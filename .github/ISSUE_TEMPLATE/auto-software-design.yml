@@ -1,0 +1,47 @@
+name: "Auto Software Design Pipeline"
+description: "Issue からソフトウェア設計パイプライン (Step.1〜5) を自動起動します"
+title: "[Auto Design] 設計ドキュメントの作成"
+labels:
+  - "auto-software-design"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto Software Design Pipeline
+        このフォームから Issue を作成すると、自動で Step.1〜Step.5 の設計タスクが
+        Sub-issue として生成され、Copilot が順次実行します。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/design-v2"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        **注意**: 依存関係により、後段のステップを選択した場合は前段のステップも自動的に追加されます。
+        例: Step.3 のみ選択 → Step.1, Step.2 も自動的に実行対象になります。
+        チェックを入れていないステップでも依存関係上必要な場合は「(依存により自動追加)」として実行されます。
+      options:
+        - label: "Step.1 — マイクロサービスアプリケーション定義書 (Step.1.1 ドメイン分析 / Step.1.2 マイクロサービス一覧抽出)"
+        - label: "Step.2 — データモデル作成"
+        - label: "Step.3 — 画面一覧と遷移図"
+        - label: "Step.4 — サービスカタログ表"
+        - label: "Step.5 — 生成AI最適化プロンプト群 (Step.5.1 画面定義書生成 / Step.5.2 マイクロサービス詳細仕様生成)"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: 画面は React で実装予定。認証は Azure AD B2C を使用。"
+    validations:
+      required: false

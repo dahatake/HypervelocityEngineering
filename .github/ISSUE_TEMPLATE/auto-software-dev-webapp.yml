@@ -1,0 +1,88 @@
+name: "Auto Software Dev WebApp Pipeline"
+description: "Issue から Web アプリケーション開発パイプライン (Step.1〜4) を自動起動します"
+title: "[Auto Dev WebApp] "
+labels:
+  - "auto-software-dev-webapp"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto Software Dev WebApp Pipeline
+        このフォームから Issue を作成すると、自動で以下の開発タスクが
+        Sub-issue として生成され、Copilot coding agent が順次実行します。
+
+        ### 前提条件
+        - `ApplicationDesign-AIAgent.md` がリポジトリルートに存在していること（Step.2.6 で使用）
+        - アプリケーション設計パイプライン（ASD）が完了し、以下のドキュメントが存在していること:
+          - `docs/domain-analytics.md`, `docs/service-list.md`, `docs/data-model.md`
+          - `docs/screen-list.md`, `docs/service-catalog.md`
+          - `docs/usecase-list.md`, `docs/usecase-detail.md`
+          - `docs/screen/`, `docs/services/` 配下の定義書
+          - `data/sample-data.json`
+        - リポジトリに以下のシークレットが設定されていること:
+          - `COPILOT_PAT`
+          - `AZURE_STATIC_WEB_APPS_API_TOKEN`（Step.3.2 の SWA デプロイで使用）
+
+        ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
+        | ステップ | 内容 | サブステップ |
+        |---------|------|------------|
+        | **Step.1** | データ | 1.1 Azure データストア選定 → 1.2 Azure データサービス Deploy |
+        | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → 2.4 サービスコード実装 → 2.5 Azure Compute Deploy → 2.6 AI Agent 構成 |
+        | **Step.3** | UI 作成 | 3.1 UI 実装 → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
+        | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（並列実行） |
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "コード/ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/dev-v2"
+    validations:
+      required: true
+
+  - type: input
+    id: resource_group
+    attributes:
+      label: "リソースグループ名"
+      description: "Azure のリソースグループ名を入力してください。各ステップの Azure CLI スクリプトおよび Sub-issue のタスク指示に埋め込まれます。"
+      placeholder: "例: rg-royalty-service-dev"
+    validations:
+      required: true
+
+  - type: input
+    id: usecase_id
+    attributes:
+      label: "ユースケースID"
+      description: "AI Agent 設計（Step.2.6）で使用するユースケースIDを入力してください。docs/usecase/{ユースケースID}/ 配下の定義書が参照されます。未入力の場合、Step.2.6 はリポジトリ内のユースケースを自動探索します。"
+      placeholder: "例: UC-001"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        **未選択の場合は全ステップを実行します。**
+        **注意**: 依存関係があるため、後段のステップには前段の成果物が必要です。
+        前段をスキップする場合は、対応するドキュメント／リソースが既に存在していることを確認してください。
+      options:
+        - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
+        - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.6)"
+        - label: "Step.3 — UI 作成 (Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy)"
+        - label: "Step.4 — アーキテクチャレビュー (Step.4.1 WAF レビュー / Step.4.2 整合性チェック)"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step の Sub-issue にも引用されます。"
+      placeholder: |
+        例:
+        - リージョンは Japan East 優先
+        - Azure Functions は C# で実装
+        - UI は HTML5/CSS/JavaScript で実装
+        - 認証は Azure AD B2C を使用
+    validations:
+      required: false

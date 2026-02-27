@@ -1,0 +1,37 @@
+name: Check split mode compliance
+
+on:
+  pull_request:
+    paths:
+      - 'work/**/plan.md'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect split mode violations
+        run: |
+          for plan in $(find work -name 'plan.md' -type f); do
+            decision=$(grep -oE '<!-- split_decision: [A-Z_]+ -->' "$plan" | grep -oE 'PROCEED|SPLIT_REQUIRED' || echo "MISSING")
+
+            if [ "$decision" = "SPLIT_REQUIRED" ]; then
+              echo "Split mode detected in $plan. Checking for prohibited files..."
+
+              BASE_SHA="${{ github.event.pull_request.base.sha }}"
+              IMPL_FILES=$(git diff --name-only "${BASE_SHA}...HEAD" | grep -E '\.(sh|py|ts|js|sql|html|css)$' | grep -v '^work/' || true)
+
+              if [ -n "$IMPL_FILES" ]; then
+                echo "::error::Split mode PR contains implementation files (AGENTS.md §2.3 violation):"
+                echo "$IMPL_FILES"
+                exit 1
+              fi
+
+              echo "✅ No implementation files found outside work/"
+            fi
+          done

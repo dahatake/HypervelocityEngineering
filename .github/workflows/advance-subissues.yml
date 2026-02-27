@@ -1,0 +1,596 @@
+name: Advance Sub Issues
+
+# PRマージ時に、クローズされた Sub Issue の依存関係を評価し、
+# 依存が全て解決された Sub Issue に Copilot + Custom Agent を自動アサインする。
+#
+# 対応する依存関係フォーマット（どちらも検出）:
+#   - ## ⏳ 前提条件（Dependencies） セクション内の - #NNN 行（Issue番号形式）
+#   - <!-- depends_on: 213,216 --> HTML コメント（Issue番号形式）
+#
+# 親 Issue の特定方法（優先順）:
+#   Method 1: Sub Issue body の <!-- parent-issue: #NNN --> （新規作成分）
+#   Method 2: Sub Issue body の <!-- pr-number: NNN --> → その PR の closingIssuesReferences
+#   Method 3a: GraphQL trackedInIssues クエリ（既存 Sub Issue に対応）
+#   Method 3b: <!-- subissues-created --> PR コメント経由（3a 失敗時フォールバック）
+
+on:
+  pull_request:
+    types: [closed]
+
+concurrency:
+  group: advance-subissues-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  advance:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Advance sub issues on PR merge
+        run: |
+          set -euo pipefail
+
+          # GitHub API state propagation: PR merge → issue state "closed" の反映を待つ
+          # (実測で 2-3秒でGitHub REST API に反映されることが多い。依存チェックの前に余裕を持たせる)
+          sleep 3
+
+          if [[ -z "${COPILOT_PAT:-}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインはスキップされます（エラーではありません）。" >&2
+          fi
+
+          OWNER="${REPO%/*}"
+          REPO_NAME="${REPO#*/}"
+
+          # ── assign_copilot() ─────────────────────────────────────────────
+          # auto-software-dev-webapp.yml / create-subissues-from-pr.yml と同じパターン
+          assign_copilot() {
+            local issue_num="$1"
+            local custom_agent="${2:-}"
+            local base_branch="${3:-main}"
+            local custom_instructions="${4:-}"
+
+            echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
+            echo "  custom_agent: ${custom_agent}"
+            echo "  base_branch: ${base_branch}"
+
+            # 冪等化ガード: 既に copilot-swe-agent がアサインされている場合はスキップ
+            local current_assignees
+            current_assignees=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              if not isinstance(d, dict):
+                  print('false')
+                  sys.exit(0)
+              assignees = [a.get('login', '') for a in d.get('assignees', [])]
+              print('true' if 'copilot-swe-agent' in assignees or 'Copilot' in assignees else 'false')
+          except Exception:
+              print('false')
+          PY
+            ) || true
+
+            if [[ "${current_assignees}" == "true" ]]; then
+              echo "  copilot-swe-agent は既にアサイン済みです。スキップします。"
+              return 0
+            fi
+
+            # 冪等化ガード: 対象 Issue に紐づく Open な PR が既に存在する場合はスキップ
+            local existing_prs
+            existing_prs=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              events = json.load(sys.stdin)
+              if not isinstance(events, list):
+                  print('false')
+                  sys.exit(0)
+          except Exception:
+              print('false')
+              sys.exit(0)
+          for e in events:
+              if e.get('event') == 'cross-referenced':
+                  source = e.get('source', {}).get('issue', {})
+                  pr = source.get('pull_request', {})
+                  if pr and source.get('state') == 'open':
+                      print('true')
+                      sys.exit(0)
+          print('false')
+          PY
+            ) || true
+
+            if [[ "${existing_prs}" == "true" ]]; then
+              echo "  Issue #${issue_num} に紐づく Open な PR が既に存在します。スキップします。"
+              return 0
+            fi
+
+            if [[ -z "${COPILOT_PAT:-}" ]]; then
+              echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインをスキップします。" >&2
+              return 2  # 2 = skipped (not failure)
+            fi
+
+            local max_assign_retry=3
+            local assign_wait=5
+            local assign_success=false
+
+            for assign_attempt in $(seq 1 "${max_assign_retry}"); do
+              echo "  アサイン試行 ${assign_attempt}/${max_assign_retry}..."
+
+              # 1回のクエリで bot_id / issue_node_id / repo_node_id をまとめて取得
+              local query_result
+              query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -f query="
+          query(\$issueNumber: Int!) {
+            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
+              id
+              issue(number: \$issueNumber) { id }
+              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                nodes {
+                  login
+                  ... on Bot { id databaseId }
+                }
+              }
+            }
+          }
+                " \
+                -F issueNumber="${issue_num}" \
+                2>&1) || true
+
+              if [[ -z "${query_result}" ]]; then
+                echo "WARNING: GraphQL クエリの実行に失敗しました。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              local bot_id issue_node_id repo_node_id
+              IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              repo = d.get('data', {}).get('repository', {})
+              bot = ''
+              for a in repo.get('suggestedActors', {}).get('nodes', []):
+                  if a.get('login') == 'copilot-swe-agent':
+                      bot = a.get('id', '')
+                      break
+              issue = repo.get('issue', {}).get('id', '')
+              print(bot + '\t' + issue + '\t' + repo.get('id', ''))
+          except Exception as e:
+              print(f'Python parse error: {e}', file=sys.stderr)
+              print('\t\t')
+          PY
+              ) || true
+
+              if [[ -z "${bot_id}" ]]; then
+                echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${issue_node_id}" ]]; then
+                echo "WARNING: Issue #${issue_num} の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${repo_node_id}" ]]; then
+                echo "WARNING: Repository の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
+
+              # addAssigneesToAssignable mutation（全変数を -f フラグで渡す・インジェクション防止）
+              local result
+              result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
+                -f query="
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+            addAssigneesToAssignable(input: {
+              assignableId: \$assignableId,
+              assigneeIds: [\$botId],
+              agentAssignment: {
+                targetRepositoryId: \$targetRepositoryId,
+                baseRef: \$baseRef,
+                customInstructions: \$customInstructions,
+                customAgent: \$customAgent,
+                model: \"\"
+              }
+            }) {
+              assignable {
+                ... on Issue {
+                  id
+                  title
+                  assignees(first: 10) {
+                    nodes { login }
+                  }
+                }
+              }
+            }
+          }
+                " \
+                -f assignableId="${issue_node_id}" \
+                -f botId="${bot_id}" \
+                -f targetRepositoryId="${repo_node_id}" \
+                -f baseRef="${base_branch}" \
+                -f customInstructions="${custom_instructions}" \
+                -f customAgent="${custom_agent}" \
+                2>&1) || true
+
+              echo "  GraphQL mutation レスポンス: ${result}"
+
+              # mutation レスポンスのエラーチェック
+              local has_errors
+              has_errors=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              print('true' if d.get('errors') else 'false')
+          except Exception:
+              print('true')
+          PY
+              ) || true
+
+              if [[ "${has_errors}" == "true" ]]; then
+                echo "WARNING: GraphQL mutation にエラーが含まれています。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              # copilot-swe-agent が assignees に含まれるか検証
+              local is_assigned
+              is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
+              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
+          except Exception:
+              print('false')
+          PY
+              ) || true
+
+              if [[ "${is_assigned}" == "true" ]]; then
+                echo "  copilot-swe-agent のアサインを確認しました。"
+                assign_success=true
+                break
+              fi
+
+              echo "WARNING: copilot-swe-agent が assignees に含まれていません。試行 ${assign_attempt}/${max_assign_retry}" >&2
+              sleep "${assign_wait}"
+              assign_wait=$((assign_wait * 2))
+            done
+
+            if [[ "${assign_success}" != "true" ]]; then
+              local fail_msg
+              fail_msg=$(printf '⚠️ Copilot coding agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot coding agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
+              gh issue comment "${issue_num}" --body "${fail_msg}" --repo "$REPO" 2>&1 || true
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
+              return 1
+            fi
+
+            echo "=== Copilot アサイン完了: Issue #${issue_num} ==="
+            sleep 2
+          }
+
+          # ── find_parent_issue() ──────────────────────────────────────────
+          # 優先度順の4段階フォールバックで親 Issue 番号を解決する。
+          # 診断メッセージは全て >&2（stderr）に出力し、
+          # stdout には親 Issue 番号（数字のみ）または空文字を出力する。
+          find_parent_issue() {
+            local issue_num="$1"
+            local issue_body="$2"
+            local result_parent=""
+
+            # Method 1: Sub Issue body の <!-- parent-issue: #NNN -->（新規作成分）
+            result_parent=$(printf '%s' "${issue_body}" \
+              | grep -oP '<!--\s*parent-issue:\s*#\K\d+' | head -1 || true)
+            if [[ "${result_parent}" =~ ^[0-9]+$ ]]; then
+              echo "  Method 1 (parent-issue comment): #${result_parent}" >&2
+              printf '%s\n' "${result_parent}"
+              return 0
+            fi
+
+            # Method 2: Sub Issue body の <!-- pr-number: NNN --> → その PR の closingIssuesReferences
+            local source_pr
+            source_pr=$(printf '%s' "${issue_body}" \
+              | grep -oP '<!--\s*pr-number:\s*\K\d+' | head -1 || true)
+            if [[ "${source_pr}" =~ ^[0-9]+$ ]] && [ "${source_pr}" != "${PR_NUMBER}" ]; then
+              result_parent=$(gh pr view "${source_pr}" --repo "${REPO}" \
+                --json closingIssuesReferences \
+                --jq '.closingIssuesReferences[0].number | tostring' 2>/dev/null \
+                | grep -E '^[0-9]+$' | head -1 || true)
+              if [[ "${result_parent}" =~ ^[0-9]+$ ]]; then
+                echo "  Method 2 (pr-number comment): #${result_parent} via PR #${source_pr}" >&2
+                printf '%s\n' "${result_parent}"
+                return 0
+              fi
+            fi
+
+            # Method 3a: GraphQL trackedInIssues（GitHub Sub Issues ネイティブ関係）
+            result_parent=$(gh api graphql \
+              -f query="
+          query(\$owner: String!, \$repo: String!, \$num: Int!) {
+            repository(owner: \$owner, name: \$repo) {
+              issue(number: \$num) {
+                trackedInIssues(first: 1) {
+                  nodes { number }
+                }
+              }
+            }
+          }
+              " \
+              -f owner="${OWNER}" \
+              -f repo="${REPO_NAME}" \
+              -F num="${issue_num}" \
+              --jq '.data.repository.issue.trackedInIssues.nodes[0].number | tostring' 2>/dev/null \
+              | grep -E '^[0-9]+$' | head -1 || true)
+            if [[ "${result_parent}" =~ ^[0-9]+$ ]]; then
+              echo "  Method 3a (GraphQL trackedInIssues): #${result_parent}" >&2
+              printf '%s\n' "${result_parent}"
+              return 0
+            fi
+
+            # Method 3b: <!-- subissues-created --> PR コメント経由（全フォールバック）
+            # この Issue の timeline から cross-reference PRs を取得し、
+            # <!-- subissues-created --> マーカーを持つ PR を特定して親 Issue を解決する
+            local xref_prs
+            xref_prs=$(gh api "/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced") | select(.source.issue.pull_request != null) | .source.issue.number] | .[]' \
+              2>/dev/null || true)
+
+            for xref_pr in $xref_prs; do
+              [[ "${xref_pr}" =~ ^[0-9]+$ ]] || continue
+              # 現在マージされた PR は skip（それ自体は作成PR ではなく作業PR）
+              [ "${xref_pr}" = "${PR_NUMBER}" ] && continue
+
+              local marker_count
+              marker_count=$(gh api "/repos/${REPO}/issues/${xref_pr}/comments?per_page=100" \
+                --jq '[.[] | select(.body | contains("<!-- subissues-created -->"))] | length' \
+                2>/dev/null || echo "0")
+              if [ "${marker_count:-0}" -gt 0 ] 2>/dev/null; then
+                result_parent=$(gh pr view "${xref_pr}" --repo "${REPO}" \
+                  --json closingIssuesReferences \
+                  --jq '.closingIssuesReferences[0].number | tostring' 2>/dev/null \
+                  | grep -E '^[0-9]+$' | head -1 || true)
+                if [[ "${result_parent}" =~ ^[0-9]+$ ]]; then
+                  echo "  Method 3b (subissues-created): #${result_parent} via PR #${xref_pr}" >&2
+                  printf '%s\n' "${result_parent}"
+                  return 0
+                fi
+              fi
+              sleep 0.5  # API レート制限対策（Method 3b の各 PR チェック間）
+            done
+
+            # 親 Issue 特定不可
+            echo "  WARNING: 全 Method で親 Issue を特定できませんでした。" >&2
+            return 1
+          }
+
+          # ── マージされた PR のクローズ Issue を取得 ──────────────────────────
+          CLOSING_ISSUES=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" \
+            --json closingIssuesReferences \
+            --jq '.closingIssuesReferences[].number' 2>/dev/null || true)
+
+          if [ -z "${CLOSING_ISSUES}" ]; then
+            echo "PR #${PR_NUMBER} に closing issue 参照（Fixes/Closes/Resolves #N）がありません。処理をスキップします。"
+            exit 0
+          fi
+
+          echo "Closing issues: $(printf '%s' "${CLOSING_ISSUES}" | tr '\n' ' ')"
+
+          declare -A PROCESSED_PARENTS
+          SUMMARY_ROWS=""
+
+          for ISSUE_NUM in ${CLOSING_ISSUES}; do
+            # 数値バリデーション
+            [[ "${ISSUE_NUM}" =~ ^[0-9]+$ ]] || { echo "WARNING: 不正な Issue 番号: ${ISSUE_NUM}。スキップ。" >&2; continue; }
+
+            echo "=== Closing issue #${ISSUE_NUM} ==="
+
+            # Issue の title と body を API 経由で取得
+            ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null || echo '{}')
+            ISSUE_TITLE=$(echo "${ISSUE_JSON}" | python3 -c \
+              "import sys,json; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || true)
+            ISSUE_BODY=$(echo "${ISSUE_JSON}" | python3 -c \
+              "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')" 2>/dev/null || true)
+
+            # [ASD]/[ASDW] Issue は専用ワークフロー（auto-software-design.yml 等）が処理する
+            if [[ "${ISSUE_TITLE}" =~ ^\[ASD\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[ASDW\] ]]; then
+              echo "  Skipping [ASD]/[ASDW] issue: ${ISSUE_TITLE}"
+              continue
+            fi
+
+            # 親 Issue を特定（4段階フォールバック）
+            # find_parent_issue は stdout に親 Issue 番号のみを出力し、診断は stderr へ
+            PARENT=$(find_parent_issue "${ISSUE_NUM}" "${ISSUE_BODY}" || true)
+
+            if [[ ! "${PARENT:-}" =~ ^[0-9]+$ ]]; then
+              echo "  Issue #${ISSUE_NUM} の親 Issue を特定できませんでした。スキップ。"
+              continue
+            fi
+
+            echo "  Parent issue: #${PARENT}"
+
+            # 同一 PR 内で同一親 Issue を重複処理しない
+            if [ -n "${PROCESSED_PARENTS[${PARENT}]:-}" ]; then
+              echo "  Parent #${PARENT} はこの実行で既に処理済みです。スキップ。"
+              continue
+            fi
+            PROCESSED_PARENTS[${PARENT}]=1
+
+            # 親 Issue の全 Sub Issues を取得（per_page=100 でページネーション対応）
+            SUB_ISSUES_JSON=$(gh api "/repos/${REPO}/issues/${PARENT}/sub_issues?per_page=100" \
+              2>/dev/null || echo "[]")
+
+            # SUB_ISSUES_JSON が配列でない場合（API エラー等）の防御処理
+            SUB_COUNT=$(echo "${SUB_ISSUES_JSON}" | python3 -c \
+              "import sys,json; d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo "0")
+            if [ "${SUB_COUNT:-0}" -eq 0 ] 2>/dev/null; then
+              echo "  Parent #${PARENT} の Sub Issues が取得できませんでした（0件または取得エラー）。スキップ。"
+              continue
+            fi
+            echo "  Sub Issues: ${SUB_COUNT} 件"
+
+            # 各 Sub Issue の依存関係を評価してアサインを実施
+            while IFS=$'\t' read -r sub_num sub_state sub_title; do
+              [ -z "${sub_num}" ] && continue
+              [[ "${sub_num}" =~ ^[0-9]+$ ]] || continue
+
+              # タイトルのパイプ文字をエスケープ（マークダウンテーブル崩れ防止）
+              sub_title_safe="${sub_title//|/&#124;}"
+
+              echo "  Sub-issue #${sub_num} (${sub_state}): ${sub_title}"
+
+              # クローズ済みはスキップ
+              if [ "${sub_state}" = "closed" ]; then
+                echo "    Already closed. Skipping."
+                continue
+              fi
+
+              # [ASD]/[ASDW] Sub Issue は専用ワークフローが処理する
+              if [[ "${sub_title}" =~ ^\[ASD\] ]] || [[ "${sub_title}" =~ ^\[ASDW\] ]]; then
+                echo "    Skipping [ASD]/[ASDW] sub-issue."
+                continue
+              fi
+
+              # Sub Issue の body を取得
+              SUB_BODY=$(gh api "/repos/${REPO}/issues/${sub_num}" \
+                --jq '.body // ""' 2>/dev/null || true)
+
+              # 依存関係を抽出
+              # Method A: ## ⏳ 前提条件（Dependencies） セクションの - #NNN 行（Issue番号形式）
+              # Method B: <!-- depends_on: 213,216 --> HTML コメント（Issue番号形式）
+              #   ※ <!-- depends_on: 1,4 --> のようなブロックインデックス形式は対象外
+              DEP_NUMS=$(echo "${SUB_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          deps = []
+          # Method A: 前提条件セクション
+          m = re.search(r'##\s*⏳\s*前提条件（Dependencies）[^\n]*\n(.*?)(?=\n##\s|\Z)', body, re.DOTALL)
+          if m:
+              deps = re.findall(r'-\s*#(\d+)', m.group(1))
+          # Method B: depends_on HTML comment（Issue番号として解釈できる場合のみ）
+          if not deps:
+              m2 = re.search(r'<!--\s*depends_on:\s*(.*?)\s*-->', body)
+              if m2:
+                  candidates = re.findall(r'#?(\d+)', m2.group(1))
+                  # ブロックインデックス（通常1-9程度）とIssue番号（通常100以上）を区別するため
+                  # 閾値10を使用。Issue #1-#10 への依存がある場合はMethod A（前提条件セクション）を使うこと
+                  deps = [c for c in candidates if int(c) > 10]
+          print(' '.join(deps))
+          PY
+              ) || true
+
+              if [ -z "${DEP_NUMS}" ]; then
+                echo "    No issue-number dependencies found. Skipping (root nodes are handled at creation time)."
+                continue
+              fi
+
+              echo "    Dependencies: ${DEP_NUMS}"
+
+              # 全依存 Issue がクローズ済み（または completed）か確認
+              ALL_DEPS_CLOSED=true
+              for DEP_NUM in ${DEP_NUMS}; do
+                [[ "${DEP_NUM}" =~ ^[0-9]+$ ]] || continue
+                # API レート制限対策: 依存 Issue ごとに 0.5秒 待機
+                sleep 0.5
+                DEP_STATE=$(gh api "/repos/${REPO}/issues/${DEP_NUM}" \
+                  --jq '.state // "open"' 2>/dev/null || echo "open")
+                echo "    Dep #${DEP_NUM}: ${DEP_STATE}"
+                # "closed" および GitHub Issue Types の "completed" 状態を完了とみなす
+                if [ "${DEP_STATE}" != "closed" ] && [ "${DEP_STATE}" != "completed" ]; then
+                  ALL_DEPS_CLOSED=false
+                  break
+                fi
+              done
+
+              if [ "${ALL_DEPS_CLOSED}" = "true" ]; then
+                echo "    All dependencies resolved. Proceeding with Copilot assignment..."
+
+                # Custom Agent 名を Sub Issue body から抽出
+                AGENT=$(echo "${SUB_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'>\s*\*\*Custom agent used:\s*([^*]+)\*\*', body)
+          print(m.group(1).strip() if m else '')
+          PY
+                ) || true
+
+                # base_branch = マージされた PR の head branch
+                # （そのブランチに前の Sub Issue の作業結果ファイルが存在するため）
+                ASSIGN_STATUS=""
+                if [ -z "${COPILOT_PAT:-}" ]; then
+                  echo "    COPILOT_PAT 未設定のため Copilot アサインをスキップします。"
+                  ASSIGN_STATUS="⏭️ スキップ（COPILOT_PAT未設定）"
+                else
+                  assign_result_code=0
+                  assign_copilot "${sub_num}" "${AGENT}" "${PR_HEAD_BRANCH}" "" || assign_result_code=$?
+                  case "${assign_result_code}" in
+                    0) ASSIGN_STATUS="✅ アサイン済み" ;;
+                    2) ASSIGN_STATUS="⏭️ スキップ（COPILOT_PAT未設定）" ;;
+                    *) ASSIGN_STATUS="⚠️ 失敗" ;;
+                  esac
+                fi
+                SUMMARY_ROWS="${SUMMARY_ROWS}| #${sub_num} | ${sub_title_safe} | ${AGENT:-—} | \`${PR_HEAD_BRANCH}\` | ${ASSIGN_STATUS} |\n"
+              else
+                echo "    Not all dependencies closed yet. Skipping."
+              fi
+            done < <(echo "${SUB_ISSUES_JSON}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              issues = json.load(sys.stdin)
+              if not isinstance(issues, list):
+                  issues = []
+          except Exception:
+              issues = []
+          for i in issues:
+              num = str(i.get('number', ''))
+              state = i.get('state', 'open')
+              # タブ・改行を除去してパース崩れを防ぐ
+              title = i.get('title', '').replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+              if num:
+                  print(num + '\t' + state + '\t' + title)
+          PY
+            )
+          done
+
+          # ── PR コメントとして結果サマリーを投稿 ──────────────────────────
+          if [ -n "${SUMMARY_ROWS}" ]; then
+            {
+              printf '## 🚀 Sub Issue 自動アサイン\n\n'
+              printf 'マージされた PR #%s（head branch: `%s`）を起点に、依存関係が解決された Sub Issue に Copilot をアサインしました。\n\n' \
+                "${PR_NUMBER}" "${PR_HEAD_BRANCH}"
+              printf '| # | タイトル | Custom Agent | base branch | 状態 |\n'
+              printf '|---|--------|-------------|------------|------|\n'
+              printf '%b' "${SUMMARY_ROWS}"
+            } > /tmp/advance_comment.md
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body-file /tmp/advance_comment.md || true
+          else
+            echo "この実行では前進させた Sub Issue はありませんでした（依存関係が未解決、または対象なし）。"
+          fi
