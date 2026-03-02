@@ -146,6 +146,19 @@ Sub Issue 間は `---`（水平線）で区切る。
   1. `Fixes #N` / `Closes #N` / `Resolves #N`（GitHub 標準の closing reference — 推奨）
   2. `<!-- parent-issue: #N -->`（HTMLコメント形式 — レガシー互換）
 - Sub Issue 一覧と「次にやる最初の Sub」を記載する
+- **次のステップ案内（必須）**: 以下の案内文をそのまま PR description にコピーして記載する（変更不可）:
+
+> ## 📋 次のステップ（手動操作が必要）
+>
+> この PR には `subissues.md` が含まれています。
+> Sub Issue を自動作成するには、以下の手順を実行してください：
+>
+> 1. この PR の内容（`plan.md` / `subissues.md`）を確認する
+> 2. この PR に `create-subissues` ラベルを付与する
+> 3. GitHub Actions（`create-subissues-from-pr.yml`）が自動で Sub Issue を作成します
+> 4. 依存関係のない Sub Issue には Copilot が自動アサインされます
+>
+> ⚠️ `create-subissues` ラベルの付与は **手動** で行う必要があります（意図しない Sub Issue 作成を防ぐための安全設計です）。
 
 #### PR の完了条件
 - 上記の計画ファイルをコミットし、PR タイトルに `[WIP]` を付与する

@@ -37,6 +37,26 @@ body:
         - label: "Step.4 — サービスカタログ表"
         - label: "Step.5 — 生成AI最適化プロンプト群 (Step.5.1 画面定義書生成 / Step.5.2 マイクロサービス詳細仕様生成)"
 
+  - type: checkboxes
+    id: skip_review
+    attributes:
+      label: "Copilot セルフレビュー設定"
+      description: |
+        Copilot が PR を完成させた際に、自動でセルフレビュー指示コメントを PR に投稿します（デフォルト: 実行する）。
+        レビューをスキップしたい場合のみチェックを入れてください。
+      options:
+        - label: "Copilot セルフレビューをスキップする（チェックしない場合、レビューは自動実行されます）"
+
+  - type: checkboxes
+    id: skip_context_review
+    attributes:
+      label: "内容のレビュー設定"
+      description: |
+        デフォルト（チェックなし）では、Copilot が PR を完成させた際に内容のレビューを自動実行します（チェックしない場合に `auto-context-review` ラベルが付与されレビューパイプラインが起動します）。
+        レビューを実施しない場合のみチェックを入れてください。
+      options:
+        - label: "内容のレビューを実施しない（チェックしない場合、レビューは自動実行されます）"
+
   - type: textarea
     id: additional_comment
     attributes:

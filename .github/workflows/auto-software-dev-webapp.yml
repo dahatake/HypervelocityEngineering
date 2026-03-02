@@ -8,6 +8,7 @@ on:
 permissions:
   issues: write
   contents: read
+  pull-requests: write
 
 jobs:
   orchestrate:
@@ -161,6 +162,7 @@ jobs:
           create_label "asd:running"               "E4E669" ""
           create_label "asd:done"                  "0E8A16" ""
           create_label "asd:blocked"               "D73A4A" ""
+          create_label "auto-context-review"       "1D76DB" "auto context review trigger for copilot-auto-review workflow"
 
       # ----------------------------------------------------------------
       # 3. Issue body パース & Step Issue 生成
@@ -595,7 +597,36 @@ jobs:
               if usecase_id == "_No response_":
                   usecase_id = ""
 
-          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id}
+          # セルフレビュースキップ設定の抽出
+          # 「Copilot セルフレビュー設定」セクションでチェック済み [x] = スキップ
+          # → チェック済み = skip_review=true → auto_review=false
+          # → 未チェック or セクションなし = auto_review=true（デフォルト: レビュー実行）
+          skip_review = False
+          review_section = re.search(
+              r"###\s*Copilot\s+セルフレビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"-\s*\[[xX]\]", section_text):
+                  skip_review = True
+
+          auto_review = not skip_review
+
+          # 内容のレビュー設定の抽出
+          skip_context_review = False
+          context_review_section = re.search(
+              r"###\s*内容のレビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if context_review_section:
+              section_text = context_review_section.group(1)
+              if re.search(r"-\s*\[[xX]\]", section_text):
+                  skip_context_review = True
+
+          auto_context_review = not skip_context_review
+
+          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_review": auto_review, "auto_context_review": auto_context_review}
           print(json.dumps(result))
           PYEOF
           )
@@ -605,15 +636,19 @@ jobs:
           SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           USECASE_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('usecase_id',''))")
+          AUTO_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_review') else 'false')")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "リソースグループ名: ${RESOURCE_GROUP}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "ユースケースID: ${USECASE_ID}"
+          echo "自動レビュー: ${AUTO_REVIEW}"
+          echo "内容レビュー: ${AUTO_CONTEXT_REVIEW}"
 
           # ---- ROOT_REF（リソースグループメタコメント含む）----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->' \
-            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- auto-review: %s -->\n<!-- auto-context-review: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${AUTO_REVIEW}" "${AUTO_CONTEXT_REVIEW}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
@@ -673,16 +708,94 @@ jobs:
               || echo "WARNING: Root Issue body の更新に失敗しました。処理を続行します。" >&2
 
             rm -f "${PATCH_JSON_FILE}"
+
+            # PYBODY が body を更新したため、PYREVIEW 用に最新の body を再取得する
+            _refreshed=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' 2>/dev/null) \
+              && ISSUE_BODY="${_refreshed}" && export ISSUE_BODY \
+              || echo "WARNING: ISSUE_BODY の再取得に失敗しました。スキップステップ除去後の body で auto-review タグが埋め込まれない可能性があります。" >&2
           else
             echo "全ステップ実行のため Root Issue body の更新は不要です。"
           fi
 
+          # ---- Root Issue に auto-review タグを埋め込み ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_review = sys.argv[1]
+          output_file = sys.argv[2]
+
+          tag = f"<!-- auto-review: {auto_review} -->"
+          pat = re.compile(r'<!--\s*auto-review:\s*(true|false)\s*-->')
+
+          if pat.search(body):
+              body = pat.sub(tag, body)
+          else:
+              body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-review タグを埋め込みました（auto-review: ${AUTO_REVIEW}）。" \
+            || echo "WARNING: Root Issue body の auto-review タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
           # ---- Root Issue に asd:initialized を付与 ----
+          # ---- Root Issue body に auto-review タグを埋め込む ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_review = sys.argv[1]
+          output_file = sys.argv[2]
+
+          tag = f"<!-- auto-review: {auto_review} -->"
+
+          if re.search(r'<!--\s*auto-review:\s*(true|false)\s*-->', body):
+              body = re.sub(
+                  r'<!--\s*auto-review:\s*(true|false)\s*-->',
+                  tag,
+                  body
+              )
+          else:
+              body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-review タグを埋め込みました（auto-review: ${AUTO_REVIEW}）。" \
+            || echo "WARNING: Root Issue body の auto-review タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
           add_label "${ROOT_ISSUE}" "asd:initialized"
           echo "asd:initialized を付与しました。"
 
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
           # skip_step helper: SKIP_STEPS に Step 番号が含まれていれば true
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # Step Issue に付与するラベルセット
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-software-dev-webapp","auto-context-review"]'
+          else
+            STEP_LABELS='["auto-software-dev-webapp"]'
+          fi
 
           # ---- Step Issue 生成 ----
           S1_NUM=""  S1_ID=""
@@ -709,7 +822,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.1: データ（コンテナ）" \
               "${BODY_S1}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S1_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.1 作成: #${S1_NUM}"
@@ -721,7 +834,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.1.1: Azure データストア選定" \
               "${BODY_S11}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S11_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S11_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.1.1 作成: #${S11_NUM}"
@@ -733,7 +846,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.1.2: Azure データサービス Deploy" \
               "${BODY_S12}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S12_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S12_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.1.2 作成: #${S12_NUM}"
@@ -749,7 +862,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2: マイクロサービス作成（コンテナ）" \
               "${BODY_S2}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2 作成: #${S2_NUM}"
@@ -761,7 +874,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.1: Azure コンピュート選定" \
               "${BODY_S21}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S21_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S21_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.1 作成: #${S21_NUM}"
@@ -773,7 +886,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.2: 追加 Azure サービス選定" \
               "${BODY_S22}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S22_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S22_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.2 作成: #${S22_NUM}"
@@ -785,7 +898,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.3: 追加 Azure サービス Deploy" \
               "${BODY_S23}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S23_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S23_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.3 作成: #${S23_NUM}"
@@ -797,7 +910,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.4: サービスコード実装 (Azure Functions)" \
               "${BODY_S24}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S24_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S24_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.4 作成: #${S24_NUM}"
@@ -809,7 +922,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.5: Azure Compute Deploy" \
               "${BODY_S25}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S25_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S25_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.5 作成: #${S25_NUM}"
@@ -826,7 +939,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.2.6: AI Agent 構成" \
               "${BODY_S26}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S26_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S26_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.6 作成: #${S26_NUM}"
@@ -842,7 +955,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.3: UI 作成（コンテナ）" \
               "${BODY_S3}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S3_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S3_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.3 作成: #${S3_NUM}"
@@ -854,7 +967,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.3.1: UI 実装" \
               "${BODY_S31}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S31_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S31_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.3.1 作成: #${S31_NUM}"
@@ -866,7 +979,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.3.2: Web アプリ Deploy (Azure Static Web Apps)" \
               "${BODY_S32}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S32_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.3.2 作成: #${S32_NUM}"
@@ -882,7 +995,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.4: アーキテクチャレビュー（コンテナ）" \
               "${BODY_S4}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.4 作成: #${S4_NUM}"
@@ -894,7 +1007,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.4.1: WAF アーキテクチャレビュー" \
               "${BODY_S41}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S41_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S41_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.4.1 作成: #${S41_NUM}"
@@ -906,7 +1019,7 @@ jobs:
             RESP=$(create_issue \
               "[ASDW] Step.4.2: 整合性チェック" \
               "${BODY_S42}" \
-              '["auto-software-dev-webapp"]')
+              "${STEP_LABELS}")
             S42_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S42_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.4.2 作成: #${S42_NUM}"
@@ -1421,6 +1534,28 @@ jobs:
           )
 
           echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            # Timeline API で Issue を close する open PR を逆引き（gh pr list --search では "closes:#N" 構文が機能しないため）
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                  && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                  || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
 
           # ---- Root Issue の Sub Issues を取得して Step Issue を特定 ----
           get_sub_issue_number() {
