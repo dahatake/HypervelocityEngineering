@@ -44,22 +44,25 @@ tools: ["*"]
 
 ```
 A) スクリプト作成
-  → A-exec) スクリプト実行・リソース確認
-    → B) GitHub Actions CI/CD（A-exec の出力値を利用）
-    → C) サービスカタログ更新（A-exec の出力値を利用）
-    → D) テスト（A-exec の出力値を利用）
-  → E) 進捗ログ（全ステップ通して随時更新）
+→ A-exec) スクリプト実行・リソース確認  ※ A の完了後に実行。A とは独立した別ステップ
+  → B) GitHub Actions CI/CD（A-exec の出力値を利用）
+  → C) サービスカタログ更新（A-exec の出力値を利用）
+  → D) テスト（A-exec の出力値を利用）
+→ E) 進捗ログ（全ステップ通して随時更新）
 → AC検証（全ステップ完了後）
 → 最終品質レビュー（AC検証完了後）
 ```
 
 ※ B, C, D は互いに並列実行可能。E は全ステップで随時更新。  
-※ AC検証・最終品質レビューの見積も DAG 合計に含めること。
+※ AC検証・最終品質レビューの見積も DAG 合計に含めること。  
+※ A-exec は A とは独立したステップであり、SPLIT_REQUIRED 時には独立した Sub Issue として分割すること。A の Sub Issue に統合してはならない。
 
 ---
 
 # Required Deliverables（必須成果物）
 以下は "15分以内で完了する単位" で実装する。分割時は subissues.md に落とす。
+
+**分割時の必須ルール:** 以下の全ステップ（A, A-exec, B, C, D, E, F）をそれぞれ独立した Sub Issue として見積・分割すること。特に **A-exec は A に統合せず独立 Sub Issue** とする。
 
 ## A) Azure 作成スクリプト（Linux）
 - `infra/azure/create-azure-api-resources-prep.sh`
@@ -75,9 +78,11 @@ A) スクリプト作成
   - 検証対象: 後述の AC-3 の確認対象リソースを全て含む
 - Azure CLI や作成手順は、利用可能なら **Microsoft Learn MCP / Azure MCP** を根拠として参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
 
-## A-exec) Azure リソース作成スクリプトの実行と検証（A 完了後に実施）
+## A-exec) Azure リソース作成スクリプトの実行と検証（A 完了後に実施 — 独立ステップ）
 
-> A のサブステップ。A で作成したスクリプトの実行と結果確認を行う。
+> **A-exec は A とは別の独立ステップである。** A で作成したスクリプトの実行と結果確認を行う。
+> 
+> **分割時の注意（SPLIT_REQUIRED の場合）：** A-exec は A（スクリプト作成）とは独立した Sub Issue として分割すること。A の Sub Issue に吸収・統合してはならない。Azure CLI 利用不可の場合でも、本ステップの「Azure CLI 利用不可の場合」セクションに記載された作業（構文チェック、work-status 記録、PR description 明記、README 記載）を独立 Sub Issue の成果物として含めること。
 
 ### 実行手順
 1. `infra/azure/create-azure-api-resources-prep.sh` を実行する
