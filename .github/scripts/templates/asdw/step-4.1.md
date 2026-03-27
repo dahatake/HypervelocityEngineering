@@ -1,0 +1,26 @@
+{root_ref}
+## 目的
+デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する（APP-ID 指定時はスコープ内のリソースのみ）。
+
+## 入力
+- リソースグループ名: `{resource_group}`
+- `docs/usecase-list.md`
+- `docs/service-catalog.md`
+- `docs/azure/AzureServices-services.md`
+- `docs/azure/AzureServices-data.md`
+- `docs/azure/AzureServices-services-additional.md`
+- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+
+## 出力
+- `docs/azure/Azure-ArchitectureReview-Report.md`
+
+## Custom Agent
+`QA-AzureArchitectureReview` を使用
+
+## 依存
+- Step.3（UI 作成コンテナ）が `asdw:done` であること
+- Step.4.2 と並列実行可能
+
+## 完了条件
+- `docs/azure/Azure-ArchitectureReview-Report.md` が作成されている
+- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

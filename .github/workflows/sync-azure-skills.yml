@@ -1,0 +1,104 @@
+name: Sync Azure Skills
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # 毎週月曜 9:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backup custom skills
+        run: |
+          mkdir -p /tmp/custom-skills-backup
+          for skill in large-output-chunking repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d ".github/skills/${skill}" ]; then
+              cp -r ".github/skills/${skill}" "/tmp/custom-skills-backup/${skill}"
+              echo "Backed up: ${skill}"
+            fi
+          done
+
+      - name: Remove non-custom azure-skills folders
+        run: |
+          cd .github/skills
+          for dir in */; do
+            dir="${dir%/}"
+            case "${dir}" in
+              large-output-chunking|repo-onboarding-fast|task-dag-planning|work-artifacts-layout)
+                echo "Keeping custom skill: ${dir}"
+                ;;
+              *)
+                rm -rf "${dir}"
+                echo "Removed: ${dir}"
+                ;;
+            esac
+          done
+
+      - name: Install latest azure-skills
+        run: |
+          npx -y skills add microsoft/skills --skill '*' --agent copilot --yes --copy
+
+      - name: Restore custom skills
+        run: |
+          for skill in large-output-chunking repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d "/tmp/custom-skills-backup/${skill}" ]; then
+              rm -rf ".github/skills/${skill}"
+              cp -r "/tmp/custom-skills-backup/${skill}" ".github/skills/${skill}"
+              echo "Restored: ${skill}"
+            fi
+          done
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: auto/sync-azure-skills
+          commit-message: 'chore: sync azure-skills to latest'
+          title: 'chore: sync azure-skills to latest'
+          body: |
+            ## 概要
+
+            `microsoft/skills` リポジトリから最新の Azure Skills を自動同期しました。
+
+            ## 変更内容
+
+            - `.github/skills/` 配下の azure-skills 由来スキルを最新版に更新
+
+            ## カスタムスキル（同期対象外）
+
+            以下のカスタムスキルは同期対象外のため、変更ありません：
+            - `large-output-chunking`
+            - `repo-onboarding-fast`
+            - `task-dag-planning`
+            - `work-artifacts-layout`
+
+            ## 確認チェックリスト
+
+            - [ ] 新規追加・削除されたスキルフォルダを確認した
+            - [ ] 既存スキルの内容変更を確認した
+            - [ ] AGENTS.md §4.2 のスキル参照ルールへの影響がないことを確認した（汎用記述のため影響なし）
+            - [ ] カスタムスキル 4 件が正しく保持されていることを確認した
+          delete-branch: true

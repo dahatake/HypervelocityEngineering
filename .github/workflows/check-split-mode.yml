@@ -1,0 +1,80 @@
+name: Check split mode compliance
+
+on:
+  pull_request:
+    paths:
+      - 'work/**/plan.md'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect split mode violations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          # GitHub API 経由で PR の正確なファイル差分を取得する
+          # git diff BASE_SHA...HEAD ではなく gh pr diff を使うことで、
+          # base ブランチの SHA タイミングによる余分なファイル混入を排除する
+          if ! ALL_CHANGED=$(gh pr diff "$PR_NUMBER" --name-only); then
+            echo "::error::gh pr diff の実行に失敗しました（PR: #${PR_NUMBER}）"
+            exit 1
+          fi
+
+          # この PR で変更・追加された work/**/plan.md のみを対象にする
+          # （main ブランチに既存だが PR で未変更の plan.md は対象外）
+          # ワークフロートリガーの paths: 'work/**/plan.md' に合わせて ^work/ に限定する
+          # grep の 0件マッチ (exit 1) のみ || true で抑制する
+          CHANGED_PLANS=$(echo "$ALL_CHANGED" | grep -E '^work/.*/plan\.md$' || true)
+
+          if [ -z "$CHANGED_PLANS" ]; then
+            echo "✅ この PR で変更された plan.md はありません。チェックをスキップします。"
+            exit 0
+          fi
+
+          echo "📋 検査対象の plan.md:"
+          echo "$CHANGED_PLANS" | while IFS= read -r p; do echo "  - $p"; done
+
+          HAS_ERROR=false
+
+          # PR diff から実装ファイルを一度だけ検出（work/ 配下は除外）
+          # ループ内で繰り返し計算しないよう事前に確定する
+          IMPL_FILES=$(echo "$ALL_CHANGED" | grep -E '\.(sh|py|ts|js|sql|html|css)$' | grep -v '^work/' || true)
+
+          while IFS= read -r plan; do
+            # ファイルが存在するか確認（削除された場合はスキップ）
+            if [ ! -f "$plan" ]; then
+              echo "⏭️ $plan は削除されたためスキップします。"
+              continue
+            fi
+
+            decision=$(grep -oE '<!-- split_decision: [A-Z_]+ -->' "$plan" | grep -oE 'PROCEED|SPLIT_REQUIRED' || echo "MISSING")
+            echo "🔍 $plan → split_decision: $decision"
+
+            if [ "$decision" = "SPLIT_REQUIRED" ]; then
+              echo "⚠️ Split mode 検出: $plan"
+              echo "  実装ファイルの存在を確認します..."
+
+              if [ -n "$IMPL_FILES" ]; then
+                echo "::error::Split mode PR に実装ファイルが含まれています (AGENTS.md §2.3 違反)。原因: $plan が SPLIT_REQUIRED です。"
+                echo "該当ファイル:"
+                echo "$IMPL_FILES"
+                HAS_ERROR=true
+              else
+                echo "✅ 実装ファイルは検出されませんでした（work/ 配下を除く）"
+              fi
+            fi
+          done <<< "$CHANGED_PLANS"
+
+          if [ "$HAS_ERROR" = true ]; then
+            exit 1
+          fi
+
+          echo "✅ Split mode compliance チェック完了（違反なし）"

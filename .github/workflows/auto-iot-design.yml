@@ -1,0 +1,1846 @@
+name: AID Orchestrator
+
+# auto-iot-design ラベル付き Issue の opened/labeled/closed イベントで起動
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: aid-orchestrator-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: auto-iot-design ラベルあり + aid:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: "${{ github.event.label.name || '' }}"
+        run: |
+          set -euo pipefail
+
+          # Issue title を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_TITLE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export ISSUE_TITLE
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "aid:done" ]]; then
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "${LABEL_NAME}" == "auto-iot-design" ]]; then
+              # auto-iot-design ラベルが後から付与された場合:
+              # 下の has_aid / has_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に aid:initialized 済みの場合は has_init チェックで skip になる。
+              echo "auto-iot-design labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "aid:done / auto-iot-design 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [AID] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[AID\] ]]; then
+              # イベントペイロードから渡されたラベル一覧を使用
+              echo "ペイロードラベル（closed）: ${ISSUE_LABELS}"
+              # 既に aid:done がついていれば labeled イベントが後で来るのでスキップ
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'aid:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                echo "既に aid:done ラベル済み。closed イベントをスキップ（labeled イベントで処理済み or 処理中）。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # aid:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [AID] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [AID] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[AID\] ]]; then
+            echo "[AID] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ---- リアルタイムにラベル一覧を API 経由で取得（payload はスナップショットのため） ----
+          ISSUE_LABELS=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+          # auto-iot-design ラベルを持つか確認
+          has_aid=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'auto-iot-design' in labels else 'false')
+          PY
+          )
+
+          if [[ "${has_aid}" != "true" ]]; then
+            echo "auto-iot-design ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # aid:initialized / aid:ready / aid:running / aid:done / aid:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'aid:initialized', 'aid:ready', 'aid:running', 'aid:done', 'aid:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_init}" == "true" ]]; then
+            echo "aid:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベルを作成する関数（422 = 既存の場合は無視）
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local desc="$3"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            if [[ "${http_code}" == "201" ]]; then
+              echo "ラベル作成: ${name}"
+            elif [[ "${http_code}" == "422" ]]; then
+              echo "ラベル既存（スキップ）: ${name}"
+            else
+              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
+              return 1
+            fi
+            sleep 1
+          }
+
+          create_label "auto-iot-design" "0E8A16" "run full IoT / physical AI design document generation workflow"
+          create_label "aid:initialized"      "C5DEF5" ""
+          create_label "aid:ready"            "0075CA" ""
+          create_label "aid:running"          "E4E669" ""
+          create_label "aid:done"             "0E8A16" ""
+          create_label "aid:blocked"          "D73A4A" ""
+          create_label "auto-context-review"  "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa"               "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+
+      # ----------------------------------------------------------------
+      # 2.5. 即時 aid:initialized 付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 aid:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          max_retries=5
+          backoff=1
+          attempt=1
+          success=0
+          while [[ ${attempt} -le ${max_retries} ]]; do
+            echo "aid:initialized 付与試行 ${attempt}/${max_retries}..."
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aid:initialized"]}')
+            if [[ "${http_code}" =~ ^2 ]]; then
+              echo "aid:initialized を Issue #${ISSUE_NUMBER} に付与しました。（HTTP ${http_code}）"
+              success=1
+              break
+            fi
+            # 5xx / レート制限（403）はリトライ、それ以外は即時失敗
+            if [[ "${http_code}" =~ ^5 ]] || [[ "${http_code}" == "403" ]]; then
+              if [[ ${attempt} -lt ${max_retries} ]]; then
+                echo "WARN: aid:initialized の付与に失敗しました（HTTP ${http_code}）。${backoff} 秒後にリトライします..." >&2
+                sleep "${backoff}"
+                backoff=$((backoff * 2))
+                attempt=$((attempt + 1))
+                continue
+              else
+                echo "ERROR: aid:initialized の付与がリトライ上限に達しました。HTTP ${http_code}" >&2
+                break
+              fi
+            else
+              echo "ERROR: aid:initialized の付与に失敗しました。HTTP ${http_code}（リトライ対象外）" >&2
+              break
+            fi
+          done
+          if [[ ${success} -ne 1 ]]; then
+            exit 1
+          fi
+
+      # ----------------------------------------------------------------
+      # 3. Issue body パース & Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: Issue 初期化とStep Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+
+          # リトライ付き curl
+          api_call() {
+            local method="$1"; shift
+            local url="$1"; shift
+            local data="${1:-}"
+            local max_retry=5
+            local wait=1
+            local http_code response body
+
+            for i in $(seq 1 "${max_retry}"); do
+              if [[ -n "${data}" ]]; then
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  -H "Content-Type: application/json" \
+                  "${url}" \
+                  -d "${data}")
+              else
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${url}")
+              fi
+              http_code=$(echo "${response}" | tail -1)
+              body=$(echo "${response}" | head -n -1)
+              if [[ "${http_code}" =~ ^2 ]]; then
+                echo "${body}"
+                return 0
+              fi
+              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
+              sleep "${wait}"
+              wait=$((wait * 2))
+            done
+            echo "API 呼び出し失敗: ${method} ${url}" >&2
+            return 1
+          }
+
+          # Issue 作成
+          create_issue() {
+            local title="$1"
+            local body="$2"
+            local labels_json="$3"
+            local data
+            data=$(python3 - "${title}" "${body}" "${labels_json}" <<'PY'
+          import json, sys
+          title = sys.argv[1]
+          body  = sys.argv[2]
+          labels = json.loads(sys.argv[3])
+          print(json.dumps({'title': title, 'body': body, 'labels': labels}))
+          PY
+          )
+            api_call POST "https://api.github.com/repos/${REPO}/issues" "${data}"
+          }
+
+          # Sub Issue 紐付け
+          link_sub_issue() {
+            local parent_num="$1"
+            local child_id="$2"
+            local data="{\"sub_issue_id\":${child_id}}"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues" \
+              "${data}" || true
+            sleep 1
+          }
+
+          # ラベル付与
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          # アサイン
+          assign_copilot() {
+            local issue_num="$1"
+            local custom_agent="${2:-}"
+            local base_branch="${3:-main}"
+            local custom_instructions="${4:-}"
+
+            echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
+            echo "  custom_agent: ${custom_agent}"
+            echo "  base_branch: ${base_branch}"
+
+            # 冪等化ガード: 既に copilot-swe-agent がアサインされている場合はスキップ
+            local current_assignees
+            current_assignees=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              if not isinstance(d, dict):
+                  print('false')
+                  sys.exit(0)
+              assignees = [a.get('login', '') for a in d.get('assignees', [])]
+              print('true' if 'copilot-swe-agent' in assignees or 'Copilot' in assignees else 'false')
+          except Exception:
+              print('false')
+          PY
+            ) || true
+
+            if [[ "${current_assignees}" == "true" ]]; then
+              echo "  copilot-swe-agent は既にアサイン済みです。スキップします。"
+              return 0
+            fi
+
+            # 冪等化ガード: 対象 Issue に紐づく Open な PR が既に存在する場合はスキップ
+            local existing_prs
+            existing_prs=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              events = json.load(sys.stdin)
+              if not isinstance(events, list):
+                  print('false')
+                  sys.exit(0)
+          except Exception:
+              print('false')
+              sys.exit(0)
+          for e in events:
+              if e.get('event') == 'cross-referenced':
+                  source = e.get('source', {}).get('issue', {})
+                  pr = source.get('pull_request', {})
+                  if pr and source.get('state') == 'open':
+                      print('true')
+                      sys.exit(0)
+          print('false')
+          PY
+            ) || true
+
+            if [[ "${existing_prs}" == "true" ]]; then
+              echo "  Issue #${issue_num} に紐づく Open な PR が既に存在します。スキップします。"
+              return 0
+            fi
+
+            if [[ -z "${COPILOT_PAT}" ]]; then
+              echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインをスキップします。" >&2
+              return 1
+            fi
+
+            local OWNER="${REPO%/*}"
+            local REPO_NAME="${REPO#*/}"
+
+            local max_assign_retry=3
+            local assign_wait=5
+            local assign_success=false
+
+            for assign_attempt in $(seq 1 "${max_assign_retry}"); do
+              echo "  アサイン試行 ${assign_attempt}/${max_assign_retry}..."
+
+              # 1回のクエリで bot_id / issue_node_id / repo_node_id をまとめて取得
+              local query_result
+              query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -f query="
+          query(\$issueNumber: Int!) {
+            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
+              id
+              issue(number: \$issueNumber) { id }
+              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                nodes {
+                  login
+                  ... on Bot { id databaseId }
+                }
+              }
+            }
+          }
+                " \
+                -F issueNumber="${issue_num}" \
+                2>&1) || true
+
+              echo "  GraphQL クエリ結果: ${query_result}"
+
+              if [[ -z "${query_result}" ]]; then
+                echo "WARNING: GraphQL クエリの実行に失敗しました。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              local bot_id issue_node_id repo_node_id
+              IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          d = json.load(sys.stdin)
+          repo = d.get('data', {}).get('repository', {})
+          bot = ''
+          for a in repo.get('suggestedActors', {}).get('nodes', []):
+              if a.get('login') == 'copilot-swe-agent':
+                  bot = a.get('id', '')
+                  break
+          issue = repo.get('issue', {}).get('id', '')
+          print(bot + '\t' + issue + '\t' + repo.get('id', ''))
+          PY
+              ) || true
+
+              if [[ -z "${bot_id}" ]]; then
+                echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${issue_node_id}" ]]; then
+                echo "WARNING: Issue #${issue_num} の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${repo_node_id}" ]]; then
+                echo "WARNING: Repository の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
+
+              # addAssigneesToAssignable mutation（全変数を -f/-f フラグで渡す・インジェクション防止）
+              local result
+              result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
+                -f query="
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+            addAssigneesToAssignable(input: {
+              assignableId: \$assignableId,
+              assigneeIds: [\$botId],
+              agentAssignment: {
+                targetRepositoryId: \$targetRepositoryId,
+                baseRef: \$baseRef,
+                customInstructions: \$customInstructions,
+                customAgent: \$customAgent,
+                model: \"\"
+              }
+            }) {
+              assignable {
+                ... on Issue {
+                  id
+                  title
+                  assignees(first: 10) {
+                    nodes { login }
+                  }
+                }
+              }
+            }
+          }
+                " \
+                -f assignableId="${issue_node_id}" \
+                -f botId="${bot_id}" \
+                -f targetRepositoryId="${repo_node_id}" \
+                -f baseRef="${base_branch}" \
+                -f customInstructions="${custom_instructions}" \
+                -f customAgent="${custom_agent}" \
+                2>&1) || true
+
+              echo "  GraphQL mutation レスポンス: ${result}"
+
+              # mutation レスポンスのエラーチェック
+              local has_errors
+              has_errors=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              print('true' if d.get('errors') else 'false')
+          except Exception:
+              print('true')
+          PY
+              ) || true
+
+              if [[ "${has_errors}" == "true" ]]; then
+                echo "WARNING: GraphQL mutation にエラーが含まれています。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              # copilot-swe-agent が assignees に含まれるか検証
+              local is_assigned
+              is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
+              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
+          except Exception:
+              print('false')
+          PY
+              ) || true
+
+              if [[ "${is_assigned}" == "true" ]]; then
+                echo "  copilot-swe-agent のアサインを確認しました。"
+                assign_success=true
+                break
+              fi
+
+              echo "WARNING: copilot-swe-agent が assignees に含まれていません。試行 ${assign_attempt}/${max_assign_retry}" >&2
+              sleep "${assign_wait}"
+              assign_wait=$((assign_wait * 2))
+            done
+
+            if [[ "${assign_success}" != "true" ]]; then
+              local fail_msg
+              fail_msg=$(printf '⚠️ Copilot coding agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot coding agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
+              post_comment "${issue_num}" "${fail_msg}" || true
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
+              return 1
+            fi
+
+            echo "=== Copilot アサイン完了: Issue #${issue_num} ==="
+            sleep 2
+          }
+
+          # コメント投稿
+          post_comment() {
+            local issue_num="$1"
+            local comment_body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${comment_body}")
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null
+            sleep 1
+          }
+
+          # Issue body から Custom Agent 名を抽出
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # ブランチ名抽出（input フォームの値）
+          branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              branch = m.group(1).strip()
+              if not branch or branch == "_No response_":
+                  branch = "main"
+
+          # 実行するステップからスキップ対象を検出
+          # Issue Template は「実行するステップ」セクションで、
+          # チェック済み [x] = 実行、未チェック [ ] = スキップ
+          skip_steps = set()
+          exec_section = re.search(
+              r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if exec_section:
+              section_text = exec_section.group(1)
+              # 全 Step 番号を抽出（チェック状態問わず）
+              all_items = re.findall(
+                  r"-\s*\[[ xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              all_steps = set(all_items)
+              # チェック済み（実行対象）の Step 番号を抽出
+              checked_items = re.findall(
+                  r"-\s*\[[xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              exec_steps = set(checked_items)
+              # スキップ = 全体 - 実行対象
+              skip_steps = all_steps - exec_steps
+              # フォールバック: 全チェックなし = 全 Step 実行（スキップなし）
+              # 運用ドキュメント・Issue Template の説明「未選択で全 Step 実行」に準拠
+              if not exec_steps and all_steps:
+                  skip_steps = set()
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              additional_comment = m.group(1).strip()
+              if additional_comment == "_No response_":
+                  additional_comment = ""
+
+          # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_context_review = False
+          review_section = re.search(
+              r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_qa = False
+          qa_section = re.search(
+              r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if qa_section:
+              section_text = qa_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_qa = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa}
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "スキップ Steps: ${SKIP_STEPS}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
+
+          # ---- Root Issue body からスキップ対象のステップ行を除去して更新 ----
+          # （注意: ISSUE_BODY シェル変数は古い値のまま。パースは完了済みなので影響なし）
+          if [[ -n "${SKIP_STEPS}" ]]; then
+            echo "Root Issue body から未チェックのステップを除去します..."
+
+            PATCH_JSON_FILE=$(mktemp)
+
+            python3 - "${SKIP_STEPS}" "${PATCH_JSON_FILE}" <<'PYBODY'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          skip_steps_str = sys.argv[1]
+          output_file = sys.argv[2]
+
+          skip_steps = set(skip_steps_str.split()) if skip_steps_str.strip() else set()
+
+          if skip_steps:
+              lines = body.split('\n')
+              new_lines = []
+              for line in lines:
+                  # 未チェック行のみ除去（チェック済み行 - [x] は残す）
+                  m = re.match(r'^\s*-\s*\[[ ]\]\s*Step\.(\d+(?:\.\d+)?)\b', line)
+                  if m and m.group(1) in skip_steps:
+                      continue
+                  new_lines.append(line)
+
+              # 連続空行を最大2行に制限
+              cleaned = []
+              blank_count = 0
+              for line in new_lines:
+                  if line.strip() == '':
+                      blank_count += 1
+                      if blank_count <= 2:
+                          cleaned.append(line)
+                  else:
+                      blank_count = 0
+                      cleaned.append(line)
+
+              body = '\n'.join(cleaned)
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYBODY
+
+            api_call PATCH \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+              "$(cat "${PATCH_JSON_FILE}")" > /dev/null \
+              && echo "Root Issue #${ROOT_ISSUE} の body を更新しました（未チェックのステップ行を除去）。" \
+              || echo "WARNING: Root Issue body の更新に失敗しました。処理を続行します。" >&2
+
+            rm -f "${PATCH_JSON_FILE}"
+
+            # PYBODY が body を更新したため、PYREVIEW 用に最新の body を再取得する
+            _refreshed=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' 2>/dev/null) \
+              && ISSUE_BODY="${_refreshed}" && export ISSUE_BODY \
+              || echo "WARNING: ISSUE_BODY の再取得に失敗しました。スキップステップ除去後の body で auto-context-review タグが埋め込まれない可能性があります。" >&2
+          else
+            echo "全ステップ実行のため Root Issue body の更新は不要です。"
+          fi
+
+          # ---- Root Issue body に auto-context-review タグを埋め込む ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_context_review = sys.argv[1]
+          output_file = sys.argv[2]
+
+          tag = f"<!-- auto-context-review: {auto_context_review} -->"
+
+          if re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body):
+              body = re.sub(
+                  r'<!--\s*auto-context-review:\s*(true|false)\s*-->',
+                  tag,
+                  body
+              )
+          else:
+              body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
+          add_label "${ROOT_ISSUE}" "aid:initialized"
+          echo "aid:initialized を付与しました。"
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          # ---- Step Issue 生成 ----
+          # 各 Step の id と issue_number を保存する変数
+          S11_NUM="" S11_ID=""
+          S12_NUM="" S12_ID=""
+          S2_NUM="" S2_ID=""
+          S3_NUM="" S3_ID=""
+          S4_NUM="" S4_ID=""
+          S5_NUM="" S5_ID=""
+          S51_NUM="" S51_ID=""
+          S52_NUM="" S52_ID=""
+          S45_NUM="" S45_ID=""
+          S53_NUM="" S53_ID=""
+
+          # 各 Step Issue の body 先頭に埋め込む共通メタ情報（printf で単一行定義）
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}")
+
+          # 追加コメントが存在する場合のフッター
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+          else
+            ADDITIONAL_SECTION=""
+          fi
+
+          skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # Step Issue に付与するラベルセット
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-iot-design","auto-context-review","auto-qa"]'
+          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-iot-design","auto-context-review"]'
+          elif [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-iot-design","auto-qa"]'
+          else
+            STEP_LABELS='["auto-iot-design"]'
+          fi
+
+          # ---- Step.1.1 （IoT ドメイン分析 — ルートノード） ----
+          if ! skip_step "1.1"; then
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点＋IoT 3層境界（Device/Edge/Cloud）でドメイン分析を行い、docs/domain-analytics.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n\n## 出力\n- `docs/domain-analytics.md`\n\n## Custom Agent\n`Arch-IoT-DomainAnalytics` を使用\n\n## 依存\n- なし（ルートノード）\n\n## 完了条件\n- `docs/domain-analytics.md` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.1.1: IoT ドメイン分析" \
+              "${BODY_S11}" \
+              "${STEP_LABELS}")
+            S11_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S11_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.1 作成: #${S11_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.1.2 （デバイスプロファイル＋接続性 — ルートノード、Step.1.1 と並列） ----
+          if ! skip_step "1.2"; then
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書を根拠に、対象デバイスのHWプロファイル・センサー/アクチュエーター仕様・接続性・オフライン分類・消費電力・AI推論要件・状態遷移・フェイルセーフ設計を整理し、docs/device-connectivity.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n\n## 出力\n- `docs/device-connectivity.md`\n\n## Custom Agent\n`Arch-IoT-DeviceConnectivity` を使用\n\n## 依存\n- なし（ルートノード。Step.1.1 と並列実行可能）\n\n## 完了条件\n- `docs/device-connectivity.md` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.1.2: デバイスプロファイル＋接続性分析" \
+              "${BODY_S12}" \
+              "${STEP_LABELS}")
+            S12_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S12_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.2 作成: #${S12_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.2 ----
+          if ! skip_step "2"; then
+            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とデバイス接続性定義を根拠に、IoT 固有のデータモデル（デバイステレメトリ・時系列データ・エッジキャッシュ含む）を設計する。\n\n## 入力\n- `docs/domain-analytics.md`\n- `docs/device-connectivity.md`\n\n## 出力\n- `docs/data-model.md`\n- `data/sample-data.json`\n\n## Custom Agent\n`Arch-DataModeling` を使用\n\n## 依存\n- Step.1.1（IoT ドメイン分析）が `aid:done` であること\n- Step.1.2（デバイスプロファイル＋接続性分析）が `aid:done` であること\n\n## 完了条件\n- `docs/data-model.md` と `data/sample-data.json` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.2: データモデル" \
+              "${BODY_S2}" \
+              "${STEP_LABELS}")
+            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2 作成: #${S2_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.3 ----
+          if ! skip_step "3"; then
+            BODY_S3=$(printf '%s\n## 目的\nドメイン分析結果、データモデルを根拠に、IoT デバイス管理ダッシュボード・監視UI を含む画面一覧を設計する。\n\n## 入力\n- `docs/domain-analytics.md`\n- `docs/device-connectivity.md`\n- `docs/data-model.md`\n\n## 出力\n- `docs/screen-list.md`\n\n## Custom Agent\n`Arch-UI-List` を使用\n\n## 依存\n- Step.2（データモデル）が `aid:done` であること\n\n## 完了条件\n- `docs/screen-list.md` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.3: 画面一覧/構造" \
+              "${BODY_S3}" \
+              "${STEP_LABELS}")
+            S3_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S3_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3 作成: #${S3_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4 ----
+          if ! skip_step "4"; then
+            BODY_S4=$(printf '%s\n## 目的\nドメイン分析結果、データモデル、画面一覧を統合して、IoT 固有サービス（デバイス管理・テレメトリ収集・OTA更新・エッジ推論サービス含む）のサービスカタログを作成する。\n\n## 入力\n- `docs/domain-analytics.md`\n- `docs/device-connectivity.md`\n- `docs/data-model.md`\n- `docs/screen-list.md`\n\n## 出力\n- `docs/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog` を使用\n\n## 依存\n- Step.3（画面一覧/構造）が `aid:done` であること\n\n## 完了条件\n- `docs/service-catalog.md` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.4: サービスカタログ" \
+              "${BODY_S4}" \
+              "${STEP_LABELS}")
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4.5 ----
+          # Step.4.5 は Step.4 に依存するため、Step.4 がスキップされている場合は作成しない
+          if ! skip_step "4.5" && ! skip_step "4"; then
+            BODY_S45=$(printf '%s\n## 目的\nサービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、IoT 固有テスト戦略（デバイスシミュレーター・プロトコルテスト・オフラインテスト戦略含む）を作成する。\n\n## 入力\n- `docs/service-catalog.md`\n- `docs/data-model.md`\n- `docs/domain-analytics.md`\n- `docs/device-connectivity.md`\n\n## 出力\n- `docs/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy` を使用\n\n## 依存\n- Step.4（サービスカタログ）が `aid:done` であること\n\n## 完了条件\n- `docs/test-strategy.md` が作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.4.5: テスト戦略書" \
+              "${BODY_S45}" \
+              "${STEP_LABELS}")
+            S45_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S45_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4.5 作成: #${S45_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.5 ----
+          if ! skip_step "5"; then
+            # Step.5.3 は Step.4.5 の出力（test-strategy.md）を入力とするため、Step.4.5 がスキップされると依存が満たせない。
+            # そのため Step.5.3 は Step.4.5 と両方がスキップされていない場合にのみ作成する。
+            if ! skip_step "5.3" && ! skip_step "4.5"; then
+              _S5_SUBTASKS="Step.5.1, Step.5.2, Step.5.3"
+            else
+              _S5_SUBTASKS="Step.5.1, Step.5.2"
+            fi
+            BODY_S5=$(printf '%s\n## Step.5 コンテナ\nStep.5 はコンテナ Issue。Sub Task（%s）の完了を待つ。%s' \
+              "${ROOT_REF}" "${_S5_SUBTASKS}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.5: 画面定義書 + マイクロサービス定義書" \
+              "${BODY_S5}" \
+              "${STEP_LABELS}")
+            S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S5_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5 作成: #${S5_NUM}"
+            sleep 3
+
+            # Step.5.1/5.2 の依存は Step.4.5 がスキップされているかで変わる
+            if ! skip_step "4.5"; then
+              _S51_DEP="Step.4.5（テスト戦略書）が \`aid:done\` であること"
+              _S52_DEP="Step.4.5（テスト戦略書）が \`aid:done\` であること"
+            else
+              _S51_DEP="Step.4（サービスカタログ）が \`aid:done\` であること"
+              _S52_DEP="Step.4（サービスカタログ）が \`aid:done\` であること"
+            fi
+
+            # Step.5.1
+            BODY_S51=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/screen-list.md`\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${_S51_DEP}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.5.1: 画面定義書" \
+              "${BODY_S51}" \
+              "${STEP_LABELS}")
+            S51_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S51_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5.1 作成: #${S51_NUM}"
+            sleep 3
+
+            # Step.5.2
+            BODY_S52=$(printf '%s\n## 目的\nサービスカタログおよびIoT各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/service-catalog.md 等）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${_S52_DEP}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AID] Step.5.2: マイクロサービス定義書" \
+              "${BODY_S52}" \
+              "${STEP_LABELS}")
+            S52_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S52_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5.2 作成: #${S52_NUM}"
+            sleep 3
+
+            # Step.5.3
+            # Step.5.3 は Step.4.5（テスト戦略書）の出力を必須入力とするため、
+            # Step.4.5 がスキップされている場合は作成しない（作成しても必ず aid:blocked になるため）
+            if ! skip_step "5.3" && ! skip_step "4.5"; then
+              BODY_S53=$(printf '%s\n## 目的\nテスト戦略書・画面定義書・サービス定義書を根拠に、IoT 固有テスト仕様書（デバイステスト・エッジ推論テスト・E2Eテスト含む）をサービスごと・画面ごとに作成する。\n\n## 入力\n- `docs/test-strategy.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/screen/{screenId}-{screenNameSlug}-description.md`\n- `docs/service-catalog.md`\n- `docs/data-model.md`\n- `docs/domain-analytics.md`\n- `docs/device-connectivity.md`\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービスごとに1ファイル）\n- `docs/test-specs/{screenId}-test-spec.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.4.5（テスト戦略書）が `aid:done` であること\n- Step.5.1（画面定義書）が `aid:done` であること\n- Step.5.2（マイクロサービス定義書）が `aid:done` であること\n\n## 完了条件\n- テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている\n- 完了時に自身に `aid:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+              RESP=$(create_issue \
+                "[AID] Step.5.3: TDDテスト仕様書" \
+                "${BODY_S53}" \
+                "${STEP_LABELS}")
+              S53_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+              S53_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+              echo "Step.5.3 作成: #${S53_NUM}"
+              sleep 3
+            fi
+          fi
+
+          # ---- Sub Issue 紐付け ----
+          echo "Sub Issue 紐付けを開始します..."
+
+          # Step.1.1 と Step.1.2 は Root の直接 Sub Issue（コンテナなし — AID は並列ルートノード）
+          [[ -n "${S11_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S11_ID}"; echo "Root → Step.1.1 紐付け完了"; }
+          [[ -n "${S12_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S12_ID}"; echo "Root → Step.1.2 紐付け完了"; }
+
+          [[ -n "${S2_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S3_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}"; echo "Root → Step.3 紐付け完了"; }
+          [[ -n "${S4_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S45_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S45_ID}"; echo "Root → Step.4.5 紐付け完了"; }
+
+          if [[ -n "${S5_NUM}" ]]; then
+            link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"
+            echo "Root → Step.5 紐付け完了"
+            if [[ -n "${S51_NUM}" ]]; then
+              link_sub_issue "${S5_NUM}" "${S51_ID}"
+              echo "Step.5 → Step.5.1 紐付け完了"
+            fi
+            if [[ -n "${S52_NUM}" ]]; then
+              link_sub_issue "${S5_NUM}" "${S52_ID}"
+              echo "Step.5 → Step.5.2 紐付け完了"
+            fi
+            if [[ -n "${S53_NUM}" ]]; then
+              link_sub_issue "${S5_NUM}" "${S53_ID}"
+              echo "Step.5 → Step.5.3 紐付け完了"
+            fi
+          fi
+
+          # ---- 最初に実行すべき Step を起動 ----
+          # Step.1.1 と Step.1.2 は並列ルートノード → 両方を同時に起動する
+          if [[ -n "${S11_NUM}" ]] || [[ -n "${S12_NUM}" ]]; then
+            if [[ -n "${S11_NUM}" ]]; then
+              add_label "${S11_NUM}" "aid:ready"
+              CA=$(extract_custom_agent "${BODY_S11}")
+              if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S11_NUM}" "aid:running"
+                echo "Step.1.1 に copilot アサイン + aid:running 付与完了"
+              else
+                echo "WARNING: Step.1.1 へのアサイン失敗。aid:running は付与しません。"
+              fi
+            fi
+            if [[ -n "${S12_NUM}" ]]; then
+              add_label "${S12_NUM}" "aid:ready"
+              CA=$(extract_custom_agent "${BODY_S12}")
+              if assign_copilot "${S12_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S12_NUM}" "aid:running"
+                echo "Step.1.2 に copilot アサイン + aid:running 付与完了"
+              else
+                echo "WARNING: Step.1.2 へのアサイン失敗。aid:running は付与しません。"
+              fi
+            fi
+          elif [[ -n "${S2_NUM}" ]]; then
+            add_label "${S2_NUM}" "aid:ready"
+            CA=$(extract_custom_agent "${BODY_S2}")
+            if assign_copilot "${S2_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S2_NUM}" "aid:running"
+              echo "Step.1.1/1.2 がスキップ済み: Step.2 (#${S2_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.2 へのアサイン失敗。aid:running は付与しません。"
+            fi
+          elif [[ -n "${S3_NUM}" ]]; then
+            add_label "${S3_NUM}" "aid:ready"
+            CA=$(extract_custom_agent "${BODY_S3}")
+            if assign_copilot "${S3_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S3_NUM}" "aid:running"
+              echo "Step.1.1/1.2/2 がスキップ済み: Step.3 (#${S3_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3 へのアサイン失敗。aid:running は付与しません。"
+            fi
+          elif [[ -n "${S4_NUM}" ]]; then
+            add_label "${S4_NUM}" "aid:ready"
+            CA=$(extract_custom_agent "${BODY_S4}")
+            if assign_copilot "${S4_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S4_NUM}" "aid:running"
+              echo "Step.1.1/1.2/2/3 がスキップ済み: Step.4 (#${S4_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.4 へのアサイン失敗。aid:running は付与しません。"
+            fi
+          elif [[ -n "${S45_NUM}" ]]; then
+            add_label "${S45_NUM}" "aid:ready"
+            CA=$(extract_custom_agent "${BODY_S45}")
+            if assign_copilot "${S45_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S45_NUM}" "aid:running"
+              echo "Step.1.1/1.2/2/3/4 がスキップ済み: Step.4.5 (#${S45_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.4.5 へのアサイン失敗。aid:running は付与しません。"
+            fi
+          elif [[ -n "${S51_NUM}" ]] || [[ -n "${S52_NUM}" ]]; then
+            if [[ -n "${S51_NUM}" ]]; then
+              add_label "${S51_NUM}" "aid:ready"
+              CA=$(extract_custom_agent "${BODY_S51}")
+              if assign_copilot "${S51_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S51_NUM}" "aid:running"
+                echo "Step.5.1 (#${S51_NUM}) を起動しました。"
+              else
+                echo "WARNING: Step.5.1 へのアサイン失敗。aid:running は付与しません。"
+              fi
+            fi
+            if [[ -n "${S52_NUM}" ]]; then
+              add_label "${S52_NUM}" "aid:ready"
+              CA=$(extract_custom_agent "${BODY_S52}")
+              if assign_copilot "${S52_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S52_NUM}" "aid:running"
+                echo "Step.5.2 (#${S52_NUM}) を起動しました。"
+              else
+                echo "WARNING: Step.5.2 へのアサイン失敗。aid:running は付与しません。"
+              fi
+            fi
+          else
+            echo "実行すべき Step が存在しません（全 Step スキップ）。"
+          fi
+
+          echo "初期化完了。"
+
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移: aid:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得（YAML 展開問題を回避）
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: aid:done ラベルをまだ持っていなければ付与する
+          # （labeled(aid:done) イベントと closed イベントのどちらで state_transition に来ても正しく動作するための冪等処理）
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'aid:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "aid:done ラベルを付与します（closed イベント由来）..."
+            # add_label関数の定義より前なので直接curl（リトライなし・エラーは無視）
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aid:done"]}' || true
+            echo "aid:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          # ---- ユーティリティ関数（再定義） ----
+          api_call() {
+            local method="$1"; shift
+            local url="$1"; shift
+            local data="${1:-}"
+            local max_retry=5
+            local wait=1
+            local http_code response body
+
+            for i in $(seq 1 "${max_retry}"); do
+              if [[ -n "${data}" ]]; then
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  -H "Content-Type: application/json" \
+                  "${url}" \
+                  -d "${data}")
+              else
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${url}")
+              fi
+              http_code=$(echo "${response}" | tail -1)
+              body=$(echo "${response}" | head -n -1)
+              if [[ "${http_code}" =~ ^2 ]]; then
+                echo "${body}"
+                return 0
+              fi
+              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
+              sleep "${wait}"
+              wait=$((wait * 2))
+            done
+            echo "API 呼び出し失敗: ${method} ${url}" >&2
+            return 1
+          }
+
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          assign_copilot() {
+            local issue_num="$1"
+            local custom_agent="${2:-}"
+            local base_branch="${3:-main}"
+            local custom_instructions="${4:-}"
+
+            echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
+            echo "  custom_agent: ${custom_agent}"
+            echo "  base_branch: ${base_branch}"
+
+            # 冪等化ガード: 既に copilot-swe-agent がアサインされている場合はスキップ
+            local current_assignees
+            current_assignees=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              if not isinstance(d, dict):
+                  print('false')
+                  sys.exit(0)
+              assignees = [a.get('login', '') for a in d.get('assignees', [])]
+              print('true' if 'copilot-swe-agent' in assignees or 'Copilot' in assignees else 'false')
+          except Exception:
+              print('false')
+          PY
+            ) || true
+
+            if [[ "${current_assignees}" == "true" ]]; then
+              echo "  copilot-swe-agent は既にアサイン済みです。スキップします。"
+              return 0
+            fi
+
+            # 冪等化ガード: 対象 Issue に紐づく Open な PR が既に存在する場合はスキップ
+            local existing_prs
+            existing_prs=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              events = json.load(sys.stdin)
+              if not isinstance(events, list):
+                  print('false')
+                  sys.exit(0)
+          except Exception:
+              print('false')
+              sys.exit(0)
+          for e in events:
+              if e.get('event') == 'cross-referenced':
+                  source = e.get('source', {}).get('issue', {})
+                  pr = source.get('pull_request', {})
+                  if pr and source.get('state') == 'open':
+                      print('true')
+                      sys.exit(0)
+          print('false')
+          PY
+            ) || true
+
+            if [[ "${existing_prs}" == "true" ]]; then
+              echo "  Issue #${issue_num} に紐づく Open な PR が既に存在します。スキップします。"
+              return 0
+            fi
+
+            if [[ -z "${COPILOT_PAT}" ]]; then
+              echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインをスキップします。" >&2
+              return 1
+            fi
+
+            local OWNER="${REPO%/*}"
+            local REPO_NAME="${REPO#*/}"
+
+            local max_assign_retry=3
+            local assign_wait=5
+            local assign_success=false
+
+            for assign_attempt in $(seq 1 "${max_assign_retry}"); do
+              echo "  アサイン試行 ${assign_attempt}/${max_assign_retry}..."
+
+              # 1回のクエリで bot_id / issue_node_id / repo_node_id をまとめて取得
+              local query_result
+              query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -f query="
+          query(\$issueNumber: Int!) {
+            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
+              id
+              issue(number: \$issueNumber) { id }
+              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                nodes {
+                  login
+                  ... on Bot { id databaseId }
+                }
+              }
+            }
+          }
+                " \
+                -F issueNumber="${issue_num}" \
+                2>&1) || true
+
+              echo "  GraphQL クエリ結果: ${query_result}"
+
+              if [[ -z "${query_result}" ]]; then
+                echo "WARNING: GraphQL クエリの実行に失敗しました。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              local bot_id issue_node_id repo_node_id
+              IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          d = json.load(sys.stdin)
+          repo = d.get('data', {}).get('repository', {})
+          bot = ''
+          for a in repo.get('suggestedActors', {}).get('nodes', []):
+              if a.get('login') == 'copilot-swe-agent':
+                  bot = a.get('id', '')
+                  break
+          issue = repo.get('issue', {}).get('id', '')
+          print(bot + '\t' + issue + '\t' + repo.get('id', ''))
+          PY
+              ) || true
+
+              if [[ -z "${bot_id}" ]]; then
+                echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${issue_node_id}" ]]; then
+                echo "WARNING: Issue #${issue_num} の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${repo_node_id}" ]]; then
+                echo "WARNING: Repository の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
+
+              # addAssigneesToAssignable mutation（全変数を -f/-f フラグで渡す・インジェクション防止）
+              local result
+              result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
+                -f query="
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+            addAssigneesToAssignable(input: {
+              assignableId: \$assignableId,
+              assigneeIds: [\$botId],
+              agentAssignment: {
+                targetRepositoryId: \$targetRepositoryId,
+                baseRef: \$baseRef,
+                customInstructions: \$customInstructions,
+                customAgent: \$customAgent,
+                model: \"\"
+              }
+            }) {
+              assignable {
+                ... on Issue {
+                  id
+                  title
+                  assignees(first: 10) {
+                    nodes { login }
+                  }
+                }
+              }
+            }
+          }
+                " \
+                -f assignableId="${issue_node_id}" \
+                -f botId="${bot_id}" \
+                -f targetRepositoryId="${repo_node_id}" \
+                -f baseRef="${base_branch}" \
+                -f customInstructions="${custom_instructions}" \
+                -f customAgent="${custom_agent}" \
+                2>&1) || true
+
+              echo "  GraphQL mutation レスポンス: ${result}"
+
+              # mutation レスポンスのエラーチェック
+              local has_errors
+              has_errors=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              print('true' if d.get('errors') else 'false')
+          except Exception:
+              print('true')
+          PY
+              ) || true
+
+              if [[ "${has_errors}" == "true" ]]; then
+                echo "WARNING: GraphQL mutation にエラーが含まれています。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              # copilot-swe-agent が assignees に含まれるか検証
+              local is_assigned
+              is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
+              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
+          except Exception:
+              print('false')
+          PY
+              ) || true
+
+              if [[ "${is_assigned}" == "true" ]]; then
+                echo "  copilot-swe-agent のアサインを確認しました。"
+                assign_success=true
+                break
+              fi
+
+              echo "WARNING: copilot-swe-agent が assignees に含まれていません。試行 ${assign_attempt}/${max_assign_retry}" >&2
+              sleep "${assign_wait}"
+              assign_wait=$((assign_wait * 2))
+            done
+
+            if [[ "${assign_success}" != "true" ]]; then
+              local fail_msg
+              fail_msg=$(printf '⚠️ Copilot coding agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot coding agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
+              post_comment "${issue_num}" "${fail_msg}" || true
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
+              return 1
+            fi
+
+            echo "=== Copilot アサイン完了: Issue #${issue_num} ==="
+            sleep 2
+          }
+
+          post_comment() {
+            local issue_num="$1"
+            local body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${body}")
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null
+            sleep 1
+          }
+
+          # Issue body から Custom Agent 名を抽出
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          activate_issue() {
+            local issue_num="$1"
+            local issue_body
+            issue_body=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
+            local agent_name
+            agent_name=$(extract_custom_agent "${issue_body}") || true
+            add_label "${issue_num}" "aid:ready"
+            if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
+              add_label "${issue_num}" "aid:running"
+              echo "Issue #${issue_num} を aid:ready + copilot アサイン + aid:running に設定しました。(custom_agent: ${agent_name})"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。aid:running は付与しません。"
+            fi
+          }
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[AID\] Step\.(\d+(?:\.\d+)?)', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- ブランチ名の取得 ----
+          BRANCH=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- branch: (.+?) -->', body)
+          print(m.group(1).strip() if m else 'main')
+          PY
+          )
+
+          echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review / auto-qa PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+            # Timeline API で Issue を close する open PR を逆引き（gh pr list --search では "closes:#N" 構文が機能しないため）
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                fi
+                if [[ "${AUTO_QA}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-qa ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-qa ラベル付与に失敗しました。" >&2
+                fi
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
+
+          # ---- Root Issue の Sub Issues を取得して Step Issue を特定 ----
+          get_sub_issue_number() {
+            local pattern="$1"
+            # Root Issue から全 Sub Issues を取得
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          get_sub_issue_number_from_parent() {
+            local parent_num="$1"
+            local pattern="$2"
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
+          # AID: Step.1.1 と Step.1.2 は並列ルートノード。両方が aid:done になって初めて Step.2 へ進む。
+          next_after_step1() {
+            S2_NUM=$(get_sub_issue_number '\[AID\] Step\.2:')
+            if [[ -n "${S2_NUM}" ]]; then
+              activate_issue "${S2_NUM}"
+            else
+              S3_NUM=$(get_sub_issue_number '\[AID\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                activate_issue "${S3_NUM}"
+              else
+                S4_NUM=$(get_sub_issue_number '\[AID\] Step\.4:')
+                if [[ -n "${S4_NUM}" ]]; then
+                  activate_issue "${S4_NUM}"
+                else
+                  S45_NUM=$(get_sub_issue_number '\[AID\] Step\.4\.5:')
+                  if [[ -n "${S45_NUM}" ]]; then
+                    activate_issue "${S45_NUM}"
+                  else
+                    S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+                    if [[ -n "${S5_NUM}" ]]; then
+                      S51_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.1:')
+                      S52_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.2:')
+                      [[ -n "${S51_NUM}" ]] && activate_issue "${S51_NUM}"
+                      [[ -n "${S52_NUM}" ]] && activate_issue "${S52_NUM}"
+                    fi
+                  fi
+                fi
+              fi
+            fi
+          }
+
+          case "${STEP_MATCH}" in
+            "1.1")
+              # Step.1.1 完了 → Step.1.2 も完了済みなら Step.2 へ進む（AID: 並列ルートノード）
+              S12_NUM=$(get_sub_issue_number '\[AID\] Step\.1\.2:')
+              if [[ -n "${S12_NUM}" ]]; then
+                S12_DONE=$(api_call GET \
+                  "https://api.github.com/repos/${REPO}/issues/${S12_NUM}" \
+                  | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'aid:done' in [l['name'] for l in d.get('labels',[])] else 'false')")
+                if [[ "${S12_DONE}" == "true" ]]; then
+                  echo "Step.1.2 も完了済み: Step.2 以降へ進みます。"
+                  next_after_step1
+                else
+                  echo "Step.1.2 はまだ完了していません。Step.1.2 完了時に Step.2 へ移行します。"
+                fi
+              else
+                # Step.1.2 がスキップされた場合は Step.1.1 単独完了で次へ
+                echo "Step.1.2 はスキップ済み: Step.1.1 完了で Step.2 以降へ進みます。"
+                next_after_step1
+              fi
+              ;;
+
+            "1.2")
+              # Step.1.2 完了 → Step.1.1 も完了済みなら Step.2 へ進む（AID: 並列ルートノード）
+              S11_NUM=$(get_sub_issue_number '\[AID\] Step\.1\.1:')
+              if [[ -n "${S11_NUM}" ]]; then
+                S11_DONE=$(api_call GET \
+                  "https://api.github.com/repos/${REPO}/issues/${S11_NUM}" \
+                  | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'aid:done' in [l['name'] for l in d.get('labels',[])] else 'false')")
+                if [[ "${S11_DONE}" == "true" ]]; then
+                  echo "Step.1.1 も完了済み: Step.2 以降へ進みます。"
+                  next_after_step1
+                else
+                  echo "Step.1.1 はまだ完了していません。Step.1.1 完了時に Step.2 へ移行します。"
+                fi
+              else
+                # Step.1.1 がスキップされた場合は Step.1.2 単独完了で次へ
+                echo "Step.1.1 はスキップ済み: Step.1.2 完了で Step.2 以降へ進みます。"
+                next_after_step1
+              fi
+              ;;
+
+            "2")
+              # Step.2 完了 → Step.3 を ready + assign（なければ Step.4 → Step.4.5 → Step.5 へ）
+              S3_NUM=$(get_sub_issue_number '\[AID\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                activate_issue "${S3_NUM}"
+              else
+                S4_NUM=$(get_sub_issue_number '\[AID\] Step\.4:')
+                if [[ -n "${S4_NUM}" ]]; then
+                  activate_issue "${S4_NUM}"
+                else
+                  S45_NUM=$(get_sub_issue_number '\[AID\] Step\.4\.5:')
+                  if [[ -n "${S45_NUM}" ]]; then
+                    activate_issue "${S45_NUM}"
+                  else
+                    S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+                    if [[ -n "${S5_NUM}" ]]; then
+                      S51_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.1:')
+                      S52_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.2:')
+                      [[ -n "${S51_NUM}" ]] && activate_issue "${S51_NUM}"
+                      [[ -n "${S52_NUM}" ]] && activate_issue "${S52_NUM}"
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "3")
+              # Step.3 完了 → Step.4 を ready + assign（なければ Step.4.5 → Step.5 へ）
+              S4_NUM=$(get_sub_issue_number '\[AID\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                activate_issue "${S4_NUM}"
+              else
+                S45_NUM=$(get_sub_issue_number '\[AID\] Step\.4\.5:')
+                if [[ -n "${S45_NUM}" ]]; then
+                  activate_issue "${S45_NUM}"
+                else
+                  S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+                  if [[ -n "${S5_NUM}" ]]; then
+                    S51_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.1:')
+                    S52_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.2:')
+                    [[ -n "${S51_NUM}" ]] && activate_issue "${S51_NUM}"
+                    [[ -n "${S52_NUM}" ]] && activate_issue "${S52_NUM}"
+                  fi
+                fi
+              fi
+              ;;
+
+            "4")
+              # Step.4 完了 → Step.4.5 を ready + assign（なければ Step.5.1/5.2 を並列起動）
+              S45_NUM=$(get_sub_issue_number '\[AID\] Step\.4\.5:')
+              if [[ -n "${S45_NUM}" ]]; then
+                activate_issue "${S45_NUM}"
+              else
+                # Step.4.5 がスキップされている場合は Step.5.1/5.2 を直接起動
+                S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+                if [[ -n "${S5_NUM}" ]]; then
+                  S51_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.1:')
+                  S52_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.2:')
+                  [[ -n "${S51_NUM}" ]] && activate_issue "${S51_NUM}"
+                  [[ -n "${S52_NUM}" ]] && activate_issue "${S52_NUM}"
+                fi
+              fi
+              ;;
+
+            "4.5")
+              # Step.4.5 完了 → Step.5.1 と Step.5.2 を並列で ready + assign
+              S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                S51_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.1:')
+                S52_NUM=$(get_sub_issue_number_from_parent "${S5_NUM}" '\[AID\] Step\.5\.2:')
+                [[ -n "${S51_NUM}" ]] && activate_issue "${S51_NUM}"
+                [[ -n "${S52_NUM}" ]] && activate_issue "${S52_NUM}"
+              fi
+              ;;
+
+            "5.1"|"5.2")
+              # Step.5.1 または 5.2 完了 →
+              #   Step.5.3 が存在する場合: 5.1 AND 5.2 の両方完了を確認して Step.5.3 を起動
+              #   Step.5.3 が存在しない場合: 両方完了を確認して Step.5 コンテナ + Root に aid:done
+              S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                # Step.5 の Sub Issues から状態を確認
+                S5_SUBS=$(api_call GET \
+                  "https://api.github.com/repos/${REPO}/issues/${S5_NUM}/sub_issues")
+                NEXT_ACTION=$(echo "${S5_SUBS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json, re
+          issues = json.load(sys.stdin)
+          s51_done = any(
+              'aid:done' in [l['name'] for l in i.get('labels', [])]
+              for i in issues if re.search(r'\[AID\] Step\.5\.1:', i.get('title', ''))
+          )
+          s52_done = any(
+              'aid:done' in [l['name'] for l in i.get('labels', [])]
+              for i in issues if re.search(r'\[AID\] Step\.5\.2:', i.get('title', ''))
+          )
+          s53_issue = next(
+              (i for i in issues if re.search(r'\[AID\] Step\.5\.3:', i.get('title', ''))),
+              None
+          )
+          if s51_done and s52_done:
+              if s53_issue:
+                  print(f"activate_53:{s53_issue['number']}")
+              else:
+                  print("done_s5")
+          else:
+              print("wait")
+          PY
+                )
+                case "${NEXT_ACTION}" in
+                  done_s5)
+                    add_label "${S5_NUM}" "aid:done"
+                    echo "Step.5 コンテナに aid:done を付与しました。"
+                    add_label "${ROOT_ISSUE}" "aid:done"
+                    echo "Root Issue #${ROOT_ISSUE} に aid:done を付与しました。"
+                    post_comment "${ROOT_ISSUE}" "🎉 全ての設計書生成ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                    echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+                    ;;
+                  activate_53:*)
+                    S53_NUM="${NEXT_ACTION#activate_53:}"
+                    # Step.4.5 が存在し aid:done になっているかを確認してから Step.5.3 を起動する
+                    S45_NUM=$(get_sub_issue_number '\[AID\] Step\.4\.5:')
+                    S45_DONE="false"
+                    if [[ -n "${S45_NUM}" ]]; then
+                      S45_DONE=$(api_call GET \
+                        "https://api.github.com/repos/${REPO}/issues/${S45_NUM}" \
+                        | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'aid:done' in [l['name'] for l in d.get('labels',[])] else 'false')")
+                    fi
+                    if [[ "${S45_DONE}" == "true" ]]; then
+                      activate_issue "${S53_NUM}"
+                      echo "Step.5.1/5.2 が両方完了 + Step.4.5 完了確認済み: Step.5.3 (#${S53_NUM}) を起動しました。"
+                    else
+                      # Step.4.5 が未完了のため Step.5.3 をスキップ — ワークフローをブロック状態にする
+                      echo "WARNING: Step.4.5 が aid:done ではありません。Step.5.3 を起動できません。ワークフローをブロック状態にします。"
+                      add_label "${S5_NUM}" "aid:blocked"
+                      add_label "${ROOT_ISSUE}" "aid:blocked"
+                      add_label "${S53_NUM}" "aid:blocked"
+                      _blocked_msg=$(printf '⚠️ **Step.5.3（テスト仕様書）がスキップされました**\n\nStep.4.5（テスト戦略書）が完了していないため、Step.5.3 を起動できませんでした。\nテスト仕様書は TDD プロセスの重要な成果物です。ワークフローは `aid:blocked` 状態です。\n\n**手動で Step.5.3 を起動する手順:**\n1. Step.4.5（テスト戦略書）の Issue を完了させ、`aid:done` ラベルを付与する\n2. Step.5.3 の Issue に `aid:ready` ラベルを付与する\n3. Step.5.3 の Issue に copilot-swe-agent をアサインする\n4. Step.5.3 完了後、必要に応じて（進捗表示目的でのみ）Step.5 コンテナと Root Issue の `aid:blocked` を `aid:done` に変更する\n\n設計書生成ステップ（Step.5.1/5.2）は正常に完了しています。')
+                      post_comment "${ROOT_ISSUE}" "${_blocked_msg}"
+                    fi
+                    ;;
+                  wait)
+                    echo "Step.5.1/5.2 の両方完了を待機中です。"
+                    ;;
+                esac
+              fi
+              ;;
+
+            "5.3")
+              # Step.5.3 完了 → Step.5 コンテナに aid:done + Root に aid:done + 完了コメント
+              S5_NUM=$(get_sub_issue_number '\[AID\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                add_label "${S5_NUM}" "aid:done"
+                echo "Step.5 コンテナに aid:done を付与しました。"
+              fi
+              add_label "${ROOT_ISSUE}" "aid:done"
+              echo "Root Issue #${ROOT_ISSUE} に aid:done を付与しました。"
+              post_comment "${ROOT_ISSUE}" "🎉 全ての設計書生成ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac

@@ -1,0 +1,91 @@
+name: "Auto Batch Design Workflow"
+description: "Issue からバッチ設計ワークフロー (Step.1〜6.3) を自動起動します"
+title: "[Auto Batch Design] "
+labels:
+  - "auto-batch-design"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto Batch Design Workflow
+        このフォームから Issue を作成すると、自動で Step.1〜Step.6.3 の設計タスクが
+        Sub-issue として生成され、Copilot coding agent が順次実行します。
+
+        ### 実行されるステップ
+        | ステップ | 内容 |
+        |---------|------|
+        | **Step.1.1** | バッチドメイン分析（冪等性・トランザクション境界等）|
+        | **Step.1.2** | データソース/デスティネーション分析（並列）|
+        | **Step.2** | バッチデータモデル（入力/ステージング/中間/出力）|
+        | **Step.3** | ジョブ設計書（ジョブ一覧・依存DAG・スケジュール）|
+        | **Step.4** | サービスカタログ（バッチジョブ版）|
+        | **Step.5** | テスト戦略書（バッチ固有テスト方針）|
+        | **Step.6.1** | ジョブ詳細仕様書 |
+        | **Step.6.2** | 監視・運用設計書（詳細）|
+        | **Step.6.3** | TDD テスト仕様書（Step.6.1 AND Step.6.2 完了後）|
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "コード/ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/batch-design-v1"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるため、後段のステップには前段の成果物が必要です。
+        📋 **依存関係**: Step.1.1 ‖ Step.1.2 → Step.2 → Step.3 → Step.4 → Step.5 → Step.6.1 ‖ Step.6.2 → Step.6.3
+        ・Step.1.1 と Step.1.2 は並列実行されます
+        ・Step.6.1 と Step.6.2 は Step.5 完了後に**並列開始**されます
+        ・Step.6.3 は Step.6.1 **AND** Step.6.2 の**両方が完了した後**に開始されます（AND 依存）
+      options:
+        - label: "Step.1.1 — バッチドメイン分析"
+        - label: "Step.1.2 — データソース/デスティネーション分析"
+        - label: "Step.2 — バッチデータモデル"
+        - label: "Step.3 — ジョブ設計書"
+        - label: "Step.4 — サービスカタログ（バッチジョブ版）"
+        - label: "Step.5 — テスト戦略書（バッチ固有テスト方針）"
+        - label: "Step.6.1 — ジョブ詳細仕様書"
+        - label: "Step.6.2 — 監視・運用設計書（詳細）"
+        - label: "Step.6.3 — TDD テスト仕様書（Step.6.1 AND Step.6.2 必須）"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント"
+      description: "任意。補足・制約・注意事項があれば記載してください。各 Step の Sub-issue にも引用されます。"
+      placeholder: |
+        例:
+        - バッチ処理の対象データソース: Azure Blob Storage
+        - 実行スケジュール: 毎日 2:00 AM (JST)
+        - 出力先: Azure SQL Database
+    validations:
+      required: false

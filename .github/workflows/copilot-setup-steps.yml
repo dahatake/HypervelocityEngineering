@@ -1,0 +1,47 @@
+name: "Copilot Setup Steps"
+# Copilot Coding Agent が Azure CLI を使えるようにするセットアップ
+#
+# 【Azure 側の事前準備】
+# 1. Azure Portal で App Registration を作成する
+# 2. App Registration に Federated Credential を追加する
+#    - Issuer: https://token.actions.githubusercontent.com
+#    - Subject: repo:<org>/<repo>:environment:copilot
+#    - Audience: api://AzureADTokenExchange
+# 3. リソースグループ（またはサブスクリプション）に対して
+#    Contributor ロールを App Registration に付与する（最小権限推奨）
+#
+# 【GitHub 側の事前準備】
+# 1. リポジトリの Settings > Environments で "copilot" 環境を作成する
+# 2. 以下の Secrets を登録する
+#    - AZURE_CLIENT_ID     : App Registration のクライアント ID
+#    - AZURE_TENANT_ID     : Azure テナント ID
+#    - AZURE_SUBSCRIPTION_ID: 対象サブスクリプション ID
+
+on:
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: copilot
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Verify Azure CLI
+        run: |
+          az account show --output table
+          echo "Azure CLI login verified successfully"
+      - name: Install additional tools
+        run: |
+          python3 --version
+          jq --version
+          sudo apt-get update && sudo apt-get install -y shellcheck

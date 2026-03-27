@@ -1,179 +1,199 @@
-# HypervelocityEngineering
+# Hypervelocity Engineering
 
-このリポジトリは、要件整理・設計・実装運用のためのテンプレートとガイドをまとめた作業ベースです。
+> **🚧 開発途中** — ワークフロー・Custom Agent・ドキュメントは随時更新されます。
+
+Vibe Coding のベストプラクティスを組み込んだワークフローにより、要求定義からアプリケーション設計・実装までを段階的に実行するテンプレートリポジトリです。現在の実装例は Azure を対象としています。
+
+<!-- English summary for international readers -->
+> A workflow-based template repository for rapid application prototyping — from business requirements through architecture design to implementation — powered by GitHub Copilot Coding Agent.
+
+---
 
 ## 目的
 
-- プロジェクト開始時のドキュメント整備を標準化する
-- 設計・要件・運用の参照先を一本化する
-- エージェント運用時のルールを明確にする
+**Vibe Coding のベストプラクティスを組み込んだワークフローの実施**を目的としています。
+
+人が「何を作るか」を定義し、GitHub Copilot Coding Agent が設計書・コード・テストを依存関係に従って順次生成する。この一連のプロセスをワークフローとして標準化し、再現可能な開発を実現します。
+
+---
 
 ## 対象読者
 
-- プロダクトマネージャー
-- アーキテクト / 開発リード
-- 開発者（実装・レビュー担当）
-- ドキュメント整備担当
+| 対象 | 前提スキル |
+|------|----------|
+| アプリケーション設計・実装を担当するエンジニア / アーキテクト | GitHub Issues / Actions の基本操作 |
+| このリポジトリで初めて Copilot Coding Agent を使う開発者 | Markdown / YAML の読み書き |
+
+---
+
+## 概要
+
+本リポジトリは **ワークフローベース** のアプローチを取ります。
+
+**基本サイクル:** Issue 作成 → Sub-issue 自動生成 → Copilot Coding Agent（Custom Agent）が自動アサイン → PR 作成 → レビュー・マージ → 次の Step が自動起動
+
+各ワークフローの Step では TDD 原則に基づいて設計成果物・テスト・実装コードを自動生成します。
+
+### 3 段構造
+
+フローは以下の 3 段構造で構成されます。
+
+```mermaid
+graph TD
+    A["01. 要求定義<br>ユースケース作成・事業分析"]
+    B["02. アプリ選定 &<br>ベースアーキテクチャ選定"]
+    C1["Microservice<br>設計 → 実装"]
+    C2["Batch<br>設計 → 実装"]
+    C3["IoT<br>設計"]
+    C4["AI Agent<br>設計 → 実装"]
+
+    A --> B
+    B --> C1
+    B --> C2
+    B --> C3
+    B --> C4
+```
+
+1. **01 — 要求定義**: 事業分析・ユースケースを作成
+2. **02 — アプリ選定 & ベースアーキテクチャ選定**: ユースケースからアプリ一覧を作成し、アーキテクチャを推薦
+3. **03 以降 — 設計 & 実装**: 選定されたベースアーキテクチャ（Microservice、Batch、IoT、AI Agent）に応じて分岐
+
+---
+
+## ワークフロー一覧
+
+| フェーズ | ガイド | ワークフロー ID | Issue テンプレート |
+|---------|--------|:---:|:---:|
+| **01 — 要求定義** | [01-Business-Requirement.md](users-guide/01-Business-Requirement.md) | — | — |
+| **02 — アプリ選定** | [02-App-Selection.md](users-guide/02-App-Selection.md) | `aas` | `auto-app-selection.yml` |
+| **03 — Microservice 設計** | [03-App-Design-Microservice-Azure.md](users-guide/03-App-Design-Microservice-Azure.md) | `aad` | `auto-app-design.yml` |
+| **04 — Batch 設計** | [04-App-Design-Batch.md](users-guide/04-App-Design-Batch.md) | `abd` | `auto-batch-design.yml` |
+| **05 — Microservice 実装** | [05-App-Dev-Microservice-Azure.md](users-guide/05-App-Dev-Microservice-Azure.md) | `asdw` | `auto-app-dev-microservice.yml` |
+| **06 — Batch 実装** | [06-App-Dev-Batch-Azure.md](users-guide/06-App-Dev-Batch-Azure.md) | `abdv` | `auto-batch-dev.yml` |
+| **07 — AI Agent（Quick）** | [07-AIAgent-Simple.md](users-guide/07-AIAgent-Simple.md) | — | — |
+| **08 — AI Agent（本格）** | [08-AIAgent.md](users-guide/08-AIAgent.md) | — | — |
+| **IoT 設計** | — | `aid` | `auto-iot-design.yml` |
+
+> 01（要求定義）と 07（AI Agent Quick）は手動実行です。それ以外はワークフローによる自動実行が可能です。
+
+---
+
+## 2 つの実行方法
+
+本リポジトリのワークフローは **2 通りの方法** で実行できます。いずれも `.github/scripts/` 配下の CLI コマンド（Bash / PowerShell）と連動して動作します。
+
+| | **方法 1: GitHub Copilot Coding Agent** | **方法 2: Copilot CLI SDK** |
+|---|---|---|
+| **概要** | GitHub.com 上で Issue を登録し、Copilot をアサインして動作させる | ローカルの PC / Mac 上で Python SDK を実行 |
+| **実行場所** | クラウド（GitHub Actions） | ローカル |
+| **操作** | Issue 作成 → ラベル付与 → Copilot が自動アサイン | CLI コマンドで実行 |
+| **認証** | `COPILOT_PAT` シークレット | `gh auth login` |
+| **詳細** | [users-guide/README.md](users-guide/README.md) | [users-guide/SDK-Guide.md](users-guide/SDK-Guide.md) |
+
+### 方法 1: GitHub Copilot Coding Agent（GitHub.com Web UI 方式）
+
+GitHub.com の Issues タブから Issue テンプレートで Issue を作成すると、GitHub Actions が起動し、Sub-issue を自動生成します。各 Sub-issue には Custom Agent 付きで Copilot が自動アサインされ、設計ドキュメントやコードを含む PR が自動作成されます。
+
+```
+Issue 作成 → GitHub Actions 起動 → Sub-issue 一括生成
+  → Copilot が各 Sub-issue に自動アサイン → PR 作成 → マージ → 次 Step 自動起動
+```
+
+### 方法 2: Copilot CLI SDK（ローカル実行方式）
+
+ローカル環境から Python スクリプトでワークフローを実行します。GitHub Actions を使わずに MCP Server や Custom Agent を柔軟に組み合わせられます。
+
+> 詳細 → [SDK ユーザーガイド](users-guide/SDK-Guide.md)
+
+### CLI スクリプトとの連携
+
+ワークフローのオーケストレーション・Sub-issue 作成・plan.md バリデーションなどを行う CLI コマンド群（Bash / PowerShell）を同梱しています。両方の実行方法から利用できます。
+
+> 詳細 → [.github/scripts/README.md](.github/scripts/README.md)
+
+---
+
+## リポジトリ構造
+
+```
+.
+├── AGENTS.md                       ← Copilot Agent 行動規約（全 Agent 共通ルール）
+├── users-guide/                    ← ワークフローのユーザーガイド（各フェーズ）
+│   ├── README.md                   ← セットアップ手順・利用方法
+│   ├── 01-Business-Requirement.md
+│   ├── 02-App-Selection.md
+│   ├── 03-App-Design-Microservice-Azure.md
+│   ├── 04-App-Design-Batch.md
+│   ├── 05-App-Dev-Microservice-Azure.md
+│   ├── 06-App-Dev-Batch-Azure.md
+│   ├── 07-AIAgent-Simple.md
+│   ├── 08-AIAgent.md
+│   └── SDK-Guide.md
+├── .github/
+│   ├── agents/                     ← Custom Agent 定義ファイル
+│   ├── ISSUE_TEMPLATE/             ← ワークフロー起動用 Issue テンプレート
+│   ├── workflows/                  ← GitHub Actions ワークフロー定義
+│   ├── scripts/                    ← CLI コマンド（Bash / PowerShell）
+│   └── copilot-instructions.md     ← Copilot 追加指示
+└── LICENSE                         ← MIT License
+```
+
+---
+
+## Custom Agent
+
+`.github/agents/` 配下に Custom Agent が定義されています。各ワークフローの Step ごとに専用の Custom Agent が自動的に選択されます。
+
+| カテゴリ | Agent 例 | 用途 |
+|---------|---------|------|
+| **設計 — Microservice** | `Arch-Microservice-DomainAnalytics`, `Arch-DataModeling`, `Arch-UI-List` 等 | ドメイン分析・データモデル・画面一覧・サービスカタログ |
+| **設計 — Batch** | `Arch-Batch-DomainAnalytics`, `Arch-Batch-JobCatalog` 等 | バッチドメイン分析・ジョブ設計・監視運用 |
+| **設計 — IoT** | `Arch-IoT-DomainAnalytics`, `Arch-IoT-DeviceConnectivity` | IoT ドメイン分析・デバイス接続設計 |
+| **設計 — AI Agent** | `Arch-AIAgentDesign` | AI Agent アプリケーション定義・粒度設計・詳細設計 |
+| **設計 — テスト** | `Arch-TDD-TestStrategy`, `Arch-TDD-TestSpec` | テスト戦略・テスト仕様書 |
+| **実装** | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` 等 | Azure Functions 実装・UI コーディング・デプロイ |
+| **QA / レビュー** | `QA-AzureArchitectureReview`, `QA-AzureDependencyReview` | Azure WAF レビュー・依存関係レビュー |
+
+> 全 Agent 一覧 → [.github/agents/](https://github.com/dahatake/RoyalytyService2ndGen/tree/main/.github/agents)
+
+---
+
+## AGENTS.md — Copilot Agent 行動規約
+
+[AGENTS.md](AGENTS.md) は、すべての Copilot Coding Agent が従う共通ルール（ベースライン）です。AGENTS.md のルールは Custom Agent の指示より優先されます。
+
+主なルール:
+- **コンテキスト収集プロトコル** — 不足情報は質問票で確認してから作業開始
+- **計画（DAG）と分割** — 15 分超のタスクは Sub-issue に分割必須
+- **work/ ディレクトリ** — 計画・作業ファイルの標準構造
+- **最終品質レビュー** — 3 つの異なる観点でセルフレビュー
+
+---
 
 ## クイックスタート
 
-1. ルール確認: `AGENTS.md`
-2. 設計テンプレート確認: `docs/templates/`
-3. サンプル確認: `sample/`
-4. ユーザーガイド確認: `users-guide/`
+> 詳細な手順は [users-guide/README.md](users-guide/README.md) を参照してください。
 
-## ディレクトリ構成
+1. **リポジトリ作成** — このリポジトリの内容を自分のリポジトリにコピー
+2. **権限設定** — Settings → Actions → Workflow permissions を **Read and write** に設定
+3. **Copilot 有効化** — リポジトリで GitHub Copilot を有効にする
+4. **シークレット設定** — `COPILOT_PAT` に PAT を設定（Copilot 自動アサインに必要）
+5. **ラベル作成** — 各ワークフロー用のラベルを作成（Bootstrap ワークフローが自動作成するものもあり）
+6. **Issue 作成** — Issues タブ → New Issue → ワークフローテンプレートを選択して開始
 
-```text
-.
-├─ AGENTS.md
-├─ docs/
-│  └─ templates/
-├─ sample/
-└─ users-guide/
-```
+---
 
-## 主なドキュメント
+## ドキュメント一覧
 
-- `AGENTS.md`: リポジトリ運用の強制ルール
-- `docs/templates/agent-playbook.md`: エージェント作業テンプレート
-- `docs/templates/microservice-definition.md`: マイクロサービス定義テンプレート
-- `sample/business-requirement.md`: 要件定義サンプル
-- `sample/usecase-list.md`: ユースケース一覧サンプル
-- `users-guide/README.md`: ユーザーガイド入口
+| ドキュメント | 説明 |
+|-------------|------|
+| [users-guide/README.md](users-guide/README.md) | ユーザーガイド（準備・セットアップ・利用手順・トラブルシューティング） |
+| [users-guide/SDK-Guide.md](users-guide/SDK-Guide.md) | Copilot CLI SDK コマンドリファレンス |
+| [AGENTS.md](AGENTS.md) | Copilot Agent 行動規約（コンテキスト収集・計画・分割・品質レビュー） |
+| [.github/scripts/README.md](.github/scripts/README.md) | CLI コマンドリファレンス（Bash / PowerShell） |
 
-## 使用方法に関する重要事項
-
-本リポジトリの**具体的な使用手順・運用方法・実行フローは `users-guide/` 配下に集約**されています。
-実務で利用する際は、最初に `users-guide/README.md` を参照し、各ユースケースに対応するガイドに従って進めてください。
-
-- 使用方法の一次参照先: `users-guide/README.md`
-- 設計・開発・運用の詳細手順: `users-guide/` 配下の各ガイド
-
-運用の一貫性と品質確保のため、README は概要・索引、`users-guide/` は実行手順という役割分担で管理します。
-
-## 進め方（推奨）
-
-1. `sample/` を参考に要件を整理
-2. `docs/templates/` を用いて設計ドキュメントを作成
-3. `users-guide/` の該当ガイドで実装・運用の方針を確認
-4. PR では目的・変更点・検証結果を明記
-
-## sample ドキュメントの取り扱い
-
-`sample/` 配下のドキュメントは、Microsoft 365 Copilot のリサーチツール Agent により作成されたサンプルです。
-そのため、正式なプロジェクト成果物として利用する場合は、利用者が内容を確認したうえで、必要なファイルを `docs/` 配下へコピーして管理してください。
-
-- `sample/`: 参照用サンプル（原本）
-- `docs/`: プロジェクトで採用・運用する正式ドキュメント
-
-この運用により、サンプルと正式版の責務を分離し、レビュー・更新履歴・参照先の一貫性を維持できます。
-
-## 開発ルール（抜粋）
-
-- 変更前に `AGENTS.md` を確認する
-- 変更は最小差分で行う
-- 検証手順（テスト/チェック）を PR に記録する
-- 機密情報をコミットしない
-
-## Custom Agent 索引
-
-### 優先ルール（最重要）
-
-```mermaid
-flowchart TD
-	A[AGENTS.md\nリポジトリ共通の強制ルール] --> B[.github/copilot-instructions.md\n補足ルール]
-	B --> C[.github/agents/*.agent.md\n個別Agent定義]
-	C --> D[.github/workflows/*.yml\nIssue/PR自動処理]
-	C --> E[users-guide/README.md\n利用者向け手順]
-
-	A -.最優先.-> C
-	A -.最優先.-> D
-```
-
-- ルールの衝突時は `AGENTS.md` が常に優先
-- 15分超または不確実性が中/高の場合は分割モード（Plan-Only）
-
-### どこを編集すると何が変わるか
-
-| 目的 | 編集するファイル/場所 | 影響範囲 |
-|---|---|---|
-| 全Agent共通ルールを変更 | `AGENTS.md` | 全Agent/全ワークフロー |
-| Copilot向け補足ルールを変更 | `.github/copilot-instructions.md` | 全Agent実行時の指示 |
-| 個別Agentの役割・入力・出力を変更 | `.github/agents/<Agent名>.agent.md` | 該当Agentのみ |
-| Sub Issue自動作成を変更 | `.github/workflows/create-subissues-from-pr.yml` | 分割運用全体 |
-| 15分判定のCI検証を変更 | `.github/workflows/validate-plan.yml` / `.github/workflows/check-split-mode.yml` | 分割判定/実装禁止チェック |
-| 利用者向け説明を変更 | `users-guide/README.md` | 運用手順の理解 |
-
-### Custom Agent 一覧（カテゴリ別）
-
-#### アーキテクチャ/設計系（Arch-*）
-
-| Agent名 | 主な役割 | ファイル |
-|---|---|---|
-| Arch-AIAgentDesign | AI Agentの定義/粒度/詳細設計を作成 | `.github/agents/Arch-AIAgentDesign.agent.md` |
-| Arch-ApplicationCandidateAnalyzer | UCからアプリ候補/MVP選定のための定義を作成 | `.github/agents/Arch-ApplicationCandidateAnArchalyzer.agent.md` |
-| Arch-ArchitectureCandidateAnalyzer | APPごとに最適アーキテクチャ候補を選定 | `.github/agents/Arch-ArchitectureCandidateAnalyzer.agent.md` |
-| Arch-DataModeling | エンティティ抽出とデータモデル作成 | `.github/agents/Arch-DataModeling.agent.md` |
-| Arch-Micro-DomainAnalytics | DDD観点のドメイン分析 | `.github/agents/Arch-Micro-DomainAnalytics.agent.md` |
-| Arch-Micro-ServiceCatalog | 画面→機能→API→SoTのサービスカタログ化 | `.github/agents/Arch-Micro-ServiceCatalog.agent.md` |
-| Arch-Micro-ServiceDetail | サービス詳細仕様を作成/更新 | `.github/agents/Arch-Micro-ServiceDetail.agent.md` |
-| Arch-Micro-ServiceIdentify | ドメイン分析からサービス候補を抽出 | `.github/agents/Arch-Micro-ServiceIdentify.agent.md` |
-| Arch-UI-Detail | 画面定義書を生成/更新 | `.github/agents/Arch-UI-Detail.agent.md` |
-| Arch-UI-List | 画面一覧/遷移図を作成 | `.github/agents/Arch-UI-List.agent.md` |
-
-#### 開発/デプロイ系（Dev-*）
-
-| Agent名 | 主な役割 | ファイル |
-|---|---|---|
-| Dev-WebAzure-AddServiceDeploy | 追加Azureサービスを冪等デプロイ | `.github/agents/Dev-WebAzure-AddServiceDeploy.agent.md` |
-| Dev-WebAzure-AddServiceDesign | 追加Azureサービスの設計 | `.github/agents/Dev-WebAzure-AddServiceDesign.agent.md` |
-| Dev-WebAzure-ComputeDeploy-AzureFunctions | Functionsデプロイ/CI-CD/スモークテスト | `.github/agents/Dev-WebAzure-ComputeDeploy-AzureFunctions.agent.md` |
-| Dev-WebAzure-ComputeDesign | Azureコンピュート選定設計 | `.github/agents/Dev-WebAzure-ComputeDesign.agent.md` |
-| Dev-WebAzure-DataDeploy | データ系Azureサービス作成とデータ登録 | `.github/agents/Dev-WebAzure-DataDeploy.agent.md` |
-| Dev-WebAzure-DataDesign | Polyglot Persistenceに基づくデータ設計 | `.github/agents/Dev-WebAzure-DataDesign.agent.md` |
-| Dev-WebAzure-ServiceCoding-AzureFunctions | Azure Functions実装とテスト整備 | `.github/agents/Dev-WebAzure-ServiceCoding-AzureFunctions.agent.md` |
-| Dev-WebAzure-UICoding | UI実装とAPIクライアント整備 | `.github/agents/Dev-WebAzure-UICoding.agent.md` |
-| Dev-WebAzure-UIDeploy-AzureStaticWebApps | Static Web Appsデプロイ/CD構築 | `.github/agents/Dev-WebAzure-UIDeploy-AzureStaticWebApps.agent.md` |
-
-#### PM/QA系
-
-| Agent名 | 主な役割 | ファイル |
-|---|---|---|
-| PM-UseCaseDetail | UCを1件詳細化し仕様書化 | `.github/agents/PM-UseCaseDetail.agent.md` |
-| QA-AzureArchitectureReview | WAF/ASB準拠のAzure構成レビュー | `.github/agents/QA-AzureArchitectureReview.agent.md` |
-| QA-AzureDependencyReview | Azure依存の証跡点検と必要最小修正 | `.github/agents/QA-AzureDependencyReview.agent.md` |
-
-### 実行フロー（Issue→Agent→分割→Sub Issue）
-
-```mermaid
-flowchart LR
-	I[IssueでCustom Agentを選択] --> A[.agent.md 読み込み]
-	A --> P[plan.md 作成]
-	P --> J{見積 > 15分\nまたは不確実性 中/高}
-	J -- Yes --> S[subissues.md 作成]
-	S --> W[create-subissues ラベル]
-	W --> CI[create-subissues-from-pr.yml 実行]
-	J -- No --> X[実装/更新]
-	X --> V[検証]
-```
-
-### カスタマイズ時の最短チェックリスト
-
-1. `AGENTS.md` の優先ルールと分割判定を確認
-2. 変更対象の `.agent.md` の `name` / `description` / 入出力定義を確認
-3. 分割運用に関わるなら workflow（`create-subissues-from-pr.yml`, `validate-plan.yml`）を確認
-4. 利用者への案内が必要なら `users-guide/README.md` を更新
-
-### 注意点
-
-- `Arch-ApplicationCandidateAnArchalyzer.agent.md` はファイル名と Agent名表記に揺れがあるため、編集時は参照ミスに注意
-- `.agent.md` で固有ルールを追加しても、共通ルールは `AGENTS.md` が優先
+---
 
 ## ライセンス
 
-`LICENSE` を参照してください。
-
-## 貢献
-
-Issue / Pull Request での改善提案を歓迎します。大きな変更は先に方針を共有してください。
+[MIT License](LICENSE)

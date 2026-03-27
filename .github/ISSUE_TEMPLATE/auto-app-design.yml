@@ -1,0 +1,86 @@
+name: "Auto App Design Workflow"
+description: "Issue からアプリケーション設計ワークフロー (Step.1〜Step.8) を自動起動します"
+title: "[Auto App Design] アプリケーション設計"
+labels:
+  - "auto-app-design"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto App Design Workflow
+        このフォームから Issue を作成すると、自動で Step.1〜Step.8 の設計タスクが
+        Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
+
+        ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
+        - `docs/app-list.md` — Auto App Selection Workflow (Step.1) の成果物
+
+        💡 **複数回実行可能**: 同じ `docs/app-list.md` に対して設計を複数回実行できます。別ブランチを指定することで、異なる設計方針を並行比較することが可能です。
+
+        📋 **アプリケーション粒度**: Step.1.2 以降は `docs/app-list.md` のアプリケーション一覧（APP-ID）を参照し、各成果物に APP-ID との紐付けを行います。
+
+        🤖 **AI Agent 設計**: Step.8（AI Agent 設計）は、チャット・音声等の AI Agent が有効なアプリケーションに対してのみ実行してください。AI Agent 不要な場合は Step.8 をスキップしてください。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/design-v2"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
+        📋 **依存関係**:
+        Step.1 (1.1 / 1.2) → Step.2 → Step.3 → Step.4 → Step.5 → Step.6 → Step.7 (7.1 / 7.2 並列) → Step.7.3 → Step.8 (8.1 → 8.2 → 8.3)
+        ・Step.3（データカタログ）は Step.2 が必須
+        ・Step.6（テスト戦略書）は Step.5 が必須
+        ・Step.7.1 / 7.2 は Step.6（またはStep.6スキップ時は Step.5）が必須
+        ・Step.7.3（テスト仕様書）は Step.6 + Step.7.1 + Step.7.2 が全て必須
+        ・Step.8（AI Agent 設計）は Step.7.3 が必須。AI Agent 不要な場合はスキップ可
+      options:
+        - label: "Step.1 — マイクロサービスアプリケーション定義書 (Step.1.1 ドメイン分析 / Step.1.2 マイクロサービス一覧抽出)"
+        - label: "Step.2 — データモデル作成"
+        - label: "Step.3 — データカタログ作成 (概念エンティティ × 物理テーブル/列マッピング) ※ Step.2 が必須"
+        - label: "Step.4 — 画面一覧と遷移図"
+        - label: "Step.5 — サービスカタログ表"
+        - label: "Step.6 — テスト戦略書 (TDDテスト方針策定: UI/APIテスト分類・テストダブル戦略・カバレッジ方針) ※ Step.5 が必須"
+        - label: "Step.7 — 詳細設計書生成 (Step.7.1 画面定義書 / Step.7.2 マイクロサービス詳細仕様書)"
+        - label: "Step.7.3 — テスト駆動開発用テスト仕様書 (サービス別テスト仕様書 `docs/test-specs/{serviceId}-test-spec.md` + 画面別テスト仕様書 `docs/test-specs/{screenId}-test-spec.md` を全件生成。テストダブル設計・契約テスト・A11yテスト含む) ※ Step.6 + Step.7 (7.1 / 7.2) が必須。この成果物は Dev ワークフロー (ASDW Step.2.3TC / Step.3.0TC) の前提条件"
+        - label: "Step.8 — AI Agent 設計 (Step.8.1 アプリケーション定義 / Step.8.2 粒度設計 / Step.8.3 詳細設計) ※ Step.7.3 が必須"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: 画面は React で実装予定。認証は Azure AD B2C を使用。"
+    validations:
+      required: false

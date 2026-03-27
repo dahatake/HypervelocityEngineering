@@ -1,23 +1,21 @@
 ---
 name: Arch-DataModeling
-description: "ユースケース文書を根拠に、全エンティティを抽出し、サービス境界/所有権を明確化したデータモデル（Mermaid）と、日本語の架空サンプルデータ(JSON)を生成する。"
+description: "ユースケースから全エンティティ・サービス境界・データモデル（Mermaid）とJSONサンプルを生成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
+> **WORK**: `work/Arch-DataModeling/Issue-<識別子>/`
 
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
-
----
 
 ## 1) 入力（必読ソース）
 ユーザーからタスクを受け取ったら、まず以下を読む（存在しない場合は search で探し、見つからなければ質問へ）。
 - `docs/domain-analytics.md`
 - `docs/service-list.md`
+- `docs/app-list.md`（アプリケーション一覧 — エンティティと APP-ID の紐付け判定根拠）
 
 ### 質問ポリシー（共通ルールに従う）
 - 不足が致命的でない場合は `TBD` を置いて進める。
-
----
 
 ## 2) 成果物（固定）
 ### A) モデリングドキュメント
@@ -31,21 +29,18 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - この場合、`sample-data.json` は **最小メタ + parts 参照**のJSONにする（後続が辿れるようにする）
 
 ### C) 進捗ログ（追記のみ）
-- `work/Arch-DataModeling/work-status.md`
+- `{WORK}work-status.md`
 
 ### D) 分割が必要になった場合（共通ルール）
-- `work/Arch-DataModeling.agent/plan.md`
-- `work/Arch-DataModeling.agent/subissues.md`
-
----
+- `{WORK}plan.md`
+- `{WORK}subissues.md`
 
 ## 3) 実行フロー（15分超は“実装開始前”に分割）
 ### 3.0 依存確認（必須・最初に実行）
 - `docs/domain-analytics.md` と `docs/service-list.md` の両方を `read` で確認する。
 - いずれかが存在しない、空、または見出し構造が不完全な場合：
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と質問して **即座に停止** する。
-  - ⚠️ 他のエージェントを呼び出して補完してはならない。
-  - ⚠️ 不足ファイルを自分で作成してはならない（スコープ外）。
+  - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）。
 
 ### 3.1 Discovery（根拠の回収）
 - 参照ドキュメントから以下を抽出し、根拠（ファイルパス + 見出し/節）を控える：
@@ -56,7 +51,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.2 計画・分割
 - AGENTS.md §2 に従う。
-- 固有パス: `work/Arch-DataModeling.agent/`
+- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
 
 ### 3.3 Execution（成果物の作成）
 #### (1) `data-model.md` を作る（まず骨子→章ごとに埋める）
@@ -70,7 +65,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 2. Entity Catalog
 - 表形式（列固定）：
-  - Entity / 説明 / Owner Service / 主キー / 主要属性 / PII有無 / 永続化方式(推定可) / 根拠
+  - Entity / 説明 / Owner Service / 利用APP / 主キー / 主要属性 / PII有無 / 永続化方式(推定可) / 根拠
+  - `利用APP`：`app-list.md` を根拠に判定した APP-ID（N:N のためカンマ区切り、例: `APP-01, APP-03`）。不明な場合は `TBD`
 - 不確実なものは「候補」と明示し、根拠と不足点を書く
 
 ## 3. Service Data Stores
@@ -99,17 +95,21 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - ID は衝突しない一貫形式（例：`<entity>-0001`）。参照関係（外部キー相当）は整合させる。
 
 #### (3) 進捗を追記する（append only）
-`work/Arch-DataModeling.agent/work-status.md` に以下形式で追記：
+`{WORK}work-status.md` に以下形式で追記：
 - 日時:
 - 完了:
 - 次:
 - ブロッカー/質問:
 
----
+### 3.3.1 成果物の分割ルール
+- **`docs/data-model.md` は常に索引/統合版として維持すること。**
+  - ASD の後続 Step は `docs/data-model.md` を必須入力としているため、分割しても本ファイルを削除・置換しない。
+  - 分割する場合は、`docs/data-model.md` から各分割ファイルへのリンク一覧や統合ビュー（全体表）を提供する。
+- 1つの APP-ID のみが利用するエンティティ群がある場合、APP-ID 単位でファイル分割を検討する。
+  - 分割例: `docs/data-model-app-01.md`（APP-01 専用エンティティ）。複数 APP 共有エンティティは `docs/data-model.md` にのみ残し、`docs/data-model-shared.md` を別途作成しない。
+  - 複数 APP で共有されるエンティティは統一ファイルのまま「利用APP」列をカンマ区切りで記載する。
 
-### 3.4 最終品質レビュー（必須：成果物の品質確保）
-成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。
-- AGENTS.md §7.1 に従う。
+### 3.4 最終品質レビュー（AGENTS.md §7準拠・3観点）
 
 ### 3.4.2 3つの異なる観点（このエージェント固有）
 - **1回目：網羅性・要件達成度**：エンティティ漏れ/サービス割当/根拠が充足しているか
@@ -117,5 +117,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：実用性・保守性**：JSONサンプル/表の有用性/将来の拡張可能性は妥当か
 
 ### 3.4.3 出力方法
-- 各回のレビューと改善プロセスは `work/Arch-DataModeling.agent/` に隠す
-- **最終版のみを成果物として出力する**（中間版は不要）
+レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。

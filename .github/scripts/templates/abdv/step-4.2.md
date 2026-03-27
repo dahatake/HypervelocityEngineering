@@ -1,0 +1,22 @@
+{root_ref}
+## 目的
+サービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、設計書との整合性を確認する。
+
+## 入力
+- `docs/azure/AzureServices-data.md`
+- `docs/batch/batch-service-catalog.md`
+- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ダッシュボード設定の整合確認）
+- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）
+
+## 出力
+- 整合性チェックレポート（`docs/azure/dependency-review.md`）
+
+## Custom Agent
+`QA-AzureDependencyReview` を使用
+
+## 依存
+- Step.4.1 と同じ前段 Step が `abdv:done` であること（Step.3 → 並列起動）
+
+## 完了条件
+- `docs/azure/dependency-review.md` が作成されている
+- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}

@@ -1,0 +1,109 @@
+name: Copilot PR レビュー指示
+
+# auto-context-review ラベルが PR に付与されており、かつ PR が ready（非 draft）状態の場合に、
+# 自動的にレビュー指示コメントを PR に投稿する。
+# （目的達成の3観点レビュー指示）
+#
+# トリガー条件:
+#   - labeled: PR にラベルが付与された時（ジョブ if で auto-context-review + !draft をチェック）
+#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベル + !draft をチェック）
+#   → どちらの操作順序でも動作する（ラベル→ready / ready→ラベル）
+#
+# ジョブ実行条件:
+#   - PR に auto-context-review ラベルが付与されていること
+#   - PR が draft でないこと（ready 状態）
+#   - すべてを満たす場合のみジョブが実行される
+#
+# opt-out チェック（ステップレベル）:
+#   - PR body の <!-- START COPILOT ORIGINAL PROMPT --> より前の部分のみを対象に
+#     <!-- auto-context-review: false --> の有無をチェックする
+#   - Copilot が元 Issue body を PR body に引用している場合でも誤マッチしない
+#   - opt-out マーカーが検出された場合、後続ステップ（guard, post comment）をスキップする
+#
+# 冪等化:
+#   - 同一 PR に対する重複コメントを防止（<!-- copilot-auto-review-posted --> マーカーで判定）
+#   - 再レビューしたい場合は、既存コメントを削除してから auto-context-review ラベルを削除→再付与
+#
+# 注意:
+#   - pull_request_target を使用（ベースブランチのワークフロー定義で実行されるため、
+#     Copilot が作成した PR でも自動的に発火する）
+#   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
+#   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
+
+on:
+  pull_request_target:
+    types: [labeled, ready_for_review]
+
+concurrency:
+  group: copilot-auto-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-review:
+    if: >
+      contains(github.event.pull_request.labels.*.name, 'auto-context-review')
+      && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+
+    steps:
+      - name: Check opt-out marker in PR body (excluding quoted sections)
+        id: optout
+        run: |
+          set -euo pipefail
+          # <!-- START COPILOT ORIGINAL PROMPT --> 以降（Copilot による元 Issue 引用部分）を除外し、
+          # PR 本文のみを対象に opt-out マーカーをチェックする
+          PR_BODY_HEAD=$(printf '%s' "${PR_BODY}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- auto-context-review: false -->'; then
+            echo "PR body の先頭部分に opt-out マーカーが含まれています。後続ステップをスキップします。"
+            echo "opted_out=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "opted_out=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check for existing review comment
+        id: guard
+        if: steps.optout.outputs.opted_out != 'true'
+        run: |
+          set -euo pipefail
+          MARKER="<!-- copilot-auto-review-posted -->"
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\"))] | length" \
+            2>&1) || existing="0"
+          if [ "${existing:-0}" -gt 0 ] 2>/dev/null; then
+            echo "レビュー指示コメントは既に投稿済みです。スキップします。"
+            echo "posted=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "posted=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Post auto review instruction to Copilot
+        if: steps.optout.outputs.opted_out != 'true' && steps.guard.outputs.posted != 'true'
+        env:
+          COMMENT_BODY: |
+            <!-- copilot-auto-review-posted -->
+            @copilot
+            
+            あなたの回答は、私があなたに依頼した「目的」を達成できているのかを、3回、異なる観点でレビューをして、問題点を15～100個リストアップをしてください。
+            私の目的を再確認して、リストアップした問題点に対する解決策を立案し、その解決策を実行して、目的の達成のできる成果物を最終の成果物として作成してください。
+            
+            捏造は絶対に禁止です。
+        run: |
+          set -euo pipefail
+          if gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT_BODY}"; then
+            echo "✅ レビュー指示コメントを PR #${PR_NUMBER} に投稿しました。"
+          else
+            echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
+            exit 1
+          fi

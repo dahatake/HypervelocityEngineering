@@ -1,0 +1,131 @@
+name: "App Dev Microservice Workflow"
+description: "Issue からマイクロサービス開発ワークフロー (Step.1〜4) を自動起動します"
+title: "[Auto App Dev Microservice] "
+labels:
+  - "auto-app-dev-microservice"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## App Dev Microservice Workflow
+        このフォームから Issue を作成すると、自動で以下の開発タスクが
+        Sub-issue として生成され、Copilot coding agent が順次実行します。
+
+        **本ワークフローは 1 度の実行で 1 つのアプリケーション (APP-ID) のみを対象とします。**
+
+        ### 前提条件
+        - `users-guide/08-AIAgent.md` がリポジトリ内に存在していること（Step.2.6 で使用）
+        - アプリケーション設計ワークフロー（Auto App Design / AAD）が完了し、以下のドキュメントが存在していること:
+          - `docs/domain-analytics.md`, `docs/service-list.md`, `docs/data-model.md`
+          - `docs/screen-list.md`, `docs/service-catalog.md`
+          - `docs/usecase-list.md`
+          - `docs/screen/`, `docs/services/` 配下の定義書
+          - `src/data/sample-data.json`
+          - `docs/test-strategy.md`（設計ワークフローの TDD テスト戦略書生成ステップで作成済み）
+          - `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。サービス別テスト仕様書）
+          - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。画面別テスト仕様書）
+          - `docs/app-list.md`（アプリケーション一覧。Auto App Selection Workflow の成果物。存在しない場合はアプリケーション名を直接入力可）
+        - リポジトリに以下のシークレットが設定されていること:
+          - `COPILOT_PAT`
+          - `AZURE_STATIC_WEB_APPS_API_TOKEN`（Step.3.2 の SWA デプロイで使用）
+
+        ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
+        | ステップ | 内容 | サブステップ |
+        |---------|------|------------|
+        | **Step.1** | データ | 1.1 Azure データストア選定 → 1.2 Azure データサービス Deploy |
+        | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → **2.3TC テストコード生成 (TDD RED)** → 2.4 サービスコード実装 (TDD GREEN) → 2.5 Azure Compute Deploy → 2.6 AI Agent 構成設計 → **2.7T AI Agent テスト仕様書 (TDD RED)** → **2.7TC AI Agent テストコード生成 (TDD RED)** → **2.7 AI Agent 実装 (TDD GREEN)** → **2.8 AI Agent Deploy** |
+        | **Step.3** | UI 作成 | **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
+        | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（並列実行） |
+
+  - type: input
+    id: app_id
+    attributes:
+      label: "対象アプリケーション (APP-ID)"
+      description: |
+        `docs/app-list.md` のアプリ一覧（アーキタイプ）概要セクションから APP-ID（例: `APP-01`）を入力してください。
+        `docs/app-list.md` が存在しない場合は、アプリケーションの名称をそのまま入力してください（入力した名称が ID として扱われます）。
+        1 度の実行で 1 つのアプリケーションのみを対象とします。
+      placeholder: "例: APP-01 または 会員ポータル"
+    validations:
+      required: true
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "コード/ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/dev-v2"
+    validations:
+      required: true
+
+  - type: input
+    id: resource_group
+    attributes:
+      label: "リソースグループ名"
+      description: "Azure のリソースグループ名を入力してください。各ステップの Azure CLI スクリプトおよび Sub-issue のタスク指示に埋め込まれます。"
+      placeholder: "例: rg-royalty-service-dev"
+    validations:
+      required: true
+
+  - type: input
+    id: usecase_id
+    attributes:
+      label: "ユースケースID"
+      description: "AI Agent 設計（Step.2.6）で使用するユースケースIDを入力してください。Agent 設計書は `docs/agent/` 配下に配置されます（設計フェーズ（AAD Step.8）で作成済みの場合は不要）。未入力の場合、Step.2.6 はリポジトリ内のユースケースを自動探索します。"
+      placeholder: "例: UC-001"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        **未選択の場合は全ステップを実行します。**
+        **注意**: 依存関係があるため、後段のステップには前段の成果物が必要です。
+        前段をスキップする場合は、対応するドキュメント／リソースが既に存在していることを確認してください。
+        ⚠️ **TDD 警告**: Step.2 をスキップすると、TDD RED フェーズ（テストコード生成）が未実施のままサービス実装（Step.2.4）が開始されます。
+        テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（AAD Step.7.3）で生成済みであることを前提とします。Step.2 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
+        同様に、AI Agent 実装（Step.2.7）をスキップする場合は、`test/agent/` 配下にテストコードが既に存在していることを確認してください。
+        Step.3 をスキップすると、UI テストコード生成（Step.3.0TC）が未実施のまま UI 実装をスキップすることになります。
+        Step.3 をスキップする場合は、`docs/test-specs/` と `test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
+      options:
+        - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
+        - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.8 + Step.2.3TC, Step.2.7T, Step.2.7TC)"
+        - label: "Step.3 — UI 作成 (Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy)"
+        - label: "Step.4 — アーキテクチャレビュー (Step.4.1 WAF レビュー / Step.4.2 整合性チェック)"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step の Sub-issue にも引用されます。"
+      placeholder: |
+        例:
+        - リージョンは Japan East 優先
+        - Azure Functions は C# で実装
+        - UI は HTML5/CSS/JavaScript で実装
+        - 認証は Azure AD B2C を使用
+    validations:
+      required: false

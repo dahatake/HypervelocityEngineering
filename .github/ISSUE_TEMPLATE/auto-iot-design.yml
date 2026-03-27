@@ -1,0 +1,76 @@
+name: "Auto IoT Design Workflow"
+description: "Issue から IoT/Physical AI 組み込みアプリケーション設計ワークフロー (Step.1〜5) を自動起動します"
+title: "[Auto IoT Design] 設計ドキュメントの作成"
+labels:
+  - "auto-iot-design"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto IoT Design Workflow
+        このフォームから Issue を作成すると、自動で Step.1〜Step.5 の IoT 設計タスクが
+        Sub-issue として生成され、Copilot が順次実行します。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/design-v2"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
+        📋 **依存関係**:
+        Step.1 (1.1 / 1.2 並列) → Step.2 → Step.3 → Step.4 → Step.4.5 → Step.5 (5.1 / 5.2 並列) → Step.5.3
+        ・Step.1.1（ドメイン分析）と Step.1.2（デバイスプロファイル＋接続性）は並列実行可能
+        ・Step.2 以降は Step.1.1 + Step.1.2 の両方が完了するまで待機
+        ・Step.4.5（テスト戦略書）は Step.4 が必須
+        ・Step.5.1 / 5.2 は Step.4.5（またはStep.4.5スキップ時は Step.4）が必須
+        ・Step.5.3（テスト仕様書）は Step.4.5 + Step.5.1 + Step.5.2 が全て必須
+      options:
+        - label: "Step.1.1 — IoT ドメイン分析（DDD + IoT 3層境界: Device/Edge/Cloud）"
+        - label: "Step.1.2 — デバイスプロファイル＋接続性分析（HW制約・通信・オフライン・AI推論・状態遷移・フェイルセーフ）"
+        - label: "Step.2 — データモデル作成（デバイステレメトリ・時系列データ・エッジキャッシュ含む）"
+        - label: "Step.3 — 画面一覧と遷移図（デバイス管理ダッシュボード・監視UI含む）"
+        - label: "Step.4 — サービスカタログ表（デバイス管理・テレメトリ収集・OTA更新・エッジ推論サービス含む）"
+        - label: "Step.4.5 — テスト戦略書（IoT固有: デバイスシミュレーター・プロトコルテスト・オフラインテスト戦略）※ Step.4 が必須"
+        - label: "Step.5 — 生成AI最適化プロンプト群（Step.5.1 画面定義書生成 / Step.5.2 マイクロサービス詳細仕様生成）"
+        - label: "Step.5.3 — テスト駆動開発用テスト仕様書（デバイステスト・エッジ推論テスト・E2Eテスト含む）※ Step.4.5 + Step.5.1 + Step.5.2 が全て必須"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: デバイスは ESP32 + FreeRTOS を使用。通信は MQTT over TLS。クラウドは Azure IoT Hub。エッジ推論に ONNX Runtime を使用予定。"
+    validations:
+      required: false

@@ -1,0 +1,137 @@
+name: Deploy SVC-05 (CS・AIチャットサービス) to Azure Functions
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/api/svc-05-cs-ai-chatbot/**'
+      - '.github/workflows/deploy-svc-05.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'デプロイ環境 (dev / prod)'
+        required: false
+        default: 'dev'
+
+permissions:
+  id-token: write   # OIDC トークン取得に必要
+  contents: read
+
+concurrency:
+  group: deploy-svc-05  # 同一 Azure リソースへのデプロイを直列化
+  cancel-in-progress: false
+
+env:
+  AZURE_FUNCTIONAPP_NAME: royal2-func-app05
+  AZURE_RESOURCE_GROUP: dahatake-royal2
+  DOTNET_VERSION: '9.0.x'
+  PROJECT_PATH: src/api/svc-05-cs-ai-chatbot/CsAiChatbot
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      # ── 1. チェックアウト ───────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. .NET セットアップ ────────────────────────────────────────
+      - name: Setup .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      # ── 3. ビルド ───────────────────────────────────────────────────
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.PROJECT_PATH }}
+
+      - name: Build
+        run: |
+          dotnet build ${{ env.PROJECT_PATH }} \
+            --configuration Release \
+            --no-restore
+
+      # ── 4. テスト（ユニット）────────────────────────────────────────
+      - name: Run unit tests
+        run: |
+          dotnet test test/api/CsAiChatbot.Tests \
+            --configuration Release \
+            --verbosity normal \
+            --filter "Category!=Integration&Category!=Contract"
+        # 統合テストは Azure リソースが必要なため除外。CI では Unit のみ実行。
+        # テスト失敗時はジョブを停止します（|| true は不使用）。
+
+      # ── 5. パッケージ化 ─────────────────────────────────────────────
+      - name: Publish
+        run: |
+          dotnet publish ${{ env.PROJECT_PATH }} \
+            --configuration Release \
+            --output ./publish
+
+      # ── 6. Azure ログイン (OIDC) ────────────────────────────────────
+      # 必要な GitHub Secrets:
+      #   AZURE_CLIENT_ID     : Entra ID アプリ登録のクライアント ID
+      #   AZURE_TENANT_ID     : Azure テナント ID
+      #   AZURE_SUBSCRIPTION_ID : Azure サブスクリプション ID
+      #
+      # セットアップ手順: infra/README.md#oidc-設定手順 を参照
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ── 7. Azure Functions デプロイ ─────────────────────────────────
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: ./publish
+          scm-do-build-during-deployment: false
+          enable-oryx-build: false
+
+      # ── 8. デプロイ後スモークテスト ─────────────────────────────────
+      - name: Smoke test - health check
+        shell: bash
+        run: |
+          set -euo pipefail
+          FUNC_BASE="https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api"
+          # /support-tickets への POST が Function App に到達するか確認
+          # 422/400/401 は Function が起動済みであることを示す（正常系レスポンス）
+          echo "スモークテスト URL: ${FUNC_BASE}/support-tickets"
+          FINAL_STATUS="000"
+          for i in $(seq 1 6); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" \
+              --max-time 10 \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d '{"MemberId":"smoke-test","InquiryText":"ping","Channel":0}' \
+              "${FUNC_BASE}/support-tickets" 2>/dev/null || echo "000")
+            FINAL_STATUS="${status}"
+            # 200/201=成功, 400/422=バリデーションエラー（Function 起動確認済み）
+            # 401/403=認証エラー（Function 起動確認済み）
+            if [[ "${status}" =~ ^(200|201|400|401|403|422)$ ]]; then
+              echo "スモークテスト OK (HTTP ${status})"
+              break
+            fi
+            echo "待機中... (試行 ${i}/6, HTTP ${status})"
+            sleep 10
+          done
+          # Function App に到達できなかった（000/5xx が続いた）場合は失敗
+          if [[ "${FINAL_STATUS}" == "000" || "${FINAL_STATUS}" =~ ^5 ]]; then
+            echo "スモークテスト FAIL: Function App に到達できませんでした (HTTP ${FINAL_STATUS})" >&2
+            exit 1
+          fi

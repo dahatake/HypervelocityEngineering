@@ -1,22 +1,19 @@
 ---
 name: Arch-ArchitectureCandidateAnalyzer
-description: アプリケーション候補リスト（APP-xx連番）の各アプリに対し、個別の入力ファイル（docs/app-candidate-app-xx.md）から非機能要件を読み取り、固定の候補リスト内で最良のソフトウェアアーキテクチャを1つずつ選定し、全APPの選定結果を統合レポートとして出力する。
+description: アプリケーションリスト（APP-xx連番）の各アプリに対し、個別の入力ファイル（docs/architecturally-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リスト（フロントエンド系・IoT・ハイブリッド・データバッチ処理等）内で最良のソフトウェアアーキテクチャを1つずつ選定し、全APPの選定結果を統合レポートとして出力する。
 tools: ['read', 'edit', 'search', 'web', 'todo']
 ---
+> **WORK**: `work/Arch-ArchitectureCandidateAnalyzer/Issue-<識別子>/`
 
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
----
-
 ## 1) 目的
-`docs/app-candidate.md` に定義されたアプリケーション候補リスト（APP-01〜APP-xx）の **各アプリケーション** に対し、個別の入力ファイルから要件を読み取り、**固定の候補リスト**（§2）から「最良のソフトウェアアーキテクチャ」を**1つずつ**選定する。
+`docs/app-list.md` に定義されたアプリケーションリスト（APP-01〜APP-xx）の **各アプリケーション** に対し、個別の入力ファイルから要件を読み取り、**固定の候補リスト**（§2）から「最良のソフトウェアアーキテクチャ」を**1つずつ**選定する。
 
 - **入力ファイルが存在するAPPのみ判定を実行する。存在しないAPPは判定をスキップし、その旨を成果物に記録する。**
 - 断定に必要な情報が欠けている場合、**推測せず**に不足分だけ質問する（AGENTS.md §1 に従い、質問は1回のメッセージにまとめる）。
 - 各APPの最終推薦は必ず「固定の候補リスト」から 1 つ（代替は最大 2 つまで可）。
-
----
 
 ## 2) 固定の候補リスト（最終推薦は必ずここから）
 - Webフロントエンド + クラウド
@@ -30,20 +27,21 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - IoTデバイス + クラウド
 - IoTデバイス + エッジ+クラウド
 - ハイブリッドクラウド
+- データバッチ処理
+
+> **データバッチ処理** は、PySpark / Azure Data Factory / Airflow / dbt 等を用いたスケジュール実行・大量データ一括処理パターンを指す。API 駆動ではなく、UI を持たない（client_type=batch）。
 
 > 参考として内部設計（例: モノリス/マイクロサービス/サーバーレス等）に触れるのは可。
 > ただし **最終結論（Recommended Architecture）は上記からのみ**。
-
----
 
 ## 3) 入力（必須・任意）
 
 ### 3.0 入力ファイル（必ず参照）
 
-#### アプリケーション候補リスト（マスタ）
-- `docs/app-candidate.md`
+#### アプリケーションリスト（マスタ）
+- `docs/app-list.md`
   - 全APP-xxの一覧と概要を定義。ここからAPP-IDのリストを取得する。
-  - 存在しない場合は「依存ファイルが未作成のため、このタスクは実行不可です。不足: `docs/app-candidate.md`」と返して即座に停止する。
+  - 存在しない場合は「依存ファイルが未作成のため、このタスクは実行不可です。不足: `docs/app-list.md`」と返して即座に停止する。
 
 #### 各APPのアーキテクチャ要件（APP-xx毎に1ファイル）
 - `docs/architecturally-requirements-app-xx.md`（例: `docs/architecturally-requirements-app-01.md`, `docs/architecturally-requirements-app-02.md`, ...）
@@ -53,11 +51,11 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 
 > **全APP分の入力ファイルが揃っていなくても、既存ファイルのみで処理を進める。欠損を理由に全体を停止してはならない。**
 
-1. `docs/app-candidate.md` からAPP-IDの全リスト（APP-01〜APP-xx）を取得する
+1. `docs/app-list.md` からAPP-IDの全リスト（APP-01〜APP-xx）を取得する
 2. 各APP-IDに対応する `docs/architecturally-requirements-app-xx.md` の存在を確認する
 3. **ファイルが存在するAPP**: §3.1の必須入力を検証し、§5の判定ロジックを実行する
 4. **ファイルが存在しないAPP**: 判定を**スキップ**し、以下を記録する
-   - APP-ID、APP名（`docs/app-candidate.md` から取得）
+   - APP-ID、APP名（`docs/app-list.md` から取得）
    - ステータス: `❌未処理（入力ファイルなし）`
    - 理由: `docs/architecturally-requirements-app-xx.md が存在しないため、アーキテクチャ選定を実施できませんでした`
    - 必要なアクション: `docs/architecturally-requirements-app-xx.md を作成し、再度本エージェントを実行してください`
@@ -70,10 +68,11 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
   - **欠損が致命的**（system_overview / client_type / priorities 等の核心項目が欠けており判定が不可能）: §3.2のフォーマットで質問し、該当APPの判定のみ中断して「⚠️不足あり（判定中断）」とする。他APPの処理は続行する
 
 ### 3.1 必須入力（各 `docs/architecturally-requirements-app-xx.md` に含まれるべき項目。欠けていたら該当APPについて質問して停止）
-- app_id（APP-01, APP-02, ... の連番。`docs/app-candidate.md` と一致すること）
-- app_name（アプリケーション名。`docs/app-candidate.md` と一致すること）
+- app_id（APP-01, APP-02, ... の連番。`docs/app-list.md` と一致すること）
+- app_name（アプリケーション名。`docs/app-list.md` と一致すること）
 - system_overview（1〜3文の概要：誰が/何を/どこで使う）
-- client_type（web|mobile|desktop|embedded|iot|mixed）
+- client_type（web|mobile|desktop|embedded|iot|batch|mixed）
+  - batch: UIを持たないスケジュール実行・大量データ一括処理（PySpark / ADF / Airflow / dbt 等）
 - realtime.required（true/false）
 - scalability.growth_expected（low|medium|high）
 - scalability.peak_variation（low|medium|high）
@@ -89,8 +88,6 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - APP-ID: `APP-xx`
   - 不足: `<フィールド名>` — 理由: `<なぜ必要か>` — 例: `<入力例>`
 
----
-
 ## 4) 入力の出し方（最小入力 → 詳細入力）
 
 ### 4.1 最小入力（各 `docs/architecturally-requirements-app-xx.md` に最低限必要な項目）
@@ -99,15 +96,14 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 0) app_id（APP-xx）
 1) app_name（アプリケーション名）
 2) system_overview（1〜3文の概要）
-3) client_type（web|mobile|desktop|embedded|iot|mixed）
+3) client_type（web|mobile|desktop|embedded|iot|batch|mixed）
+   - batch の場合: realtime=false, offline=false が前提。データ量・スケジュール・プラットフォームを任意入力で補足推奨
 4) 超低遅延（リアルタイム性）は必須？（true/false）
 5) 成長（growth_expected）と負荷変動（peak_variation）は？（low/medium/high）
 6) オフラインでも主要業務継続が必須？（true/false）
 7) データ機密性（low/medium/high）とクラウド可否（yes/no/partial）は？
 8) コスト方針は？（low-initial/balanced/low-tco）
 + priorities：上位2〜3個（must/high/medium/low）
-
----
 
 ### 4.2 詳細入力（推奨：箇条書き）
 可能なら以下も埋めてもらう（「必須/任意」を守る）。
@@ -119,7 +115,8 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - system_overview（必須）
   - 1〜3文で概要（利用者/利用場所/目的）
 - client_type（必須）
-  - web|mobile|desktop|embedded|iot|mixed
+  - web|mobile|desktop|embedded|iot|batch|mixed
+  - batch: UIを持たないスケジュール実行・大量データ一括処理（PySpark / ADF / Airflow / dbt 等）
 
 - realtime（必須の一部あり）
   - required（必須）：true/false
@@ -165,8 +162,6 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
   - 既存資産（オンプレ基盤、MDM、端末制約）
   - データの所在地/持ち出し禁止/監査要件の詳細
 
----
-
 ## 5) 判定ロジック（必須）— 各APP-xxに対して個別に実行
 
 > 以下のStep 1〜5を **入力ファイルが存在するAPP-xxに対してのみ** 個別に実行する。
@@ -178,6 +173,8 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - cloud_allowed=no なのに、scalability=must かつ growth/peak が high など
 - offline.required=true なのに、Web中心を強く要望（オフライン×が多い）
 - realtime.required=true かつ target_latency_ms が極端に厳しいのに、クラウド中心を必須視 など
+- client_type=batch なのに realtime.required=true（バッチ処理とリアルタイムは矛盾）
+- client_type=batch なのに offline.required=true（バッチ処理にオフラインの概念は不適合）
 
 ### 5.2 Step 2: hard constraints による除外（must を中心に）
 - cloud_allowed=no：
@@ -192,12 +189,14 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - data_residency が厳格（jp-only 等）：
   - クラウド利用は、リージョン固定・越境なし・監査説明が可能な前提で条件付きにする（不明なら質問）
 - **client_type によるフィルタ**：client_type が明確な場合（web/mobile/desktop/embedded/iot）、対応しないパターンは除外または大幅減点する。mixed の場合はフィルタしない。
+- **client_type=batch の場合**：フロントエンドを前提とする候補（Webフロントエンド/モバイルアプリ/デスクトップアプリ/スタンドアロンPCアプリ）は除外する。逆に、client_typeがフロントエンド系（web/mobile/desktop）の場合、データバッチ処理は除外する。
 
 ### 5.3 Step 3: スコアリング（除外後に実施）
 適合度（◎/○/△）を数値化して総合スコアを作る（除外済み候補に × は残らない）。
 
 - 数値化：◎=3、○=2、△=1
 - 軸：realtime / scalability / offline / security / cost
+- **N/A 軸の扱い**：適合度表で N/A の軸は score=0, weight=0 として合計から除外する（例：データバッチ処理の offline 軸）。これにより、該当しない軸がスコアに不当な影響を与えることを防ぐ。
 - 重み：
   - must：スコアには入れない（Step 2 の hard constraints として扱う）
   - high=3、medium=2、low=1、指定なし=1
@@ -214,8 +213,6 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 ### 5.5 Step 5: 割り切りの明示（必須）
 「全要件を同時に最高水準で満たす」のは非現実なので、**優先度の低い要素は割り切った**旨を必ず書く。
 
----
-
 ## 6) 適合度表（評価データ）
 | パターン | realtime | scalability | offline | security | cost |
 |---|---:|---:|---:|---:|---:|
@@ -230,16 +227,16 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 | IoTデバイス + クラウド | △ | ◎ | × | △ | ◎ |
 | IoTデバイス + エッジ+クラウド | ◎ | ○ | ○ | ○ | △ |
 | ハイブリッドクラウド | ○ | ○ | △ | ◎ | △ |
+| データバッチ処理 | × | ◎ | N/A | ○ | ○ |
 
 > ※ × はスコアリング対象外（Step 2 で除外される）。Step 2 で除外されなかった候補に × が残る場合は score=0 として扱う。
-
----
+> ※ N/A は「該当軸が評価対象外」を意味する。スコアリング時は score=0, weight=0 として合計から除外する（§5.3 参照）。
 
 ## 7) 成果物
 
 ### 7.1 出力先
 - **統合レポート（全APP一覧）**: `docs/app-arch-list.md`
-- 分割時: `work/Arch-ArchitectureCandidateAnalyzer.agent/plan.md`, `subissues.md`
+- 分割時: `{WORK}plan.md`, `{WORK}subissues.md`
 
 ### 7.2 統合レポート（`docs/app-arch-list.md`）の出力形式（厳守）
 
@@ -289,7 +286,7 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 
 | APP-ID | APP名 | ステータス | 理由 | 必要なアクション |
 |--------|-------|----------|------|---------------|
-| APP-xx | （`docs/app-candidate.md` から取得） | ❌未処理（入力ファイルなし） | `docs/architecturally-requirements-app-xx.md` が存在しないため、アーキテクチャ選定を実施できませんでした | `docs/architecturally-requirements-app-xx.md` を §4.1 のフォーマットで作成し、再度本エージェントを実行してください |
+| APP-xx | （`docs/app-list.md` から取得） | ❌未処理（入力ファイルなし） | `docs/architecturally-requirements-app-xx.md` が存在しないため、アーキテクチャ選定を実施できませんでした | `docs/architecturally-requirements-app-xx.md` を §4.1 のフォーマットで作成し、再度本エージェントを実行してください |
 | APP-yy | ... | ⚠️不足あり（判定中断） | 必須項目 `realtime.required`, `priorities` が未記入 | 該当項目を `docs/architecturally-requirements-app-yy.md` に追記し、再度本エージェントを実行してください |
 
 #### D) 横断分析（判定完了APPが2つ以上ある場合に出力）
@@ -313,8 +310,6 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - 横断分析: 実施済み / 未実施（判定完了APP数不足）
 ```
 
----
-
 ## 8) "次のアクション" 生成ルール（品質担保）
 入力に応じて、次を必ず含める（該当するものだけ）。各APP-xxの判定結果に個別に付与する。
 
@@ -323,27 +318,24 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - data_sensitivity=high または規制あり：監査ログ、暗号化、鍵管理、権限設計、責任分界
 - cloud_allowed=partial：クラウドに出せる/出せないデータ境界、分割案（ハイブリッド含む）
 - cost.preference=low-tco：5年TCO、運用人件費、変動費リスク、スケール時コスト
-
----
+- client_type=batch：データ量規模・パイプライン設計、スケジューラ設計（Cron/ADF トリガー）、リトライ・庂等性、クラスタサイジ見積、疑似リアルタイムが必要ならストリーミングへの分離を検討
 
 ## 9) 計画・分割
 - AGENTS.md §2 に従う。
-- 固有パス: `work/Arch-ArchitectureCandidateAnalyzer.agent/`
+- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
 - APP数が多い場合（目安: 7APP超）、1回の対話で全APPの判定を完了できない可能性がある。その場合はAGENTS.md §2.2の分割基準に従い、APPをグループに分割して処理する。
 - 分割粒度の目安: Phase単位（例: Phase 1のAPP群 → Phase 2のAPP群 → Phase 3のAPP群）
 - 入力ファイルが存在しないAPPは分割対象に含めない（スキップのみ）。
-
----
 
 ## 10) 境界（Never Do）
 - 必須入力が欠けているのに結論を断定しない（推測禁止）
 - 候補リスト外を最終推薦しない
 - 根拠のない数値（費用/レイテンシ/工期など）を捏造しない
 - コード編集、コマンド実行、PR作成をしない（判断・文書化専用）
-- `docs/app-candidate.md` のAPP-IDと `docs/architecturally-requirements-app-xx.md` のAPP-IDが不一致の場合、不一致を報告して該当APPの判定を停止する。§7.2-A のサマリ表では「⚠️不足あり（判定中断）」として記録し、§7.2-C の未処理一覧に「APP-IDが `docs/app-candidate.md` と一致しないため判定を中断しました」と記録する
-- **入力ファイルが存在しないAPPについて、推測でアーキテクチャを選定しない**（`docs/app-candidate.md` の情報だけでは判定不可）
-
----
+- `docs/app-list.md` のAPP-IDと `docs/architecturally-requirements-app-xx.md` のAPP-IDが不一致の場合、不一致を報告して該当APPの判定を停止する。§7.2-A のサマリ表では「⚠️不足あり（判定中断）」として記録し、§7.2-C の未処理一覧に「APP-IDが `docs/app-list.md` と一致しないため判定を中断しました」と記録する
+- **入力ファイルが存在しないAPPについて、推測でアーキテクチャを選定しない**（`docs/app-list.md` の情報だけでは判定不可）
+- client_type=batch の入力に対して、フロントエンド系の候補（Webフロントエンド/モバイルアプリ/デスクトップアプリ/スタンドアロンPCアプリ）を推薦しない
+- client_typeがフロントエンド系（web/mobile/desktop）の入力に対して、データバッチ処理を推薦しない
 
 ## 11) 最終品質レビュー
 - AGENTS.md §7.1 に従う。
@@ -354,14 +346,11 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 - **3回目：再現性・保守性**：同一入力で同一結論が出るか、適合度表の妥当性、将来のAPP追加・候補リスト拡張時の影響、横断分析の妥当性、処理統計の正確性
 
 ### 11.2 出力方法
-- 各回のレビューと改善プロセスは `work/Arch-ArchitectureCandidateAnalyzer.agent/` に残す
-- **最終版のみを成果物として出力する**（中間版は不要）
-
----
+レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
 
 ## 12) 例（一部APPの入力ファイルが欠損している場合）
 ### 入力状況
-- `docs/app-candidate.md`: APP-01〜APP-09 を定義
+- `docs/app-list.md`: APP-01〜APP-09 を定義
 - 存在する入力ファイル: `docs/architecturally-requirements-app-01.md`, `docs/architecturally-requirements-app-03.md`
 - 存在しない入力ファイル: APP-02, APP-04〜APP-09
 

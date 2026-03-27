@@ -1,0 +1,818 @@
+name: Create Sub Issues from PR
+
+on:
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: create-subissues-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-subissues:
+    if: github.event.label.name == 'create-subissues'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Bootstrap create-subissues label
+        run: |
+          gh label create "create-subissues" \
+            --color "e4e669" \
+            --description "Trigger Sub Issue creation from subissues.md" \
+            --repo "$REPO" 2>/dev/null || true
+
+      - name: Check idempotency
+        id: idempotency
+        run: |
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            | jq -s '[.[][] | select(.body | contains("<!-- subissues-created -->"))] | length')
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Sub issues already created for PR #${PR_NUMBER}. Skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Find subissues.md files
+        if: steps.idempotency.outputs.skip == 'false'
+        id: find_files
+        run: |
+          echo "=== PR #${PR_NUMBER} の変更ファイルから subissues.md を検索 ==="
+
+          # GitHub API で PR の変更ファイル一覧を取得（指数バックオフ付きリトライ）
+          # status: added / modified のみ対象（renamed / removed は除外）
+          MAX_ATTEMPTS=5
+          WAIT=2
+          pr_files=""
+          api_success=false
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            err_file=$(mktemp "${RUNNER_TEMP}/gh-api-error.XXXXXX")
+            pr_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+              --paginate \
+              --jq '.[] | select(.filename | test("^work/.*subissues\\.md$")) | select(.status == "added" or .status == "modified") | .filename' \
+              2>"$err_file") && { api_success=true; rm -f "$err_file"; break; }
+            err_msg=$(cat "$err_file")
+            rm -f "$err_file"
+            echo "::warning::Attempt ${attempt}/${MAX_ATTEMPTS} failed: ${err_msg}"
+            # 一時的なサーバーエラー（500/502/503、temporarily unavailable、heavy server load）のみリトライ
+            # それ以外（404 等の回復不能エラー）は即座に失敗
+            if ! echo "$err_msg" | grep -qiE 'HTTP 50[023]|temporarily unavailable|server error|heavy server load'; then
+              echo "::error::Non-retryable error on attempt ${attempt}: ${err_msg}"
+              exit 1
+            fi
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Retrying in ${WAIT}s..."
+              sleep "$WAIT"
+              WAIT=$((WAIT * 2))
+            fi
+          done
+
+          # API が全リトライで失敗した場合は git diff フォールバック
+          # Note: actions/checkout の fetch-depth が 0（全履歴）または GITHUB_BASE_REF が
+          # fetch 済みの場合のみ有効。デフォルト（depth=1）では動作しない可能性がある。
+          if [ "$api_success" = "false" ]; then
+            echo "[FALLBACK] GitHub API failed after ${MAX_ATTEMPTS} attempts. Falling back to git diff --name-only."
+            pr_files=$(git diff --name-only "origin/${GITHUB_BASE_REF:-main}...HEAD" \
+              | grep -E '^work/.*subissues\.md$' || true)
+            if [ -z "$pr_files" ]; then
+              echo "::error::[FALLBACK] git diff also returned no results. Cannot determine changed files."
+              exit 1
+            fi
+            echo "[FALLBACK] Files found via git diff: ${pr_files}"
+          fi
+
+          files=$(printf '%s' "$pr_files" | grep -v '^[[:space:]]*$' | sort || true)
+          if [ -z "$files" ]; then
+            echo "PR の変更ファイル内に subissues.md が見つかりませんでした。Nothing to do."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found:"
+            echo "$files"
+            encoded=$(printf '%s' "$files" | base64 -w 0)
+            echo "files_b64=${encoded}" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Parse and create sub issues
+        if: steps.idempotency.outputs.skip == 'false' && steps.find_files.outputs.found == 'true'
+        env:
+          FILES_B64: ${{ steps.find_files.outputs.files_b64 }}
+        run: |
+          set -euo pipefail
+
+          # ── detect parent issue (3-stage fallback) ───────────────────────
+          PR_BODY=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""')
+
+          # Method 1: closing issues references via gh pr view (most reliable)
+          PARENT_ISSUE=$(gh pr view "$PR_NUMBER" --repo "$REPO" \
+            --json closingIssuesReferences \
+            --jq '.closingIssuesReferences[0].number | tostring' 2>/dev/null \
+            | grep -E '^[0-9]+$' | head -1 || true)
+
+          # Method 2: Closing reference in PR body (Fixes/Closes/Resolves [:]#NNN or owner/repo#NNN)
+          if [ -z "$PARENT_ISSUE" ]; then
+            PARENT_ISSUE=$(printf '%s' "$PR_BODY" \
+              | grep -iEo '(fixes|closes|resolves):?[[:space:]]+(([a-zA-Z0-9_./-]+)?#[0-9]+)' \
+              | grep -oE '#[0-9]+' | head -1 | tr -d '#' || true)
+          fi
+
+          # Method 3: Legacy HTML comment <!-- parent-issue: #NNN -->
+          if [ -z "$PARENT_ISSUE" ]; then
+            PARENT_ISSUE=$(printf '%s' "$PR_BODY" \
+              | grep -i '<!--.*parent-issue:.*#[0-9]' \
+              | sed 's/.*parent-issue:[[:space:]]*#\([0-9][0-9]*\).*/\1/' | head -1 || true)
+          fi
+
+          if [ -n "$PARENT_ISSUE" ]; then
+            echo "Parent issue detected: #${PARENT_ISSUE}"
+          else
+            echo "No parent issue detected — sub-issue links will not be created."
+          fi
+
+          # ── check auto-context-review / auto-qa labels on parent issue ─────
+          HAS_CONTEXT_REVIEW="false"
+          HAS_QA="false"
+          if [ -n "$PARENT_ISSUE" ]; then
+            _PARENT_LABELS=$(gh api "/repos/${REPO}/issues/${PARENT_ISSUE}" \
+              --jq '[.labels[].name]' \
+              2>/dev/null || echo "[]")
+            HAS_CONTEXT_REVIEW=$(echo "${_PARENT_LABELS}" | python3 -c \
+              "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-context-review' in lbls else 'false')")
+            HAS_QA=$(echo "${_PARENT_LABELS}" | python3 -c \
+              "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-qa' in lbls else 'false')")
+          fi
+          echo "auto-context-review ラベル伝播: ${HAS_CONTEXT_REVIEW}"
+          echo "auto-qa ラベル伝播: ${HAS_QA}"
+
+          # ── helper: create issue with exponential backoff retry ──────────
+          create_issue() {
+            local title="$1" body_file="$2" label_args="$3"
+            local attempt=0 delay=2
+            local issue_url issue_number issue_id
+            local stderr_file
+            stderr_file=$(mktemp)
+            trap 'rm -f "$stderr_file"' RETURN
+            while [ $attempt -lt 5 ]; do
+              # shellcheck disable=SC2086
+              if issue_url=$(gh issue create \
+                --repo "$REPO" \
+                --title "$title" \
+                --body-file "$body_file" \
+                $label_args 2>"$stderr_file"); then
+                issue_number=$(printf '%s' "$issue_url" | grep -oE '/issues/[0-9]+' | grep -oE '[0-9]+' | head -1)
+                if [ -n "$issue_number" ]; then
+                  issue_id=$(gh api "/repos/${REPO}/issues/${issue_number}" --jq '.id' 2>/dev/null || echo "")
+                  jq -n --argjson num "$issue_number" --arg id "$issue_id" '{number: $num, id: $id}'
+                  return 0
+                fi
+                # gh issue create succeeded (exit 0) but URL parse failed — do not retry to avoid duplicates
+                echo "  Warning: issue created but URL not parseable: ${issue_url}" >&2
+                return 1
+              fi
+              attempt=$((attempt + 1))
+              echo "  Retry ${attempt}/5 after ${delay}s — stderr: $(head -n 5 "$stderr_file" 2>/dev/null || echo '(empty)')" >&2
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+            echo "" ; return 1
+          }
+
+          # ── helper: extract HTML comment value ──────────────────────────
+          # Usage: extract_comment_value "title" < block_file
+          extract_comment_value() {
+            local key="$1"
+            grep -oP "<!--\s*${key}:\s*\K.*?(?=\s*-->)" | head -1 | xargs 2>/dev/null || true
+          }
+
+          # ── helper: assign Copilot via GraphQL (ported from auto-software-design.yml) ──
+          assign_copilot() {
+            local issue_num="$1"
+            local custom_agent="${2:-}"
+            local base_branch="${3:-main}"
+            local custom_instructions="${4:-}"
+
+            echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
+            echo "  custom_agent: ${custom_agent}"
+            echo "  base_branch: ${base_branch}"
+
+            # 冪等化ガード: 既に copilot-swe-agent がアサインされている場合はスキップ
+            local current_assignees
+            current_assignees=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              if not isinstance(d, dict):
+                  print('false')
+                  sys.exit(0)
+              assignees = [a.get('login', '') for a in d.get('assignees', [])]
+              print('true' if 'copilot-swe-agent' in assignees or 'Copilot' in assignees else 'false')
+          except Exception:
+              print('false')
+          PY
+            ) || true
+
+            if [[ "${current_assignees}" == "true" ]]; then
+              echo "  copilot-swe-agent は既にアサイン済みです。スキップします。"
+              return 0
+            fi
+
+            # 冪等化ガード: 対象 Issue に紐づく Open な PR が既に存在する場合はスキップ
+            local existing_prs
+            existing_prs=$(curl -s \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
+              | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              events = json.load(sys.stdin)
+              if not isinstance(events, list):
+                  print('false')
+                  sys.exit(0)
+          except Exception:
+              print('false')
+              sys.exit(0)
+          for e in events:
+              if e.get('event') == 'cross-referenced':
+                  source = e.get('source', {}).get('issue', {})
+                  pr = source.get('pull_request', {})
+                  if pr and source.get('state') == 'open':
+                      print('true')
+                      sys.exit(0)
+          print('false')
+          PY
+            ) || true
+
+            if [[ "${existing_prs}" == "true" ]]; then
+              echo "  Issue #${issue_num} に紐づく Open な PR が既に存在します。スキップします。"
+              return 0
+            fi
+
+            if [[ -z "${COPILOT_PAT}" ]]; then
+              echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインをスキップします。" >&2
+              return 1
+            fi
+
+            local OWNER="${REPO%/*}"
+            local REPO_NAME="${REPO#*/}"
+
+            local max_assign_retry=3
+            local assign_wait=5
+            local assign_success=false
+
+            for assign_attempt in $(seq 1 "${max_assign_retry}"); do
+              echo "  アサイン試行 ${assign_attempt}/${max_assign_retry}..."
+
+              # 1回のクエリで bot_id / issue_node_id / repo_node_id をまとめて取得
+              local query_result
+              query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -f query="
+          query(\$issueNumber: Int!) {
+            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
+              id
+              issue(number: \$issueNumber) { id }
+              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
+                nodes {
+                  login
+                  ... on Bot { id databaseId }
+                }
+              }
+            }
+          }
+                " \
+                -F issueNumber="${issue_num}" \
+                2>&1) || true
+
+              echo "  GraphQL クエリ結果: ${query_result}"
+
+              if [[ -z "${query_result}" ]]; then
+                echo "WARNING: GraphQL クエリの実行に失敗しました。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              local bot_id issue_node_id repo_node_id
+              IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          d = json.load(sys.stdin)
+          repo = d.get('data', {}).get('repository', {})
+          bot = ''
+          for a in repo.get('suggestedActors', {}).get('nodes', []):
+              if a.get('login') == 'copilot-swe-agent':
+                  bot = a.get('id', '')
+                  break
+          issue = repo.get('issue', {}).get('id', '')
+          print(bot + '\t' + issue + '\t' + repo.get('id', ''))
+          PY
+              ) || true
+
+              if [[ -z "${bot_id}" ]]; then
+                echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${issue_node_id}" ]]; then
+                echo "WARNING: Issue #${issue_num} の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              if [[ -z "${repo_node_id}" ]]; then
+                echo "WARNING: Repository の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+              echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
+
+              # addAssigneesToAssignable mutation（全変数を -f/-f フラグで渡す・インジェクション防止）
+              local result
+              result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
+                -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
+                -f query="
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+            addAssigneesToAssignable(input: {
+              assignableId: \$assignableId,
+              assigneeIds: [\$botId],
+              agentAssignment: {
+                targetRepositoryId: \$targetRepositoryId,
+                baseRef: \$baseRef,
+                customInstructions: \$customInstructions,
+                customAgent: \$customAgent,
+                model: \"\"
+              }
+            }) {
+              assignable {
+                ... on Issue {
+                  id
+                  title
+                  assignees(first: 10) {
+                    nodes { login }
+                  }
+                }
+              }
+            }
+          }
+                " \
+                -f assignableId="${issue_node_id}" \
+                -f botId="${bot_id}" \
+                -f targetRepositoryId="${repo_node_id}" \
+                -f baseRef="${base_branch}" \
+                -f customInstructions="${custom_instructions}" \
+                -f customAgent="${custom_agent}" \
+                2>&1) || true
+
+              echo "  GraphQL mutation レスポンス: ${result}"
+
+              # mutation レスポンスのエラーチェック
+              local has_errors
+              has_errors=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              print('true' if d.get('errors') else 'false')
+          except Exception:
+              print('true')
+          PY
+              ) || true
+
+              if [[ "${has_errors}" == "true" ]]; then
+                echo "WARNING: GraphQL mutation にエラーが含まれています。試行 ${assign_attempt}/${max_assign_retry}" >&2
+                sleep "${assign_wait}"
+                assign_wait=$((assign_wait * 2))
+                continue
+              fi
+
+              # copilot-swe-agent が assignees に含まれるか検証
+              local is_assigned
+              is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
+              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
+          except Exception:
+              print('false')
+          PY
+              ) || true
+
+              if [[ "${is_assigned}" == "true" ]]; then
+                echo "  copilot-swe-agent のアサインを確認しました。"
+                assign_success=true
+                break
+              fi
+
+              echo "WARNING: copilot-swe-agent が assignees に含まれていません。試行 ${assign_attempt}/${max_assign_retry}" >&2
+              sleep "${assign_wait}"
+              assign_wait=$((assign_wait * 2))
+            done
+
+            if [[ "${assign_success}" != "true" ]]; then
+              local fail_msg
+              fail_msg=$(printf '⚠️ Copilot coding agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot coding agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
+              gh issue comment "${issue_num}" --body "${fail_msg}" --repo "$REPO" 2>&1 || true
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
+              return 1
+            fi
+
+            echo "=== Copilot アサイン完了: Issue #${issue_num} ==="
+            sleep 2
+          }
+
+          # ── get PR head branch (used as default when subissues.md has no base_branch) ──
+          PR_HEAD_BRANCH=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName --jq '.headRefName' 2>/dev/null || echo "main")
+
+          # ── iterate over subissues.md files ──────────────────────────────
+          mapfile -t FILES < <(printf '%s' "$FILES_B64" | base64 -d)
+
+          CREATED_ROWS=""
+          WARNINGS=""
+          CREATED_WORK_DIRS=""
+
+          for subissues_file in "${FILES[@]}"; do
+            [ -z "$subissues_file" ] && continue
+            [ -f "$subissues_file" ] || continue
+            echo "=== Processing: ${subissues_file} ==="
+
+            # Extract file-level base_branch metadata; fall back to PR base branch
+            FILE_BASE_BRANCH=$(extract_comment_value "base_branch" < "$subissues_file" || true)
+            [ -z "$FILE_BASE_BRANCH" ] && FILE_BASE_BRANCH="$PR_HEAD_BRANCH"
+
+            # Split file on <!-- subissue --> lines using awk
+            rm -f /tmp/subissue_block_*.txt
+            awk '
+              /^<!-- subissue -->/ {
+                blocknum++
+                outfile = "/tmp/subissue_block_" blocknum ".txt"
+                next
+              }
+              blocknum > 0 {
+                print > outfile
+              }
+            ' "$subissues_file"
+
+            block_count=$(ls /tmp/subissue_block_*.txt 2>/dev/null | wc -l || echo 0)
+            if [ "$block_count" -eq 0 ]; then
+              WARNINGS="${WARNINGS}- ${subissues_file}: no \`<!-- subissue -->\` blocks found\n"
+              continue
+            fi
+
+            # Collect ordered block indices (numerical sort)
+            block_indices=()
+            while IFS= read -r bf; do
+              [ -f "$bf" ] || continue
+              bidx=$(basename "$bf" .txt | grep -oE '[0-9]+$')
+              block_indices+=("$bidx")
+            done < <(ls /tmp/subissue_block_*.txt 2>/dev/null | sort -V)
+
+            # Reset per-file tracking arrays
+            unset BLOCK_TO_ISSUE BLOCK_TO_ID BLOCK_DEPS BLOCK_AGENT BLOCK_TITLE BLOCK_PARENT_RESULT
+            declare -A BLOCK_TO_ISSUE BLOCK_TO_ID BLOCK_DEPS BLOCK_AGENT BLOCK_TITLE BLOCK_PARENT_RESULT
+
+            # ── Pre-parse: extract deps and agent for all blocks ──────────
+            for block_idx in "${block_indices[@]}"; do
+              block_file="/tmp/subissue_block_${block_idx}.txt"
+              agent=$(extract_comment_value "custom_agent" < "$block_file")
+              BLOCK_AGENT[$block_idx]="$agent"
+
+              # Method A: <!-- depends_on: 1,4 -->
+              deps_raw=$(extract_comment_value "depends_on" < "$block_file")
+              # Method B: ## 依存 section — extract "Sub N" patterns
+              if [ -z "$deps_raw" ]; then
+                deps_raw=$(sed -n '/^## 依存/,/^## /{ /^## 依存/d; /^## /d; p; }' "$block_file" \
+                  | grep -oE 'Sub [0-9]+' | grep -oE '[0-9]+' | tr '\n' ',' | sed 's/,$//' || true)
+              fi
+              # Normalize: "1,4" -> "1 4"
+              deps=$(printf '%s' "$deps_raw" | tr ',' ' ' | tr -s ' ' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+              BLOCK_DEPS[$block_idx]="$deps"
+            done
+
+            # ── Log DAG analysis ──────────────────────────────────────────
+            echo "--- DAG analysis ---"
+            for block_idx in "${block_indices[@]}"; do
+              deps="${BLOCK_DEPS[$block_idx]}"
+              if [ -z "$deps" ]; then
+                echo "Block ${block_idx}: no dependencies (root node - will auto-assign)"
+              else
+                echo "Block ${block_idx}: depends on [${deps}] (will wait)"
+              fi
+            done
+
+            # ── Pass 1: Create all issues ─────────────────────────────────
+            echo "--- Pass 1: Creating issues ---"
+            for block_idx in "${block_indices[@]}"; do
+              block_file="/tmp/subissue_block_${block_idx}.txt"
+
+              title=$(extract_comment_value "title" < "$block_file")
+              labels=$(extract_comment_value "labels" < "$block_file")
+              agent="${BLOCK_AGENT[$block_idx]}"
+
+              if [ -z "$title" ]; then
+                WARNINGS="${WARNINGS}- ${block_file}: missing \`<!-- title: ... -->\` — skipped\n"
+                continue
+              fi
+
+              BLOCK_TITLE[$block_idx]="$title"
+
+              # Build body: remove HTML comment lines; strip leading/trailing blank lines
+              body_file="/tmp/subissue_body_${block_idx}.md"
+              grep -v '<!--[^>]*-->' "$block_file" \
+                | sed '1{/^[[:space:]]*---[[:space:]]*$/d}' \
+                | sed '${/^[[:space:]]*---[[:space:]]*$/d}' > "$body_file" || true
+              if [ ! -s "$body_file" ]; then
+                echo "_${title}_" > "$body_file"
+              fi
+
+              # If custom agent is specified, append it to the issue body
+              if [ -n "$agent" ]; then
+                printf '\n\n> **Custom agent used: %s**\n' "$agent" >> "$body_file"
+              fi
+
+              # Prepend metadata HTML comments (used by advance-subissues.yml)
+              {
+                if [ -n "${PARENT_ISSUE:-}" ]; then
+                  printf '<!-- parent-issue: #%s -->\n' "${PARENT_ISSUE}"
+                fi
+                printf '<!-- pr-number: %s -->\n' "${PR_NUMBER}"
+                printf '<!-- pr-head-branch: %s -->\n' "${PR_HEAD_BRANCH}"
+                cat "$body_file"
+              } > "/tmp/body_meta_${block_idx}.md" && mv "/tmp/body_meta_${block_idx}.md" "$body_file"
+
+              # Build label args and ensure labels exist
+              label_args=""
+              if [ -n "$labels" ]; then
+                while IFS= read -r lbl; do
+                  lbl=$(printf '%s' "$lbl" | xargs)
+                  [ -z "$lbl" ] && continue
+                  gh label create "$lbl" --color "bfd4f2" --repo "$REPO" 2>/dev/null || true
+                  label_args="${label_args} --label ${lbl}"
+                done < <(printf '%s' "$labels" | tr ',' '\n')
+              fi
+              if [ "$HAS_CONTEXT_REVIEW" = "true" ]; then
+                if [ ! -f "/tmp/auto-context-review-label-created" ]; then
+                  gh label create "auto-context-review" --color "1D76DB" --repo "$REPO" 2>/dev/null || true
+                  touch "/tmp/auto-context-review-label-created"
+                fi
+                label_args="${label_args} --label auto-context-review"
+              fi
+              if [ "$HAS_QA" = "true" ]; then
+                if [ ! -f "/tmp/auto-qa-label-created" ]; then
+                  gh label create "auto-qa" --color "BFD4F2" --repo "$REPO" 2>/dev/null || true
+                  touch "/tmp/auto-qa-label-created"
+                fi
+                label_args="${label_args} --label auto-qa"
+              fi
+
+              echo "  Creating: ${title}"
+              issue_json=$(create_issue "$title" "$body_file" "$label_args")
+              if [ -z "$issue_json" ]; then
+                WARNINGS="${WARNINGS}- Failed to create issue: ${title}\n"
+                continue
+              fi
+
+              issue_num=$(printf '%s' "$issue_json" | jq -r '.number // empty')
+              issue_id=$(printf '%s' "$issue_json" | jq -r '.id // empty')
+              if [ -z "$issue_num" ] || [ "$issue_num" = "null" ]; then
+                WARNINGS="${WARNINGS}- Failed to parse issue number from response: ${title}\n"
+                continue
+              fi
+              echo "  Created #${issue_num}: ${title}"
+
+              # Record in per-file tracking maps (required by Pass 2)
+              BLOCK_TO_ISSUE[$block_idx]="$issue_num"
+              BLOCK_TO_ID[$block_idx]="${issue_id:-}"
+
+              # ── create work directory for this sub issue ─────────────────
+              # Generate a safe directory name from the title:
+              #   1. Strip ALL leading [Prefix] tags (e.g. "[DataDeploy Sub 1]")
+              #   2. Replace ".." with "-" to prevent path traversal
+              #   3. Replace unsafe filesystem characters with hyphens
+              #   4. Strip leading dots (prevent hidden directories)
+              #   5. Collapse consecutive hyphens; trim leading/trailing hyphens
+              #   6. Truncate to 80 characters and re-trim trailing hyphens
+              safe_dir=$(printf '%s' "$title" \
+                | sed 's/^\(\[[^]]*\][[:space:]]*\)\+//' \
+                | sed 's/\.\./-/g' \
+                | sed 's/[[:space:]]/-/g' \
+                | sed 's/[/\\:*?"<>|]/-/g' \
+                | sed 's/^\.*//' \
+                | sed 's/-\{2,\}/-/g' \
+                | sed 's/^-//;s/-$//')
+              safe_dir="${safe_dir:0:80}"
+              safe_dir="${safe_dir%-}"
+              # Fallback: if safe_dir is still empty, use issue number
+              [ -z "$safe_dir" ] && safe_dir="issue-${issue_num}"
+              work_dir="work/${safe_dir}"
+              # Handle same-name collision: append issue number as suffix
+              if [ -d "$work_dir" ] && [ ! -f "${work_dir}/.issue-${issue_num}" ]; then
+                work_dir="work/${safe_dir}-${issue_num}"
+              fi
+              if [ -d "$work_dir" ]; then
+                echo "  Work dir already exists, skipping: ${work_dir}"
+                CREATED_WORK_DIRS="${CREATED_WORK_DIRS}| #${issue_num} | \`${work_dir}\` | ⏭️ 既存 |\n"
+              else
+                mkdir -p "$work_dir"
+                # Sentinel file to track which issue owns this dir
+                touch "${work_dir}/.issue-${issue_num}"
+                {
+                  printf '# %s\n\n' "$title"
+                  printf '作業ディレクトリ for Sub Issue #%s\n\n' "$issue_num"
+                  printf '## 概要\n\n'
+                  printf 'このディレクトリは Sub Issue [#%s](https://github.com/%s/issues/%s) の作業ディレクトリです。\n\n' "$issue_num" "$REPO" "$issue_num"
+                  printf 'PR #%s によって自動生成されました。\n\n' "$PR_NUMBER"
+                  printf '## ファイル構成\n\n'
+                  printf '| ファイル | 説明 |\n'
+                  printf '|---------|------|\n'
+                  printf '| README.md | 作業ディレクトリの入口（このファイル） |\n'
+                  printf '| plan.md | DAG + 見積もり + リスク + 検証計画 |\n'
+                  printf '| subissues.md | 分割定義（必要な場合） |\n'
+                  printf '| work-status.md | 各ステップの進捗（✅/⏭️/❌） |\n\n'
+                  printf '## リンク\n\n'
+                  printf -- '- Sub Issue: [#%s](https://github.com/%s/issues/%s)\n' "$issue_num" "$REPO" "$issue_num"
+                  printf -- '- PR: [#%s](https://github.com/%s/pull/%s)\n' "$PR_NUMBER" "$REPO" "$PR_NUMBER"
+                } > "${work_dir}/README.md"
+                echo "  Created work dir: ${work_dir}"
+                CREATED_WORK_DIRS="${CREATED_WORK_DIRS}| #${issue_num} | \`${work_dir}\` | ✅ 新規 |\n"
+              fi
+
+              # Sub-issue link (beta API — with retry and error logging)
+              parent_link_result="—"
+              if [ -n "$PARENT_ISSUE" ] && [ -n "$issue_id" ] && [ "$issue_id" != "null" ]; then
+                # Rate limit 対策: API 呼び出し前の遅延
+                sleep 2
+
+                sub_issue_attempt=0
+                sub_issue_max=3
+                sub_issue_delay=3
+                while [ $sub_issue_attempt -lt $sub_issue_max ]; do
+                  sub_issue_stderr=$(mktemp)
+                  if gh api --method POST \
+                    "/repos/${REPO}/issues/${PARENT_ISSUE}/sub_issues" \
+                    -F "sub_issue_id=${issue_id}" 2>"$sub_issue_stderr"; then
+                    parent_link_result="✅"
+                    rm -f "$sub_issue_stderr"
+                    break
+                  fi
+                  sub_issue_attempt=$((sub_issue_attempt + 1))
+                  echo "  Sub Issues API 試行 ${sub_issue_attempt}/${sub_issue_max} 失敗: $(<"$sub_issue_stderr")" >&2
+                  rm -f "$sub_issue_stderr"
+                  if [ $sub_issue_attempt -lt $sub_issue_max ]; then
+                    sleep "$sub_issue_delay"
+                    sub_issue_delay=$((sub_issue_delay * 2))
+                  fi
+                done
+
+                if [ "$parent_link_result" != "✅" ]; then
+                  parent_link_result="⚠️ 失敗"
+                  WARNINGS="${WARNINGS}- #${issue_num}: Sub Issues API失敗（${sub_issue_max}回試行後）\n"
+                fi
+              fi
+              BLOCK_PARENT_RESULT[$block_idx]="$parent_link_result"
+
+              sleep 1
+            done
+
+            # ── Pass 2: Assign Copilot (root nodes only) + update dep bodies ──
+            echo "--- Pass 2: Copilot assignment and dependency body update ---"
+            for block_idx in "${block_indices[@]}"; do
+              issue_num="${BLOCK_TO_ISSUE[$block_idx]:-}"
+              [ -z "$issue_num" ] && continue
+
+              agent="${BLOCK_AGENT[$block_idx]}"
+              deps="${BLOCK_DEPS[$block_idx]}"
+              title="${BLOCK_TITLE[$block_idx]}"
+              parent_link_result="${BLOCK_PARENT_RESULT[$block_idx]:-—}"
+
+              assign_result="—"
+              dep_display="なし"
+
+              if [ -z "$deps" ]; then
+                # Root node: assign Copilot immediately
+                if [ -n "$agent" ]; then
+                  if assign_copilot "$issue_num" "$agent" "$FILE_BASE_BRANCH" ""; then  # custom_instructions: unused in this workflow
+                    assign_result="✅ 即時"
+                  else
+                    assign_result="⚠️ 失敗"
+                    WARNINGS="${WARNINGS}- #${issue_num}: Copilotアサイン失敗\n"
+                  fi
+                fi
+              else
+                # Has deps: skip Copilot assign; update body with prerequisite links
+                assign_result="⏳ 待ち"
+                dep_issue_list=""
+                dep_display_parts=""
+                for dep_idx in $deps; do
+                  dep_issue_num="${BLOCK_TO_ISSUE[$dep_idx]:-}"
+                  if [ -n "$dep_issue_num" ]; then
+                    dep_issue_list="${dep_issue_list} #${dep_issue_num}"
+                    dep_display_parts="${dep_display_parts}, #${dep_issue_num}"
+                  else
+                    WARNINGS="${WARNINGS}- #${issue_num}: 依存先 Block ${dep_idx} が未作成のため解決不可\n"
+                  fi
+                done
+                dep_display="${dep_display_parts#, }"
+                [ -z "$dep_display" ] && dep_display="未解決"
+
+                if [ -n "$dep_issue_list" ]; then
+                  current_body=$(gh issue view "$issue_num" --repo "$REPO" --json body --jq '.body // ""')
+                  {
+                    printf '%s\n' "$current_body"
+                    printf '\n## ⏳ 前提条件（Dependencies）\n\n'
+                    printf '以下のIssueが完了してから、このIssueにCopilot coding agentをアサインしてください:\n'
+                    for dep_ref in $dep_issue_list; do
+                      printf -- '- %s\n' "$dep_ref"
+                    done
+                  } > /tmp/updated_body_${block_idx}.md
+                  gh issue edit "$issue_num" \
+                    --body-file /tmp/updated_body_${block_idx}.md \
+                    --repo "$REPO" 2>/dev/null || {
+                    WARNINGS="${WARNINGS}- #${issue_num}: 依存先body更新失敗\n"
+                  }
+                fi
+              fi
+
+              agent_display="${agent:-—}"
+              CREATED_ROWS="${CREATED_ROWS}| #${issue_num} | ${title} | ${agent_display} | ${parent_link_result} | ${assign_result} | ${dep_display} |\n"
+            done
+          done
+
+          # ── post PR comment ───────────────────────────────────────────────
+          {
+            printf '<!-- subissues-created -->\n\n'
+            printf '## \u2705 Sub Issue 作成完了\n\n'
+            printf '| # | タイトル | Custom Agent | 親紐づけ | Copilot | 依存関係 |\n'
+            printf '|---|--------|-------------|---------|---------|----------|\n'
+            if [ -n "$CREATED_ROWS" ]; then
+              printf '%b' "$CREATED_ROWS"
+            else
+              printf '| — | （作成なし） | — | — | — | — |\n'
+            fi
+            if [ -n "$CREATED_WORK_DIRS" ]; then
+              printf '\n## 📁 作成された作業ディレクトリ\n\n'
+              printf '| Sub Issue | work/ ディレクトリ | 状態 |\n'
+              printf '|-----------|-------------------|------|\n'
+              printf '%b' "$CREATED_WORK_DIRS"
+            fi
+            if [ -n "$WARNINGS" ]; then
+              printf '\n### \u26a0\ufe0f 警告\n\n'
+              while IFS= read -r line; do
+                [ -n "$line" ] && printf -- '- %s\n' "$line"
+              done <<< "$(printf '%b' "$WARNINGS")"
+            fi
+          } > /tmp/pr_comment.md
+
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body-file /tmp/pr_comment.md
+
+      - name: Commit and push work directories
+        if: steps.idempotency.outputs.skip == 'false' && steps.find_files.outputs.found == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add work/
+          if git diff --cached --quiet; then
+            echo "No new work directories to commit."
+          else
+            git commit -m "chore: create work directories for sub-issues of PR #${PR_NUMBER}"
+            # Retry push with pull-rebase on race condition
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push; then
+                pushed=true
+                break
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                echo "Push attempt ${attempt} failed; pulling and retrying..."
+                git pull --rebase
+              fi
+            done
+            if [ "$pushed" = false ]; then
+              echo "::error::git push failed after 3 attempts." >&2
+              exit 1
+            fi
+          fi

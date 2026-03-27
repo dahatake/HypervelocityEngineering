@@ -1,0 +1,1022 @@
+name: ABDV Orchestrator
+
+# auto-batch-dev ラベル付き Issue の opened/labeled/closed イベントで起動。
+#
+# ワークフロー概要（ABDV = Auto Batch Dev）:
+#   Step.1.1 — データサービス選定          (Dev-Microservice-Azure-DataDesign)
+#   Step.1.2 — Azure リソース Deploy        (Dev-Microservice-Azure-DataDeploy)          ← Step.1.1 完了後
+#   Step.2.1 — TDD RED: テストコード作成   (Dev-Batch-TestCoding)              ← Step.1.2 完了後
+#   Step.2.2 — TDD GREEN: 本実装           (Dev-Batch-ServiceCoding)            ← Step.2.1 完了後
+#   Step.3   — Azure Functions/コンテナ Deploy (Dev-Batch-Deploy)               ← Step.2.2 完了後
+#   Step.4.1 — WAF レビュー                (QA-AzureArchitectureReview)        ← Step.3 完了後（並列）
+#   Step.4.2 — 整合性チェック              (QA-AzureDependencyReview)          ← Step.3 完了後（並列）
+#
+# 状態ラベル（abdv: プレフィックス）:
+#   abdv:initialized — Bootstrap 完了（Sub Issue 生成済み）
+#   abdv:ready       — 実行待ち
+#   abdv:running     — Copilot 実行中
+#   abdv:done        — Step 完了（Sub Issue に付与 → 次 Step の起動トリガー）
+#   abdv:blocked     — 依存先未完了でブロック中
+#
+# 依存関係 DAG:
+#   Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2
+#   Step.4.1 AND Step.4.2 → Root abdv:done（AND 依存）
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: abdv-orchestrator-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: auto-batch-dev ラベルあり + abdv:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: "${{ github.event.label.name || '' }}"
+        run: |
+          set -euo pipefail
+
+          # Issue title を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_TITLE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export ISSUE_TITLE
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "abdv:done" ]]; then
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "${LABEL_NAME}" == "auto-batch-dev" ]]; then
+              # auto-batch-dev ラベルが後から付与された場合:
+              # 下の has_abdv / has_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に abdv:initialized 済みの場合は has_init チェックで skip になる。
+              echo "auto-batch-dev labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "abdv:done / auto-batch-dev 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [ABDV] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[ABDV\] ]]; then
+              # ---- ラベル一覧はイベント payload から取得（env: ISSUE_LABELS） ----
+              echo "ラベル（closed payload）: ${ISSUE_LABELS}"
+              # 既に abdv:done がついていれば labeled イベントが後で来るのでスキップ
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'abdv:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                echo "既に abdv:done ラベル済み。closed イベントをスキップ（labeled イベントで処理済み or 処理中）。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # abdv:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [ABDV] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [ABDV] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[ABDV\] ]]; then
+            echo "[ABDV] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ---- リアルタイムにラベル一覧を API 経由で取得（payload はスナップショットのため） ----
+          ISSUE_LABELS=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+          # auto-batch-dev ラベルを持つか確認
+          has_abdv=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'auto-batch-dev' in labels else 'false')
+          PY
+          )
+
+          if [[ "${has_abdv}" != "true" ]]; then
+            echo "auto-batch-dev ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # abdv:initialized / abdv:ready / abdv:running / abdv:done / abdv:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'abdv:initialized', 'abdv:ready', 'abdv:running', 'abdv:done', 'abdv:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_init}" == "true" ]]; then
+            echo "abdv:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------
+      # 1.5. リポジトリ checkout（abd-common.sh を利用するため）
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベルを作成する関数（422 = 既存の場合は無視）
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local desc="$3"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            if [[ "${http_code}" == "201" ]]; then
+              echo "ラベル作成: ${name}"
+            elif [[ "${http_code}" == "422" ]]; then
+              echo "ラベル既存（スキップ）: ${name}"
+            else
+              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
+            fi
+            sleep 1
+          }
+
+          create_label "auto-batch-dev" "0E8A16" "run full batch dev workflow (Azure resource, coding, deploy, review)"
+          create_label "abdv:initialized"            "C5DEF5" ""
+          create_label "abdv:ready"                  "0075CA" ""
+          create_label "abdv:running"                "E4E669" ""
+          create_label "abdv:done"                   "0E8A16" ""
+          create_label "abdv:blocked"                "D73A4A" ""
+          create_label "auto-context-review"        "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa"                     "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+
+      # ----------------------------------------------------------------
+      # 2.5. 即時 abdv:initialized 付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 abdv:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          # 共通ユーティリティ（ラベル付与・API リトライなど）を読み込む
+          source .github/scripts/abd-common.sh
+
+          echo "二重実行防止のため abdv:initialized を即座に付与します..."
+          add_label "${ISSUE_NUMBER}" "abdv:initialized"
+          echo "abdv:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
+
+      # ----------------------------------------------------------------
+      # 3. Issue 初期化と Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: Issue 初期化とStep Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT:-}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/abd-common.sh"
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # ブランチ名抽出（input フォームの値）
+          branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              branch = m.group(1).strip()
+              if not branch or branch == "_No response_":
+                  branch = "main"
+
+          # リソースグループ名抽出
+          resource_group = ""
+          m = re.search(r"###\s*リソースグループ名\s*\n+(.+)", body)
+          if m:
+              resource_group = m.group(1).strip()
+              if resource_group == "_No response_":
+                  resource_group = ""
+
+          # 対象バッチジョブ ID 抽出
+          batch_job_ids = ""
+          m = re.search(r"###\s*対象バッチジョブ\s*ID（カンマ区切り）\s*\n+(.+)", body)
+          if m:
+              batch_job_ids = m.group(1).strip()
+              if batch_job_ids == "_No response_":
+                  batch_job_ids = ""
+
+          # 実行するステップからスキップ対象を検出
+          # checkboxes は Step.1 / Step.2 / Step.3 / Step.4 の4項目
+          skip_steps = set()
+          exec_section = re.search(
+              r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if exec_section:
+              section_text = exec_section.group(1)
+              all_items = re.findall(
+                  r"-\s*\[[ xX]\]\s*Step\.(\d+)",
+                  section_text
+              )
+              all_steps = set(all_items)
+              checked_items = re.findall(
+                  r"-\s*\[[xX]\]\s*Step\.(\d+)",
+                  section_text
+              )
+              exec_steps = set(checked_items)
+              skip_steps = all_steps - exec_steps
+              # 全チェックなし = 全ステップ実行（デフォルト動作）
+              if not exec_steps and all_steps:
+                  skip_steps = set()
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              additional_comment = m.group(1).strip()
+              if additional_comment == "_No response_":
+                  additional_comment = ""
+
+          # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_context_review = False
+          review_section = re.search(
+              r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_qa = False
+          qa_section = re.search(
+              r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if qa_section:
+              section_text = qa_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_qa = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          result = {
+              "branch": branch,
+              "resource_group": resource_group,
+              "batch_job_ids": batch_job_ids,
+              "skip_steps": list(skip_steps),
+              "additional_comment": additional_comment,
+              "auto_context_review": auto_context_review,
+              "auto_qa": auto_qa
+          }
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          RESOURCE_GROUP=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['resource_group'])")
+          BATCH_JOB_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['batch_job_ids'])")
+          SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "リソースグループ名: ${RESOURCE_GROUP}"
+          echo "対象バッチジョブ ID: ${BATCH_JOB_IDS}"
+          echo "スキップ Steps: ${SKIP_STEPS}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
+
+          # ---- Root Issue body に auto-context-review タグを埋め込み ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_context_review = sys.argv[1]
+          output_file = sys.argv[2]
+
+          tag = f"<!-- auto-context-review: {auto_context_review} -->"
+          pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+
+          if pat.search(body):
+              body = pat.sub(tag, body)
+          else:
+              body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
+          # ---- Root Issue に abdv:initialized を付与 ----
+          add_label "${ROOT_ISSUE}" "abdv:initialized"
+          echo "abdv:initialized を付与しました。"
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          # ---- Step Issue に埋め込む共通メタ情報 ----
+          # root-issue / branch / resource-group / batch-job-ids / auto-context-review / auto-qa を埋め込む
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- batch-job-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${BATCH_JOB_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}")
+
+          # 追加コメントセクション（空の場合は空文字）
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+          else
+            ADDITIONAL_SECTION=""
+          fi
+
+          # リソースグループ／ジョブID セクション（存在する場合のみ）
+          if [[ -n "${RESOURCE_GROUP}" ]]; then
+            RG_SECTION=$(printf '\n\n## リソースグループ\n`%s`' "${RESOURCE_GROUP}")
+          else
+            RG_SECTION=""
+          fi
+
+          if [[ -n "${BATCH_JOB_IDS}" ]]; then
+            JOB_SECTION=$(printf '\n\n## 対象バッチジョブ ID\n`%s`' "${BATCH_JOB_IDS}")
+          else
+            JOB_SECTION=""
+          fi
+
+          # Step Issue に付与するラベルセット
+          # auto-batch-dev を付与することで Issue 一覧のラベル絞り込み検索が可能になる（ABD = Auto Batch Design と同パターン）
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["abdv:blocked","auto-batch-dev","auto-context-review","auto-qa"]'
+          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["abdv:blocked","auto-batch-dev","auto-context-review"]'
+          elif [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["abdv:blocked","auto-batch-dev","auto-qa"]'
+          else
+            STEP_LABELS='["abdv:blocked","auto-batch-dev"]'
+          fi
+
+          # ---- Step Issue 生成 ----
+          # 各 Step の issue_number と id を保存する変数
+          S11_NUM="" S11_ID=""
+          S12_NUM="" S12_ID=""
+          S21_NUM="" S21_ID=""
+          S22_NUM="" S22_ID=""
+          S3_NUM=""  S3_ID=""
+          S41_NUM="" S41_ID=""
+          S42_NUM="" S42_ID=""
+
+          # ---- Step.1.1: データサービス選定 ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
+            BODY_S11=$(printf '%s\n## 目的\nバッチジョブ設計書・サービスカタログを根拠に、データ系 Azure サービスの選定と設計を行う。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）\n\n## 出力\n- `docs/azure/AzureServices-data.md`（データストア設計）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- 依存なし（最初の Step）\n\n## 完了条件\n- `docs/azure/AzureServices-data.md` が作成または更新されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S11_RESP=$(create_issue \
+              "[ABDV] Step.1.1: データサービス選定" \
+              "${BODY_S11}" \
+              "${STEP_LABELS}")
+            S11_NUM=$(echo "${S11_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S11_ID=$(echo "${S11_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.1.1 作成: #${S11_NUM}"
+            sleep 3
+          else
+            echo "Step.1 はスキップ対象のため Step.1.1 は作成しません。"
+          fi
+
+          # ---- Step.1.2: Azure リソース Deploy ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
+            BODY_S12=$(printf '%s\n## 目的\nデータサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。\n\n## 入力\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）\n\n## 出力\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- Step.1.1（データサービス選定）が `abdv:done` であること\n\n## 完了条件\n- Azure データ系リソースが作成/確認されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S12_RESP=$(create_issue \
+              "[ABDV] Step.1.2: Azure データリソース Deploy" \
+              "${BODY_S12}" \
+              "${STEP_LABELS}")
+            S12_NUM=$(echo "${S12_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S12_ID=$(echo "${S12_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.1.2 作成: #${S12_NUM}"
+            sleep 3
+          else
+            echo "Step.1 はスキップ対象のため Step.1.2 は作成しません。"
+          fi
+
+          # ---- Step.2.1: TDD RED: テストコード作成 ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 2 " ]]; then
+            # Step.2.1 の依存先: Step.1.2 が存在すれば Step.1.2、なければ依存なし
+            if [[ -n "${S12_NUM}" ]]; then
+              _S21_DEP="Step.1.2（Azure データリソース Deploy）が \`abdv:done\` であること"
+            else
+              _S21_DEP="依存なし（Step.1 がスキップされたため）"
+            fi
+            BODY_S21=$(printf '%s\n## 目的\nTDD テスト仕様書を根拠に、バッチジョブの失敗するテストコード（TDD RED フェーズ）を作成する。\n\n⚠️ **注意**: `{jobId}` はこの Issue の `## 対象バッチジョブ ID` セクションに記載のジョブ ID を使用すること（例: `BJ-001`）。\n\n## 入力\n- `docs/test-specs/{jobId}-test-spec.md`（TDD テスト仕様書。ABD ワークフローの Arch-Batch-TDDTestSpec が生成）\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書）\n\n## 出力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/` 配下のテストコード（xUnit / C#）\n\n## Custom Agent\n`Dev-Batch-TestCoding` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- テストコードが作成され、`dotnet test` で失敗（TDD RED）が確認されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${_S21_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S21_RESP=$(create_issue \
+              "[ABDV] Step.2.1: TDD RED — テストコード作成" \
+              "${BODY_S21}" \
+              "${STEP_LABELS}")
+            S21_NUM=$(echo "${S21_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S21_ID=$(echo "${S21_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.2.1 作成: #${S21_NUM}"
+            sleep 3
+          else
+            echo "Step.2 はスキップ対象のため Step.2.1 は作成しません。"
+          fi
+
+          # ---- Step.2.2: TDD GREEN: 本実装 ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 2 " ]]; then
+            BODY_S22=$(printf '%s\n## 目的\nテストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。\n\n## 入力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/`（テストコード）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）\n- `docs/azure/AzureServices-data.md`（データストア接続情報）\n\n## 出力\n- `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード\n\n## Custom Agent\n`Dev-Batch-ServiceCoding` を使用\n\n## 依存\n- Step.2.1（TDD RED: テストコード作成）が `abdv:done` であること\n\n## 完了条件\n- `dotnet test` が全テスト PASS（TDD GREEN）になっている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S22_RESP=$(create_issue \
+              "[ABDV] Step.2.2: TDD GREEN — バッチジョブ本実装" \
+              "${BODY_S22}" \
+              "${STEP_LABELS}")
+            S22_NUM=$(echo "${S22_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S22_ID=$(echo "${S22_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.2.2 作成: #${S22_NUM}"
+            sleep 3
+          else
+            echo "Step.2 はスキップ対象のため Step.2.2 は作成しません。"
+          fi
+
+          # ---- Step.3: Azure Functions/コンテナ Deploy ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 3 " ]]; then
+            # Step.3 の依存先: Step.2.2 が存在すれば Step.2.2、なければ Step.1.2、なければ依存なし
+            if [[ -n "${S22_NUM}" ]]; then
+              _S3_DEP="Step.2.2（TDD GREEN: バッチジョブ本実装）が \`abdv:done\` であること"
+            elif [[ -n "${S12_NUM}" ]]; then
+              _S3_DEP="Step.1.2（Azure データリソース Deploy）が \`abdv:done\` であること"
+            else
+              _S3_DEP="依存なし（Step.1 / Step.2 がスキップされたため）"
+            fi
+            BODY_S3=$(printf '%s\n## 目的\nバッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。\n\n## 入力\n- `src/` または `functions/` 配下の本実装コード\n- `docs/azure/AzureServices-data.md`（データストア設計）\n- `docs/batch/batch-service-catalog.md`（サービスカタログ）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）\n- `docs/azure/AzureServices-services.md`（コンピュート設計: 存在する場合のみ参照）\n\n## 出力\n- Azure Functions / コンテナのデプロイ完了\n- CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト: バッチリソース作成）\n- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI スクリプト: バッチリソース検証）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- バッチジョブが Azure 上で稼働している\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${_S3_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S3_RESP=$(create_issue \
+              "[ABDV] Step.3: Azure Functions/コンテナ Deploy" \
+              "${BODY_S3}" \
+              "${STEP_LABELS}")
+            S3_NUM=$(echo "${S3_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S3_ID=$(echo "${S3_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.3 作成: #${S3_NUM}"
+            sleep 3
+          else
+            echo "Step.3 はスキップ対象のため作成しません。"
+          fi
+
+          # ---- Step.4.1: WAF レビュー ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 4 " ]]; then
+            # Step.4.1 の依存先: Step.3 が存在すれば Step.3、なければ最後に完了した Step
+            if [[ -n "${S3_NUM}" ]]; then
+              _S41_DEP="Step.3（Azure Functions/コンテナ Deploy）が \`abdv:done\` であること"
+            elif [[ -n "${S22_NUM}" ]]; then
+              _S41_DEP="Step.2.2（TDD GREEN: バッチジョブ本実装）が \`abdv:done\` であること"
+            elif [[ -n "${S12_NUM}" ]]; then
+              _S41_DEP="Step.1.2（Azure データリソース Deploy）が \`abdv:done\` であること"
+            else
+              _S41_DEP="依存なし（前段 Step がスキップされたため）"
+            fi
+            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みの Azure リソース構成を Azure Well-Architected Framework（WAF）5本柱で評価する。\n\n## 入力\n- デプロイ済みの Azure リソース（Azure Portal / CLI で確認）\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: WAF「運用の優秀性」柱の根拠）\n- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）\n\n## 出力\n- WAF レビューレポート（`docs/azure/waf-review.md`）\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- `docs/azure/waf-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${_S41_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S41_RESP=$(create_issue \
+              "[ABDV] Step.4.1: WAF レビュー" \
+              "${BODY_S41}" \
+              "${STEP_LABELS}")
+            S41_NUM=$(echo "${S41_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S41_ID=$(echo "${S41_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.4.1 作成: #${S41_NUM}"
+            sleep 3
+          else
+            echo "Step.4 はスキップ対象のため Step.4.1 は作成しません。"
+          fi
+
+          # ---- Step.4.2: 整合性チェック ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 4 " ]]; then
+            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、設計書との整合性を確認する。\n\n## 入力\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ダッシュボード設定の整合確認）\n- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）\n\n## 出力\n- 整合性チェックレポート（`docs/azure/dependency-review.md`）\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.4.1 と同じ前段 Step が `abdv:done` であること（Step.3 → 並列起動）\n\n## 完了条件\n- `docs/azure/dependency-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S42_RESP=$(create_issue \
+              "[ABDV] Step.4.2: 整合性チェック" \
+              "${BODY_S42}" \
+              "${STEP_LABELS}")
+            S42_NUM=$(echo "${S42_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S42_ID=$(echo "${S42_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.4.2 作成: #${S42_NUM}"
+            sleep 3
+          else
+            echo "Step.4 はスキップ対象のため Step.4.2 は作成しません。"
+          fi
+
+          # ---- Sub Issue を Root Issue に紐付け ----
+          [[ -n "${S11_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S11_ID}"; echo "Root → Step.1.1 紐付け完了"; }
+          [[ -n "${S12_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S12_ID}"; echo "Root → Step.1.2 紐付け完了"; }
+          [[ -n "${S21_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S21_ID}"; echo "Root → Step.2.1 紐付け完了"; }
+          [[ -n "${S22_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S22_ID}"; echo "Root → Step.2.2 紐付け完了"; }
+          [[ -n "${S3_NUM}" ]]  && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}";  echo "Root → Step.3 紐付け完了"; }
+          [[ -n "${S41_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S41_ID}"; echo "Root → Step.4.1 紐付け完了"; }
+          [[ -n "${S42_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S42_ID}"; echo "Root → Step.4.2 紐付け完了"; }
+
+          # ---- 最初に実行すべき Step を起動 ----
+          # Step.1.1 が存在 → Step.1.1 から開始
+          # Step.1 がスキップ → Step.2.1 から開始
+          # Step.1/2 がスキップ → Step.3 から開始
+          # Step.1/2/3 がスキップ → Step.4.1/4.2 から並列開始
+          # 初回起動ヘルパー: abdv:blocked を除去して abdv:ready + Copilot アサイン + abdv:running を設定
+          activate_first_step() {
+            local issue_num="$1"
+            local custom_agent="$2"
+            # abdv:blocked ラベルを除去（URLエンコード: : → %3A）
+            curl -s -o /dev/null \
+              -X DELETE \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels/abdv%3Ablocked" || true
+            add_label "${issue_num}" "abdv:ready"
+            if assign_copilot "${issue_num}" "${custom_agent}" "${BRANCH}" ""; then
+              add_label "${issue_num}" "abdv:running"
+              echo "Issue #${issue_num} に Copilot アサイン + abdv:running 付与完了"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。abdv:running は付与しません。"
+            fi
+          }
+
+          if [[ -n "${S11_NUM}" ]]; then
+            activate_first_step "${S11_NUM}" "Dev-Batch-Deploy"
+            echo "Step.1.1 (#${S11_NUM}) を起動しました。"
+          elif [[ -n "${S21_NUM}" ]]; then
+            activate_first_step "${S21_NUM}" "Dev-Batch-TestCoding"
+            echo "Step.1 がスキップ済み: Step.2.1 (#${S21_NUM}) を起動しました。"
+          elif [[ -n "${S3_NUM}" ]]; then
+            activate_first_step "${S3_NUM}" "Dev-Batch-Deploy"
+            echo "Step.1〜2 がスキップ済み: Step.3 (#${S3_NUM}) を起動しました。"
+          else
+            # Step.1/2/3 全スキップ → Step.4.1 と Step.4.2 を並列起動
+            if [[ -n "${S41_NUM}" ]]; then
+              activate_first_step "${S41_NUM}" "QA-AzureArchitectureReview"
+              echo "Step.4.1 (#${S41_NUM}) を起動しました（Step.1〜3 スキップ）。"
+            fi
+            if [[ -n "${S42_NUM}" ]]; then
+              activate_first_step "${S42_NUM}" "QA-AzureDependencyReview"
+              echo "Step.4.2 (#${S42_NUM}) を起動しました（Step.1〜3 スキップ）。"
+            fi
+            if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+              # 全ステップがスキップ → 即完了
+              add_label "${ROOT_ISSUE}" "abdv:done"
+              post_comment "${ROOT_ISSUE}" "⚠️ 全てのステップがスキップされました。Root Issue #${ROOT_ISSUE} をワークフロー完了とマークします。"
+            fi
+          fi
+
+          # ---- 完了通知コメント ----
+          SUBISSUE_LIST=""
+          [[ -n "${S11_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S11_NUM} Step.1.1: データサービス選定\n"
+          [[ -n "${S12_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S12_NUM} Step.1.2: Azure データリソース Deploy\n"
+          [[ -n "${S21_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S21_NUM} Step.2.1: TDD RED — テストコード作成\n"
+          [[ -n "${S22_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S22_NUM} Step.2.2: TDD GREEN — バッチジョブ本実装\n"
+          [[ -n "${S3_NUM}" ]]  && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S3_NUM} Step.3: Azure Functions/コンテナ Deploy\n"
+          [[ -n "${S41_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S41_NUM} Step.4.1: WAF レビュー\n"
+          [[ -n "${S42_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S42_NUM} Step.4.2: 整合性チェック\n"
+
+          INIT_COMMENT=$(printf '✅ ABDV ワークフローを初期化しました。\n\n**生成された Sub Issue:**\n%s\n**実行順序（DAG）:**\nStep.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2\n\n各 Step に `abdv:done` ラベルを付与すると次の Step が自動的に起動します。' \
+            "${SUBISSUE_LIST}")
+          post_comment "${ROOT_ISSUE}" "${INIT_COMMENT}" \
+            || echo "WARNING: Root Issue へのコメント投稿に失敗しました。" >&2
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移処理: abdv:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: abdv:done ラベルをまだ持っていなければ付与する
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'abdv:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "abdv:done ラベルを付与します（closed イベント由来）..."
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["abdv:done"]}' || true
+            echo "abdv:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          if [[ -z "${COPILOT_PAT:-}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          # ---- ユーティリティ関数（再定義） ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/abd-common.sh"
+
+          # Issue が abdv:done ラベルを持つか確認（AND依存チェック用）
+          check_abdv_done() {
+            local issue_num="$1"
+            api_call GET "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'abdv:done' in [l['name'] for l in d.get('labels',[])] else 'false')"
+          }
+
+          # Issue を abdv:ready + Copilot アサイン + abdv:running に設定
+          activate_issue() {
+            local issue_num="$1"
+            local issue_body
+            issue_body=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
+            local agent_name
+            agent_name=$(extract_custom_agent "${issue_body}") || true
+            # abdv:blocked を除去して abdv:ready を付与
+            curl -s -o /dev/null \
+              -X DELETE \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels/abdv%3Ablocked" || true
+            add_label "${issue_num}" "abdv:ready"
+            if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
+              add_label "${issue_num}" "abdv:running"
+              echo "Issue #${issue_num} を abdv:ready + Copilot アサイン + abdv:running に設定しました。(custom_agent: ${agent_name})"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。abdv:running は付与しません。"
+            fi
+          }
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[ABDV\] Step\.(\d+(?:\.\d+)?)', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- ブランチ名の取得 ----
+          BRANCH=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- branch: (.+?) -->', body)
+          print(m.group(1).strip() if m else 'main')
+          PY
+          )
+
+          echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review / auto-qa PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                fi
+                if [[ "${AUTO_QA}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-qa ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-qa ラベル付与に失敗しました。" >&2
+                fi
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
+
+          # ---- Root Issue の Sub Issues から Step Issue 番号を取得 ----
+          get_sub_issue_number() {
+            local pattern="$1"
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          # ---- 依存関係 DAG に基づき次 Step を特定 & 起動 ----
+          # DAG: Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2
+          #       Step.4.1 AND Step.4.2 → Root abdv:done
+          case "${STEP_MATCH}" in
+            "1.1")
+              # Step.1.1 完了 → Step.1.2 を起動
+              S12_NUM=$(get_sub_issue_number '\[ABDV\] Step\.1\.2:')
+              if [[ -n "${S12_NUM}" ]]; then
+                activate_issue "${S12_NUM}"
+                echo "Step.1.2 (#${S12_NUM}) を起動しました。"
+              else
+                # Step.1.2 が存在しない（スキップ済み）→ Step.2.1 を起動
+                S21_NUM=$(get_sub_issue_number '\[ABDV\] Step\.2\.1:')
+                if [[ -n "${S21_NUM}" ]]; then
+                  activate_issue "${S21_NUM}"
+                  echo "Step.1.2 が存在しないため Step.2.1 (#${S21_NUM}) を起動しました。"
+                else
+                  # Step.2.1 もスキップ → Step.2.2 → Step.3 → Step.4 の順にフォールバック
+                  S22_NUM=$(get_sub_issue_number '\[ABDV\] Step\.2\.2:')
+                  if [[ -n "${S22_NUM}" ]]; then
+                    activate_issue "${S22_NUM}"
+                  else
+                    S3_NUM=$(get_sub_issue_number '\[ABDV\] Step\.3:')
+                    if [[ -n "${S3_NUM}" ]]; then
+                      activate_issue "${S3_NUM}"
+                    else
+                      S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+                      S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+                      [[ -n "${S41_NUM}" ]] && activate_issue "${S41_NUM}"
+                      [[ -n "${S42_NUM}" ]] && activate_issue "${S42_NUM}"
+                      if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+                        add_label "${ROOT_ISSUE}" "abdv:done"
+                        post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                      fi
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "1.2")
+              # Step.1.2 完了 → Step.2.1 を起動
+              S21_NUM=$(get_sub_issue_number '\[ABDV\] Step\.2\.1:')
+              if [[ -n "${S21_NUM}" ]]; then
+                activate_issue "${S21_NUM}"
+                echo "Step.2.1 (#${S21_NUM}) を起動しました。"
+              else
+                # Step.2.1 がスキップ → Step.2.2 → Step.3 → Step.4 の順にフォールバック
+                S22_NUM=$(get_sub_issue_number '\[ABDV\] Step\.2\.2:')
+                if [[ -n "${S22_NUM}" ]]; then
+                  activate_issue "${S22_NUM}"
+                else
+                  S3_NUM=$(get_sub_issue_number '\[ABDV\] Step\.3:')
+                  if [[ -n "${S3_NUM}" ]]; then
+                    activate_issue "${S3_NUM}"
+                  else
+                    S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+                    S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+                    [[ -n "${S41_NUM}" ]] && activate_issue "${S41_NUM}"
+                    [[ -n "${S42_NUM}" ]] && activate_issue "${S42_NUM}"
+                    if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+                      add_label "${ROOT_ISSUE}" "abdv:done"
+                      post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "2.1")
+              # Step.2.1 完了 → Step.2.2 を起動
+              S22_NUM=$(get_sub_issue_number '\[ABDV\] Step\.2\.2:')
+              if [[ -n "${S22_NUM}" ]]; then
+                activate_issue "${S22_NUM}"
+                echo "Step.2.2 (#${S22_NUM}) を起動しました。"
+              else
+                # Step.2.2 がスキップ → Step.3 → Step.4 の順にフォールバック
+                S3_NUM=$(get_sub_issue_number '\[ABDV\] Step\.3:')
+                if [[ -n "${S3_NUM}" ]]; then
+                  activate_issue "${S3_NUM}"
+                else
+                  S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+                  S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+                  [[ -n "${S41_NUM}" ]] && activate_issue "${S41_NUM}"
+                  [[ -n "${S42_NUM}" ]] && activate_issue "${S42_NUM}"
+                  if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+                    add_label "${ROOT_ISSUE}" "abdv:done"
+                    post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                  fi
+                fi
+              fi
+              ;;
+
+            "2.2")
+              # Step.2.2 完了 → Step.3 を起動
+              S3_NUM=$(get_sub_issue_number '\[ABDV\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                activate_issue "${S3_NUM}"
+                echo "Step.3 (#${S3_NUM}) を起動しました。"
+              else
+                # Step.3 がスキップ → Step.4.1/4.2 を並列起動
+                S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+                S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+                [[ -n "${S41_NUM}" ]] && activate_issue "${S41_NUM}"
+                [[ -n "${S42_NUM}" ]] && activate_issue "${S42_NUM}"
+                if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+                  add_label "${ROOT_ISSUE}" "abdv:done"
+                  post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                fi
+              fi
+              ;;
+
+            "3")
+              # Step.3 完了 → Step.4.1 と Step.4.2 を並列で起動
+              S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+              S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+              if [[ -n "${S41_NUM}" ]]; then
+                activate_issue "${S41_NUM}"
+                echo "Step.4.1 (#${S41_NUM}) を起動しました。"
+              fi
+              if [[ -n "${S42_NUM}" ]]; then
+                activate_issue "${S42_NUM}"
+                echo "Step.4.2 (#${S42_NUM}) を起動しました。"
+              fi
+              if [[ -z "${S41_NUM}" ]] && [[ -z "${S42_NUM}" ]]; then
+                # Step.4 が両方スキップ → ワークフロー完了
+                add_label "${ROOT_ISSUE}" "abdv:done"
+                post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+              fi
+              ;;
+
+            "4.1"|"4.2")
+              # AND 依存チェック: Step.4.1 または Step.4.2 完了
+              # → 両方 abdv:done になった後に Root Issue をワークフロー完了とする
+              S41_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.1:')
+              S42_NUM=$(get_sub_issue_number '\[ABDV\] Step\.4\.2:')
+
+              S41_DONE="false"
+              S42_DONE="false"
+              # api_call のエラーはすでに stderr に出力される（api_call 関数参照）。
+              # ここでは API エラー時に "false" を返してワークフローを止めないようにする。
+              if [[ -n "${S41_NUM}" ]]; then
+                S41_DONE=$(check_abdv_done "${S41_NUM}") \
+                  || { echo "WARNING: check_abdv_done #${S41_NUM} 失敗 → incomplete として扱う。" >&2; S41_DONE="false"; }
+              fi
+              if [[ -n "${S42_NUM}" ]]; then
+                S42_DONE=$(check_abdv_done "${S42_NUM}") \
+                  || { echo "WARNING: check_abdv_done #${S42_NUM} 失敗 → incomplete として扱う。" >&2; S42_DONE="false"; }
+              fi
+
+              # 存在しない（スキップ済み）場合は完了とみなす
+              [[ -z "${S41_NUM}" ]] && S41_DONE="true"
+              [[ -z "${S42_NUM}" ]] && S42_DONE="true"
+
+              if [[ "${S41_DONE}" == "true" ]] && [[ "${S42_DONE}" == "true" ]]; then
+                add_label "${ROOT_ISSUE}" "abdv:done"
+                echo "Root Issue #${ROOT_ISSUE} に abdv:done を付与しました。"
+                post_comment "${ROOT_ISSUE}" "🎉 全ての ABDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。（Step.4.1: ${S41_DONE}, Step.4.2: ${S42_DONE}）"
+                echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+              else
+                echo "AND 依存待機: Step.4.1/4.2 の両方完了を待機中です。（Step.4.1: ${S41_DONE}, Step.4.2: ${S42_DONE}）"
+              fi
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac

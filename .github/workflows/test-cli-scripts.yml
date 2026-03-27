@@ -1,0 +1,130 @@
+name: Test CLI Scripts (Bash / PowerShell)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/scripts/bash/**'
+      - '.github/scripts/powershell/**'
+      - '.github/scripts/tests/**'
+      - '.github/workflows/test-cli-scripts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/scripts/bash/**'
+      - '.github/scripts/powershell/**'
+      - '.github/scripts/tests/**'
+      - '.github/workflows/test-cli-scripts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Bash テスト (ubuntu-latest)
+  # ===========================================================================
+  bash-tests:
+    name: Bash Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          if ! command -v shellcheck &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y shellcheck
+          fi
+          shellcheck --version
+
+      - name: shellcheck — static analysis
+        run: |
+          shellcheck -S warning .github/scripts/bash/*.sh .github/scripts/bash/lib/*.sh
+          shellcheck -S warning .github/scripts/tests/test-bash.sh
+
+      - name: Run Bash dry-run tests
+        run: bash .github/scripts/tests/test-bash.sh
+
+  # ===========================================================================
+  # PowerShell テスト (windows-latest)
+  # ===========================================================================
+  powershell-tests:
+    name: PowerShell Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester and PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -MinimumVersion 1.20.0 -Force -Scope CurrentUser
+
+      - name: PSScriptAnalyzer — static analysis
+        shell: pwsh
+        run: |
+          Import-Module PSScriptAnalyzer -MinimumVersion 1.20.0
+          $results = @()
+          $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error |
+              Where-Object { $_.ScriptName -notlike '*.Tests.ps1' }
+          if ($results.Count -gt 0) {
+              $results | Format-Table -AutoSize
+              throw "PSScriptAnalyzer found $($results.Count) issue(s)"
+          }
+          Write-Host "PSScriptAnalyzer: all scripts clean"
+
+      - name: Run Pester tests (commands.Tests.ps1)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.github/scripts/powershell/tests'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
+
+      - name: Run Pester tests (test-powershell.ps1)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.github/scripts/tests/test-powershell.ps1'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
+
+  # ===========================================================================
+  # PowerShell テスト on Ubuntu (クロスプラットフォーム確認)
+  # ===========================================================================
+  powershell-ubuntu:
+    name: PowerShell Tests (Ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester and PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -MinimumVersion 1.20.0 -Force -Scope CurrentUser
+
+      - name: PSScriptAnalyzer — static analysis
+        shell: pwsh
+        run: |
+          Import-Module PSScriptAnalyzer -MinimumVersion 1.20.0
+          $results = @()
+          $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error |
+              Where-Object { $_.ScriptName -notlike '*.Tests.ps1' }
+          if ($results.Count -gt 0) {
+              $results | Format-Table -AutoSize
+              throw "PSScriptAnalyzer found $($results.Count) issue(s)"
+          }
+          Write-Host "PSScriptAnalyzer: all scripts clean"
+
+      - name: Run Pester tests (test-powershell.ps1)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.github/scripts/tests/test-powershell.ps1'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config

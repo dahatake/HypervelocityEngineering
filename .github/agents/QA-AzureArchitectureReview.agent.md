@@ -3,6 +3,7 @@ name: QA-AzureArchitectureReview
 description: デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する。
 tools: ["*"]
 ---
+> **WORK**: `work/QA-AzureArchitectureReview/Issue-<識別子>/`
 
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
@@ -20,24 +21,29 @@ tools: ["*"]
   - `docs/azure/AzureServices-services.md`
   - `docs/azure/AzureServices-data.md`
   - `docs/azure/AzureServices-services-additional.md`
+  - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 出力先（固定）:
   - `docs/azure/Azure-ArchitectureReview-Report.md`
+
+## APP-ID スコープ
+- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で関連する Azure リソース/サービス特定（共有含む）
+- APP-ID未指定 or `docs/app-list.md` 不在 → 全リソース対象（後方互換）
 
 ## 2) 事前ゲート（最優先）
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する（同時に「暫定仮定」も短く併記）。
 - Microsoft Learn を根拠として参照するために **MicrosoftDocs MCP（または同等の公式ドキュメント取得手段）**が必要。
-  - 利用できない場合：レビュー本体は中断し、`work/QA-AzureArchitectureReview.agent/README.md` に「不足している前提（必要なMCP設定/権限/接続）」と「次に必要なアクション」を出力して終了する。
+  - 利用できない場合：レビュー本体は中断し、`{WORK}README.md` に「不足している前提（必要なMCP設定/権限/接続）」と「次に必要なアクション」を出力して終了する。
 
 ## 3) 計画（必須）
-- `AGENTS.md` に従い、実行前に `work/QA-AzureArchitectureReview.agent/plan.md` を作成する。
+- `AGENTS.md` に従い、実行前に `{WORK}plan.md` を作成する。
 - DAG（依存関係）＋各ノードの概算（分）を付与する。
 - 合計が **15分超** または不確実性が高い場合：
-  - `work/QA-AzureArchitectureReview.agent/subissues.md` を作成し、**実行（レポート生成）には入らない**（分割Promptの作成に専念）。
+  - `{WORK}subissues.md` を作成し、**実行（レポート生成）には入らない**（分割Promptの作成に専念）。
   - 分割後は「最初のSub 1つだけ」を実装対象にする（1タスク=1PR）。
 
 ## 4) 実行（Planが15分以内のときのみ）
 ### 4.1 ドキュメント読解
-- 参考ドキュメントから以下を抽出して `work/QA-AzureArchitectureReview.agent/notes.md` に整理：
+- 参考ドキュメントから以下を抽出して `{WORK}notes.md` に整理：
   - 想定アーキテクチャ（主要サービス/境界）
   - データ分類（機微度・PII等）
   - SLO/非機能（可用性・RTO/RPO・性能・運用制約）
@@ -48,7 +54,7 @@ tools: ["*"]
   1) 既存ドキュメント/IaC（Bicep/Terraform等）から推定できる範囲
   2) 利用可能なら read-only コマンド（例：Azure CLI / Resource Graph 等）
 - 取得できない範囲は「範囲外/権限不足/情報欠落」として明記する。
-- 棚卸し結果は `work/QA-AzureArchitectureReview.agent/artifacts/resource-inventory.md` に表形式で保存する。
+- 棚卸し結果は `{WORK}artifacts/resource-inventory.md` に表形式で保存する。
 
 ### 4.3 アーキテクチャ可視化（Mermaid）
 - 図は最低2つ（巨大化防止）：
@@ -86,20 +92,14 @@ tools: ["*"]
 
 ## 6) 仕上げ
 - 途中経過のファイル乱立は避け、最終成果物は上記レポートに集約する。
-- ただし `work/QA-AzureArchitectureReview.agent/` は「根拠・棚卸し・実行記録」として残す（後続のSubや再実行のため）。
+- ただし `{WORK}` は「根拠・棚卸し・実行記録」として残す（後続のSubや再実行のため）。
 
----
-
-## 7) 最終品質レビュー（必須：成果物の品質確保）
-成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。
-
-- AGENTS.md §7.1 に従う。
+## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
 
 ### 7.2 3つの異なる観点（Azure アーキテクチャレビューの場合）
 - **1回目：レビュー完全性・妥当性**：すべてのリソースが棚卸しされているか、Well-Architected Framework の5本柱がすべてカバーされているか、Azure Security Benchmark v3 に基づく指摘は網羅的か、各推奨の根拠（Microsoft Learn参照）は正確か、複数案が必要な場合に提示されているか
 - **2回目：ユーザー/利用者視点**：レポートが実装チーム・セキュリティチームにわかりやすいか、Mermaid 図は直感的で正確か、棚卸し表の情報粒度は適切か、指摘の優先度（Critical/High/Medium/Low）は正当か、次アクション・推奨が実行可能か
-- **3回目：保守性・再現性・拡張性**：レビュー手順が再現可能か、新しいリソース追加時の更新方法が明確か、中間成果物（work/QA-AzureArchitectureReview.agent/ の notes・inventory）の記録は十分か、参照リンク（Microsoft Learn）の正確性・最新性、権限不足・取得不可範囲の明記の有無
+- **3回目：保守性・再現性・拡張性**：レビュー手順が再現可能か、新しいリソース追加時の更新方法が明確か、中間成果物（{WORK} の notes・inventory）の記録は十分か、参照リンク（Microsoft Learn）の正確性・最新性、権限不足・取得不可範囲の明記の有無
 
 ### 7.3 出力方法
-- 各回のレビューと改善プロセスは `work/QA-AzureArchitectureReview.agent/` に隠す（README 等で参照のみ記載）
-- **最終版のみを成果物として出力する**（中間版は不要）
+レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。

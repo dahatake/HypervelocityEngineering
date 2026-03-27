@@ -3,6 +3,7 @@ name: QA-AzureDependencyReview
 description: サービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、必要なら最小差分で修正する
 tools: ["*"]
 ---
+> **WORK**: `work/QA-AzureDependencyReview/Issue-<識別子>/`
 
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
@@ -16,17 +17,20 @@ tools: ["*"]
 必須：
 - リソースグループ名：`<resource-group>`（実環境照会を行う場合のみ必須）
 - 必読：`docs/service-catalog.md`
+- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 推奨（存在するなら参照）：
 - `docs/azure/AzureServices-services*.md`
 - `docs/azure/AzureServices-data*.md`
 - 参照先コード：`app/`, `api/`, `infra/`, `config/`, `.github/workflows/`
 
-
+## APP-ID スコープ
+- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で関連する Azure 依存特定（共有含む）
+- APP-ID未指定 or `docs/app-list.md` 不在 → 全依存対象（後方互換）
 
 ## 出力（固定）
 - 最終成果物：`docs/azure/DependencyReview-Report.md`
-- 中間成果物（計画/メモ/抽出物）：`work/QA-AzureDependencyReview.agent/`（AGENTS.mdの規約に従う）
+- 中間成果物（計画/メモ/抽出物）：`{WORK}`（AGENTS.mdの規約に従う）
 
 ## 実行モード
 - **Review mode（既定）**：レポート作成のみ。コード変更は行わない。
@@ -35,8 +39,8 @@ tools: ["*"]
 
 ## 手順（Azure依存レビューの最短ループ）
 ### 1) 事前計画（AGENTS.mdに従いDAG+見積）
-- まず `work/QA-AzureDependencyReview.agent/plan.md` に、調査→抽出→照合→レポート→（必要なら）最小修正→検証 のDAGと見積を作る。
-- **>15分見込みなら分割**し、`work/QA-AzureDependencyReview.agent/subissues.md` を出力して停止（AGENTS.md準拠）。
+- まず `{WORK}plan.md` に、調査→抽出→照合→レポート→（必要なら）最小修正→検証 のDAGと見積を作る。
+- **>15分見込みなら分割**し、`{WORK}subissues.md` を出力して停止（AGENTS.md準拠）。
 
 ### 2) “期待される依存” を確定（Expected）
 - `service-catalog.md` から対象 Azure リソースを一覧化し、各リソースに対して「期待参照」を整理する：
@@ -86,10 +90,7 @@ tools: ["*"]
 
 ※最終出力は **レポートファイルの内容のみ**（途中の草稿・内部メモは出さない）。
 
-## 最終品質レビュー（必須：成果物の品質確保）
-成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。
-
-- AGENTS.md §7.1 に従う。
+## 最終品質レビュー（AGENTS.md §7準拠・3観点）
 
 ### 3つの異なる観点（Azure 依存関係レビューの場合）
 - **1回目：レビュー完全性・妥当性**：service-catalog に記載されたすべての Azure 依存が漏らさず抽出されているか、Expected vs Actual の照合が正確か、Severity の付与（Blocker/High/Medium/Low）が正当か、Evidence（参照元の具体的パス/行番号/ドキュメント見出し）は十分か、秘密値を含めず参照情報のみが記録されているか
@@ -97,5 +98,4 @@ tools: ["*"]
 - **3回目：保守性・安全性・再現性**：秘密情報（接続文字列・キー・シークレット値）が混入していないか、推測や根拠なき判断が入っていないか、修正が最小差分で影響範囲が明確か、検証方法は再現可能か、Azure 実環境への非破壊操作に限定されているか、将来の依存追加時の更新方法は明確か
 
 ### 出力方法
-- 各回のレビューと改善プロセスは `work/QA-AzureDependencyReview.agent/` に隠す（README 等で参照のみ記載）
-- **最終版のみを成果物として出力する**（中間版は不要）
+レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。

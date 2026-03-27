@@ -1,8 +1,9 @@
 ---
 name: Arch-UI-List
-description: "docs/ の資料から、ユースケースと画面の関係性のベストプラクティスを示したうえで、アクターの中の「人」毎の画面一覧（表）と画面遷移図（Mermaid）を設計し、screen-list.md と進捗ログを作成・更新する。"
+description: "画面一覧（表）と画面遷移図（Mermaid）を設計し screen-list.md を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
+> **WORK**: `work/Arch-UI-List/Issue-<識別子>/`
 
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
@@ -19,19 +20,21 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `docs/domain-analytics.md`
 - `docs/service-list.md`（機能/責務の補助）
 - `docs/data-model.md`（表示/入力項目の補助）
+- `docs/app-list.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）
 
 ## 3) 出力（必須）
 - 主要成果物：`docs/screen-list.md`
-- 進捗ログ：`work/Arch-UI-List.agent/screen-modeling-work-status.md`
+- 進捗ログ：`{WORK}screen-modeling-work-status.md`
 
-`<task>` は `AGENTS.md` の命名規則に従う。
+`<識別子>` は `AGENTS.md` §4 の命名規則に従う。
 - 既に作業フォルダがあるならそれを使う
-- なければ `work/Arch-UI-List.agent` を作る
+- なければ `{WORK}` を作る（AGENTS.md §4 に従う）
 
 ## 4) UI設計の制約（このエージェント固有）
 - 人のアクター毎に別の画面を作成する
 - 画面上の表示文言に `{ユースケースID}` をそのまま出さない（人間可読なユースケース名/機能名を使う）。
 - `screen_id` は **安定採番**（例：S001, S002...）。`{ユースケースID}` を埋め込まない。
+- **1画面は必ず1つの APP-ID に所属する**（1:1 関係）。`app-list.md` の「アプリ一覧（アーキタイプ）概要」を参照して所属 APP-ID を決定する。
 - 既に `screen-list.md` が存在する場合：
   - 既存 `screen_id` は維持（差分更新）
   - 追加画面のみ末尾に採番追加（欠番は原則詰めない）
@@ -44,8 +47,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ### 5.1 画面一覧（Screen List）
 Markdown表（列固定）：
 
-| screen_id | screen_name | description | function_type | notes |
-| --------- | ----------- | ----------- | ------------- | ----- |
+| screen_id | screen_name | 所属APP | description | function_type | notes |
+| --------- | ----------- | ------- | ----------- | ------------- | ----- |
 
 - `notes`：根拠（参照ファイル）/不明点/要確認 を短く。欠損は空欄可。
 
@@ -58,10 +61,17 @@ Markdown表（列固定）：
 - 断定できない点、矛盾、要確認を箇条書き。
 - 質問が必要なら最大3点まで（同時に暫定案も書く）。
 
+### 5.4 成果物の分割ルール
+- アクター×APP 単位での画面グルーピングを検討する。
+  - 1つの APP-ID のみに属する画面群がある場合、アクター×APP 単位での `screen-list.md` の分割を検討する。
+  - 複数 APP で共有される画面はない（1:1 関係のため）が、アクター視点ではAPP 単位でのグルーピングが可読性を高める場合がある。
+  - **重要**: ASD の後続 Step（例: Step.7.1）は `docs/screen-list.md` を入力として前提にしているため、分割する場合でも `docs/screen-list.md` 自体は必ず残すこと。
+  - APP 別にファイルを分割する場合は、`docs/screen-list.md` を各 APP 別ファイルへのリンク/索引として機能させ、ASD のワークフロー契約（`docs/screen-list.md` を唯一の入口とする前提）を崩さない。
+
 ## 6) 作業手順（実行）
 ### 6.1 計画（必須：AGENTS.mdに従う）
 - まずDAG（依存関係）と見積（分）を作る。
-- 見積合計が閾値を超える/レビュー困難なら、**実装（編集）に入らず分割**して `work/Arch-UI-List.agent/subissues.md` を作る。
+- 見積合計が閾値を超える/レビュー困難なら、**実装（編集）に入らず分割**して `{WORK}subissues.md` を作る。
   - Sub issue を自動作成できない場合でも、`subissues.md` に “そのままIssue化できる本文” を出力する。
 
 ### 6.2 実行（分割不要のときのみ）
@@ -70,7 +80,7 @@ Markdown表（列固定）：
 3) `screen_id` を安定採番（既存ファイルがあれば維持）
 4) Portal（tabs）を定義し、主要遷移を組み立てる
 5) `screen-list.md` をフォーマット固定で更新
-6) 進捗ログ `work/Arch-UI-List.agent/screen-modeling-work-status.md` を更新
+6) 進捗ログ `{WORK}screen-modeling-work-status.md` を更新
 
 ## 7) 進捗ログ更新ルール（冪等）
 - 見出し：`## YYYY-MM-DD`
@@ -81,10 +91,7 @@ Markdown表（列固定）：
 - 1回の edit で失敗しそうなら、ファイルを段階的に作成・更新する。
 - 長文化・大量生成が見込まれる場合は、AGENTS.md の分割/チャンク規約に従う。
 
-## 9) 最終品質レビュー（必須：成果物の品質確保）
-成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。
-
-- AGENTS.md §7.1 に従う。
+## 9) 最終品質レビュー（AGENTS.md §7準拠・3観点）
 
 ### 9.2 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：画面一覧が漏れ/重複なく、screen_id が安定採番され、遷移図でポータルから主要画面へ到達できるか
@@ -92,5 +99,4 @@ Markdown表（列固定）：
 - **3回目：保守性・拡張性・安全性**：捏造なし（TBD運用）、質問が最大3点、既存 screen_id は維持されているか
 
 ### 9.3 出力方法
-- 各回のレビューと改善プロセスは `work/Arch-UI-List.agent/` に隠す
-- **最終版のみを成果物として出力する**（中間版は不要）
+レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。

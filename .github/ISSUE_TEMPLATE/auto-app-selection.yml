@@ -1,0 +1,72 @@
+name: "Auto App Selection Workflow"
+description: "Issue からアプリケーション選定ワークフロー (Step.1〜Step.2) を自動起動します"
+title: "[Auto App Selection] アプリケーション選定"
+labels:
+  - "auto-app-selection"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto App Selection Workflow
+        このフォームから Issue を作成すると、自動で Step.1〜Step.2 のアプリケーション選定タスクが
+        Sub-issue として生成され、Copilot が順次実行します。
+
+        ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
+        - `docs/usecase-list.md` — ユースケース文書（Step.1 の入力）
+
+        Auto App Design Workflow（Step.1 以降）のアプリケーション設計は、このワークフロー完了後に
+        **Auto App Design Workflow** Issue を別途作成してください。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/design-v2"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
+        📋 **依存関係**:
+        Step.1 → Step.2
+        ・Step.2（ソフトウェアアーキテクチャの推薦）は Step.1 が必須
+      options:
+        - label: "Step.1 — アプリケーションリストの作成（ユースケースからアプリリストを作成）"
+        - label: "Step.2 — ソフトウェアアーキテクチャの推薦（アプリごとにアーキテクチャを選定）※ Step.1 が必須"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: ユースケースは docs/usecase-list.md に記載済み。APP は3〜5個想定。"
+    validations:
+      required: false

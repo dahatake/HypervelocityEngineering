@@ -1,0 +1,1151 @@
+name: ABD Orchestrator
+
+# auto-batch-design ラベル付き Issue の opened/labeled/closed イベントで起動
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: abd-orchestrator-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: auto-batch-design ラベルあり + abd:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: "${{ github.event.label.name || '' }}"
+        run: |
+          set -euo pipefail
+
+          # Issue title を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_TITLE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export ISSUE_TITLE
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "abd:done" ]]; then
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "${LABEL_NAME}" == "auto-batch-design" ]]; then
+              # auto-batch-design ラベルが後から付与された場合:
+              # 下の has_abd / has_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に abd:initialized 済みの場合は has_init チェックで skip になる。
+              echo "auto-batch-design labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "abd:done / auto-batch-design 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [ABD] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[ABD\] ]]; then
+              # ---- イベントペイロード由来のラベル一覧を使用 ----
+              echo "ラベル（closed, payload）: ${ISSUE_LABELS}"
+              # 既に abd:done がついていれば labeled イベントが後で来るのでスキップ
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'abd:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                echo "既に abd:done ラベル済み。closed イベントをスキップ（labeled イベントで処理済み or 処理中）。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # abd:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [ABD] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [ABD] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[ABD\] ]]; then
+            echo "[ABD] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ---- リアルタイムにラベル一覧を API 経由で取得（payload はスナップショットのため） ----
+          ISSUE_LABELS=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+          # auto-batch-design ラベルを持つか確認
+          has_abd=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'auto-batch-design' in labels else 'false')
+          PY
+          )
+
+          if [[ "${has_abd}" != "true" ]]; then
+            echo "auto-batch-design ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # abd:initialized / abd:ready / abd:running / abd:done / abd:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'abd:initialized', 'abd:ready', 'abd:running', 'abd:done', 'abd:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_init}" == "true" ]]; then
+            echo "abd:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------
+      # 1.5. リポジトリ checkout（abd-common.sh を利用するため）
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベルを作成する関数（422 = 既存の場合は無視）
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local desc="$3"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            if [[ "${http_code}" == "201" ]]; then
+              echo "ラベル作成: ${name}"
+            elif [[ "${http_code}" == "422" ]]; then
+              echo "ラベル既存（スキップ）: ${name}"
+            else
+              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
+            fi
+            sleep 1
+          }
+
+          create_label "auto-batch-design" "0E8A16" "run full batch design workflow"
+          create_label "abd:initialized"             "C5DEF5" ""
+          create_label "abd:ready"                   "0075CA" ""
+          create_label "abd:running"                 "E4E669" ""
+          create_label "abd:done"                    "0E8A16" ""
+          create_label "abd:blocked"                 "D73A4A" ""
+          create_label "auto-context-review"         "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa"                     "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+
+      # ----------------------------------------------------------------
+      # 2.5. 即時 abd:initialized 付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 abd:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          # 共通ユーティリティ（ラベル付与・API リトライなど）を読み込む
+          source .github/scripts/abd-common.sh
+
+          echo "二重実行防止のため abd:initialized を即座に付与します..."
+          add_label "${ISSUE_NUMBER}" "abd:initialized"
+          echo "abd:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
+
+      # ----------------------------------------------------------------
+      # 3. Issue 初期化と Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: Issue 初期化とStep Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/abd-common.sh"
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # ブランチ名抽出（input フォームの値）
+          branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              branch = m.group(1).strip()
+              if not branch or branch == "_No response_":
+                  branch = "main"
+
+          # 実行するステップからスキップ対象を検出
+          # Issue Template は「実行するステップ」セクションで、
+          # チェック済み [x] = 実行、未チェック [ ] = スキップ
+          skip_steps = set()
+          exec_section = re.search(
+              r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if exec_section:
+              section_text = exec_section.group(1)
+              # 全 Step 番号を抽出（チェック状態問わず）
+              all_items = re.findall(
+                  r"-\s*\[[ xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              all_steps = set(all_items)
+              # チェック済み（実行対象）の Step 番号を抽出
+              checked_items = re.findall(
+                  r"-\s*\[[xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              exec_steps = set(checked_items)
+              # スキップ = 全体 - 実行対象
+              skip_steps = all_steps - exec_steps
+              # フォールバック: 全チェックなし = 全 Step 実行（スキップなし）
+              # 運用ドキュメント・Issue Template の説明「未選択で全 Step 実行」に準拠
+              if not exec_steps and all_steps:
+                  skip_steps = set()
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              additional_comment = m.group(1).strip()
+              if additional_comment == "_No response_":
+                  additional_comment = ""
+
+          # レビュー設定の抽出（統合済み: セルフレビュー + 内容のレビュー）
+          # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_context_review = False
+          review_section = re.search(
+              r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_qa = False
+          qa_section = re.search(
+              r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if qa_section:
+              section_text = qa_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_qa = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa}
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "スキップ Steps: ${SKIP_STEPS}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
+
+          # ---- Root Issue body からスキップ対象のステップ行を除去して更新 ----
+          if [[ -n "${SKIP_STEPS}" ]]; then
+            echo "Root Issue body から未チェックのステップを除去します..."
+
+            PATCH_JSON_FILE=$(mktemp)
+
+            python3 - "${SKIP_STEPS}" "${PATCH_JSON_FILE}" <<'PYBODY'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          skip_steps_str = sys.argv[1]
+          output_file = sys.argv[2]
+
+          skip_steps = set(skip_steps_str.split()) if skip_steps_str.strip() else set()
+
+          if skip_steps:
+              lines = body.split('\n')
+              new_lines = []
+              for line in lines:
+                  m = re.match(r'^\s*-\s*\[[ ]\]\s*Step\.(\d+(?:\.\d+)?)\b', line)
+                  if m and m.group(1) in skip_steps:
+                      continue
+                  new_lines.append(line)
+
+              cleaned = []
+              blank_count = 0
+              for line in new_lines:
+                  if line.strip() == '':
+                      blank_count += 1
+                      if blank_count <= 2:
+                          cleaned.append(line)
+                  else:
+                      blank_count = 0
+                      cleaned.append(line)
+
+              body = '\n'.join(cleaned)
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYBODY
+
+            api_call PATCH \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+              "$(cat "${PATCH_JSON_FILE}")" > /dev/null \
+              && echo "Root Issue #${ROOT_ISSUE} の body を更新しました（未チェックのステップ行を除去）。" \
+              || echo "WARNING: Root Issue body の更新に失敗しました。処理を続行します。" >&2
+
+            rm -f "${PATCH_JSON_FILE}"
+
+            _refreshed=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' 2>/dev/null) \
+              && ISSUE_BODY="${_refreshed}" && export ISSUE_BODY \
+              || echo "WARNING: ISSUE_BODY の再取得に失敗しました。" >&2
+          else
+            echo "全ステップ実行のため Root Issue body の更新は不要です。"
+          fi
+
+          # ---- Root Issue body に auto-context-review タグを埋め込み ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_context_review = sys.argv[1]
+          output_file = sys.argv[2]
+
+          tag = f"<!-- auto-context-review: {auto_context_review} -->"
+          pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+
+          if pat.search(body):
+              body = pat.sub(tag, body)
+          else:
+              body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
+          # ---- Root Issue に abd:initialized を付与 ----
+          add_label "${ROOT_ISSUE}" "abd:initialized"
+          echo "abd:initialized を付与しました。"
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          # ---- Step Issue 生成 ----
+          # 各 Step の issue_number と id を保存する変数
+          S11_NUM="" S11_ID=""
+          S12_NUM="" S12_ID=""
+          S2_NUM=""  S2_ID=""
+          S3_NUM=""  S3_ID=""
+          S4_NUM=""  S4_ID=""
+          S5_NUM="" S5_ID=""
+          S61_NUM="" S61_ID=""
+          S62_NUM="" S62_ID=""
+          S63_NUM="" S63_ID=""
+
+          # 各 Step Issue の body 先頭に埋め込む共通メタ情報
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}")
+
+          # 追加コメントが存在する場合のフッター
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+          else
+            ADDITIONAL_SECTION=""
+          fi
+
+          skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # Step Issue に付与するラベルセット
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-batch-design","auto-context-review","auto-qa"]'
+          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-batch-design","auto-context-review"]'
+          elif [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-batch-design","auto-qa"]'
+          else
+            STEP_LABELS='["auto-batch-design"]'
+          fi
+
+          # ---- Step.1.1 ----
+          if ! skip_step "1.1"; then
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でバッチドメイン分析（冪等性・トランザクション境界・最終的一貫性・チェックポイント/リスタート等）を行い、docs/batch/batch-domain-analytics.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n\n## 出力\n- `docs/batch/batch-domain-analytics.md`\n\n## Custom Agent\n`Arch-Batch-DomainAnalytics` を使用\n\n## 完了条件\n- `docs/batch/batch-domain-analytics.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.1.1: バッチドメイン分析" \
+              "${BODY_S11}" \
+              "${STEP_LABELS}")
+            S11_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S11_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.1 作成: #${S11_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.1.2 ----
+          if ! skip_step "1.2"; then
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書を根拠に、データソース/デスティネーション分析（接続先・スキーマ概要・データ量見積・変換ルール・SLA/SLO）を行い、docs/batch/batch-data-source-analysis.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n- `docs/data-model.md`（任意）\n\n## 出力\n- `docs/batch/batch-data-source-analysis.md`\n\n## Custom Agent\n`Arch-Batch-DataSourceAnalysis` を使用\n\n## 完了条件\n- `docs/batch/batch-data-source-analysis.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.1.2: データソース/デスティネーション分析" \
+              "${BODY_S12}" \
+              "${STEP_LABELS}")
+            S12_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S12_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.2 作成: #${S12_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.2 ----
+          if ! skip_step "2"; then
+            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とデータソース分析結果を根拠に、バッチデータモデル（入力/ステージング/中間/出力モデル・冪等性キー・パーティション戦略・ER図）を設計する。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/data-model.md`\n\n## 出力\n- `docs/batch/batch-data-model.md`\n\n## Custom Agent\n`Arch-Batch-DataModel` を使用\n\n## 依存\n- Step.1.1（バッチドメイン分析）が `abd:done` であること（AND依存）\n- Step.1.2（データソース/デスティネーション分析）が `abd:done` であること（AND依存）\n\n## 完了条件\n- `docs/batch/batch-data-model.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.2: バッチデータモデル" \
+              "${BODY_S2}" \
+              "${STEP_LABELS}")
+            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2 作成: #${S2_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.3 ----
+          if ! skip_step "3"; then
+            BODY_S3=$(printf '%s\n## 目的\nドメイン分析・データソース分析・バッチデータモデルを根拠に、バッチジョブ設計書（ジョブ一覧・依存DAG・スケジュール・リトライ戦略・冪等性保証）を作成する。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n\n## 出力\n- `docs/batch/batch-job-catalog.md`\n\n## Custom Agent\n`Arch-Batch-JobCatalog` を使用\n\n## 依存\n- Step.2（バッチデータモデル）が `abd:done` であること\n\n## 完了条件\n- `docs/batch/batch-job-catalog.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.3: ジョブ設計書" \
+              "${BODY_S3}" \
+              "${STEP_LABELS}")
+            S3_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S3_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3 作成: #${S3_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4 ----
+          if ! skip_step "4"; then
+            BODY_S4=$(printf '%s\n## 目的\nジョブ設計書・データモデル・ドメイン分析を統合してバッチジョブ版サービスカタログを作成する。\n\n## 入力\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-domain-analytics.md`\n\n## 出力\n- `docs/batch/batch-service-catalog.md`\n\n## Custom Agent\n`Arch-Batch-ServiceCatalog` を使用\n\n## 依存\n- Step.3（ジョブ設計書）が `abd:done` であること\n\n## 完了条件\n- `docs/batch/batch-service-catalog.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.4: サービスカタログ" \
+              "${BODY_S4}" \
+              "${STEP_LABELS}")
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.5 ----
+          # Step.5 は Step.4 に依存するため、Step.4 がスキップされている場合は作成しない
+          if ! skip_step "5" && ! skip_step "4"; then
+            BODY_S5=$(printf '%s\n## 目的\nサービスカタログとデータモデルを根拠に、バッチ処理固有のテスト戦略書（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト方針）を作成する。\n\n## 入力\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-data-model.md`\n\n## 出力\n- `docs/batch/batch-test-strategy.md`\n\n## Custom Agent\n`Arch-Batch-TestStrategy` を使用\n\n## 依存\n- Step.4（サービスカタログ）が `abd:done` であること\n\n## 完了条件\n- `docs/batch/batch-test-strategy.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.5: テスト戦略書" \
+              "${BODY_S5}" \
+              "${STEP_LABELS}")
+            S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S5_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5 作成: #${S5_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.6.1 ----
+          if ! skip_step "6.1"; then
+            # Step.6.1 の依存は Step.5 がスキップされているかで変わる
+            if ! skip_step "5"; then
+              _S61_DEP="Step.5（テスト戦略書）が \`abd:done\` であること"
+            else
+              _S61_DEP="Step.4（サービスカタログ）が \`abd:done\` であること"
+            fi
+
+            BODY_S61=$(printf '%s\n## 目的\nサービスカタログとジョブ設計に基づき、ジョブ毎の詳細仕様書を作成する。\n\n## 入力\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-data-model.md`\n\n## 出力\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブごとに1ファイル）\n\n## Custom Agent\n`Arch-Batch-JobSpec` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- 各ジョブの詳細仕様書が全て作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${_S61_DEP}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.6.1: ジョブ詳細仕様書" \
+              "${BODY_S61}" \
+              "${STEP_LABELS}")
+            S61_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S61_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6.1 作成: #${S61_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.6.2 ----
+          if ! skip_step "6.2"; then
+            # Step.6.2 の依存は Step.5 がスキップされているかで変わる
+            if ! skip_step "5"; then
+              _S62_DEP="Step.5（テスト戦略書）が \`abd:done\` であること"
+            else
+              _S62_DEP="Step.4（サービスカタログ）が \`abd:done\` であること"
+            fi
+
+            BODY_S62=$(printf '%s\n## 目的\nサービスカタログとジョブ設計に基づき、監視・運用設計書を作成する。\n\n## 入力\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-job-catalog.md`\n\n## 出力\n- `docs/batch/batch-monitoring-design.md`\n\n## Custom Agent\n`Arch-Batch-MonitoringDesign` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- `docs/batch/batch-monitoring-design.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${_S62_DEP}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.6.2: 監視・運用設計書" \
+              "${BODY_S62}" \
+              "${STEP_LABELS}")
+            S62_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S62_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6.2 作成: #${S62_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.6.3 ----
+          if ! skip_step "6.3"; then
+            BODY_S63=$(printf '%s\n## 目的\nテスト戦略書・ジョブ詳細仕様書・監視設計書を根拠に、TDD用テスト仕様書をジョブごとに作成する。\n\n## 入力\n- `docs/batch/batch-test-strategy.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/jobs/{jobId}-*-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-monitoring-design.md`\n\n## 出力\n- `docs/test-specs/{jobId}-test-spec.md`（ジョブごとに1ファイル）\n\n## Custom Agent\n`Arch-Batch-TDD-TestSpec` を使用\n\n## 依存\n- Step.6.1（ジョブ詳細仕様書）が `abd:done` であること（AND依存）\n- Step.6.2（監視・運用設計書）が `abd:done` であること（AND依存）\n\n## 完了条件\n- テスト仕様書がジョブカタログに基づいて全ジョブ分作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ABD] Step.6.3: TDDテスト仕様書" \
+              "${BODY_S63}" \
+              "${STEP_LABELS}")
+            S63_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S63_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6.3 作成: #${S63_NUM}"
+            sleep 3
+          fi
+
+          # ---- Sub Issue 紐付け（全て Root Issue の直下に配置） ----
+          echo "Sub Issue 紐付けを開始します..."
+
+          [[ -n "${S11_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S11_ID}"; echo "Root → Step.1.1 紐付け完了"; }
+          [[ -n "${S12_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S12_ID}"; echo "Root → Step.1.2 紐付け完了"; }
+          [[ -n "${S2_NUM}" ]]  && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}";  echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S3_NUM}" ]]  && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}";  echo "Root → Step.3 紐付け完了"; }
+          [[ -n "${S4_NUM}" ]]  && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}";  echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S5_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
+          [[ -n "${S61_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S61_ID}"; echo "Root → Step.6.1 紐付け完了"; }
+          [[ -n "${S62_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S62_ID}"; echo "Root → Step.6.2 紐付け完了"; }
+          [[ -n "${S63_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S63_ID}"; echo "Root → Step.6.3 紐付け完了"; }
+
+          # ---- 最初に実行すべき Step を起動（step-1.1 AND step-1.2 を並列起動） ----
+          if [[ -n "${S11_NUM}" ]] || [[ -n "${S12_NUM}" ]]; then
+            # step-1.1 が存在する場合は起動
+            if [[ -n "${S11_NUM}" ]]; then
+              add_label "${S11_NUM}" "abd:ready"
+              CA=$(extract_custom_agent "${BODY_S11}")
+              if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S11_NUM}" "abd:running"
+                echo "step-1.1 に Copilot アサイン + abd:running 付与完了"
+              else
+                echo "WARNING: step-1.1 へのアサイン失敗。abd:running は付与しません。"
+              fi
+            fi
+            # step-1.2 が存在する場合は並列起動
+            if [[ -n "${S12_NUM}" ]]; then
+              add_label "${S12_NUM}" "abd:ready"
+              CA=$(extract_custom_agent "${BODY_S12}")
+              if assign_copilot "${S12_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S12_NUM}" "abd:running"
+                echo "step-1.2 に Copilot アサイン + abd:running 付与完了（並列）"
+              else
+                echo "WARNING: step-1.2 へのアサイン失敗。abd:running は付与しません。"
+              fi
+            fi
+          elif [[ -n "${S2_NUM}" ]]; then
+            add_label "${S2_NUM}" "abd:ready"
+            CA=$(extract_custom_agent "${BODY_S2}")
+            if assign_copilot "${S2_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S2_NUM}" "abd:running"
+              echo "step-1.1/1.2 がスキップ済み: step-2 (#${S2_NUM}) を起動しました。"
+            else
+              echo "WARNING: step-2 へのアサイン失敗。abd:running は付与しません。"
+            fi
+          elif [[ -n "${S3_NUM}" ]]; then
+            add_label "${S3_NUM}" "abd:ready"
+            CA=$(extract_custom_agent "${BODY_S3}")
+            if assign_copilot "${S3_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S3_NUM}" "abd:running"
+              echo "step-1〜2 がスキップ済み: step-3 (#${S3_NUM}) を起動しました。"
+            else
+              echo "WARNING: step-3 へのアサイン失敗。abd:running は付与しません。"
+            fi
+          elif [[ -n "${S4_NUM}" ]]; then
+            add_label "${S4_NUM}" "abd:ready"
+            CA=$(extract_custom_agent "${BODY_S4}")
+            if assign_copilot "${S4_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S4_NUM}" "abd:running"
+              echo "step-1〜3 がスキップ済み: step-4 (#${S4_NUM}) を起動しました。"
+            else
+              echo "WARNING: step-4 へのアサイン失敗。abd:running は付与しません。"
+            fi
+          elif [[ -n "${S5_NUM}" ]]; then
+            add_label "${S5_NUM}" "abd:ready"
+            CA=$(extract_custom_agent "${BODY_S5}")
+            if assign_copilot "${S5_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S5_NUM}" "abd:running"
+              echo "step-1〜4 がスキップ済み: step-5 (#${S5_NUM}) を起動しました。"
+            else
+              echo "WARNING: step-5 へのアサイン失敗。abd:running は付与しません。"
+            fi
+          elif [[ -n "${S61_NUM}" ]] || [[ -n "${S62_NUM}" ]]; then
+            if [[ -n "${S61_NUM}" ]]; then
+              add_label "${S61_NUM}" "abd:ready"
+              CA=$(extract_custom_agent "${BODY_S61}")
+              if assign_copilot "${S61_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S61_NUM}" "abd:running"
+                echo "step-6.1 (#${S61_NUM}) を起動しました。"
+              else
+                echo "WARNING: step-6.1 へのアサイン失敗。abd:running は付与しません。"
+              fi
+            fi
+            if [[ -n "${S62_NUM}" ]]; then
+              add_label "${S62_NUM}" "abd:ready"
+              CA=$(extract_custom_agent "${BODY_S62}")
+              if assign_copilot "${S62_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S62_NUM}" "abd:running"
+                echo "step-6.2 (#${S62_NUM}) を起動しました。"
+              else
+                echo "WARNING: step-6.2 へのアサイン失敗。abd:running は付与しません。"
+              fi
+            fi
+          elif [[ -n "${S63_NUM}" ]]; then
+            add_label "${S63_NUM}" "abd:ready"
+            CA=$(extract_custom_agent "${BODY_S63}")
+            if assign_copilot "${S63_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S63_NUM}" "abd:running"
+              echo "step-1〜6.2 がスキップ済み: step-6.3 (#${S63_NUM}) を起動しました。"
+            else
+              echo "WARNING: step-6.3 へのアサイン失敗。abd:running は付与しません。"
+            fi
+          else
+            echo "実行すべき Step が存在しません（全 Step スキップ）。"
+          fi
+
+          echo "初期化完了。"
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移: abd:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得（YAML 展開問題を回避）
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: abd:done ラベルをまだ持っていなければ付与する
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'abd:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "abd:done ラベルを付与します（closed イベント由来）..."
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["abd:done"]}' || true
+            echo "abd:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          # ---- ユーティリティ関数（再定義） ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/abd-common.sh"
+
+          # Issue が abd:done ラベルを持つか確認（AND依存チェック用）
+          check_abd_done() {
+            local issue_num="$1"
+            api_call GET "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'abd:done' in [l['name'] for l in d.get('labels',[])] else 'false')"
+          }
+
+          # Issue を abd:ready + Copilot アサイン + abd:running に設定
+          activate_issue() {
+            local issue_num="$1"
+            local issue_body
+            issue_body=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
+            local agent_name
+            agent_name=$(extract_custom_agent "${issue_body}") || true
+            add_label "${issue_num}" "abd:ready"
+            if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
+              add_label "${issue_num}" "abd:running"
+              echo "Issue #${issue_num} を abd:ready + Copilot アサイン + abd:running に設定しました。(custom_agent: ${agent_name})"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。abd:running は付与しません。"
+            fi
+          }
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[ABD\] Step\.(\d+(?:\.\d+)?)', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- ブランチ名の取得 ----
+          BRANCH=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- branch: (.+?) -->', body)
+          print(m.group(1).strip() if m else 'main')
+          PY
+          )
+
+          echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review / auto-qa PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                fi
+                if [[ "${AUTO_QA}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-qa ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-qa ラベル付与に失敗しました。" >&2
+                fi
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
+
+          # ---- Root Issue の Sub Issues から Step Issue 番号を取得 ----
+          get_sub_issue_number() {
+            local pattern="$1"
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
+          case "${STEP_MATCH}" in
+            "1.1")
+              # AND依存チェック: step-1.1 完了 → step-1.2 が abd:done か確認
+              # 両方完了した場合のみ step-2 を起動する
+              S12_NUM=$(get_sub_issue_number '\[ABD\] Step\.1\.2:')
+              BOTH_DONE="false"
+              if [[ -z "${S12_NUM}" ]]; then
+                # step-1.2 が存在しない（スキップ済み）→ step-1.1 だけで AND 条件を満たす
+                echo "step-1.2 は存在しません（スキップ済み）。step-2 の起動条件を満たしました。"
+                BOTH_DONE="true"
+              else
+                S12_DONE=$(check_abd_done "${S12_NUM}")
+                if [[ "${S12_DONE}" == "true" ]]; then
+                  echo "step-1.2 は abd:done 済み。AND依存解消: step-2 を起動します。"
+                  BOTH_DONE="true"
+                else
+                  echo "AND依存待機: step-1.2 が abd:done になるまで step-2 は起動しません。"
+                fi
+              fi
+              if [[ "${BOTH_DONE}" == "true" ]]; then
+                S2_NUM=$(get_sub_issue_number '\[ABD\] Step\.2:')
+                if [[ -n "${S2_NUM}" ]]; then
+                  activate_issue "${S2_NUM}"
+                else
+                  S3_NUM=$(get_sub_issue_number '\[ABD\] Step\.3:')
+                  if [[ -n "${S3_NUM}" ]]; then
+                    activate_issue "${S3_NUM}"
+                  else
+                    S4_NUM=$(get_sub_issue_number '\[ABD\] Step\.4:')
+                    if [[ -n "${S4_NUM}" ]]; then
+                      activate_issue "${S4_NUM}"
+                    else
+                      S5_NUM=$(get_sub_issue_number '\[ABD\] Step\.5:')
+                      if [[ -n "${S5_NUM}" ]]; then
+                        activate_issue "${S5_NUM}"
+                      else
+                        S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+                        S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+                        [[ -n "${S61_NUM}" ]] && activate_issue "${S61_NUM}"
+                        [[ -n "${S62_NUM}" ]] && activate_issue "${S62_NUM}"
+                        if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                          S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                          if [[ -n "${S63_NUM}" ]]; then
+                            activate_issue "${S63_NUM}"
+                          else
+                            add_label "${ROOT_ISSUE}" "abd:done"
+                            post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                          fi
+                        fi
+                      fi
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "1.2")
+              # AND依存チェック: step-1.2 完了 → step-1.1 が abd:done か確認
+              # 両方完了した場合のみ step-2 を起動する
+              S11_NUM=$(get_sub_issue_number '\[ABD\] Step\.1\.1:')
+              BOTH_DONE="false"
+              if [[ -z "${S11_NUM}" ]]; then
+                # step-1.1 が存在しない（スキップ済み）→ step-1.2 だけで AND 条件を満たす
+                echo "step-1.1 は存在しません（スキップ済み）。step-2 の起動条件を満たしました。"
+                BOTH_DONE="true"
+              else
+                S11_DONE=$(check_abd_done "${S11_NUM}")
+                if [[ "${S11_DONE}" == "true" ]]; then
+                  echo "step-1.1 は abd:done 済み。AND依存解消: step-2 を起動します。"
+                  BOTH_DONE="true"
+                else
+                  echo "AND依存待機: step-1.1 が abd:done になるまで step-2 は起動しません。"
+                fi
+              fi
+              if [[ "${BOTH_DONE}" == "true" ]]; then
+                S2_NUM=$(get_sub_issue_number '\[ABD\] Step\.2:')
+                if [[ -n "${S2_NUM}" ]]; then
+                  activate_issue "${S2_NUM}"
+                else
+                  S3_NUM=$(get_sub_issue_number '\[ABD\] Step\.3:')
+                  if [[ -n "${S3_NUM}" ]]; then
+                    activate_issue "${S3_NUM}"
+                  else
+                    S4_NUM=$(get_sub_issue_number '\[ABD\] Step\.4:')
+                    if [[ -n "${S4_NUM}" ]]; then
+                      activate_issue "${S4_NUM}"
+                    else
+                      S5_NUM=$(get_sub_issue_number '\[ABD\] Step\.5:')
+                      if [[ -n "${S5_NUM}" ]]; then
+                        activate_issue "${S5_NUM}"
+                      else
+                        S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+                        S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+                        [[ -n "${S61_NUM}" ]] && activate_issue "${S61_NUM}"
+                        [[ -n "${S62_NUM}" ]] && activate_issue "${S62_NUM}"
+                        if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                          S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                          if [[ -n "${S63_NUM}" ]]; then
+                            activate_issue "${S63_NUM}"
+                          else
+                            add_label "${ROOT_ISSUE}" "abd:done"
+                            post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                          fi
+                        fi
+                      fi
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "2")
+              # step-2 完了 → step-3 を起動（なければ step-4 → step-5 → step-6.1/6.2 へ）
+              S3_NUM=$(get_sub_issue_number '\[ABD\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                activate_issue "${S3_NUM}"
+              else
+                S4_NUM=$(get_sub_issue_number '\[ABD\] Step\.4:')
+                if [[ -n "${S4_NUM}" ]]; then
+                  activate_issue "${S4_NUM}"
+                else
+                  S5_NUM=$(get_sub_issue_number '\[ABD\] Step\.5:')
+                  if [[ -n "${S5_NUM}" ]]; then
+                    activate_issue "${S5_NUM}"
+                  else
+                    S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+                    S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+                    [[ -n "${S61_NUM}" ]] && activate_issue "${S61_NUM}"
+                    [[ -n "${S62_NUM}" ]] && activate_issue "${S62_NUM}"
+                    if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                      S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                      if [[ -n "${S63_NUM}" ]]; then
+                        activate_issue "${S63_NUM}"
+                      else
+                        add_label "${ROOT_ISSUE}" "abd:done"
+                        post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                      fi
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "3")
+              # step-3 完了 → step-4 を起動（なければ step-5 → step-6.1/6.2 へ）
+              S4_NUM=$(get_sub_issue_number '\[ABD\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                activate_issue "${S4_NUM}"
+              else
+                S5_NUM=$(get_sub_issue_number '\[ABD\] Step\.5:')
+                if [[ -n "${S5_NUM}" ]]; then
+                  activate_issue "${S5_NUM}"
+                else
+                  S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+                  S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+                  [[ -n "${S61_NUM}" ]] && activate_issue "${S61_NUM}"
+                  [[ -n "${S62_NUM}" ]] && activate_issue "${S62_NUM}"
+                  if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                    S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                    if [[ -n "${S63_NUM}" ]]; then
+                      activate_issue "${S63_NUM}"
+                    else
+                      add_label "${ROOT_ISSUE}" "abd:done"
+                      post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                    fi
+                  fi
+                fi
+              fi
+              ;;
+
+            "4")
+              # step-4 完了 → step-5 を起動（なければ step-6.1/6.2 を並列起動）
+              S5_NUM=$(get_sub_issue_number '\[ABD\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                activate_issue "${S5_NUM}"
+              else
+                # step-5 がスキップされている場合は step-6.1/6.2 を直接起動
+                S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+                S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+                [[ -n "${S61_NUM}" ]] && activate_issue "${S61_NUM}"
+                [[ -n "${S62_NUM}" ]] && activate_issue "${S62_NUM}"
+                if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                  S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                  if [[ -n "${S63_NUM}" ]]; then
+                    activate_issue "${S63_NUM}"
+                  else
+                    add_label "${ROOT_ISSUE}" "abd:done"
+                    post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                  fi
+                fi
+              fi
+              ;;
+
+            "5")
+              # step-5 完了 → step-6.1 と step-6.2 を並列で起動
+              S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+              S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+              if [[ -n "${S61_NUM}" ]]; then
+                activate_issue "${S61_NUM}"
+                echo "step-6.1 (#${S61_NUM}) を起動しました。"
+              fi
+              if [[ -n "${S62_NUM}" ]]; then
+                activate_issue "${S62_NUM}"
+                echo "step-6.2 (#${S62_NUM}) を起動しました。"
+              fi
+              if [[ -z "${S61_NUM}" ]] && [[ -z "${S62_NUM}" ]]; then
+                # step-6.1/6.2 が両方スキップ → step-6.3 を直接起動
+                S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                if [[ -n "${S63_NUM}" ]]; then
+                  activate_issue "${S63_NUM}"
+                  echo "step-6.1/6.2 がスキップ済み: step-6.3 (#${S63_NUM}) を直接起動しました。"
+                else
+                  add_label "${ROOT_ISSUE}" "abd:done"
+                  post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                fi
+              fi
+              ;;
+
+            "6.1"|"6.2")
+              # AND依存チェック: step-6.1 または step-6.2 完了
+              # → 両方 abd:done になった後に step-6.3 を起動する
+              S61_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.1:')
+              S62_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.2:')
+
+              S61_DONE="false"
+              S62_DONE="false"
+              [[ -n "${S61_NUM}" ]] && S61_DONE=$(check_abd_done "${S61_NUM}")
+              [[ -n "${S62_NUM}" ]] && S62_DONE=$(check_abd_done "${S62_NUM}")
+
+              # 存在しない（スキップ済み）場合は完了とみなす（AND依存の片方が存在しない場合の処理）
+              [[ -z "${S61_NUM}" ]] && S61_DONE="true"
+              [[ -z "${S62_NUM}" ]] && S62_DONE="true"
+
+              if [[ "${S61_DONE}" == "true" ]] && [[ "${S62_DONE}" == "true" ]]; then
+                S63_NUM=$(get_sub_issue_number '\[ABD\] Step\.6\.3:')
+                if [[ -n "${S63_NUM}" ]]; then
+                  activate_issue "${S63_NUM}"
+                  echo "step-6.1/6.2 が両方完了（AND依存解消）: step-6.3 (#${S63_NUM}) を起動しました。"
+                else
+                  # step-6.3 が存在しない場合はワークフロー完了
+                  add_label "${ROOT_ISSUE}" "abd:done"
+                  echo "Root Issue #${ROOT_ISSUE} に abd:done を付与しました。"
+                  post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+                  echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+                fi
+              else
+                echo "AND依存待機: step-6.1/6.2 の両方完了を待機中です。（step-6.1: ${S61_DONE}, step-6.2: ${S62_DONE}）"
+              fi
+              ;;
+
+            "6.3")
+              # step-6.3 完了 → Root Issue に abd:done + 完了コメント
+              add_label "${ROOT_ISSUE}" "abd:done"
+              echo "Root Issue #${ROOT_ISSUE} に abd:done を付与しました。"
+              post_comment "${ROOT_ISSUE}" "🎉 全てのバッチデータ処理設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac

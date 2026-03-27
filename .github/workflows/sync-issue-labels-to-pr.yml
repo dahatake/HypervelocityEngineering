@@ -1,0 +1,197 @@
+name: Issue ラベル → PR 自動同期
+
+# PR が opened または ready_for_review になった時に、紐づく Issue の
+# auto-qa / auto-context-review ラベルを PR に自動コピーする。
+#
+# 順次制御:
+#   - auto-qa と auto-context-review の両方が Issue にある場合:
+#     → まず auto-qa のみ PR に付与（auto-context-review は QA 完了後に別ワークフローで付与）
+#   - auto-qa のみの場合:
+#     → auto-qa を PR に付与
+#   - auto-context-review のみの場合:
+#     → auto-context-review を PR に付与
+#
+# Issue の特定方法（優先順）:
+#   1. GraphQL closingIssuesReferences（PR が "Fixes/Closes/Resolves #NNN" を含む場合）
+#   2. PR body のテキストから "Fixes/Closes/Resolves #NNN" をパース（フォールバック）
+#
+# 冪等化:
+#   - <!-- sync-issue-labels-done --> マーカーで重複実行を防止
+#   - draft PR を含むすべての opened PR でラベル付与・警告コメント投稿が実行される
+#     （draft でも Issue リンク確認とラベル付与を即時実行することで、ready_for_review 時の再実行問題を回避）
+#
+# 注意:
+#   - pull_request_target を使用（Copilot が作成した PR のブランチには
+#     ワークフロー定義がない可能性があるため、ベースブランチの定義で実行）
+#   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
+#   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
+
+on:
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+concurrency:
+  group: sync-issue-labels-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+
+    steps:
+      - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
+        uses: actions/checkout@v4
+
+      - name: 冪等化チェック（既に同期済みかどうか確認）
+        id: guard
+        run: |
+          set -euo pipefail
+          MARKER="<!-- sync-issue-labels-done -->"
+          # --paginate + --jq '.[]' で全ページを NDJSON として出力し、jq -s で配列に集約する。
+          # per_page=100 限定にすると 100 件超の PR で再実行が起きるため、paginate を使用する。
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing=0
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "ラベル同期は既に完了しています。スキップします。"
+            echo "done=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "done=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: 紐づく Issue 番号を特定
+        if: steps.guard.outputs.done != 'true'
+        id: find-issue
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/pr-common.sh"
+          find_issue_number
+          echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      - name: Issue のラベルを確認して PR に付与
+        if: steps.guard.outputs.done != 'true' && steps.find-issue.outputs.issue_number != ''
+        id: apply-labels
+        env:
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          echo "=== Issue #${ISSUE_NUMBER} のラベルを取得 ==="
+          issue_labels=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            --jq '[.labels[].name]' 2>/dev/null) || issue_labels="[]"
+          echo "Issue ラベル: ${issue_labels}"
+
+          has_auto_qa=$(echo "${issue_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
+          has_auto_review=$(echo "${issue_labels}" | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
+          echo "auto-qa: ${has_auto_qa}, auto-context-review: ${has_auto_review}"
+
+          labels_applied=""
+          labels_deferred=""
+
+          if [ "${has_auto_qa}" = "true" ] && [ "${has_auto_review}" = "true" ]; then
+            # 両方ある場合: auto-qa のみ先に付与（auto-context-review は QA 完了後に自動付与）
+            echo "=== 両方のラベルあり: auto-qa のみ先に PR に付与します ==="
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-qa"
+            labels_applied="auto-qa"
+            labels_deferred="auto-context-review"
+            echo "deferred=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${has_auto_qa}" = "true" ]; then
+            # auto-qa のみ
+            echo "=== auto-qa のみ: PR に付与します ==="
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-qa"
+            labels_applied="auto-qa"
+            echo "deferred=false" >> "${GITHUB_OUTPUT}"
+          elif [ "${has_auto_review}" = "true" ]; then
+            # auto-context-review のみ
+            echo "=== auto-context-review のみ: PR に付与します ==="
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-context-review"
+            labels_applied="auto-context-review"
+            echo "deferred=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "auto-qa / auto-context-review ラベルが Issue にありません。スキップします。"
+            echo "deferred=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          echo "labels_applied=${labels_applied}" >> "${GITHUB_OUTPUT}"
+          echo "labels_deferred=${labels_deferred}" >> "${GITHUB_OUTPUT}"
+
+      - name: サマリーコメントを PR に投稿
+        if: steps.guard.outputs.done != 'true' && steps.find-issue.outputs.issue_number != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          LABELS_APPLIED: ${{ steps.apply-labels.outputs.labels_applied }}
+          LABELS_DEFERRED: ${{ steps.apply-labels.outputs.labels_deferred }}
+          DEFERRED: ${{ steps.apply-labels.outputs.deferred }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${LABELS_APPLIED}" ]; then
+            # 付与するラベルがない場合でも <!-- sync-issue-labels-done --> マーカーコメントを投稿する
+            # （マーカーを付けないと次の ready_for_review イベントで再実行されるため）
+            echo "付与するラベルがないため、スキップコメントを投稿してマーカーを設定します。"
+            # バックティックを printf のフォーマット内に置き、二重引用符での曖昧さを避ける
+            skip_msg=$(printf 'Issue #%s に `auto-qa` / `auto-context-review` ラベルがないため、PR へのラベル付与をスキップしました。' \
+              "${ISSUE_NUMBER}")
+            COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s' \
+              '<!-- sync-issue-labels-done -->' \
+              '## 🏷️ Issue ラベル同期: スキップ' \
+              "${skip_msg}" \
+              '> ℹ️ このコメントは `sync-issue-labels-to-pr.yml` によって自動投稿されました。')
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${COMMENT}"
+            exit 0
+          fi
+
+          if [ "${DEFERRED}" = "true" ]; then
+            DEFERRED_MSG=$(printf '\n- ⏳ **遅延付与**: `%s` は QA 完了後に自動的に付与されます（`auto-qa-to-review-transition.yml` が検知します）' \
+              "${LABELS_DEFERRED}")
+          else
+            DEFERRED_MSG=""
+          fi
+
+          # バックティックを printf のフォーマット内に置き、二重引用符での曖昧さを避ける
+          # DEFERRED_MSG は空文字列 or "\n- ⏳ ..." のどちらかであり、applied_msg の末尾に連結する
+          applied_msg=$(printf '%s ✅ **付与済み**: `%s`%s' "-" "${LABELS_APPLIED}" "${DEFERRED_MSG}")
+          sync_msg=$(printf 'Issue #%s のラベルを PR に同期しました。' "${ISSUE_NUMBER}")
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s' \
+            '<!-- sync-issue-labels-done -->' \
+            '## 🏷️ Issue ラベル同期完了' \
+            "${sync_msg}" \
+            "${applied_msg}" \
+            '> ℹ️ このコメントは `sync-issue-labels-to-pr.yml` によって自動投稿されました。')
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}"
+          echo "✅ サマリーコメントを PR #${PR_NUMBER} に投稿しました。"
+
+      - name: Issue が見つからない場合のサマリーコメントを投稿
+        if: steps.guard.outputs.done != 'true' && steps.find-issue.outputs.issue_number == ''
+        run: |
+          set -euo pipefail
+
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n\n```\nFixes #NNN\nCloses #NNN\nResolves #NNN\n```\n\n%s' \
+            '<!-- sync-issue-labels-done -->' \
+            '## 🏷️ Issue ラベル同期: スキップ' \
+            'この PR に紐づく Issue が特定できませんでした。ラベルの自動同期を行うには、PR body に以下の形式で Issue を参照してください:' \
+            '> ℹ️ このコメントは `sync-issue-labels-to-pr.yml` によって自動投稿されました。')
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}"

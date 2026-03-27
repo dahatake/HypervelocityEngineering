@@ -1,0 +1,46 @@
+name: Validate plan.md split decision
+
+on:
+  pull_request:
+    paths:
+      - 'work/**/plan.md'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check split decision consistency
+        run: |
+          for plan in $(find work -name 'plan.md' -type f); do
+            echo "Checking: $plan"
+
+            estimate=$(grep -oE '<!-- estimate_total: [0-9]+ -->' "$plan" | grep -oE '[0-9]+' || echo "0")
+            decision=$(grep -oE '<!-- split_decision: [A-Z_]+ -->' "$plan" | grep -oE 'PROCEED|SPLIT_REQUIRED|MISSING' || echo "MISSING")
+            impl_files=$(grep -oE '<!-- implementation_files: (true|false) -->' "$plan" | grep -oE 'true|false' || echo "MISSING")
+
+            echo "  Estimate: ${estimate}min | Decision: $decision | Impl files: $impl_files"
+
+            if [ "$estimate" -gt 15 ] && [ "$decision" = "PROCEED" ]; then
+              echo "::error::$plan: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per AGENTS.md §2.2"
+              exit 1
+            fi
+
+            if [ "$decision" = "SPLIT_REQUIRED" ] && [ "$impl_files" = "true" ]; then
+              echo "::error::$plan: split_decision=SPLIT_REQUIRED but implementation_files=true. Per AGENTS.md §2.3, implementation files are prohibited in split mode."
+              exit 1
+            fi
+
+            if [ "$decision" = "SPLIT_REQUIRED" ]; then
+              dir=$(dirname "$plan")
+              if [ ! -f "$dir/subissues.md" ]; then
+                echo "::error::$plan: split_decision=SPLIT_REQUIRED but subissues.md not found in $dir"
+                exit 1
+              fi
+            fi
+
+            echo "  ✅ PASS"
+          done

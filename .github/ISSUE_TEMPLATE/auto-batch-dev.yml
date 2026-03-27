@@ -1,0 +1,115 @@
+name: "Auto Batch Dev Workflow"
+description: "Issue から汎用バッチ処理実装ワークフロー (Step.1〜4) を自動起動します"
+title: "[Auto Batch Dev] "
+labels:
+  - "auto-batch-dev"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto Batch Dev Workflow
+        このフォームから Issue を作成すると、自動で以下の実装タスクが
+        Sub-issue として生成され、Copilot coding agent が順次実行します。
+
+        ### 前提条件（入力ドキュメント）
+        バッチ設計ワークフロー（ABD）が完了し、以下のドキュメントが存在していること:
+        - `docs/batch/batch-domain-analytics.md`
+        - `docs/batch/batch-data-source-analysis.md`
+        - `docs/batch/batch-data-model.md`
+        - `docs/batch/batch-job-catalog.md`
+        - `docs/batch/batch-service-catalog.md`
+        - `docs/batch/batch-test-strategy.md`
+        - `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）
+        - `docs/batch/batch-monitoring-design.md`（監視・運用設計書）
+        - `docs/test-specs/{jobId}-test-spec.md`（TDD テスト仕様書）
+
+        リポジトリに以下のシークレットが設定されていること:
+        - `COPILOT_PAT`
+
+        ### 実行されるステップ
+        | ステップ | 内容 |
+        |---------|------|
+        | **Step.1** | Azure データ/コンピュートリソース構築（データサービス選定 → Deploy）|
+        | **Step.2** | バッチジョブ実装（TDD RED: テストコード → TDD GREEN: 本実装）|
+        | **Step.3** | Azure Functions/コンテナ へのデプロイ |
+        | **Step.4** | アーキテクチャレビュー（WAF レビュー ‖ 整合性チェック）（並列実行）|
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "コード/ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/batch-impl-v1"
+      value: "main"
+    validations:
+      required: true
+
+  - type: input
+    id: resource_group
+    attributes:
+      label: "リソースグループ名"
+      description: "Azure のリソースグループ名を入力してください。各ステップの Azure CLI スクリプトおよび Sub-issue のタスク指示に埋め込まれます。"
+      placeholder: "例: rg-royalty-service-dev"
+    validations:
+      required: true
+
+  - type: input
+    id: batch_job_ids
+    attributes:
+      label: "対象バッチジョブ ID（カンマ区切り）"
+      description: "実装対象のバッチジョブ ID を入力してください（例: BJ-001, BJ-002）。`docs/batch/batch-job-catalog.md` に記載されているジョブ ID を使用してください。未入力の場合は全ジョブが対象になります。"
+      placeholder: "例: BJ-001, BJ-002, BJ-003"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるため、後段のステップには前段の成果物が必要です。
+        📋 **依存関係**: Step.1（Azure リソース） → Step.2（実装コード） → Step.3（デプロイ成果物） → Step.4（Step.4.1 と Step.4.2 は並列実行）
+        ・Step.1 をスキップする場合は、Azure リソースが既に作成済みであることを確認してください。
+        ・Step.2 をスキップする場合は、テスト・本実装コードが既に存在することを確認してください。
+        ・Step.3 をスキップする場合は、Azure Functions/コンテナが既にデプロイ済みであることを確認してください。
+      options:
+        - label: "Step.1 — Azure リソース構築（Step.1.1 データサービス選定 / Step.1.2 Azure リソース Deploy）"
+        - label: "Step.2 — バッチジョブ実装（Step.2.1 テストコード作成 (TDD RED) / Step.2.2 本実装 (TDD GREEN)）"
+        - label: "Step.3 — Azure Functions/コンテナ Deploy"
+        - label: "Step.4 — アーキテクチャレビュー（Step.4.1 WAF レビュー / Step.4.2 整合性チェック）"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step の Sub-issue にも引用されます。"
+      placeholder: |
+        例:
+        - リージョンは Japan East 優先
+        - Azure Functions は C# (.NET 8) で実装
+        - コンテナレジストリは Azure Container Registry を使用
+        - タイマートリガー: 毎日 2:00 AM (JST)
+    validations:
+      required: false
