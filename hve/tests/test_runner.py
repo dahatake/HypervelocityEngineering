@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import SDKConfig
 from console import Console
-from runner import StepRunner
+from runner import StepRunner, _is_review_fail
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
 # Used in test_returns_false_when_sdk_missing to correctly restore sys.modules after the test.
@@ -258,6 +258,67 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
             runner._handle_session_event(event)
         self.assertEqual(cap.stdout, "")
         self.assertEqual(cap.stderr, "")
+
+
+class TestIsReviewFail(unittest.TestCase):
+    """_is_review_fail() の境界テスト。"""
+
+    def test_fail_on_verdict_line(self) -> None:
+        """合格判定行に ❌ FAIL が含まれる場合 True を返す。"""
+        content = "- 合格判定: ❌ FAIL（Critical > 0）"
+        self.assertTrue(_is_review_fail(content))
+
+    def test_pass_on_verdict_line(self) -> None:
+        """合格判定行に ✅ PASS が含まれる場合 False を返す。"""
+        content = "- 合格判定: ✅ PASS（Critical = 0）"
+        self.assertFalse(_is_review_fail(content))
+
+    def test_fail_case_insensitive(self) -> None:
+        """FAIL の大文字小文字を問わず検出する。"""
+        self.assertTrue(_is_review_fail("- 合格判定: Fail"))
+        self.assertTrue(_is_review_fail("- 合格判定: fail"))
+        self.assertTrue(_is_review_fail("- 合格判定: fAiL"))
+
+    def test_fail_in_body_not_verdict(self) -> None:
+        """合格判定行以外に fail が含まれていても、合格判定行が PASS なら False を返す。"""
+        content = "This test may fail under load.\n- 合格判定: ✅ PASS"
+        self.assertFalse(_is_review_fail(content))
+
+    def test_fail_in_both_body_and_verdict(self) -> None:
+        """本文と合格判定行の両方に fail が含まれる場合は True を返す。"""
+        content = "This test may fail under load.\n- 合格判定: ❌ FAIL（Critical > 0）"
+        self.assertTrue(_is_review_fail(content))
+
+    def test_empty_content(self) -> None:
+        """空文字列では FAIL 扱い（合格判定行がないため安全側に倒す）。"""
+        self.assertTrue(_is_review_fail(""))
+
+    def test_no_verdict_line(self) -> None:
+        """合格判定行がない場合 FAIL 扱い（フォーマット不備として安全側に倒す）。"""
+        content = "レビュー結果:\n- Critical: 0件\n- Major: 1件"
+        self.assertTrue(_is_review_fail(content))
+
+    def test_multiline_with_fail(self) -> None:
+        """複数行のうち合格判定行に FAIL が含まれる場合 True を返す。"""
+        content = (
+            "| 1 | 要件充足性 | Critical | ... | ... | ... |\n"
+            "### サマリー\n"
+            "- Critical: 2件\n"
+            "- Major: 1件\n"
+            "- Minor: 3件\n"
+            "- 合格判定: ❌ FAIL（Critical > 0）"
+        )
+        self.assertTrue(_is_review_fail(content))
+
+    def test_pass_emoji_token(self) -> None:
+        """✅ PASS トークンがあれば PASS 判定。"""
+        content = "- 合格判定: ✅ PASS"
+        self.assertFalse(_is_review_fail(content))
+
+    def test_fail_emoji_token(self) -> None:
+        """❌ FAIL トークンがあれば FAIL 判定。"""
+        content = "- 合格判定: ❌ FAIL"
+        self.assertTrue(_is_review_fail(content))
 
 
 if __name__ == "__main__":

@@ -14,11 +14,45 @@ _stdin_lock = asyncio.Lock()
 try:
     from .config import SDKConfig
     from .console import Console
-    from .prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT
+    from .prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT
 except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
     from console import Console  # type: ignore[no-redef]
-    from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT  # type: ignore[no-redef]
+    from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT  # type: ignore[no-redef]
+
+
+def _is_review_fail(content: str) -> bool:
+    """合格判定行のトークンから FAIL 判定かどうかを判定する。
+
+    - 「合格判定」を含む行のみを対象にすることで、
+      本文中に "fail" が含まれる場合の誤検知を防ぐ。
+    - 合否行は「✅ PASS」または「❌ FAIL」といった一意なトークンを前提とし、
+      テンプレート由来の「PASS / FAIL」併記行は FAIL とみなさない。
+
+    敵対的レビューではサマリー/合格判定が必須のため、
+    合格判定行が 1 行も見つからない場合はフォーマット不備として
+    FAIL 扱い（再レビュー実行側に倒す）とする。
+    """
+    has_judgement_line = False
+    for line in content.splitlines():
+        if "合格判定" not in line:
+            continue
+        has_judgement_line = True
+
+        # 明示的な ✅ PASS トークンがあれば FAIL ではない
+        if "✅" in line and "PASS" in line.upper():
+            return False
+
+        # 明示的な ❌ FAIL トークンがある場合は FAIL
+        if "❌" in line and "FAIL" in line.upper():
+            return True
+
+        # フォールバック: 絵文字なしでも大文字小文字を問わず FAIL を検出
+        if "FAIL" in line.upper():
+            return True
+
+    # 合格判定行が存在しない場合は安全側に倒して FAIL 扱いとする
+    return not has_judgement_line
 
 
 class StepRunner:
@@ -39,9 +73,10 @@ class StepRunner:
     │  Phase 2c: session.send_and_wait(QA_APPLY_PROMPT)  │
     │    → Agent がユーザー回答を成果物に反映              │
     │                                                    │
-    │  [auto_review=True の場合]                          │
+    │  [auto_contents_review=True の場合]                 │
     │  Phase 3: session.send_and_wait(REVIEW_PROMPT)     │
-    │    → Agent が 3 観点レビュー + 問題解決 + 最終成果物  │
+    │    → 敵対的レビュー（5軸検証 + PASS/FAIL判定）       │
+    │    → FAIL時: 再レビューサイクル（最大2回）            │
     │                                                    │
     │  session.disconnect()                              │
     └──────────────────────────────────────────────────┘
@@ -191,11 +226,50 @@ class StepRunner:
                 apply_prompt = QA_APPLY_PROMPT.format(user_answers=user_answers)
                 await session.send_and_wait(apply_prompt, timeout=self.config.timeout_seconds)
 
-            # Phase 3: Review（auto_contents_review=True の場合）
+            # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
+            # 同一セッション内で実行する（成果物のコンテキストを保持するため）
             if self.config.auto_contents_review:
-                review_response = await session.send_and_wait(REVIEW_PROMPT, timeout=self.config.timeout_seconds)
+                # 1回目: 敵対的レビュー実行
+                review_response = await session.send_and_wait(
+                    REVIEW_PROMPT, timeout=self.config.timeout_seconds
+                )
                 review_content = _extract_text(review_response)
                 self.console.review_result(review_content)
+
+                # 初回 PASS 判定
+                if not _is_review_fail(review_content):
+                    self.console.event(
+                        "✅ 敵対的レビュー PASS（初回） — 再レビュー不要"
+                    )
+                else:
+                    # 再レビューサイクル（最大2回）
+                    review_passed = False
+                    for cycle in range(1, 3):  # cycle 1, 2
+                        self.console.event(
+                            f"❌ 敵対的レビュー FAIL — 再レビューサイクル {cycle}/2 を実行"
+                        )
+                        recheck_prompt = ADVERSARIAL_RECHECK_PROMPT.format(cycle=cycle)
+                        recheck_response = await session.send_and_wait(
+                            recheck_prompt, timeout=self.config.timeout_seconds
+                        )
+                        review_content = _extract_text(recheck_response)
+                        self.console.review_result(review_content)
+
+                        if not _is_review_fail(review_content):
+                            self.console.event(
+                                f"✅ 敵対的レビュー PASS（再レビューサイクル {cycle}/2 後）"
+                            )
+                            review_passed = True
+                            break
+
+                    if not review_passed:
+                        self.console.event(
+                            "⚠️ 最大再レビューサイクル到達 — Critical が残存しています"
+                        )
+                        # Critical が残存している場合はステップ失敗として扱う
+                        raise RuntimeError(
+                            "Critical issues remain after maximum adversarial review cycles."
+                        )
 
         except Exception as exc:
             self.console.error(f"Step.{step_id} 実行中にエラーが発生しました: {exc}")

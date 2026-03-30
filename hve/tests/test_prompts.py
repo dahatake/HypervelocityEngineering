@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT
+from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT
 
 
 class TestPromptsNotEmpty(unittest.TestCase):
@@ -43,9 +43,11 @@ class TestPromptsNotEmpty(unittest.TestCase):
             "QA_PROMPT should mention Markdown or selection format",
         )
 
-    def test_review_prompt_mentions_three_reviews(self) -> None:
-        """REVIEW_PROMPT には 3 回のレビューに関する記述が含まれる。"""
-        self.assertIn("3", REVIEW_PROMPT)
+    def test_review_prompt_mentions_adversarial_review(self) -> None:
+        """REVIEW_PROMPT には敵対的レビューの5軸検証に関する記述が含まれる。"""
+        self.assertIn("敵対的レビュアー", REVIEW_PROMPT)
+        self.assertIn("要件充足性", REVIEW_PROMPT)
+        self.assertIn("合格判定", REVIEW_PROMPT)
 
 
 class TestCodeReviewAgentFixPrompt(unittest.TestCase):
@@ -60,6 +62,20 @@ class TestCodeReviewAgentFixPrompt(unittest.TestCase):
     def test_code_review_agent_fix_prompt_has_placeholder(self) -> None:
         """{review_comments} プレースホルダーが含まれることを確認。"""
         self.assertIn("{review_comments}", CODE_REVIEW_AGENT_FIX_PROMPT)
+
+
+class TestAdversarialRecheckPrompt(unittest.TestCase):
+    """ADVERSARIAL_RECHECK_PROMPT の検証。"""
+
+    def test_adversarial_recheck_prompt_is_str(self) -> None:
+        self.assertIsInstance(ADVERSARIAL_RECHECK_PROMPT, str)
+
+    def test_adversarial_recheck_prompt_not_empty(self) -> None:
+        self.assertTrue(ADVERSARIAL_RECHECK_PROMPT.strip(), "ADVERSARIAL_RECHECK_PROMPT should not be empty")
+
+    def test_adversarial_recheck_prompt_has_cycle_placeholder(self) -> None:
+        """{cycle} プレースホルダーが含まれることを確認。"""
+        self.assertIn("{cycle}", ADVERSARIAL_RECHECK_PROMPT)
 
 
 if __name__ == "__main__":
