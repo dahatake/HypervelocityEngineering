@@ -57,39 +57,82 @@ find_issue_number() {
     if [ -n "${ISSUE_NUMBER}" ]; then
       echo "✅ Method 2 成功: Issue #${ISSUE_NUMBER}"
     else
-      # --- Method 3: Copilot アサイン元 Issue の逆引き ---
-      echo "=== Method 3: Copilot アサイン元 Issue を検索 ==="
+      echo "Method 2 失敗: Closes/Fixes/Resolves パターンが見つかりませんでした。"
+    fi
+  fi
 
-      PR_AUTHOR=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.user.login' 2>/dev/null) || PR_AUTHOR=""
-      if [ "${PR_AUTHOR}" = "Copilot" ] || [ "${PR_AUTHOR}" = "copilot-swe-agent" ] || [ "${PR_AUTHOR}" = "copilot[bot]" ]; then
-        PR_TITLE=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.title' 2>/dev/null) || PR_TITLE=""
+  # --- Method 2.5: PR body の <!-- parent-issue: #N --> を確認 ---
+  if [ -z "${ISSUE_NUMBER}" ]; then
+    echo "=== Method 2.5: PR body の <!-- parent-issue: #N --> を確認 ==="
+    PARENT_ISSUE=$(echo "${PR_BODY}" \
+      | grep -oP '<!--\s*parent-issue:\s*#\K[0-9]+' \
+      | head -1) || PARENT_ISSUE=""
+    if [ -n "${PARENT_ISSUE}" ]; then
+      ISSUE_NUMBER="${PARENT_ISSUE}"
+      echo "✅ Method 2.5 成功: parent-issue #${ISSUE_NUMBER}"
+    else
+      echo "Method 2.5 失敗: <!-- parent-issue: #N --> が見つかりませんでした。"
+    fi
+  fi
 
-        # Copilot がアサインされている Open な Issue を検索し、タイトル一致で特定
-        # copilot-swe-agent を優先して検索し、見つからなければ Copilot も検索する
-        local jq_filter='[.[] | select(.pull_request == null) | ($title | .[0:30] | ascii_downcase) as $prefix | select(.title == $title or ((.title | ascii_downcase) | contains($prefix)))] | .[0].number // empty'
-        CANDIDATE=$(gh api "/repos/${REPO}/issues?assignee=copilot-swe-agent&state=open&per_page=100" \
+  # --- Method 2.7: PR body の Issue-NNN パスパターンから Issue 番号を推定 ---
+  if [ -z "${ISSUE_NUMBER}" ]; then
+    echo "=== Method 2.7: PR body の Issue-NNN パスパターンを確認 ==="
+    PATH_ISSUE=$(echo "${PR_BODY}" \
+      | grep -oP '/Issue-\K[0-9]+(?=/)' \
+      | head -1) || PATH_ISSUE=""
+    if [ -n "${PATH_ISSUE}" ]; then
+      # Issue が実在するか API で検証（PR ではなく Issue であることも確認）
+      ISSUE_STATE=$(gh api "/repos/${REPO}/issues/${PATH_ISSUE}" \
+        --jq 'select(.pull_request == null) | .state' 2>/dev/null) || ISSUE_STATE=""
+      if [ -n "${ISSUE_STATE}" ]; then
+        ISSUE_NUMBER="${PATH_ISSUE}"
+        echo "✅ Method 2.7 成功: パスパターンから Issue #${ISSUE_NUMBER}（state: ${ISSUE_STATE}）"
+      else
+        echo "⚠️ Method 2.7: Issue #${PATH_ISSUE} は存在しないか、削除/移動済みです（API応答なし）"
+      fi
+    else
+      echo "Method 2.7 失敗: Issue-NNN パスパターンが見つかりませんでした。"
+    fi
+  fi
+
+  # --- Method 3: Copilot アサイン元 Issue の逆引き ---
+  if [ -z "${ISSUE_NUMBER}" ]; then
+    echo "=== Method 3: Copilot アサイン元 Issue を検索 ==="
+
+    PR_AUTHOR=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.user.login' 2>/dev/null) || PR_AUTHOR=""
+    if [ "${PR_AUTHOR}" = "Copilot" ] \
+      || [ "${PR_AUTHOR}" = "Copilot[bot]" ] \
+      || [ "${PR_AUTHOR}" = "copilot-swe-agent" ] \
+      || [ "${PR_AUTHOR}" = "copilot-swe-agent[bot]" ] \
+      || [ "${PR_AUTHOR}" = "copilot[bot]" ]; then
+      PR_TITLE=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.title' 2>/dev/null) || PR_TITLE=""
+
+      # Copilot がアサインされている Open な Issue を検索し、タイトル一致で特定
+      # copilot-swe-agent を優先して検索し、見つからなければ Copilot も検索する
+      local jq_filter='[.[] | select(.pull_request == null) | ($title | .[0:30] | ascii_downcase) as $prefix | select(.title == $title or ((.title | ascii_downcase) | contains($prefix)))] | .[0].number // empty'
+      CANDIDATE=$(gh api "/repos/${REPO}/issues?assignee=copilot-swe-agent&state=open&per_page=100" \
+        --jq --arg title "${PR_TITLE}" \
+        "${jq_filter}" \
+        2>/dev/null) || CANDIDATE=""
+
+      if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
+        CANDIDATE=$(gh api "/repos/${REPO}/issues?assignee=Copilot&state=open&per_page=100" \
           --jq --arg title "${PR_TITLE}" \
           "${jq_filter}" \
           2>/dev/null) || CANDIDATE=""
+      fi
 
-        if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
-          CANDIDATE=$(gh api "/repos/${REPO}/issues?assignee=Copilot&state=open&per_page=100" \
-            --jq --arg title "${PR_TITLE}" \
-            "${jq_filter}" \
-            2>/dev/null) || CANDIDATE=""
-        fi
-
-        if [ -n "${CANDIDATE}" ] && [ "${CANDIDATE}" != "null" ]; then
-          ISSUE_NUMBER="${CANDIDATE}"
-          echo "✅ Method 3 成功: Issue #${ISSUE_NUMBER}（Copilot アサイン元 Issue 逆引き）"
-        else
-          echo "Method 3 失敗: Copilot アサイン元の一致する Issue が見つかりませんでした。"
-          echo "⚠️ Issue 番号が特定できませんでした。"
-        fi
+      if [ -n "${CANDIDATE}" ] && [ "${CANDIDATE}" != "null" ]; then
+        ISSUE_NUMBER="${CANDIDATE}"
+        echo "✅ Method 3 成功: Issue #${ISSUE_NUMBER}（Copilot アサイン元 Issue 逆引き）"
       else
-        echo "Method 3 スキップ: PR 作成者（${PR_AUTHOR}）は Copilot ではありません。"
+        echo "Method 3 失敗: Copilot アサイン元の一致する Issue が見つかりませんでした。"
         echo "⚠️ Issue 番号が特定できませんでした。"
       fi
+    else
+      echo "Method 3 スキップ: PR 作成者（${PR_AUTHOR}）は Copilot ではありません。"
+      echo "⚠️ Issue 番号が特定できませんでした。"
     fi
   fi
 

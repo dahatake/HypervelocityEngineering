@@ -9,6 +9,11 @@ tools: ["*"]
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 - 目的は **レビュー（読み取り＋レポート生成）**。明示依頼が無い限り **Azureリソース変更はしない**（delete/update/apply 等の破壊・変更操作は禁止）。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid 記法指針）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
 

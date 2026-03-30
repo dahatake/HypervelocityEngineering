@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+local.settings.json
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporary files
+*.tmp
+*.log
+.DS_Store
+
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+.vs/
+**/bin/
+**/obj/
+
+# Azure Functions local settings (contains secrets)
+local.settings.json
+# Azure Functions ローカル設定（秘密情報を含むため Git 管理外）
+local.settings.json
+
+# .NET ビルド出力
+# Azure Functions local settings (contains secrets)
+local.settings.json
+
+# Azure Functions build outputs
+api/*/bin/
+api/*/obj/
+test/api/*/bin/
+test/api/*/obj/
+*.slnx
+# .NET build artifacts
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+TestResults/
+# smoke-ui は HTML/MD のみコミット対象（CI テストには混入しない）
+!test/api/smoke-ui/
+!test/api/smoke-ui/index.html
+!test/api/smoke-ui/README.md
+bin/
+obj/
+# AI Agent deploy — generated files
+infra/azure/create-azure-agent-resources/agent-ids.env

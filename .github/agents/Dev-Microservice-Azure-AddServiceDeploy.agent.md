@@ -8,6 +8,13 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 0.1) スコープ
 - `docs/azure/AzureServices-services-additional.md` を根拠に、追加Azureサービスを **Azure CLI で冪等に作成**する。
 - 作成結果（resourceId / endpoint / region など）を安定に取得し、以下を更新する：
@@ -101,16 +108,11 @@ AC 検証時間の見積目安：
 > いずれか1つでも未達の場合、本セクションには進まない。
 > plan.md と subissues.md のみを作成し、PR を [WIP] として提出する。
 
-スクリプト実装方針：
-- `prep.sh`：依存確認（導入は最小）。`set -euo pipefail`。秘密情報を扱わない。
+スクリプト実装方針（`azure-cli-deploy-scripts` Skill §1「3点セットテンプレート」および §2「冪等性パターン」に準拠）：
+- `prep.sh`：依存確認（導入は最小）。秘密情報を扱わない。
 - `create.sh`：全体オーケストレーション。サービス別スクリプトを順に呼ぶ。
-- `services/<service>.sh`：各サービスの作成を担当（冪等：存在確認→必要最小更新）。
+- `services/<service>.sh`：各サービスの作成を担当（Skill §2 冪等性パターン準拠）。
 - 破壊的変更（削除/置換）はしない（必要なら Plan に明記し、Sub化を優先）。
-
-冪等性（必須パターン）：
-1) 既存確認（name + type で `show` or `resource show`）
-2) 無ければ create、あれば必要なら update（可能な場合のみ）
-3) 作成後に `resourceId/endpoint/region/type/kind` を取得して JSON に追記
 
 リトライ（必須）：
 - 一時的失敗は指数バックオフで最大3回（create系のみ）
@@ -158,20 +160,12 @@ AC 検証時間の見積目安：
 
 #### AC-1 の検証手順（最重要 — 省略禁止）
 
-`contracts/additional-services.md` の全リソースに対して、以下の優先順でコマンドを実行する：
+`contracts/additional-services.md` の全リソースに対して、`azure-ac-verification` Skill §3.2 の検証コマンドパターンに従いコマンドを実行する。
 
-1. **サービス固有コマンド**（最優先）: `az <service> show --name {名前} --resource-group {RG}`
-2. **汎用コマンド**（固有コマンドが存在しない/失敗した場合）: `az resource show --name {名前} --resource-group {RG} --resource-type {type}`
-
-確認事項：
-- `provisioningState` が `Succeeded` → **PASS**
-- `provisioningState` が `Creating` / `Updating` → 30秒待機後に再確認（最大3回）。最終的に `Succeeded` にならなければ **FAIL**
-- リソースが存在しない / `Failed` / `Deleting` → **FAIL**
+`provisioningState` の判定は `azure-ac-verification` Skill §3.3 に従う。
 
 **Azure CLI 実行が不可能な場合**（§3.1 Preflight で実行不能と判定済み）：
-- AC-1 は `⚠️ UNVERIFIABLE` とする
-- `created-resources.json` の内容は参考情報として記録するが、PASS の根拠にはしない
-- PR description にユーザーが手動検証するための具体コマンド一覧を生成して記載する
+`azure-ac-verification` Skill §4 に従う。AC-1 は `⏳（手動実行待ち）` とし、PR description にユーザーが手動検証するための具体コマンド一覧を記載する。
 
 #### AC-2〜AC-8 の検証
 
@@ -187,62 +181,22 @@ AC 検証時間の見積目安：
 
 ### 7.2 証跡の記録
 
-検証結果を `{WORK}artifacts/ac-verification.md` に記録する：
-
-```
-## AC 検証結果
-
-| # | AC 項目 | 重要度 | 結果 | 証跡/根拠 |
-|---|---------|--------|------|-----------|
-| AC-1 | Azure リソースが実際に作成されている | 最重要 | ✅/❌/⚠️ | （下記の詳細テーブル参照） |
-| AC-2 | 全サービス対応スクリプトが存在 | 必須 | ✅/❌ | （ファイルパス一覧） |
-| ... | ... | ... | ... | ... |
-
-### AC-1 詳細
-
-| リソース名 | リソース種別 | provisioningState | 確認コマンド |
-|-----------|------------|-------------------|-------------|
-| {リソース名} | {種別} | Succeeded | az {service} show ... |
-| ... | ... | ... | ... |
-
-## 完了判定
-- AC-1（最重要）: PASS / FAIL / UNVERIFIABLE
-- 全 AC: PASS / FAIL あり / UNVERIFIABLE あり
-- 判定結果: DONE / DONE_WITH_NOTES / NOT_DONE
-```
-
-> ※ テーブル内の `{リソース名}` `{種別}` 等はプレースホルダー。実際の値に置き換えること（そのまま出力しない）。
+検証結果を `{WORK}ac-verification.md` に `azure-ac-verification` Skill §1 のテンプレートに従って記録する。AC-1 詳細（リソース名・種別・provisioningState・確認コマンド）も含めること。
 
 ### 7.3 完了判定（機械的に実行）
 
-```
-if AC-1 が FAIL:
-    判定 = "NOT_DONE"
-    → 他の AC の結果に関わらず NOT_DONE
-    → FAIL 原因を特定し §3.3 に戻って修正 → §6 → §7 を再実行
-    → 再試行は AC 検証起点で最大2回。解消しなければ [WIP] で提出
-
-elif FAIL が1つ以上（AC-1 以外）:
-    判定 = "NOT_DONE"
-    → 同上
-
-elif 全 AC が PASS:
-    判定 = "DONE"
-    → PR を Ready for Review として提出
-
-else:  # FAIL なし、UNVERIFIABLE または PARTIAL が存在
-    判定 = "DONE_WITH_NOTES"
-    → PR を Ready for Review として提出
-    → 未検証項目の手動検証手順を PR description に記載
-```
+`azure-ac-verification` Skill §2 の統一ステータス名に従う。本 Agent 固有の対応付け：
+- **PASS** = 全 AC が PASS → PR を Ready for Review として提出
+- **NEEDS-VERIFICATION** = FAIL なし、AC-1 が ⏳（手動実行待ち）→ PR を Ready for Review として提出し、未検証項目の手動検証手順を PR description に記載
+- **FAIL** = いずれかの AC が FAIL → 修正して再検証（AC 検証起点で最大2回）。解消しなければ [WIP] で提出
 
 ### 7.4 PR description への反映（必須）
 
 AGENTS.md §6 の PR 必須記載（目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub）の `検証結果` に、以下を統合して記載する：
-- AC-1 の結果を最初に明記（PASS / FAIL / UNVERIFIABLE）
-- 完了判定結果（DONE / DONE_WITH_NOTES / NOT_DONE）
+- AC-1 の結果を最初に明記（PASS / FAIL / ⏳（手動実行待ち））
+- 完了判定結果（PASS / NEEDS-VERIFICATION / FAIL）
 - 詳細は `ac-verification.md` を参照する旨のリンク
-- UNVERIFIABLE の場合：ユーザーが実行すべき検証コマンド一覧（§7.1 AC-1 検証手順で使用したコマンドを転記）
+- ⏳（手動実行待ち）の場合：ユーザーが実行すべき検証コマンド一覧（§7.1 AC-1 検証手順で使用したコマンドを転記）
 
 ### 7.5 禁止事項
 - AC 検証を省略して PR を提出すること（→ 必ず §7.1 を実行してから提出する）

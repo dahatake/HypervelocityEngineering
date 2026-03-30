@@ -8,6 +8,10 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 適用範囲（このエージェントの役割）
 - 対象：指定されたユースケースに対する **AI Agent の設計（定義→粒度→詳細）** を一貫して実施する。
 - 目的：ユースケースに最適な AI Agent 群を設計し、実装可能な粒度の設計書と Agent 一覧を作成する。
@@ -38,7 +42,7 @@ tools: ["*"]
 | 12 | `docs/screen-list.md` | 画面一覧。Agent が UI 内で動作する場合の Conversation Design 根拠 |
 | 13 | `docs/screen/{画面ID}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
 | 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 15 | `docs/templates/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 15 | `.github/instructions/agent-playbook.instructions.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。

@@ -8,6 +8,10 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 目的
 `docs/app-list.md` に定義されたアプリケーションリスト（APP-01〜APP-xx）の **各アプリケーション** に対し、個別の入力ファイルから要件を読み取り、**固定の候補リスト**（§2）から「最良のソフトウェアアーキテクチャ」を**1つずつ**選定する。
 

@@ -11,6 +11,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `large-output-chunking`
 - `repo-onboarding-fast`
 
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 

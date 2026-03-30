@@ -11,6 +11,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 # 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的
 指定ユースケースの既存ドキュメントを根拠に、次の対応関係をカタログ化する：
 **画面 → 画面内機能 →（画面内処理 | API呼び出し）→（APIのSoTデータ）**
@@ -47,8 +53,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 5.4 生成（service-catalog.md）
 7. 15分以内で完了できる見込みがある場合のみ、以下の **固定スキーマ**で `service-catalog.md` を生成/更新する。
-   - 各行に **出典（ファイル#見出し）** を必須とする
-   - 不明は `TBD`、API呼び出しでない場合はAPI列を `—`
+   - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 ## 5.5 成果物の分割ルール
 - `docs/service-catalog.md` は常に「索引/統合版」のマスターファイルとして残し、削除・他ファイルへの置き換えをしてはならない。
@@ -57,12 +62,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - 複数 APP で共有されるサービスは、原則として `docs/service-catalog.md` に「利用APP」列をカンマ区切りで記載して表現する（必要に応じて `docs/service-catalog-app-shared.md` のような共有ビューを追加してもよいが、追加した場合は `docs/service-catalog.md` を正とし、生成時に必ず `docs/service-catalog.md` の「利用APP」列から再抽出して内容を同期させること）。
 
 # 6) 書き込み安全策（空ファイル/欠落対策）
-- `service-catalog.md` は「セクション単位」で段階的に書く（概要→Table A→Table B→Table C→…）。
-- 各セクション書き込み後に `read` で以下を確認：
-  - ファイルが空でない
-  - 直前に書いたセクションが末尾に存在する
-- 空/欠落があれば **直前セクションのみ**を書き直す（最大3回）。
-- それでも安定しない場合は分割へ切り替え、`{WORK}subissues.md` を作る。
+
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→Table A→Table B→Table C→ハイレベル俯瞰→設計上の注意点→網羅性チェック→Questions）。
 
 # 7) 出力フォーマット（Markdown固定）
 ## 1. 概要

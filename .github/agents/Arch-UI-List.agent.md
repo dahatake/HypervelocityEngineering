@@ -8,6 +8,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) このエージェントの目的
 `docs/` の資料を根拠に、ユースケースとUI(画面)の関係性のベストプラクティスを示したうえで、アクターの中の「人」毎のUIを
 - 画面一覧（表）

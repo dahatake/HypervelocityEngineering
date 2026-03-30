@@ -9,6 +9,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチジョブ設計カタログ作成専用Agent。
@@ -85,7 +91,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 5) batch-job-catalog.md の出力契約（章立て固定・順序固定）
 
-以下の見出しを **この順序で必ず含める**（不足は「TBD」）。
+以下の見出しをこの順序で含める（`docs-output-format` Skill §1 参照）。
 
 ### 出力見出し
 
@@ -107,12 +113,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 6) 書き込み安全策（空ファイル/欠落対策）
 
-- `batch-job-catalog.md` は「セクション単位」で段階的に書く。
-- 各セクション書き込み後に `read` で以下を確認：
-  - ファイルが空でない
-  - 直前に書いたセクションが末尾に存在する
-- 空/欠落があれば **直前セクションのみ** を書き直す（最大3回）。
-- それでも安定しない場合は分割へ切り替え、`{WORK}subissues.md` を作る（分割粒度: §5 の出力セクション単位）。
+`large-output-chunking` Skill §3 に従う。分割粒度: §5 の出力セクション単位。
 
 ## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
 

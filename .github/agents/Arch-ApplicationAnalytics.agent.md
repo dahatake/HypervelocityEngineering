@@ -7,6 +7,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 目的と非目的
 ### 目的（MUST）
 入力のユースケース文書から、根拠付きで以下を作成する。

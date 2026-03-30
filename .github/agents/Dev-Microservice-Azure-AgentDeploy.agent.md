@@ -10,6 +10,15 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 # 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的（スコープ固定）
 - 対象は **1 Agent 分のみ**：`{agentId}-{agentName}`。
 - 目的は「Azure AI Foundry Agent Service への Agent デプロイと GitHub Actions CI/CD 構築」。
@@ -35,7 +44,7 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 
 # 3) 出力（成果物）
 必須:
-- **Azure CLI スクリプト**（冪等 — 既存リソースはスキップ）:
+- **Azure CLI スクリプト**（`azure-cli-deploy-scripts` Skill 準拠 — 冪等・既存リソースはスキップ）:
   - `infra/azure/create-azure-agent-resources-prep.sh` — 前提チェック（Azure CLI バージョン・認証状態・権限確認）
   - `infra/azure/create-azure-agent-resources.sh` — Azure AI Foundry プロジェクト・Agent 登録・依存リソース作成
   - `infra/azure/verify-agent-resources.sh` — 全リソースの存在と疎通確認（exit code: 0=全 PASS, 非0=FAIL あり）
@@ -67,24 +76,23 @@ A) スクリプト作成（prep + create + verify）
 
 # 5) Azure CLI スクリプト要件
 
+> **共通仕様**: `azure-cli-deploy-scripts` Skill の「3点セットテンプレート」および「冪等性パターン」に従う。
+
 ## create-azure-agent-resources-prep.sh（前提チェック）
 - Azure CLI がインストール済みか確認
 - `az login` または `DefaultAzureCredential` で認証済みか確認
 - 対象リソースグループが存在するか確認
 - 必要な Azure AI Foundry 権限（Azure AI Developer ロール以上）があるか確認
 
-## create-azure-agent-resources.sh（リソース作成 — 冪等）
+## create-azure-agent-resources.sh（リソース作成 — Skill §2 冪等性パターン準拠）
 - Azure AI Foundry プロジェクトへの接続確認（既存プロジェクトを使用）
 - Agent の登録またはデプロイ（Agent Service API を使用）
 - 必要な場合: Azure AI Search インデックスの接続設定
-- 作成した全リソースの識別子（エンドポイント URL・Agent ID）を標準出力に `KEY=VALUE` 形式で出力
 
 ## verify-agent-resources.sh（検証）
 - Azure AI Foundry エンドポイントへのヘルスチェック（HTTP 200 応答確認）
 - Agent が正常に登録されていることの確認
 - 代表クエリ（簡単なテストメッセージ）の送信と応答確認
-- 全コマンドに `--output json` を付与し、出力形式をユーザー設定に依存させない
-- パラメータはスクリプト引数または環境変数で受け取る（ハードコードしない）
 - exit code: 0=全 PASS, 非0=FAIL あり
 - **冪等性**: 何度実行しても副作用が発生しない（読み取り専用操作のみ使用すること）
 
@@ -104,6 +112,8 @@ A) スクリプト作成（prep + create + verify）
 
 # 7) GitHub Actions ワークフロー要件（deploy-agent-*.yml）
 
+> **共通仕様**: `github-actions-cicd` Skill に従う（§1 OIDC 認証・§2 `workflow_dispatch` トリガー・§2.3 PR description 手動実行案内）。
+
 以下の Job を含む CI/CD ワークフローを作成する:
 
 ```yaml
@@ -113,12 +123,12 @@ A) スクリプト作成（prep + create + verify）
 # 3. smoke-test — デプロイ後の基本動作確認（代表クエリへの応答確認）
 ```
 
-- **認証**: OIDC + `azure/login` アクションを優先使用（`DefaultAzureCredential` 相当）
 - **シークレット**: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` を使用（接続文字列・APIキーはシークレットに格納しコードに書かない）
-- **トリガー**: `push` to `main` branch + `workflow_dispatch`（手動実行）
 - **デプロイ保護**: `environment: production` を設定し、承認を要求（推奨）
 
 # 8) AC 検証（必須）
+
+> AC 検証結果の記録は `azure-ac-verification` Skill §1 のテンプレートに従う。完了判定は §2 の統一ステータス名（PASS / NEEDS-VERIFICATION / FAIL）に従う。Azure リソース存在確認は §3 のパターンに従う。Azure CLI 利用不可時は §4 に従う。
 
 デプロイ完了後、以下の AC を全て確認する:
 
@@ -138,9 +148,7 @@ A) スクリプト作成（prep + create + verify）
 - 記録する情報: Agent ID・Agent 名・エンドポイント URL・モデル名・デプロイ日時
 
 # 10) リージョンポリシー（固定ルール）
-- 既定: **Japan East**
-- フォールバック: Japan West → East Asia → Southeast Asia
-- 既定以外を使う場合は理由を作業ログに記録する
+`azure-region-policy` Skill に従う（§1 標準リージョン優先順位）。既定以外を使う場合は理由を作業ログに記録する。
 
 # 11) 禁止事項（このタスク固有）
 - 接続文字列・API キー・エンドポイント URL をスクリプトやワークフローにハードコードしない。

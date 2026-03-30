@@ -13,6 +13,11 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 入力（参照順）
 
 1. 画面定義書: `docs/screen/{画面ID}-description.md`

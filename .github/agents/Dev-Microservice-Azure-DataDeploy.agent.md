@@ -11,6 +11,15 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 ## 0. 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 0.1 実行環境の前提（必読）
 - この agent は **GitHub Actions runner + Azure MCP Server** が利用可能な環境で動作する前提とする。
 - Azure 操作の実行手段は以下の **優先順位** で使用する：
@@ -34,9 +43,15 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 4) ドキュメントが**事実ベース**で**更新された**（未確定事項は書かない）
 
 ### Complete / Partial / Blocked の定義
+
+> 本 Agent の完了判定は `azure-ac-verification` Skill §2 の統一ステータス名に以下のように対応する:
+> - **Complete** = PASS（全ゴール達成）
+> - **Partial** = NEEDS-VERIFICATION（一部未達・外部検証待ち）
+> - **Blocked** = FAIL（環境設定不備等でリソース作成・データ登録が実行不能）
+
 - **Complete**：ゴール 1)〜4) がすべて達成された状態
 - **Partial**：いずれかが未達の状態（技術的理由・ゲート NG 等） → 以下を必ず実施：
-  - PR タイトルに `[WIP]` を付与する
+  - PR タイトルに `[NEEDS-VERIFICATION]` を付与する
   - 未完了ステップを Sub Issue 化する
   - `{WORK}work-status.md` に各ステップの状態を以下の形式で記録する：
     - `✅ 完了`
@@ -118,17 +133,15 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 
 ## 4. スクリプト要件（Outputs）
 ### 4.1 事前準備スクリプト（必須）
-`infra/azure/create-azure-data-resources-prep.sh`
-- `set -euo pipefail`
+`infra/azure/create-azure-data-resources-prep.sh`（`azure-cli-deploy-scripts` Skill §1.2 テンプレートに準拠）
 - 前提チェック：`az account show` による Azure 認証確認、および Azure MCP Server 利用可否確認（利用可能であれば最優先で使用する）
 - 必要ツール/拡張の準備（可能なら）
 - 実行ログと、失敗時に次アクションが分かるメッセージ
 - 失敗時は最大 **3回** まで再試行してから中断する
 
 ### 4.2 リソース作成スクリプト（必須）
-`infra/azure/create-azure-data-resources.sh`
-- 冪等：存在チェック→作成/更新（再実行で落ちない）
-- リージョン：原則 Japan East。不可なら Japan West → East Asia → Southeast Asia へフォールバック
+`infra/azure/create-azure-data-resources.sh`（`azure-cli-deploy-scripts` Skill §1.3 テンプレートおよび §2 冪等性パターンに準拠）
+- リージョン: `azure-region-policy` Skill §1 標準リージョン優先順位に従う
 - 可能なら最小SKU/最小構成（サーバーレス等があるなら優先）
 - リソース名：衝突回避トークンが必要なら付与（ただし再実行で変わらない設計）
 - タグ付け：repo-wide指示に従う（無ければ usecase/env/owner を最低限）
@@ -205,6 +218,8 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 ## 9. 受け入れ条件（AC）の検証と完了判定（必須）
 
 > **スクリプトの作成のみでは AC 未達である。AC はデータが実際に登録され、件数が期待値と一致することで達成される。**
+> 
+> AC 検証結果の記録は `azure-ac-verification` Skill §1 のテンプレートに従う。Azure リソース存在確認は §3 のパターンに従う。Azure CLI 利用不可時は §4 に従う。
 
 ### 9.1 完了判定ルール
 - Issue の受け入れ条件に「件数が期待値と一致する」等の **実行結果に基づく条件** がある場合、スクリプトの作成だけでは AC 未達とする

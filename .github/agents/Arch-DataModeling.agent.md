@@ -8,6 +8,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid erDiagram 記法指針）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 入力（必読ソース）
 ユーザーからタスクを受け取ったら、まず以下を読む（存在しない場合は search で探し、見つからなければ質問へ）。
 - `docs/domain-analytics.md`
@@ -55,7 +60,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.3 Execution（成果物の作成）
 #### (1) `data-model.md` を作る（まず骨子→章ごとに埋める）
-章構造は固定：
+章構造は固定（`docs-output-format` Skill §1 に従う）：
 
 # Data Model for <USECASE_ID>
 
@@ -81,7 +86,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - CQRS/Event Sourcing は「根拠がある場合のみ」
 
 ## 5. Diagrams（Mermaid）
-- 必須：サービス単位の `erDiagram`（読みやすさ優先で分割）
+- 必須：サービス単位の `erDiagram`（`docs-output-format` Skill §2 参照）
 - 任意：必要ならフロー図（`sequenceDiagram` 等）
 
 ## 6. Open Questions / Assumptions

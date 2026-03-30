@@ -8,6 +8,10 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## スコープ（このエージェントの専門）
 - **サービスカタログ（docs/usecase/<usecase>/service-catalog.md）を一次情報**として、コード/設定/IaC/CI が Azure リソースを **正しく参照**しているかを点検する。
 - 目的は「**依存関係の整合性レビュー + 証跡（evidence）付きレポート**」。

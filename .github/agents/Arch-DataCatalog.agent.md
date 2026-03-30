@@ -9,11 +9,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
 ## Skills 参照
-- `large-output-chunking`：エンティティ数が多く `data-catalog.md` が 20,000 文字を超える見込みの場合に適用する。
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid 記法指針）を参照する。
+- `large-output-chunking`：エンティティ数が多く `data-catalog.md` が 20,000 文字を超える見込みの場合に適用する。書き込み安全策は §3（セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
   - **分割先**: `{WORK}artifacts/data-catalog.index.md`（結合順・セクション一覧）+ `{WORK}artifacts/data-catalog.part-0001.md` …
   - **最終成果物**: `docs/data-catalog.md` を index ファイル（各 part へのリンク付き）として出力する。part ファイルは `work/` 配下に置き、`docs/data-catalog.md` から参照する。
   - 分割しない場合は `docs/data-catalog.md` に全文を直接出力する（通常ケース）。
 
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 入力（必読ソース）
 
 ### 必須入力
@@ -69,7 +72,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.3 Execution（成果物の作成）
 
-#### `data-catalog.md` の章構造（固定）
+#### `data-catalog.md` の章構造（固定・`docs-output-format` Skill §1 に従う）
 
 ```markdown
 # Data Catalog
@@ -133,12 +136,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - 複数 APP で共有されるエンティティは `docs/data-catalog.md` 上で管理し、「利用APP」列をカンマ区切りで記載して区別する（別ファイルには分割しない）。
 
 ## 4) 書き込み安全策（空ファイル/欠落対策）
-- `data-catalog.md` は「セクション単位（## 1. 〜 ## 9. ）」で段階的に書く。
-- 各セクション書き込み後に `read` で以下を確認：
-  - ファイルが空でない
-  - 直前に書いたセクションが末尾に存在する
-- 空/欠落があれば **直前セクションのみ** を書き直す（最大3回）。
-- エンティティ数が多く 20,000 文字を超える見込みの場合は `large-output-chunking` スキルを適用する。
+
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: ## 1. 〜 ## 9.）。エンティティ数が多く 20,000 文字を超える見込みの場合は `large-output-chunking` スキルの分割手順（§1–§2）を適用する。
 
 ## 5) 完了条件
 - `docs/data-catalog.md` が作成され、§1〜§9 の全セクションを含む

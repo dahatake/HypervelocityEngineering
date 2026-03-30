@@ -20,7 +20,7 @@ tools: ["*"]
 
 - 対象ジョブID: {対象ジョブID（省略時は `batch-job-catalog.md` の全ジョブ）}
 - リソースグループ名: {リソースグループ名}
-- リージョン: Japan East（優先。利用不可なら Japan West → East Asia → Southeast Asia の順でフォールバック）
+- リージョン: `azure-region-policy` Skill §1 標準リージョン優先順位に従う
 
 ## 3) 入力・出力
 
@@ -86,17 +86,10 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 ### 6.2 ステップ A: Azure 作成スクリプト作成
 
 1. `batch-service-catalog.md` の「2. ジョブ → Azure サービスマッピング表」と「依存関係マトリクス」から、作成が必要な Azure リソースを一覧化する（根拠を控える）。
-2. `infra/azure/batch/create-batch-resources.sh` を作成する：
-   - shebang と `set -euo pipefail` を先頭に記載する（リポジトリ標準: `infra/azure/` 配下の既存スクリプトに準拠）。
-   - **べき等性**: 各リソースは存在確認→無ければ作成→あれば skip。
-   - 作成後に Function App URL / Resource ID / リージョン等を **標準出力にキー=値形式** で出力する（例: `FUNCTION_APP_URL=https://...`）。
-   - シークレット（接続文字列・APIキー）は Key Vault に格納し、コードへのハードコードを禁止する。
-   - Azure CLI のコマンドは `--output json` を付与し、出力形式をユーザー設定に依存させない。
+2. `infra/azure/batch/create-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1「3点セットテンプレート」および §2「冪等性パターン」に準拠）：
    - リソース種別の根拠は `batch-service-catalog.md` と、利用可能なら **Azure MCP**（Azure サービス操作のための Model Context Protocol ツール）または **Microsoft Learn MCP**（Microsoft 公式ドキュメント検索ツール）を参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
-3. `infra/azure/batch/verify-batch-resources.sh` を作成する：
+3. `infra/azure/batch/verify-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1.4 テンプレートに準拠）：
    - `create-batch-resources.sh` が作成する全リソースの存在を Azure CLI で検証するスクリプト。
-   - 全コマンドに `--output json` を付与し、`provisioningState == "Succeeded"` を確認する。
-   - パラメータ（リソースグループ名等）は引数または環境変数で受け取り、ハードコードしない。
 
 ### 6.3 ステップ A-exec: Azure リソース作成スクリプトの実行と検証
 
@@ -106,18 +99,20 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
    - **成功判定**: exit code 0、かつ全リソースの URL/Resource ID/リージョンが出力されること。
 2. `infra/azure/batch/verify-batch-resources.sh` を実行する（AC-3 の事前検証）。
    - **成功判定**: exit code 0、かつ全リソースの `provisioningState` が `Succeeded` であること。
-3. べき等性検証: ステップ 1 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する。
+3. べき等性検証: ステップ 1 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する（`azure-cli-deploy-scripts` Skill §2.2 チェックリスト参照）。
 4. 取得した値（Function App URL / Resource ID / Connection Strings 等）を `{WORK}deploy-work-status.md` に記録する（機密値は記録しない）。
 
-**Azure CLI 利用不可の場合**:
-- スクリプトの構文チェック（シェルスクリプトのリント）を実施し、`work-status` に記録する。
-- PR description に「Azure CLI 実行環境が利用不可のため、手動実行が必要」と明記する。
-- `infra/azure/batch/README.md` に手動実行手順を記載する。
+**Azure CLI 利用不可の場合**: `azure-cli-deploy-scripts` Skill §3 に従う。対象 README: `infra/azure/batch/README.md`。
 
 ### 6.4 ステップ B: GitHub Actions CI/CD ワークフロー
 
+> **共通仕様**: `github-actions-cicd` Skill に従う（§1 OIDC 認証・§2 `workflow_dispatch` トリガー・§2.3 PR description 手動実行案内）。
+
 - `.github/workflows/deploy-batch-functions.yml` を作成/更新する：
-  - トリガー: `workflow_dispatch`（手動実行）+ `push`（`main` ブランチ、`src/batch/**` 変更時）
+  - トリガー:
+    - `workflow_dispatch`（手動実行）
+    - `push`（`branches: [main]` かつ `paths: ['src/batch/**', '.github/workflows/deploy-batch-functions.yml']`）
+    - ※ `main` への全 push で走らないよう、上記 `paths` フィルタを必ず指定する。
   - ステップ: ビルド（`dotnet build`）→ テスト（`dotnet test`）→ デプロイ（`azure/functions-action` または `azure/webapps-deploy`）
   - 環境変数/シークレットは GitHub Secrets から取得する（ハードコード禁止）。
   - デプロイ対象: `src/batch/` 配下の全バッチジョブ（またはジョブ別に分割する場合は `src/batch/{jobId}-{jobNameSlug}/`）。
@@ -138,6 +133,8 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 
 ### 6.7 AC 検証（全ステップ完了後・必須）
 
+> AC 検証結果の記録は `azure-ac-verification` Skill §1 のテンプレートに従う。完了判定は §2 の統一ステータス名（PASS / NEEDS-VERIFICATION / FAIL）に従う。Azure リソース存在確認は §3 のパターンに従う。Azure CLI 利用不可時は §4 に従う。
+
 以下を確認する：
 
 | AC | 確認内容 | 合否 |
@@ -150,12 +147,7 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 
 ## 7) 書き込み安全策（空ファイル/欠落対策）
 
-- スクリプト・ワークフローは「セクション単位」で段階的に書く（ヘッダ → リソースグループ作成 → Function App 作成 → ...）。
-- 各セクション書き込み後に `read` で以下を確認：
-  - ファイルが空でない
-  - 直前に書いたセクションが末尾に存在する
-- 空/欠落があれば **直前セクションのみ** を書き直す（最大3回）。
-- それでも安定しない場合は分割へ切り替え、`{WORK}subissues.md` を作る（AGENTS.md §4.1 に従い、既存ファイルがある場合は削除してから新規作成する）。
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: ヘッダ → リソースグループ作成 → Function App 作成 → ...）。
 
 ## 8) 禁止事項（このタスク固有）
 
@@ -190,5 +182,14 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 
 ## Skills 参照
 
+- `azure-cli-deploy-scripts`: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `github-actions-cicd`: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- `azure-region-policy`: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- `azure-ac-verification`: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 - `task-dag-planning`: 計画・分割が必要な場合（ジョブ数が多い、15分超の見込みがある場合）に参照する。
 - `work-artifacts-layout`: `{WORK}` の構造を整備する際に参照する。
+- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
+
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）

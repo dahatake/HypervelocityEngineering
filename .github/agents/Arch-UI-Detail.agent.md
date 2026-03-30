@@ -9,6 +9,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 - この agent は **docs/screen/** と **work/** 以外を原則変更しない（例外が必要なら理由を明記）。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 目的（このagent固有）
 `docs/screen-list.md` に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
 - アクター毎に別の画面を作成する。

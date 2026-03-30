@@ -8,6 +8,15 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # Role / Scope
 Azure Functions + GitHub Actions CI/CD + API smoke test実装専用Agent。
 
@@ -17,7 +26,7 @@ Azure Functions + GitHub Actions CI/CD + API smoke test実装専用Agent。
 - リソースグループ名: `{リソースグループ名}`
 - デプロイ対象コード: `api/{サービスID}-{サービス名}/`
 - アプリケーション一覧: `docs/app-list.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
-- リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `East Asia`、それも不可なら `Southeast Asia`）
+- リージョン: `azure-region-policy` Skill §1 標準リージョン優先順位に従う
 
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス特定（共有含む）
@@ -26,9 +35,7 @@ Azure Functions + GitHub Actions CI/CD + API smoke test実装専用Agent。
 ※Issue割当後の追加コメントは見られない。追加要件が出たら **PRコメント**に書く運用にする。
 
 # Region Policy（固定ルール）
-- 既定: **Japan East**
-- フォールバック: Japan West → East Asia → Southeast Asia
-- 既定以外を使う場合は理由（例：機能非対応/クォータ）を `work-status` に記録する。
+`azure-region-policy` Skill に従う（§1 標準リージョン優先順位）。既定以外を使う場合は理由を `work-status` に記録する。
 
 # 実行フロー（DAG）
 
@@ -54,16 +61,11 @@ A) スクリプト作成
 **分割時の必須ルール:** 以下の全ステップ（A, A-exec, B, C, D, E, F）をそれぞれ独立した Sub Issue として見積・分割すること。特に **A-exec は A に統合せず独立 Sub Issue** とする。
 
 ## A) Azure 作成スクリプト（Linux）
-- `infra/azure/create-azure-api-resources-prep.sh`
-  - Azure CLI 前提チェック/導入（必要なら）
-- `infra/azure/create-azure-api-resources.sh`
-  - **べき等**：各リソースは存在確認→無ければ作成→あれば skip
-  - 作成後に必要な値（URL/Resource ID/リージョン等）を取得/表示できること
-  - 出力形式: 取得した値は **標準出力にキー=値形式** で出力し、後続ステップで利用可能にする（例: `FUNCTION_APP_URL=https://...`）
-- `infra/azure/verify-azure-resources.sh`
-  - A のスクリプトが作成する全リソースの存在を Azure CLI で検証するスクリプト
-  - 全コマンドに `--output json` を付与し、出力形式をユーザー設定に依存させない
-  - パラメータ（リソースグループ名等）は引数または環境変数で受け取り、**ハードコードしない**
+> **共通仕様**: `azure-cli-deploy-scripts` Skill の「3点セットテンプレート」および「冪等性パターン」に従う。
+
+- `infra/azure/create-azure-api-resources-prep.sh` — 前提チェック
+- `infra/azure/create-azure-api-resources.sh` — リソース冪等作成
+- `infra/azure/verify-azure-resources.sh` — 全リソースの存在検証
   - 検証対象: 後述の AC-3 の確認対象リソースを全て含む
 - Azure CLI や作成手順は、利用可能なら **Microsoft Learn MCP / Azure MCP** を根拠として参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
 
@@ -80,7 +82,7 @@ A) スクリプト作成
    - **成功判定**: exit code 0、かつ全リソースの URL/Resource ID/リージョンが出力されること
 3. `infra/azure/verify-azure-resources.sh` を実行する（AC-3 の事前検証）
    - **成功判定**: exit code 0、かつ全リソースの `provisioningState` が `Succeeded` であること
-4. べき等性検証: ステップ 2 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する
+4. べき等性検証: ステップ 2 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する（`azure-cli-deploy-scripts` Skill §2.2 チェックリスト参照）
 
 ### 出力値の記録
 - 取得した値（Function App URL / Resource ID / リージョン等）を `{WORK}api-azure-deploy-work-status.md` に追記する
@@ -88,26 +90,22 @@ A) スクリプト作成
 
 ### 失敗時の対応
 - エラー内容を `{WORK}api-azure-deploy-work-status.md` に記録する
-- リージョンフォールバックが必要な場合は Region Policy（Japan East → Japan West → East Asia → Southeast Asia）に従い、理由を `{WORK}api-azure-deploy-work-status.md` に記録する
+- リージョンフォールバックが必要な場合は `azure-region-policy` Skill §1 に従い、理由を `{WORK}api-azure-deploy-work-status.md` に記録する
 - 修正→再実行を **最大3回** まで試行する（1回 = prep + create + verify の1サイクル）
 - 3回失敗した場合は PR コメントで報告し、人間の判断を仰ぐ
 
 ### Azure CLI 利用不可の場合（デフォルト想定）
-Copilot coding agent の実行環境では Azure CLI が利用できないことが多い。その場合：
-1. スクリプトの構文チェック（`bash -n`、`shellcheck`）のみ実施する
-2. `{WORK}api-azure-deploy-work-status.md` に「Azure CLI 利用不可のため未実行」と記録する
-3. PR description に「**人間が以下のスクリプトを順に実行し、AC-3 を検証する必要がある**」と明記する：
-   - `infra/azure/create-azure-api-resources-prep.sh`
-   - `infra/azure/create-azure-api-resources.sh`
-   - `infra/azure/verify-azure-resources.sh`
-4. `infra/README.md` に実行手順・前提条件・期待される出力を記載する
+`azure-cli-deploy-scripts` Skill §3「Azure CLI 利用不可時フォールバック手順」に従う。
+対象スクリプト:
+- `infra/azure/create-azure-api-resources-prep.sh`
+- `infra/azure/create-azure-api-resources.sh`
+- `infra/azure/verify-azure-resources.sh`
 
 ## B) GitHub Actions（CI/CD）
+> **共通仕様**: `github-actions-cicd` Skill に従う（§1 OIDC 認証・§2 `workflow_dispatch` トリガー・§2.3 PR description 手動実行案内）。
+
 - 配置: `/.github/workflows/`
-- 原則: OIDC + `azure/login`（可能なら secret-less を優先）
 - Functions デプロイ: Azure Functions 用公式 Action を利用（既存 Function App へデプロイ）
-- 例外: OIDC 不可の場合のみ publish profile 等を採用し、採用理由と設定手順を `infra/README.md` に残す
-- 注意: Copilot が push しても workflow は自動実行されないことがあるため、PR 側でユーザーが実行承認できるよう説明を残す。
 
 ## C) サービスカタログ更新
 - `docs/service-catalog.md` の表に追記/更新
@@ -179,83 +177,26 @@ AC 検証の見積は DAG 合計に含めること（目安: 2〜3分）。
 ※ `{RG}`, `{SA}`, `{PLAN}`, `{APP}`, `{AI}` 等のパラメータは `verify-azure-resources.sh` が引数または環境変数から取得する。
 
 #### 検証基準
-各リソースについて以下を確認する：
-1. コマンドが exit code 0 で返ること（リソースが存在する）
-2. JSON レスポンスの `provisioningState` が `Succeeded` であること
-3. `location` が Region Policy に準拠していること
-4. リソース名が期待値と一致すること
-
-#### 非同期プロビジョニングへの対応
-- `provisioningState` が `Creating` / `Updating` 等の場合、最大 **5分間（30秒間隔で10回）** polling する
-- タイムアウトした場合は ❌ とし、状態を `ac-verification.md` に記録する
+`azure-ac-verification` Skill §3.1〜§3.3 に従う（provisioningState 判定・非同期ポーリング・検証コマンドパターン）。
 
 #### Azure CLI 利用不可の場合（デフォルト想定）
-1. `verify-azure-resources.sh` はスクリプトとして **作成する**（A で作成済み）
-2. AC-3 の判定は **❌（未検証 — Azure CLI 利用不可）** とする
-3. `ac-verification.md` に未検証であることと理由を記録する
-4. PR description に以下を明記する：
-
-```
-## ⚠️ AC-3 未検証（人間による実行が必要）
-Azure CLI が利用できない環境のため、Azure リソースの存在確認が未実施です。
-以下のスクリプトを順に実行し、全リソースの存在を確認してください：
-1. `infra/azure/create-azure-api-resources-prep.sh`
-2. `infra/azure/create-azure-api-resources.sh`
-3. `infra/azure/verify-azure-resources.sh`
-```
-
-5. PR を `[NEEDS-VERIFICATION]` 状態で提出する
+`azure-ac-verification` Skill §4 に従う。AC-3 の判定は **⏳（手動実行待ち）** とし、`ac-verification.md` に記録する。
+`azure-cli-deploy-scripts` Skill §3 にも従う（構文チェック・work-status 記録・PR description テンプレート記載・README 記載）。
 
 #### セキュリティ上の注意
-- `ac-verification.md` に Azure CLI の出力を記録する際、**Subscription ID / Tenant ID は許容** する（公開リポジトリの場合は要判断）
-- **アクセスキー / 接続文字列 / SAS トークン** は絶対に記録しない。これらが出力に含まれる場合はマスクする
+`azure-ac-verification` Skill §3.4 に従う。
 
 ## 検証結果の記録
 
-検証結果を `{WORK}ac-verification.md` に以下の形式で保存する：
-
-```markdown
-# AC 検証結果
-
-- 検証日時: YYYY-MM-DD HH:MM
-- 検証者: Copilot Coding Agent / 人間（氏名）
-- Azure CLI 利用: 可 / 不可
-
-## チェックリスト
-
-| # | 判定 | 備考 |
-|---|------|------|
-| AC-1 | ✅ | bash -n / shellcheck 通過 |
-| AC-2 | ✅ | 2回目実行で全リソース skip 確認 |
-| AC-3 | ❌ | Azure CLI 利用不可のため未検証 |
-| ... | ... | ... |
-
-## AC-3 詳細（検証実施時のみ）
-
-| リソース種類 | リソース名 | Resource ID | provisioningState | location |
-|-------------|-----------|-------------|-------------------|----------|
-| Function App | ... | ... | Succeeded | Japan East |
-| ... | ... | ... | ... | ... |
-
-## 総合判定
-- 結果: PASS / NEEDS-VERIFICATION / FAIL
-- 未達 AC: AC-3（理由: Azure CLI 利用不可）
-- 必要な手動対応: verify-azure-resources.sh の実行
-```
+検証結果を `{WORK}ac-verification.md` に `azure-ac-verification` Skill §1 のテンプレートに従って保存する。
 
 ## 完了判定
 
-| 状態 | 条件 | PR の扱い |
-|------|------|----------|
-| **PASS** | 全 AC が ✅ | PR description に「AC 全項目検証済み」と記載。最終品質レビューへ進む |
-| **NEEDS-VERIFICATION** | AC-3 が ❌（Azure CLI 利用不可等）で、他は全て ✅ | PR description に未検証 AC と手動実行手順を明記。PR タイトルに `[NEEDS-VERIFICATION]` を付与。最終品質レビューは実施する |
-| **FAIL** | AC-3 以外で ❌ がある | 自動修正可能 → 修正して再検証。手動対応が必要 → PR コメントで報告（AGENTS.md §1 の質問方針に従い、必要な質問をすべて1メッセージにまとめる）。根本的に不可能 → 対象 AC の除外を人間に相談 |
-
-> `[NEEDS-VERIFICATION]` は本 Agent 固有の PR 状態表記であり、AGENTS.md の `[WIP]` とは異なる。`[WIP]` は分割モード（Plan-Only）用、`[NEEDS-VERIFICATION]` は実装完了だが外部検証待ちの状態を示す。
+`azure-ac-verification` Skill §2 の統一ステータス名（PASS / NEEDS-VERIFICATION / FAIL）に従う。
 
 # Safety / Output Constraints
 - 資格情報をハードコードしない。ログ/生成物に秘密情報を出さない。
-- `ac-verification.md` にアクセスキー / 接続文字列 / SAS トークンを記録しない。
+- `ac-verification.md` のセキュリティルールは `azure-ac-verification` Skill §3.4 に従う。
 
 # 最終品質レビュー（AGENTS.md §7準拠・3観点）
 - **実施タイミング**: AC 検証（上記）の完了後に実施する。AC 検証が NEEDS-VERIFICATION の場合でも、検証済みの範囲でレビューを実施する。

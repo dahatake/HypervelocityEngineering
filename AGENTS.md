@@ -507,3 +507,144 @@ else:
 ## 9) 例外（下位AGENTS.mdを置く場合）
 - 置くのは「そのディレクトリ固有の追加ルール」だけ。
 - 必ず「ルートAGENTS.mdを継承し、追加/上書き点のみ記載」と明記する。
+
+---
+
+## 10) ハーネスエンジニアリング（Harness Engineering）
+
+> **自動継承**: 本セクションは既存の §1〜§9 を継承し、全 Custom Agent に自動適用される。既存 Agent の §0 定義は一切変更しない。
+
+### §10.1 検証ループ (Verification Loop)
+
+コード変更を伴う作業を完了する前に、以下の5段階パイプラインを順次実行する。
+
+**各言語のコマンド**:
+
+```
+Phase 1: Build
+  C#     → dotnet build --no-restore
+  Python → python -m py_compile {changed_files}
+  Shell  → bash -n {changed_files}
+
+Phase 2: Lint
+  C#     → dotnet format --verify-no-changes  (利用可能な場合)
+  Python → ruff check .                        (利用可能な場合)
+  Shell  → shellcheck {changed_files}          (利用可能な場合)
+
+Phase 3: Test
+  C#     → dotnet test --no-build --verbosity normal
+  Python → pytest -x --tb=short
+  Shell  → (スクリプト固有の検証手段)
+
+Phase 4: Security Scan
+  全言語 → grep -rn で秘密情報パターン検出
+  パターン: sk-, password=, connectionstring=, Bearer , api[_-]?key
+
+Phase 5: Diff Review
+  全言語 → git diff --stat で変更ファイル・行数確認
+```
+
+**Agent ロール別の適用条件**:
+
+| Agent ロール | 必須 Phase | 推奨 Phase | 理由 |
+|---|---|---|---|
+| `Dev-*`（コーディング系） | 1, 2, 3, 4, 5 | 全 Phase | コード変更が本質 |
+| `Dev-*-Deploy` | 4, 5 | 1 | デプロイスクリプトは Build 対象外の場合あり |
+| `Arch-*`（設計系） | 4, 5 | なし | ドキュメント生成が主。Build/Test 不要 |
+| `QA-*`（レビュー系） | 4, 5 | 1, 2, 3 | 読み取り専用が基本だがセキュリティは必須 |
+
+**チェックポイント動作**:
+- Phase N が FAIL → 即時停止。Phase N+1 以降を実行しない
+- 停止時は `{WORK}verification-report.md` に失敗 Phase と詳細を記録する
+- Agent は §10.4 エラーリカバリ手順に従い対処する
+
+**検証レポートフォーマット** (`{WORK}verification-report.md`):
+
+```
+VERIFICATION REPORT
+==================
+Agent:     {Agent名}
+Issue:     #{Issue番号}
+Timestamp: {UTC - 例: 2026-01-01T00:00:00Z}
+
+Build:     [PASS/FAIL/SKIP(理由)]
+Lint:      [PASS/FAIL/SKIP(理由)]
+Tests:     [PASS/FAIL/SKIP(理由)] (X/Y passed)
+Security:  [PASS/FAIL/SKIP(理由)] {検出パターン数}
+Diff:      [X files changed, +Y/-Z lines]
+
+Overall:   [READY/NOT READY] for PR
+Notes:     {補足事項}
+```
+
+詳細手順は Skill `harness-verification-loop`（`.github/skills/harness-verification-loop/SKILL.md`）を参照。
+
+---
+
+### §10.2 安全ガード (Safety Guard)
+
+破壊的操作を検出した場合、以下の停止レベルで対処する。
+
+| カテゴリ | パターン | 停止レベル |
+|---|---|---|
+| ファイル破壊 | `rm -rf /`, `rm -rf ~`, `rm -rf .` | CRITICAL: 絶対停止 |
+| Git 破壊 | `git push --force`, `git reset --hard`, `git checkout .` | HIGH: 確認要求 |
+| DB 破壊 | `DROP TABLE`, `DROP DATABASE`, `TRUNCATE` | CRITICAL: 絶対停止 |
+| Azure 破壊 | `az resource delete`, `az group delete` | CRITICAL: 絶対停止 |
+| 検証スキップ | `--no-verify`, `--skip-tests` | MEDIUM: 警告+理由記録 |
+| 秘密情報 | `sk-`, `password=`, `connectionstring=`（コードへの直書き） | HIGH: 確認要求 |
+
+**優先関係**:
+- Agent 固有の制約がより厳しい場合はそちらが優先
+- §10.2 は最低保証として機能する
+
+詳細パターンと判定フローは Skill `harness-safety-guard`（`.github/skills/harness-safety-guard/SKILL.md`）を参照。
+
+---
+
+### §10.3 出力品質 (Observation Quality)
+
+全 Agent の成果物に以下4要素を含める。
+
+```
+## 成果物サマリー
+- status:       [成功/失敗/部分完了]
+- summary:      [何を行い何が変わったか（3行以内）]
+- next_actions: [後続で必要な作業（あれば Agent 名を推奨付き）]
+- artifacts:    [生成/変更したファイルの一覧]
+```
+
+**既存 §6 PR description との関係**:
+- §6 の「目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub」はそのまま維持する
+- §10.3 は §6 の構造化補完版。PR description 内に統合して記載する
+
+---
+
+### §10.4 エラーリカバリ契約 (Error Recovery)
+
+Agent がエラーに遭遇した場合、以下の3要素を出力する。
+
+```
+## エラーリカバリ
+- root_cause_hint:        [何が原因と推定されるか]
+- safe_retry_instruction: [再試行する場合の手順]
+- stop_condition:         [これ以上進めない場合の明示的停止宣言]
+```
+
+**既存 §1「書き込み失敗対策（最大3回リトライ）」との関係**:
+- §1 のリトライルールはそのまま維持する（ファイル書き込み限定）
+- §10.4 はスコープを全エラー種別に拡張する
+- リトライ上限は §1 準拠（最大3回）、超過時は `stop_condition` を出力する
+
+詳細フローは Skill `harness-error-recovery`（`.github/skills/harness-error-recovery/SKILL.md`）を参照。
+
+---
+
+### §10.5 差分品質評価 (Diff Quality Assessment)
+
+PR 提出前に以下を実施する。
+
+1. `git diff --stat` で変更サマリーを取得する
+2. 変更ファイルが Issue/AC の対象スコープ内か確認する
+3. 無関係な変更（整形のみ、コメント追加のみ等）が含まれていないか確認する
+4. 結果を `{WORK}verification-report.md` の Diff セクションに記録する

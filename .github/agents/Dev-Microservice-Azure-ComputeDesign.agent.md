@@ -9,6 +9,11 @@ tools: ["*"]
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
+
+## Skills 参照
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 目的 / スコープ
 ### 目的
 `docs/services/service-list.md` に列挙された **対象サービス**（APP-ID 指定時はスコープ内のサービス+共有サービスのみ）について、Azure のホスティング先（コンピュート）を選定し、技術的根拠（公式ドキュメントURL）を添えて設計書に残す。

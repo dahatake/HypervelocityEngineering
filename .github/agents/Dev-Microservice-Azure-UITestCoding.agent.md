@@ -22,6 +22,9 @@ TDD RED フェーズ UI テストコード生成専用Agent。
   2. 本ファイル（`.github/agents/Dev-Microservice-Azure-UITestCoding.agent.md`）
   3. 各 `SKILL.md`
 
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的（スコープ固定）
 - 対象は **1画面分のみ**：`{画面ID}-{画面名}`。
 - 目的は「画面別テスト仕様書に基づく TDD RED フェーズの UI テストコード生成」。

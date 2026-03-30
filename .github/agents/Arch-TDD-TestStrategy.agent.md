@@ -11,6 +11,13 @@ TDDテスト戦略専用Agent。
 # 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+- `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
+- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的
 サービスカタログで確立された画面→API→データのトレーサビリティに基づき、
 プロジェクト全体のテスト方針を策定する。
@@ -75,16 +82,11 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 ## 6.4 生成（test-strategy.md）
 13. 15分以内で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/test-strategy.md` を生成/更新する。
-    - 各表の各行に **出典（ファイル#見出し）** を必須とする
-    - 不明・推測は `TBD` と記載し、根拠と確認方法を添える
+    - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）
-- `test-strategy.md` は「セクション単位」で段階的に書く（概要→テスト分類→サービス別→テストダブル→…）。
-- 各セクション書き込み後に `read` で以下を確認：
-  - ファイルが空でない
-  - 直前に書いたセクションが末尾に存在する
-- 空/欠落があれば **直前セクションのみ** を書き直す（最大3回）。
-- それでも安定しない場合は分割へ切り替え、`{WORK}subissues.md` を作る（分割粒度: §9 の出力セクション単位）。
+
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→テスト分類→サービス別→テストダブル→Polyglot Persistence→既存テスト資産→網羅性チェック→Questions）。分割粒度: §9 の出力セクション単位。
 
 # 8) 禁止事項（このタスク固有）
 - `docs/service-catalog.md` 等から確認できない情報を断定・補完・推測しない
@@ -105,7 +107,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 > **注**: UI 固有のテスト種別（Component Test / Visual Regression Test / Accessibility Test 等）がプロジェクトに該当する場合は、上記テーブルに追加すること。
 
-> **テストピラミッド方針**: テスト比率はテストピラミッドの原則に従い、Unit > Integration > E2E の順で量を設定する。推奨目安: Unit 70-80% / Integration 15-20% / E2E 5-10%。プロジェクトの特性に応じてカスタマイズすること（根拠を出典に記載）。
+> **テストピラミッド方針**: `test-strategy-template` Skill §1 参照。プロジェクトの特性に応じてカスタマイズすること（根拠を出典に記載）。
 
 ## 3. サービス別テスト対象サマリ（表）
 | サービスID | サービス名 | 主要API数 | Unit | Integration | Contract | E2E | Component | 既存テストプロジェクト | 特記事項 | 出典(ファイル#見出し) |
@@ -113,7 +115,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 ## 4. テストダブル戦略
 
-依存パターンごとの選択基準（`service-catalog.md` Table C の依存欄から導出）:
+依存パターンごとの選択基準（`test-strategy-template` Skill §2 参照。`service-catalog.md` Table C の依存欄から導出）:
 
 | 依存パターン | テストダブル種別 | 使用場面 | 出典(ファイル#見出し) |
 |---|---|---|---|
@@ -127,7 +129,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
   - SQL DB（Azure SQL）: トランザクション・ロールバック方針
   - NoSQL（Cosmos DB）: 結果整合性テストの方針
   - Blob Storage: ファイル操作のテスト方針
-- テスト用データストア（In-Memory / Testcontainers / エミュレータ）の選択基準
+- テスト用データストア（In-Memory / Testcontainers / エミュレータ）の選択基準（`test-strategy-template` Skill §2 参照）
 
 ## 6. 既存テスト資産との関係
 - `test/api/` 配下のユニットテストプロジェクト（xUnit）の位置づけ

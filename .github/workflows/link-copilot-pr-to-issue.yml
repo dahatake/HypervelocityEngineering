@@ -8,13 +8,15 @@ name: Copilot PR ↔ Issue リンク自動設定
 # 処理フロー:
 #   1. PR 作成者が Copilot かどうか確認（copilot-swe-agent[bot] / Copilot Bot）
 #   2. 冪等化チェック（<!-- link-copilot-pr-to-issue-done --> マーカーで重複防止）
-#   3. 元 Issue 番号を以下の優先順で特定:
-#      (a) PR body に既に Closes/Fixes/Resolves #N がある場合、その番号を抽出（body 追記はスキップ）
-#      (b) PR body の <!-- parent-issue: #N -->
-#      (c) Copilot がアサインされた Open Issue を検索（一意に特定できる場合のみ採用）
-#      (d) 特定できない場合は PR に警告コメントを投稿
+#   3. 元 Issue 番号を .github/scripts/pr-common.sh の find_issue_number() で特定:
+#      Method 1  : GraphQL closingIssuesReferences
+#      Method 2  : PR body の Closes/Fixes/Resolves #N（既にリンクあり → body 追記スキップ）
+#      Method 2.5: PR body の <!-- parent-issue: #N -->
+#      Method 2.7: PR body の Issue-NNN パスパターン（存在確認付き）
+#      Method 3  : Copilot がアサインされた Open Issue のタイトル逆引き
+#      特定できない場合は PR に警告コメントを投稿
 #   4. Issue が特定できた場合:
-#      - (a) 以外: PR body に Closes #N を追記
+#      - PR body に既に Closes/Fixes/Resolves がない場合: PR body に Closes #N を追記
 #      - Issue に「Copilot が PR を作成しました」コメントを投稿
 #
 # 注意:
@@ -88,75 +90,35 @@ jobs:
             echo "done=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
+        if: steps.check-copilot.outputs.is_copilot == 'true' && steps.guard.outputs.done != 'true'
+        uses: actions/checkout@v4
+
       - name: 元 Issue 番号を特定
         if: steps.check-copilot.outputs.is_copilot == 'true' && steps.guard.outputs.done != 'true'
         id: find-issue
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
-          ISSUE_NUMBER=""
-          NEEDS_BODY_UPDATE="true"
-
-          # (a) PR body に既に Closes/Fixes/Resolves #N がある場合、番号を抽出（body 追記は不要）
-          echo "=== (a) PR body の既存リンクを確認 ==="
-          EXISTING=$(echo "${PR_BODY}" \
-            | grep -oiP '(?:fix(?:es)?|close[sd]?|resolve[sd]?)\s+(?:[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+)?#\K[0-9]+' \
-            | head -1) || EXISTING=""
-          if [ -n "${EXISTING}" ]; then
-            echo "✅ (a) PR body に既にリンクあり: Issue #${EXISTING}。body 追記をスキップします。"
-            ISSUE_NUMBER="${EXISTING}"
-            NEEDS_BODY_UPDATE="false"
-          fi
-
-          # (b) PR body の <!-- parent-issue: #N --> を確認
-          if [ -z "${ISSUE_NUMBER}" ]; then
-            echo "=== (b) PR body の <!-- parent-issue: #N --> を確認 ==="
-            PARENT_ISSUE=$(echo "${PR_BODY}" \
-              | grep -oP '<!--\s*parent-issue:\s*#\K[0-9]+' \
-              | head -1) || PARENT_ISSUE=""
-            if [ -n "${PARENT_ISSUE}" ]; then
-              echo "✅ (b) parent-issue: #${PARENT_ISSUE}"
-              ISSUE_NUMBER="${PARENT_ISSUE}"
-            fi
-          fi
-
-          # (c) Copilot アサイン済み Open Issue を検索（一意に特定できる場合のみ採用）
-          if [ -z "${ISSUE_NUMBER}" ]; then
-            echo "=== (c) copilot-swe-agent アサイン済み Open Issue を検索 ==="
-            CANDIDATES=$(gh api \
-              "/repos/${REPO}/issues?assignee=copilot-swe-agent&state=open&sort=updated&direction=desc&per_page=10" \
-              --jq '[.[] | select(.pull_request == null) | .number] | join(" ")' \
-              2>/dev/null) || CANDIDATES=""
-
-            if [ -z "${CANDIDATES}" ]; then
-              echo "=== (c) Copilot アサイン済み Open Issue を検索 ==="
-              CANDIDATES=$(gh api \
-                "/repos/${REPO}/issues?assignee=Copilot&state=open&sort=updated&direction=desc&per_page=10" \
-                --jq '[.[] | select(.pull_request == null) | .number] | join(" ")' \
-                2>/dev/null) || CANDIDATES=""
-            fi
-
-            if [ -n "${CANDIDATES}" ]; then
-              # 候補が一意な場合のみ採用（複数ある場合は誤リンクを防ぐため警告のみ）
-              # shellcheck disable=SC2086
-              set -- ${CANDIDATES}
-              CANDIDATE_COUNT=$#
-              if [ "${CANDIDATE_COUNT}" -eq 1 ]; then
-                ISSUE_NUMBER="$1"
-                echo "✅ (c) 一意に特定された Issue #${ISSUE_NUMBER}"
-              else
-                echo "⚠️ (c) Copilot アサイン済みの Open Issue が複数見つかったため、自動で Closes を付与しません: ${CANDIDATES}"
-              fi
-            fi
-          fi
+          source "${GITHUB_WORKSPACE}/.github/scripts/pr-common.sh"
+          find_issue_number
 
           if [ -n "${ISSUE_NUMBER}" ]; then
-            echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
-            echo "needs_body_update=${NEEDS_BODY_UPDATE}" >> "${GITHUB_OUTPUT}"
+            # PR body に既に Closes/Fixes/Resolves がある場合は body 追記不要
+            EXISTING=$(echo "${PR_BODY}" \
+              | grep -oiP '(?:fix(?:es)?|close[sd]?|resolve[sd]?)\s+(?:[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+)?#\K[0-9]+' \
+              | head -1) || EXISTING=""
+            if [ -n "${EXISTING}" ]; then
+              echo "needs_body_update=false" >> "${GITHUB_OUTPUT}"
+            else
+              echo "needs_body_update=true" >> "${GITHUB_OUTPUT}"
+            fi
           else
-            echo "(d) Issue 番号を特定できませんでした。"
-            echo "issue_number=" >> "${GITHUB_OUTPUT}"
             echo "needs_body_update=false" >> "${GITHUB_OUTPUT}"
           fi
+          echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
       - name: PR body に Closes #N を追記
         if: >
@@ -207,9 +169,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          COMMENT=$(printf '%s\n\n## ⚠️ 元 Issue を特定できませんでした\n\n%s\n\n%s' \
+          # PR body から Issue 番号のヒントを抽出（/Issue<digits>/ パターンのみ対象）
+          HINT_ISSUE=$(echo "${PR_BODY}" | grep -oP '/Issue-\K[0-9]+(?=/)' | head -1) || HINT_ISSUE=""
+          if [ -n "${HINT_ISSUE}" ]; then
+            HINT_MSG=$(printf '\n\n> 💡 **ヒント**: PR body に `Issue-%s` への参照があります。Issue #%s が削除・移動済みの場合は、新規 Issue を作成して `Closes #N` を追記してください。' \
+              "${HINT_ISSUE}" "${HINT_ISSUE}")
+          else
+            HINT_MSG=""
+          fi
+
+          COMMENT=$(printf '%s\n\n## ⚠️ 元 Issue を特定できませんでした\n\n%s%s\n\n%s' \
             '<!-- link-copilot-pr-to-issue-done -->' \
             '元 Issue を特定できませんでした。手動で `Closes #N` を PR body に追記してください。' \
+            "${HINT_MSG}" \
             '> ℹ️ このコメントは `link-copilot-pr-to-issue.yml` によって自動投稿されました。')
 
           gh pr comment "${PR_NUMBER}" \

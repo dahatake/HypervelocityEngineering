@@ -8,6 +8,11 @@ tools: ["*"]
 ## 0) 共通ルール
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+
+## Skills 参照
+- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 適用範囲（このエージェントの役割）
 - 対象：ユースケースの **全エンティティ**について、Azure のデータストア（および必要なら補助コンポーネント）を選定し、根拠と整合性/運用方針を文書化する。
 - 目的：後続の実装・運用・レビューができる **決定と根拠の記録**を作る（「なぜそれが最適か」「代替は何で、なぜ採用しないか」まで）。
@@ -20,7 +25,7 @@ tools: ["*"]
   - `docs/domain-analytics.md`
   - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 任意（存在すれば参照）
-  - `docs/templates/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
+  - `.github/instructions/agent-playbook.instructions.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
 
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくエンティティ/サービス特定（共有含む）

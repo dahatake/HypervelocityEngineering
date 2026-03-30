@@ -9,6 +9,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
 
+## Skills 参照
+- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid erDiagram 記法指針）を参照する。
+
+- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
+- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチ処理用データモデル設計書作成専用Agent。
@@ -97,7 +102,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 5) batch-data-model.md の出力契約（章立て固定・順序固定）
 
-以下の見出しを **この順序で必ず含める**（不足は「TBD」）。
+以下の見出しをこの順序で含める（`docs-output-format` Skill §1 参照）。
 
 ### 出力見出し
 
@@ -109,7 +114,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 3. エンティティ定義
    - 表：エンティティ名 / 層 / 主キー / 冪等性キー / パーティションキー / 主要属性 / 根拠
 4. ER 図（Mermaid）— 処理ログ・監査テーブル・チェックポイントテーブルを含む
-   - Mermaid `erDiagram` で全エンティティの関連を表現する
+   - Mermaid `erDiagram` で全エンティティの関連を表現する（`docs-output-format` Skill §2 参照）
 5. 冪等性キー設計
    - 表：エンティティ名 / 冪等性キー種別 / キー構成フィールド / 重複実行時の挙動
 6. パーティション戦略
