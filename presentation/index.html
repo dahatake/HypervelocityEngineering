@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hypervelocity Engineering | Agentic Development Presentation</title>
+  <meta name="description" content="RoyalytyService2ndGen の Agent 中心設計、Prompt/Context/Harness Engineering、CLI とバッチ自動化の両立を紹介するプレゼンテーションサイト。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">H</span>
+        <span>Hypervelocity Engineering</span>
+      </a>
+      <nav class="nav" aria-label="ページナビゲーション">
+        <a data-nav href="index.html">Overview</a>
+        <a data-nav href="engineering.html">Engineering</a>
+        <a data-nav href="execution-modes.html">Execution Modes</a>
+        <a data-nav href="deep-dive.html">Deep Dive</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-shell">
+    <section class="hero">
+      <div class="hero-copy reveal is-visible">
+        <div class="eyebrow">Presentation 01 / Overview</div>
+        <h1>Agent を主役にした<br>設計と開発の実験場</h1>
+        <p class="lead">
+          RoyalytyService2ndGen は、Agent を単なる補助ツールではなく、工程ごとの責務を持つ実行主体として扱うリポジトリーです。
+          要件定義から設計、実装、QA までをワークフロー化し、Prompt、Context、Harness を一体で設計しています。
+        </p>
+        <div class="hero-actions">
+          <a class="button" href="engineering.html">Prompt / Context / Harness を見る</a>
+          <a class="ghost-button" href="execution-modes.html">CLI とバッチ自動化を比較する</a>
+        </div>
+      </div>
+
+      <aside class="hero-panel reveal">
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="metric-value" data-count="6" data-suffix=" workflows">0</span>
+            <span class="metric-label">共通 DAG で管理される主要ワークフロー</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value" data-count="30" data-suffix="+ agents">0</span>
+            <span class="metric-label">責務別に分割された Custom Agent 群</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value" data-count="5" data-suffix=" phases">0</span>
+            <span class="metric-label">Build / Lint / Test / Security / Diff の検証ループ</span>
+          </div>
+          <div class="metric">
+            <span class="metric-value" data-count="2" data-suffix=" execution modes">0</span>
+            <span class="metric-label">Web UI とローカル CLI の両立</span>
+          </div>
+        </div>
+
+        <div class="mini-panel">
+          <div class="kicker">Why it matters</div>
+          <h3>Agentic Software Engineering を運用まで落とす</h3>
+          <ul>
+            <li>Agent に読ませる情報を先に設計する</li>
+            <li>長いタスクは分割し、依存関係で流す</li>
+            <li>生成後に QA とレビューを自動挿入する</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">What is special</div>
+          <h2>単なるコード生成ではなく、工程そのものを Agent 化</h2>
+        </div>
+        <p>
+          Agent の役割、入出力、必要コンテキスト、完了条件、レビュー観点を定義し、設計書とコードをつなぐ流れまで整えている点が特徴です。
+        </p>
+      </div>
+
+      <div class="card-grid">
+        <article class="section-card card-accent">
+          <div class="kicker">01</div>
+          <h3>役割分割が前提</h3>
+          <p>
+            ドメイン分析、データモデル、UI、サービス定義、AI Agent 設計、実装、QA を個別の Agent に分解し、万能 Agent への依存を避けています。
+          </p>
+          <div class="tag-row">
+            <span class="tag">Design Agents ×16</span>
+            <span class="tag">Dev Agents ×14</span>
+            <span class="tag">QA Agents ×2</span>
+          </div>
+          <div class="file-tree">├─ <b>.github/agents/</b>
+│   ├─ Arch-DataModeling.agent.md
+│   ├─ Arch-Microservice-ServiceCatalog.agent.md
+│   ├─ Dev-Microservice-Azure-ServiceCoding-AzureFunctions.agent.md
+│   ├─ Dev-Batch-Deploy.agent.md
+│   ├─ QA-AzureArchitectureReview.agent.md
+│   └─ … 計 43 ファイル</div>
+        </article>
+
+        <article class="section-card card-accent">
+          <div class="kicker">02</div>
+          <h3>DAG で進む</h3>
+          <p>
+            ワークフローはステップ依存を持つ DAG として定義され、完了済みステップだけを起点に次を起動します。順次、並列、AND join が共通モデルです。
+          </p>
+          <div class="process-ribbon">
+            <span>Sequential</span>
+            <span>Parallel</span>
+            <span>Join</span>
+          </div>
+          <div class="code-block"><span class="cm"># hve/workflow_registry.py — AAD ワークフロー（16ステップの一部）</span>
+StepDef(id=<span class="str">"1.1"</span>, title=<span class="str">"ドメイン分析"</span>,
+        custom_agent=<span class="str">"Arch-Microservice-DomainAnalytics"</span>),
+StepDef(id=<span class="str">"1.2"</span>, title=<span class="str">"サービス一覧抽出"</span>,
+        custom_agent=<span class="str">"Arch-Microservice-ServiceIdentify"</span>,
+        depends_on=[<span class="str">"1.1"</span>]),
+StepDef(id=<span class="str">"7.1"</span>, title=<span class="str">"画面定義書"</span>,
+        depends_on=[<span class="str">"6"</span>]),
+StepDef(id=<span class="str">"7.2"</span>, title=<span class="str">"マイクロサービス定義書"</span>,
+        depends_on=[<span class="str">"6"</span>]),            <span class="cm"># ← 7.1 と並列</span>
+StepDef(id=<span class="str">"7.3"</span>, title=<span class="str">"TDDテスト仕様書"</span>,
+        depends_on=[<span class="str">"6"</span>, <span class="str">"7.1"</span>, <span class="str">"7.2"</span>]), <span class="cm"># ← AND join</span></div>
+        </article>
+
+        <article class="section-card card-accent">
+          <div class="kicker">03</div>
+          <h3>ドキュメント駆動</h3>
+          <p>
+            前工程で作られた成果物を次工程の一次情報として扱うため、設計と実装が断絶しません。Agent もその前提で指示されています。
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
+            <span class="file-badge">docs/domain-analytics.md</span>
+            <span class="file-badge">docs/data-model.md</span>
+            <span class="file-badge">docs/service-catalog.md</span>
+            <span class="file-badge">docs/screen-list.md</span>
+            <span class="file-badge">docs/test-strategy.md</span>
+            <span class="file-badge">docs/services/SVC-*-description.md</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">Narrative</div>
+          <h2>このリポジトリーが強いのは Prompt 単体ではなく、その周辺設計</h2>
+        </div>
+        <p>
+          良いプロンプトを書くことより、Agent が誤解しない入力文脈、危険操作を防ぐガード、生成結果を検証するハーネスを揃えていることに価値があります。
+        </p>
+      </div>
+
+      <div class="summary-grid">
+        <div class="quote-card">
+          <div class="kicker">Core thesis</div>
+          <h3>Agent を賢くする前に、Agent が失敗しにくい舞台を作る</h3>
+          <p>
+            この思想が、AGENTS.md の共通規約、Custom Agent の入力一覧、CLI/Actions のオーケストレーション、QA / Review の追加入力に貫かれています。
+          </p>
+          <div class="file-tree">├─ <b>AGENTS.md</b>               ← 全 Agent の強制ルール（§1〜§10）
+├─ <b>.github/copilot-instructions.md</b>
+├─ <b>.github/agents/*.agent.md</b>  ← 43 Custom Agent 定義
+├─ <b>.github/skills/*/SKILL.md</b>  ← 再利用可能な技術 Skill
+├─ <b>hve/</b>                       ← Copilot SDK ローカル実行基盤
+│   ├─ orchestrator.py
+│   ├─ dag_executor.py
+│   ├─ runner.py
+│   ├─ workflow_registry.py
+│   └─ prompts.py
+└─ <b>.github/workflows/</b>         ← GitHub Actions 自動化</div>
+        </div>
+
+        <div class="timeline-card">
+          <div class="kicker">Flow</div>
+          <div class="timeline">
+            <div class="timeline-step">
+              <div class="step-badge">1</div>
+              <div>
+                <strong>Issue / CLI で起動</strong>
+                <p>必要な branch、step、review、qa 設定を受け取り、対象ワークフローを決定。</p>
+              </div>
+            </div>
+            <div class="timeline-step">
+              <div class="step-badge">2</div>
+              <div>
+                <strong>Step ごとに Agent 実行</strong>
+                <p>テンプレートと Custom Agent によって役割を固定し、成果物を生成。</p>
+              </div>
+            </div>
+            <div class="timeline-step">
+              <div class="step-badge">3</div>
+              <div>
+                <strong>QA / Review / Advance</strong>
+                <p>PR コメントやローカル入力を使って追加確認とレビューを入れ、依存が解けた次工程へ進む。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">Pages</div>
+          <h2>次のページで見ること</h2>
+        </div>
+        <p>
+          詳細ページでは、Prompt / Context / Harness の三層、対話型 CLI とバッチ自動化の設計差、DAG と実装基盤の関係を順に掘り下げます。
+        </p>
+      </div>
+      <div class="page-link-grid">
+        <a class="page-link" href="engineering.html">
+          <strong>Engineering</strong>
+          <p>Prompt、Context、Harness のベストプラクティスをどのように内蔵しているか。</p>
+          <small>Page 02</small>
+        </a>
+        <a class="page-link" href="execution-modes.html">
+          <strong>Execution Modes</strong>
+          <p>Web UI と CLI がどう共通モデルを共有し、どこで性格が分かれるか。</p>
+          <small>Page 03</small>
+        </a>
+        <a class="page-link" href="deep-dive.html">
+          <strong>Deep Dive</strong>
+          <p>DAG、StepRunner、GitHub Actions、QA コメント自動化の関係図を整理。</p>
+          <small>Page 04</small>
+        </a>
+        <a class="page-link" href="index.html#start-here">
+          <strong>Start Here</strong>
+          <p>まず全体像に戻って、何を軸に見るべきかを再確認する。</p>
+          <small>Anchor</small>
+        </a>
+      </div>
+    </section>
+
+    <section class="footer-card reveal" id="start-here">
+      <div class="footer-grid">
+        <div>
+          <strong>Keyword</strong>
+          <p>Agentic Software Engineering, Workflow DAG, Prompt Engineering, Context Engineering, Harness Engineering</p>
+        </div>
+        <div>
+          <strong>Audience</strong>
+          <p>Agent 活用を設計と運用のレベルまで引き上げたいソフトウェアエンジニア、アーキテクト、開発基盤担当者。</p>
+        </div>
+        <div>
+          <strong>Theme</strong>
+          <p>Agent を賢く使うだけではなく、Agent がうまく働くシステムを設計する。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

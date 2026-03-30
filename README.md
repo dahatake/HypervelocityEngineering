@@ -191,6 +191,7 @@ Issue 作成 → GitHub Actions 起動 → Sub-issue 一括生成
 | [users-guide/SDK-Guide.md](users-guide/SDK-Guide.md) | Copilot CLI SDK コマンドリファレンス |
 | [AGENTS.md](AGENTS.md) | Copilot Agent 行動規約（コンテキスト収集・計画・分割・品質レビュー） |
 | [.github/scripts/README.md](.github/scripts/README.md) | CLI コマンドリファレンス（Bash / PowerShell） |
+| [presentation/](presentation/index.html) | アーキテクチャ紹介プレゼンテーション（Prompt / Context / Harness Engineering、実行モード比較） |
 
 ---
 

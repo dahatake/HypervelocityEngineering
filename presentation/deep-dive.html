@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deep Dive | Hypervelocity Engineering</title>
+  <meta name="description" content="RoyalytyService2ndGen の DAG、StepRunner、GitHub Actions、自動 QA/レビューの関係を整理するページ。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark">H</span>
+        <span>Hypervelocity Engineering</span>
+      </a>
+      <nav class="nav" aria-label="ページナビゲーション">
+        <a data-nav href="index.html">Overview</a>
+        <a data-nav href="engineering.html">Engineering</a>
+        <a data-nav href="execution-modes.html">Execution Modes</a>
+        <a data-nav href="deep-dive.html">Deep Dive</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="site-shell">
+    <section class="hero">
+      <div class="hero-copy reveal is-visible">
+        <div class="eyebrow">Presentation 04 / Deep Dive</div>
+        <h1>実装の芯は<br>DAG と Session Orchestration</h1>
+        <p class="lead">
+          表面的には Agent が多く、ワークフローも多彩ですが、中心にあるのは workflow_registry、DAGExecutor、StepRunner、GitHub Actions の組み合わせです。
+        </p>
+      </div>
+      <aside class="hero-panel reveal">
+        <div class="mini-panel">
+          <div class="kicker">Architecture sentence</div>
+          <h3>Input surface と execution core を分離し、QA / Review を後置する</h3>
+          <p>この一文で、このリポジトリーの実装哲学をかなり正確に説明できます。</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">Core components</div>
+          <h2>重要コンポーネントの関係</h2>
+        </div>
+        <p>
+          実行核はコンパクトです。workflow_registry が定義、DAGExecutor が順序制御、StepRunner がセッション処理、GitHub API / Actions が外部接続を担当します。
+        </p>
+      </div>
+      <div class="diagram-grid">
+        <article class="detail-card">
+          <div class="kicker">Registry</div>
+          <h3>workflow_registry.py</h3>
+          <p>6 ワークフローの StepDef をデータとして保持し、依存関係と Agent 割り当てを統一管理します。</p>
+          <div class="code-block"><span class="cm"># hve/workflow_registry.py — 6 ワークフロー定義</span>
+<span class="cls">AAS</span>  = WorkflowDef(id=<span class="str">"aas"</span>, steps=[…])   <span class="cm">#  2 steps</span>
+<span class="cls">AAD</span>  = WorkflowDef(id=<span class="str">"aad"</span>, steps=[…])   <span class="cm"># 16 steps</span>
+<span class="cls">ASDW</span> = WorkflowDef(id=<span class="str">"asdw"</span>, steps=[…])  <span class="cm"># 24 steps</span>
+<span class="cls">ABD</span>  = WorkflowDef(id=<span class="str">"abd"</span>, steps=[…])   <span class="cm">#  9 steps</span>
+<span class="cls">ABDV</span> = WorkflowDef(id=<span class="str">"abdv"</span>, steps=[…])  <span class="cm">#  7 steps</span>
+<span class="cls">AID</span>  = WorkflowDef(id=<span class="str">"aid"</span>, steps=[…])   <span class="cm"># 10 steps</span></div>
+        </article>
+        <article class="detail-card">
+          <div class="kicker">Execution</div>
+          <h3>DAGExecutor</h3>
+          <p>完了済みステップから次の起動可能ステップを算出し、asyncio.Semaphore で並列数を制御します。</p>
+          <div class="code-block"><span class="cm"># hve/dag_executor.py — 起動可能判定</span>
+<span class="kw">def</span> <span class="fn">get_next_steps</span>(self, completed, skipped):
+    <span class="kw">for</span> step <span class="kw">in</span> self.steps:
+        deps_satisfied = <span class="fn">all</span>(
+            dep <span class="kw">in</span> effective_done
+            <span class="kw">or</span> dep <span class="kw">not in</span> existing_ids
+            <span class="kw">for</span> dep <span class="kw">in</span> step.depends_on
+        )
+        <span class="kw">if</span> deps_satisfied:
+            result.append(step)</div>
+        </article>
+        <article class="detail-card">
+          <div class="kicker">Session</div>
+          <h3>StepRunner</h3>
+          <p>同一セッション内で main task、QA、Review を連続実行し、対話の文脈を維持します。</p>
+          <div class="code-block"><span class="cm"># hve/runner.py — 1 ステップのフロー</span>
+┌──────────────────────────────────────┐
+│ CopilotSession（コンテキスト保持）      │
+│                                        │
+│ Phase 1: <span class="fn">send_and_wait</span>(prompt)       │
+│   → Agent がメインタスク実行            │
+│                                        │
+│ Phase 2: <span class="fn">send_and_wait</span>(<span class="cls">QA_PROMPT</span>)    │
+│   → 質問票生成 → stdin 回答 → 反映     │
+│                                        │
+│ Phase 3: <span class="fn">send_and_wait</span>(<span class="cls">REVIEW_PROMPT</span>) │
+│   → 3 観点レビュー + 最終成果物        │
+└──────────────────────────────────────┘</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">Execution choreography</div>
+          <h2>1 ステップの中で何が起きるか</h2>
+        </div>
+        <p>
+          ローカル CLI では、1 ステップを単発実行するのではなく、同一セッションのまま追加確認とレビューを流し込めるのが特徴です。
+        </p>
+      </div>
+      <div class="timeline-card">
+        <div class="timeline">
+          <div class="timeline-step">
+            <div class="step-badge">1</div>
+            <div>
+              <strong>Main Prompt</strong>
+              <p>対象 Step の本処理を Custom Agent 付きで実行します。</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="step-badge">2</div>
+            <div>
+              <strong>QA Prompt</strong>
+              <p>必要なら質問票を自動生成し、ユーザー回答またはデフォルト案を反映します。</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <div class="step-badge">3</div>
+            <div>
+              <strong>Review Prompt</strong>
+              <p>3 観点レビューを追加し、成果物を最終版に寄せます。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">GitHub automation</div>
+          <h2>Actions 側では状態遷移システムとして動く</h2>
+        </div>
+        <p>
+          Web UI 方式では、Actions がオーケストレーターです。Issue ラベル、PR ラベル、merge イベントをトリガーに、次の工程へ機械的に進めます。
+        </p>
+      </div>
+      <div class="two-column">
+        <article class="section-card">
+          <div class="kicker">On issue opened</div>
+          <h3>Initialize and spawn</h3>
+          <p>ルート Issue を受けて Step Issue を生成し、必要なら Copilot をアサインします。</p>
+          <div style="margin-top:10px;">
+            <span class="file-badge">.github/workflows/copilot-setup-steps.yml</span>
+            <span class="file-badge">.github/workflows/create-subissues-from-pr.yml</span>
+          </div>
+        </article>
+        <article class="section-card">
+          <div class="kicker">On PR labeled / merged</div>
+          <h3>Review and advance</h3>
+          <p>auto-qa、auto-context-review、create-subissues、advance-subissues が PR を介して次段へ進めます。</p>
+          <div style="margin-top:10px;">
+            <span class="file-badge">.github/workflows/advance-subissues.yml</span>
+            <span class="file-badge">.github/workflows/copilot-auto-qa.yml</span>
+          </div>
+          <div class="code-block"><span class="cm"># hve/workflow_registry.py — 状態ラベル</span>
+<span class="kw">def</span> <span class="fn">_make_state_labels</span>(prefix):
+    <span class="kw">return</span> {
+        <span class="str">"initialized"</span>: <span class="fn">f</span><span class="str">"{prefix}:initialized"</span>,
+        <span class="str">"ready"</span>:       <span class="fn">f</span><span class="str">"{prefix}:ready"</span>,
+        <span class="str">"running"</span>:     <span class="fn">f</span><span class="str">"{prefix}:running"</span>,
+        <span class="str">"done"</span>:        <span class="fn">f</span><span class="str">"{prefix}:done"</span>,
+        <span class="str">"blocked"</span>:     <span class="fn">f</span><span class="str">"{prefix}:blocked"</span>,
+    }</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <div class="eyebrow">Bottom line</div>
+          <h2>この設計が示しているもの</h2>
+        </div>
+        <p>
+          Agent の能力差を埋めるためにプロンプトを盛るのではなく、Agent の作業単位、前提文脈、検証ルール、遷移手順をアプリケーション開発の一部として実装しているということです。
+        </p>
+      </div>
+      <div class="quote-card">
+        <h3>一番ワクワクする点</h3>
+        <p>
+          これは「Agent を使った開発」のサンプルではありません。Agent が本当に作業者として参加できるように、開発プロセス側を再設計したリポジトリーです。
+        </p>
+      </div>
+      <div class="code-block" style="margin-top:18px;"><span class="cm"># hve/config.py — SDKConfig（主要パラメータ抜粋）</span>
+<span class="op">@</span><span class="fn">dataclass</span>
+<span class="kw">class</span> <span class="cls">SDKConfig</span>:
+    model: <span class="kw">str</span>          = <span class="str">"claude-opus-4.6"</span>
+    max_parallel: <span class="kw">int</span>   = <span class="str">15</span>
+    auto_qa: <span class="kw">bool</span>       = <span class="str">False</span>            <span class="cm"># QA 自動投入</span>
+    auto_contents_review: <span class="kw">bool</span> = <span class="str">False</span>   <span class="cm"># Review 自動投入</span>
+    create_issues: <span class="kw">bool</span> = <span class="str">False</span>            <span class="cm"># Issue 作成（オプション）</span>
+    create_pr: <span class="kw">bool</span>    = <span class="str">False</span>             <span class="cm"># PR 作成（オプション）</span>
+    mcp_servers: Optional[Dict] = <span class="str">None</span>   <span class="cm"># MCP Server 設定</span></div>
+    </section>
+
+    <section class="footer-card reveal">
+      <div class="footer-grid">
+        <div>
+          <strong>Design principle</strong>
+          <p>役割分割、入力制御、状態遷移、検証ループの4点で Agent を支える。</p>
+        </div>
+        <div>
+          <strong>Operational principle</strong>
+          <p>人が一度に全部を判断しなくても、質問票とレビューで後から密度を上げられる。</p>
+        </div>
+        <div>
+          <strong>Engineering principle</strong>
+          <p>実行チャネルを変えても、内部モデルは変えない。だから拡張しやすい。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
