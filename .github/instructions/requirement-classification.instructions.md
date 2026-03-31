@@ -3,14 +3,14 @@ applyTo: "work/business-requirement-document-status.md"
 ---
 # D01〜D21 分類ルール・状態判定基準・ステータス管理テンプレート
 
-> 目的：`QA-RequirementClassifier` Agent が `qa/` の質問データを `docs/business-requirement-document-master-list.md` の D01〜D21 に分類し、ステータス管理ファイルを生成する際の判定基準を定義する。
+> 目的：`QA-RequirementClassifier` Agent が `qa/` の質問データを `template/business-requirement-document-master-list.md` の D01〜D21 に分類し、ステータス管理ファイルを生成する際の判定基準を定義する。
 
 ---
 
 ## §1 適用条件
 
 - **参照元 Agent**: `QA-RequirementClassifier`（`.github/agents/QA-RequirementClassifier.agent.md`）
-- **入力**: `qa/*.md`（全ファイル）、`docs/business-requirement-document-master-list.md`
+- **入力**: `qa/*.md`（全ファイル）、`template/business-requirement-document-master-list.md`
 - **出力**: `work/business-requirement-document-status.md`
 - 本ルールは Agent が質問→D クラスのマッピングを行う際に **必ず参照** する。
 
@@ -48,7 +48,7 @@ applyTo: "work/business-requirement-document-status.md"
 1. 質問テキストのキーワード/テーマを上記の Primary マッピング基準と照合する
 2. **最も強く合致する D クラスを Primary** とする（1質問につき Primary は必ず1つ）
 3. 副次的に関連する D クラスがある場合は **Contributing**（最大3つ）として記録する
-4. 複数の D クラスに同程度に該当する場合は、以下の優先順で Primary を決定する: ①必須度が Core の D クラスを優先、②`docs/business-requirement-document-master-list.md` の「最低内容」のうち、質問が直接言及している項目がより多い D を優先、③それでも同等の場合は D クラス番号が小さい方を Primary とする
+4. 複数の D クラスに同程度に該当する場合は、以下の優先順で Primary を決定する: ①必須度が Core の D クラスを優先、②`template/business-requirement-document-master-list.md` の「最低内容」のうち、質問が直接言及している項目がより多い D を優先、③それでも同等の場合は D クラス番号が小さい方を Primary とする
 5. 明確に該当 D が判断できない場合でも、最も近い D を Primary に選定しつつ、根拠不足として `分類困難（理由: ...）` を併記して記録する（捏造禁止）
 
 ---
@@ -146,7 +146,7 @@ applyTo: "work/business-requirement-document-status.md"
 
 ## §5 カバレッジ分析ルール
 
-各 D クラスの不足判定は `docs/business-requirement-document-master-list.md` の `**不足判定:**` フィールドに記載された基準に従う。
+各 D クラスの不足判定は `template/business-requirement-document-master-list.md` の `**不足判定:**` フィールドに記載された基準に従う。
 
 ### 判定手順
 1. D クラスにマッピングされた質問群から、回答済み（Confirmed/Tentative）の内容を確認する
@@ -234,4 +234,4 @@ applyTo: "work/business-requirement-document-status.md"
 ## 注意事項
 - キーワード辞書は補助手段であり、質問の文脈・意味を優先して判定する
 - キーワードが複数の D クラスに該当する場合は質問全体の文脈で Primary を決定する
-- `docs/business-requirement-document-master-list.md` の定義が本辞書と矛盾する場合は master-list を優先する
+- `template/business-requirement-document-master-list.md` の定義が本辞書と矛盾する場合は master-list を優先する

@@ -1,6 +1,6 @@
 # トラブルシューティング
 
-← [Users Guide](./README.md)
+← [README](../README.md)
 
 ---
 

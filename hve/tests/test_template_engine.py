@@ -244,9 +244,9 @@ class TestBuildRootIssueBody:
     def test_aas(self):
         wf = get_workflow("aas")
         body = build_root_issue_body(wf, {"branch": "main"})
-        assert "# [AAS] Auto App Selection" in body
+        assert "# [AAS] App Selection" in body
         assert "<!-- branch: main -->" in body
-        assert "ワークフロー: **Auto App Selection**" in body
+        assert "ワークフロー: **App Selection**" in body
 
     def test_asdw_with_params(self):
         wf = get_workflow("asdw")

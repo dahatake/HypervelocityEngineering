@@ -20,12 +20,13 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
-    "aas": "Auto App Selection",
-    "aad": "Auto App Design",
-    "asdw": "Auto App Dev Microservice Azure",
-    "abd": "Auto Batch Design",
-    "abdv": "Auto Batch Dev",
-    "aid": "Auto IoT Design",
+    "aas": "App Selection",
+    "aad": "App Design",
+    "asdw": "App Dev Microservice Azure",
+    "abd": "Batch Design",
+    "abdv": "Batch Dev",
+    "aid": "IoT Design",
+    "aqrc": "QA Requirement Classification",
 }
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
@@ -36,6 +37,7 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "abd": "ABD",
     "abdv": "ABDV",
     "aid": "AID",
+    "aqrc": "AQRC",
 }
 
 
@@ -133,6 +135,39 @@ def collect_params(wf: WorkflowDef) -> dict:
     if "batch_job_id" in wf.params:
         params["batch_job_id"] = _prompt(
             "対象バッチジョブ ID（カンマ区切り）", default="", required=False
+        )
+
+    # AQRC 固有パラメータ
+    if "scope" in wf.params:
+        print("\n分類対象スコープを選択してください:")
+        print("  1) 全ファイル (all)")
+        print("  2) 指定ファイルのみ (specified)")
+        while True:
+            scope_input = input("選択 [1]: ").strip() or "1"
+            if scope_input == "1":
+                params["scope"] = "all"
+                break
+            elif scope_input == "2":
+                params["scope"] = "specified"
+                break
+            else:
+                print("  ⚠️ 1 または 2 を入力してください。")
+
+    if "target_files" in wf.params and params.get("scope") == "specified":
+        while True:
+            target_files = _prompt(
+                "対象ファイルパス（スペース区切り）", default="", required=False
+            )
+            if target_files.strip():
+                params["target_files"] = target_files
+                break
+            print("  ⚠️ scope=specified の場合は少なくとも 1 件のファイルパスを入力してください。")
+    elif "target_files" in wf.params:
+        params["target_files"] = ""
+
+    if "force_refresh" in wf.params:
+        params["force_refresh"] = _prompt_yes_no(
+            "既存の status.md を完全に再生成する？", default=False
         )
 
     # ステップ選択
@@ -233,6 +268,17 @@ def _build_job_section(batch_job_id: str) -> str:
     return f"\n\n## 対象バッチジョブ ID\n`{batch_job_id}`"
 
 
+def _build_target_files_section(target_files: str) -> str:
+    """AQRC テンプレートの ``{aqrc_target_files_section}`` を展開する。"""
+    if not target_files:
+        return ""
+    files = [f.strip() for f in target_files.split() if f.strip()]
+    if not files:
+        return ""
+    lines = "\n".join(f"- `{f}`" for f in files)
+    return f"\n\n## 対象ファイル\n{lines}"
+
+
 def render_template(
     template_path: str,
     root_issue_num: int,
@@ -258,6 +304,17 @@ def render_template(
     # ABDV 固有プレースホルダ
     body = body.replace("{rg_section}", _build_rg_section(params.get("resource_group", "")))
     body = body.replace("{job_section}", _build_job_section(params.get("batch_job_id", "")))
+
+    # AQRC 固有プレースホルダ
+    body = body.replace("{aqrc_scope}", params.get("scope", "all"))
+    body = body.replace(
+        "{aqrc_target_files_section}",
+        _build_target_files_section(params.get("target_files", "")),
+    )
+    body = body.replace(
+        "{aqrc_force_refresh}",
+        str(params.get("force_refresh", False)).lower(),
+    )
 
     # コンテナ固有プレースホルダ (AAD step-7, AID step-5)
     body = body.replace("{s7_subtasks}", "Step.7.1, Step.7.2, Step.7.3")
@@ -350,7 +407,10 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"ユースケースID: `{params['usecase_id']}`")
     if params.get("batch_job_id"):
         lines.append(f"バッチジョブ ID: `{params['batch_job_id']}`")
-
+    if params.get("scope"):
+        lines.append(f"スコープ: `{params['scope']}`")
+    if params.get("force_refresh"):
+        lines.append(f"force_refresh: `{params['force_refresh']}`")
     additional = params.get("additional_comment", "")
     if additional:
         lines.append(f"\n## 追加コメント\n{additional}")

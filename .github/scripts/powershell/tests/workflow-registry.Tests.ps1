@@ -10,42 +10,42 @@ Describe 'workflow-registry.ps1' {
         It 'retrieves AAS workflow' {
             $wf = Get-Workflow -WorkflowId 'aas'
             $wf.id | Should -Be 'aas'
-            $wf.name | Should -Be 'Auto App Selection'
+            $wf.name | Should -Be 'App Selection'
             $wf.steps.Count | Should -Be 2
         }
 
         It 'retrieves AAD workflow' {
             $wf = Get-Workflow -WorkflowId 'aad'
             $wf.id | Should -Be 'aad'
-            $wf.name | Should -Be 'Auto App Design'
+            $wf.name | Should -Be 'App Design'
             $wf.steps.Count | Should -Be 16
         }
 
         It 'retrieves ASDW workflow' {
             $wf = Get-Workflow -WorkflowId 'asdw'
             $wf.id | Should -Be 'asdw'
-            $wf.name | Should -Be 'Auto App Dev Microservice Azure'
+            $wf.name | Should -Be 'App Dev Microservice Azure'
             $wf.steps.Count | Should -Be 24
         }
 
         It 'retrieves ABD workflow' {
             $wf = Get-Workflow -WorkflowId 'abd'
             $wf.id | Should -Be 'abd'
-            $wf.name | Should -Be 'Auto Batch Design'
+            $wf.name | Should -Be 'Batch Design'
             $wf.steps.Count | Should -Be 9
         }
 
         It 'retrieves ABDV workflow' {
             $wf = Get-Workflow -WorkflowId 'abdv'
             $wf.id | Should -Be 'abdv'
-            $wf.name | Should -Be 'Auto Batch Dev'
+            $wf.name | Should -Be 'Batch Dev'
             $wf.steps.Count | Should -Be 7
         }
 
         It 'retrieves AID workflow' {
             $wf = Get-Workflow -WorkflowId 'aid'
             $wf.id | Should -Be 'aid'
-            $wf.name | Should -Be 'Auto IoT Design'
+            $wf.name | Should -Be 'IoT Design'
             $wf.steps.Count | Should -Be 10
         }
 

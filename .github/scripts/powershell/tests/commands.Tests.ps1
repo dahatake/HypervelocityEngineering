@@ -209,7 +209,7 @@ Describe 'orchestrate.ps1' {
     It 'shows execution plan for AAS in dry-run' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $output = & $ScriptPath -Workflow aas -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAS.*Auto App Selection'
+        $output | Should -Match 'AAS.*App Selection'
         $output | Should -Match '2'
         $output | Should -Match 'Step\.1:.*アプリケーションリストの作成'
         $output | Should -Match 'Step\.2:.*ソフトウェアアーキテクチャの推薦'
@@ -219,7 +219,7 @@ Describe 'orchestrate.ps1' {
     It 'shows execution plan for AAD with step filter' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $output = & $ScriptPath -Workflow aad -Steps '1.1,1.2' -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAD.*Auto App Design'
+        $output | Should -Match 'AAD.*App Design'
         $output | Should -Match 'Step\.1\.1:.*ドメイン分析'
         $output | Should -Match 'Step\.1\.2:.*サービス一覧抽出'
         $output | Should -Match 'コンテナ Issue'

@@ -28,6 +28,7 @@ class SDKConfig:
     auto_coding_agent_review: bool = False              # Code Review Agent 呼び出し（デフォルト: 無効）
     auto_coding_agent_review_auto_approval: bool = False  # 自動承認（デフォルト: 無効）
     review_timeout_seconds: float = 900.0               # Code Review Agent レビュー待ちタイムアウト
+    review_base_ref: str = "HEAD~1"                     # git diff の基点 (例: "HEAD~1", "main", "origin/main")
 
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない

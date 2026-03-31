@@ -1,6 +1,6 @@
 # はじめかた（初期セットアップ）
 
-← [Users Guide](./README.md)
+← [README](../README.md)
 
 ---
 
@@ -26,8 +26,8 @@
 | GitHub Copilot ライセンス | **必須** | Copilot Coding Agent 利用 |
 | Git | **必須** | リポジトリのクローン |
 | Web ブラウザ | **必須** | GitHub.com の操作（Web UI 方式） |
-| Python 3.9+ | SDK 版のみ | SDK 版ワークフロー実行 |
-| Copilot CLI | SDK 版のみ | SDK 版ワークフロー実行 |
+| Python 3.9+ | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
+| GitHub Copilot CLI | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
 
 ---
@@ -245,5 +245,5 @@ MCP と PAT の設定が完了すると、Repository には以下のように se
 セットアップが完了したら、いずれかの方法でワークフローを開始してください。
 
 - **Web UI 方式**: [web-ui-guide.md](./web-ui-guide.md)
-- **SDK 版（ローカル実行）**: [SDK-Guide.md](./SDK-Guide.md)
-- **フェーズ別ガイド**: [Users Guide](./README.md)
+- **GitHub Copilot CLI SDK 版（ローカル実行）**: [SDK-Guide.md](./SDK-Guide.md)
+- **フェーズ別ガイド**: [README](../README.md)

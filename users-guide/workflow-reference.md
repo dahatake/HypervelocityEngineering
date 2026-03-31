@@ -1,6 +1,6 @@
 # ワークフロー・ラベル・Custom Agent リファレンス
 
-← [Users Guide](./README.md)
+← [README](../README.md)
 
 ---
 
@@ -43,14 +43,15 @@
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
-| `aas` | Auto App Selection | `auto-app-selection.yml` |
-| `aad` | Auto App Design | `auto-app-design.yml` |
-| `asdw` | Auto App Dev Azure Web | `auto-app-dev-microservice-azure.yml` |
-| `abd` | Auto Batch Design | `auto-batch-design.yml` |
-| `abdv` | Auto Batch Dev | `auto-batch-dev.yml` |
-| `aid` | Auto IoT Design | `auto-iot-design.yml` |
+| `aas` | App Selection | `auto-app-selection.yml` |
+| `aad` | App Design | `auto-app-design.yml` |
+| `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure.yml` |
+| `abd` | Batch Design | `auto-batch-design.yml` |
+| `abdv` | Batch Dev | `auto-batch-dev.yml` |
+| `aid` | IoT Design | `auto-iot-design.yml` |
+| `aqrc` | QA Requirement Classification | — |
 
-> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aid` を使用してください。
+> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aid` / `aqrc` を使用してください。
 
 ---
 
@@ -183,7 +184,7 @@
 |---------|------|
 | `QA-AzureArchitectureReview` | デプロイ済み Azure リソースを棚卸しし、Azure WAF（5 本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ / セキュリティをレビュー |
 | `QA-AzureDependencyReview` | サービスカタログ準拠で Azure 依存（参照 / 設定 / IaC）を証跡付きで点検 |
-| `QA-RequirementClassifier` | `qa/` フォルダーの質問ファイルを読み取り、docs/business-requirement-document-master-list.md の D01〜D21 に分類し、work/business-requirement-document-status.md を生成 |
+| `QA-RequirementClassifier` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、work/business-requirement-document-status.md を生成 |
 
 ---
 
@@ -193,10 +194,10 @@
 
 | ファイル名 | 用途 | トリガーラベル |
 |-----------|------|-------------|
-| `auto-app-selection.yml` | アプリケーション選定ワークフロー起動 | `auto-app-selection` |
-| `auto-app-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-design` |
-| `auto-app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
-| `auto-batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
-| `auto-batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
-| `auto-iot-design.yml` | IoT 設計ワークフロー起動 | `auto-iot-design` |
+| `app-selection.yml` | アプリケーション選定ワークフロー起動 | `auto-app-selection` |
+| `app-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-design` |
+| `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
+| `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
+| `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
+| `iot-design.yml` | IoT 設計ワークフロー起動 | `auto-iot-design` |
 | `qa-requirement-classification.yml` | 要求定義文書の QA 分類 | — |

@@ -90,19 +90,6 @@ class Console:
     def _elapsed(self) -> float:
         return time.time() - self._start_time
 
-    @staticmethod
-    def _format_duration(seconds: float) -> str:
-        """秒数を人間が読みやすい形式に変換する（例: 1h 23m 45s, 2m 30s, 45.3s）。"""
-        if seconds < 60:
-            return f"{seconds:.1f}s"
-        minutes = int(seconds) // 60
-        secs = int(seconds) % 60
-        if minutes < 60:
-            return f"{minutes}m {secs}s"
-        hours = minutes // 60
-        mins = minutes % 60
-        return f"{hours}h {mins}m {secs}s"
-
     # ------------------------------------------------------------------
     # ANSI スタイル付きテキスト生成
     # ------------------------------------------------------------------
@@ -316,8 +303,8 @@ class Console:
         s = self.s
         icons = {"success": f"{s.GREEN}✅{s.RESET}", "failed": f"{s.RED}❌{s.RESET}", "skipped": f"{s.YELLOW}⏭️{s.RESET}"}
         icon = icons.get(status, "?")
-        duration_str = self._format_duration(elapsed)
-        self._print(f"  {icon} {s.BOLD}[Step.{step_id}]{s.RESET} {status} {s.CYAN}⏱ 実行時間: {duration_str}{s.RESET}")
+        elapsed_str = f"{s.DIM}({elapsed:.1f}s){s.RESET}"
+        self._print(f"  {icon} {s.BOLD}[Step.{step_id}]{s.RESET} {status} {elapsed_str}")
 
     def event(self, msg: str) -> None:
         """イベント詳細。verbose のみ表示。"""
@@ -547,13 +534,12 @@ class Console:
         skipped = results.get("skipped", 0)
         total = success + failed + skipped
         elapsed = results.get("total_elapsed", self._elapsed())
-        duration_str = self._format_duration(elapsed)
         self.panel("実行サマリー", [
             f"合計ステップ : {s.BOLD}{total}{s.RESET}",
             f"{s.GREEN}✅ 成功{s.RESET}      : {success}",
             f"{s.RED}❌ 失敗{s.RESET}      : {failed}",
             f"{s.YELLOW}⏭️  スキップ{s.RESET}  : {skipped}",
-            f"⏱️  全体の実行時間: {s.BOLD}{duration_str}{s.RESET}",
+            f"⏱️  合計時間  : {elapsed:.1f}s",
         ], ts=True)
 
     # ------------------------------------------------------------------
@@ -574,10 +560,9 @@ class Console:
         if self.quiet:
             return
         s = self.s
-        duration_str = self._format_duration(elapsed)
         self._print(
             f"{s.BOLD}▸ Phase {phase_num}/{total_phases}:{s.RESET} {title} "
-            f"{s.GREEN}✓{s.RESET} ⏱ {duration_str}",
+            f"{s.GREEN}✓{s.RESET} {s.DIM}({elapsed:.1f}s){s.RESET}",
         )
 
     def dag_wave_start(self, wave_num: int, total_waves: int, steps: List[Any]) -> None:
@@ -628,11 +613,10 @@ class Console:
         if self.quiet:
             return
         s = self.s
-        duration_str = self._format_duration(elapsed)
         result_str = f" {result}" if result else ""
         self._print(
             f"  {s.DIM}┊{s.RESET} Phase {phase_num}/{total_phases}: {name} "
-            f"{s.GREEN}✓{s.RESET} ⏱ {duration_str}{result_str}",
+            f"{s.GREEN}✓{s.RESET} {s.DIM}({elapsed:.1f}s){s.RESET}{result_str}",
         )
 
     def execution_plan(self, waves: List[List[Any]], total_steps: int, max_parallel: int) -> None:

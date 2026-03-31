@@ -64,6 +64,9 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.resource_group)
         self.assertIsNone(args.batch_job_id)
         self.assertIsNone(args.usecase_id)
+        self.assertIsNone(args.scope)
+        self.assertIsNone(args.target_files)
+        self.assertFalse(args.force_refresh)
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
         self.assertIsNone(args.mcp_config)
@@ -170,6 +173,27 @@ class TestParserBasic(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--repo", "owner/repo"])
         self.assertEqual(args.repo, "owner/repo")
 
+    def test_scope_option(self) -> None:
+        """--scope オプションのテスト。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+        self.assertEqual(args.scope, "all")
+
+    def test_scope_specified_option(self) -> None:
+        """--scope specified のテスト。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified"])
+        self.assertEqual(args.scope, "specified")
+
+    def test_target_files_option(self) -> None:
+        """--target-files オプションのテスト。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified",
+                        "--target-files", "qa/file1.md", "qa/file2.md"])
+        self.assertEqual(args.target_files, ["qa/file1.md", "qa/file2.md"])
+
+    def test_force_refresh_flag(self) -> None:
+        """--force-refresh フラグのテスト。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all", "--force-refresh"])
+        self.assertTrue(args.force_refresh)
+
 
 class TestBuildParams(unittest.TestCase):
     """_build_params() のテスト。"""
@@ -215,6 +239,31 @@ class TestBuildParams(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--steps", " 1 , 2 , 3 "])
         params = _build_params(args)
         self.assertEqual(params["steps"], ["1", "2", "3"])
+
+    def test_aqrc_scope_in_params(self) -> None:
+        """AQRC scope がパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+        params = _build_params(args)
+        self.assertEqual(params["scope"], "all")
+
+    def test_aqrc_target_files_in_params(self) -> None:
+        """AQRC target_files がスペース区切り文字列としてパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified",
+                        "--target-files", "qa/f1.md", "qa/f2.md"])
+        params = _build_params(args)
+        self.assertEqual(params["target_files"], "qa/f1.md qa/f2.md")
+
+    def test_aqrc_force_refresh_in_params(self) -> None:
+        """AQRC force_refresh フラグがパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all", "--force-refresh"])
+        params = _build_params(args)
+        self.assertTrue(params["force_refresh"])
+
+    def test_aqrc_force_refresh_default_false(self) -> None:
+        """AQRC force_refresh デフォルト値が False であることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+        params = _build_params(args)
+        self.assertFalse(params["force_refresh"])
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -302,6 +351,40 @@ class TestMainDryRun(unittest.TestCase):
                 ])
                 self.assertEqual(exit_code, 0, f"{wf_id} の dry_run で終了コードが 0 以外")
 
+    def test_aqrc_scope_specified_without_target_files_returns_1(self) -> None:
+        """aqrc で --scope specified だが --target-files 未指定の場合、終了コードが 1。"""
+        exit_code = main([
+            "orchestrate",
+            "--workflow", "aqrc",
+            "--scope", "specified",
+            "--dry-run",
+            "--quiet",
+        ])
+        self.assertEqual(exit_code, 1)
+
+    def test_aqrc_scope_all_dry_run_returns_0(self) -> None:
+        """aqrc で --scope all（--target-files 不要）の dry_run が成功する。"""
+        exit_code = main([
+            "orchestrate",
+            "--workflow", "aqrc",
+            "--scope", "all",
+            "--dry-run",
+            "--quiet",
+        ])
+        self.assertEqual(exit_code, 0)
+
+    def test_aqrc_scope_specified_with_target_files_dry_run_returns_0(self) -> None:
+        """aqrc で --scope specified + --target-files 指定の dry_run が成功する。"""
+        exit_code = main([
+            "orchestrate",
+            "--workflow", "aqrc",
+            "--scope", "specified",
+            "--target-files", "qa/file1.md",
+            "--dry-run",
+            "--quiet",
+        ])
+        self.assertEqual(exit_code, 0)
+
 
 class TestBuildConfigReviewTimeout(unittest.TestCase):
     """`--review-timeout` が SDKConfig.review_timeout_seconds に反映されることを確認。"""
@@ -353,34 +436,26 @@ class TestValidateAutoCodingAgentReview(unittest.TestCase):
         result = _validate_auto_coding_agent_review(args, config)
         self.assertTrue(result)
 
-    def test_returns_false_when_repo_missing(self) -> None:
-        """--repo 未設定の場合、False を返す。"""
-        args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review"])
+    def test_returns_true_when_repo_missing(self) -> None:
+        """--repo 未設定でも True を返す（Code Review Agent はローカル実行）。"""
+        args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review", "--quiet"])
         config = self._make_config(repo="", token="ghp_test")
         result = _validate_auto_coding_agent_review(args, config)
-        self.assertFalse(result)
+        self.assertTrue(result)
 
-    def test_returns_false_when_token_missing(self) -> None:
-        """GH_TOKEN 未設定の場合、False を返す。"""
-        old_gh = os.environ.pop("GH_TOKEN", None)
-        old_github = os.environ.pop("GITHUB_TOKEN", None)
-        try:
-            args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review"])
-            config = self._make_config(repo="owner/repo", token="")
-            result = _validate_auto_coding_agent_review(args, config)
-            self.assertFalse(result)
-        finally:
-            if old_gh is not None:
-                os.environ["GH_TOKEN"] = old_gh
-            if old_github is not None:
-                os.environ["GITHUB_TOKEN"] = old_github
-
-    def test_returns_false_when_both_missing(self) -> None:
-        """--repo と GH_TOKEN が両方未設定の場合、False を返す。"""
-        args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review"])
+    def test_returns_true_when_token_missing(self) -> None:
+        """GH_TOKEN 未設定でも True を返す（Code Review Agent はローカル実行）。"""
+        args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review", "--quiet"])
         config = self._make_config(repo="", token="")
         result = _validate_auto_coding_agent_review(args, config)
-        self.assertFalse(result)
+        self.assertTrue(result)
+
+    def test_returns_true_when_both_missing(self) -> None:
+        """--repo と GH_TOKEN が両方未設定でも True を返す（Code Review Agent はローカル実行）。"""
+        args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review", "--quiet"])
+        config = self._make_config(repo="", token="")
+        result = _validate_auto_coding_agent_review(args, config)
+        self.assertTrue(result)
 
     def test_returns_true_when_both_set(self) -> None:
         """--repo と GH_TOKEN が両方設定されていれば True を返す。"""
@@ -389,26 +464,17 @@ class TestValidateAutoCodingAgentReview(unittest.TestCase):
         result = _validate_auto_coding_agent_review(args, config)
         self.assertTrue(result)
 
-    def test_main_returns_1_when_repo_missing(self) -> None:
-        """--auto-coding-agent-review 指定時、--repo 未設定なら main() が 1 を返す。"""
-        old_env = os.environ.pop("REPO", None)
-        old_gh = os.environ.pop("GH_TOKEN", None)
-        old_github = os.environ.pop("GITHUB_TOKEN", None)
-        try:
-            exit_code = main([
-                "orchestrate",
-                "--workflow", "aas",
-                "--auto-coding-agent-review",
-                "--quiet",
-            ])
-            self.assertEqual(exit_code, 1)
-        finally:
-            if old_env is not None:
-                os.environ["REPO"] = old_env
-            if old_gh is not None:
-                os.environ["GH_TOKEN"] = old_gh
-            if old_github is not None:
-                os.environ["GITHUB_TOKEN"] = old_github
+    def test_main_does_not_fail_when_repo_missing(self) -> None:
+        """--auto-coding-agent-review 指定時、--repo 未設定でもバリデーションは成功する（Code Review Agent はローカル実行）。"""
+        args = _parse([
+            "orchestrate",
+            "--workflow", "aas",
+            "--auto-coding-agent-review",
+            "--quiet",
+        ])
+        config = self._make_config(repo="", token="")
+        result = _validate_auto_coding_agent_review(args, config)
+        self.assertTrue(result)
 
     def test_auto_approval_reset_when_review_disabled(self) -> None:
         """--auto-coding-agent-review が無効で --auto-coding-agent-review-auto-approval が
@@ -521,6 +587,163 @@ class TestCreateIssuesNewFlow(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--ignore-paths", "tmp", "build"])
         config = _build_config(args)
         self.assertEqual(config.ignore_paths, ["tmp", "build"])
+
+
+class TestInteractiveModeCodeReview(unittest.TestCase):
+    """インタラクティブモードの Code Review Agent オプションのテスト。
+
+    _cmd_run_interactive() は Console の対話メソッドを使用するため、
+    それらをモックしてテストする。
+    """
+
+    def _run_interactive_with_inputs(
+        self,
+        *,
+        code_review: bool = False,
+        auto_approval: bool = False,
+        review_timeout: str = "900",
+        create_pr: bool = False,
+        create_issues: bool = False,
+    ) -> "SDKConfig":
+        """Console メソッドをモックして _cmd_run_interactive を実行し、
+        構築された SDKConfig を返す。
+
+        run_workflow をモックして実行をスキップし、SDKConfig を capture する。
+        """
+        import unittest.mock as mock
+        import asyncio
+
+        captured_config = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured_config["cfg"] = config
+            return {"completed": [], "failed": [], "skipped": []}
+
+        # prompt_yes_no の回答順序:
+        # 1. QA 自動 → False
+        # 2. Review 自動 → False
+        # 3. Issue 作成 → create_issues
+        # 4. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる)
+        # 5. Code Review Agent → code_review
+        # 6. 自動承認 → auto_approval (code_review=True 時のみ)
+        # 7. ドライラン → False
+        # 8. 実行確認 → True
+        yes_no_answers = [False, False, create_issues]
+        if not create_issues:
+            yes_no_answers.append(create_pr)
+        yes_no_answers.append(code_review)
+        if code_review:
+            yes_no_answers.append(auto_approval)
+        yes_no_answers += [False, True]  # dry_run, 実行確認
+
+        yes_no_iter = iter(yes_no_answers)
+
+        # prompt_input の回答順序:
+        # 1. ブランチ → "main"
+        # 2. 並列数 → "15"
+        # 3. Review タイムアウト (code_review=True 時のみ)
+        # 4. (repo_input — create_issues or create_pr の場合)
+        # 5. 追加プロンプト → ""
+        input_answers = ["main", "15"]
+        if code_review:
+            input_answers.append(review_timeout)
+        if create_issues or create_pr:
+            input_answers.append("owner/repo")
+        input_answers.append("")  # 追加プロンプト
+
+        input_iter = iter(input_answers)
+
+        # Console のモックを作成
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(
+            CYAN="", RESET="", DIM="", GREEN="", YELLOW="",
+        )
+        con.menu_select.side_effect = [0, 0, 1]  # workflow, model, log_level
+        con.prompt_multi_select.return_value = []  # 全ステップ
+        con.prompt_yes_no.side_effect = lambda *a, **kw: next(yes_no_iter)
+        con.prompt_input.side_effect = lambda *a, **kw: next(input_iter)
+
+        # ワークフロー/ステップのモック
+        mock_step = mock.MagicMock(
+            id="s1", title="Step1", is_container=False, depends_on=[], params=[],
+        )
+        mock_wf = mock.MagicMock(
+            id="aas", steps=[mock_step], params=[],
+        )
+
+        mock_list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_display_names = {"aas": "AAS"}
+
+        # console, workflow_registry, template_engine, orchestrator をモックモジュールとして設定
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+
+        mock_config_mod = mock.MagicMock()
+        # SDKConfig は実物を使用する
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock_list_workflows
+        mock_wr_mod.get_workflow = mock_get_workflow
+
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+        }):
+            _cmd_run_interactive = _main_mod._cmd_run_interactive
+            _cmd_run_interactive()
+
+        return captured_config.get("cfg")
+
+    def test_interactive_code_review_sets_config(self) -> None:
+        """auto_coding_agent_review=True が SDKConfig に反映される。"""
+        cfg = self._run_interactive_with_inputs(code_review=True)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_coding_agent_review)
+
+    def test_interactive_auto_approval_sets_config(self) -> None:
+        """auto_approval=True が SDKConfig に反映される。"""
+        cfg = self._run_interactive_with_inputs(code_review=True, auto_approval=True)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_coding_agent_review_auto_approval)
+
+    def test_interactive_no_review_no_approval_prompt(self) -> None:
+        """code_review=False の場合、auto_approval は False のまま。"""
+        cfg = self._run_interactive_with_inputs(code_review=False)
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.auto_coding_agent_review)
+        self.assertFalse(cfg.auto_coding_agent_review_auto_approval)
+
+    def test_interactive_code_review_without_create_pr(self) -> None:
+        """code_review=True でも create_pr=False なら create_pr は False のまま。"""
+        cfg = self._run_interactive_with_inputs(code_review=True, create_pr=False)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_coding_agent_review)
+        self.assertFalse(cfg.create_pr)
+
+    def test_interactive_review_timeout_reflected(self) -> None:
+        """review_timeout のカスタム値が SDKConfig に反映される。"""
+        cfg = self._run_interactive_with_inputs(code_review=True, review_timeout="600")
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.review_timeout_seconds, 600.0)
+
+    def test_interactive_review_timeout_invalid_fallback(self) -> None:
+        """review_timeout に非数値を入力した場合、デフォルト 900.0 にフォールバック。"""
+        cfg = self._run_interactive_with_inputs(code_review=True, review_timeout="abc")
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.review_timeout_seconds, 900.0)
 
 
 class TestInteractiveMode(unittest.TestCase):

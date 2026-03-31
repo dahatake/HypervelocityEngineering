@@ -3,7 +3,7 @@
 ユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/domain-analytics.md を作成する。
 
 ## 前提条件
-- `docs/app-list.md` が存在すること（Auto App Selection Workflow の成果物）
+- `docs/app-list.md` が存在すること（App Selection の成果物）
 
 ## 入力
 - `docs/usecase-list.md`

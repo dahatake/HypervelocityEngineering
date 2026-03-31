@@ -44,6 +44,16 @@
     # Issue タイトル指定
     python -m hve orchestrate --workflow aad \\
       --create-issues --issue-title "Sprint 42: AAD 全ステップ実行"
+
+    # QA 要求分類（全ファイル）
+    python -m hve orchestrate --workflow aqrc --scope all
+
+    # QA 要求分類（指定ファイルのみ）
+    python -m hve orchestrate --workflow aqrc --scope specified \\
+      --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
+
+    # QA 要求分類（既存 status.md を完全再生成）
+    python -m hve orchestrate --workflow aqrc --scope all --force-refresh
 """
 
 from __future__ import annotations
@@ -93,7 +103,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workflow", "-w",
         required=True,
         metavar="WORKFLOW_ID",
-        help="ワークフロー ID: aas / aad / asdw / abd / abdv / aid",
+        help="ワークフロー ID: aas / aad / asdw / abd / abdv / aid / aqrc",
     )
 
     # モデル
@@ -131,9 +141,9 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help=(
-            "GitHub Copilot Code Review Agent によるレビューを有効化 (デフォルト: 無効)。"
-            "⚠️ 前提条件: --repo と GH_TOKEN 環境変数が必須。"
-            "Issue・Branch・PR が自動的に作成されます。"
+            "Copilot CLI SDK でローカルにコードレビューを実行する (デフォルト: 無効)。"
+            "git diff を使用して差分を取得し、ローカルセッションでレビューする。"
+            "GH_TOKEN / --repo は不要。"
         ),
     )
     orch.add_argument(
@@ -279,6 +289,27 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="UC_ID",
         help="ユースケース ID (ASDW 等で使用)",
+    )
+
+    # AQRC 固有パラメータ
+    orch.add_argument(
+        "--scope",
+        choices=["all", "specified"],
+        default=None,
+        help="AQRC: 分類対象スコープ (all=全ファイル, specified=指定ファイルのみ)",
+    )
+    orch.add_argument(
+        "--target-files",
+        nargs="+",
+        default=None,
+        metavar="FILE",
+        help="AQRC: 対象ファイルパス (--scope specified 時に使用)",
+    )
+    orch.add_argument(
+        "--force-refresh",
+        action="store_true",
+        default=False,
+        help="AQRC: 既存 status.md を完全に再生成する",
     )
 
     # repo / token
@@ -430,6 +461,13 @@ def _build_params(args: argparse.Namespace) -> dict:
     if args.usecase_id:
         params["usecase_id"] = args.usecase_id
 
+    # AQRC 固有パラメータ
+    if getattr(args, "scope", None):
+        params["scope"] = args.scope
+    if getattr(args, "target_files", None):
+        params["target_files"] = " ".join(args.target_files)
+    params["force_refresh"] = getattr(args, "force_refresh", False)
+
     # Issue タイトル上書き
     if args.issue_title:
         params["issue_title"] = args.issue_title
@@ -468,28 +506,10 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
             args.auto_coding_agent_review_auto_approval = False
         return True
 
-    errors: List[str] = []
-    if not config.repo:
-        errors.append("  --repo（または REPO 環境変数）が必要です。")
-    if not config.resolve_token():
-        errors.append("  GH_TOKEN（または GITHUB_TOKEN）環境変数が必要です。")
-
-    if errors:
-        print(
-            f"{_ts()} ❌ --auto-coding-agent-review の前提条件が満たされていません:\n"
-            + "\n".join(errors)
-            + "\n\n"
-            "注意: Code Review Agent は GitHub.com 上の PR に対してレビューを行う機能です。\n"
-            "      このオプションを使用すると、Issue・Branch・PR が自動的に作成されます。",
-            file=sys.stderr,
-        )
-        return False
-
     if not args.quiet:
         print(
             f"{_ts()} ℹ️  --auto-coding-agent-review が有効です。\n"
-            "   全ステップ完了後に Issue・Branch・PR が暗黙的に作成され、\n"
-            "   Code Review Agent にレビューが依頼されます。",
+            "   Code Review Agent はローカルの GitHub Copilot CLI SDK で実行されます。",
             file=sys.stderr,
         )
     return True
@@ -568,6 +588,25 @@ def _cmd_run_interactive() -> int:
     create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
     create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
 
+    # ── Code Review Agent ─────────────────────────────
+    auto_coding_agent_review = con.prompt_yes_no(
+        "GitHub Copilot Code Review Agent（ローカル実行）を有効にする？", default=False
+    )
+    auto_coding_agent_review_auto_approval = False
+    review_timeout = 900.0
+    if auto_coding_agent_review:
+        auto_coding_agent_review_auto_approval = con.prompt_yes_no(
+            "Code Review Agent の修正提案を自動承認する？", default=False
+        )
+        review_timeout_str = con.prompt_input(
+            "Review タイムアウト（秒。デフォルト: 900 = 15分）", default="900"
+        )
+        try:
+            review_timeout = float(review_timeout_str or "900")
+        except ValueError:
+            con.warning("無効な値のため、デフォルトの 900 秒を使用します。")
+            review_timeout = 900.0
+
     # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
     repo_input = ""
     if create_issues or create_pr:
@@ -599,6 +638,14 @@ def _cmd_run_interactive() -> int:
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
         f"PR  作成     : {'ON' if create_pr else 'OFF'}",
+        f"Code Review  : {'ON' if auto_coding_agent_review else 'OFF'}",
+    ]
+    if auto_coding_agent_review:
+        summary_lines += [
+            f"自動承認     : {'ON' if auto_coding_agent_review_auto_approval else 'OFF'}",
+            f"タイムアウト : {review_timeout}s",
+        ]
+    summary_lines += [
         f"リポジトリ   : {repo_input or '(なし)'}",
         f"ドライラン   : {'ON' if dry_run else 'OFF'}",
     ]
@@ -628,6 +675,11 @@ def _cmd_run_interactive() -> int:
     cfg.log_level = log_level
     cfg.base_branch = branch
     cfg.dry_run = dry_run
+    cfg.auto_coding_agent_review = auto_coding_agent_review
+    cfg.auto_coding_agent_review_auto_approval = (
+        auto_coding_agent_review_auto_approval if auto_coding_agent_review else False
+    )
+    cfg.review_timeout_seconds = review_timeout
     cfg.additional_prompt = additional_prompt or None
     if repo_input:
         cfg.repo = repo_input
@@ -677,6 +729,9 @@ def _cmd_run_interactive() -> int:
     if result.get("error"):
         con.error(str(result["error"]))
         return 1
+    if result.get("code_review_error"):
+        con.error(f"Code Review Agent エラー: {result['code_review_error']}")
+        return 1
     if result.get("failed"):
         return 1
     con._print(f"\n  {s.GREEN}✓{s.RESET} ワークフロー完了\n")
@@ -695,16 +750,16 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         )
         args.auto_coding_agent_review_auto_approval = False
 
-    # --create-issues 指定時は必ず PR を作成する
-    if args.create_issues:
-        args.create_pr = True
-
-    # --auto-coding-agent-review には --create-pr が必須。未指定の場合は暗黙的に有効にする
-    if args.auto_coding_agent_review and not args.create_pr:
+    # バリデーション: aqrc の --scope specified には --target-files が必須
+    if args.workflow == "aqrc" and getattr(args, "scope", None) == "specified" and not getattr(args, "target_files", None):
         print(
-            f"{_ts()} ℹ️  --auto-coding-agent-review が指定されたため --create-pr を有効にします。",
+            f"{_ts()} ❌ --scope specified を指定した場合は --target-files でファイルパスを指定してください。",
             file=sys.stderr,
         )
+        return 1
+
+    # --create-issues 指定時は必ず PR を作成する
+    if args.create_issues:
         args.create_pr = True
 
     # インポート

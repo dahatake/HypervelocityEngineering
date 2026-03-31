@@ -1,13 +1,13 @@
-name: "Auto IoT Design Workflow"
+name: "IoT Design"
 description: "Issue から IoT/Physical AI 組み込みアプリケーション設計ワークフロー (Step.1〜5) を自動起動します"
-title: "[Auto IoT Design] 設計ドキュメントの作成"
+title: "[IoT Design] 設計ドキュメントの作成"
 labels:
   - "auto-iot-design"
 body:
   - type: markdown
     attributes:
       value: |
-        ## Auto IoT Design Workflow
+        ## IoT Design
         このフォームから Issue を作成すると、自動で Step.1〜Step.5 の IoT 設計タスクが
         Sub-issue として生成され、Copilot が順次実行します。
 

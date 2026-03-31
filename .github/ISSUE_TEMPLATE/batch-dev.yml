@@ -1,13 +1,13 @@
-name: "Auto Batch Dev Workflow"
+name: "Batch Dev"
 description: "Issue から汎用バッチ処理実装ワークフロー (Step.1〜4) を自動起動します"
-title: "[Auto Batch Dev] "
+title: "[Batch Dev] "
 labels:
   - "auto-batch-dev"
 body:
   - type: markdown
     attributes:
       value: |
-        ## Auto Batch Dev Workflow
+        ## Batch Dev
         このフォームから Issue を作成すると、自動で以下の実装タスクが
         Sub-issue として生成され、Copilot coding agent が順次実行します。
 

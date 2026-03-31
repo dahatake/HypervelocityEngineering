@@ -1,13 +1,13 @@
-name: "Auto Batch Design Workflow"
+name: "Batch Design"
 description: "Issue からバッチ設計ワークフロー (Step.1〜6.3) を自動起動します"
-title: "[Auto Batch Design] "
+title: "[Batch Design] "
 labels:
   - "auto-batch-design"
 body:
   - type: markdown
     attributes:
       value: |
-        ## Auto Batch Design Workflow
+        ## Batch Design
         このフォームから Issue を作成すると、自動で Step.1〜Step.6.3 の設計タスクが
         Sub-issue として生成され、Copilot coding agent が順次実行します。
 

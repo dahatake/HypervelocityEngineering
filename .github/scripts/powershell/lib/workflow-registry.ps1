@@ -48,10 +48,10 @@ function script:NewWorkflowStep {
 
 $script:WorkflowRegistryData = @{}
 
-# AAS — Auto App Selection (2 steps)
+# AAS — App Selection (2 steps)
 $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     id            = 'aas'
-    name          = 'Auto App Selection'
+    name          = 'App Selection'
     label_prefix  = 'aas'
     state_labels  = [PSCustomObject]@{
         initialized = 'aas:initialized'
@@ -67,10 +67,10 @@ $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     )
 }
 
-# AAD — Auto App Design (16 steps)
+# AAD — App Design (16 steps)
 $script:WorkflowRegistryData['aad'] = [PSCustomObject]@{
     id            = 'aad'
-    name          = 'Auto App Design'
+    name          = 'App Design'
     label_prefix  = 'aad'
     state_labels  = [PSCustomObject]@{
         initialized = 'aad:initialized'
@@ -100,10 +100,10 @@ $script:WorkflowRegistryData['aad'] = [PSCustomObject]@{
     )
 }
 
-# ASDW — Auto App Dev Microservice Azure (24 steps)
+# ASDW — App Dev Microservice Azure (24 steps)
 $script:WorkflowRegistryData['asdw'] = [PSCustomObject]@{
     id            = 'asdw'
-    name          = 'Auto App Dev Microservice Azure'
+    name          = 'App Dev Microservice Azure'
     label_prefix  = 'asdw'
     state_labels  = [PSCustomObject]@{
         initialized = 'asdw:initialized'
@@ -141,10 +141,10 @@ $script:WorkflowRegistryData['asdw'] = [PSCustomObject]@{
     )
 }
 
-# ABD — Auto Batch Design (9 steps)
+# ABD — Batch Design (9 steps)
 $script:WorkflowRegistryData['abd'] = [PSCustomObject]@{
     id            = 'abd'
-    name          = 'Auto Batch Design'
+    name          = 'Batch Design'
     label_prefix  = 'abd'
     state_labels  = [PSCustomObject]@{
         initialized = 'abd:initialized'
@@ -167,10 +167,10 @@ $script:WorkflowRegistryData['abd'] = [PSCustomObject]@{
     )
 }
 
-# ABDV — Auto Batch Dev (7 steps)
+# ABDV — Batch Dev (7 steps)
 $script:WorkflowRegistryData['abdv'] = [PSCustomObject]@{
     id            = 'abdv'
-    name          = 'Auto Batch Dev'
+    name          = 'Batch Dev'
     label_prefix  = 'abdv'
     state_labels  = [PSCustomObject]@{
         initialized = 'abdv:initialized'
@@ -191,10 +191,10 @@ $script:WorkflowRegistryData['abdv'] = [PSCustomObject]@{
     )
 }
 
-# AID — Auto IoT Design (10 steps)
+# AID — IoT Design (10 steps)
 $script:WorkflowRegistryData['aid'] = [PSCustomObject]@{
     id            = 'aid'
-    name          = 'Auto IoT Design'
+    name          = 'IoT Design'
     label_prefix  = 'aid'
     state_labels  = [PSCustomObject]@{
         initialized = 'aid:initialized'

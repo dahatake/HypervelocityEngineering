@@ -1,6 +1,6 @@
-# SDK ユーザーガイド（Copilot SDK版ワークフローオーケストレーション）
+# GitHub Copilot CLI SDK ユーザーガイド（GitHub Copilot CLI SDK 版ワークフローオーケストレーション）
 
-← [Users Guide](./README.md)
+← [README](../README.md)
 
 ---
 
@@ -28,7 +28,7 @@
 
 > **注意**: `hve/` はこのリポジトリに含まれるローカルパッケージです。`python -m hve` はリポジトリルートをカレントディレクトリとして実行してください。
 
-本ガイドは **SDK 版（ローカル実行方式）** に特化しています。Web UI 方式との比較や全体の利用ガイドについては [README.md](./README.md#2つの利用方法) を参照してください。
+本ガイドは **GitHub Copilot CLI SDK 版（ローカル実行方式）** に特化しています。Web UI 方式との比較や全体の利用ガイドについては [README.md](../README.md#2-つの実行方法) を参照してください。
 
 ### ポイント
 
@@ -256,12 +256,13 @@ wizard は以下の 8 段階で進行します。
 
 ```text
 ? ワークフローを選択してください
-  1) Auto App Selection (aas — 2 steps)
-  2) Auto App Design (aad — 16 steps)
-  3) Auto App Dev Azure Web (asdw — 24 steps)
-  4) Auto Batch Design (abd — 9 steps)
-  5) Auto Batch Dev (abdv — 7 steps)
-  6) Auto IoT Design (aid — 10 steps)
+  1) App Selection (aas — 2 steps)
+  2) App Design (aad — 16 steps)
+  3) App Dev Microservice Azure (asdw — 24 steps)
+  4) Batch Design (abd — 9 steps)
+  5) Batch Dev (abdv — 7 steps)
+  6) IoT Design (aid — 10 steps)
+  7) QA Requirement Classification (aqrc — 1 step)
 > 2
 ```
 
@@ -342,6 +343,7 @@ wizard は以下の 8 段階で進行します。
 固有パラメータを持つワークフロー:
 - `asdw`: `app_id`, `resource_group`, `usecase_id`
 - `abdv`: `resource_group`, `batch_job_id`
+- `aqrc`: `scope`, `target_files`（scope=specified 時）, `force_refresh`
 
 > 固有パラメータのないワークフロー（`aas`, `aad`, `abd`, `aid`）ではこのステップはスキップされます。
 
@@ -357,7 +359,7 @@ wizard は以下の 8 段階で進行します。
 
 ```text
 ┌─ 実行設定 ────────────────────────────────────────┐
-│  ワークフロー : Auto App Design (aad)              │
+│  ワークフロー : App Design (aad)                   │
 │  ステップ     : 全ステップ                          │
 │  モデル       : claude-opus-4.6                    │
 │  ブランチ     : main                               │
@@ -560,6 +562,9 @@ python -m hve orchestrate \
 | `--resource-group` | Azure リソースグループ名（例: `rg-dev`） | `asdw`, `abdv` |
 | `--usecase-id` | ユースケース ID（例: `UC-01`） | `asdw` |
 | `--batch-job-id` | バッチジョブ ID（カンマ区切り可。例: `JOB-01,JOB-02`） | `abdv` |
+| `--scope` | 分類対象スコープ (`all` / `specified`、省略時は `all`) | `aqrc` |
+| `--target-files` | 対象ファイルパス（スペース区切り） | `aqrc` |
+| `--force-refresh` | 既存 status.md を完全に再生成 | `aqrc` |
 
 ### 使い方の例
 
@@ -631,12 +636,13 @@ python -m hve orchestrate \
 | バッチ設計 | `abd` | `python -m hve orchestrate --workflow abd` |
 | バッチ実装 | `abdv` | `python -m hve orchestrate --workflow abdv --resource-group rg-batch --batch-job-id JOB-01` |
 | IoT 設計 | `aid` | `python -m hve orchestrate --workflow aid` |
+| QA 要求分類 | `aqrc` | `python -m hve orchestrate --workflow aqrc --scope all` |
 
 > **ヒント**: インタラクティブモード（`python -m hve`）では、上記のワークフローが番号付きメニューとして表示されます。ワークフロー固有のオプション（`--app-id` 等）も wizard 内で自動的にプロンプトされるため、コマンドを暗記する必要はありません。
 
 ### 各ワークフローの詳細
 
-#### aas — Auto App Selection（アプリケーション選定）
+#### aas — App Selection（アプリケーション選定）
 
 | 項目 | 内容 |
 |------|------|
@@ -645,7 +651,7 @@ python -m hve orchestrate \
 | **ステップ数** | 2 |
 | **固有オプション** | なし |
 
-#### aad — Auto App Design（アプリケーション設計）
+#### aad — App Design（アプリケーション設計）
 
 | 項目 | 内容 |
 |------|------|
@@ -654,7 +660,7 @@ python -m hve orchestrate \
 | **ステップ数** | 16 |
 | **固有オプション** | なし |
 
-#### asdw — Auto App Dev Azure Web（Azure Web アプリ実装）
+#### asdw — App Dev Microservice Azure（Azure Web アプリ実装）
 
 | 項目 | 内容 |
 |------|------|
@@ -663,7 +669,7 @@ python -m hve orchestrate \
 | **ステップ数** | 24 |
 | **固有オプション** | `--app-id`（必須）, `--resource-group`（必須）, `--usecase-id`（必須） |
 
-#### abd — Auto Batch Design（バッチ設計）
+#### abd — Batch Design（バッチ設計）
 
 | 項目 | 内容 |
 |------|------|
@@ -672,7 +678,7 @@ python -m hve orchestrate \
 | **ステップ数** | 9 |
 | **固有オプション** | なし |
 
-#### abdv — Auto Batch Dev（バッチ実装）
+#### abdv — Batch Dev（バッチ実装）
 
 | 項目 | 内容 |
 |------|------|
@@ -681,7 +687,7 @@ python -m hve orchestrate \
 | **ステップ数** | 7 |
 | **固有オプション** | `--resource-group`（必須）, `--batch-job-id`（必須、カンマ区切り可） |
 
-#### aid — Auto IoT Design（IoT 設計）
+#### aid — IoT Design（IoT 設計）
 
 | 項目 | 内容 |
 |------|------|
@@ -689,6 +695,31 @@ python -m hve orchestrate \
 | **前提条件** | `aas` ワークフローによるアプリ選定が完了していること |
 | **ステップ数** | 10 |
 | **固有オプション** | なし |
+
+#### aqrc — QA Requirement Classification（QA 要求分類）
+
+| 項目 | 内容 |
+|------|------|
+| **目的** | `qa/` の質問ファイルを D01〜D21 に分類し、`work/business-requirement-document-status.md` を生成・更新 |
+| **前提条件** | `qa/` 配下に `.md` ファイルが存在し、`docs/business-requirement-document-master-list.md` が存在すること |
+| **ステップ数** | 1（Agent 内部で 8 ステップを順次処理） |
+| **固有オプション** | `--scope`（省略時は `all`）, `--target-files`（scope=specified 時は必須）, `--force-refresh` |
+
+**実行例:**
+
+```bash
+# 全ファイル分類
+python -m hve orchestrate --workflow aqrc --scope all
+
+# 指定ファイルのみ分類
+python -m hve orchestrate --workflow aqrc --scope specified \
+  --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
+
+# 既存 status.md を完全再生成
+python -m hve orchestrate --workflow aqrc --scope all --force-refresh
+```
+
+> **`work/` フォルダーの扱い**: AQRC の成果物は `work/business-requirement-document-status.md` に出力されます。`--create-pr` を使用する場合、デフォルトの `ignore_paths` に `work` が含まれているため、`--ignore-paths` オプションで `work` を除外リストから外す必要があります。
 
 ---
 
@@ -935,7 +966,7 @@ ANSI エスケープシーケンスに対応していないターミナルでは
 
 | リソース | URL |
 |---------|-----|
-| 利用ガイド（README） | [users-guide/README.md](./README.md) |
+| 利用ガイド（README） | [README.md](../README.md) |
 | GitHub Copilot SDK（リポジトリ） | https://github.com/github/copilot-sdk |
 | SDK Getting Started | https://github.com/github/copilot-sdk/blob/main/docs/getting-started.md |
 | Custom Agents ドキュメント | https://github.com/github/copilot-sdk/blob/main/docs/features/custom-agents.md |

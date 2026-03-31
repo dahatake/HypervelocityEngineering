@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-6 つのオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AID) のステップ DAG
+7 つのオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AID/AQRC) のステップ DAG
 定義をデータとして保持する。状態遷移ロジックはデータドリブンに実装する。
 
 依存パターン:
@@ -58,7 +58,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aid"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -162,10 +162,10 @@ def _make_state_labels(prefix: str) -> Dict[str, str]:
 # ワークフロー定義
 # ---------------------------------------------------------------------------
 
-# --- AAS: Auto App Selection ---
+# --- AAS: App Selection ---
 AAS = WorkflowDef(
     id="aas",
-    name="Auto App Selection",
+    name="App Selection",
     label_prefix="aas",
     state_labels=_make_state_labels("aas"),
     params=[],
@@ -175,10 +175,10 @@ AAS = WorkflowDef(
     ],
 )
 
-# --- AAD: Auto App Design ---
+# --- AAD: App Design ---
 AAD = WorkflowDef(
     id="aad",
-    name="Auto App Design",
+    name="App Design",
     label_prefix="aad",
     state_labels=_make_state_labels("aad"),
     params=[],
@@ -204,10 +204,10 @@ AAD = WorkflowDef(
     ],
 )
 
-# --- ASDW: Auto App Dev Microservice Azure ---
+# --- ASDW: App Dev Microservice Azure ---
 ASDW = WorkflowDef(
     id="asdw",
-    name="Auto App Dev Microservice Azure",
+    name="App Dev Microservice Azure",
     label_prefix="asdw",
     state_labels=_make_state_labels("asdw"),
     params=["app_id", "resource_group", "usecase_id"],
@@ -241,10 +241,10 @@ ASDW = WorkflowDef(
     ],
 )
 
-# --- ABD: Auto Batch Design ---
+# --- ABD: Batch Design ---
 ABD = WorkflowDef(
     id="abd",
-    name="Auto Batch Design",
+    name="Batch Design",
     label_prefix="abd",
     state_labels=_make_state_labels("abd"),
     params=[],
@@ -261,10 +261,10 @@ ABD = WorkflowDef(
     ],
 )
 
-# --- ABDV: Auto Batch Dev ---
+# --- ABDV: Batch Dev ---
 ABDV = WorkflowDef(
     id="abdv",
-    name="Auto Batch Dev",
+    name="Batch Dev",
     label_prefix="abdv",
     state_labels=_make_state_labels("abdv"),
     params=["resource_group", "batch_job_id"],
@@ -279,10 +279,10 @@ ABDV = WorkflowDef(
     ],
 )
 
-# --- AID: Auto IoT Design ---
+# --- AID: IoT Design ---
 AID = WorkflowDef(
     id="aid",
-    name="Auto IoT Design",
+    name="IoT Design",
     label_prefix="aid",
     state_labels=_make_state_labels("aid"),
     params=[],
@@ -303,12 +303,31 @@ AID = WorkflowDef(
 )
 
 
+# --- AQRC: QA Requirement Classification ---
+AQRC = WorkflowDef(
+    id="aqrc",
+    name="QA Requirement Classification",
+    label_prefix="aqrc",
+    state_labels=_make_state_labels("aqrc"),
+    params=["scope", "target_files", "force_refresh"],
+    steps=[
+        StepDef(
+            id="1",
+            title="QA 分類・ステータス更新",
+            custom_agent="QA-RequirementClassifier",
+            depends_on=[],
+            body_template_path="templates/aqrc/step-1.md",
+        ),
+    ],
+)
+
+
 # ---------------------------------------------------------------------------
 # レジストリ
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AID]
+    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AID, AQRC]
 }
 
 

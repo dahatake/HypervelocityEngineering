@@ -167,12 +167,12 @@ cd .github/scripts/powershell
 
 | ID | 名称 | ステップ数 |
 |----|------|-----------|
-| `aas` | Auto App Selection | 2 |
-| `aad` | Auto App Design | 16 |
-| `asdw` | Auto App Dev (Microservice Azure) | 24 |
-| `abd` | Auto Batch Design | 9 |
-| `abdv` | Auto Batch Dev | 7 |
-| `aid` | Auto IoT Design | 10 |
+| `aas` | App Selection | 2 |
+| `aad` | App Design | 16 |
+| `asdw` | App Dev (Microservice Azure) | 24 |
+| `abd` | Batch Design | 9 |
+| `abdv` | Batch Dev | 7 |
+| `aid` | IoT Design | 10 |
 
 ## テスト実行
 

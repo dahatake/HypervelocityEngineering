@@ -74,3 +74,6 @@ bin/
 obj/
 # AI Agent deploy — generated files
 infra/azure/create-azure-agent-resources/agent-ids.env
+
+# ECC plugin junction (machine-local)
+.claude/plugins/

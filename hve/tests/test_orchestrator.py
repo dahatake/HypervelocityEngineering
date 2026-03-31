@@ -6,6 +6,7 @@ import asyncio
 import os
 import sys
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -101,7 +102,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "aid"]
+        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
@@ -399,93 +400,301 @@ class TestCopilotUsernames(unittest.TestCase):
                 self.assertIn(name, _COPILOT_USERNAMES)
 
 
-class TestRequestCodeReviewFallback(unittest.TestCase):
-    """`_request_code_review()` のレビュアーリクエスト・フォールバック動作テスト。"""
+class TestGetGitDiff(unittest.TestCase):
+    """`_get_git_diff()` のテスト。"""
+
+    def _make_console(self):
+        from console import Console
+        return Console(quiet=True)
+
+    def test_returns_empty_string_when_no_diff(self) -> None:
+        """差分なしの場合に空文字を返すことを確認。"""
+        from orchestrator import _get_git_diff
+        console = self._make_console()
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = _get_git_diff("HEAD~1", console)
+
+        self.assertEqual(result, "")
+
+    def test_returns_diff_text(self) -> None:
+        """差分がある場合に差分テキストを返すことを確認。"""
+        from orchestrator import _get_git_diff
+        console = self._make_console()
+
+        diff_text = "diff --git a/foo.py b/foo.py\n+new line"
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = diff_text
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = _get_git_diff("HEAD~1", console)
+
+        self.assertEqual(result, diff_text)
+
+    def test_trims_diff_at_80000_chars(self) -> None:
+        """差分が 80,000 文字超の場合にトリミングすることを確認。"""
+        from orchestrator import _get_git_diff, _MAX_DIFF_CHARS
+        console = self._make_console()
+
+        long_diff = "x" * 90_000
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = long_diff
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = _get_git_diff("HEAD~1", console)
+
+        _truncation_suffix = "\n... (truncated)"
+        self.assertEqual(len(result), _MAX_DIFF_CHARS + len(_truncation_suffix))
+        self.assertTrue(result.endswith("... (truncated)"))
+
+    def test_returns_empty_on_nonzero_returncode(self) -> None:
+        """git diff が失敗した場合に空文字を返すことを確認。"""
+        from orchestrator import _get_git_diff
+        console = self._make_console()
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 128
+        mock_result.stdout = ""
+        mock_result.stderr = "fatal: bad revision"
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = _get_git_diff("HEAD~1", console)
+
+        self.assertEqual(result, "")
+
+    def test_returns_empty_on_timeout(self) -> None:
+        """git diff がタイムアウトした場合に空文字を返すことを確認。"""
+        from orchestrator import _get_git_diff
+        import subprocess
+        console = self._make_console()
+
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("git", 30)):
+            result = _get_git_diff("HEAD~1", console)
+
+        self.assertEqual(result, "")
+
+    def test_returns_empty_when_git_not_found(self) -> None:
+        """git コマンドが見つからない場合に空文字を返すことを確認。"""
+        from orchestrator import _get_git_diff
+        console = self._make_console()
+
+        with patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
+            result = _get_git_diff("HEAD~1", console)
+
+        self.assertEqual(result, "")
+
+
+class TestRequestCodeReviewSDK(unittest.TestCase):
+    """`_request_code_review()` の新 SDK ローカル実行テスト。"""
 
     def _make_config(self, **kwargs) -> SDKConfig:
-        cfg = SDKConfig(
-            quiet=True,
-            github_token="ghp_test",
-            repo="owner/repo",
-            **kwargs,
-        )
+        cfg = SDKConfig(quiet=True, **kwargs)
         return cfg
 
-    def test_returns_error_when_all_candidates_fail(self) -> None:
-        """全ての reviewer 候補が失敗した場合、エラーメッセージを返すことを確認。"""
+    def test_skips_when_no_diff(self) -> None:
+        """差分なしの場合に None を返してスキップすることを確認。"""
         from orchestrator import _request_code_review
         from console import Console
 
         config = self._make_config()
         console = Console(quiet=True)
 
-        import importlib
-        orchestrator_mod = importlib.import_module("orchestrator")
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
 
-        with patch.object(orchestrator_mod, "api_call", side_effect=Exception("422 Unprocessable")):
-            result = _run(_request_code_review(pr_number=1, config=config, console=console))
+        with patch("subprocess.run", return_value=mock_result):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
 
-        self.assertIsInstance(result, str)
-        self.assertIn("失敗", result)
-
-    def test_console_error_called_when_all_candidates_fail(self) -> None:
-        """全ての reviewer 候補が失敗した場合、console.error() が呼ばれ例外メッセージが含まれることを確認。"""
-        from orchestrator import _request_code_review
-        from console import Console
-
-        config = self._make_config()
-        console = Console(quiet=True)
-
-        import importlib
-        orchestrator_mod = importlib.import_module("orchestrator")
-
-        with patch.object(orchestrator_mod, "api_call", side_effect=Exception("422 Unprocessable")):
-            with patch.object(console, "error") as mock_error:
-                _run(_request_code_review(pr_number=1, config=config, console=console))
-
-        mock_error.assert_called_once()
-        error_message = mock_error.call_args[0][0]
-        self.assertIn("失敗", error_message)
-        self.assertIn("422 Unprocessable", error_message)
-
-    def test_succeeds_with_first_candidate(self) -> None:
-        """最初の reviewer 候補が成功した場合、None を返すことを確認。"""
-        from orchestrator import _request_code_review
-        from console import Console
-
-        config = self._make_config()
-        console = Console(quiet=True)
-
-        import importlib
-        orchestrator_mod = importlib.import_module("orchestrator")
-
-        call_count = {"n": 0}
-
-        def fake_api_call(method, url, **kwargs):
-            call_count["n"] += 1
-            if method == "POST" and "requested_reviewers" in url:
-                # 最初の候補（copilot-pull-request-reviewer[bot]）で成功
-                return {"message": "ok"}
-            if method == "GET" and "/reviews/42" in url:
-                return {"body": "LGTM"}
-            if method == "GET" and "reviews" in url:
-                # ポーリング: すぐにレビュー完了を返す
-                return [{"state": "COMMENTED", "user": {"login": "copilot-pull-request-reviewer[bot]"}, "id": 42}]
-            if method == "GET" and "comments" in url:
-                return []
-            return {}
-
-        with patch.object(orchestrator_mod, "api_call", side_effect=fake_api_call), \
-             patch("asyncio.sleep", return_value=None):
-            result = _run(_request_code_review(pr_number=1, config=config, console=console))
-
-        # 成功時は None（エラーなし）または適切なフローで処理が完了する
-        # auto_approval=False かつ非TTY環境なので修正はスキップされる
         self.assertIsNone(result)
 
+    def test_returns_error_on_import_error(self) -> None:
+        """SDK が未インストールの場合にエラーメッセージを返すことを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
 
-class TestNewCreateIssuesFlow(unittest.TestCase):
-    """--create-issues 新フロー（ブランチ作成 + PR 作成統一）のテスト。"""
+        config = self._make_config()
+        console = Console(quiet=True)
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "diff --git a/foo.py b/foo.py\n+new line"
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result), \
+             patch.dict("sys.modules", {"copilot": None}):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        self.assertIsInstance(result, str)
+        self.assertIn("GitHub Copilot SDK", result)
+
+    def test_no_fix_when_pass(self) -> None:
+        """PASS 判定時は修正プロンプトを送信しないことを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
+
+        config = self._make_config()
+        console = Console(quiet=True)
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "diff --git a/foo.py b/foo.py\n+new line"
+        mock_result.stderr = ""
+
+        # PASS レビュー応答（合格判定: ✅ PASS）
+        pass_response = unittest.mock.MagicMock()
+        pass_data = unittest.mock.MagicMock()
+        pass_data.content = "### サマリー\n- Critical: 0件\n- 合格判定: ✅ PASS"
+        pass_response.data = pass_data
+
+        mock_session = unittest.mock.AsyncMock()
+        mock_session.send_and_wait = unittest.mock.AsyncMock(return_value=pass_response)
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.create_session = unittest.mock.AsyncMock(return_value=mock_session)
+
+        mock_copilot = unittest.mock.MagicMock()
+        mock_copilot.CopilotClient.return_value = mock_client
+        mock_copilot.PermissionHandler = unittest.mock.MagicMock()
+        mock_copilot.SubprocessConfig = unittest.mock.MagicMock()
+        mock_copilot.ExternalServerConfig = unittest.mock.MagicMock()
+
+        with patch("subprocess.run", return_value=mock_result), \
+             patch.dict("sys.modules", {"copilot": mock_copilot}):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        self.assertIsNone(result)
+        # PASS なので send_and_wait は 1 回だけ（レビュー用のみ）
+        self.assertEqual(mock_session.send_and_wait.call_count, 1)
+
+    def test_auto_approval_sends_fix_prompt_on_fail(self) -> None:
+        """FAIL + auto_approval=True の場合、修正プロンプトを自動送信することを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
+
+        config = self._make_config(auto_coding_agent_review_auto_approval=True)
+        console = Console(quiet=True)
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "diff --git a/foo.py b/foo.py\n+new line"
+        mock_result.stderr = ""
+
+        # FAIL レビュー応答
+        fail_response = unittest.mock.MagicMock()
+        fail_data = unittest.mock.MagicMock()
+        fail_data.content = "### サマリー\n- Critical: 1件\n- 合格判定: ❌ FAIL"
+        fail_response.data = fail_data
+
+        fix_response = unittest.mock.MagicMock()
+        fix_data = unittest.mock.MagicMock()
+        fix_data.content = "修正しました。"
+        fix_response.data = fix_data
+
+        mock_session = unittest.mock.AsyncMock()
+        mock_session.send_and_wait = unittest.mock.AsyncMock(
+            side_effect=[fail_response, fix_response]
+        )
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.create_session = unittest.mock.AsyncMock(return_value=mock_session)
+
+        mock_copilot = unittest.mock.MagicMock()
+        mock_copilot.CopilotClient.return_value = mock_client
+        mock_copilot.PermissionHandler = unittest.mock.MagicMock()
+        mock_copilot.SubprocessConfig = unittest.mock.MagicMock()
+        mock_copilot.ExternalServerConfig = unittest.mock.MagicMock()
+
+        with patch("subprocess.run", return_value=mock_result), \
+             patch.dict("sys.modules", {"copilot": mock_copilot}):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        self.assertIsNone(result)
+        # FAIL なので send_and_wait は 2 回（レビュー + 修正）
+        self.assertEqual(mock_session.send_and_wait.call_count, 2)
+
+    def test_works_without_gh_token_and_repo(self) -> None:
+        """GH_TOKEN / repo が未設定でも正常動作することを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
+
+        # GH_TOKEN も repo も未設定
+        config = self._make_config(github_token="", repo="")
+        console = Console(quiet=True)
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""  # 差分なし → スキップ
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        # 差分なしでスキップ → None を返す（エラーにならない）
+        self.assertIsNone(result)
+
+    def test_pr_number_is_optional(self) -> None:
+        """pr_number が None でも正常動作することを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
+
+        config = self._make_config()
+        console = Console(quiet=True)
+
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_result):
+            # pr_number=None でもエラーにならない
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        self.assertIsNone(result)
+    def test_returns_error_string_on_session_exception(self) -> None:
+        """create_session() が例外を投げた場合、Optional[str] エラーメッセージを返すことを確認。"""
+        from orchestrator import _request_code_review
+        from console import Console
+
+        config = self._make_config()
+        console = Console(quiet=True)
+
+        mock_client = unittest.mock.AsyncMock()
+        mock_client.create_session = unittest.mock.AsyncMock(
+            side_effect=RuntimeError("connection refused")
+        )
+
+        mock_copilot = unittest.mock.MagicMock()
+        mock_copilot.CopilotClient.return_value = mock_client
+        mock_copilot.PermissionHandler = unittest.mock.MagicMock()
+        mock_copilot.SubprocessConfig = unittest.mock.MagicMock()
+        mock_copilot.ExternalServerConfig = unittest.mock.MagicMock()
+
+        mock_git_result = unittest.mock.MagicMock()
+        mock_git_result.returncode = 0
+        mock_git_result.stdout = "diff --git a/foo.py b/foo.py\n+new"
+        mock_git_result.stderr = ""
+
+        with patch("subprocess.run", return_value=mock_git_result), \
+             patch.dict("sys.modules", {"copilot": mock_copilot}):
+            result = _run(_request_code_review(pr_number=None, config=config, console=console))
+
+        # 例外は呼び出し元に伝播せず、エラーメッセージ文字列として返される
+        self.assertIsInstance(result, str)
+        self.assertIn("エラー", result)
+
+
+
 
     def test_dry_run_create_issues_shows_new_flow(self) -> None:
         """dry_run=True + create_issues=True で新フロー表示がエラーなく動作することを確認。"""

@@ -2,7 +2,7 @@ name: ABDV Orchestrator
 
 # auto-batch-dev ラベル付き Issue の opened/labeled/closed イベントで起動。
 #
-# ワークフロー概要（ABDV = Auto Batch Dev）:
+# ワークフロー概要（ABDV = Batch Dev）:
 #   Step.1.1 — データサービス選定          (Dev-Microservice-Azure-DataDesign)
 #   Step.1.2 — Azure リソース Deploy        (Dev-Microservice-Azure-DataDeploy)          ← Step.1.1 完了後
 #   Step.2.1 — TDD RED: テストコード作成   (Dev-Batch-TestCoding)              ← Step.1.2 完了後
@@ -442,7 +442,7 @@ jobs:
           fi
 
           # Step Issue に付与するラベルセット
-          # auto-batch-dev を付与することで Issue 一覧のラベル絞り込み検索が可能になる（ABD = Auto Batch Design と同パターン）
+          # auto-batch-dev を付与することで Issue 一覧のラベル絞り込み検索が可能になる（ABD = Batch Design と同パターン）
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS='["abdv:blocked","auto-batch-dev","auto-context-review","auto-qa"]'
           elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then

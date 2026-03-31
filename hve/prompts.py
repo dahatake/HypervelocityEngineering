@@ -83,6 +83,33 @@ ADVERSARIAL_RECHECK_PROMPT: str = """敵対的再レビュー（サイクル {cy
 再レビュー時も、Critical 指摘が残っている場合は必ずそれらをすべて修正し、その修正内容を反映したうえでサマリーと合格判定を更新してください。
 捏造は絶対に禁止です。"""
 
+# Copilot CLI Code Review Agent 起動プロンプト（{diff} に git diff テキストを埋め込む）
+CODE_REVIEW_CLI_PROMPT: str = """/review
+
+レビュー対象の差分は以下のとおりです:
+
+```diff
+{diff}
+```
+
+以下の観点でコードレビューを実施してください:
+1. バグ・論理エラー・セキュリティ脆弱性（Critical）
+2. パフォーマンス・保守性・テスト可能性（Major）
+3. コーディング規約・命名・コメント（Minor）
+
+各指摘に Critical / Major / Minor の重大度を以下のテーブル形式で出力してください:
+
+| No. | 重大度 | 指摘箇所 | 問題の説明 | 修正案 |
+|-----|--------|---------|-----------|--------|
+
+### サマリー
+- Critical: X件
+- Major: Y件
+- Minor: Z件
+- 合格判定: ✅ PASS または ❌ FAIL のどちらか一方のみを出力してください。（基準: Critical = 0 なら PASS、それ以外は FAIL）
+
+捏造は絶対に禁止です。"""
+
 # Code Review Agent レビュー結果への対応プロンプト（{review_comments} に埋め込む）
 CODE_REVIEW_AGENT_FIX_PROMPT: str = """GitHub Copilot Code Review Agent から以下のレビューコメントが返されました:
 

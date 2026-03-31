@@ -34,12 +34,12 @@ _TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
 # ---------------------------------------------------------------------------
 
 declare -A _WORKFLOW_DISPLAY_NAMES=(
-  [aas]="Auto App Selection"
-  [aad]="Auto App Design"
-  [asdw]="Auto App Dev Microservice Azure"
-  [abd]="Auto Batch Design"
-  [abdv]="Auto Batch Dev"
-  [aid]="Auto IoT Design"
+  [aas]="App Selection"
+  [aad]="App Design"
+  [asdw]="App Dev Microservice Azure"
+  [abd]="Batch Design"
+  [abdv]="Batch Dev"
+  [aid]="IoT Design"
 )
 
 declare -A _TRIGGER_LABELS=(

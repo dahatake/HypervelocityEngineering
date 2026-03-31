@@ -1,18 +1,18 @@
-name: "Auto App Design Workflow"
+name: "App Design"
 description: "Issue からアプリケーション設計ワークフロー (Step.1〜Step.8) を自動起動します"
-title: "[Auto App Design] アプリケーション設計"
+title: "[App Design] アプリケーション設計"
 labels:
   - "auto-app-design"
 body:
   - type: markdown
     attributes:
       value: |
-        ## Auto App Design Workflow
+        ## App Design
         このフォームから Issue を作成すると、自動で Step.1〜Step.8 の設計タスクが
         Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
 
         ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
-        - `docs/app-list.md` — Auto App Selection Workflow (Step.1) の成果物
+        - `docs/app-list.md` — App Selection (Step.1) の成果物
 
         💡 **複数回実行可能**: 同じ `docs/app-list.md` に対して設計を複数回実行できます。別ブランチを指定することで、異なる設計方針を並行比較することが可能です。
 

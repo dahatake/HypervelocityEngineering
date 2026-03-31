@@ -491,7 +491,7 @@ jobs:
 
           # ---- Step.1 ----
           if ! skip_step "1"; then
-            BODY_S1=$(printf '%s\n## Step.1 コンテナ\nStep.1 はコンテナ Issue。Sub Task（Step.1.1, Step.1.2）の完了を待つ。\n\n## 前提条件\n- `docs/app-list.md` が存在すること（Auto App Selection Workflow の成果物）\n- `docs/app-arch-list.md` が存在すること（Auto App Selection Workflow の成果物）%s' \
+            BODY_S1=$(printf '%s\n## Step.1 コンテナ\nStep.1 はコンテナ Issue。Sub Task（Step.1.1, Step.1.2）の完了を待つ。\n\n## 前提条件\n- `docs/app-list.md` が存在すること（App Selection の成果物）\n- `docs/app-arch-list.md` が存在すること（App Selection の成果物）%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.1: ドメイン分析 + サービス一覧抽出" \
@@ -507,7 +507,7 @@ jobs:
             fi
 
             # Step.1.1
-            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/app-list.md` が存在すること（Auto App Selection Workflow の成果物）\n\n## 入力\n- `docs/usecase-list.md`\n- `docs/app-list.md`（アプリケーション一覧）\n\n## 出力\n- `docs/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/domain-analytics.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/app-list.md` が存在すること（App Selection の成果物）\n\n## 入力\n- `docs/usecase-list.md`\n- `docs/app-list.md`（アプリケーション一覧）\n\n## 出力\n- `docs/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/domain-analytics.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.1.1: ドメイン分析" \

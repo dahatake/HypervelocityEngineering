@@ -24,6 +24,7 @@ EXPECTED_STEP_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aid": 10,   # 1 container + 9 real steps
+    "aqrc": 1,
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
@@ -33,13 +34,14 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aid": 9,
+    "aqrc": 1,
 }
 
 
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -53,14 +55,14 @@ class TestGetWorkflow:
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
     def test_step_count_matches_bash(self, wf_id: str):
         """各ワークフローのステップ数が bash 版と一致すること。"""
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -239,13 +241,45 @@ class TestGetStep:
 class TestListWorkflows:
     """list_workflows() のテスト。"""
 
-    def test_returns_six(self):
+    def test_returns_seven(self):
         wfs = list_workflows()
-        assert len(wfs) == 6
+        assert len(wfs) == 7
 
     def test_all_ids(self):
         wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "aid", "asdw"]
+        assert wf_ids == ["aad", "aas", "abd", "abdv", "aid", "aqrc", "asdw"]
+
+
+class TestAQRCWorkflow:
+    """AQRC ワークフロー固有テスト。"""
+
+    def test_aqrc_params(self):
+        wf = get_workflow("aqrc")
+        assert wf is not None
+        assert "scope" in wf.params
+        assert "target_files" in wf.params
+        assert "force_refresh" in wf.params
+
+    def test_aqrc_single_step(self):
+        wf = get_workflow("aqrc")
+        assert wf is not None
+        assert len(wf.steps) == 1
+        assert wf.steps[0].id == "1"
+
+    def test_aqrc_custom_agent(self):
+        wf = get_workflow("aqrc")
+        assert wf is not None
+        assert wf.steps[0].custom_agent == "QA-RequirementClassifier"
+
+    def test_aqrc_template_path(self):
+        step = get_step("aqrc", "1")
+        assert step is not None
+        assert step.body_template_path == "templates/aqrc/step-1.md"
+
+    def test_aqrc_root_step(self):
+        roots = get_root_steps("aqrc")
+        assert len(roots) == 1
+        assert roots[0].id == "1"
 
 
 class TestStepDefFields:

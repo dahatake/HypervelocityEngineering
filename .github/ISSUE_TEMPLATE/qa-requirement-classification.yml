@@ -10,7 +10,7 @@ body:
         ## qa/ 質問データの D01〜D21 分類・ステータス更新
 
         `qa/` フォルダーに蓄積された質問ファイル（コンテキスト確認・品質チェックリスト等）を
-        `docs/business-requirement-document-master-list.md` の D01〜D21 文書クラスに分類し、
+        `template/business-requirement-document-master-list.md` の D01〜D21 文書クラスに分類し、
         `work/business-requirement-document-status.md` を生成・更新します。
 
         ### 処理フロー
@@ -26,7 +26,7 @@ body:
         - [ ] マッピング根拠が全質問に記載されている（捏造なし）
         - [ ] `work/business-requirement-document-status.md` が正しいフォーマットで生成されている
         - [ ] サマリーの集計値と詳細マッピングの行数が一致している
-        - [ ] `qa/` および `docs/` のファイルが変更されていない
+        - [ ] `qa/`、`docs/`、`template/` のファイルが変更されていない
 
         <!-- custom_agent: QA-RequirementClassifier -->
 

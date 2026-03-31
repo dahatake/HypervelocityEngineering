@@ -35,20 +35,20 @@ from typing import Dict, List, Optional, Set
 try:
     from .config import SDKConfig
     from .console import Console, timestamp_prefix
-    from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT
-    from .runner import StepRunner
+    from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT
+    from .runner import StepRunner, _is_review_fail, _extract_text
     from .dag_executor import DAGExecutor
 except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
-    from prompts import CODE_REVIEW_AGENT_FIX_PROMPT  # type: ignore[no-redef]
-    from runner import StepRunner  # type: ignore[no-redef]
+    from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT  # type: ignore[no-redef]
+    from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
     from dag_executor import DAGExecutor  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
 # -----------------------------------------------------------------------
-from hve.workflow_registry import get_workflow, WorkflowDef  # noqa: F401
+from hve.workflow_registry import get_workflow, WorkflowDef, list_workflows  # noqa: F401
 from hve.template_engine import (
     render_template,
     resolve_selected_steps,
@@ -71,7 +71,7 @@ from hve.github_api import (
 # 定数
 # -----------------------------------------------------------------------
 
-_VALID_WORKFLOWS = ["aas", "aad", "asdw", "abd", "abdv", "aid"]
+_VALID_WORKFLOWS = [wf.id for wf in list_workflows()]
 
 # Code Review Agent の GitHub ユーザー名候補
 _COPILOT_USERNAMES = (
@@ -81,6 +81,9 @@ _COPILOT_USERNAMES = (
     "copilot-swe-agent[bot]",
     "copilot-pull-request-reviewer[bot]",
 )
+
+# git diff の最大文字数（トークン上限対策）
+_MAX_DIFF_CHARS = 80_000
 
 
 # -----------------------------------------------------------------------
@@ -116,6 +119,14 @@ def _collect_params_non_interactive(
     if args.get("batch_job_id"):
         params["batch_job_id"] = args["batch_job_id"]
 
+    # AQRC 固有パラメータ
+    if args.get("scope"):
+        params["scope"] = args["scope"]
+    if args.get("target_files"):
+        params["target_files"] = args["target_files"]
+    # force_refresh は bool なので常に設定
+    params["force_refresh"] = args.get("force_refresh", False)
+
     # Issue タイトル上書き
     if args.get("issue_title"):
         params["issue_title"] = args["issue_title"]
@@ -148,7 +159,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         # fetch して最新の origin/{base_branch} を取得
         fetch_result = subprocess.run(
             ["git", "fetch", "origin", base_branch],
-            capture_output=True, text=True, timeout=60, encoding="utf-8",
+            capture_output=True, text=True, timeout=60,
         )
         fetch_ok = fetch_result.returncode == 0
         if not fetch_ok:
@@ -158,7 +169,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         if fetch_ok:
             result = subprocess.run(
                 ["git", "checkout", "-b", new_branch, f"origin/{base_branch}"],
-                capture_output=True, text=True, timeout=30, encoding="utf-8",
+                capture_output=True, text=True, timeout=30,
             )
             if result.returncode == 0:
                 console.event(f"ブランチ '{new_branch}' を 'origin/{base_branch}' から作成し checkout しました。")
@@ -168,7 +179,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         # フォールバック: ローカルの base_branch から作成
         fallback = subprocess.run(
             ["git", "checkout", "-b", new_branch, base_branch],
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, text=True, timeout=30,
         )
         if fallback.returncode != 0:
             console.error(f"ブランチ作成に失敗しました: {fallback.stderr.strip()}")
@@ -198,7 +209,7 @@ def _git_add_commit_push(
         # 差分確認
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, text=True, timeout=30,
         )
         if not status.stdout.strip():
             console.warning("コミット対象の変更がありません。")
@@ -216,7 +227,7 @@ def _git_add_commit_push(
                     add_args.append(f":!{sanitized}")
         add_result = subprocess.run(
             add_args,
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, text=True, timeout=30,
         )
         if add_result.returncode != 0:
             console.error(f"git add に失敗しました: {add_result.stderr.strip()}")
@@ -225,7 +236,7 @@ def _git_add_commit_push(
         # ステージングエリアの差分確認（除外後に差分がなければスキップ）
         cached_diff = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, text=True, timeout=30,
         )
         if cached_diff.returncode == 0:
             console.warning("除外パスを適用後、コミット対象のステージング変更がありません。")
@@ -234,7 +245,7 @@ def _git_add_commit_push(
         # git commit
         commit_result = subprocess.run(
             ["git", "commit", "-m", commit_message],
-            capture_output=True, text=True, timeout=60, encoding="utf-8",
+            capture_output=True, text=True, timeout=60,
         )
         if commit_result.returncode != 0:
             console.error(f"git commit に失敗しました: {commit_result.stderr.strip()}")
@@ -244,7 +255,7 @@ def _git_add_commit_push(
         # git push（-u でリモートブランチをトラッキング）
         push_result = subprocess.run(
             ["git", "push", "-u", "origin", branch],
-            capture_output=True, text=True, timeout=120, encoding="utf-8",
+            capture_output=True, text=True, timeout=120,
         )
         if push_result.returncode != 0:
             console.error(f"git push に失敗しました: {push_result.stderr.strip()}")
@@ -766,9 +777,10 @@ def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: 
             console.event(f"[DRY RUN]      除外パス: {', '.join(config.ignore_paths)}")
         console.event("[DRY RUN]   5. PR の作成（Issue 番号を PR body に記載）")
         if config.auto_coding_agent_review:
-            console.event("[DRY RUN]   6. Code Review Agent へのレビュー依頼")
+            console.event("[DRY RUN]   6. Code Review Agent (ローカル CLI SDK) でレビュー実行")
+            console.event(f"[DRY RUN]      git diff {config.review_base_ref} で差分取得")
         console.event("[DRY RUN]   ⚠️ PR のレビュー・マージはユーザーが実施してください")
-        console.event("[DRY RUN] ⚠️ 前提: GH_TOKEN と --repo が必要です")
+        console.event("[DRY RUN] ⚠️ 前提: PR 作成には GH_TOKEN と --repo が必要です（Code Review Agent レビュー自体はローカル実行のみで完結します）")
     elif config.create_pr:
         console.event("[DRY RUN] --- ローカル実行 + PR モード ---")
         console.event("[DRY RUN] 全ステップ完了後に以下を実行:")
@@ -777,13 +789,14 @@ def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: 
         console.event("[DRY RUN]   3. 変更を commit + push")
         console.event("[DRY RUN]   4. PR の作成")
         if config.auto_coding_agent_review:
-            console.event("[DRY RUN]   5. Code Review Agent へのレビュー依頼")
+            console.event("[DRY RUN]   5. Code Review Agent (ローカル CLI SDK) でレビュー実行")
+            console.event(f"[DRY RUN]      git diff {config.review_base_ref} で差分取得")
             console.event(f"[DRY RUN]   レビュータイムアウト: {config.review_timeout_seconds}s")
             if config.auto_coding_agent_review_auto_approval:
-                console.event("[DRY RUN]   6. 修正プランの自動承認 + PR コメント投稿")
+                console.event("[DRY RUN]   6. 修正プランの自動承認 + 同一セッション内でローカル修正実行")
             else:
                 console.event("[DRY RUN]   6. 修正プランの確認プロンプト（対話）")
-        console.event("[DRY RUN] ⚠️ 前提: GH_TOKEN と --repo が必要です")
+        console.event("[DRY RUN] ⚠️ 前提: PR 作成には GH_TOKEN と --repo が必要です（Code Review Agent レビュー自体はローカル実行のみで完結します）")
 
 
 # -----------------------------------------------------------------------
@@ -791,182 +804,173 @@ def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: 
 # -----------------------------------------------------------------------
 
 
+def _get_git_diff(base_ref: str, console: Console) -> str:
+    """git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。
+
+    Args:
+        base_ref: git diff の基点 (例: "HEAD~1", "main", "origin/main")
+        console: コンソール出力用
+
+    Returns:
+        差分テキスト（空文字は差分なし or エラー）
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", base_ref],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            console.warning(f"git diff {base_ref} に失敗: {result.stderr.strip()}")
+            return ""
+        diff = result.stdout.strip()
+        if len(diff) > _MAX_DIFF_CHARS:
+            console.warning(
+                f"差分が {len(diff)} 文字を超えるため {_MAX_DIFF_CHARS} 文字にトリミングします。"
+            )
+            diff = diff[:_MAX_DIFF_CHARS] + "\n... (truncated)"
+        return diff
+    except subprocess.TimeoutExpired:
+        console.warning("git diff がタイムアウトしました。")
+        return ""
+    except FileNotFoundError:
+        console.warning("git コマンドが見つかりません。")
+        return ""
+
+
 async def _request_code_review(
-    pr_number: int,
+    pr_number: Optional[int],
     config: SDKConfig,
     console: Console,
 ) -> Optional[str]:
-    """PR に Code Review Agent のレビューを依頼し、結果を待機する。
+    """Copilot CLI SDK セッションでローカルに Code Review を実行する。
+
+    git diff でレビュー対象差分を取得し、Copilot CLI セッションに
+    /review コマンドとして送信する。GitHub API / PR は使用しない。
 
     処理フロー:
-    1. Copilot をレビュアーとしてリクエスト
-    2. レビュー完了をポーリング（COMMENTED 状態を待つ）
-    3. レビュー結果を表示
-    4. 修正処理（auto_approval または ユーザー確認）
-       承認された場合、修正プロンプトを PR コメントとして投稿する
+    1. git diff {config.review_base_ref} で差分テキストを取得
+    2. Copilot CLI SDK インポート確認
+    3. CopilotClient セッション開始
+    4. /review プロンプト送信（差分埋め込み）
+    5. PASS/FAIL 判定 → FAIL 時は修正実行
+
+    Args:
+        pr_number: 参照用のみ（API 呼び出しには使わない）。省略可。
+        config: SDKConfig
+        console: コンソール出力用
 
     Returns:
         None = 成功, str = エラーメッセージ
     """
-    token = config.resolve_token()
-    repo = config.repo
+    # 1. git diff で差分を取得
+    diff = _get_git_diff(config.review_base_ref, console)
+    if not diff:
+        console.warning("レビュー対象の差分がありません。Code Review をスキップします。")
+        return None
 
-    if not token or not repo:
-        return "GH_TOKEN または REPO が未設定のため Code Review Agent 処理をスキップします。"
-
-    _GH_API = "https://api.github.com"
-
-    # --- 1. Code Review Agent をレビュアーとしてリクエスト ---
-    reviewer_candidates = ["copilot-pull-request-reviewer[bot]", "copilot"]
-    request_succeeded = False
-    last_exc: Optional[Exception] = None
-    for reviewer in reviewer_candidates:
-        try:
-            api_call(
-                "POST",
-                f"{_GH_API}/repos/{repo}/pulls/{pr_number}/requested_reviewers",
-                data={"reviewers": [reviewer]},
-                token=token,
-            )
-            console.event(f"Code Review Agent ({reviewer}) にレビューを依頼しました。")
-            request_succeeded = True
-            break
-        except Exception as exc:
-            last_exc = exc
-            console.event(f"レビュアー '{reviewer}' でのリクエストに失敗: {exc}")
-
-    if not request_succeeded:
-        error_detail = f": {last_exc}" if last_exc else ""
-        console.error(
-            f"Code Review Agent へのレビュー依頼に失敗しました{error_detail}\n"
-            "リポジトリで Copilot Code Review が有効になっていることを確認してください。"
-        )
-        return f"Code Review Agent へのレビュー依頼に失敗しました{error_detail}"
-
-    # --- 2. レビュー完了をポーリング ---
-    console.event("Code Review Agent のレビュー完了を待機中...")
-    poll_interval = 10
-    timeout = config.review_timeout_seconds
-    start_poll = time.time()
-    review_id: Optional[int] = None
-    first_poll = True
-
-    while True:
-        elapsed = time.time() - start_poll
-        if elapsed > timeout:
-            return f"タイムアウト ({timeout}s) になりました。レビューがまだ完了していません。"
-
-        if first_poll:
-            first_poll = False
-        else:
-            await asyncio.sleep(poll_interval)
-
-        try:
-            reviews = api_call(
-                "GET",
-                f"{_GH_API}/repos/{repo}/pulls/{pr_number}/reviews",
-                token=token,
-                max_retries=1,
-            )
-            copilot_reviews = [
-                r for r in reviews  # type: ignore[union-attr]
-                if r.get("state") == "COMMENTED"
-                and r.get("user", {}).get("login", "").lower() in _COPILOT_USERNAMES
-            ]
-            if copilot_reviews:
-                review_id = copilot_reviews[-1]["id"]
-                console.event("Code Review Agent のレビューが完了しました。")
-                break
-
-        except Exception as exc:
-            console.warning(f"レビューポーリング中にエラーが発生しました（次のサイクルで再試行）: {exc}")
-
-    # --- 3. レビュー結果を取得・表示 ---
-    review_body = ""
+    # 2. Copilot CLI SDK インポート確認（runner.py と同じパターン）
     try:
-        review_detail = api_call(
-            "GET",
-            f"{_GH_API}/repos/{repo}/pulls/{pr_number}/reviews/{review_id}",
-            token=token,
+        from copilot import CopilotClient, PermissionHandler  # type: ignore[import]
+        from copilot import SubprocessConfig, ExternalServerConfig  # type: ignore[import]
+    except ImportError:
+        return (
+            "GitHub Copilot SDK がインストールされていません。\n"
+            "  pip install github-copilot-sdk  # または適切なパッケージ名で再試行してください。"
         )
-        review_body = review_detail.get("body", "")  # type: ignore[union-attr]
-    except Exception as exc:
-        console.warning(f"レビュー本体の取得中にエラーが発生しました: {exc}")
 
-    review_comments_text = ""
-    try:
-        comments = api_call(
-            "GET",
-            f"{_GH_API}/repos/{repo}/pulls/{pr_number}/comments",
-            token=token,
-        )
-        if isinstance(comments, list) and comments:
-            lines = []
-            for c in comments:
-                path = c.get("path", "")
-                body = c.get("body", "")
-                lines.append(f"- `{path}`: {body}")
-            review_comments_text = "\n".join(lines)
-    except Exception as exc:
-        console.warning(f"レビューコメントの取得中にエラーが発生しました: {exc}")
-
-    console.event("=== Code Review Agent レビュー結果 ===")
-    if review_body:
-        print(f"{timestamp_prefix()} {review_body}")
-    if review_comments_text:
-        console.event("--- インラインコメント ---")
-        print(f"{timestamp_prefix()} {review_comments_text}")
-
-    # --- 4. 修正処理 ---
-    combined_comments = "\n".join(filter(None, [review_body, review_comments_text]))
-
-    if config.auto_coding_agent_review_auto_approval:
-        console.event(
-            "auto_coding_agent_review_auto_approval=True のため、"
-            "全ての修正プランを自動承認します。"
-        )
+    # 3. CopilotClient セッション開始
+    if config.cli_url:
+        sdk_config = ExternalServerConfig(url=config.cli_url)
     else:
-        console.warning(
-            "Code Review Agent のレビュー結果を確認しました。\n"
-            "修正プロンプトを PR コメントとして投稿しますか？ [y/N]: "
+        sdk_config = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level=config.log_level,
         )
-        if not sys.stdin.isatty():
-            console.warning("stdin が非対話モードのため、修正をスキップします。")
-            console.event("修正をスキップしました。")
-            return None
+    client = CopilotClient(config=sdk_config)
+    await client.start()
 
-        def _read_answer() -> str:
-            try:
-                return sys.stdin.readline().rstrip("\n").strip().lower()
-            except EOFError:
-                return ""
-
-        loop = asyncio.get_running_loop()
-        try:
-            answer = await asyncio.wait_for(
-                loop.run_in_executor(None, _read_answer),
-                timeout=60.0,
-            )
-        except asyncio.TimeoutError:
-            console.warning("入力タイムアウト (60s)。修正をスキップします。")
-            answer = ""
-        if answer not in ("y", "yes"):
-            console.event("修正をスキップしました。")
-            return None
-
-    fix_prompt = CODE_REVIEW_AGENT_FIX_PROMPT.format(review_comments=combined_comments)
+    session = None
     try:
-        post_comment(pr_number, fix_prompt, repo=repo, token=token)
-        console.event(f"修正プロンプトを PR #{pr_number} にコメントとして投稿しました。")
-        console.warning(
-            "⚠️ 修正プロンプトは PR コメントとして投稿されました。\n"
-            "   修正を自動実行するには、GitHub Copilot Coding Agent が\n"
-            "   この PR に割り当てられている必要があります。"
+        session = await client.create_session(
+            model=config.model,
+            on_permission_request=PermissionHandler.approve_all,
+            streaming=True,
         )
+
+        # 4. /review プロンプト送信
+        review_prompt = CODE_REVIEW_CLI_PROMPT.format(diff=diff)
+        console.event("Copilot CLI Code Review Agent を実行中...")
+        review_response = await session.send_and_wait(
+            review_prompt, timeout=config.review_timeout_seconds
+        )
+        review_content = _extract_text(review_response)
+
+        console.event("=== Code Review Agent レビュー結果 ===")
+        print(f"{timestamp_prefix()} {review_content}")
+
+        # 5. FAIL 判定 → 修正実行
+        if not _is_review_fail(review_content):
+            console.event("✅ Code Review: PASS（Critical 指摘なし）")
+        else:
+            approve = False
+            if config.auto_coding_agent_review_auto_approval:
+                console.event(
+                    "auto_coding_agent_review_auto_approval=True のため、"
+                    "全ての指摘を自動修正します。"
+                )
+                approve = True
+            else:
+                console.warning(
+                    "Code Review Agent の指摘があります。修正を実行しますか？ [y/N]: "
+                )
+                if not sys.stdin.isatty():
+                    console.warning("stdin が非対話モードのため、修正をスキップします。")
+                else:
+                    def _read_answer() -> str:
+                        try:
+                            return sys.stdin.readline().rstrip("\n").strip().lower()
+                        except EOFError:
+                            return ""
+
+                    loop = asyncio.get_running_loop()
+                    try:
+                        answer = await asyncio.wait_for(
+                            loop.run_in_executor(None, _read_answer),
+                            timeout=60.0,
+                        )
+                    except asyncio.TimeoutError:
+                        console.warning("入力タイムアウト (60s)。修正をスキップします。")
+                        answer = ""
+                    if answer in ("y", "yes"):
+                        approve = True
+
+            if approve:
+                fix_prompt = CODE_REVIEW_AGENT_FIX_PROMPT.format(
+                    review_comments=review_content
+                )
+                # 6. 同一セッション内で修正を実行
+                await session.send_and_wait(
+                    fix_prompt, timeout=config.review_timeout_seconds
+                )
+                console.event("✅ Code Review Agent による修正が完了しました。")
+            else:
+                console.event("修正をスキップしました。")
+
     except Exception as exc:
-        console.warning(f"修正プロンプトの投稿中にエラーが発生しました: {exc}")
-        console.event("修正プロンプト（PR コメント投稿失敗のためコンソールに出力）:")
-        print(f"{timestamp_prefix()} {fix_prompt}")
+        error_msg = f"Code Review Agent の実行中にエラーが発生しました: {exc}"
+        console.error(error_msg)
+        return error_msg
+    finally:
+        if session is not None:
+            try:
+                await session.disconnect()
+            except Exception as cleanup_exc:
+                console.warning(f"[cleanup] session.disconnect() failed: {cleanup_exc}")
+        try:
+            await client.stop()
+        except Exception as cleanup_exc:
+            console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
 
     return None
 

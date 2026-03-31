@@ -1344,7 +1344,7 @@ jobs:
               else
                 echo "Step.2 が存在しません。フェーズ1完了。"
                 add_label "${ROOT_ISSUE}" "aas:done"
-                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーション選定）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**Auto App Design Workflow** Issue を別途作成してください。"
+                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーション選定）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
               fi
               ;;
 
@@ -1352,7 +1352,7 @@ jobs:
               # Step.2 完了 → Root Issue に aas:done + 完了コメント
               add_label "${ROOT_ISSUE}" "aas:done"
               echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-              post_comment "${ROOT_ISSUE}" "🎉 フェーズ1（アプリケーション選定）の全ステップが完了しました！\n\n**成果物:**\n- \`docs/app-list.md\` — アプリケーションリスト\n- \`docs/app-arch-list.md\` — アーキテクチャ選定結果\n\nフェーズ2（アプリケーション設計）を実行するには、**Auto App Design Workflow** Issue を別途作成してください。"
+              post_comment "${ROOT_ISSUE}" "🎉 フェーズ1（アプリケーション選定）の全ステップが完了しました！\n\n**成果物:**\n- \`docs/app-list.md\` — アプリケーションリスト\n- \`docs/app-arch-list.md\` — アーキテクチャ選定結果\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
               echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
               ;;
 

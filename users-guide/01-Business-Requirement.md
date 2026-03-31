@@ -19,7 +19,7 @@ GitHub Copilot Coding Agent への Issue 候補でもあります: [GitHub Copil
 
 - Microsoft 365 Copilot（または同等の LLM ツール）へのアクセス（Step.1〜Step.3 で使用）
 - GitHub Copilot が有効になっていること（Step.4 で使用）
-- セットアップ・トラブルシューティングは → [README.md 共通セットアップ手順](./README.md#共通セットアップ手順)
+- セットアップ・トラブルシューティングは → [README.md 共通セットアップ手順](../README.md#共通セットアップ手順)
 
 ### 完了条件
 
@@ -929,7 +929,7 @@ Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足
 - **D01〜D18**: 要求定義として必要な標準文書クラス
 - **D19〜D21**: 追加した新規文書クラス（アーキテクチャ・セキュア設計・CI/CD）
 
-出典: `AGENTS.md §1.1 / §1.2`、`docs/business-requirement-document-master-list.md`
+出典: `AGENTS.md §1.1 / §1.2`、`template/business-requirement-document-master-list.md`
 
 ---
 
@@ -1018,9 +1018,9 @@ flowchart TD
 3. Assignees に @copilot を設定
 4. Issue body に参照先を記載:
    - 分類対象: `qa/` 配下の質問票ファイル
-   - マスターリスト: `docs/business-requirement-document-master-list.md`
+   - マスターリスト: `template/business-requirement-document-master-list.md`
 
-`QA-RequirementClassifier` は `qa/` のファイルを読み取り専用で参照し、`docs/` のファイルも読み取り専用で参照します（いずれも変更禁止）。
+`QA-RequirementClassifier` は `qa/` のファイルを読み取り専用で参照し、マスターリストである `template/business-requirement-document-master-list.md` および `docs/` 配下のファイルも読み取り専用で参照します（いずれも変更禁止）。
 
 出典: `.github/agents/QA-RequirementClassifier.agent.md`
 
@@ -1051,13 +1051,13 @@ flowchart TD
 2. **Custom Agent を選択**: `.github/agents/` から該当する Custom Agent を選択して Issue を作成・実行
 3. **Microsoft 365 Copilot Researcher で調査・作成**
 
-出典: `docs/business-requirement-document-master-list.md` の各 D クラスの `**不足判定:**` フィールド
+出典: `template/business-requirement-document-master-list.md` の各 D クラスの `**不足判定:**` フィールド
 
 ---
 
 ### Step.4.7 注意事項
 
-1. **非捏造運用ルール**: `docs/business-requirement-document-master-list.md` の「非捏造運用ルール（12項目）」を遵守してください。特に重要なルール:
+1. **非捏造運用ルール**: `template/business-requirement-document-master-list.md` の「非捏造運用ルール（12項目）」を遵守してください。特に重要なルール:
    - Confirmed だけを authoritative prompt に入れる
    - Tentative は Design Assumptions に隔離する
    - Unknown は UNKNOWN のままにする
@@ -1079,7 +1079,7 @@ flowchart TD
 | AGENTS.md | `/AGENTS.md` | 全 Agent 共通の強制ルール（§1.1/§1.2 コンテキスト収集プロトコル） |
 | QA-RequirementClassifier | `.github/agents/QA-RequirementClassifier.agent.md` | qa/ 質問票の D01〜D21 分類 Agent |
 | 分類ルール | `.github/instructions/requirement-classification.instructions.md` | D01〜D21 分類・状態判定基準 |
-| マスターリスト | `docs/business-requirement-document-master-list.md` | D01〜D21 文書クラス定義と非捏造運用ルール |
+| マスターリスト | `template/business-requirement-document-master-list.md` | D01〜D21 文書クラス定義と非捏造運用ルール |
 | auto-qa ワークフロー | `.github/workflows/copilot-auto-qa.yml` | PR への質問票作成指示の自動投稿 |
 | QA→レビュー遷移 | `.github/workflows/auto-qa-to-review-transition.yml` | QA 完了後の auto-context-review ラベル自動付与 |
 
@@ -1088,7 +1088,7 @@ flowchart TD
 
 ## 参考
 
-詳細は [参考: 要求定義として必要な文書の一覧](../docs/business-requirement-document-master-list.md) を参照してください。
+詳細は [参考: 要求定義として必要な文書の一覧](../template/business-requirement-document-master-list.md) を参照してください。
 
 > [!NOTE]
 > 次のステップ（アプリケーション選定）は [02-App-Selection.md](./02-App-Selection.md) を参照してください。

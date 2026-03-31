@@ -17,13 +17,13 @@
 Issue Form から親 Issue を作成するだけで、Step.1〜Step.2 のアプリケーション選定タスクが
 Sub-issue として自動生成され、Copilot が依存関係に従って順次実行するワークフローです。
 
-フェーズ2（アプリケーション設計: Step.1〜7.3）は **Auto App Design Workflow** を使用してください。
+フェーズ2（アプリケーション設計: Step.1〜7.3）は **App Design** を使用してください。
 
 ### 前提条件
 
 - `docs/usecase-list.md` が存在していること（Step.1 の必須入力）
 - GitHub Copilot が有効になっていること
-- セットアップ・トラブルシューティングは → [README.md 共通セットアップ手順](./README.md#共通セットアップ手順)
+- セットアップ・トラブルシューティングは → [README.md 共通セットアップ手順](../README.md#共通セットアップ手順)
 
 ### アーキテクチャ図
 
@@ -420,7 +420,7 @@ Prompt:
 #### 1. Issue を作成する
 
 1. リポジトリの **Issues** タブ → **New Issue**
-2. テンプレート **"Auto App Selection Workflow"** を選択
+2. テンプレート **"App Selection"** を選択
 3. 以下を入力:
    - **対象ブランチ**: 設計ドキュメントをコミットするブランチ名 (例: `main`)
    - **実行するステップ**: 実行したい Step にチェック（全て未選択の場合は全 Step 実行。一部チェックした場合、チェックしていない Step はスキップされます）
@@ -445,11 +445,11 @@ Prompt:
 - フェーズ1完了後、以下の成果物が作成されます:
   - `docs/app-list.md` — アプリケーションリスト
   - `docs/app-arch-list.md` — アーキテクチャ選定結果
-- フェーズ2（設計: Step.1〜7.3）を実行するには、**Auto App Design Workflow** Issue を別途作成してください
+- フェーズ2（設計: Step.1〜7.3）を実行するには、**App Design** Issue を別途作成してください
 
 ### セットアップ・トラブルシューティング
 
-共通のセットアップ手順とトラブルシューティングは → [README.md 共通セットアップ手順](./README.md#共通セットアップ手順)
+共通のセットアップ手順とトラブルシューティングは → [README.md 共通セットアップ手順](../README.md#共通セットアップ手順)
 
 ---
 
@@ -457,8 +457,8 @@ Prompt:
 
 1. リポジトリで Actions の Workflow permissions を **Read and write** に設定する
 2. `.github/workflows/auto-app-selection.yml` がリポジトリに存在することを確認する
-3. `.github/ISSUE_TEMPLATE/auto-app-selection.yml` がリポジトリに存在することを確認する
-4. Issues タブ → New Issue → **Auto App Selection Workflow** テンプレートを選択する
+3. `.github/ISSUE_TEMPLATE/app-selection.yml` がリポジトリに存在することを確認する
+4. Issues タブ → New Issue → **App Selection** テンプレートを選択する
 5. 対象ブランチに `main` を入力し、Step.1 のみチェックして Issue を作成する
 6. Actions タブで `AAS Orchestrator` の Bootstrap ジョブが起動したことを確認する
 7. Bootstrap 完了後、Step.1 の Issue が作成され `aas:running` ラベルが付き Copilot が assign されることを確認する
@@ -466,4 +466,4 @@ Prompt:
 9. step-1 の Issue を close し、`auto-app-selection.yml` の状態遷移ジョブが起動することを確認する
 10. step-2 に `aas:ready` + `aas:running` が付与され Copilot が assign されることを確認する
 11. step-2 を close し、Root Issue に `aas:done` が付与され完了通知コメントが投稿されることを確認する
-12. フェーズ2（**Auto App Design Workflow**）Issue を作成し、連携を確認する
+12. フェーズ2（**App Design**）Issue を作成し、連携を確認する

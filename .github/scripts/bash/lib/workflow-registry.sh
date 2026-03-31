@@ -38,7 +38,7 @@ declare -A _WORKFLOW_REGISTRY
 _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
 {
   "id": "aas",
-  "name": "Auto App Selection",
+  "name": "App Selection",
   "label_prefix": "aas",
   "state_labels": {
     "initialized": "aas:initialized",
@@ -59,7 +59,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[aad]=$(cat <<'JSONEOF'
 {
   "id": "aad",
-  "name": "Auto App Design",
+  "name": "App Design",
   "label_prefix": "aad",
   "state_labels": {
     "initialized": "aad:initialized",
@@ -94,7 +94,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[asdw]=$(cat <<'JSONEOF'
 {
   "id": "asdw",
-  "name": "Auto App Dev Microservice Azure",
+  "name": "App Dev Microservice Azure",
   "label_prefix": "asdw",
   "state_labels": {
     "initialized": "asdw:initialized",
@@ -137,7 +137,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[abd]=$(cat <<'JSONEOF'
 {
   "id": "abd",
-  "name": "Auto Batch Design",
+  "name": "Batch Design",
   "label_prefix": "abd",
   "state_labels": {
     "initialized": "abd:initialized",
@@ -165,7 +165,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[abdv]=$(cat <<'JSONEOF'
 {
   "id": "abdv",
-  "name": "Auto Batch Dev",
+  "name": "Batch Dev",
   "label_prefix": "abdv",
   "state_labels": {
     "initialized": "abdv:initialized",
@@ -191,7 +191,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[aid]=$(cat <<'JSONEOF'
 {
   "id": "aid",
-  "name": "Auto IoT Design",
+  "name": "IoT Design",
   "label_prefix": "aid",
   "state_labels": {
     "initialized": "aid:initialized",
