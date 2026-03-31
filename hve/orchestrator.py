@@ -34,13 +34,13 @@ from typing import Dict, List, Optional, Set
 # -----------------------------------------------------------------------
 try:
     from .config import SDKConfig
-    from .console import Console
+    from .console import Console, timestamp_prefix
     from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT
     from .runner import StepRunner
     from .dag_executor import DAGExecutor
 except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
-    from console import Console  # type: ignore[no-redef]
+    from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import CODE_REVIEW_AGENT_FIX_PROMPT  # type: ignore[no-redef]
     from runner import StepRunner  # type: ignore[no-redef]
     from dag_executor import DAGExecutor  # type: ignore[no-redef]
@@ -54,6 +54,8 @@ from hve.template_engine import (
     resolve_selected_steps,
     build_root_issue_body,
     collect_params as cli_collect_params,
+    _WORKFLOW_DISPLAY_NAMES,
+    _WORKFLOW_PREFIX,
 )
 from hve.github_api import (
     GitHubAPIError,
@@ -70,26 +72,6 @@ from hve.github_api import (
 # -----------------------------------------------------------------------
 
 _VALID_WORKFLOWS = ["aas", "aad", "asdw", "abd", "abdv", "aid"]
-
-_WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
-    "aas": "Auto App Selection",
-    "aad": "Auto App Design",
-    "asdw": "Auto App Dev Microservice Azure",
-    "abd": "Auto Batch Design",
-    "abdv": "Auto Batch Dev",
-    "aid": "Auto IoT Design",
-}
-
-_WORKFLOW_PREFIX: Dict[str, str] = {
-    "aas": "AAS",
-    "aad": "AAD",
-    "asdw": "ASDW",
-    "abd": "ABD",
-    "abdv": "ABDV",
-    "aid": "AID",
-}
-
-_TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts" / "templates"
 
 # Code Review Agent の GitHub ユーザー名候補
 _COPILOT_USERNAMES = (
@@ -166,7 +148,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         # fetch して最新の origin/{base_branch} を取得
         fetch_result = subprocess.run(
             ["git", "fetch", "origin", base_branch],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, encoding="utf-8",
         )
         fetch_ok = fetch_result.returncode == 0
         if not fetch_ok:
@@ -176,7 +158,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         if fetch_ok:
             result = subprocess.run(
                 ["git", "checkout", "-b", new_branch, f"origin/{base_branch}"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=30, encoding="utf-8",
             )
             if result.returncode == 0:
                 console.event(f"ブランチ '{new_branch}' を 'origin/{base_branch}' から作成し checkout しました。")
@@ -186,7 +168,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         # フォールバック: ローカルの base_branch から作成
         fallback = subprocess.run(
             ["git", "checkout", "-b", new_branch, base_branch],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
         if fallback.returncode != 0:
             console.error(f"ブランチ作成に失敗しました: {fallback.stderr.strip()}")
@@ -216,7 +198,7 @@ def _git_add_commit_push(
         # 差分確認
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
         if not status.stdout.strip():
             console.warning("コミット対象の変更がありません。")
@@ -234,7 +216,7 @@ def _git_add_commit_push(
                     add_args.append(f":!{sanitized}")
         add_result = subprocess.run(
             add_args,
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
         if add_result.returncode != 0:
             console.error(f"git add に失敗しました: {add_result.stderr.strip()}")
@@ -243,7 +225,7 @@ def _git_add_commit_push(
         # ステージングエリアの差分確認（除外後に差分がなければスキップ）
         cached_diff = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, encoding="utf-8",
         )
         if cached_diff.returncode == 0:
             console.warning("除外パスを適用後、コミット対象のステージング変更がありません。")
@@ -252,7 +234,7 @@ def _git_add_commit_push(
         # git commit
         commit_result = subprocess.run(
             ["git", "commit", "-m", commit_message],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, encoding="utf-8",
         )
         if commit_result.returncode != 0:
             console.error(f"git commit に失敗しました: {commit_result.stderr.strip()}")
@@ -262,7 +244,7 @@ def _git_add_commit_push(
         # git push（-u でリモートブランチをトラッキング）
         push_result = subprocess.run(
             ["git", "push", "-u", "origin", branch],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=120, encoding="utf-8",
         )
         if push_result.returncode != 0:
             console.error(f"git push に失敗しました: {push_result.stderr.strip()}")
@@ -352,8 +334,8 @@ def _create_issues_if_needed(
                 repo=repo,
                 token=token,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            console.warning(f"Sub-Issue #{sub_num} の親子リンクに失敗しました: {exc}")
 
     return root_issue_num
 
@@ -468,7 +450,33 @@ async def run_workflow(
     display_name = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
     console.header(f"Copilot SDK Orchestrator: [{wf.id.upper()}] {display_name}")
 
+    # フェーズ構成の動的算出
+    _phases: List[str] = ["ワークフロー定義取得", "パラメータ収集", "ステップフィルタリング"]
+    if config.create_issues or config.create_pr:
+        _phases.append("ブランチ作成")
+    if config.create_issues:
+        _phases.append("Issue 作成")
+    _phases.append("実行計画 → DAG 実行")
+    if config.create_issues or config.create_pr:
+        _phases.append("後処理 (git push + PR)")
+    _phases.append("サマリー")
+    _total_phases = len(_phases)
+    _phase_idx = 0
+
+    def _next_phase() -> int:
+        nonlocal _phase_idx
+        _phase_idx += 1
+        return _phase_idx
+
+    # Phase 1: ワークフロー定義取得 ✓ (既に取得済み)
+    p = _next_phase()
+    console.phase_end(p, _total_phases, "ワークフロー定義取得", time.time() - start_total)
+
     # --- 2. パラメータ収集 ---
+    p = _next_phase()
+    phase_start = time.time()
+    console.phase_start(p, _total_phases, "パラメータ収集")
+
     if params is None:
         params = {}
 
@@ -493,20 +501,25 @@ async def run_workflow(
             if v is not None and v != "" and v != []:
                 effective_params[k] = v
         # 'steps' キー（CLI側）→ 'selected_steps'（orchestrate.py側）の正規化
-        if "steps" in params and params["steps"] and "selected_steps" not in effective_params:
-            effective_params["selected_steps"] = params["steps"]
-        elif "steps" in params and params["steps"]:
+        if "steps" in params and params["steps"]:
             effective_params["selected_steps"] = params["steps"]
 
     # dry_run を params に反映
     if config.dry_run:
         effective_params["dry_run"] = True
 
+    console.phase_end(p, _total_phases, "パラメータ収集", time.time() - phase_start)
+
     # --- 3. ステップフィルタリング ---
+    p = _next_phase()
+    phase_start = time.time()
+    console.phase_start(p, _total_phases, "ステップフィルタリング")
+
     selected_step_ids: List[str] = effective_params.get("selected_steps") or []
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
 
     console.event(f"実行対象ステップ数: {len(active_steps)}")
+    console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
     # --- dry_run: 実行計画表示のみ ---
     if config.dry_run:
@@ -524,6 +537,10 @@ async def run_workflow(
     # --- 4. 新ブランチ作成（--create-issues または --create-pr 時） ---
     working_branch: Optional[str] = None
     if config.create_issues or config.create_pr:
+        p = _next_phase()
+        phase_start = time.time()
+        console.phase_start(p, _total_phases, "ブランチ作成")
+
         prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
         working_branch = f"copilot-sdk/{prefix.lower()}-{uuid.uuid4().hex[:8]}"
         if not _git_checkout_new_branch(working_branch, config.base_branch, console):
@@ -537,8 +554,14 @@ async def run_workflow(
                 "error": f"ブランチ '{working_branch}' の作成に失敗しました。",
             }
         effective_params["branch"] = working_branch
+        console.phase_end(p, _total_phases, "ブランチ作成", time.time() - phase_start)
 
     # --- 4.5. Issue 作成（--create-issues 時のみ） ---
+    if config.create_issues:
+        p = _next_phase()
+        phase_start_issue = time.time()
+        console.phase_start(p, _total_phases, "Issue 作成")
+
     root_issue_num = _create_issues_if_needed(
         wf=wf,
         params=effective_params,
@@ -549,7 +572,14 @@ async def run_workflow(
         build_root_issue_body_fn=build_root_issue_body,
     )
 
-    # --- 5. StepRunner 準備 ---
+    if config.create_issues:
+        console.phase_end(p, _total_phases, "Issue 作成", time.time() - phase_start_issue)
+
+    # --- 5. StepRunner 準備 + DAG 実行 ---
+    p = _next_phase()
+    phase_start_dag = time.time()
+    console.phase_start(p, _total_phases, "実行計画 → DAG 実行")
+
     runner = StepRunner(config=config, console=console)
 
     # ステップ → プロンプト の事前構築
@@ -565,8 +595,6 @@ async def run_workflow(
             wf=wf,
             additional_prompt=config.additional_prompt,
         )
-        # ステップオブジェクトにプロンプトを注入（DAGExecutor が参照できるよう）
-        step._prompt = step_prompts[step.id]
 
     # --- 6-7. DAGExecutor 実行 ---
     async def run_step_fn(
@@ -588,9 +616,16 @@ async def run_workflow(
         active_step_ids=active_steps,
         max_parallel=config.max_parallel,
         console=console,
+        step_prompts=step_prompts,
     )
 
+    # 実行計画を事前表示
+    waves = executor.compute_waves()
+    if waves:
+        console.execution_plan(waves, len(active_steps), config.max_parallel)
+
     results = await executor.execute()
+    console.phase_end(p, _total_phases, "実行計画 → DAG 実行", time.time() - phase_start_dag)
 
     # --- 8. Post-DAG: 統一後処理 ---
     code_review_error: Optional[str] = None
@@ -598,6 +633,10 @@ async def run_workflow(
     pr_error: Optional[str] = None
 
     if working_branch:
+        p = _next_phase()
+        phase_start_post = time.time()
+        console.phase_start(p, _total_phases, "後処理 (git push + PR)")
+
         prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
         display_name_for_commit = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
         pushed = _git_add_commit_push(
@@ -625,8 +664,12 @@ async def run_workflow(
                 )
         else:
             console.warning("コミット対象の変更がないため PR 作成をスキップしました。")
+        console.phase_end(p, _total_phases, "後処理 (git push + PR)", time.time() - phase_start_post)
 
     # --- 9. サマリー ---
+    p = _next_phase()
+    console.phase_start(p, _total_phases, "サマリー")
+
     elapsed_total = time.time() - start_total
     completed_ids = list(executor.completed)
     failed_ids = list(executor.failed)
@@ -806,13 +849,17 @@ async def _request_code_review(
     timeout = config.review_timeout_seconds
     start_poll = time.time()
     review_id: Optional[int] = None
+    first_poll = True
 
     while True:
         elapsed = time.time() - start_poll
         if elapsed > timeout:
             return f"タイムアウト ({timeout}s) になりました。レビューがまだ完了していません。"
 
-        await asyncio.sleep(poll_interval)
+        if first_poll:
+            first_poll = False
+        else:
+            await asyncio.sleep(poll_interval)
 
         try:
             reviews = api_call(
@@ -865,10 +912,10 @@ async def _request_code_review(
 
     console.event("=== Code Review Agent レビュー結果 ===")
     if review_body:
-        print(review_body)
+        print(f"{timestamp_prefix()} {review_body}")
     if review_comments_text:
         console.event("--- インラインコメント ---")
-        print(review_comments_text)
+        print(f"{timestamp_prefix()} {review_comments_text}")
 
     # --- 4. 修正処理 ---
     combined_comments = "\n".join(filter(None, [review_body, review_comments_text]))
@@ -919,7 +966,7 @@ async def _request_code_review(
     except Exception as exc:
         console.warning(f"修正プロンプトの投稿中にエラーが発生しました: {exc}")
         console.event("修正プロンプト（PR コメント投稿失敗のためコンソールに出力）:")
-        print(fix_prompt)
+        print(f"{timestamp_prefix()} {fix_prompt}")
 
     return None
 
@@ -964,7 +1011,7 @@ def _create_pr_if_needed(
     ]
     if root_issue_num:
         body_lines.append("")
-        body_lines.append(f"Related Issue: #{root_issue_num}")
+        body_lines.append(f"Closes #{root_issue_num}")
 
     try:
         pr_num = create_pull_request(
@@ -977,6 +1024,6 @@ def _create_pr_if_needed(
         )
         console.event(f"PR #{pr_num} を作成しました。")
         return pr_num
-    except Exception as exc:
+    except GitHubAPIError as exc:
         console.error(f"PR 作成中にエラーが発生しました: {exc}")
         return None

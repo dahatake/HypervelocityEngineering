@@ -13,11 +13,11 @@ _stdin_lock = asyncio.Lock()
 
 try:
     from .config import SDKConfig
-    from .console import Console
+    from .console import Console, timestamp_prefix
     from .prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT
 except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
-    from console import Console  # type: ignore[no-redef]
+    from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT  # type: ignore[no-redef]
 
 
@@ -142,6 +142,7 @@ class StepRunner:
                 sdk_config = SubprocessConfig(
                     cli_path=self.config.cli_path,
                     github_token=self.config.resolve_token() or None,
+                    log_level=self.config.log_level,
                 )
             client = CopilotClient(config=sdk_config)
             await client.start()
@@ -204,11 +205,29 @@ class StepRunner:
             if self.console.show_stream:
                 self.console.stream_start(step_id)
 
+            # フェーズ総数を動的算出
+            total_phases = 1
+            if self.config.auto_qa:
+                total_phases += 1
+            if self.config.auto_contents_review:
+                total_phases += 1
+            current_phase = 0
+
             # Phase 1: メインタスク
+            current_phase += 1
+            phase1_start = time.time()
+            self.console.step_phase_start(step_id, current_phase, total_phases, "メインタスク")
             await session.send_and_wait(prompt, timeout=self.config.timeout_seconds)
+            self.console.step_phase_end(
+                step_id, current_phase, total_phases, "メインタスク",
+                elapsed=time.time() - phase1_start,
+            )
 
             # Phase 2: QA（auto_qa=True の場合）
             if self.config.auto_qa:
+                current_phase += 1
+                phase2_start = time.time()
+                self.console.step_phase_start(step_id, current_phase, total_phases, "QA レビュー")
                 qa_response = await session.send_and_wait(QA_PROMPT, timeout=self.config.timeout_seconds)
                 qa_content = _extract_text(qa_response)
                 self.console.qa_prompt(qa_content)
@@ -225,10 +244,17 @@ class StepRunner:
 
                 apply_prompt = QA_APPLY_PROMPT.format(user_answers=user_answers)
                 await session.send_and_wait(apply_prompt, timeout=self.config.timeout_seconds)
+                self.console.step_phase_end(
+                    step_id, current_phase, total_phases, "QA レビュー",
+                    elapsed=time.time() - phase2_start,
+                )
 
             # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
             # 同一セッション内で実行する（成果物のコンテキストを保持するため）
             if self.config.auto_contents_review:
+                current_phase += 1
+                phase3_start = time.time()
+                self.console.step_phase_start(step_id, current_phase, total_phases, "敵対的レビュー")
                 # 1回目: 敵対的レビュー実行
                 review_response = await session.send_and_wait(
                     REVIEW_PROMPT, timeout=self.config.timeout_seconds
@@ -240,6 +266,10 @@ class StepRunner:
                 if not _is_review_fail(review_content):
                     self.console.event(
                         "✅ 敵対的レビュー PASS（初回） — 再レビュー不要"
+                    )
+                    self.console.step_phase_end(
+                        step_id, current_phase, total_phases, "敵対的レビュー",
+                        elapsed=time.time() - phase3_start, result="PASS",
                     )
                 else:
                     # 再レビューサイクル（最大2回）
@@ -259,10 +289,18 @@ class StepRunner:
                             self.console.event(
                                 f"✅ 敵対的レビュー PASS（再レビューサイクル {cycle}/2 後）"
                             )
+                            self.console.step_phase_end(
+                                step_id, current_phase, total_phases, "敵対的レビュー",
+                                elapsed=time.time() - phase3_start, result="PASS",
+                            )
                             review_passed = True
                             break
 
                     if not review_passed:
+                        self.console.step_phase_end(
+                            step_id, current_phase, total_phases, "敵対的レビュー",
+                            elapsed=time.time() - phase3_start, result="FAIL",
+                        )
                         self.console.event(
                             "⚠️ 最大再レビューサイクル到達 — Critical が残存しています"
                         )
@@ -281,12 +319,12 @@ class StepRunner:
                 try:
                     await session.disconnect()
                 except Exception as cleanup_exc:
-                    self.console.event(f"[cleanup] session.disconnect() failed: {cleanup_exc}")
+                    self.console.warning(f"[cleanup] session.disconnect() failed: {cleanup_exc}")
             if client is not None:
                 try:
                     await client.stop()
                 except Exception as cleanup_exc:
-                    self.console.event(f"[cleanup] client.stop() failed: {cleanup_exc}")
+                    self.console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
 
         elapsed = time.time() - start
         self.console.step_end(step_id, "success", elapsed=elapsed)
@@ -543,7 +581,7 @@ def _blocking_stdin_read() -> str:
     """スレッドプール内で実行するブロッキング stdin 読み取り。"""
     try:
         return sys.stdin.readline().rstrip("\n")
-    except EOFError:
+    except (EOFError, OSError):
         return ""
 
 
@@ -570,9 +608,9 @@ async def _read_stdin_async(
     async with _stdin_lock:
         # 他のステップのストリーム出力と視覚的に分離
         print(flush=True)
-        print("─" * 50, flush=True)
+        print(f"{timestamp_prefix()} {"─" * 50}", flush=True)
         console.warning(prompt_msg)
-        print("─" * 50, flush=True)
+        print(f"{timestamp_prefix()} {"─" * 50}", flush=True)
 
         loop = asyncio.get_running_loop()
         try:
@@ -611,4 +649,5 @@ def _extract_text(response: Any) -> str:
         val = getattr(response, attr, None)
         if val is not None:
             return str(val)
-    return str(response)
+    # 未知の型の場合はフォールバックで空文字を返す（repr 文字列の混入を防止）
+    return ""

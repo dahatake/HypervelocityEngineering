@@ -6,6 +6,7 @@ import io
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -279,6 +280,341 @@ class TestConsoleStreamQuiet(unittest.TestCase):
         c = self._make()
         with _CaptureOutput() as cap:
             c.stream_end("1.1")
+        self.assertEqual(cap.stdout, "")
+
+
+# -----------------------------------------------------------------------
+# ANSI スタイルテスト
+# -----------------------------------------------------------------------
+
+
+class TestStyleTTY(unittest.TestCase):
+    """_Style — TTY 接続時は ANSI エスケープコードを返す。"""
+
+    def test_codes_nonempty_when_tty(self) -> None:
+        from console import _Style
+
+        s = _Style(is_tty=True)
+        self.assertTrue(s.BOLD.startswith("\033["))
+        self.assertTrue(s.CYAN.startswith("\033["))
+        self.assertTrue(s.RESET.startswith("\033["))
+
+    def test_codes_empty_when_not_tty(self) -> None:
+        from console import _Style
+
+        s = _Style(is_tty=False)
+        self.assertEqual(s.BOLD, "")
+        self.assertEqual(s.CYAN, "")
+        self.assertEqual(s.RESET, "")
+
+
+# -----------------------------------------------------------------------
+# バナー / パネルテスト
+# -----------------------------------------------------------------------
+
+
+class TestConsoleBanner(unittest.TestCase):
+    """banner() の表示テスト。"""
+
+    def test_banner_shows_title(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.banner("テストタイトル", "サブタイトル")
+        self.assertIn("テストタイトル", cap.stdout)
+        self.assertIn("サブタイトル", cap.stdout)
+
+    def test_banner_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.banner("タイトル")
+        self.assertEqual(cap.stdout, "")
+
+
+class TestConsolePanel(unittest.TestCase):
+    """panel() の表示テスト。"""
+
+    def test_panel_shows_title_and_lines(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.panel("設定確認", ["モデル: claude-opus-4.6", "並列: 15"])
+        self.assertIn("設定確認", cap.stdout)
+        self.assertIn("claude-opus-4.6", cap.stdout)
+
+    def test_panel_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.panel("タイトル", ["行1"])
+        self.assertEqual(cap.stdout, "")
+
+
+# -----------------------------------------------------------------------
+# インタラクティブ入力テスト
+# -----------------------------------------------------------------------
+
+
+class TestConsoleMenuSelect(unittest.TestCase):
+    """menu_select() のテスト。"""
+
+    def test_valid_selection(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="2"):
+            idx = c.menu_select("選択", ["Option A", "Option B", "Option C"])
+        self.assertEqual(idx, 1)
+
+    def test_eof_returns_zero(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", side_effect=EOFError):
+            idx = c.menu_select("選択", ["A", "B"])
+        self.assertEqual(idx, 0)
+
+    def test_keyboard_interrupt_returns_zero(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            idx = c.menu_select("選択", ["A", "B"])
+        self.assertEqual(idx, 0)
+
+
+class TestConsolePromptInput(unittest.TestCase):
+    """prompt_input() のテスト。"""
+
+    def test_returns_user_input(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="hello"):
+            val = c.prompt_input("テスト")
+        self.assertEqual(val, "hello")
+
+    def test_returns_default_on_empty(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            val = c.prompt_input("テスト", default="default_val")
+        self.assertEqual(val, "default_val")
+
+    def test_required_rejects_empty(self) -> None:
+        """required=True で空入力→リトライ→有効値を返す。"""
+        c = Console(verbose=True, quiet=False)
+        inputs = iter(["", "valid"])
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", side_effect=inputs):
+            val = c.prompt_input("テスト", required=True)
+        self.assertEqual(val, "valid")
+
+
+class TestConsolePromptYesNo(unittest.TestCase):
+    """prompt_yes_no() のテスト。"""
+
+    def test_yes_input(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="y"):
+            val = c.prompt_yes_no("確認")
+        self.assertTrue(val)
+
+    def test_no_input(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="n"):
+            val = c.prompt_yes_no("確認")
+        self.assertFalse(val)
+
+    def test_empty_returns_default_true(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            val = c.prompt_yes_no("確認", default=True)
+        self.assertTrue(val)
+
+    def test_empty_returns_default_false(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            val = c.prompt_yes_no("確認", default=False)
+        self.assertFalse(val)
+
+
+class TestConsoleMultiSelect(unittest.TestCase):
+    """prompt_multi_select() のテスト。"""
+
+    def test_empty_returns_empty(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            val = c.prompt_multi_select("選択", ["A", "B", "C"])
+        self.assertEqual(val, [])
+
+    def test_single_selection(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="2"):
+            val = c.prompt_multi_select("選択", ["A", "B", "C"])
+        self.assertEqual(val, [1])
+
+    def test_comma_separated(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value="1,3"):
+            val = c.prompt_multi_select("選択", ["A", "B", "C"])
+        self.assertEqual(val, [0, 2])
+
+
+# -----------------------------------------------------------------------
+# スピナーテスト
+# -----------------------------------------------------------------------
+
+
+class TestConsoleSpinner(unittest.TestCase):
+    """spinner_start/stop のテスト。"""
+
+    def test_spinner_start_stop_no_crash(self) -> None:
+        """非 TTY 環境ではスピナーは no-op で、例外は発生しない。"""
+        c = Console(verbose=True, quiet=False)
+        c._is_tty = False
+        c.spinner_start("テスト中...")
+        c.spinner_stop("完了")
+
+    def test_spinner_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        c.spinner_start("テスト中...")
+        self.assertIsNone(c._spinner_thread)
+
+
+# -----------------------------------------------------------------------
+# ワークフローフェーズ / DAG 進捗 / ステップ内フェーズテスト
+# -----------------------------------------------------------------------
+
+
+class TestPhaseOutput(unittest.TestCase):
+    """phase_start / phase_end のテスト。"""
+
+    def test_phase_start_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.phase_start(2, 7, "パラメータ収集")
+        self.assertIn("Phase 2/7", cap.stdout)
+        self.assertIn("パラメータ収集", cap.stdout)
+
+    def test_phase_end_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.phase_end(3, 7, "ステップフィルタリング", 0.5)
+        self.assertIn("Phase 3/7", cap.stdout)
+        self.assertIn("✓", cap.stdout)
+        self.assertIn("0.5s", cap.stdout)
+
+    def test_phase_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.phase_start(1, 5, "テスト")
+            c.phase_end(1, 5, "テスト", 1.0)
+        self.assertEqual(cap.stdout, "")
+
+
+class TestDagWaveOutput(unittest.TestCase):
+    """dag_wave_start / dag_progress のテスト。"""
+
+    class _Step:
+        def __init__(self, id_: str):
+            self.id = id_
+
+    def test_dag_wave_start_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        steps = [self._Step("2a"), self._Step("2b")]
+        with _CaptureOutput() as cap:
+            c.dag_wave_start(2, 4, steps)
+        self.assertIn("Wave 2/4", cap.stdout)
+        self.assertIn("Step.2a", cap.stdout)
+        self.assertIn("Step.2b", cap.stdout)
+
+    def test_dag_wave_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.dag_wave_start(1, 3, [self._Step("1")])
+        self.assertEqual(cap.stdout, "")
+
+    def test_dag_progress_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.dag_progress(3, 2, 8)
+        self.assertIn("3/8", cap.stdout)
+        self.assertIn("完了", cap.stdout)
+        self.assertIn("実行中 2", cap.stdout)
+        self.assertIn("残り 3", cap.stdout)
+
+    def test_dag_progress_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.dag_progress(1, 1, 5)
+        self.assertEqual(cap.stdout, "")
+
+
+class TestStepPhaseOutput(unittest.TestCase):
+    """step_phase_start / step_phase_end のテスト。"""
+
+    def test_step_phase_start_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.step_phase_start("3", 1, 3, "メインタスク")
+        self.assertIn("Phase 1/3", cap.stdout)
+        self.assertIn("メインタスク", cap.stdout)
+
+    def test_step_phase_end_with_result(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.step_phase_end("3", 2, 3, "QA レビュー", 30.5, result="PASS")
+        self.assertIn("Phase 2/3", cap.stdout)
+        self.assertIn("30.5s", cap.stdout)
+        self.assertIn("PASS", cap.stdout)
+
+    def test_step_phase_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.step_phase_start("1", 1, 2, "テスト")
+            c.step_phase_end("1", 1, 2, "テスト", 5.0)
+        self.assertEqual(cap.stdout, "")
+
+
+class TestExecutionPlanOutput(unittest.TestCase):
+    """execution_plan のテスト。"""
+
+    class _Step:
+        def __init__(self, id_: str, title: str = ""):
+            self.id = id_
+            self.title = title
+
+    def test_execution_plan_shown(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        waves = [
+            [self._Step("1", "ドメイン分析")],
+            [self._Step("2a", "データモデル"), self._Step("2b", "サービスカタログ")],
+        ]
+        with _CaptureOutput() as cap:
+            c.execution_plan(waves, 3, 15)
+        self.assertIn("実行計画", cap.stdout)
+        self.assertIn("Wave 1", cap.stdout)
+        self.assertIn("Wave 2", cap.stdout)
+        self.assertIn("ドメイン分析", cap.stdout)
+
+    def test_execution_plan_suppressed_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.execution_plan([[self._Step("1")]], 1, 15)
+        self.assertEqual(cap.stdout, "")
+
+
+class TestStepElapsedOutput(unittest.TestCase):
+    """step_elapsed のテスト。"""
+
+    def test_step_elapsed_shown_when_verbose(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        c._step_start_times["3"] = c._start_time - 125  # 2m 5s ago
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertIn("Step.3", cap.stdout)
+        self.assertIn("m", cap.stdout)
+        self.assertIn("経過", cap.stdout)
+
+    def test_step_elapsed_hidden_when_not_verbose(self) -> None:
+        c = Console(verbose=False, quiet=False)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertEqual(cap.stdout, "")
+
+    def test_step_elapsed_no_crash_for_unknown_step(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.step_elapsed("unknown")
         self.assertEqual(cap.stdout, "")
 
 

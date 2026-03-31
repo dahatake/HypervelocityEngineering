@@ -21,7 +21,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertEqual(self.cfg.model, "claude-opus-4.6")
 
     def test_timeout_default(self) -> None:
-        self.assertEqual(self.cfg.timeout_seconds, 300.0)
+        self.assertEqual(self.cfg.timeout_seconds, 900.0)
 
     def test_base_branch_default(self) -> None:
         self.assertEqual(self.cfg.base_branch, "main")
@@ -73,6 +73,9 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_dry_run_default(self) -> None:
         self.assertFalse(self.cfg.dry_run)
+
+    def test_log_level_default(self) -> None:
+        self.assertEqual(self.cfg.log_level, "error")
 
 
 class TestSDKConfigFromEnv(unittest.TestCase):

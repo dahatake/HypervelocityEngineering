@@ -309,8 +309,8 @@ class TestStepResult(unittest.TestCase):
 class TestDAGExecutorConsole(unittest.TestCase):
     """Console が接続されている場合のテスト。"""
 
-    def test_dag_batch_called_when_console_provided(self) -> None:
-        """console.dag_batch() が呼ばれることを確認。"""
+    def test_dag_wave_start_called_when_console_provided(self) -> None:
+        """console.dag_wave_start() が呼ばれることを確認。"""
         wf = _WorkflowDef([
             _StepDef(id="1", title="Step 1", depends_on=[]),
         ])
@@ -328,7 +328,86 @@ class TestDAGExecutorConsole(unittest.TestCase):
         )
         _run(executor.execute())
 
-        mock_console.dag_batch.assert_called_once()
+        mock_console.dag_wave_start.assert_called_once()
+
+    def test_dag_progress_called_on_step_completion(self) -> None:
+        """ステップ完了時に console.dag_progress() が呼ばれることを確認。"""
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+        ])
+
+        mock_console = MagicMock()
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return True
+
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2"},
+            console=mock_console,
+        )
+        _run(executor.execute())
+
+        # dag_progress は各ステップ完了時に呼ばれる (最低2回)
+        self.assertGreaterEqual(mock_console.dag_progress.call_count, 2)
+
+
+class TestDAGExecutorComputeWaves(unittest.TestCase):
+    """compute_waves() のテスト。"""
+
+    def test_sequential_dag_has_separate_waves(self) -> None:
+        """直列 DAG: 各ステップが別 Wave になる。"""
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+        ])
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=lambda *a, **kw: None,
+            active_step_ids={"1", "2"},
+        )
+        waves = executor.compute_waves()
+        self.assertEqual(len(waves), 2)
+        self.assertEqual([s.id for s in waves[0]], ["1"])
+        self.assertEqual([s.id for s in waves[1]], ["2"])
+
+    def test_parallel_fork_in_same_wave(self) -> None:
+        """並列 fork: 同じ依存の複数ステップが同一 Wave に入る。"""
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2a", title="Step 2a", depends_on=["1"]),
+            _StepDef(id="2b", title="Step 2b", depends_on=["1"]),
+            _StepDef(id="3", title="Step 3", depends_on=["2a", "2b"]),
+        ])
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=lambda *a, **kw: None,
+            active_step_ids={"1", "2a", "2b", "3"},
+        )
+        waves = executor.compute_waves()
+        self.assertEqual(len(waves), 3)
+        wave2_ids = sorted(s.id for s in waves[1])
+        self.assertEqual(wave2_ids, ["2a", "2b"])
+
+    def test_inactive_steps_skipped_in_waves(self) -> None:
+        """active でないステップは Wave に含まれない。"""
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+            _StepDef(id="3", title="Step 3", depends_on=["2"]),
+        ])
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=lambda *a, **kw: None,
+            active_step_ids={"1", "3"},  # Step.2 は inactive
+        )
+        waves = executor.compute_waves()
+        all_ids = [s.id for wave in waves for s in wave]
+        self.assertIn("1", all_ids)
+        self.assertIn("3", all_ids)
+        self.assertNotIn("2", all_ids)
 
 
 if __name__ == "__main__":

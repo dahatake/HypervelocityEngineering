@@ -318,14 +318,14 @@ def resolve_selected_steps(
 
 def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     """Root Issue の本文を組み立てる。"""
-    prefix = _WORKFLOW_PREFIX[wf.id]
+    prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
     branch = params.get("branch", "main")
     auto_review = str(not params.get("skip_review", False)).lower()
     auto_context_review = "true"
     auto_qa = str(not params.get("skip_qa", False)).lower()
 
     lines: List[str] = []
-    lines.append(f"# [{prefix}] {_WORKFLOW_DISPLAY_NAMES[wf.id]}\n")
+    lines.append(f"# [{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}\n")
 
     # メタデータ HTML コメント
     lines.append(f"<!-- branch: {branch} -->")
@@ -339,7 +339,7 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     lines.append(f"<!-- auto-context-review: {auto_context_review} -->")
     lines.append(f"<!-- auto-qa: {auto_qa} -->")
     lines.append("")
-    lines.append(f"ワークフロー: **{_WORKFLOW_DISPLAY_NAMES[wf.id]}**")
+    lines.append(f"ワークフロー: **{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}**")
     lines.append(f"ブランチ: `{branch}`")
 
     if params.get("app_id"):

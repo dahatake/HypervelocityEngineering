@@ -15,7 +15,8 @@ from __future__ import annotations
 import asyncio
 import time
 import traceback
-from typing import Any, Callable, Coroutine, Dict, Optional, Set
+from datetime import datetime
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
 
 
 class StepResult:
@@ -72,12 +73,14 @@ class DAGExecutor:
         active_step_ids: Set[str],
         max_parallel: int = 15,
         console: Any = None,
+        step_prompts: Optional[Dict[str, str]] = None,
     ) -> None:
         self.workflow = workflow
         self.run_step_fn = run_step_fn
         self.active_step_ids = active_step_ids
         self._semaphore = asyncio.Semaphore(max(1, max_parallel))
         self.console = console
+        self._step_prompts: Dict[str, str] = step_prompts or {}
 
         # 実行状態
         self.completed: Set[str] = set()
@@ -88,13 +91,75 @@ class DAGExecutor:
         # 結果マップ (step_id → StepResult)
         self._results: Dict[str, StepResult] = {}
 
+        # Wave / 進捗管理
+        self._wave_counter: int = 0
+        self._total_waves: int = 0
+
+    def compute_waves(self) -> List[List[Any]]:
+        """DAG を事前走査して Wave 分割を計算する。
+
+        Returns:
+            [[step, ...], [step, ...], ...] — 各内部リストが 1 Wave
+        """
+        completed: Set[str] = set()
+        skipped: Set[str] = set()
+        waves: List[List[Any]] = []
+
+        while True:
+            next_steps = self.workflow.get_next_steps(
+                completed_step_ids=list(completed),
+                skipped_step_ids=list(skipped),
+            )
+
+            # active でないステップを自動スキップ
+            newly_skipped = False
+            for s in next_steps:
+                if (
+                    s.id not in self.active_step_ids
+                    and s.id not in skipped
+                    and s.id not in completed
+                ):
+                    skipped.add(s.id)
+                    newly_skipped = True
+
+            executable = [
+                s for s in next_steps
+                if s.id in self.active_step_ids
+                and s.id not in completed
+                and s.id not in skipped
+            ]
+
+            if not executable:
+                if newly_skipped:
+                    # スキップにより後続ステップが解放される可能性がある
+                    continue
+                remaining = [
+                    s for s in next_steps
+                    if s.id not in completed and s.id not in skipped
+                ]
+                if not remaining:
+                    break
+                break
+
+            waves.append(executable)
+            for s in executable:
+                completed.add(s.id)
+
+        return waves
+
     async def execute(self) -> Dict[str, StepResult]:
         """DAG を走査し、全ステップを実行する。
 
         Returns:
             step_id → StepResult のマップ。
         """
+        # Wave 事前計算
+        waves = self.compute_waves()
+        self._total_waves = len(waves)
+        self._wave_counter = 0
+
         pending_tasks: Set[asyncio.Task] = set()
+        HEARTBEAT_INTERVAL = 60  # 秒
 
         while True:
             next_steps = self.workflow.get_next_steps(
@@ -128,8 +193,11 @@ class DAGExecutor:
             ]
 
             if executable:
+                self._wave_counter += 1
                 if self.console is not None:
-                    self.console.dag_batch(executable)
+                    self.console.dag_wave_start(
+                        self._wave_counter, self._total_waves, executable,
+                    )
 
                 for step in executable:
                     self.running.add(step.id)
@@ -153,13 +221,28 @@ class DAGExecutor:
                 # → 次のイテレーションで wait する
                 continue
 
-            # 完了したタスクを1つ以上待つ（FIRST_COMPLETED パターン）
+            # 完了したタスクを1つ以上待つ（FIRST_COMPLETED + ハートビート）
             done, pending_tasks = await asyncio.wait(
-                pending_tasks, return_when=asyncio.FIRST_COMPLETED
+                pending_tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=HEARTBEAT_INTERVAL,
             )
+            if not done:
+                # タイムアウト — 実行中ステップの経過時間を表示
+                if self.console is not None:
+                    for step_id in list(self.running):
+                        self.console.step_elapsed(step_id)
+                continue
             for task in done:
                 result: StepResult = task.result()
                 self._results[result.step_id] = result
+
+            # 進捗更新
+            if self.console is not None:
+                self.console.dag_progress(
+                    len(self.completed), len(self.running),
+                    len(self.active_step_ids),
+                )
 
         return self._results
 
@@ -172,7 +255,7 @@ class DAGExecutor:
                 success: bool = await self.run_step_fn(
                     step_id=step.id,
                     title=step.title,
-                    prompt=getattr(step, "_prompt", ""),
+                    prompt=self._step_prompts.get(step.id, ""),
                     custom_agent=step.custom_agent,
                 )
             except Exception as exc:
@@ -185,7 +268,7 @@ class DAGExecutor:
                 else:
                     import sys as _sys
                     print(
-                        f"❌ ERROR: Step.{step.id} 例外: {error_msg}",
+                        f"[{datetime.now().strftime('%H:%M:%S')}] ❌ ERROR: Step.{step.id} 例外: {error_msg}",
                         file=_sys.stderr,
                         flush=True,
                     )

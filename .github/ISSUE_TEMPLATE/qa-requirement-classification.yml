@@ -1,0 +1,75 @@
+name: "qa/ 質問 → D01〜D21 分類・ステータス更新"
+description: "qa/ の質問ファイルを master-list の D01〜D21 に分類し、work/business-requirement-document-status.md を更新する"
+title: "[QA Classification] qa/ 質問 → D01〜D21 分類・ステータス更新"
+labels:
+  - "qa-classification"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## qa/ 質問データの D01〜D21 分類・ステータス更新
+
+        `qa/` フォルダーに蓄積された質問ファイル（コンテキスト確認・品質チェックリスト等）を
+        `docs/business-requirement-document-master-list.md` の D01〜D21 文書クラスに分類し、
+        `work/business-requirement-document-status.md` を生成・更新します。
+
+        ### 処理フロー
+        1. `qa/*.md` の全ファイルを読み取り、質問項目を抽出
+        2. 各質問を D01〜D21 に分類（Primary / Contributing）
+        3. 状態判定（Confirmed / Tentative / Unknown）
+        4. カバレッジギャップ分析
+        5. `work/business-requirement-document-status.md` を生成・更新
+
+        ### 受け入れ条件（AC）
+        - [ ] `qa/` 配下の全 `.md` ファイルが処理対象に含まれている
+        - [ ] 各質問が D01〜D21 のいずれかに Primary マッピングされている
+        - [ ] マッピング根拠が全質問に記載されている（捏造なし）
+        - [ ] `work/business-requirement-document-status.md` が正しいフォーマットで生成されている
+        - [ ] サマリーの集計値と詳細マッピングの行数が一致している
+        - [ ] `qa/` および `docs/` のファイルが変更されていない
+
+        <!-- custom_agent: QA-RequirementClassifier -->
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "対象スコープ"
+      description: "分類対象の qa/ ファイルの範囲を選択してください"
+      options:
+        - "全ファイル — qa/ 配下の全 .md ファイルを対象"
+        - "指定ファイルのみ — 下の「対象ファイル」欄で指定したファイルのみ対象"
+    validations:
+      required: true
+
+  - type: textarea
+    id: target_files
+    attributes:
+      label: "対象ファイル（スコープが「指定ファイルのみ」の場合）"
+      description: |
+        対象にする qa/ 配下のファイルを1行1ファイルで記載してください。
+        スコープが「全ファイル」の場合は空欄で構いません。
+      placeholder: |
+        qa/AAS-Step1-context-review.md
+        qa/AAD-Step1-2-service-list-context-review.md
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: force_refresh
+    attributes:
+      label: "再生成オプション"
+      description: |
+        チェックを入れると、既存の `work/business-requirement-document-status.md` を完全に再生成します。
+        チェックなしの場合は差分更新を試みます。
+        ※ Agent はこのチェックボックスの状態を Issue body から直接検知します。
+      options:
+        - label: "既存 status.md を完全に再生成する（force-refresh）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。"
+      placeholder: "例: 新しく追加した qa/XXX.md のみ差分分類してほしい"
+    validations:
+      required: false

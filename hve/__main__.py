@@ -1,14 +1,17 @@
 """__main__.py — CLI エントリポイント
 
 使い方:
-    # (A) python -m で実行 (推奨)
+    # (A) インタラクティブモード（推奨）
+    python -m hve
+
+    # (B) python -m で直接実行
     python -m hve orchestrate --workflow aad
 
-    # (B) ディレクトリに移動して __main__.py を直接実行
+    # (C) ディレクトリに移動して __main__.py を直接実行
     cd hve
     python __main__.py orchestrate --workflow aad
 
-    # (C) フルパス指定
+    # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
     # 基本実行 (デフォルト: claude-opus-4.6, 並列15, verbose, Issue/PR作成なし)
@@ -23,7 +26,7 @@
 
     # 並列数変更 + モデル変更
     python -m hve orchestrate --workflow aad \\
-      --max-parallel 5 --model gpt-4.1
+      --max-parallel 5 --model gpt-5.4
 
     # 出力抑制
     python -m hve orchestrate --workflow aad --quiet
@@ -50,8 +53,14 @@ import asyncio
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+
+
+def _ts() -> str:
+    """現在時刻のプレフィックス文字列を返す。"""
+    return f"[{datetime.now().strftime('%H:%M:%S')}]"
 
 
 # -----------------------------------------------------------------------
@@ -65,7 +74,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="GitHub Copilot SDK ワークフローオーケストレーター",
     )
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+
+    # --- run サブコマンド (インタラクティブモード) ---
+    sub.add_parser(
+        "run",
+        help="インタラクティブモードでワークフローを実行する (デフォルト)",
+    )
 
     # --- orchestrate サブコマンド ---
     orch = sub.add_parser(
@@ -178,6 +193,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help="モデル応答のトークンストリーム表示を有効化 (デフォルト: 無効)",
     )
+    orch.add_argument(
+        "--log-level",
+        default="error",
+        choices=["none", "error", "warning", "info", "debug", "all"],
+        metavar="LEVEL",
+        help="Copilot CLI のログレベル: none/error/warning/info/debug/all (デフォルト: error)",
+    )
 
     # MCP Server
     orch.add_argument(
@@ -205,16 +227,16 @@ def _build_parser() -> argparse.ArgumentParser:
     orch.add_argument(
         "--timeout",
         type=float,
-        default=300.0,
+        default=900.0,
         metavar="SECONDS",
-        help="idle タイムアウト秒数 (デフォルト: 300)",
+        help="idle タイムアウト秒数 (デフォルト: 900)",
     )
     orch.add_argument(
         "--review-timeout",
         type=float,
-        default=600.0,
+        default=900.0,
         metavar="SECONDS",
-        help="Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 600)",
+        help="Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 900)",
     )
 
     # ブランチ
@@ -308,14 +330,14 @@ def _load_mcp_config(mcp_config_path: Optional[str]) -> Optional[dict]:
 
     path = Path(mcp_config_path)
     if not path.exists():
-        print(f"⚠️  MCP 設定ファイルが見つかりません: {mcp_config_path}", file=sys.stderr)
+        print(f"{_ts()} ⚠️  MCP 設定ファイルが見つかりません: {mcp_config_path}", file=sys.stderr)
         return None
 
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
-        print(f"❌ MCP 設定ファイルの読み込みに失敗しました: {exc}", file=sys.stderr)
+        print(f"{_ts()} ❌ MCP 設定ファイルの読み込みに失敗しました: {exc}", file=sys.stderr)
         return None
 
 
@@ -350,6 +372,7 @@ def _build_config(args: argparse.Namespace):
     cfg.verbose = args.verbose or not args.quiet  # verbose はデフォルト True; --quiet で抑制
     cfg.quiet = args.quiet
     cfg.show_stream = args.show_stream
+    cfg.log_level = args.log_level
     cfg.timeout_seconds = args.timeout
     cfg.review_timeout_seconds = args.review_timeout
     cfg.base_branch = args.branch
@@ -430,8 +453,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "orchestrate":
         return _cmd_orchestrate(args)
 
-    parser.print_help()
-    return 1
+    # "run" サブコマンド、または引数なし → インタラクティブモード
+    return _cmd_run_interactive()
 
 
 def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKConfig") -> bool:
@@ -453,7 +476,7 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
 
     if errors:
         print(
-            "❌ --auto-coding-agent-review の前提条件が満たされていません:\n"
+            f"{_ts()} ❌ --auto-coding-agent-review の前提条件が満たされていません:\n"
             + "\n".join(errors)
             + "\n\n"
             "注意: Code Review Agent は GitHub.com 上の PR に対してレビューを行う機能です。\n"
@@ -464,7 +487,7 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
 
     if not args.quiet:
         print(
-            "ℹ️  --auto-coding-agent-review が有効です。\n"
+            f"{_ts()} ℹ️  --auto-coding-agent-review が有効です。\n"
             "   全ステップ完了後に Issue・Branch・PR が暗黙的に作成され、\n"
             "   Code Review Agent にレビューが依頼されます。",
             file=sys.stderr,
@@ -472,12 +495,200 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
     return True
 
 
+def _cmd_run_interactive() -> int:
+    """インタラクティブ wizard モードのハンドラー。
+
+    GitHub Copilot CLI スタイルの対話型 UI でワークフローを選択・設定・実行する。
+    """
+    _sdk_dir = Path(__file__).resolve().parent
+    if str(_sdk_dir) not in sys.path:
+        sys.path.insert(0, str(_sdk_dir))
+
+    try:
+        from .console import Console
+        from .config import SDKConfig
+        from .workflow_registry import list_workflows, get_workflow
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+        from .orchestrator import run_workflow
+    except ImportError:
+        from console import Console  # type: ignore[no-redef]
+        from config import SDKConfig  # type: ignore[no-redef]
+        from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+        from orchestrator import run_workflow  # type: ignore[no-redef]
+
+    con = Console(verbose=True, quiet=False)
+
+    # ── ウェルカムバナー ──────────────────────────────────
+    con.banner(
+        "HVE — GitHub Copilot SDK Workflow Orchestrator",
+        "ワークフローをインタラクティブに実行します",
+    )
+
+    # ── ワークフロー選択 ──────────────────────────────────
+    workflows = list_workflows()
+    wf_options = [
+        f"{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}  {con.s.DIM}({wf.id} — {len(wf.steps)} steps){con.s.RESET}"
+        for wf in workflows
+    ]
+    wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
+    selected_wf = workflows[wf_idx]
+    wf = get_workflow(selected_wf.id)
+
+    # ── ステップ選択 ──────────────────────────────────────
+    non_container_steps = [s for s in wf.steps if not s.is_container]
+    step_options = [f"[{s.id}] {s.title}" for s in non_container_steps]
+    selected_indices = con.prompt_multi_select(
+        f"実行するステップを選択（Enter = 全{len(non_container_steps)}ステップ）",
+        step_options,
+    )
+    if selected_indices:
+        selected_step_ids = [non_container_steps[i].id for i in selected_indices]
+    else:
+        selected_step_ids = []  # 空 = 全ステップ
+
+    # ── モデル選択 ────────────────────────────────────────
+    model_options = ["claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"]
+    model_idx = con.menu_select("使用するモデルを選択", model_options)
+    model = model_options[model_idx]
+
+    # ── オプション設定 ────────────────────────────────────
+    branch = con.prompt_input("ベースブランチ", default="main")
+    max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
+
+    # ── ログレベル選択 ────────────────────────────────────
+    log_level_options = ["none", "error", "warning", "info", "debug", "all"]
+    log_level_default_idx = log_level_options.index("error")
+    con._print(f"  {con.s.DIM}(デフォルト: error){con.s.RESET}", ts=False)
+    log_level_idx = con.menu_select("Copilot CLI ログレベルを選択", log_level_options)
+    log_level = log_level_options[log_level_idx]
+
+    auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
+    auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
+    create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
+    create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
+
+    # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
+    repo_input = ""
+    if create_issues or create_pr:
+        repo_default = os.environ.get("REPO", "")
+        repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
+
+    dry_run = con.prompt_yes_no("ドライラン（実際の SDK 呼び出しをしない）？", default=False)
+
+    # ── ワークフロー固有パラメータ ────────────────────────
+    params_extra: dict = {}
+    for param_name in wf.params:
+        val = con.prompt_input(f"{param_name}", required=True)
+        params_extra[param_name] = val
+
+    # ── 追加プロンプト ────────────────────────────────────
+    additional_prompt = con.prompt_input("追加プロンプト（省略可）")
+
+    # ── 確認パネル ────────────────────────────────────────
+    s = con.s
+    step_display = ", ".join(selected_step_ids) if selected_step_ids else "全ステップ"
+    summary_lines = [
+        f"ワークフロー : {s.CYAN}{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}{s.RESET} ({wf.id})",
+        f"ステップ     : {step_display}",
+        f"モデル       : {model}",
+        f"ブランチ     : {branch}",
+        f"並列数       : {max_parallel}",
+        f"ログレベル   : {log_level}",
+        f"QA 自動      : {'ON' if auto_qa else 'OFF'}",
+        f"Review 自動  : {'ON' if auto_review else 'OFF'}",
+        f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
+        f"PR  作成     : {'ON' if create_pr else 'OFF'}",
+        f"リポジトリ   : {repo_input or '(なし)'}",
+        f"ドライラン   : {'ON' if dry_run else 'OFF'}",
+    ]
+    for k, v in params_extra.items():
+        summary_lines.append(f"{k:<13}: {v}")
+    if additional_prompt:
+        summary_lines.append(f"追加プロンプト: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
+
+    con.panel("実行設定", summary_lines)
+
+    # ── 実行確認 ──────────────────────────────────────────
+    if not con.prompt_yes_no("この設定で実行しますか？", default=True):
+        con._print(f"\n  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
+        return 0
+
+    # ── SDKConfig 構築 ────────────────────────────────────
+    cfg = SDKConfig.from_env()
+    cfg.model = model
+    cfg.max_parallel = max_parallel
+    cfg.auto_qa = auto_qa
+    cfg.auto_contents_review = auto_review
+    cfg.create_issues = create_issues
+    cfg.create_pr = create_pr or create_issues
+    cfg.verbose = True
+    cfg.quiet = False
+    cfg.show_stream = False
+    cfg.log_level = log_level
+    cfg.base_branch = branch
+    cfg.dry_run = dry_run
+    cfg.additional_prompt = additional_prompt or None
+    if repo_input:
+        cfg.repo = repo_input
+    elif not cfg.repo:
+        cfg.repo = os.environ.get("REPO", "")
+
+    # params dict 構築
+    params: dict = {
+        "branch": branch,
+        "auto_qa": auto_qa,
+        "auto_contents_review": auto_review,
+        "steps": selected_step_ids,
+    }
+    params.update(params_extra)
+
+    # ── バリデーション ────────────────────────────────────
+    if cfg.create_issues or cfg.create_pr:
+        errors: List[str] = []
+        if not cfg.repo:
+            errors.append("  REPO 環境変数が必要です。")
+        if not cfg.resolve_token():
+            errors.append("  GH_TOKEN（または GITHUB_TOKEN）環境変数が必要です。")
+        if errors:
+            for e in errors:
+                con.error(e)
+            return 1
+
+    # ── 実行 ──────────────────────────────────────────────
+    con._print("", ts=False)
+    con.spinner_start("ワークフローを実行中...")
+    try:
+        result = asyncio.run(
+            run_workflow(
+                workflow_id=wf.id,
+                params=params,
+                config=cfg,
+            )
+        )
+    except KeyboardInterrupt:
+        con.spinner_stop()
+        con._print(f"\n  {s.YELLOW}中断されました。{s.RESET}")
+        return 1
+    finally:
+        con.spinner_stop()
+
+    # ── 結果表示 ──────────────────────────────────────────
+    if result.get("error"):
+        con.error(str(result["error"]))
+        return 1
+    if result.get("failed"):
+        return 1
+    con._print(f"\n  {s.GREEN}✓{s.RESET} ワークフロー完了\n")
+    return 0
+
+
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
     # バリデーション: --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と併用必須
     if args.auto_coding_agent_review_auto_approval and not args.auto_coding_agent_review:
         print(
-            "⚠️  --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と"
+            f"{_ts()} ⚠️  --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と"
             " 組み合わせて使用してください。\n"
             "   --auto-coding-agent-review が指定されていないため --auto-coding-agent-review-auto-approval は無視されます。",
             file=sys.stderr,
@@ -491,7 +702,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     # --auto-coding-agent-review には --create-pr が必須。未指定の場合は暗黙的に有効にする
     if args.auto_coding_agent_review and not args.create_pr:
         print(
-            "ℹ️  --auto-coding-agent-review が指定されたため --create-pr を有効にします。",
+            f"{_ts()} ℹ️  --auto-coding-agent-review が指定されたため --create-pr を有効にします。",
             file=sys.stderr,
         )
         args.create_pr = True
@@ -518,7 +729,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             errors.append("  GH_TOKEN（または GITHUB_TOKEN）環境変数が必要です。")
         if errors:
             print(
-                "❌ --create-issues / --create-pr の前提条件が満たされていません:\n"
+                f"{_ts()} ❌ --create-issues / --create-pr の前提条件が満たされていません:\n"
                 + "\n".join(errors),
                 file=sys.stderr,
             )
@@ -541,7 +752,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if result.get("failed"):
         return 1
     if result.get("code_review_error"):
-        print(f"⚠️  Code Review Agent でエラーが発生しました: {result['code_review_error']}", file=sys.stderr)
+        print(f"{_ts()} ⚠️  Code Review Agent でエラーが発生しました: {result['code_review_error']}", file=sys.stderr)
         return 1
     return 0
 

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 class SDKConfig:
     # --- 基本設定 ---
     model: str = "claude-opus-4.6"          # デフォルトモデル
-    timeout_seconds: float = 300.0          # セッションの idle タイムアウト
+    timeout_seconds: float = 900.0          # セッションの idle タイムアウト
     base_branch: str = "main"               # ベースブランチ
     cli_path: Optional[str] = None          # Copilot CLI のパス (COPILOT_CLI_PATH)
     cli_url: Optional[str] = None           # 外部 CLI サーバー URL (例: localhost:4321)
@@ -27,7 +27,7 @@ class SDKConfig:
     # --- Code Review Agent ---
     auto_coding_agent_review: bool = False              # Code Review Agent 呼び出し（デフォルト: 無効）
     auto_coding_agent_review_auto_approval: bool = False  # 自動承認（デフォルト: 無効）
-    review_timeout_seconds: float = 600.0               # Code Review Agent レビュー待ちタイムアウト
+    review_timeout_seconds: float = 900.0               # Code Review Agent レビュー待ちタイムアウト
 
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない
@@ -38,6 +38,7 @@ class SDKConfig:
     verbose: bool = True                    # デフォルト: 詳細表示
     quiet: bool = False                     # True = 全出力抑制
     show_stream: bool = False               # トークンストリーム表示（デフォルト: 無効）
+    log_level: str = "error"                # CLI ログレベル (none/error/warning/info/debug/all)
 
     # --- MCP Servers ---
     mcp_servers: Optional[Dict[str, Any]] = None

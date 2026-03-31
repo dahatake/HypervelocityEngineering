@@ -553,7 +553,7 @@ class TestCreatePrIfNeeded(unittest.TestCase):
             )
 
         self.assertEqual(pr_num, 42)
-        self.assertIn("Related Issue: #99", captured_body.get("body", ""))
+        self.assertIn("Closes #99", captured_body.get("body", ""))
 
     def test_pr_body_without_root_issue(self) -> None:
         """root_issue_num が None の場合、PR body に 'Related Issue' が含まれないことを確認。"""

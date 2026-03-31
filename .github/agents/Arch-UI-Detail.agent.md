@@ -36,19 +36,27 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3) 作業ディレクトリ（このagent固有）
 - task-slug: `screen-detail`
 - `{WORK}`
+  - `plan.md`（**必須** — AGENTS.md §2.1 条件「大量/生成」に該当するタスクでは常に作成。§2.3 必須セクション形式に従うこと）
   - `screen-detail-work-status.md`（進捗：フォーマット固定）
-  - `plan.md`（必要時のみ）
-  - `subissues.md`（15分超のとき必須。Sub Issue 用本文）
+  - `subissues.md`（SPLIT_REQUIRED 判定時に必須。Sub Issue 用本文）
 
 ## 4) 実行フロー（必ずこの順）
 
 ### 4.1 Planner（最初に必ず / 大量生成はしない）
 1) `screen-list.md` から画面IDと画面名を抽出して画面数を確定  
 2) 画面ごとに概算（X–Y分）と合計を見積（厳密不要）  
-3) 合計と不確実性から分割要否を決め、`{WORK}screen-detail-work-status.md` の `## Planner` に記録
+3) **AGENTS.md §2.1 の条件判定を実施する**（必須。スキップ禁止）
+4) **`{WORK}plan.md` を AGENTS.md §2.3 の必須セクション形式で作成する**（見積結果に関わらず必須）
+5) AGENTS.md §2.2 の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
+6) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録
 
-分割判定:
-- 合計見積が **15分超** または **レビュー困難（大量/不確実性高）** → Split Mode に移行し、このセッションでは実生成しない（以降の Execution をスキップ）
+> ⚠️ **plan.md の作成は見積結果に関わらず必須**。AGENTS.md §2.1 の条件「大規模/大量/生成」に全画面一括生成タスクは常に該当するため。
+> ⚠️ plan.md を作成せずに docs/screen/ 配下のファイルを生成することは禁止（AGENTS.md §2.2 違反）。
+
+分割判定（AGENTS.md §2.2 準拠）:
+- 合計見積が **15分超** → SPLIT_REQUIRED（不確実性に関わらず。AGENTS.md §2.2 の if 分岐が最優先）
+- 合計見積が **15分以下** かつ 不確実性が **中/高** → SPLIT_REQUIRED
+- 合計見積が **15分以下** かつ 不確実性が **低** → PROCEED（Execution に進んでよい）
 
 ### 4.2 Split Mode（合計>15分 など）
 - `{WORK}subissues.md` を作成し、**そのままSub Issue化できる本文**を出力する
