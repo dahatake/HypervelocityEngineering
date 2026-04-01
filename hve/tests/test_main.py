@@ -66,11 +66,11 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.usecase_id)
         self.assertIsNone(args.scope)
         self.assertIsNone(args.target_files)
-        self.assertFalse(args.force_refresh)
+        self.assertIsNone(args.force_refresh)
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
         self.assertIsNone(args.mcp_config)
-        self.assertEqual(args.timeout, 900.0)
+        self.assertEqual(args.timeout, 7200.0)
         self.assertEqual(args.log_level, "error")
 
     def test_log_level_option(self) -> None:
@@ -154,14 +154,14 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.timeout, 600.0)
 
     def test_review_timeout_default(self) -> None:
-        """--review-timeout のデフォルト値が 900.0 であることを確認。"""
+        """--review-timeout のデフォルト値が 7200.0 であることを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
-        self.assertEqual(args.review_timeout, 900.0)
+        self.assertEqual(args.review_timeout, 7200.0)
 
     def test_review_timeout_option(self) -> None:
         """--review-timeout オプションのテスト。"""
-        args = _parse(["orchestrate", "-w", "aas", "--review-timeout", "900"])
-        self.assertEqual(args.review_timeout, 900.0)
+        args = _parse(["orchestrate", "-w", "aas", "--review-timeout", "600"])
+        self.assertEqual(args.review_timeout, 600.0)
 
     def test_cli_url_option(self) -> None:
         """--cli-url オプションのテスト。"""
@@ -259,11 +259,53 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_aqrc_force_refresh_default_false(self) -> None:
-        """AQRC force_refresh デフォルト値が False であることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+    def test_aqrc_force_refresh_default_true(self) -> None:
+        """AQRC force_refresh デフォルト値が True であることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc"])
+        params = _build_params(args)
+        self.assertTrue(params["force_refresh"])
+
+    def test_aqrc_no_force_refresh_sets_false(self) -> None:
+        """AQRC --no-force-refresh で force_refresh が False になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc", "--no-force-refresh"])
         params = _build_params(args)
         self.assertFalse(params["force_refresh"])
+
+    def test_aqrc_scope_default_all_when_not_specified(self) -> None:
+        """AQRC scope が未指定時に 'all' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc"])
+        params = _build_params(args)
+        self.assertEqual(params["scope"], "all")
+
+    def test_aqrc_target_files_default_qa_glob_when_not_specified(self) -> None:
+        """AQRC target_files が未指定時に 'qa/*.md' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqrc"])
+        params = _build_params(args)
+        self.assertEqual(params["target_files"], "qa/*.md")
+
+    def test_non_aqrc_scope_not_set_when_not_specified(self) -> None:
+        """非 AQRC ワークフローで --scope 未指定時は params に scope が含まれないことを確認。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        params = _build_params(args)
+        self.assertNotIn("scope", params)
+
+    def test_non_aqrc_target_files_not_set_when_not_specified(self) -> None:
+        """非 AQRC ワークフローで --target-files 未指定時は params に target_files が含まれないことを確認。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        params = _build_params(args)
+        self.assertNotIn("target_files", params)
+
+    def test_non_aqrc_force_refresh_not_in_params_when_not_specified(self) -> None:
+        """非 AQRC ワークフローで --force-refresh 未指定時は params に force_refresh が含まれないことを確認。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        params = _build_params(args)
+        self.assertNotIn("force_refresh", params)
+
+    def test_model_auto_resolved_in_config(self) -> None:
+        """--model Auto が claude-opus-4.6 に解決されることを確認。"""
+        args = _parse(["orchestrate", "-w", "aas", "--model", "Auto"])
+        config = _build_config(args)
+        self.assertEqual(config.model, "claude-opus-4.6")
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -351,8 +393,8 @@ class TestMainDryRun(unittest.TestCase):
                 ])
                 self.assertEqual(exit_code, 0, f"{wf_id} の dry_run で終了コードが 0 以外")
 
-    def test_aqrc_scope_specified_without_target_files_returns_1(self) -> None:
-        """aqrc で --scope specified だが --target-files 未指定の場合、終了コードが 1。"""
+    def test_aqrc_scope_specified_without_target_files_returns_0(self) -> None:
+        """aqrc で --scope specified だが --target-files 未指定の場合、デフォルト値 qa/*.md で続行するため終了コードが 0。"""
         exit_code = main([
             "orchestrate",
             "--workflow", "aqrc",
@@ -360,7 +402,7 @@ class TestMainDryRun(unittest.TestCase):
             "--dry-run",
             "--quiet",
         ])
-        self.assertEqual(exit_code, 1)
+        self.assertEqual(exit_code, 0)
 
     def test_aqrc_scope_all_dry_run_returns_0(self) -> None:
         """aqrc で --scope all（--target-files 不要）の dry_run が成功する。"""
@@ -391,15 +433,15 @@ class TestBuildConfigReviewTimeout(unittest.TestCase):
 
     def test_review_timeout_reflected_in_config(self) -> None:
         """--review-timeout の値が config.review_timeout_seconds に反映される。"""
-        args = _parse(["orchestrate", "-w", "aas", "--review-timeout", "900"])
+        args = _parse(["orchestrate", "-w", "aas", "--review-timeout", "600"])
         config = _build_config(args)
-        self.assertEqual(config.review_timeout_seconds, 900.0)
+        self.assertEqual(config.review_timeout_seconds, 600.0)
 
     def test_review_timeout_default_in_config(self) -> None:
         """--review-timeout 未指定時のデフォルト値が config に反映される。"""
         args = _parse(["orchestrate", "-w", "aas"])
         config = _build_config(args)
-        self.assertEqual(config.review_timeout_seconds, 900.0)
+        self.assertEqual(config.review_timeout_seconds, 7200.0)
 
 
 class TestBuildConfigLogLevel(unittest.TestCase):
@@ -580,6 +622,7 @@ class TestCreateIssuesNewFlow(unittest.TestCase):
         config = _build_config(args)
         self.assertIsNotNone(config.ignore_paths)
         self.assertIn("docs", config.ignore_paths)
+        self.assertIn("qa", config.ignore_paths)
         self.assertIn("work", config.ignore_paths)
 
     def test_ignore_paths_cli_override(self) -> None:
@@ -601,7 +644,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         *,
         code_review: bool = False,
         auto_approval: bool = False,
-        review_timeout: str = "900",
+        review_timeout: str = "7200",
         create_pr: bool = False,
         create_issues: bool = False,
     ) -> "SDKConfig":
@@ -641,10 +684,11 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # prompt_input の回答順序:
         # 1. ブランチ → "main"
         # 2. 並列数 → "15"
-        # 3. Review タイムアウト (code_review=True 時のみ)
-        # 4. (repo_input — create_issues or create_pr の場合)
-        # 5. 追加プロンプト → ""
-        input_answers = ["main", "15"]
+        # 3. セッション idle タイムアウト → "7200"
+        # 4. Review タイムアウト (code_review=True 時のみ)
+        # 5. (repo_input — create_issues or create_pr の場合)
+        # 6. 追加プロンプト → ""
+        input_answers = ["main", "15", "7200"]
         if code_review:
             input_answers.append(review_timeout)
         if create_issues or create_pr:
@@ -740,10 +784,10 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         self.assertEqual(cfg.review_timeout_seconds, 600.0)
 
     def test_interactive_review_timeout_invalid_fallback(self) -> None:
-        """review_timeout に非数値を入力した場合、デフォルト 900.0 にフォールバック。"""
+        """review_timeout に非数値を入力した場合、デフォルト 7200.0 にフォールバック。"""
         cfg = self._run_interactive_with_inputs(code_review=True, review_timeout="abc")
         self.assertIsNotNone(cfg)
-        self.assertEqual(cfg.review_timeout_seconds, 900.0)
+        self.assertEqual(cfg.review_timeout_seconds, 7200.0)
 
 
 class TestInteractiveMode(unittest.TestCase):

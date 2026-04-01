@@ -64,6 +64,7 @@ A) スクリプト作成
 > **共通仕様**: `azure-cli-deploy-scripts` Skill の「3点セットテンプレート」および「冪等性パターン」に従う。
 
 - `infra/azure/create-azure-api-resources-prep.sh` — 前提チェック
+  - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）
 - `infra/azure/create-azure-api-resources.sh` — リソース冪等作成
 - `infra/azure/verify-azure-resources.sh` — 全リソースの存在検証
   - 検証対象: 後述の AC-3 の確認対象リソースを全て含む

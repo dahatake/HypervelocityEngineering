@@ -280,19 +280,24 @@ wizard は以下の 8 段階で進行します。
 >            ← Enter のみ = 全ステップ
 ```
 
+> **AQRC の場合**: AQRC はステップが 1 つのみのため、ステップ選択はスキップされ自動で全選択されます。
+
 #### ステップ 4: モデル選択
 
 使用する AI モデルを番号で選択します。
 
 ```text
 ? 使用するモデルを選択
-  1) claude-opus-4.6
-  2) claude-sonnet-4.6
-  3) gpt-5.4
-  4) gpt-5.3-codex
-  5) gemini-2.5-pro
+  1) Auto
+  2) claude-opus-4.6
+  3) claude-sonnet-4.6
+  4) gpt-5.4
+  5) gpt-5.3-codex
+  6) gemini-2.5-pro
 > 1
 ```
+
+> **Auto を選択した場合**: デフォルトモデル（`claude-opus-4.6`）が自動的に使用されます。確認パネルでは `Auto` と表示されます。
 
 #### ステップ 5: オプション設定
 
@@ -309,6 +314,7 @@ wizard は以下の 8 段階で進行します。
   5) debug
   6) all
 > 2
+? セッション idle タイムアウト（秒。デフォルト: 7200 = 2時間） [7200]: 7200
 ? QA 自動投入を有効にする？ [y/N]: N
 ? Review 自動投入を有効にする？ [y/N]: N
 ? GitHub Issue を作成する？ [y/N]: y
@@ -322,12 +328,17 @@ wizard は以下の 8 段階で進行します。
 | 設定項目 | デフォルト | CLI モードでの対応オプション |
 |---------|-----------|--------------------------|
 | ベースブランチ | `main` | `--branch` |
-| 並列実行数 | `15` | `--max-parallel` || ログレベル | `error` | `--log-level` || QA 自動投入 | OFF | `--auto-qa` |
+| 並列実行数 | `15` | `--max-parallel` |
+| ログレベル | `error` | `--log-level` |
+| タイムアウト | `7200`（2時間） | `--timeout` |
+| QA 自動投入 | OFF | `--auto-qa` |
 | Review 自動投入 | OFF | `--auto-contents-review` |
 | GitHub Issue 作成 | OFF | `--create-issues` |
 | GitHub PR 作成 | OFF | `--create-pr` |
 | リポジトリ (owner/repo) | `$REPO` または空 | `--repo` |
 | ドライラン | OFF | `--dry-run` |
+
+> **AQRC ワークフローの場合**: 並列実行数（15 固定）、QA 自動投入（OFF 固定）、Review 自動投入（OFF 固定）のプロンプトはスキップされます。タイムアウト設定は AQRC でもスキップされず、全ワークフロー共通で個別設定可能です。
 
 #### ステップ 6: ワークフロー固有パラメータ
 
@@ -343,7 +354,9 @@ wizard は以下の 8 段階で進行します。
 固有パラメータを持つワークフロー:
 - `asdw`: `app_id`, `resource_group`, `usecase_id`
 - `abdv`: `resource_group`, `batch_job_id`
-- `aqrc`: `scope`, `target_files`（scope=specified 時）, `force_refresh`
+- `aqrc`: `scope`, `target_files`, `force_refresh`
+
+> **AQRC ワークフローの場合**: 固有パラメータ（scope=all, target_files=qa/*.md, force_refresh=true）はデフォルト値で自動設定され、プロンプトはスキップされます。
 
 > 固有パラメータのないワークフロー（`aas`, `aad`, `abd`, `aid`）ではこのステップはスキップされます。
 
@@ -365,6 +378,7 @@ wizard は以下の 8 段階で進行します。
 │  ブランチ     : main                               │
 │  並列数       : 15                                 │
 │  ログレベル   : error                              │
+│  タイムアウト  : 7200 秒                           │
 │  QA 自動      : OFF                               │
 │  Review 自動  : OFF                               │
 │  Issue 作成   : ON                                │
@@ -479,8 +493,8 @@ python -m hve orchestrate \
   --steps Step.1,Step.2,Step.3 \
   --mcp-config mcp-servers.json \
   --cli-path /usr/local/bin/copilot \
-  --timeout 900 \
-  --review-timeout 900 \
+  --timeout 7200 \
+  --review-timeout 7200 \
   --show-stream \
   --log-level info \
   --verbose \
@@ -497,7 +511,7 @@ python -m hve orchestrate \
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
-| `--workflow`, `-w` | ワークフロー ID（`aas` / `aad` / `asdw` / `abd` / `abdv` / `aid`） | なし（**必須**） |
+| `--workflow`, `-w` | ワークフロー ID（`aas` / `aad` / `asdw` / `abd` / `abdv` / `aid` / `aqrc`） | なし（**必須**） |
 | `--branch` | ターゲットブランチ名 | `main` |
 | `--steps` | 実行ステップをカンマ区切りで指定 | 全ステップ |
 | `--dry-run` | 事前確認モード（SDK 呼び出しなし） | `false` |
@@ -508,14 +522,14 @@ python -m hve orchestrate \
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
-| `--model`, `-m` | 使用する AI モデル | `claude-opus-4.6` |
+| `--model`, `-m` | 使用する AI モデル（`Auto` を指定するとデフォルトモデルが自動選択されます） | `claude-opus-4.6` |
 | `--max-parallel` | 同時実行するステップ数の上限 | `15` |
 | `--auto-qa` | 各ステップ後に自動 QA を実行（対話的） | `false` |
 | `--auto-contents-review` | 各ステップ後に自動レビューを実行 | `false` |
 | `--auto-coding-agent-review` | 全ステップ完了後に Code Review Agent レビューを実行（`--repo` + `GH_TOKEN` 必須） | `false` |
 | `--auto-coding-agent-review-auto-approval` | Code Review Agent の修正プランを全て自動承認 | `false` |
-| `--timeout` | idle タイムアウト秒数 | `900` |
-| `--review-timeout` | Code Review Agent レビュー完了待ちタイムアウト秒数 | `900` |
+| `--timeout` | idle タイムアウト秒数 | `7200`（2時間） |
+| `--review-timeout` | Code Review Agent レビュー完了待ちタイムアウト秒数 | `7200`（2時間） |
 | `--show-stream` | モデル応答のトークンストリーム表示 | `false` |
 | `--log-level` | Copilot CLI のログレベル (`none`/`error`/`warning`/`info`/`debug`/`all`) | `error` |
 
@@ -550,7 +564,7 @@ python -m hve orchestrate \
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
-| `--ignore-paths` | `git add` 時に除外するパス（スペース区切りで複数指定可） | config デフォルト値 |
+| `--ignore-paths` | `git add` 時に除外するパス（スペース区切りで複数指定可） | `docs images infra qa src test work` |
 | `--additional-prompt` | 全 Custom Agent のプロンプト末尾に追記する文字列 | なし |
 | `--issue-title` | Root Issue 作成時のタイトルを上書き | ワークフロー名から自動生成 |
 
@@ -563,8 +577,8 @@ python -m hve orchestrate \
 | `--usecase-id` | ユースケース ID（例: `UC-01`） | `asdw` |
 | `--batch-job-id` | バッチジョブ ID（カンマ区切り可。例: `JOB-01,JOB-02`） | `abdv` |
 | `--scope` | 分類対象スコープ (`all` / `specified`、省略時は `all`) | `aqrc` |
-| `--target-files` | 対象ファイルパス（スペース区切り） | `aqrc` |
-| `--force-refresh` | 既存 status.md を完全に再生成 | `aqrc` |
+| `--target-files` | 対象ファイルパス（スペース区切り、省略時は `qa/*.md`） | `aqrc` |
+| `--force-refresh` / `--no-force-refresh` | 既存 status.md を完全に再生成（デフォルト: 有効） | `aqrc` |
 
 ### 使い方の例
 
@@ -636,7 +650,7 @@ python -m hve orchestrate \
 | バッチ設計 | `abd` | `python -m hve orchestrate --workflow abd` |
 | バッチ実装 | `abdv` | `python -m hve orchestrate --workflow abdv --resource-group rg-batch --batch-job-id JOB-01` |
 | IoT 設計 | `aid` | `python -m hve orchestrate --workflow aid` |
-| QA 要求分類 | `aqrc` | `python -m hve orchestrate --workflow aqrc --scope all` |
+| QA 要求分類 | `aqrc` | `python -m hve orchestrate --workflow aqrc` |
 
 > **ヒント**: インタラクティブモード（`python -m hve`）では、上記のワークフローが番号付きメニューとして表示されます。ワークフロー固有のオプション（`--app-id` 等）も wizard 内で自動的にプロンプトされるため、コマンドを暗記する必要はありません。
 
@@ -703,23 +717,23 @@ python -m hve orchestrate \
 | **目的** | `qa/` の質問ファイルを D01〜D21 に分類し、`work/business-requirement-document-status.md` を生成・更新 |
 | **前提条件** | `qa/` 配下に `.md` ファイルが存在し、`docs/business-requirement-document-master-list.md` が存在すること |
 | **ステップ数** | 1（Agent 内部で 8 ステップを順次処理） |
-| **固有オプション** | `--scope`（省略時は `all`）, `--target-files`（scope=specified 時は必須）, `--force-refresh` |
+| **固有オプション** | `--scope`（省略時は `all`）, `--target-files`（省略時は `qa/*.md`）, `--force-refresh` / `--no-force-refresh`（デフォルト: 有効） |
 
 **実行例:**
 
 ```bash
-# 全ファイル分類
-python -m hve orchestrate --workflow aqrc --scope all
+# デフォルト設定で実行（scope=all, target_files=qa/*.md, force_refresh=true）
+python -m hve orchestrate --workflow aqrc
 
 # 指定ファイルのみ分類
 python -m hve orchestrate --workflow aqrc --scope specified \
   --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
 
-# 既存 status.md を完全再生成
-python -m hve orchestrate --workflow aqrc --scope all --force-refresh
+# 増分更新（force_refresh を無効化）
+python -m hve orchestrate --workflow aqrc --no-force-refresh
 ```
 
-> **`work/` フォルダーの扱い**: AQRC の成果物は `work/business-requirement-document-status.md` に出力されます。`--create-pr` を使用する場合、デフォルトの `ignore_paths` に `work` が含まれているため、`--ignore-paths` オプションで `work` を除外リストから外す必要があります。
+> **`work/` フォルダーの扱い**: AQRC の成果物は `work/business-requirement-document-status.md` に出力されます。`--create-pr` を使用する場合、デフォルトの `ignore_paths` に `work` が含まれているため、`--ignore-paths` オプションで `work` を除外リストから外す必要があります。また、`qa` もデフォルトで `ignore_paths` に含まれています（`docs images infra qa src test work`）。
 
 ---
 
@@ -851,7 +865,7 @@ WORKFLOW_REGISTRY = {
 
 ### Code Review Agent フェーズ（`--auto-coding-agent-review`）
 
-全ステップ完了後: Root Issue 作成 → ブランチ作成 → 全ステップ実行 → PR 作成 → Code Review Agent レビュー依頼 → レビュー完了ポーリング（デフォルト 900秒） → 修正プロンプト
+全ステップ完了後: Root Issue 作成 → ブランチ作成 → 全ステップ実行 → PR 作成 → Code Review Agent レビュー依頼 → レビュー完了ポーリング（デフォルト 7200秒） → 修正プロンプト
 
 ---
 

@@ -7,12 +7,13 @@ import io
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import SDKConfig
 from console import Console
-from runner import StepRunner, _is_review_fail
+from runner import StepRunner, _is_review_fail, _make_log_handler, _StderrLogReader
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
 # Used in test_returns_false_when_sdk_missing to correctly restore sys.modules after the test.
@@ -319,6 +320,165 @@ class TestIsReviewFail(unittest.TestCase):
         """❌ FAIL トークンがあれば FAIL 判定。"""
         content = "- 合格判定: ❌ FAIL"
         self.assertTrue(_is_review_fail(content))
+
+
+class TestMakeCliLogHandler(unittest.TestCase):
+    """StepRunner._make_cli_log_handler() のテスト。"""
+
+    def _make_runner(self) -> StepRunner:
+        config = SDKConfig()
+        console = Console(verbosity=3)
+        return StepRunner(config, console)
+
+    def test_handler_calls_console_cli_log(self) -> None:
+        """コールバックが console.cli_log() を呼び出す。"""
+        runner = self._make_runner()
+        handler = runner._make_cli_log_handler("1")
+        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
+            handler("● Environment loaded: 10 agents")
+            mock_cli_log.assert_called_once_with("1", "● Environment loaded: 10 agents")
+
+    def test_handler_splits_multiline(self) -> None:
+        """複数行文字列は行ごとに分割して cli_log() を呼び出す。"""
+        runner = self._make_runner()
+        handler = runner._make_cli_log_handler("1")
+        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
+            handler("○ List directory qa\n  └ qa/")
+            self.assertEqual(mock_cli_log.call_count, 2)
+
+    def test_handler_ignores_empty_lines(self) -> None:
+        """空行・空白のみの行は cli_log() を呼び出さない。"""
+        runner = self._make_runner()
+        handler = runner._make_cli_log_handler("1")
+        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
+            handler("")
+            handler("   ")
+            handler("\n\n")
+            mock_cli_log.assert_not_called()
+
+    def test_handler_passes_step_id(self) -> None:
+        """step_id がコールバック経由で cli_log() に渡される。"""
+        runner = self._make_runner()
+        handler = runner._make_cli_log_handler("2.3")
+        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
+            handler("○ Search (glob)")
+            mock_cli_log.assert_called_once_with("2.3", "○ Search (glob)")
+
+
+class TestMakeLogHandlerStandalone(unittest.TestCase):
+    """モジュールレベル _make_log_handler() のテスト（orchestrator.py からも利用）。"""
+
+    def test_standalone_handler_calls_cli_log(self) -> None:
+        """_make_log_handler() が console.cli_log() を呼び出す。"""
+        console = Console(verbosity=3)
+        handler = _make_log_handler(console, "review")
+        with unittest.mock.patch.object(console, 'cli_log') as mock_cli_log:
+            handler("● Environment loaded: 5 agents")
+            mock_cli_log.assert_called_once_with("review", "● Environment loaded: 5 agents")
+
+    def test_standalone_handler_ignores_empty(self) -> None:
+        """空行は cli_log() を呼び出さない。"""
+        console = Console(verbosity=3)
+        handler = _make_log_handler(console, "review")
+        with unittest.mock.patch.object(console, 'cli_log') as mock_cli_log:
+            handler("")
+            handler("  ")
+            mock_cli_log.assert_not_called()
+
+
+class TestStderrLogReader(unittest.TestCase):
+    """_StderrLogReader のユニットテスト。"""
+
+    def _make_fake_stderr(self, content: bytes) -> io.BytesIO:
+        """bytes を BytesIO stream に包む。"""
+        return io.BytesIO(content)
+
+    def _run_reader(self, content: bytes, step_id: str = "1") -> tuple:
+        """ヘルパー: リーダーを起動してストリームが EOF に達したらスレッドを join する。
+        (sleep を使わず決定論的にテストするため)
+        """
+        console = Console(verbosity=3, quiet=False)
+        fake_stderr = self._make_fake_stderr(content)
+        received: list = []
+        with unittest.mock.patch.object(
+            console, "cli_log", side_effect=lambda sid, line: received.append((sid, line))
+        ):
+            reader = _StderrLogReader(fake_stderr, console, step_id)
+            reader.start()
+            # EOF 到達後にスレッドが自然終了するのを待つ
+            if reader._thread is not None:
+                reader._thread.join(timeout=5.0)
+            reader.stop()
+        return reader, received
+
+    def test_reads_stderr_lines_to_cli_log(self) -> None:
+        """stderr の各行が console.cli_log() に正しく渡される。"""
+        content = "● Environment loaded\n○ List directory\n".encode("utf-8")
+        _, received = self._run_reader(content)
+        lines = [line for _, line in received]
+        self.assertIn("● Environment loaded", lines)
+        self.assertIn("○ List directory", lines)
+
+    def test_empty_lines_are_skipped(self) -> None:
+        """空行・空白行は cli_log() に渡されない。"""
+        content = "\n\n● Test line\n\n".encode("utf-8")
+        _, received = self._run_reader(content)
+        lines = [line for _, line in received]
+        # 空行は含まれず、"● Test line" のみが受け取られる
+        self.assertTrue(all(line.strip() for line in lines))
+        self.assertTrue(any("Test line" in line for line in lines))
+
+    def test_stop_sets_event(self) -> None:
+        """stop() を呼ぶと _stop イベントがセットされる。"""
+        console = Console(verbosity=3, quiet=False)
+        fake_stderr = self._make_fake_stderr(b"line1\n")
+        reader = _StderrLogReader(fake_stderr, console, "1")
+        reader.start()
+        reader.stop()
+        self.assertTrue(reader._stop.is_set())
+
+    def test_stop_without_start_is_safe(self) -> None:
+        """start() を呼ばずに stop() を呼んでもエラーにならない。"""
+        console = Console(verbosity=3, quiet=False)
+        fake_stderr = self._make_fake_stderr(b"")
+        reader = _StderrLogReader(fake_stderr, console, "1")
+        # start() なし
+        reader.stop()  # 例外が発生しないことを確認
+        self.assertTrue(reader._stop.is_set())
+
+    def test_step_id_passed_to_cli_log(self) -> None:
+        """step_id が cli_log() の第1引数として渡される。"""
+        content = "Remote session established\n".encode("utf-8")
+        _, received = self._run_reader(content, step_id="2.3")
+        self.assertTrue(len(received) > 0)
+        self.assertTrue(all(sid == "2.3" for sid, _ in received))
+
+    def test_handles_text_mode_str_lines(self) -> None:
+        """text mode の stream (readline が str を返す) も正しく処理される。"""
+        console = Console(verbosity=3, quiet=False)
+        received: list = []
+
+        class _FakeTextStream:
+            def __init__(self, lines):
+                self._lines = iter(lines)
+
+            def readline(self):
+                try:
+                    return next(self._lines)
+                except StopIteration:
+                    return ""
+
+        fake_stream = _FakeTextStream(["● Loaded\n", "○ Activity\n", ""])
+        with unittest.mock.patch.object(
+            console, "cli_log", side_effect=lambda sid, line: received.append(line)
+        ):
+            reader = _StderrLogReader(fake_stream, console, "1")
+            reader.start()
+            if reader._thread is not None:
+                reader._thread.join(timeout=5.0)
+            reader.stop()
+        self.assertIn("● Loaded", received)
+        self.assertIn("○ Activity", received)
 
 
 if __name__ == "__main__":

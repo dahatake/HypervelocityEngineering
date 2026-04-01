@@ -112,6 +112,7 @@ tools: ["*"]
      - `--sku Free`
    - 冪等性: `az staticwebapp show` で存在チェック → 既存時はスキップ or 更新
    - スクリプト冒頭で `az` CLI の存在確認を行う（prep.sh は廃止）
+   - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §2 SWA 例外に準拠）
    - **注意**: `--token` の値（`$GITHUB_PAT`）は GitHub PAT 用の環境変数経由で渡す。GitHub Actions の自動生成トークン（`GITHUB_TOKEN`）と混同せず、スクリプト内にハードコードしない。
 2. `app/staticwebapp.config.json`
    - SWA ルーティング設定（`navigationFallback` 等）。

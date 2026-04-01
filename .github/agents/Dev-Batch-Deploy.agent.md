@@ -87,6 +87,7 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 
 1. `batch-service-catalog.md` の「2. ジョブ → Azure サービスマッピング表」と「依存関係マトリクス」から、作成が必要な Azure リソースを一覧化する（根拠を控える）。
 2. `infra/azure/batch/create-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1「3点セットテンプレート」および §2「冪等性パターン」に準拠）：
+   - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）
    - リソース種別の根拠は `batch-service-catalog.md` と、利用可能なら **Azure MCP**（Azure サービス操作のための Model Context Protocol ツール）または **Microsoft Learn MCP**（Microsoft 公式ドキュメント検索ツール）を参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
 3. `infra/azure/batch/verify-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1.4 テンプレートに準拠）：
    - `create-batch-resources.sh` が作成する全リソースの存在を Azure CLI で検証するスクリプト。

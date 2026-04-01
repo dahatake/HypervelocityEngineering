@@ -52,6 +52,7 @@ set -euo pipefail
 
 # --------------- パラメータ ---------------
 RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-<デフォルト値>}"
+LOCATION="${AZURE_LOCATION:-japaneast}"  # azure-region-policy §1 準拠
 MAX_RETRIES=3
 
 # --------------- ヘルパー ---------------
@@ -72,9 +73,20 @@ for i in $(seq 1 "$MAX_RETRIES"); do
   sleep 2
 done
 
-# 3. リソースグループ存在確認
-az group show --name "$RESOURCE_GROUP" --output json >/dev/null 2>&1 \
-  || { log_error "リソースグループ '$RESOURCE_GROUP' が存在しません"; exit 1; }
+# 3. リソースグループ存在確認 → 存在しない場合は冪等に作成
+#    az group exists は true/false を返す。認可エラー等では非ゼロ終了するため区別可能
+rg_exists=$(az group exists --name "$RESOURCE_GROUP" 2>/dev/null) || {
+  log_error "リソースグループ存在確認に失敗しました（認可エラー/ネットワーク障害の可能性）"
+  exit 1
+}
+if [ "$rg_exists" = "true" ]; then
+  log_info "リソースグループ '$RESOURCE_GROUP' 確認 OK（既存）"
+else
+  log_info "リソースグループ '$RESOURCE_GROUP' が存在しません。作成します（場所: $LOCATION）"
+  az group create --name "$RESOURCE_GROUP" --location "$LOCATION" --output none \
+    || { log_error "リソースグループ '$RESOURCE_GROUP' の作成に失敗しました"; exit 1; }
+  log_info "リソースグループ '$RESOURCE_GROUP' を作成しました"
+fi
 
 log_info "前提チェック完了"
 ```
@@ -177,8 +189,16 @@ fi
 
 ## 3. Azure CLI 利用不可時フォールバック手順
 
-Copilot coding agent の実行環境では Azure CLI が利用できないことが多い（サンドボックス制約）。
-以下の手順で対応する。
+Azure CLI の利用可否は以下の条件により変動し得る:
+
+- `copilot-setup-steps.yml` が **未設定** の場合: Azure CLI は **利用できない**
+- `copilot-setup-steps.yml` が **設定済み** の場合: Azure CLI は **利用可能になり得る**（Secrets 未設定・workflow 未実行・login 失敗等で利用不能なケースもある）
+
+最終的な Azure CLI の利用可否は、Agent §0.1 の判定手順（`az account show` の実行結果）で確定すること。
+
+**フォールバックに進む前に、Agent §0.1 の3ステップ判定（Azure MCP Server / `copilot-setup-steps.yml` 存在確認 / `az account show` 実行）を必ず完了すること。**
+いずれか1つでも OK であればフォールバックに進んではならない。
+以下の手順は、上記3ステップがすべて NG の場合のみ適用する。
 
 ### 3.1 フォールバック手順
 

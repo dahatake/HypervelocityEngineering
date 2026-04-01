@@ -618,5 +618,69 @@ class TestStepElapsedOutput(unittest.TestCase):
         self.assertEqual(cap.stdout, "")
 
 
+class TestConsoleCliLog(unittest.TestCase):
+    """Console.cli_log() の verbosity 別表示制御テスト。"""
+
+    def test_quiet_suppresses_all(self) -> None:
+        """verbosity=0 では全ての CLI ログが抑制される。"""
+        con = Console(verbosity=0)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", "● Environment loaded: 10 agents")
+            con.cli_log("1", "○ List directory qa")
+            mock_emit.assert_not_called()
+
+    def test_compact_shows_env_loaded_as_fixed(self) -> None:
+        """verbosity=1 で ● Environment loaded は確定行として出力される。"""
+        con = Console(verbosity=1)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", "● Environment loaded: 22 custom instructions")
+            mock_emit.assert_called_once()
+
+    def test_compact_ignores_activity_lines(self) -> None:
+        """verbosity=1 で ○ 行は _emit されない。"""
+        con = Console(verbosity=1)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", "○ List directory qa")
+            mock_emit.assert_not_called()
+
+    def test_verbose_shows_all_as_fixed(self) -> None:
+        """verbosity=3 で全行が確定行として出力される。"""
+        con = Console(verbosity=3)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", "○ Search (glob)")
+            mock_emit.assert_called_once()
+
+    def test_normal_shows_important_as_fixed(self) -> None:
+        """verbosity=2 で ● 行は確定行として出力される。"""
+        con = Console(verbosity=2)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", "● Read-only remote session")
+            mock_emit.assert_called_once()
+
+    def test_tree_lines_in_verbose(self) -> None:
+        """verbosity=3 で └ ツリー行が確定行として出力される。"""
+        con = Console(verbosity=3)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("1", '  └ ".github/agents/QA-RequirementClassifier*"')
+            mock_emit.assert_called_once()
+
+    def test_step_id_prefix_always_present(self) -> None:
+        """step_id が出力に含まれることを確認。"""
+        con = Console(verbosity=3)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit:
+            con.cli_log("2.1", "● Environment loaded: 5 agents")
+            call_args = mock_emit.call_args[0][0]
+            self.assertIn("[2.1]", call_args)
+
+    def test_normal_activity_updates_spinner_not_emit(self) -> None:
+        """verbosity=2 で ○ 行は _emit ではなくスピナー更新のみ。"""
+        con = Console(verbosity=2)
+        with unittest.mock.patch.object(con, '_emit') as mock_emit, \
+                unittest.mock.patch.object(con, '_update_spinner_msg') as mock_spinner:
+            con.cli_log("1", "○ List directory qa")
+            mock_emit.assert_not_called()
+            mock_spinner.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

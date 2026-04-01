@@ -81,7 +81,7 @@ A) スクリプト作成（prep + create + verify）
 ## create-azure-agent-resources-prep.sh（前提チェック）
 - Azure CLI がインストール済みか確認
 - `az login` または `DefaultAzureCredential` で認証済みか確認
-- 対象リソースグループが存在するか確認
+- 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）
 - 必要な Azure AI Foundry 権限（Azure AI Developer ロール以上）があるか確認
 
 ## create-azure-agent-resources.sh（リソース作成 — Skill §2 冪等性パターン準拠）

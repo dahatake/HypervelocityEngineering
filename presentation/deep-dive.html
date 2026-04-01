@@ -55,14 +55,15 @@
         <article class="detail-card">
           <div class="kicker">Registry</div>
           <h3>workflow_registry.py</h3>
-          <p>6 ワークフローの StepDef をデータとして保持し、依存関係と Agent 割り当てを統一管理します。</p>
-          <div class="code-block"><span class="cm"># hve/workflow_registry.py — 6 ワークフロー定義</span>
+          <p>7 ワークフローの StepDef をデータとして保持し、依存関係と Agent 割り当てを統一管理します。</p>
+          <div class="code-block"><span class="cm"># hve/workflow_registry.py — 7 ワークフロー定義</span>
 <span class="cls">AAS</span>  = WorkflowDef(id=<span class="str">"aas"</span>, steps=[…])   <span class="cm">#  2 steps</span>
 <span class="cls">AAD</span>  = WorkflowDef(id=<span class="str">"aad"</span>, steps=[…])   <span class="cm"># 16 steps</span>
 <span class="cls">ASDW</span> = WorkflowDef(id=<span class="str">"asdw"</span>, steps=[…])  <span class="cm"># 24 steps</span>
 <span class="cls">ABD</span>  = WorkflowDef(id=<span class="str">"abd"</span>, steps=[…])   <span class="cm">#  9 steps</span>
 <span class="cls">ABDV</span> = WorkflowDef(id=<span class="str">"abdv"</span>, steps=[…])  <span class="cm">#  7 steps</span>
-<span class="cls">AID</span>  = WorkflowDef(id=<span class="str">"aid"</span>, steps=[…])   <span class="cm"># 10 steps</span></div>
+<span class="cls">AID</span>  = WorkflowDef(id=<span class="str">"aid"</span>, steps=[…])   <span class="cm"># 10 steps</span>
+<span class="cls">AQRC</span> = WorkflowDef(id=<span class="str">"aqrc"</span>, steps=[…])  <span class="cm">#  1 step</span></div>
         </article>
         <article class="detail-card">
           <div class="kicker">Execution</div>
@@ -94,7 +95,7 @@
 │   → 質問票生成 → stdin 回答 → 反映     │
 │                                        │
 │ Phase 3: <span class="fn">send_and_wait</span>(<span class="cls">REVIEW_PROMPT</span>) │
-│   → 3 観点レビュー + 最終成果物        │
+│   → 敵対的レビュー + 最終成果物       │
 └──────────────────────────────────────┘</div>
         </article>
       </div>
@@ -130,7 +131,7 @@
             <div class="step-badge">3</div>
             <div>
               <strong>Review Prompt</strong>
-              <p>3 観点レビューを追加し、成果物を最終版に寄せます。</p>
+              <p>敵対的レビューを追加し、成果物を最終版に寄せます。</p>
             </div>
           </div>
         </div>

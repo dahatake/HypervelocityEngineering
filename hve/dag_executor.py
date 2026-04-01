@@ -159,7 +159,7 @@ class DAGExecutor:
         self._wave_counter = 0
 
         pending_tasks: Set[asyncio.Task] = set()
-        HEARTBEAT_INTERVAL = 60  # 秒
+        HEARTBEAT_INTERVAL = 15  # 秒 — ローカル実行ではより頻繁なチェックで応答性を向上
 
         while True:
             next_steps = self.workflow.get_next_steps(

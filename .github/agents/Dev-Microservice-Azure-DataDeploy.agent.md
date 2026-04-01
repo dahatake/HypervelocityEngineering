@@ -13,6 +13,7 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 
 ## Skills 参照
 - **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- **`azure-cosmosdb`**: Azure Cosmos DB for NoSQL へのデータプレーン操作共通パターン（§1 Bearer token 非対応の理由・§2 SDK セットアップ・§3 quoted heredoc 呼び出し・§4 upsert + 件数検証 + 結果ファイル・§5 COUNT クエリ・§6 verify 連携・§7 RBAC 設定）を参照する。Cosmos DB へのドキュメント登録を行う場合は必ず参照すること。
 - **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
 - **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
 - **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
@@ -32,6 +33,10 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
   3. `az account show` を実行し、正常終了するか確認
   - **いずれかが OK** → Azure 操作が可能
   - **すべてが NG** → 環境設定不備エラーとして報告し、設定修正の Sub Issue を作成する（スクリプト作成のみで完了せず、必ず Sub Issue 化すること）
+
+> **重要**: Skill §3 のフォールバック手順に進む条件は、上記3ステップ（Azure MCP Server / `copilot-setup-steps.yml` 存在確認 / `az account show` 実行）がすべて NG の場合のみである。
+> 1つでも OK であれば Azure 操作は可能であり、フォールバックに進んではならない。
+> `az account show` の実行結果（成功時のサブスクリプション名、または失敗時のエラー出力）は必ず `{WORK}work-status.md` に記録すること。
 - `SQL_ADMIN_PASSWORD` の Secret は不要。SQL Server は **Microsoft Entra ID 専用認証（`--enable-ad-only-auth`）** で作成し、sqlcmd は Microsoft Entra ID トークン認証で接続する。
 - 設定手順の詳細は `docs/copilot-azure-setup.md` を参照。
 
@@ -97,20 +102,31 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 **ステップ 1: スクリプト作成**
 - `infra/azure/create-azure-data-resources-prep.sh` を作成
 - `infra/azure/create-azure-data-resources.sh` を作成
-- `data/azure/data-registration-script.sh` を作成
+- `src/data/azure/data-registration-script.sh` を作成
 - 作成後、各スクリプトに対して `shellcheck` で構文検証を行う
 
 **ゲート 1**: 3スクリプト作成済み + shellcheck 全通過 → ステップ 2 へ / NG → ステップ 2 以降をスキップし Sub Issue 化
 
-**ステップ 2: Azure 認証確認**
+**ステップ 2: Azure 認証確認 + リソースグループ準備**
 - `az account show` を実行
-- `az group show --name <リソースグループ名>` を実行
+- `az group exists --name <リソースグループ名>` で存在判定を行う（認可エラー等の失敗と「存在しない」を区別する）
+  - 存在しない場合: `az group create --name <リソースグループ名> --location japaneast` で冪等に作成する（azure-region-policy §1 準拠）
+  - コマンド自体が失敗した場合（認可エラー/ネットワーク障害等）: エラー内容を `{WORK}work-status.md` に記録しゲート 2b へ
 
-**ゲート 2**: 両コマンドが正常終了 → ステップ 3 へ / NG → **環境設定不備エラー**として以下を実施：
+**ゲート 2a**: `az account show` が正常終了 → ゲート 2b へ / `az account show` が NG → **環境設定不備エラー**として以下を実施：
   - `{WORK}work-status.md` にエラー状態を記録する
   - **Azure 環境設定修正の Sub Issue** を作成する（`copilot-setup-steps.yml` / MCP Server / Secrets の設定手順を含む）
   - PR タイトルに `[BLOCKED]` を付与する
   - ステップ 3, 4 は「スキップ」ではなく「ブロック（環境設定不備）」と記録する
+
+**ゲート 2b**: リソースグループが存在する（作成済みを含む） → ステップ 3 へ / `az group create` が NG → **リソースグループ作成失敗**として以下を実施：
+  - `az group create` の stderr（またはエラーコード・メッセージ要約）を `{WORK}work-status.md` に記録する
+  - エラー内容から原因を判定し、適切な Sub Issue を作成する（例：
+    - 権限不足が原因の場合: **Azure 権限修正の Sub Issue**（リソースグループ作成権限の付与手順を含む）
+    - ポリシー違反 / 無効な location・name の場合: **Azure ポリシー / 入力値見直しの Sub Issue**
+    - 一時的なプラットフォーム障害・ネットワーク障害の場合: **再試行 / 障害調査の Sub Issue**
+    - 上記に当てはまらない場合: **その他の入力・設定不備の Sub Issue**）
+  - PR タイトルに `[BLOCKED]` を付与する（ブロック理由は作成した Sub Issue に合わせて説明する）
 
 **ステップ 3: Azure リソース作成＋検証**
 - `prep.sh` → `create-resources.sh` の順に実行
@@ -150,10 +166,17 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 - 一時的な API エラー（429/503）は最大 **3回** まで再試行してから中断する
 
 ### 4.3 データ登録スクリプト（必須）
-`data/azure/data-registration-script.sh`
+`src/data/azure/data-registration-script.sh`
 - 入力データの場所/形式を明示（不明なら質問）
 - 変換（必要なら）と登録を分離し、件数/結果をログに出す
 - **sqlcmd で SQL Database に接続する場合は、Microsoft Entra ID トークン認証（`az account get-access-token --resource https://database.windows.net/` で取得したトークン）を使用する。`-U` / `-P` による SQL 認証は使用禁止**
+- **Cosmos DB へのドキュメント登録が必要な場合は `azure-cosmosdb` Skill §1〜§4 §6 §7 に従って実装すること**:
+  - §1: Bearer token（curl）は使用禁止（必ず HTTP 401）→ `azure-cosmos` Python SDK + `DefaultAzureCredential` を使用する
+  - §2: `pip install "azure-cosmos>=4.7,<5" "azure-identity>=1.16,<2"` でバージョン範囲指定
+  - §3: Shell スクリプトから呼び出す場合は `quoted heredoc (<<'PYEOF')` + `export PY_*` 環境変数渡しを使用
+  - §4: upsert + 結果ファイル書き出し（`INSERTED < EXPECTED` 時は `exit 1`、`EXPECTED` は shell 側のみで管理）
+  - §6: verify スクリプトは「結果ファイル参照 → 不在時 COUNT(1) 直接クエリ」の2段階パターン
+  - §7: RBAC ロール `Cosmos DB Built-in Data Contributor` は **prep スクリプトでは自動付与されないため、事前に手動またはインフラコード側で付与すること**（反映に最大15分かかる、未付与の場合は 401/403 で失敗）。付与コマンドは Skill §7 および `create-azure-data-resources-prep.sh` のガイダンス出力を参照のこと
 - 登録後に最小検証（件数取得/サンプル取得/クエリ）を実施
 - 一時的なエラーは最大 **3回** まで再試行してから中断する
 

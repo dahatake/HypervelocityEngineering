@@ -80,7 +80,7 @@
 
 ## Custom Agent 一覧
 
-`.github/agents/` 配下の全 44 Custom Agent を以下に列挙します。
+`.github/agents/` 配下の全 48 Custom Agent を以下に列挙します。
 
 ### ビジネス分析・要求定義
 
@@ -137,6 +137,12 @@
 |---------|------|
 | `Arch-AIAgentDesign` | AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、docs/AI-Agents-list.md に出力 |
 
+### アーキテクチャ設計 — 改善
+
+| Agent 名 | 用途 |
+|---------|------|
+| `Arch-ImprovementPlanner` | コード品質スキャン結果を受け取り、改善計画（DAG + 見積）を策定する。自己改善ループの Phase 4b として使用 |
+
 ### アーキテクチャ設計 — テスト
 
 | Agent 名 | 用途 |
@@ -184,6 +190,9 @@
 |---------|------|
 | `QA-AzureArchitectureReview` | デプロイ済み Azure リソースを棚卸しし、Azure WAF（5 本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ / セキュリティをレビュー |
 | `QA-AzureDependencyReview` | サービスカタログ準拠で Azure 依存（参照 / 設定 / IaC）を証跡付きで点検 |
+| `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
+| `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
+| `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。AGENTS.md §10.1 Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
 | `QA-RequirementClassifier` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、work/business-requirement-document-status.md を生成 |
 
 ---
@@ -200,4 +209,5 @@
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
 | `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
 | `iot-design.yml` | IoT 設計ワークフロー起動 | `auto-iot-design` |
-| `qa-requirement-classification.yml` | 要求定義文書の QA 分類 | — |
+| `qa-requirement-classification.yml` | 要求定義文書の QA 分類 | `qa-classification` |
+| `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |

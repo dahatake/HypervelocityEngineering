@@ -36,13 +36,13 @@ try:
     from .config import SDKConfig
     from .console import Console, timestamp_prefix
     from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT
-    from .runner import StepRunner, _is_review_fail, _extract_text
+    from .runner import StepRunner, _is_review_fail, _extract_text, _make_log_handler
     from .dag_executor import DAGExecutor
 except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT  # type: ignore[no-redef]
-    from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
+    from runner import StepRunner, _is_review_fail, _extract_text, _make_log_handler  # type: ignore[no-redef]
     from dag_executor import DAGExecutor  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
@@ -85,6 +85,10 @@ _COPILOT_USERNAMES = (
 # git diff の最大文字数（トークン上限対策）
 _MAX_DIFF_CHARS = 80_000
 
+# AQRC デフォルト値
+_AQRC_DEFAULT_SCOPE = "all"
+_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+
 
 # -----------------------------------------------------------------------
 # パラメータ収集（非対話モード対応）
@@ -120,12 +124,20 @@ def _collect_params_non_interactive(
         params["batch_job_id"] = args["batch_job_id"]
 
     # AQRC 固有パラメータ
-    if args.get("scope"):
-        params["scope"] = args["scope"]
-    if args.get("target_files"):
-        params["target_files"] = args["target_files"]
-    # force_refresh は bool なので常に設定
-    params["force_refresh"] = args.get("force_refresh", False)
+    if wf.id == "aqrc":
+        params["scope"] = args.get("scope") or _AQRC_DEFAULT_SCOPE
+        params["target_files"] = args.get("target_files") or _AQRC_DEFAULT_TARGET_FILES
+        # AQRC では、フラグ未指定(None)の場合はデフォルトで True とする
+        force_refresh = args.get("force_refresh", None)
+        params["force_refresh"] = True if force_refresh is None else force_refresh
+    else:
+        if args.get("scope"):
+            params["scope"] = args["scope"]
+        if args.get("target_files"):
+            params["target_files"] = args["target_files"]
+        # 非 AQRC では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        if "force_refresh" in args:
+            params["force_refresh"] = args["force_refresh"]
 
     # Issue タイトル上書き
     if args.get("issue_title"):
@@ -442,7 +454,8 @@ async def run_workflow(
     if config is None:
         config = SDKConfig()
 
-    console = Console(verbose=config.verbose, quiet=config.quiet, show_stream=config.show_stream)
+    console = Console(verbose=config.verbose, quiet=config.quiet, show_stream=config.show_stream,
+                      verbosity=config.verbosity)
     start_total = time.time()
 
     # --- 1. ワークフロー定義取得 ---
@@ -879,14 +892,22 @@ async def _request_code_review(
         )
 
     # 3. CopilotClient セッション開始
+    _cfg_kwargs = dict(
+        cli_path=config.cli_path,
+        github_token=config.resolve_token() or None,
+        log_level=config.log_level,
+    )
     if config.cli_url:
         sdk_config = ExternalServerConfig(url=config.cli_url)
     else:
-        sdk_config = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level=config.log_level,
-        )
+        try:
+            sdk_config = SubprocessConfig(
+                **_cfg_kwargs,
+                on_log=_make_log_handler(console, "review"),
+            )
+        except TypeError:
+            console.warning("⚠️ [review] SDK が on_log 未対応のため CLI ログ表示をスキップ")
+            sdk_config = SubprocessConfig(**_cfg_kwargs)
     client = CopilotClient(config=sdk_config)
     await client.start()
 

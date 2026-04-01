@@ -14,7 +14,7 @@
     # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
-    # 基本実行 (デフォルト: claude-opus-4.6, 並列15, verbose, Issue/PR作成なし)
+    # 基本実行 (デフォルト: claude-opus-4.6, 並列15, compact, Issue/PR作成なし)
     python -m hve orchestrate --workflow aad
 
     # QA + Review 有効
@@ -45,15 +45,15 @@
     python -m hve orchestrate --workflow aad \\
       --create-issues --issue-title "Sprint 42: AAD 全ステップ実行"
 
-    # QA 要求分類（全ファイル）
-    python -m hve orchestrate --workflow aqrc --scope all
+    # QA 要求分類（デフォルト設定: scope=all, target_files=qa/*.md, force_refresh=true）
+    python -m hve orchestrate --workflow aqrc
 
     # QA 要求分類（指定ファイルのみ）
     python -m hve orchestrate --workflow aqrc --scope specified \\
       --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
 
-    # QA 要求分類（既存 status.md を完全再生成）
-    python -m hve orchestrate --workflow aqrc --scope all --force-refresh
+    # QA 要求分類（増分更新: force_refresh を無効化）
+    python -m hve orchestrate --workflow aqrc --no-force-refresh
 """
 
 from __future__ import annotations
@@ -71,6 +71,32 @@ from typing import List, Optional
 def _ts() -> str:
     """現在時刻のプレフィックス文字列を返す。"""
     return f"[{datetime.now().strftime('%H:%M:%S')}]"
+
+
+# -----------------------------------------------------------------------
+# Auto モデル定数
+# -----------------------------------------------------------------------
+
+MODEL_AUTO = "Auto"
+_MODEL_AUTO_RESOLVED = "claude-opus-4.6"
+
+# AQRC デフォルト値
+_AQRC_DEFAULT_SCOPE = "all"
+_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+
+
+def _resolve_model(model: str) -> tuple:
+    """モデル名を解決する。
+
+    Args:
+        model: 入力モデル名。MODEL_AUTO の場合は _MODEL_AUTO_RESOLVED に解決する。
+
+    Returns:
+        (resolved_model, display_name) のタプル。
+    """
+    if model == MODEL_AUTO:
+        return _MODEL_AUTO_RESOLVED, MODEL_AUTO
+    return model, model
 
 
 # -----------------------------------------------------------------------
@@ -111,7 +137,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model", "-m",
         default="claude-opus-4.6",
         metavar="MODEL",
-        help="使用するモデル名 (デフォルト: claude-opus-4.6)",
+        help="使用するモデル名 (デフォルト: claude-opus-4.6)。Auto を指定するとデフォルトモデルが自動選択されます",
     )
 
     # 並列実行
@@ -189,13 +215,24 @@ def _build_parser() -> argparse.ArgumentParser:
     orch.add_argument(
         "--verbose", "-v",
         action="store_true",
-        help="詳細出力を強制有効化 (デフォルトは --quiet 未指定時に有効)",
+        help="詳細出力 (--verbosity verbose と同等。--verbosity が指定された場合はそちらが優先)",
     )
     orch.add_argument(
         "--quiet", "-q",
         action="store_true",
         default=False,
-        help="出力抑制 (デフォルト: 無効)",
+        help="出力抑制 (--verbosity quiet と同等。--verbosity が指定された場合はそちらが優先)",
+    )
+    orch.add_argument(
+        "--verbosity",
+        choices=["quiet", "compact", "normal", "verbose"],
+        default=None,
+        metavar="LEVEL",
+        help=(
+            "コンソール出力レベル: quiet (エラーのみ) / compact (重要イベントのみ、デフォルト) / "
+            "normal (compact + intent/subagent) / verbose (全詳細)。"
+            "--verbosity が最優先。未指定時は --verbose/--quiet フラグを参照"
+        ),
     )
     orch.add_argument(
         "--show-stream",
@@ -237,16 +274,16 @@ def _build_parser() -> argparse.ArgumentParser:
     orch.add_argument(
         "--timeout",
         type=float,
-        default=900.0,
+        default=7200.0,
         metavar="SECONDS",
-        help="idle タイムアウト秒数 (デフォルト: 900)",
+        help="idle タイムアウト秒数 (デフォルト: 7200 = 2時間)",
     )
     orch.add_argument(
         "--review-timeout",
         type=float,
-        default=900.0,
+        default=7200.0,
         metavar="SECONDS",
-        help="Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 900)",
+        help="Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 7200 = 2時間)",
     )
 
     # ブランチ
@@ -296,20 +333,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--scope",
         choices=["all", "specified"],
         default=None,
-        help="AQRC: 分類対象スコープ (all=全ファイル, specified=指定ファイルのみ)",
+        help="AQRC: 分類対象スコープ (省略時: all=全ファイル, specified=指定ファイルのみ)",
     )
     orch.add_argument(
         "--target-files",
         nargs="+",
         default=None,
         metavar="FILE",
-        help="AQRC: 対象ファイルパス (--scope specified 時に使用)",
+        help="AQRC: 対象ファイルパス (省略時: qa/*.md)",
     )
     orch.add_argument(
         "--force-refresh",
-        action="store_true",
-        default=False,
-        help="AQRC: 既存 status.md を完全に再生成する",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="AQRC: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
     )
 
     # repo / token
@@ -345,6 +382,53 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="ドライラン（実際の SDK 呼び出しをしない）",
+    )
+
+    # Self-Improve
+    orch.add_argument(
+        "--no-self-improve",
+        action="store_true",
+        default=False,
+        help=(
+            "自己改善ループ（Phase 4）を無効化する（デフォルト: 有効）。"
+            " auto_self_improve=True がデフォルトであり、このフラグで無効化できる。"
+        ),
+    )
+
+    # --- qa-merge サブコマンド ---
+    qa_merge = sub.add_parser(
+        "qa-merge",
+        help="qa/ 配下の質問票ファイルにユーザー回答をマージし、統合ドキュメントを生成する",
+    )
+    qa_merge.add_argument(
+        "--qa-file",
+        required=True,
+        metavar="PATH",
+        help="マージ対象の qa/ ファイルパス",
+    )
+    qa_merge.add_argument(
+        "--answers-file",
+        default=None,
+        metavar="PATH",
+        help="回答ファイルパス（番号: 選択肢 形式。省略時: デフォルト回答を採用）",
+    )
+    qa_merge.add_argument(
+        "--use-defaults",
+        action="store_true",
+        default=False,
+        help="全問デフォルト回答を採用する",
+    )
+    qa_merge.add_argument(
+        "--skip-consistency",
+        action="store_true",
+        default=False,
+        help="一貫性検証（LLM）をスキップし、マージのみ実行する",
+    )
+    qa_merge.add_argument(
+        "--model", "-m",
+        default="claude-opus-4.6",
+        metavar="MODEL",
+        help="一貫性検証に使用するモデル（デフォルト: claude-opus-4.6）",
     )
 
     return parser
@@ -393,6 +477,8 @@ def _build_config(args: argparse.Namespace):
 
     # CLI 引数で上書き
     cfg.model = args.model
+    # Auto モデル解決
+    cfg.model, _ = _resolve_model(cfg.model)
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
     cfg.auto_contents_review = args.auto_contents_review
@@ -404,11 +490,25 @@ def _build_config(args: argparse.Namespace):
     cfg.quiet = args.quiet
     cfg.show_stream = args.show_stream
     cfg.log_level = args.log_level
+
+    # --verbosity 明示指定 > --verbose/--quiet フラグ > デフォルト
+    _verbosity_map = {"quiet": 0, "compact": 1, "normal": 2, "verbose": 3}
+    if getattr(args, "verbosity", None) is not None:
+        cfg.verbosity = _verbosity_map[args.verbosity]
+    elif args.quiet:
+        cfg.verbosity = 0
+    elif args.verbose:
+        cfg.verbosity = 3
+    else:
+        cfg.verbosity = 1  # デフォルト: compact
     cfg.timeout_seconds = args.timeout
     cfg.review_timeout_seconds = args.review_timeout
     cfg.base_branch = args.branch
     cfg.dry_run = args.dry_run
     cfg.additional_prompt = args.additional_prompt
+
+    # Self-Improve: --no-self-improve フラグで無効化
+    cfg.self_improve_skip = getattr(args, "no_self_improve", False)
 
     if args.cli_path:
         cfg.cli_path = args.cli_path
@@ -443,6 +543,7 @@ def _build_params(args: argparse.Namespace) -> dict:
         "branch": args.branch,
         "auto_qa": args.auto_qa,
         "auto_contents_review": args.auto_contents_review,
+        "no_self_improve": getattr(args, "no_self_improve", False),
     }
 
     # ステップ選択
@@ -462,11 +563,22 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["usecase_id"] = args.usecase_id
 
     # AQRC 固有パラメータ
-    if getattr(args, "scope", None):
-        params["scope"] = args.scope
-    if getattr(args, "target_files", None):
-        params["target_files"] = " ".join(args.target_files)
-    params["force_refresh"] = getattr(args, "force_refresh", False)
+    if getattr(args, "workflow", None) == "aqrc":
+        params["scope"] = getattr(args, "scope", None) or _AQRC_DEFAULT_SCOPE
+        target_files = getattr(args, "target_files", None)
+        params["target_files"] = " ".join(target_files) if target_files else _AQRC_DEFAULT_TARGET_FILES
+        # AQRC では、フラグ未指定(None)の場合はデフォルトで True とする
+        force_refresh = getattr(args, "force_refresh", None)
+        params["force_refresh"] = True if force_refresh is None else force_refresh
+    else:
+        if getattr(args, "scope", None):
+            params["scope"] = args.scope
+        if getattr(args, "target_files", None):
+            params["target_files"] = " ".join(args.target_files)
+        # 非 AQRC では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        force_refresh = getattr(args, "force_refresh", None)
+        if force_refresh is not None:
+            params["force_refresh"] = force_refresh
 
     # Issue タイトル上書き
     if args.issue_title:
@@ -490,6 +602,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "orchestrate":
         return _cmd_orchestrate(args)
+
+    if args.command == "qa-merge":
+        return _cmd_qa_merge(args)
 
     # "run" サブコマンド、または引数なし → インタラクティブモード
     return _cmd_run_interactive()
@@ -537,7 +652,7 @@ def _cmd_run_interactive() -> int:
         from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
 
-    con = Console(verbose=True, quiet=False)
+    con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
 
     # ── ウェルカムバナー ──────────────────────────────────
     con.banner(
@@ -554,37 +669,70 @@ def _cmd_run_interactive() -> int:
     wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
     selected_wf = workflows[wf_idx]
     wf = get_workflow(selected_wf.id)
+    is_aqrc = (wf.id == "aqrc")
 
     # ── ステップ選択 ──────────────────────────────────────
-    non_container_steps = [s for s in wf.steps if not s.is_container]
-    step_options = [f"[{s.id}] {s.title}" for s in non_container_steps]
-    selected_indices = con.prompt_multi_select(
-        f"実行するステップを選択（Enter = 全{len(non_container_steps)}ステップ）",
-        step_options,
-    )
-    if selected_indices:
-        selected_step_ids = [non_container_steps[i].id for i in selected_indices]
-    else:
+    # AQRC はステップが 1 つのみのため、自動で全選択
+    if is_aqrc:
         selected_step_ids = []  # 空 = 全ステップ
+    else:
+        non_container_steps = [s for s in wf.steps if not s.is_container]
+        step_options = [f"[{s.id}] {s.title}" for s in non_container_steps]
+        selected_indices = con.prompt_multi_select(
+            f"実行するステップを選択（Enter = 全{len(non_container_steps)}ステップ）",
+            step_options,
+        )
+        if selected_indices:
+            selected_step_ids = [non_container_steps[i].id for i in selected_indices]
+        else:
+            selected_step_ids = []  # 空 = 全ステップ
 
     # ── モデル選択 ────────────────────────────────────────
-    model_options = ["claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"]
+    model_options = [MODEL_AUTO, "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"]
     model_idx = con.menu_select("使用するモデルを選択", model_options)
-    model = model_options[model_idx]
+    model, model_display = _resolve_model(model_options[model_idx])
 
     # ── オプション設定 ────────────────────────────────────
     branch = con.prompt_input("ベースブランチ", default="main")
-    max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
+    if is_aqrc:
+        max_parallel = 15
+    else:
+        max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
 
-    # ── ログレベル選択 ────────────────────────────────────
-    log_level_options = ["none", "error", "warning", "info", "debug", "all"]
-    log_level_default_idx = log_level_options.index("error")
-    con._print(f"  {con.s.DIM}(デフォルト: error){con.s.RESET}", ts=False)
-    log_level_idx = con.menu_select("Copilot CLI ログレベルを選択", log_level_options)
-    log_level = log_level_options[log_level_idx]
+    # ── 出力レベル選択（verbosity）────────────────────────
+    _verbosity_options = [
+        "quiet   — エラーのみ",
+        "compact — 重要イベントのみ",
+        "normal  — compact + intent/subagent",
+        "verbose — 全詳細",
+    ]
+    _verbosity_keys = ["quiet", "compact", "normal", "verbose"]
+    _VERBOSITY_DEFAULT = 1  # compact
+    con._print(f"  {con.s.DIM}(Enter = compact){con.s.RESET}", ts=False)
+    _raw_idx = con.menu_select("コンソール出力レベルを選択", _verbosity_options, allow_empty=True)
+    verbosity_idx = _VERBOSITY_DEFAULT if _raw_idx == -1 else _raw_idx
+    verbosity_key = _verbosity_keys[verbosity_idx]
+    verbosity_value = verbosity_idx  # quiet=0, compact=1, normal=2, verbose=3
 
-    auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
-    auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
+    # ── タイムアウト設定 ────────────────────────────────
+    timeout_str = con.prompt_input(
+        "セッション idle タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
+    )
+    try:
+        timeout_val = float(timeout_str or "7200")
+    except ValueError:
+        con.warning("無効な値のため、デフォルトの 7200 秒を使用します。")
+        timeout_val = 7200.0
+    if timeout_val <= 0:
+        con.warning("0 以下のタイムアウト値は無効なため、デフォルトの 7200 秒を使用します。")
+        timeout_val = 7200.0
+
+    if is_aqrc:
+        auto_qa = False
+        auto_review = False
+    else:
+        auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
+        auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
     create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
     create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
 
@@ -593,19 +741,22 @@ def _cmd_run_interactive() -> int:
         "GitHub Copilot Code Review Agent（ローカル実行）を有効にする？", default=False
     )
     auto_coding_agent_review_auto_approval = False
-    review_timeout = 900.0
+    review_timeout = 7200.0
     if auto_coding_agent_review:
         auto_coding_agent_review_auto_approval = con.prompt_yes_no(
             "Code Review Agent の修正提案を自動承認する？", default=False
         )
         review_timeout_str = con.prompt_input(
-            "Review タイムアウト（秒。デフォルト: 900 = 15分）", default="900"
+            "Review タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
         )
         try:
-            review_timeout = float(review_timeout_str or "900")
+            review_timeout = float(review_timeout_str or "7200")
         except ValueError:
-            con.warning("無効な値のため、デフォルトの 900 秒を使用します。")
-            review_timeout = 900.0
+            con.warning("無効な値のため、デフォルトの 7200 秒を使用します。")
+            review_timeout = 7200.0
+        if review_timeout <= 0:
+            con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
+            review_timeout = 7200.0
 
     # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
     repo_input = ""
@@ -617,9 +768,15 @@ def _cmd_run_interactive() -> int:
 
     # ── ワークフロー固有パラメータ ────────────────────────
     params_extra: dict = {}
-    for param_name in wf.params:
-        val = con.prompt_input(f"{param_name}", required=True)
-        params_extra[param_name] = val
+    if is_aqrc:
+        # AQRC の固有パラメータはデフォルト値で自動設定
+        params_extra["scope"] = _AQRC_DEFAULT_SCOPE
+        params_extra["target_files"] = _AQRC_DEFAULT_TARGET_FILES
+        params_extra["force_refresh"] = True
+    else:
+        for param_name in wf.params:
+            val = con.prompt_input(f"{param_name}", required=True)
+            params_extra[param_name] = val
 
     # ── 追加プロンプト ────────────────────────────────────
     additional_prompt = con.prompt_input("追加プロンプト（省略可）")
@@ -630,10 +787,11 @@ def _cmd_run_interactive() -> int:
     summary_lines = [
         f"ワークフロー : {s.CYAN}{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}{s.RESET} ({wf.id})",
         f"ステップ     : {step_display}",
-        f"モデル       : {model}",
+        f"モデル       : {model_display}",
         f"ブランチ     : {branch}",
         f"並列数       : {max_parallel}",
-        f"ログレベル   : {log_level}",
+        f"出力レベル   : {verbosity_key}",
+        f"タイムアウト  : {timeout_val:.0f} 秒",
         f"QA 自動      : {'ON' if auto_qa else 'OFF'}",
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
@@ -669,16 +827,18 @@ def _cmd_run_interactive() -> int:
     cfg.auto_contents_review = auto_review
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
-    cfg.verbose = True
-    cfg.quiet = False
+    cfg.verbosity = verbosity_value
+    cfg.verbose = verbosity_value >= 3
+    cfg.quiet = verbosity_value == 0
     cfg.show_stream = False
-    cfg.log_level = log_level
+    cfg.log_level = "error"
     cfg.base_branch = branch
     cfg.dry_run = dry_run
     cfg.auto_coding_agent_review = auto_coding_agent_review
     cfg.auto_coding_agent_review_auto_approval = (
         auto_coding_agent_review_auto_approval if auto_coding_agent_review else False
     )
+    cfg.timeout_seconds = timeout_val
     cfg.review_timeout_seconds = review_timeout
     cfg.additional_prompt = additional_prompt or None
     if repo_input:
@@ -738,6 +898,171 @@ def _cmd_run_interactive() -> int:
     return 0
 
 
+def _cmd_qa_merge(args: argparse.Namespace) -> int:
+    """qa-merge サブコマンドのハンドラー。
+
+    qa/ ファイルにユーザー回答をマージして保存し、
+    --skip-consistency 未指定時は CopilotSession で統合ドキュメントを生成する。
+    """
+    _sdk_dir = Path(__file__).resolve().parent
+    if str(_sdk_dir) not in sys.path:
+        sys.path.insert(0, str(_sdk_dir))
+
+    try:
+        from .qa_merger import QAMerger
+        from .prompts import QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT
+    except ImportError:
+        from qa_merger import QAMerger  # type: ignore[no-redef]
+        from prompts import QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT  # type: ignore[no-redef]
+
+    qa_path = Path(args.qa_file)
+    if not qa_path.exists():
+        print(f"{_ts()} ❌ qa/ ファイルが見つかりません: {qa_path}", file=sys.stderr)
+        return 1
+
+    # ── ファイルパース ────────────────────────────────────
+    try:
+        doc = QAMerger.parse_qa_file(qa_path)
+    except Exception as exc:
+        print(f"{_ts()} ❌ qa/ ファイルのパースに失敗しました: {exc}", file=sys.stderr)
+        return 1
+
+    # ── マージ済み判定 ────────────────────────────────────
+    already_merged = any(q.user_answer is not None for q in doc.questions)
+    if already_merged:
+        print(
+            f"{_ts()} ⚠️  ファイルには既にユーザー回答が含まれています: {qa_path}\n"
+            "   再マージします（既存の回答は上書きされます）。",
+            file=sys.stderr,
+        )
+
+    # ── 回答読み込み ──────────────────────────────────────
+    answers: "dict[int, str]" = {}
+    use_defaults = args.use_defaults
+
+    if args.answers_file:
+        answers_path = Path(args.answers_file)
+        if not answers_path.exists():
+            print(
+                f"{_ts()} ❌ 回答ファイルが見つかりません: {answers_path}", file=sys.stderr
+            )
+            return 1
+        answer_text = answers_path.read_text(encoding="utf-8")
+        answers = QAMerger.parse_answers(answer_text)
+        if not answers:
+            print(
+                f"{_ts()} ⚠️  回答ファイルに有効な回答が見つかりません。"
+                " デフォルト回答を採用します。",
+                file=sys.stderr,
+            )
+            use_defaults = True
+    elif not use_defaults:
+        # --answers-file も --use-defaults も未指定の場合はデフォルト採用
+        use_defaults = True
+
+    # ── マージ ────────────────────────────────────────────
+    try:
+        merged_doc = QAMerger.merge_answers(doc, answers, use_defaults=use_defaults)
+        merged_content = QAMerger.render_merged(merged_doc)
+    except Exception as exc:
+        print(f"{_ts()} ❌ マージ処理に失敗しました: {exc}", file=sys.stderr)
+        return 1
+
+    # ── 保存（write → read-back → retry 3回） ────────────
+    if not QAMerger.save_merged(merged_content, qa_path):
+        print(f"{_ts()} ❌ ファイル保存に失敗しました: {qa_path}", file=sys.stderr)
+        return 1
+
+    print(f"{_ts()} ✅ マージ済みファイルを保存しました: {qa_path}")
+
+    # ── 統合ドキュメント生成（--skip-consistency 未指定時） ──
+    if args.skip_consistency:
+        print(f"{_ts()} ℹ️  --skip-consistency が指定されました。統合ドキュメント生成をスキップします。")
+        return 0
+
+    consolidated_path = QAMerger.generate_consolidated_path(qa_path)
+
+    try:
+        from .config import SDKConfig
+        from .console import Console
+    except ImportError:
+        from config import SDKConfig  # type: ignore[no-redef]
+        from console import Console  # type: ignore[no-redef]
+
+    try:
+        try:
+            from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
+            from copilot.session import CopilotSession  # type: ignore[import]
+        except ImportError:
+            # github_copilot_sdk パッケージ名でのフォールバック
+            try:
+                from github_copilot_sdk import CopilotClient, SubprocessConfig  # type: ignore[import]
+                from github_copilot_sdk.session import CopilotSession  # type: ignore[import]
+            except ImportError:
+                print(
+                    f"{_ts()} ⚠️  GitHub Copilot SDK が見つかりません。"
+                    " 統合ドキュメント生成をスキップします。",
+                    file=sys.stderr,
+                )
+                return 0
+
+        model, _ = _resolve_model(args.model)  # _ = display name (unused here)
+        cfg = SDKConfig.from_env()
+        cfg.model = model
+
+        sdk_cfg = SubprocessConfig(
+            cli_path=cfg.cli_path,
+            github_token=cfg.resolve_token() or None,
+            log_level="error",
+        )
+        client = CopilotClient(config=sdk_cfg)
+
+        async def _generate_consolidated() -> int:
+            await client.start()
+            async with CopilotSession(
+                client=client,
+                model=model,
+            ) as session:
+                consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
+                    merged_qa_content=merged_content,
+                )
+                response = await session.send_and_wait(consolidate_prompt, timeout=1800.0)
+
+                # 統合ドキュメントを保存
+                if response:
+                    content_text = ""
+                    data = getattr(response, "data", None)
+                    if data:
+                        for attr in ("content", "message"):
+                            val = getattr(data, attr, None)
+                            if val:
+                                content_text = str(val)
+                                break
+                    if not content_text:
+                        content_text = str(response)
+
+                    if QAMerger.save_merged(content_text, consolidated_path):
+                        print(
+                            f"{_ts()} ✅ 統合ドキュメントを保存しました: {consolidated_path}"
+                        )
+                    else:
+                        print(
+                            f"{_ts()} ⚠️  統合ドキュメントの保存に失敗しました。",
+                            file=sys.stderr,
+                        )
+            await client.stop()
+            return 0
+
+        return asyncio.run(_generate_consolidated())
+
+    except Exception as exc:
+        print(
+            f"{_ts()} ⚠️  統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {exc}",
+            file=sys.stderr,
+        )
+        return 0
+
+
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
     # バリデーション: --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と併用必須
@@ -749,14 +1074,6 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         args.auto_coding_agent_review_auto_approval = False
-
-    # バリデーション: aqrc の --scope specified には --target-files が必須
-    if args.workflow == "aqrc" and getattr(args, "scope", None) == "specified" and not getattr(args, "target_files", None):
-        print(
-            f"{_ts()} ❌ --scope specified を指定した場合は --target-files でファイルパスを指定してください。",
-            file=sys.stderr,
-        )
-        return 1
 
     # --create-issues 指定時は必ず PR を作成する
     if args.create_issues:

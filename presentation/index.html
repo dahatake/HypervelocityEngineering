@@ -41,11 +41,11 @@
       <aside class="hero-panel reveal">
         <div class="metric-grid">
           <div class="metric">
-            <span class="metric-value" data-count="6" data-suffix=" workflows">0</span>
-            <span class="metric-label">共通 DAG で管理される主要ワークフロー</span>
+            <span class="metric-value" data-count="7" data-suffix=" workflows">0</span>
+            <span class="metric-label">共通 DAG で管理されるワークフロー（AAS/AAD/ASDW/ABD/ABDV/AID/AQRC）</span>
           </div>
           <div class="metric">
-            <span class="metric-value" data-count="30" data-suffix="+ agents">0</span>
+            <span class="metric-value" data-count="48" data-suffix=" agents">0</span>
             <span class="metric-label">責務別に分割された Custom Agent 群</span>
           </div>
           <div class="metric">
@@ -89,17 +89,19 @@
             ドメイン分析、データモデル、UI、サービス定義、AI Agent 設計、実装、QA を個別の Agent に分解し、万能 Agent への依存を避けています。
           </p>
           <div class="tag-row">
-            <span class="tag">Design Agents ×16</span>
-            <span class="tag">Dev Agents ×14</span>
-            <span class="tag">QA Agents ×2</span>
+            <span class="tag">Arch Agents ×25</span>
+            <span class="tag">Dev Agents ×17</span>
+            <span class="tag">QA Agents ×6</span>
           </div>
           <div class="file-tree">├─ <b>.github/agents/</b>
 │   ├─ Arch-DataModeling.agent.md
 │   ├─ Arch-Microservice-ServiceCatalog.agent.md
+│   ├─ Arch-ImprovementPlanner.agent.md
 │   ├─ Dev-Microservice-Azure-ServiceCoding-AzureFunctions.agent.md
 │   ├─ Dev-Batch-Deploy.agent.md
 │   ├─ QA-AzureArchitectureReview.agent.md
-│   └─ … 計 43 ファイル</div>
+│   ├─ QA-CodeQualityScan.agent.md
+│   └─ … 計 48 ファイル</div>
         </article>
 
         <article class="section-card card-accent">
@@ -165,7 +167,7 @@ StepDef(id=<span class="str">"7.3"</span>, title=<span class="str">"TDDテスト
           </p>
           <div class="file-tree">├─ <b>AGENTS.md</b>               ← 全 Agent の強制ルール（§1〜§10）
 ├─ <b>.github/copilot-instructions.md</b>
-├─ <b>.github/agents/*.agent.md</b>  ← 43 Custom Agent 定義
+├─ <b>.github/agents/*.agent.md</b>  ← 48 Custom Agent 定義
 ├─ <b>.github/skills/*/SKILL.md</b>  ← 再利用可能な技術 Skill
 ├─ <b>hve/</b>                       ← Copilot SDK ローカル実行基盤
 │   ├─ orchestrator.py

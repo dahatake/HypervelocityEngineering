@@ -18,6 +18,9 @@ from .workflow_registry import WorkflowDef
 # テンプレートディレクトリのベースパス（リポジトリルート相対）
 _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
+# AQRC デフォルト値
+_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "aas": "App Selection",
@@ -154,20 +157,16 @@ def collect_params(wf: WorkflowDef) -> dict:
                 print("  ⚠️ 1 または 2 を入力してください。")
 
     if "target_files" in wf.params and params.get("scope") == "specified":
-        while True:
-            target_files = _prompt(
-                "対象ファイルパス（スペース区切り）", default="", required=False
-            )
-            if target_files.strip():
-                params["target_files"] = target_files
-                break
-            print("  ⚠️ scope=specified の場合は少なくとも 1 件のファイルパスを入力してください。")
+        target_files = _prompt(
+            "対象ファイルパス（スペース区切り）", default=_AQRC_DEFAULT_TARGET_FILES, required=False
+        )
+        params["target_files"] = target_files.strip() if target_files.strip() else _AQRC_DEFAULT_TARGET_FILES
     elif "target_files" in wf.params:
-        params["target_files"] = ""
+        params["target_files"] = _AQRC_DEFAULT_TARGET_FILES
 
     if "force_refresh" in wf.params:
         params["force_refresh"] = _prompt_yes_no(
-            "既存の status.md を完全に再生成する？", default=False
+            "既存の status.md を完全に再生成する？", default=True
         )
 
     # ステップ選択
@@ -313,7 +312,7 @@ def render_template(
     )
     body = body.replace(
         "{aqrc_force_refresh}",
-        str(params.get("force_refresh", False)).lower(),
+        str(params.get("force_refresh", True)).lower(),
     )
 
     # コンテナ固有プレースホルダ (AAD step-7, AID step-5)

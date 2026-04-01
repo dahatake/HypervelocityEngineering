@@ -54,6 +54,7 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 ### 3.1 Preflight（最初にやる）
 - `az version` / `az account show` / `az account list --query ...` で実行環境とアカウント状態を確認。
 - 結果を `{WORK}artifacts/cli-evidence.md` に記録する（後続の AC 検証で参照するため）。
+- 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）。
 - 未ログイン・権限不足・CLI未導入などで実行不能なら、**実行はしない**。
   - 代わりに「ユーザーが実行する手順」と「前提条件」を README と `{WORK}plan.md` に残す。
 
