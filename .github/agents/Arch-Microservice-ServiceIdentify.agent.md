@@ -113,3 +113,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - 例：
   - `- YYYY-MM-DD: domain-analytics.md からBC候補を抽出（n件）`
   - `- 次：サービス候補の責務/非責務と依存関係を整理`
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D04-業務プロセス仕様書.md` — 業務プロセス
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
+- `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md` — システムコンテキスト・責任境界
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約

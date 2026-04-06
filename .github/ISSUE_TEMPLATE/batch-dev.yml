@@ -9,7 +9,7 @@ body:
       value: |
         ## Batch Dev
         このフォームから Issue を作成すると、自動で以下の実装タスクが
-        Sub-issue として生成され、Copilot coding agent が順次実行します。
+        Sub-issue として生成され、Copilot cloud agent が順次実行します。
 
         ### 前提条件（入力ドキュメント）
         バッチ設計ワークフロー（ABD）が完了し、以下のドキュメントが存在していること:
@@ -34,6 +34,8 @@ body:
         | **Step.3** | Azure Functions/コンテナ へのデプロイ |
         | **Step.4** | アーキテクチャレビュー（WAF レビュー ‖ 整合性チェック）（並列実行）|
 
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
     id: branch
     attributes:

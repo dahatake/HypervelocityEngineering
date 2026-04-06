@@ -437,7 +437,7 @@ main() {
           local current_body
           current_body=$(echo "${current_json}" | jq -r '.body // ""' 2>/dev/null)
           local dep_section
-          dep_section=$'\n\n## ⏳ 前提条件（Dependencies）\n\n以下のIssueが完了してから、このIssueにCopilot coding agentをアサインしてください:\n'
+          dep_section=$'\n\n## ⏳ 前提条件（Dependencies）\n\n以下のIssueが完了してから、このIssueにCopilot cloud agentをアサインしてください:\n'
           for ref in "${dep_refs[@]}"; do
             dep_section+="- ${ref}"$'\n'
           done

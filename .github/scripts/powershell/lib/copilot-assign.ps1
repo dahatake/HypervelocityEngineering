@@ -1,4 +1,4 @@
-﻿# copilot-assign.ps1 — Copilot coding agent アサインモジュール
+﻿# copilot-assign.ps1 — Copilot cloud agent アサインモジュール
 #
 # Migrated from:
 #   - .github/scripts/bash/lib/copilot-assign.sh
@@ -342,7 +342,7 @@ mutation(
 
     # All retries exhausted — post failure comment
     $failMsg = @"
-⚠️ Copilot coding agent (copilot-swe-agent) を Issue #$IssueNumber にアサインできませんでした。
+⚠️ Copilot cloud agent (copilot-swe-agent) を Issue #$IssueNumber にアサインできませんでした。
 
 手動でアサインする手順:
 1. Issue #$IssueNumber を開く
@@ -350,7 +350,7 @@ mutation(
 
 失敗原因として考えられるもの:
 - ``COPILOT_PAT`` の権限不足または失効
-- Copilot coding agent が有効化されていない
+- Copilot cloud agent が有効化されていない
 - GraphQL API の一時的な障害
 "@
 

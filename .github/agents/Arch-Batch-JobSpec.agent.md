@@ -36,6 +36,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - `{jobId}`: `batch-job-catalog.md` の Job-ID（例：`JOB-001`）
   - `{jobNameSlug}`: ジョブ名をケバブケースに変換した文字列（ファイル名不適文字は `-` へ置換）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D04-業務プロセス仕様書.md` — 業務プロセス
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+
 ## 3) 実行手順（決定的）
 
 ### 3.0 依存確認（必須・最初に実行）

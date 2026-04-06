@@ -3,6 +3,8 @@
 プロトタイピングのフェーズあるいはMVPの最初のフェーズでの利用を想定しています。
 
 
+> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、AI Agent 設計で業務コンテキスト（ユースケース: `D05`、業務ルール: `D06`、権限・認可: `D12`、Promptガバナンス: `D18`）として自動参照されます。
+
 # ツール
 
 AI Agentの実装は、Microsoft 365 CopilotのChatでの、Agent Builderや、Microsoft Copilot Studio。あるいは、Microsoft Foundryでなどがお勧めです。

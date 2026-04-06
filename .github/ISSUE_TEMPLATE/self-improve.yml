@@ -9,7 +9,7 @@ body:
       value: |
         ## 🔄 Self-Improve: 自己改善ループ
 
-        このフォームから Issue を作成すると、Copilot Coding Agent が以下のループを実行します:
+        このフォームから Issue を作成すると、Copilot cloud agent が以下のループを実行します:
 
         1. **Phase 4a**: コードベーススキャン（ruff / pytest --cov / markdownlint）
         2. **Phase 4b**: LLM 統合評価 + 改善計画策定（AGENTS.md §2 準拠）
@@ -35,6 +35,8 @@ body:
         ⚠️ **注意**: この Issue に Copilot をアサインすると、AGENTS.md §2.2 の分割判定が実行されます。
         見積合計 > 15分の場合は `plan.md` と `subissues.md` のみ作成し、Sub Issue に分割されます。
 
+
+        📚 **knowledge/ 参照**: 改善計画で `knowledge/` の業務要件ドキュメント（D01〜D21）との整合性も確認対象とします。
   - type: input
     id: target_scope
     attributes:

@@ -1,3 +1,10 @@
+# check-split-mode.yml
+#
+# 責務: split mode PR に実装ファイルが含まれていないかチェック
+#   - PR 差分の plan.md が SPLIT_REQUIRED の場合、PR 差分に .sh/.py/.ts/.js/.sql/.html/.css ファイルが含まれていないことを確認
+#
+# スキャン対象: PR 差分のみ（gh pr diff 使用）
+# 関連ワークフロー: validate-plan.yml（plan.md メタデータ整合性チェック）
 name: Check split mode compliance
 
 on:

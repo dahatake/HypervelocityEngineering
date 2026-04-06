@@ -89,7 +89,7 @@ Subcommands:
 
 Environment Variables (for default/advance):
   REPO        Repository (owner/repo)
-  WORKFLOW    Workflow ID (aas|aad|asdw|abd|abdv|aid)
+  WORKFLOW    Workflow ID (aas|aad|asdw|abd|abdv)
   BRANCH      Target branch (default: main)
   STEPS       Comma-separated step IDs
   ISSUE_NO    Completed issue number (for advance)

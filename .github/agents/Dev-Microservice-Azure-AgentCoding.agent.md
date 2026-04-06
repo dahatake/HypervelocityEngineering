@@ -220,3 +220,10 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 
 ## 出力方法
 レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+- `knowledge/D12-権限-認可-職務分掌設計書.md` — 権限・認可・職務分掌
+- `knowledge/D18-Prompt-ガバナンス-入力統制パック.md` — Promptガバナンス

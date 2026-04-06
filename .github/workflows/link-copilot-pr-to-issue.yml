@@ -1,8 +1,8 @@
 name: Copilot PR ↔ Issue リンク自動設定
 
-# Copilot coding agent が PR を作成した際に、元 Issue との紐付けを自動で行う。
+# Copilot cloud agent が PR を作成した際に、元 Issue との紐付けを自動で行う。
 #
-# 問題: Copilot coding agent は PR body に Closes #N / Fixes #N を記載しないため、
+# 問題: Copilot cloud agent は PR body に Closes #N / Fixes #N を記載しないため、
 #   Issue の Development セクションに PR リンクが表示されない。
 #
 # 処理フロー:

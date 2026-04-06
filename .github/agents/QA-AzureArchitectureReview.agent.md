@@ -30,6 +30,14 @@ tools: ["*"]
 - 出力先（固定）:
   - `docs/azure/Azure-ArchitectureReview-Report.md`
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md` — システムコンテキスト・責任境界
+- `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` — セキュリティ・プライバシー・監査
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+- `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` — ソフトウェアアーキテクチャ・ADR
+- `knowledge/D20-セキュア設計-実装ガードレール.md` — セキュア設計・実装ガードレール
+
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で関連する Azure リソース/サービス特定（共有含む）
 - APP-ID未指定 or `docs/app-list.md` 不在 → 全リソース対象（後方互換）

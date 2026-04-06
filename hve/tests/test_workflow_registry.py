@@ -23,8 +23,7 @@ EXPECTED_STEP_COUNTS = {
     "asdw": 24,  # 4 containers + 20 real steps
     "abd": 9,
     "abdv": 7,
-    "aid": 10,   # 1 container + 9 real steps
-    "aqrc": 1,
+    "aqkm": 1,
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
@@ -33,15 +32,14 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "asdw": 20,
     "abd": 9,
     "abdv": 7,
-    "aid": 9,
-    "aqrc": 1,
+    "aqkm": 1,
 }
 
 
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -55,14 +53,14 @@ class TestGetWorkflow:
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
     def test_step_count_matches_bash(self, wf_id: str):
         """各ワークフローのステップ数が bash 版と一致すること。"""
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -132,12 +130,6 @@ class TestGetRootSteps:
     def test_abd_roots(self):
         """ABD: Step.1.1 と Step.1.2 が並列ルート。"""
         roots = get_root_steps("abd")
-        root_ids = sorted(s.id for s in roots)
-        assert root_ids == ["1.1", "1.2"]
-
-    def test_aid_roots(self):
-        """AID: Step.1.1 と Step.1.2 が並列ルート。"""
-        roots = get_root_steps("aid")
         root_ids = sorted(s.id for s in roots)
         assert root_ids == ["1.1", "1.2"]
 
@@ -241,45 +233,70 @@ class TestGetStep:
 class TestListWorkflows:
     """list_workflows() のテスト。"""
 
-    def test_returns_seven(self):
+    def test_returns_six(self):
         wfs = list_workflows()
-        assert len(wfs) == 7
+        assert len(wfs) == 6
 
     def test_all_ids(self):
         wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "aid", "aqrc", "asdw"]
+        assert wf_ids == ["aad", "aas", "abd", "abdv", "aqkm", "asdw"]
 
 
-class TestAQRCWorkflow:
-    """AQRC ワークフロー固有テスト。"""
+class TestAQKMWorkflow:
+    """AQKM ワークフロー固有テスト。"""
 
-    def test_aqrc_params(self):
-        wf = get_workflow("aqrc")
+    def test_aqkm_params(self):
+        wf = get_workflow("aqkm")
         assert wf is not None
         assert "scope" in wf.params
         assert "target_files" in wf.params
         assert "force_refresh" in wf.params
 
-    def test_aqrc_single_step(self):
-        wf = get_workflow("aqrc")
+    def test_aqkm_single_step(self):
+        wf = get_workflow("aqkm")
         assert wf is not None
         assert len(wf.steps) == 1
         assert wf.steps[0].id == "1"
 
-    def test_aqrc_custom_agent(self):
-        wf = get_workflow("aqrc")
+    def test_aqkm_custom_agent(self):
+        wf = get_workflow("aqkm")
         assert wf is not None
-        assert wf.steps[0].custom_agent == "QA-RequirementClassifier"
+        assert wf.steps[0].custom_agent == "QA-KnowledgeManager"
 
-    def test_aqrc_template_path(self):
-        step = get_step("aqrc", "1")
+    def test_aqkm_template_path(self):
+        step = get_step("aqkm", "1")
         assert step is not None
-        assert step.body_template_path == "templates/aqrc/step-1.md"
+        assert step.body_template_path == "templates/aqkm/step-1.md"
 
-    def test_aqrc_root_step(self):
-        roots = get_root_steps("aqrc")
+    def test_aqkm_root_step(self):
+        roots = get_root_steps("aqkm")
         assert len(roots) == 1
         assert roots[0].id == "1"
+
+    def test_aqkm_template_mentions_knowledge(self):
+        """AQKM step-1.md テンプレートが knowledge/ 出力への言及を含むこと。"""
+        from hve.template_engine import _load_template
+        content = _load_template("templates/aqkm/step-1.md")
+        assert "knowledge/" in content
+
+    def test_aqkm_template_uses_correct_master_list_path(self):
+        """AQKM step-1.md テンプレートが正しいパス template/ を参照していること（docs/ ではない）。"""
+        from hve.template_engine import _load_template
+        content = _load_template("templates/aqkm/step-1.md")
+        assert "template/business-requirement-document-master-list.md" in content
+        assert "docs/business-requirement-document-master-list.md" not in content
+
+    def test_aqkm_template_has_9_steps(self):
+        """AQKM step-1.md テンプレートが 9 ステップの処理フローを記述していること。"""
+        from hve.template_engine import _load_template
+        content = _load_template("templates/aqkm/step-1.md")
+        assert "9 ステップ" in content
+
+    def test_aqkm_template_output_lists_knowledge(self):
+        """AQKM step-1.md テンプレートの出力セクションに knowledge/ が含まれること。"""
+        from hve.template_engine import _load_template
+        content = _load_template("templates/aqkm/step-1.md")
+        assert "knowledge/D{NN}" in content
 
 
 class TestStepDefFields:

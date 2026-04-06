@@ -661,7 +661,7 @@ class TestConsoleCliLog(unittest.TestCase):
         """verbosity=3 で └ ツリー行が確定行として出力される。"""
         con = Console(verbosity=3)
         with unittest.mock.patch.object(con, '_emit') as mock_emit:
-            con.cli_log("1", '  └ ".github/agents/QA-RequirementClassifier*"')
+            con.cli_log("1", '  └ ".github/agents/QA-KnowledgeManager*"')
             mock_emit.assert_called_once()
 
     def test_step_id_prefix_always_present(self) -> None:

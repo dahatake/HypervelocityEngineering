@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-7 つのオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AID/AQRC) のステップ DAG
+6 つのオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AQKM) のステップ DAG
 定義をデータとして保持する。状態遷移ロジックはデータドリブンに実装する。
 
 依存パターン:
@@ -58,7 +58,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -279,44 +279,20 @@ ABDV = WorkflowDef(
     ],
 )
 
-# --- AID: IoT Design ---
-AID = WorkflowDef(
-    id="aid",
-    name="IoT Design",
-    label_prefix="aid",
-    state_labels=_make_state_labels("aid"),
-    params=[],
-    steps=[
-        # コンテナ
-        StepDef(id="5", title="画面定義書 + マイクロサービス定義書（コンテナ）", custom_agent=None, is_container=True),
-        # 実ステップ
-        StepDef(id="1.1", title="IoT ドメイン分析", custom_agent="Arch-IoT-DomainAnalytics", body_template_path="templates/aid/step-1.1.md"),
-        StepDef(id="1.2", title="デバイスプロファイル＋接続性分析", custom_agent="Arch-IoT-DeviceConnectivity", body_template_path="templates/aid/step-1.2.md"),
-        StepDef(id="2", title="データモデル", custom_agent="Arch-DataModeling", depends_on=["1.1", "1.2"], body_template_path="templates/aid/step-2.md"),
-        StepDef(id="3", title="画面一覧/構造", custom_agent="Arch-UI-List", depends_on=["2"], skip_fallback_deps=["2"], body_template_path="templates/aid/step-3.md"),
-        StepDef(id="4", title="サービスカタログ", custom_agent="Arch-Microservice-ServiceCatalog", depends_on=["3"], skip_fallback_deps=["3"], body_template_path="templates/aid/step-4.md"),
-        StepDef(id="4.5", title="テスト戦略書", custom_agent="Arch-TDD-TestStrategy", depends_on=["4"], skip_fallback_deps=["4"], body_template_path="templates/aid/step-4.5.md"),
-        StepDef(id="5.1", title="画面定義書", custom_agent="Arch-UI-Detail", depends_on=["4.5"], skip_fallback_deps=["4"], body_template_path="templates/aid/step-5.1.md"),
-        StepDef(id="5.2", title="マイクロサービス定義書", custom_agent="Arch-Microservice-ServiceDetail", depends_on=["4.5"], skip_fallback_deps=["4"], body_template_path="templates/aid/step-5.2.md"),
-        StepDef(id="5.3", title="TDDテスト仕様書", custom_agent="Arch-TDD-TestSpec", depends_on=["4.5", "5.1", "5.2"], body_template_path="templates/aid/step-5.3.md"),
-    ],
-)
-
-
-# --- AQRC: QA Requirement Classification ---
-AQRC = WorkflowDef(
-    id="aqrc",
-    name="QA Requirement Classification",
-    label_prefix="aqrc",
-    state_labels=_make_state_labels("aqrc"),
+# --- AQKM: QA Knowledge Management ---
+AQKM = WorkflowDef(
+    id="aqkm",
+    name="QA Knowledge Management",
+    label_prefix="aqkm",
+    state_labels=_make_state_labels("aqkm"),
     params=["scope", "target_files", "force_refresh"],
     steps=[
         StepDef(
             id="1",
-            title="QA 分類・ステータス更新",
-            custom_agent="QA-RequirementClassifier",
+            title="QA Knowledge ドキュメント生成・管理",
+            custom_agent="QA-KnowledgeManager",
             depends_on=[],
-            body_template_path="templates/aqrc/step-1.md",
+            body_template_path="templates/aqkm/step-1.md",
         ),
     ],
 )
@@ -327,7 +303,7 @@ AQRC = WorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AID, AQRC]
+    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM]
 }
 
 

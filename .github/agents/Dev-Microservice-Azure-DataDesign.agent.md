@@ -27,6 +27,12 @@ tools: ["*"]
 - 任意（存在すれば参照）
   - `.github/instructions/agent-playbook.instructions.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` — セキュリティ・プライバシー・監査
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくエンティティ/サービス特定（共有含む）
 - APP-ID未指定 or `docs/app-list.md` 不在 → 全エンティティ対象（後方互換）

@@ -1,0 +1,229 @@
+# setup-labels.yml
+#
+# 目的: .github/labels.json に定義されたラベルをリポジトリに一括作成・更新する。
+#
+# トリガー:
+#   - workflow_dispatch: Actions タブから手動実行（初回セットアップ推奨）
+#   - issues (opened / labeled): setup-labels ラベル付き Issue が作成またはラベル付与されたとき
+#
+# 冪等性:
+#   - 未存在ラベル → POST で新規作成
+#   - 既存ラベル   → PATCH で色・description を更新
+#   - 複数回実行しても安全
+#
+# 管理対象外:
+#   - ステートラベル (aas:initialized, aas:ready, ... など xxx:yyy 形式)
+#     → 各オーケストレーターワークフローが自己 bootstrap する
+#   - Sub Issue 固有ラベル
+#     → 各 Sub Issue 作成時にワークフローが自動付与する
+#
+# 実行タイミング:
+#   リポジトリ作成後に1度だけ実行してください。
+#   ラベル定義 (.github/labels.json) が更新された場合は再実行できます（冪等設計）。
+
+name: Setup Labels
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  setup-labels:
+    name: Create / Update Labels from labels.json
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch'
+      || (
+        github.event_name == 'issues'
+        && contains(github.event.issue.labels.*.name, 'setup-labels')
+      )
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bootstrap setup-labels label (chicken-and-egg fix)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Ensuring 'setup-labels' label exists..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/labels" \
+            -d '{"name":"setup-labels","color":"C5DEF5","description":"trigger label setup workflow (run once after repository creation, re-runnable for updates)"}')
+          if [ "$RESPONSE" = "201" ]; then
+            echo "Created 'setup-labels' label."
+          elif [ "$RESPONSE" = "422" ]; then
+            echo "'setup-labels' label already exists (skipped creation)."
+          else
+            echo "Unexpected response $RESPONSE when creating 'setup-labels' label."
+          fi
+
+      - name: Create / Update labels from labels.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          LABELS_FILE=".github/labels.json"
+          if [ ! -f "$LABELS_FILE" ]; then
+            echo "Error: $LABELS_FILE not found."
+            exit 1
+          fi
+
+          CREATED=0
+          UPDATED=0
+          FAILED=0
+          SUMMARY_LINES=""
+
+          LABEL_COUNT=$(jq '. | length' "$LABELS_FILE")
+          echo "Processing $LABEL_COUNT labels from $LABELS_FILE ..."
+
+          for i in $(seq 0 $((LABEL_COUNT - 1))); do
+            NAME=$(jq -r ".[$i].name" "$LABELS_FILE")
+            COLOR=$(jq -r ".[$i].color" "$LABELS_FILE")
+            DESCRIPTION=$(jq -r ".[$i].description" "$LABELS_FILE")
+
+            # URL-encode the label name (handles ':' and other special chars)
+            ENCODED_NAME=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$NAME")
+
+            PAYLOAD=$(python3 -c \
+              'import json, sys; print(json.dumps({"name": sys.argv[1], "color": sys.argv[2], "description": sys.argv[3]}))' \
+              "$NAME" "$COLOR" "$DESCRIPTION")
+
+            # Try to create the label
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${{ github.repository }}/labels" \
+              -d "$PAYLOAD")
+
+            if [ "$RESPONSE" = "201" ]; then
+              echo "[CREATED] $NAME"
+              CREATED=$((CREATED + 1))
+              SUMMARY_LINES="${SUMMARY_LINES}\n- ✅ Created: \`${NAME}\`"
+            elif [ "$RESPONSE" = "422" ]; then
+              # Label already exists — update color and description via PATCH
+              PATCH_PAYLOAD=$(python3 -c \
+                'import json, sys; print(json.dumps({"color": sys.argv[1], "description": sys.argv[2]}))' \
+                "$COLOR" "$DESCRIPTION")
+
+              PATCH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X PATCH \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${{ github.repository }}/labels/${ENCODED_NAME}" \
+                -d "$PATCH_PAYLOAD")
+
+              if [ "$PATCH_RESPONSE" = "200" ]; then
+                echo "[UPDATED] $NAME"
+                UPDATED=$((UPDATED + 1))
+                SUMMARY_LINES="${SUMMARY_LINES}\n- 🔄 Updated: \`${NAME}\`"
+              else
+                echo "[ERROR] Failed to update $NAME (HTTP $PATCH_RESPONSE)"
+                FAILED=$((FAILED + 1))
+                SUMMARY_LINES="${SUMMARY_LINES}\n- ❌ Failed: \`${NAME}\` (PATCH HTTP ${PATCH_RESPONSE})"
+              fi
+            else
+              echo "[ERROR] Failed to create $NAME (HTTP $RESPONSE)"
+              FAILED=$((FAILED + 1))
+              SUMMARY_LINES="${SUMMARY_LINES}\n- ❌ Failed: \`${NAME}\` (POST HTTP ${RESPONSE})"
+            fi
+
+            sleep 1
+          done
+
+          echo ""
+          echo "=== Summary ==="
+          echo "Created : $CREATED"
+          echo "Updated : $UPDATED"
+          echo "Failed  : $FAILED"
+          echo "Total   : $LABEL_COUNT"
+
+          # Write summary to GitHub Actions step summary
+          {
+            echo "## Setup Labels — Summary"
+            echo ""
+            echo "| | Count |"
+            echo "|---|---|"
+            echo "| ✅ Created | $CREATED |"
+            echo "| 🔄 Updated | $UPDATED |"
+            echo "| ❌ Failed  | $FAILED  |"
+            echo "| Total     | $LABEL_COUNT |"
+            echo ""
+            echo "### Details"
+            echo -e "$SUMMARY_LINES"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Store summary for next step
+          echo "CREATED=$CREATED" >> "$GITHUB_ENV"
+          echo "UPDATED=$UPDATED" >> "$GITHUB_ENV"
+          echo "FAILED=$FAILED" >> "$GITHUB_ENV"
+          echo "LABEL_COUNT=$LABEL_COUNT" >> "$GITHUB_ENV"
+
+          if [ "$FAILED" -gt 0 ]; then
+            exit 1
+          fi
+
+      - name: Post summary comment to Issue
+        if: github.event_name == 'issues'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          COMMENT_BODY=$(python3 - <<'PYEOF'
+          import json, os, textwrap
+          created  = os.environ.get('CREATED', '0')
+          updated  = os.environ.get('UPDATED', '0')
+          failed   = os.environ.get('FAILED', '0')
+          total    = os.environ.get('LABEL_COUNT', '0')
+          run_url  = os.environ.get('RUN_URL', '')
+          status   = '\u2705 完了' if failed == '0' else '\u26a0\ufe0f 一部失敗'
+          body = (
+              f'## Setup Labels \u2014 実行結果 {status}\n\n'
+              f'| | 件数 |\n'
+              f'|---|---|\n'
+              f'| \u2705 新規作成 | {created} |\n'
+              f'| \U0001f504 更新 | {updated} |\n'
+              f'| \u274c 失敗 | {failed} |\n'
+              f'| 合計 | {total} |\n\n'
+              f'詳細は [Actions ログ]({run_url}) を参照してください。\n'
+          )
+          print(json.dumps({'body': body}))
+          PYEOF
+          )
+
+          COMMENT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
+            -d "$COMMENT_BODY")
+
+          if [ "$COMMENT_STATUS" != "201" ]; then
+            echo "[WARNING] Failed to post summary comment (HTTP $COMMENT_STATUS). Continuing to close issue."
+          else
+            echo "Summary comment posted successfully."
+          fi
+
+      - name: Close Issue
+        if: github.event_name == 'issues'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh issue close ${{ github.event.issue.number }} --reason completed

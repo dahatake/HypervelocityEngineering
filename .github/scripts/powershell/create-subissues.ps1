@@ -412,7 +412,7 @@ for ($i = 0; $i -lt $blocks.Count; $i++) {
                 $currentData = Get-GitHubIssue -IssueNum $issueNum -Repo $Repo
                 if ($currentData) {
                     $currentBody = $currentData.body
-                    $depSection = "`n`n## ⏳ 前提条件（Dependencies）`n`n以下のIssueが完了してから、このIssueにCopilot coding agentをアサインしてください:`n"
+                    $depSection = "`n`n## ⏳ 前提条件（Dependencies）`n`n以下のIssueが完了してから、このIssueにCopilot cloud agentをアサインしてください:`n"
                     foreach ($ref in $depRefs) {
                         $depSection += "- $ref`n"
                     }

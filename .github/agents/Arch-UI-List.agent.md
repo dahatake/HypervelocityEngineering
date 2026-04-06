@@ -27,6 +27,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `docs/data-model.md`（表示/入力項目の補助）
 - `docs/app-list.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D11-画面-UX-操作意味仕様書.md` — 画面UX・操作仕様
+
 ## 3) 出力（必須）
 - 主要成果物：`docs/screen-list.md`
 - 進捗ログ：`{WORK}screen-modeling-work-status.md`

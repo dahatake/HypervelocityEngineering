@@ -9,13 +9,16 @@
 | 対象 | 前提スキル |
 |---|---|
 | バッチ処理設計・実装を担当するエンジニア | GitHub Issues / Actions の基本操作 |
-| このリポジトリで初めて Copilot Coding Agent を使う開発者 | Markdown / YAML の読み書き |
+| このリポジトリで初めて Copilot cloud agent を使う開発者 | Markdown / YAML の読み書き |
 
 ---
 
 ## 前提条件
 
 本チュートリアルを開始する前に、以下の条件が満たされていることを確認してください。
+
+> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図・スコープ・業務プロセス・ユースケース・データモデル・セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) のワークフローを実行して `knowledge/` を充実させることを推奨します。
+
 
 ### リポジトリ設定
 

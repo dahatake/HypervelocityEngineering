@@ -8,7 +8,7 @@
 
 - [敵対的レビュー（Adversarial Review）](#敵対的レビューadversarial-review)
 - [質問票作成](#質問票作成)
-- [Coding Agent エラー対応](#coding-agent-エラー対応)
+- [Copilot cloud agent エラー対応](#copilot-cloud-agent-エラー対応)
 
 ---
 
@@ -76,9 +76,9 @@
 
 ---
 
-## Coding Agent エラー対応
+## Copilot cloud agent エラー対応
 
-Coding Agent の GitHub Actions でのタスクが失敗した場合に使用するプロンプトです。
+Copilot cloud agent の GitHub Actions でのタスクが失敗した場合に使用するプロンプトです。
 
 > [!IMPORTANT]
 > この状況になったら、即座にジョブを停止させてください。GitHub Actions の課金に影響が考えられます。
@@ -98,3 +98,29 @@ No command provided. Please supply a valid command to execute.
 1. **Actions タブでログを確認**: 失敗したジョブのログからエラーメッセージを特定
 2. **段階的アプローチを指示**: 一度に大きな変更をしようとして失敗している場合、「各セクションを個別のコミットで追加」するよう指示
 3. **エラーメッセージを貼り付けて質問**: 上記プロンプトに実際のエラーメッセージを含めて Copilot に送信
+
+## knowledge/ を活用したプロンプト例
+
+`knowledge/` フォルダーの業務要件ドキュメントを参照させることで、Copilot の設計精度を高めることができます。
+
+### ドメインモデルを参照した設計依頼
+
+```text
+`knowledge/D07-用語集-ドメインモデル定義書.md` と `knowledge/D05-ユースケース-シナリオカタログ.md` を参照して、
+マイクロサービスのドメイン分析を行ってください。
+```
+
+### 業務ルールを参照した実装依頼
+
+```text
+`knowledge/D06-業務ルール-判定表仕様書.md` を参照して、
+ポイント計算サービスの実装を TDD で行ってください。
+```
+
+### セキュリティ要件を参照したレビュー依頼
+
+```text
+`knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` と
+`knowledge/D20-セキュア設計-実装ガードレール.md` を参照して、
+実装コードのセキュリティレビューを行ってください。
+```

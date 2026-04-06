@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# copilot-assign.sh — Copilot coding agent アサインモジュール
+# copilot-assign.sh — Copilot cloud agent アサインモジュール
 #
 # Migrated from:
 #   - .github/cli/lib/copilot_assign.py
@@ -307,7 +307,7 @@ mutation(
 
   # All retries exhausted — post failure comment
   local fail_msg
-  fail_msg="⚠️ Copilot coding agent (copilot-swe-agent) を Issue #${issue_number} にアサインできませんでした。
+  fail_msg="⚠️ Copilot cloud agent (copilot-swe-agent) を Issue #${issue_number} にアサインできませんでした。
 
 手動でアサインする手順:
 1. Issue #${issue_number} を開く
@@ -315,7 +315,7 @@ mutation(
 
 失敗原因として考えられるもの:
 - \`COPILOT_PAT\` の権限不足または失効
-- Copilot coding agent が有効化されていない
+- Copilot cloud agent が有効化されていない
 - GraphQL API の一時的な障害"
 
   local comment_token="${gh_token:-${copilot_pat}}"

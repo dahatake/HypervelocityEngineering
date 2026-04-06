@@ -49,6 +49,14 @@ tools: ["*"]
 - **サービス詳細仕様（SVC-*.md）が多数ある場合**: Agent の Scope に関連するサービスのみ読む（全サービスを網羅的に読む必要はない）。
 - **入力の優先順位**: ファイル間で矛盾がある場合、`service-catalog.md` > `service-list.md` > `data-model.md` の順で新しい方を正とする。
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+- `knowledge/D12-権限-認可-職務分掌設計書.md` — 権限・認可・職務分掌
+- `knowledge/D18-Prompt-ガバナンス-入力統制パック.md` — Promptガバナンス
+
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス/画面/エンティティ特定（共有含む）
 - APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス/全画面対象（後方互換）

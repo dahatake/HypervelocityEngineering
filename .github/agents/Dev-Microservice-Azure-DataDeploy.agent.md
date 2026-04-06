@@ -93,7 +93,7 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
   2) `create-azure-data-resources-prep.sh` 作成＋shellcheck 検証
   3) `create-azure-data-resources.sh` 作成＋shellcheck 検証（サービス作成のみ）
   4) `data-registration-script.sh` 作成＋shellcheck 検証（変換→登録→検証）
-  5) **Azure リソース作成＋データ登録の実行**（prep.sh → create-resources.sh → data-registration-script.sh の順に実行し `az show` で確認）※Copilot Coding Agent による自動実行を前提とする
+  5) **Azure リソース作成＋データ登録の実行**（prep.sh → create-resources.sh → data-registration-script.sh の順に実行し `az show` で確認）※Copilot cloud agent による自動実行を前提とする
   6) docs更新（service-catalog/work-status/README）
 - Split Mode では **「次にやる最初のSub」**を明記して終了する（AGENTS.md §2.3 の完了条件に従う）
 
@@ -258,3 +258,10 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 ### 9.3 実行ログの記録
 - スクリプト実行時のログ（各テーブル/コンテナの INSERT/upsert 件数、検証結果）を PR description または work-status.md に貼付すること
 - 実行していない場合は「未実行（理由：〇〇）」と明記し、再実行の Sub Issue 番号を記載すること
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` — セキュリティ・プライバシー・監査
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+- `knowledge/D20-セキュア設計-実装ガードレール.md` — セキュア設計・実装ガードレール

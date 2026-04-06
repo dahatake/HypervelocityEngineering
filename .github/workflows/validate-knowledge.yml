@@ -1,0 +1,41 @@
+name: Validate knowledge/ Files
+
+on:
+  pull_request:
+    paths:
+      - "knowledge/D??-*.md"
+      - ".github/scripts/validate-knowledge-files.py"
+      - ".github/workflows/validate-knowledge.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "knowledge/D??-*.md"
+      - ".github/scripts/validate-knowledge-files.py"
+      - ".github/workflows/validate-knowledge.yml"
+  workflow_dispatch:
+    inputs:
+      knowledge_dir:
+        description: "検証対象ディレクトリ（デフォルト: knowledge/）"
+        required: false
+        default: "knowledge"
+
+jobs:
+  validate-knowledge-files:
+    name: Validate knowledge/ D クラス要求定義書ドラフト
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run knowledge file validation
+        run: |
+          KNOWLEDGE_DIR="${{ github.event.inputs.knowledge_dir || 'knowledge' }}"
+          python .github/scripts/validate-knowledge-files.py "$KNOWLEDGE_DIR"

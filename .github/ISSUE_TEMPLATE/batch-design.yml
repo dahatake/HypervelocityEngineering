@@ -9,7 +9,7 @@ body:
       value: |
         ## Batch Design
         このフォームから Issue を作成すると、自動で Step.1〜Step.6.3 の設計タスクが
-        Sub-issue として生成され、Copilot coding agent が順次実行します。
+        Sub-issue として生成され、Copilot cloud agent が順次実行します。
 
         ### 実行されるステップ
         | ステップ | 内容 |
@@ -24,6 +24,8 @@ body:
         | **Step.6.2** | 監視・運用設計書（詳細）|
         | **Step.6.3** | TDD テスト仕様書（Step.6.1 AND Step.6.2 完了後）|
 
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
     id: branch
     attributes:

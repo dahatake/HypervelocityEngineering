@@ -11,7 +11,8 @@
   - [Sub Issue API が失敗する](#sub-issue-api-が失敗する)
   - [Copilot が assign されない](#copilot-が-assign-されない)
   - [ワークフローがエラーで終了する](#ワークフローがエラーで終了する)
-  - [Coding Agent のタスク実行エラー](#coding-agent-のタスク実行エラー)
+  - [Azure Static Web Apps デプロイエラー](#azure-static-web-apps-デプロイエラー)
+  - [Copilot cloud agent のタスク実行エラー](#copilot-cloud-agent-のタスク実行エラー)
 - [SDK 版のトラブル](#sdk-版のトラブル)
 
 ---
@@ -74,7 +75,47 @@
 
 ---
 
-### Coding Agent のタスク実行エラー
+### Azure Static Web Apps デプロイエラー
+
+**症状**: SWA デプロイ workflow が失敗する、または `::warning::` でスキップされる。
+
+**確認事項（チェック順）**:
+
+1. **`AZURE_STATIC_WEB_APPS_API_TOKEN` が設定されているか確認**
+   ```bash
+   gh secret list --repo <owner>/<repo>
+   ```
+   - `AZURE_STATIC_WEB_APPS_API_TOKEN` が一覧に表示されない場合、Secret 未設定です
+   - **対処法**: `create-azure-webui-resources.sh` を `GITHUB_PAT` 付きで実行するか、手動で設定:
+     ```bash
+     # トークン取得
+     TOKEN=$(az staticwebapp secrets list --name <SWA_NAME> -g <RESOURCE_GROUP> --query "properties.apiKey" -o tsv)
+     # Secret 設定
+     GH_TOKEN=$GITHUB_PAT gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo <owner>/<repo> --body "$TOKEN"
+     ```
+
+2. **Azure リソースが存在するか確認**
+   ```bash
+   az staticwebapp show --name <SWA_NAME> --resource-group <RESOURCE_GROUP>
+   ```
+   - リソースが存在しない場合は `create-azure-webui-resources.sh` を実行してください
+
+3. **`GITHUB_PAT` の権限不足（`gh secret set` が 403 エラー）**
+   - Fine-grained PAT の場合: Repository Permission に **Secrets: Read and write** が必要
+   - Classic PAT の場合: `repo` スコープが必要
+   - PAT の有効期限が切れていないか確認
+
+4. **デプロイトークンの期限切れ**
+   - SWA のデプロイトークンは Azure リソース側で管理されます
+   - トークンをリセットする場合:
+     ```bash
+     az staticwebapp secrets reset-api-key --name <SWA_NAME> -g <RESOURCE_GROUP>
+     ```
+   - リセット後は `AZURE_STATIC_WEB_APPS_API_TOKEN` を再設定してください
+
+---
+
+### Copilot cloud agent のタスク実行エラー
 
 **症状**: Pull Request の Session の中で `Run Bash command` が繰り返され、何も処理が行われていない。
 
@@ -111,3 +152,23 @@ SDK 版（ローカル実行方式）のトラブルシューティングは [SD
 | MCP Server が接続できない | [付録D: MCP Server が接続できない](./SDK-Guide.md#mcp-server-が接続できない) |
 | 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./SDK-Guide.md#並列実行でメモリ不足) |
 | PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./SDK-Guide.md#pr-作成時に-http-422-エラー) |
+
+## knowledge/ ドキュメント関連のトラブル
+
+### knowledge/ フォルダーが空の場合
+
+**症状**: Custom Agent の設計精度が低い、業務要件が反映されていない。
+
+**対処法**:
+1. `qa/` フォルダーに質問票ファイルが存在するか確認する
+2. 質問票が存在する場合は `qa-knowledge-management` ワークフローを実行する（[09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) 参照）
+3. `knowledge/business-requirement-document-status.md` で D01〜D21 のカバレッジを確認する
+
+### knowledge/ ファイルが期待通り参照されない
+
+**症状**: Custom Agent が `knowledge/` の内容を無視して設計している。
+
+**確認事項**:
+1. 各 Custom Agent ファイル（`.github/agents/*.agent.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションに対象ファイルが記載されているか確認する
+2. `knowledge/` のファイル名が正しい形式（`D{NN}-<文書名>.md`）になっているか確認する
+3. `knowledge/` ファイルの `**Prompt投入可否**:` フィールドが `Yes（Confirmed のみ）` になっているか確認する（`No（Draft）` の場合は未確定事項があります）

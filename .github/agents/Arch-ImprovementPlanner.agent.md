@@ -22,6 +22,12 @@ tools: ["*"]
 - 現在のイテレーション: `{iteration}`
 - 前回学習サマリー: `{previous_learning}`（初回は空）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+- `knowledge/D17-品質保証-UAT-受入パッケージ.md` — 品質保証・UAT
+- `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` — ソフトウェアアーキテクチャ・ADR
+
 ## 2) 事前ゲート
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する。
 - スキャン結果が空または問題なし（quality_score ≥ 80）の場合は `IMPROVEMENT_NOT_NEEDED` を返して終了する。
@@ -45,16 +51,7 @@ tools: ["*"]
 - 見積合計 ≤ 15分 かつ 不確実性「低」→ PROCEED
 
 ## 4) 成果物保存
-- `{WORK}plan.md` を作成する（§4.1 準拠: delete → create）
-
-  plan.md の必須ヘッダー（1〜4行目）:
-  ```
-  <!-- estimate_total: XX -->
-  <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-  <!-- subissues_count: N -->
-  <!-- implementation_files: false -->
-  ```
-
+- `{WORK}plan.md` を作成する（§4.1 準拠: delete → create）。**AGENTS.md §2.1.2 の plan.md 必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
 - SPLIT_REQUIRED の場合は `{WORK}subissues.md` も作成する
 
 ## 5) 出力（§10.3 準拠）

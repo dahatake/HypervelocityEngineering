@@ -226,15 +226,14 @@ Describe 'orchestrate.ps1' {
         $output | Should -Match 'スキップされるステップ'
     }
 
-    It 'shows execution plan for all 6 workflows' {
+    It 'shows execution plan for all 5 workflows' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $workflows = @(
             @{ id = 'aas';  prefix = 'AAS';  count = 2 },
             @{ id = 'aad';  prefix = 'AAD';  count = 13 },
             @{ id = 'asdw'; prefix = 'ASDW'; count = 20 },
             @{ id = 'abd';  prefix = 'ABD';  count = 9 },
-            @{ id = 'abdv'; prefix = 'ABDV'; count = 7 },
-            @{ id = 'aid';  prefix = 'AID';  count = 9 }
+            @{ id = 'abdv'; prefix = 'ABDV'; count = 7 }
         )
         foreach ($wf in $workflows) {
             $output = & $ScriptPath -Workflow $wf.id -DryRun *>&1 | Out-String

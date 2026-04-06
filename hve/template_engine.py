@@ -18,8 +18,8 @@ from .workflow_registry import WorkflowDef
 # テンプレートディレクトリのベースパス（リポジトリルート相対）
 _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
-# AQRC デフォルト値
-_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+# AQKM デフォルト値
+_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
@@ -28,8 +28,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "asdw": "App Dev Microservice Azure",
     "abd": "Batch Design",
     "abdv": "Batch Dev",
-    "aid": "IoT Design",
-    "aqrc": "QA Requirement Classification",
+    "aqkm": "QA Knowledge Management",
 }
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
@@ -39,8 +38,7 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "asdw": "ASDW",
     "abd": "ABD",
     "abdv": "ABDV",
-    "aid": "AID",
-    "aqrc": "AQRC",
+    "aqkm": "AQKM",
 }
 
 
@@ -140,7 +138,7 @@ def collect_params(wf: WorkflowDef) -> dict:
             "対象バッチジョブ ID（カンマ区切り）", default="", required=False
         )
 
-    # AQRC 固有パラメータ
+    # AQKM 固有パラメータ
     if "scope" in wf.params:
         print("\n分類対象スコープを選択してください:")
         print("  1) 全ファイル (all)")
@@ -158,11 +156,11 @@ def collect_params(wf: WorkflowDef) -> dict:
 
     if "target_files" in wf.params and params.get("scope") == "specified":
         target_files = _prompt(
-            "対象ファイルパス（スペース区切り）", default=_AQRC_DEFAULT_TARGET_FILES, required=False
+            "対象ファイルパス（スペース区切り）", default=_AQKM_DEFAULT_TARGET_FILES, required=False
         )
-        params["target_files"] = target_files.strip() if target_files.strip() else _AQRC_DEFAULT_TARGET_FILES
+        params["target_files"] = target_files.strip() if target_files.strip() else _AQKM_DEFAULT_TARGET_FILES
     elif "target_files" in wf.params:
-        params["target_files"] = _AQRC_DEFAULT_TARGET_FILES
+        params["target_files"] = _AQKM_DEFAULT_TARGET_FILES
 
     if "force_refresh" in wf.params:
         params["force_refresh"] = _prompt_yes_no(
@@ -268,7 +266,7 @@ def _build_job_section(batch_job_id: str) -> str:
 
 
 def _build_target_files_section(target_files: str) -> str:
-    """AQRC テンプレートの ``{aqrc_target_files_section}`` を展開する。"""
+    """AQKM テンプレートの ``{aqkm_target_files_section}`` を展開する。"""
     if not target_files:
         return ""
     files = [f.strip() for f in target_files.split() if f.strip()]
@@ -304,20 +302,19 @@ def render_template(
     body = body.replace("{rg_section}", _build_rg_section(params.get("resource_group", "")))
     body = body.replace("{job_section}", _build_job_section(params.get("batch_job_id", "")))
 
-    # AQRC 固有プレースホルダ
-    body = body.replace("{aqrc_scope}", params.get("scope", "all"))
+    # AQKM 固有プレースホルダ
+    body = body.replace("{aqkm_scope}", params.get("scope", "all"))
     body = body.replace(
-        "{aqrc_target_files_section}",
+        "{aqkm_target_files_section}",
         _build_target_files_section(params.get("target_files", "")),
     )
     body = body.replace(
-        "{aqrc_force_refresh}",
+        "{aqkm_force_refresh}",
         str(params.get("force_refresh", True)).lower(),
     )
 
-    # コンテナ固有プレースホルダ (AAD step-7, AID step-5)
+    # コンテナ固有プレースホルダ (AAD step-7)
     body = body.replace("{s7_subtasks}", "Step.7.1, Step.7.2, Step.7.3")
-    body = body.replace("{s5_subtasks}", "Step.5.1, Step.5.2, Step.5.3")
 
     return body
 

@@ -56,9 +56,9 @@ Describe 'orchestrate dry-run output' {
         $output | Should -Match 'Step'
     }
 
-    It 'all 6 workflows produce dry-run output' {
+    It 'all 5 workflows produce dry-run output' {
         $ScriptPath = "$ScriptRoot/orchestrate.ps1"
-        foreach ($wfId in @('aas', 'aad', 'asdw', 'abd', 'abdv', 'aid')) {
+        foreach ($wfId in @('aas', 'aad', 'asdw', 'abd', 'abdv')) {
             $output = & $ScriptPath -Workflow $wfId -DryRun *>&1 | Out-String
             $output | Should -Match $wfId.ToUpper()
         }

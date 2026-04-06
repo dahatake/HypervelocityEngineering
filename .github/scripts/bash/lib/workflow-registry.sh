@@ -4,7 +4,7 @@
 # Migrated from:
 #   - .github/cli/lib/workflow_registry.py
 #
-# 6 workflows (AAS/AAD/ASDW/ABD/ABDV/AID) with step DAG definitions stored
+# 5 workflows (AAS/AAD/ASDW/ABD/ABDV) with step DAG definitions stored
 # as JSON and queried with jq.
 #
 # Prerequisites:
@@ -188,35 +188,6 @@ _WORKFLOW_REGISTRY[abdv]=$(cat <<'JSONEOF'
 JSONEOF
 )
 
-_WORKFLOW_REGISTRY[aid]=$(cat <<'JSONEOF'
-{
-  "id": "aid",
-  "name": "IoT Design",
-  "label_prefix": "aid",
-  "state_labels": {
-    "initialized": "aid:initialized",
-    "ready": "aid:ready",
-    "running": "aid:running",
-    "done": "aid:done",
-    "blocked": "aid:blocked"
-  },
-  "params": [],
-  "steps": [
-    {"id":"5","title":"画面定義書 + マイクロサービス定義書（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"1.1","title":"IoT ドメイン分析","custom_agent":"Arch-IoT-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aid/step-1.1.md"},
-    {"id":"1.2","title":"デバイスプロファイル＋接続性分析","custom_agent":"Arch-IoT-DeviceConnectivity","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aid/step-1.2.md"},
-    {"id":"2","title":"データモデル","custom_agent":"Arch-DataModeling","depends_on":["1.1","1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aid/step-2.md"},
-    {"id":"3","title":"画面一覧/構造","custom_agent":"Arch-UI-List","depends_on":["2"],"is_container":false,"skip_fallback_deps":["2"],"block_unless":[],"body_template_path":"templates/aid/step-3.md"},
-    {"id":"4","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["3"],"is_container":false,"skip_fallback_deps":["3"],"block_unless":[],"body_template_path":"templates/aid/step-4.md"},
-    {"id":"4.5","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/aid/step-4.5.md"},
-    {"id":"5.1","title":"画面定義書","custom_agent":"Arch-UI-Detail","depends_on":["4.5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/aid/step-5.1.md"},
-    {"id":"5.2","title":"マイクロサービス定義書","custom_agent":"Arch-Microservice-ServiceDetail","depends_on":["4.5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/aid/step-5.2.md"},
-    {"id":"5.3","title":"TDDテスト仕様書","custom_agent":"Arch-TDD-TestSpec","depends_on":["4.5","5.1","5.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aid/step-5.3.md"}
-  ]
-}
-JSONEOF
-)
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -226,7 +197,7 @@ JSONEOF
 # Retrieve full workflow definition as JSON.
 #
 # Args:
-#   WORKFLOW_ID — Workflow identifier (aas, aad, asdw, abd, abdv, aid)
+#   WORKFLOW_ID — Workflow identifier (aas, aad, asdw, abd, abdv)
 #
 # Output:
 #   Workflow JSON on stdout.

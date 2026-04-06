@@ -5,7 +5,7 @@
     → StepRunner.run_step() Phase 4 として自動実行（auto_self_improve=True）
     → --no-self-improve で無効化可能
 
-実行パス B（Issue → Copilot Coding Agent）:
+実行パス B（Issue → Copilot cloud agent）:
     GitHub Issue (.github/ISSUE_TEMPLATE/self-improve.yml) 作成
     → Copilot 自動アサイン
     → AGENTS.md §2.2 に従い Sub Issue を 15分以内に分割

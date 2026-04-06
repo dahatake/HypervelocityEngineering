@@ -85,9 +85,9 @@ _COPILOT_USERNAMES = (
 # git diff の最大文字数（トークン上限対策）
 _MAX_DIFF_CHARS = 80_000
 
-# AQRC デフォルト値
-_AQRC_DEFAULT_SCOPE = "all"
-_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+# AQKM デフォルト値
+_AQKM_DEFAULT_SCOPE = "all"
+_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
 
 
 # -----------------------------------------------------------------------
@@ -123,11 +123,11 @@ def _collect_params_non_interactive(
     if args.get("batch_job_id"):
         params["batch_job_id"] = args["batch_job_id"]
 
-    # AQRC 固有パラメータ
-    if wf.id == "aqrc":
-        params["scope"] = args.get("scope") or _AQRC_DEFAULT_SCOPE
-        params["target_files"] = args.get("target_files") or _AQRC_DEFAULT_TARGET_FILES
-        # AQRC では、フラグ未指定(None)の場合はデフォルトで True とする
+    # AQKM 固有パラメータ
+    if wf.id == "aqkm":
+        params["scope"] = args.get("scope") or _AQKM_DEFAULT_SCOPE
+        params["target_files"] = args.get("target_files") or _AQKM_DEFAULT_TARGET_FILES
+        # AQKM では、フラグ未指定(None)の場合はデフォルトで True とする
         force_refresh = args.get("force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
     else:
@@ -135,7 +135,7 @@ def _collect_params_non_interactive(
             params["scope"] = args["scope"]
         if args.get("target_files"):
             params["target_files"] = args["target_files"]
-        # 非 AQRC では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        # 非 AQKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         if "force_refresh" in args:
             params["force_refresh"] = args["force_refresh"]
 

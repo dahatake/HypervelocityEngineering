@@ -175,23 +175,23 @@ class TestParserBasic(unittest.TestCase):
 
     def test_scope_option(self) -> None:
         """--scope オプションのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all"])
         self.assertEqual(args.scope, "all")
 
     def test_scope_specified_option(self) -> None:
         """--scope specified のテスト。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified"])
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified"])
         self.assertEqual(args.scope, "specified")
 
     def test_target_files_option(self) -> None:
         """--target-files オプションのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified",
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified",
                         "--target-files", "qa/file1.md", "qa/file2.md"])
         self.assertEqual(args.target_files, ["qa/file1.md", "qa/file2.md"])
 
     def test_force_refresh_flag(self) -> None:
         """--force-refresh フラグのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all", "--force-refresh"])
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all", "--force-refresh"])
         self.assertTrue(args.force_refresh)
 
 
@@ -240,63 +240,63 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertEqual(params["steps"], ["1", "2", "3"])
 
-    def test_aqrc_scope_in_params(self) -> None:
-        """AQRC scope がパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all"])
+    def test_aqkm_scope_in_params(self) -> None:
+        """AQKM scope がパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all"])
         params = _build_params(args)
         self.assertEqual(params["scope"], "all")
 
-    def test_aqrc_target_files_in_params(self) -> None:
-        """AQRC target_files がスペース区切り文字列としてパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "specified",
+    def test_aqkm_target_files_in_params(self) -> None:
+        """AQKM target_files がスペース区切り文字列としてパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified",
                         "--target-files", "qa/f1.md", "qa/f2.md"])
         params = _build_params(args)
         self.assertEqual(params["target_files"], "qa/f1.md qa/f2.md")
 
-    def test_aqrc_force_refresh_in_params(self) -> None:
-        """AQRC force_refresh フラグがパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--scope", "all", "--force-refresh"])
+    def test_aqkm_force_refresh_in_params(self) -> None:
+        """AQKM force_refresh フラグがパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all", "--force-refresh"])
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_aqrc_force_refresh_default_true(self) -> None:
-        """AQRC force_refresh デフォルト値が True であることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc"])
+    def test_aqkm_force_refresh_default_true(self) -> None:
+        """AQKM force_refresh デフォルト値が True であることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm"])
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_aqrc_no_force_refresh_sets_false(self) -> None:
-        """AQRC --no-force-refresh で force_refresh が False になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc", "--no-force-refresh"])
+    def test_aqkm_no_force_refresh_sets_false(self) -> None:
+        """AQKM --no-force-refresh で force_refresh が False になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm", "--no-force-refresh"])
         params = _build_params(args)
         self.assertFalse(params["force_refresh"])
 
-    def test_aqrc_scope_default_all_when_not_specified(self) -> None:
-        """AQRC scope が未指定時に 'all' になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc"])
+    def test_aqkm_scope_default_all_when_not_specified(self) -> None:
+        """AQKM scope が未指定時に 'all' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm"])
         params = _build_params(args)
         self.assertEqual(params["scope"], "all")
 
-    def test_aqrc_target_files_default_qa_glob_when_not_specified(self) -> None:
-        """AQRC target_files が未指定時に 'qa/*.md' になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqrc"])
+    def test_aqkm_target_files_default_qa_glob_when_not_specified(self) -> None:
+        """AQKM target_files が未指定時に 'qa/*.md' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aqkm"])
         params = _build_params(args)
         self.assertEqual(params["target_files"], "qa/*.md")
 
-    def test_non_aqrc_scope_not_set_when_not_specified(self) -> None:
-        """非 AQRC ワークフローで --scope 未指定時は params に scope が含まれないことを確認。"""
+    def test_non_aqkm_scope_not_set_when_not_specified(self) -> None:
+        """非 AQKM ワークフローで --scope 未指定時は params に scope が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
         self.assertNotIn("scope", params)
 
-    def test_non_aqrc_target_files_not_set_when_not_specified(self) -> None:
-        """非 AQRC ワークフローで --target-files 未指定時は params に target_files が含まれないことを確認。"""
+    def test_non_aqkm_target_files_not_set_when_not_specified(self) -> None:
+        """非 AQKM ワークフローで --target-files 未指定時は params に target_files が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
         self.assertNotIn("target_files", params)
 
-    def test_non_aqrc_force_refresh_not_in_params_when_not_specified(self) -> None:
-        """非 AQRC ワークフローで --force-refresh 未指定時は params に force_refresh が含まれないことを確認。"""
+    def test_non_aqkm_force_refresh_not_in_params_when_not_specified(self) -> None:
+        """非 AQKM ワークフローで --force-refresh 未指定時は params に force_refresh が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
         self.assertNotIn("force_refresh", params)
@@ -383,7 +383,7 @@ class TestMainDryRun(unittest.TestCase):
 
     def test_main_all_valid_workflows_dry_run(self) -> None:
         """全ての有効なワークフローで dry_run が成功することを確認。"""
-        for wf_id in ["aas", "aad", "asdw", "abd", "abdv", "aid"]:
+        for wf_id in ["aas", "aad", "asdw", "abd", "abdv"]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
                     "orchestrate",
@@ -393,33 +393,33 @@ class TestMainDryRun(unittest.TestCase):
                 ])
                 self.assertEqual(exit_code, 0, f"{wf_id} の dry_run で終了コードが 0 以外")
 
-    def test_aqrc_scope_specified_without_target_files_returns_0(self) -> None:
-        """aqrc で --scope specified だが --target-files 未指定の場合、デフォルト値 qa/*.md で続行するため終了コードが 0。"""
+    def test_aqkm_scope_specified_without_target_files_returns_0(self) -> None:
+        """aqkm で --scope specified だが --target-files 未指定の場合、デフォルト値 qa/*.md で続行するため終了コードが 0。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqrc",
+            "--workflow", "aqkm",
             "--scope", "specified",
             "--dry-run",
             "--quiet",
         ])
         self.assertEqual(exit_code, 0)
 
-    def test_aqrc_scope_all_dry_run_returns_0(self) -> None:
-        """aqrc で --scope all（--target-files 不要）の dry_run が成功する。"""
+    def test_aqkm_scope_all_dry_run_returns_0(self) -> None:
+        """aqkm で --scope all（--target-files 不要）の dry_run が成功する。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqrc",
+            "--workflow", "aqkm",
             "--scope", "all",
             "--dry-run",
             "--quiet",
         ])
         self.assertEqual(exit_code, 0)
 
-    def test_aqrc_scope_specified_with_target_files_dry_run_returns_0(self) -> None:
-        """aqrc で --scope specified + --target-files 指定の dry_run が成功する。"""
+    def test_aqkm_scope_specified_with_target_files_dry_run_returns_0(self) -> None:
+        """aqkm で --scope specified + --target-files 指定の dry_run が成功する。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqrc",
+            "--workflow", "aqkm",
             "--scope", "specified",
             "--target-files", "qa/file1.md",
             "--dry-run",

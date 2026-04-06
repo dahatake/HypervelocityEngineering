@@ -1,5 +1,5 @@
 name: "Copilot Setup Steps"
-# Copilot Coding Agent が Azure CLI を使えるようにするセットアップ
+# Copilot cloud agent が Azure CLI を使えるようにするセットアップ
 #
 # 【Azure 側の事前準備】
 # 1. Azure Portal で App Registration を作成する

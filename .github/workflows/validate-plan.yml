@@ -1,3 +1,13 @@
+# validate-plan.yml
+#
+# 責務: plan.md のメタデータ整合性チェック
+#   - estimate > 15 かつ decision = PROCEED → NG (§2.2)
+#   - decision = SPLIT_REQUIRED かつ implementation_files = true → NG (§2.3)
+#   - decision = SPLIT_REQUIRED かつ subissues.md 不在 → NG (§2.3)
+#
+# スキャン対象: PR 差分に含まれる work/**/plan.md のみ
+# 関連ワークフロー: check-split-mode.yml（PR差分の実装ファイル存在チェック）
+# 定期監査: audit-plans.yml（main の全 plan.md を週次スキャン）
 name: Validate plan.md split decision
 
 on:
@@ -10,37 +20,47 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
 
       - name: Check split decision consistency
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          for plan in $(find work -name 'plan.md' -type f); do
-            echo "Checking: $plan"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
 
-            estimate=$(grep -oE '<!-- estimate_total: [0-9]+ -->' "$plan" | grep -oE '[0-9]+' || echo "0")
-            decision=$(grep -oE '<!-- split_decision: [A-Z_]+ -->' "$plan" | grep -oE 'PROCEED|SPLIT_REQUIRED|MISSING' || echo "MISSING")
-            impl_files=$(grep -oE '<!-- implementation_files: (true|false) -->' "$plan" | grep -oE 'true|false' || echo "MISSING")
+          # PR の差分ファイルのみを取得（check-split-mode.yml と同じ方式）
+          if ! ALL_CHANGED=$(gh pr diff "$PR_NUMBER" --name-only); then
+            echo "::error::gh pr diff の実行に失敗しました（PR: #${PR_NUMBER}）"
+            exit 1
+          fi
 
-            echo "  Estimate: ${estimate}min | Decision: $decision | Impl files: $impl_files"
+          CHANGED_PLANS=$(echo "$ALL_CHANGED" | grep -E '^work/.*/plan\.md$' || true)
 
-            if [ "$estimate" -gt 15 ] && [ "$decision" = "PROCEED" ]; then
-              echo "::error::$plan: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per AGENTS.md §2.2"
-              exit 1
+          if [ -z "$CHANGED_PLANS" ]; then
+            echo "✅ この PR で変更された plan.md はありません。チェックをスキップします。"
+            exit 0
+          fi
+
+          echo "📋 検査対象の plan.md:"
+          echo "$CHANGED_PLANS" | while IFS= read -r p; do echo "  - $p"; done
+
+          HAS_ERROR=false
+
+          while IFS= read -r plan; do
+            if [ ! -f "$plan" ]; then
+              echo "⏭️ $plan は削除されたためスキップします。"
+              continue
             fi
 
-            if [ "$decision" = "SPLIT_REQUIRED" ] && [ "$impl_files" = "true" ]; then
-              echo "::error::$plan: split_decision=SPLIT_REQUIRED but implementation_files=true. Per AGENTS.md §2.3, implementation files are prohibited in split mode."
-              exit 1
+            if ! bash .github/scripts/bash/validate-plan.sh --path "$plan"; then
+              HAS_ERROR=true
             fi
+          done <<< "$CHANGED_PLANS"
 
-            if [ "$decision" = "SPLIT_REQUIRED" ]; then
-              dir=$(dirname "$plan")
-              if [ ! -f "$dir/subissues.md" ]; then
-                echo "::error::$plan: split_decision=SPLIT_REQUIRED but subissues.md not found in $dir"
-                exit 1
-              fi
-            fi
+          if [ "$HAS_ERROR" = true ]; then
+            exit 1
+          fi
 
-            echo "  ✅ PASS"
-          done
+          echo "✅ 全チェック完了（違反なし）"

@@ -9,7 +9,7 @@ body:
       value: |
         ## App Dev Microservice
         このフォームから Issue を作成すると、自動で以下の開発タスクが
-        Sub-issue として生成され、Copilot coding agent が順次実行します。
+        Sub-issue として生成され、Copilot cloud agent が順次実行します。
 
         **本ワークフローは 1 度の実行で 1 つのアプリケーション (APP-ID) のみを対象とします。**
 
@@ -37,6 +37,8 @@ body:
         | **Step.3** | UI 作成 | **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
         | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（並列実行） |
 
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
     id: app_id
     attributes:

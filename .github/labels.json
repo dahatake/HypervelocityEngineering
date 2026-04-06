@@ -1,0 +1,67 @@
+[
+  {
+    "name": "auto-app-selection",
+    "color": "0E8A16",
+    "description": "run app selection workflow (usecase to app list and architecture recommendation)"
+  },
+  {
+    "name": "auto-app-design",
+    "color": "0E8A16",
+    "description": "run app design workflow (microservice architecture design document generation)"
+  },
+  {
+    "name": "auto-app-dev-microservice",
+    "color": "1D76DB",
+    "description": "run full microservice app development workflow on Azure"
+  },
+  {
+    "name": "auto-batch-design",
+    "color": "0E8A16",
+    "description": "run full batch design workflow"
+  },
+  {
+    "name": "auto-batch-dev",
+    "color": "0E8A16",
+    "description": "run full batch dev workflow (Azure resource, coding, deploy, review)"
+  },
+  {
+    "name": "qa-knowledge-management",
+    "color": "0E8A16",
+    "description": "run QA knowledge management workflow (qa/ files to knowledge/ D01-D21 documents)"
+  },
+  {
+    "name": "self-improve",
+    "color": "0E8A16",
+    "description": "run self-improvement loop (code quality scan, fix, verify)"
+  },
+  {
+    "name": "auto-context-review",
+    "color": "1D76DB",
+    "description": "auto context review trigger for copilot-auto-review workflow"
+  },
+  {
+    "name": "auto-qa",
+    "color": "BFD4F2",
+    "description": "auto QA trigger for copilot-auto-qa workflow"
+  },
+  {
+    "name": "create-subissues",
+    "color": "E4E669",
+    "description": "trigger Sub Issue creation from subissues.md in PR"
+  },
+  {
+    "name": "split-mode",
+    "color": "D93F0B",
+    "description": "split mode PR (AGENTS.md section 2.2 SPLIT_REQUIRED)"
+  },
+  {
+    "name": "plan-only",
+    "color": "D93F0B",
+    "description": "PR contains only plan.md and subissues.md (no implementation files)"
+  },
+  {
+    "name": "setup-labels",
+    "color": "C5DEF5",
+    "description": "trigger label setup workflow (run once after repository creation, re-runnable for updates)"
+  }
+]

@@ -172,7 +172,6 @@ cd .github/scripts/powershell
 | `asdw` | App Dev (Microservice Azure) | 24 |
 | `abd` | Batch Design | 9 |
 | `abdv` | Batch Dev | 7 |
-| `aid` | IoT Design | 10 |
 
 ## テスト実行
 

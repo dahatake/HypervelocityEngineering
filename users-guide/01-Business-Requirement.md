@@ -2,7 +2,7 @@
 
 事業のアイディア、議事録、プロジェクトプランなどから、要求定義のドキュメントを作成します。
 
-GitHub Copilot Coding Agent への Issue 候補でもあります: [GitHub Copilot Coding Agent について](https://docs.github.com/ja/enterprise-cloud@latest/copilot/using-github-copilot/coding-agent/about-assigning-tasks-to-copilot)
+GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilot cloud agent について](https://docs.github.com/ja/enterprise-cloud@latest/copilot/using-github-copilot/coding-agent/about-assigning-tasks-to-copilot)
 
 ---
 
@@ -27,9 +27,12 @@ GitHub Copilot Coding Agent への Issue 候補でもあります: [GitHub Copil
 
 - `docs/business-requirement.md`（事業分析レポート）
 - `docs/usecase-list.md`（ユースケース一覧）
-- `work/business-requirement-document-status.md`（要求定義ドキュメントのステータス・qa/分類）
+- `knowledge/business-requirement-document-status.md`（要求定義ドキュメントのステータス・qa/分類）
 
 ---
+
+> 💡 **knowledge/ との関連**: Step.4（`QA-KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続のアプリケーション設計・開発ワークフロー（App Selection / App Design / App Dev）で業務コンテキストとして自動参照されます。詳細は [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) を参照してください。
+
 
 ## ツール
 
@@ -75,7 +78,7 @@ Step.4 は独立して実行可能（Step.1 以降に並行実施推奨）
 | Step.1 | 事業分析ドキュメントの作成 | Microsoft 365 Copilot 等 | 社内文書・メール・プロジェクトプラン等 | `docs/business-requirement.md` | なし |
 | Step.2 | ビジネスドキュメントの一覧の作成 | Microsoft 365 Copilot 等 | `docs/business-requirement.md`、各種既存文書 | 不足文書一覧・追加文書（`docs/` 配下） | Step.1 |
 | Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 | `docs/business-requirement.md`、各種文書 | `docs/usecase-list.md` | Step.2 |
-| Step.4 | qa/ 質問票ベースの要求定義プロセス | `QA-RequirementClassifier` | `qa/` 質問票ファイル | `work/business-requirement-document-status.md` | なし |
+| Step.4 | qa/ 質問票ベースの要求定義プロセス | `QA-KnowledgeManager` | `qa/` 質問票ファイル | `knowledge/business-requirement-document-status.md` | なし |
 
 ---
 
@@ -913,14 +916,14 @@ TARGET_UC_ID = "<<<UC_ID>>>"
 
 **qa/ プロセスの位置づけ**
 
-Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足を検知した際に選択式の質問票（15〜100個程度）を自動作成します。ユーザーが質問に回答することで要求仕様の曖昧さを排除し、`QA-RequirementClassifier` Agent が回答内容を D01〜D21 の文書クラスに分類・レポートします。
+Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足を検知した際に選択式の質問票（15〜100個程度）を自動作成します。ユーザーが質問に回答することで要求仕様の曖昧さを排除し、`QA-KnowledgeManager` Agent が回答内容を D01〜D21 の文書クラスに分類・レポートします。
 
 **Step.2.1（手動 Prompt ベース）との使い分け**
 
 | アプローチ | 説明 | 適した場面 |
 |-----------|------|-----------|
 | **Step.2.1** | Microsoft 365 Copilot 等で手持ちドキュメントを一括分析し、D01〜D21 の充足度を手動で判定するプロセス | 既存資料がある場合の大枠把握 |
-| **Step.4** | Copilot Coding Agent が Issue/PR のコンテキストから自動で質問票を作成し、回答を `qa/` に蓄積。`QA-RequirementClassifier` Agent が自動分類するプロセス | 詳細な不足の補完・新規プロジェクト |
+| **Step.4** | Copilot cloud agent が Issue/PR のコンテキストから自動で質問票を作成し、回答を `qa/` に蓄積。`QA-KnowledgeManager` Agent が自動分類・knowledge ドキュメント生成するプロセス | 詳細な不足の補完・新規プロジェクト |
 
 両方を併用可能です。Step.2.1 で大枠を把握した後に Step.4 で詳細な不足を補完する使い方が推奨されます。
 
@@ -941,7 +944,7 @@ flowchart TD
     B --> C["Step.4<br/>qa/ 質問票の作成<br/>(auto-qa / Issue / VS Code)"]
     A --> C
     C --> D["ユーザーが質問に回答"]
-    D --> E["QA-RequirementClassifier<br/>D01-D21 分類・ステータス生成"]
+    D --> E["QA-KnowledgeManager<br/>D01-D21 分類・ステータス生成"]
     E --> F["カバレッジギャップの特定<br/>不足ドキュメント作成"]
 ```
 
@@ -1009,41 +1012,41 @@ flowchart TD
 
 ---
 
-### Step.4.5 QA-RequirementClassifier による文書クラス分類
+### Step.4.5 QA-KnowledgeManager による文書クラス分類
 
 #### 実行方法
 
 1. GitHub.com で Issue を作成
-2. Issue の右側サイドバー「Copilot」セクションで「Select agent」から「QA-RequirementClassifier」を選択
+2. Issue の右側サイドバー「Copilot」セクションで「Select agent」から「QA-KnowledgeManager」を選択
 3. Assignees に @copilot を設定
 4. Issue body に参照先を記載:
    - 分類対象: `qa/` 配下の質問票ファイル
    - マスターリスト: `template/business-requirement-document-master-list.md`
 
-`QA-RequirementClassifier` は `qa/` のファイルを読み取り専用で参照し、マスターリストである `template/business-requirement-document-master-list.md` および `docs/` 配下のファイルも読み取り専用で参照します（いずれも変更禁止）。
+`QA-KnowledgeManager` は `qa/` のファイルを読み取り専用で参照し、マスターリストである `template/business-requirement-document-master-list.md` および `docs/` 配下のファイルも読み取り専用で参照します（いずれも変更禁止）。
 
-出典: `.github/agents/QA-RequirementClassifier.agent.md`
+出典: `.github/agents/QA-KnowledgeManager.agent.md`
 
 #### 出力ファイル一覧
 
 | ファイルパス | 種別 | 説明 |
 |------------|------|------|
-| `work/business-requirement-document-status.md` | 主成果物 | D01〜D21 の総合ステータス（Confirmed/Tentative/Unknown/NotStarted）とカバレッジギャップ |
-| `work/QA-RequirementClassifier/Issue-<識別子>/plan.md` | 中間成果物 | 実行計画（DAG + 見積） |
-| `work/QA-RequirementClassifier/Issue-<識別子>/artifacts/mapping-log.md` | 中間成果物 | 質問→D クラスの詳細マッピングログ |
-| `work/QA-RequirementClassifier/Issue-<識別子>/artifacts/adversarial-review.md` | 中間成果物 | 敵対的レビュー結果 |
+| `knowledge/business-requirement-document-status.md` | 主成果物 | D01〜D21 の総合ステータス（Confirmed/Tentative/Unknown/NotStarted）とカバレッジギャップ |
+| `work/QA-KnowledgeManager/Issue-<識別子>/plan.md` | 中間成果物 | 実行計画（DAG + 見積） |
+| `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/mapping-log.md` | 中間成果物 | 質問→D クラスの詳細マッピングログ |
+| `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` | 中間成果物 | 敵対的レビュー結果 |
 
-分類ルールの詳細は `.github/instructions/requirement-classification.instructions.md` に定義されています。
+分類ルールの詳細は `.github/instructions/knowledge-management.instructions.md` に定義されています。
 
 #### 敵対的レビュー結果の活用
 
-`QA-RequirementClassifier` は `AGENTS.md §7` に従い、5軸（要件充足性・技術的正確性・整合性・非機能品質・捏造検出）で自己レビューを実施します。レビュー結果は `work/QA-RequirementClassifier/Issue-<識別子>/artifacts/adversarial-review.md` に保存されます。Critical 指摘がある場合は自動修正→再レビュー（最大2サイクル）が実行されます。
+`QA-KnowledgeManager` は `AGENTS.md §7` に従い、5軸（要件充足性・技術的正確性・整合性・非機能品質・捏造検出）で自己レビューを実施します。レビュー結果は `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` に保存されます。Critical 指摘がある場合は自動修正→再レビュー（最大2サイクル）が実行されます。
 
 ---
 
 ### Step.4.6 カバレッジギャップの対応（不足ドキュメントの作成）
 
-`work/business-requirement-document-status.md` の「カバレッジギャップ」セクションで `NotStarted` / `Unknown` の D クラスを確認します。
+`knowledge/business-requirement-document-status.md` の「カバレッジギャップ」セクションで `NotStarted` / `Unknown` の D クラスを確認します。
 
 不足 D クラスへの対応方法:
 
@@ -1064,21 +1067,21 @@ flowchart TD
    - 出典なし情報を Confirmed 扱いしない
    - AI に業務ルールそのものを決めさせない
 
-2. **`qa/` ファイルの読み取り専用性**: `QA-RequirementClassifier` は `qa/` のファイルを変更しません
+2. **`qa/` ファイルの読み取り専用性**: `QA-KnowledgeManager` は `qa/` のファイルを変更しません
 
-3. **`auto-qa` と `QA-RequirementClassifier` の関係**: `auto-qa` ラベルは PR ready 時に Copilot に質問票作成を指示するトリガー（`copilot-auto-qa.yml`）です。`QA-RequirementClassifier` は生成された質問票を D01〜D21 に分類するための別プロセスです。両者は補完関係にあります
+3. **`auto-qa` と `QA-KnowledgeManager` の関係**: `auto-qa` ラベルは PR ready 時に Copilot に質問票作成を指示するトリガー（`copilot-auto-qa.yml`）です。`QA-KnowledgeManager` は生成された質問票を D01〜D21 に分類するための別プロセスです。両者は補完関係にあります
 
 4. **エラー時の対処**:
-   - `qa/` に `.md` ファイルがない場合: `QA-RequirementClassifier` は `plan.md` に記録して停止します。先に質問票を作成してください
-   - 分類結果がおかしい場合: `work/QA-RequirementClassifier/Issue-<識別子>/artifacts/adversarial-review.md` を確認し、Critical 指摘がないか検証してください
+   - `qa/` に `.md` ファイルがない場合: `QA-KnowledgeManager` は `plan.md` に記録して停止します。先に質問票を作成してください
+   - 分類結果がおかしい場合: `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` を確認し、Critical 指摘がないか検証してください
 
 5. **関連ファイル一覧**:
 
 | ファイル | パス | 役割 |
 |---------|------|------|
 | AGENTS.md | `/AGENTS.md` | 全 Agent 共通の強制ルール（§1.1/§1.2 コンテキスト収集プロトコル） |
-| QA-RequirementClassifier | `.github/agents/QA-RequirementClassifier.agent.md` | qa/ 質問票の D01〜D21 分類 Agent |
-| 分類ルール | `.github/instructions/requirement-classification.instructions.md` | D01〜D21 分類・状態判定基準 |
+| QA-KnowledgeManager | `.github/agents/QA-KnowledgeManager.agent.md` | qa/ 質問票の D01〜D21 分類 Agent |
+| 分類ルール | `.github/instructions/knowledge-management.instructions.md` | D01〜D21 分類・状態判定基準 |
 | マスターリスト | `template/business-requirement-document-master-list.md` | D01〜D21 文書クラス定義と非捏造運用ルール |
 | auto-qa ワークフロー | `.github/workflows/copilot-auto-qa.yml` | PR への質問票作成指示の自動投稿 |
 | QA→レビュー遷移 | `.github/workflows/auto-qa-to-review-transition.yml` | QA 完了後の auto-context-review ラベル自動付与 |

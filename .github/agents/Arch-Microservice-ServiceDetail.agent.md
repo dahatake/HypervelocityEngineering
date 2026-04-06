@@ -51,9 +51,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 3.2 計画（必須）
 - `AGENTS.md` のフォーマットに従い、DAG+見積を `{WORK}plan.md` に作る。
-- 見積合計が15分を超える/レビュー困難なら:
-  - 先に `{WORK}subissues.md`（または本タスク用の issue-prompt ファイル）を作り、
+- **分割要否は AGENTS.md §2.2 の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**:
+  - **`見積合計 > 15分` または `不確実性が中/高` の場合は `SPLIT_REQUIRED`** として扱う。
+  - plan.md のメタデータを §2.3 準拠で設定する（`implementation_files: false` 必須）
+  - `{WORK}subissues.md` を AGENTS.md §2.3 のフォーマットで作成する（`subissues_count ≥ 1` 必須）
   - **最初のSub（=今回の15分で処理するserviceIdの集合）だけ**実行対象にする。
+  - ⚠️ 「全サービス一括」「1バッチで完了」「完全な解を優先」等の判断は、見積・不確実性を含む AGENTS.md §2.2 の分割判定により禁止。
 
 ## 3.3 実行（15分でできる分だけ）
 - 今回対象の serviceId のみ処理する（対象外は触らない）。
@@ -98,3 +101,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `sample-data.json` の値を転記しない（要約のみ）
 - 根拠のない断定、ID/URL/具体値の捏造をしない
 - 対象外ユースケース/対象外サービスに変更を入れない
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+- `knowledge/D12-権限-認可-職務分掌設計書.md` — 権限・認可・職務分掌

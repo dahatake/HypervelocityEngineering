@@ -30,6 +30,12 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - `docs/azure/AzureServices-services-additional.md`
 - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+- `knowledge/D20-セキュア設計-実装ガードレール.md` — セキュア設計・実装ガードレール
+
 ## APP-ID スコープ
 - Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づく追加サービス特定（共有含む）
 - APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）

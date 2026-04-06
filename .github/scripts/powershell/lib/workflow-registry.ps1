@@ -4,7 +4,7 @@
 #   - .github/scripts/bash/lib/workflow-registry.sh
 #   - .github/cli/lib/workflow_registry.py
 #
-# 6 workflows (AAS/AAD/ASDW/ABD/ABDV/AID) with step DAG definitions stored
+# 5 workflows (AAS/AAD/ASDW/ABD/ABDV) with step DAG definitions stored
 # as PSCustomObject structures.
 #
 # Prerequisites:
@@ -191,33 +191,6 @@ $script:WorkflowRegistryData['abdv'] = [PSCustomObject]@{
     )
 }
 
-# AID — IoT Design (10 steps)
-$script:WorkflowRegistryData['aid'] = [PSCustomObject]@{
-    id            = 'aid'
-    name          = 'IoT Design'
-    label_prefix  = 'aid'
-    state_labels  = [PSCustomObject]@{
-        initialized = 'aid:initialized'
-        ready       = 'aid:ready'
-        running     = 'aid:running'
-        done        = 'aid:done'
-        blocked     = 'aid:blocked'
-    }
-    params        = @()
-    steps         = @(
-        (NewWorkflowStep -Id '5' -Title '画面定義書 + マイクロサービス定義書（コンテナ）' -IsContainer $true)
-        (NewWorkflowStep -Id '1.1' -Title 'IoT ドメイン分析' -CustomAgent 'Arch-IoT-DomainAnalytics' -BodyTemplatePath 'templates/aid/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title 'デバイスプロファイル＋接続性分析' -CustomAgent 'Arch-IoT-DeviceConnectivity' -BodyTemplatePath 'templates/aid/step-1.2.md')
-        (NewWorkflowStep -Id '2' -Title 'データモデル' -CustomAgent 'Arch-DataModeling' -DependsOn @('1.1', '1.2') -BodyTemplatePath 'templates/aid/step-2.md')
-        (NewWorkflowStep -Id '3' -Title '画面一覧/構造' -CustomAgent 'Arch-UI-List' -DependsOn @('2') -SkipFallbackDeps @('2') -BodyTemplatePath 'templates/aid/step-3.md')
-        (NewWorkflowStep -Id '4' -Title 'サービスカタログ' -CustomAgent 'Arch-Microservice-ServiceCatalog' -DependsOn @('3') -SkipFallbackDeps @('3') -BodyTemplatePath 'templates/aid/step-4.md')
-        (NewWorkflowStep -Id '4.5' -Title 'テスト戦略書' -CustomAgent 'Arch-TDD-TestStrategy' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/aid/step-4.5.md')
-        (NewWorkflowStep -Id '5.1' -Title '画面定義書' -CustomAgent 'Arch-UI-Detail' -DependsOn @('4.5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/aid/step-5.1.md')
-        (NewWorkflowStep -Id '5.2' -Title 'マイクロサービス定義書' -CustomAgent 'Arch-Microservice-ServiceDetail' -DependsOn @('4.5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/aid/step-5.2.md')
-        (NewWorkflowStep -Id '5.3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-TDD-TestSpec' -DependsOn @('4.5', '5.1', '5.2') -BodyTemplatePath 'templates/aid/step-5.3.md')
-    )
-}
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -227,7 +200,7 @@ function Get-Workflow {
     .SYNOPSIS
         Retrieve full workflow definition as PSCustomObject.
     .PARAMETER WorkflowId
-        Workflow identifier (aas, aad, asdw, abd, abdv, aid)
+        Workflow identifier (aas, aad, asdw, abd, abdv)
     #>
     [CmdletBinding()]
     param(

@@ -360,7 +360,7 @@ PY
 
   if [[ "${assign_success}" != "true" ]]; then
     local fail_msg
-    fail_msg=$(printf '⚠️ Copilot coding agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot coding agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
+    fail_msg=$(printf '⚠️ Copilot cloud agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot cloud agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
     post_comment "${issue_num}" "${fail_msg}" || true
     echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
     return 1

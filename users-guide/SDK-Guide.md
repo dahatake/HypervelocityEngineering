@@ -261,8 +261,7 @@ wizard は以下の 8 段階で進行します。
   3) App Dev Microservice Azure (asdw — 24 steps)
   4) Batch Design (abd — 9 steps)
   5) Batch Dev (abdv — 7 steps)
-  6) IoT Design (aid — 10 steps)
-  7) QA Requirement Classification (aqrc — 1 step)
+  6) QA Knowledge Management (aqkm — 1 step)
 > 2
 ```
 
@@ -280,7 +279,7 @@ wizard は以下の 8 段階で進行します。
 >            ← Enter のみ = 全ステップ
 ```
 
-> **AQRC の場合**: AQRC はステップが 1 つのみのため、ステップ選択はスキップされ自動で全選択されます。
+> **AQKM の場合**: AQKM はステップが 1 つのみのため、ステップ選択はスキップされ自動で全選択されます。
 
 #### ステップ 4: モデル選択
 
@@ -338,7 +337,7 @@ wizard は以下の 8 段階で進行します。
 | リポジトリ (owner/repo) | `$REPO` または空 | `--repo` |
 | ドライラン | OFF | `--dry-run` |
 
-> **AQRC ワークフローの場合**: 並列実行数（15 固定）、QA 自動投入（OFF 固定）、Review 自動投入（OFF 固定）のプロンプトはスキップされます。タイムアウト設定は AQRC でもスキップされず、全ワークフロー共通で個別設定可能です。
+> **AQKM ワークフローの場合**: 並列実行数（15 固定）、QA 自動投入（OFF 固定）、Review 自動投入（OFF 固定）のプロンプトはスキップされます。タイムアウト設定は AQKM でもスキップされず、全ワークフロー共通で個別設定可能です。
 
 #### ステップ 6: ワークフロー固有パラメータ
 
@@ -354,11 +353,11 @@ wizard は以下の 8 段階で進行します。
 固有パラメータを持つワークフロー:
 - `asdw`: `app_id`, `resource_group`, `usecase_id`
 - `abdv`: `resource_group`, `batch_job_id`
-- `aqrc`: `scope`, `target_files`, `force_refresh`
+- `aqkm`: `scope`, `target_files`, `force_refresh`
 
-> **AQRC ワークフローの場合**: 固有パラメータ（scope=all, target_files=qa/*.md, force_refresh=true）はデフォルト値で自動設定され、プロンプトはスキップされます。
+> **AQKM ワークフローの場合**: 固有パラメータ（scope=all, target_files=qa/*.md, force_refresh=true）はデフォルト値で自動設定され、プロンプトはスキップされます。
 
-> 固有パラメータのないワークフロー（`aas`, `aad`, `abd`, `aid`）ではこのステップはスキップされます。
+> 固有パラメータのないワークフロー（`aas`, `aad`, `abd`）ではこのステップはスキップされます。
 
 パラメータ入力後、追加プロンプト（全 Agent のプロンプトに末尾に追記される文字列）のオプション入力も行えます。
 
@@ -511,7 +510,7 @@ python -m hve orchestrate \
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
-| `--workflow`, `-w` | ワークフロー ID（`aas` / `aad` / `asdw` / `abd` / `abdv` / `aid` / `aqrc`） | なし（**必須**） |
+| `--workflow`, `-w` | ワークフロー ID（`aas` / `aad` / `asdw` / `abd` / `abdv` / `aqkm`） | なし（**必須**） |
 | `--branch` | ターゲットブランチ名 | `main` |
 | `--steps` | 実行ステップをカンマ区切りで指定 | 全ステップ |
 | `--dry-run` | 事前確認モード（SDK 呼び出しなし） | `false` |
@@ -576,9 +575,9 @@ python -m hve orchestrate \
 | `--resource-group` | Azure リソースグループ名（例: `rg-dev`） | `asdw`, `abdv` |
 | `--usecase-id` | ユースケース ID（例: `UC-01`） | `asdw` |
 | `--batch-job-id` | バッチジョブ ID（カンマ区切り可。例: `JOB-01,JOB-02`） | `abdv` |
-| `--scope` | 分類対象スコープ (`all` / `specified`、省略時は `all`) | `aqrc` |
-| `--target-files` | 対象ファイルパス（スペース区切り、省略時は `qa/*.md`） | `aqrc` |
-| `--force-refresh` / `--no-force-refresh` | 既存 status.md を完全に再生成（デフォルト: 有効） | `aqrc` |
+| `--scope` | 分類対象スコープ (`all` / `specified`、省略時は `all`) | `aqkm` |
+| `--target-files` | 対象ファイルパス（スペース区切り、省略時は `qa/*.md`） | `aqkm` |
+| `--force-refresh` / `--no-force-refresh` | 既存 status.md を完全に再生成（デフォルト: 有効） | `aqkm` |
 
 ### 使い方の例
 
@@ -649,8 +648,7 @@ python -m hve orchestrate \
 | Azure Web アプリ実装 | `asdw` | `python -m hve orchestrate --workflow asdw --app-id APP-04 --resource-group rg-dev --usecase-id UC-01` |
 | バッチ設計 | `abd` | `python -m hve orchestrate --workflow abd` |
 | バッチ実装 | `abdv` | `python -m hve orchestrate --workflow abdv --resource-group rg-batch --batch-job-id JOB-01` |
-| IoT 設計 | `aid` | `python -m hve orchestrate --workflow aid` |
-| QA 要求分類 | `aqrc` | `python -m hve orchestrate --workflow aqrc` |
+| QA Knowledge ドキュメント管理 | `aqkm` | `python -m hve orchestrate --workflow aqkm` |
 
 > **ヒント**: インタラクティブモード（`python -m hve`）では、上記のワークフローが番号付きメニューとして表示されます。ワークフロー固有のオプション（`--app-id` 等）も wizard 内で自動的にプロンプトされるため、コマンドを暗記する必要はありません。
 
@@ -701,39 +699,30 @@ python -m hve orchestrate \
 | **ステップ数** | 7 |
 | **固有オプション** | `--resource-group`（必須）, `--batch-job-id`（必須、カンマ区切り可） |
 
-#### aid — IoT Design（IoT 設計）
+#### aqkm — QA Knowledge Management（QA Knowledge ドキュメント管理）
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | IoT システムの設計を自動実行 |
-| **前提条件** | `aas` ワークフローによるアプリ選定が完了していること |
-| **ステップ数** | 10 |
-| **固有オプション** | なし |
-
-#### aqrc — QA Requirement Classification（QA 要求分類）
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | `qa/` の質問ファイルを D01〜D21 に分類し、`work/business-requirement-document-status.md` を生成・更新 |
-| **前提条件** | `qa/` 配下に `.md` ファイルが存在し、`docs/business-requirement-document-master-list.md` が存在すること |
-| **ステップ数** | 1（Agent 内部で 8 ステップを順次処理） |
+| **目的** | `qa/` の質問ファイルを D01〜D21 に分類し、`knowledge/business-requirement-document-status.md` を生成・更新。QA マッピングが存在する D クラスごとに `knowledge/D{NN}-<文書名>.md` を個別生成 |
+| **前提条件** | `qa/` 配下に `.md` ファイルが存在し、`template/business-requirement-document-master-list.md` が存在すること |
+| **ステップ数** | 1（Agent 内部で 9 ステップを順次処理） |
 | **固有オプション** | `--scope`（省略時は `all`）, `--target-files`（省略時は `qa/*.md`）, `--force-refresh` / `--no-force-refresh`（デフォルト: 有効） |
 
 **実行例:**
 
 ```bash
 # デフォルト設定で実行（scope=all, target_files=qa/*.md, force_refresh=true）
-python -m hve orchestrate --workflow aqrc
+python -m hve orchestrate --workflow aqkm
 
 # 指定ファイルのみ分類
-python -m hve orchestrate --workflow aqrc --scope specified \
+python -m hve orchestrate --workflow aqkm --scope specified \
   --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
 
 # 増分更新（force_refresh を無効化）
-python -m hve orchestrate --workflow aqrc --no-force-refresh
+python -m hve orchestrate --workflow aqkm --no-force-refresh
 ```
 
-> **`work/` フォルダーの扱い**: AQRC の成果物は `work/business-requirement-document-status.md` に出力されます。`--create-pr` を使用する場合、デフォルトの `ignore_paths` に `work` が含まれているため、`--ignore-paths` オプションで `work` を除外リストから外す必要があります。また、`qa` もデフォルトで `ignore_paths` に含まれています（`docs images infra qa src test work`）。
+> **`work/` フォルダーの扱い**: AQKM の主成果物は `knowledge/business-requirement-document-status.md` に出力されます。`--create-pr` を使用する際、`work` を `--ignore-paths` で除外リストから外す必要があるのは、`work/` 配下の中間成果物も PR に含めたい場合のみです。なお、`qa` はデフォルトの `ignore_paths` に含まれています（`docs images infra qa src test work`）。
 
 ---
 
@@ -988,3 +977,13 @@ ANSI エスケープシーケンスに対応していないターミナルでは
 | Copilot CLI インストールガイド | https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli |
 | Model Context Protocol（MCP）仕様 | https://modelcontextprotocol.io/ |
 | Code Review Agent ドキュメント | https://docs.github.com/en/copilot/using-github-copilot/code-review/using-copilot-code-review |
+
+### knowledge/ ディレクトリの参照
+
+SDK 版でワークフローを実行する際も、`knowledge/` フォルダーの業務要件ドキュメント（D01〜D21）が存在する場合、各 Custom Agent が自動参照します。SDK 版での `qa-knowledge-management` ワークフロー実行:
+
+```bash
+python -m hve orchestrate --workflow aqkm
+```
+
+`knowledge/` ファイルが存在すると、以降の設計・実装ワークフロー（`aas`, `aad`, `asdw` 等）での設計品質が向上します。詳細は [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) を参照してください。

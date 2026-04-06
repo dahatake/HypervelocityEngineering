@@ -102,7 +102,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "aid", "aqrc"]
+        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "aqkm"]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(

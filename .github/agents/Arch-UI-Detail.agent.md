@@ -33,6 +33,13 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `docs/test-strategy.md`（テスト戦略書 — テスタビリティ観点の設計指針として参照。受け入れ基準 §9 の作成時にテスト種別・テストダブル方針を考慮する）
 - `data/sample-data.json`（存在しなければ付録は作らず Questions へ）
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D11-画面-UX-操作意味仕様書.md` — 画面UX・操作仕様
+- `knowledge/D12-権限-認可-職務分掌設計書.md` — 権限・認可・職務分掌
+
 ## 3) 作業ディレクトリ（このagent固有）
 - task-slug: `screen-detail`
 - `{WORK}`

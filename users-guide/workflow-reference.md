@@ -24,7 +24,7 @@
 | `auto-app-dev-microservice-azure.yml` | マイクロサービス実装（ASDW）オーケストレーター | `auto-app-dev-microservice` ラベル付き Issue |
 | `auto-batch-design.yml` | バッチ設計（ABD）オーケストレーター | `auto-batch-design` ラベル付き Issue |
 | `auto-batch-dev.yml` | バッチ実装（ABDV）オーケストレーター | `auto-batch-dev` ラベル付き Issue |
-| `auto-iot-design.yml` | IoT 設計（AID）オーケストレーター | `auto-iot-design` ラベル付き Issue |
+| `auto-qa-knowledge-management.yml` | QA Knowledge ドキュメント管理（AQKM）オーケストレーター | `qa-knowledge-management` ラベル付き Issue |
 | `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
 | `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
 | `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
@@ -35,8 +35,11 @@
 | `label-split-mode.yml` | `[WIP]` タイトルの PR に `split-mode` ラベルを付与 | PR オープン / 編集 |
 | `check-split-mode.yml` | `split-mode` PR での実装ファイル変更を検知・警告 | PR プッシュ |
 | `validate-plan.yml` | `plan.md` のフォーマット・分割判定を検証 | PR プッシュ |
+| `audit-plans.yml` | plan.md の監査（全 plan.md の AGENTS.md 違反スキャン） | 毎週月曜 3:00 UTC / 手動 |
+| `validate-knowledge.yml` | knowledge ドキュメントの検証 | `knowledge/D??-*.md` の PR / push / 手動 |
+| `setup-labels.yml` | ラベル初期セットアップ（`.github/labels.json` から一括作成・更新） | `setup-labels` ラベル付き Issue / `workflow_dispatch` |
 | `sync-azure-skills.yml` | microsoft/skills から Azure Skills を定期同期 | 毎週月曜 9:00 UTC / 手動 |
-| `copilot-setup-steps.yml` | Copilot Coding Agent の実行前セットアップ | Copilot Agent 起動時 |
+| `copilot-setup-steps.yml` | Copilot cloud agent の実行前セットアップ | Copilot cloud agent 起動時 |
 | `test-cli-scripts.yml` | `.github/scripts/` の CLI スクリプトをテスト | PR プッシュ |
 
 ### SDK 版ワークフロー ID（逆引き）
@@ -48,10 +51,9 @@
 | `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure.yml` |
 | `abd` | Batch Design | `auto-batch-design.yml` |
 | `abdv` | Batch Dev | `auto-batch-dev.yml` |
-| `aid` | IoT Design | `auto-iot-design.yml` |
-| `aqrc` | QA Requirement Classification | — |
+| `aqkm` | QA Knowledge Management | `auto-qa-knowledge-management.yml` |
 
-> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aid` / `aqrc` を使用してください。
+> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aqkm` を使用してください。
 
 ---
 
@@ -66,15 +68,22 @@
 | `auto-software-design` | **[過去互換/未使用] 設計ワークフロー用ラベル**。現在、このラベルに対応する ASD ワークフローや Issue テンプレートは `.github/workflows/` / `.github/ISSUE_TEMPLATE/` に存在しないため、付与してもオーケストレーターは起動しません |
 | `auto-app-dev-microservice` | **マイクロサービス開発ワークフローの起動トリガー**。Issue にこのラベルが付与されると、ASDW オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
-| `auto-iot-design` | **IoT 設計ワークフロー（AID）の起動トリガー**。Issue にこのラベルが付与されると、AID オーケストレーターが起動し、Step.1〜7 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
+| `qa-knowledge-management` | **QA Knowledge ドキュメント管理ワークフロー（AQKM）の起動トリガー**。Issue にこのラベルが付与されると、AQKM オーケストレーターが起動し、`[AQKM] Step.1: QA Knowledge ドキュメント生成・管理` Sub Issue を自動生成して `QA-KnowledgeManager` Agent で Copilot にアサインする。**Setup Labels ワークフローで自動作成できます。** |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
+| `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
+| `split-mode` | **分割モード PR の識別ラベル**。`label-split-mode.yml` が `work/**/plan.md` に `SPLIT_REQUIRED` を検知した場合に PR に自動付与する。`check-split-mode.yml` がこのラベル付き PR の実装ファイル混入を検知・警告する。 |
+| `plan-only` | **plan.md のみの PR 識別ラベル**。`label-split-mode.yml` が `split-mode` と同時に付与する。plan.md + subissues.md のみを含む PR であることを示す。 |
 | `auto-context-review` | **Copilot 敵対的レビューのトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に敵対的レビュー指示コメントを自動投稿する |
 | `auto-qa` | **Copilot 質問票作成のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に選択式の質問票作成指示コメントを自動投稿する |
 
 > [!IMPORTANT]
-> GitHub の Issue Template の `labels:` フィールドは、**リポジトリに既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合、Issue 作成時にラベルの自動付与はサイレントにスキップされます。各ワークフローを使用する前に必ずラベルを事前に作成してください。
-> 特に、`.github/workflows/label-split-mode.yml` で使用する `split-mode` / `plan-only` ラベルも同様に事前作成が必要です。リポジトリ設定画面の **Settings → Labels** からこれらのラベルを手動作成してからワークフローを利用してください。
+> GitHub の Issue Template の `labels:` フィールドは、**リポジトリに既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合、Issue 作成時にラベルの自動付与はサイレントにスキップされます。各ワークフローを使用する前に、必要なラベルを事前に作成してください。
+> 特に、`.github/workflows/label-split-mode.yml` で使用する `split-mode` / `plan-only` ラベルも事前に存在している必要があります。**Setup Labels ワークフロー**（Actions タブ → Setup Labels → Run workflow）を実行すると、これらを含む上記の全ラベルを自動作成できます。必要に応じて、リポジトリ設定画面の **Settings → Labels** から手動作成することも可能です。
+>
+> **⚠️ 初回セットアップ時の注意（鶏と卵問題）:** 新規リポジトリには `setup-labels` ラベル自体がまだ存在しないため、Issue テンプレートからではなく **Actions タブから `Setup Labels` ワークフローを手動実行**する必要があります（Actions タブ → 左サイドバーの「Setup Labels」→「Run workflow」）。手動実行の前に **Settings → Actions → General → Workflow permissions** を「**Read and write permissions**」に設定してください。
+>
+> 詳細な手順は [getting-started.md の Step.5](./getting-started.md#step5-ラベル設定) を参照してください。
 
 ---
 
@@ -123,13 +132,6 @@
 | `Arch-Batch-JobSpec` | バッチジョブ詳細仕様書を docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md に作成 |
 | `Arch-Batch-ServiceCatalog` | バッチジョブサービスカタログを docs/batch/batch-service-catalog.md に作成 |
 | `Arch-Batch-MonitoringDesign` | バッチ処理監視・運用設計書を docs/batch/batch-monitoring-design.md に作成 |
-
-### アーキテクチャ設計 — IoT
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-IoT-DomainAnalytics` | ユースケース文書を根拠に IoT / Physical AI の 3 層境界（Device / Edge / Cloud）を明示してドメイン分析 |
-| `Arch-IoT-DeviceConnectivity` | デバイスの HW プロファイル・センサー仕様・接続性・オフライン分類・消費電力・AI 推論要件・状態遷移・フェイルセーフ設計を整理 |
 
 ### アーキテクチャ設計 — AI Agent
 
@@ -193,9 +195,29 @@
 | `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
 | `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
 | `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。AGENTS.md §10.1 Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
-| `QA-RequirementClassifier` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、work/business-requirement-document-status.md を生成 |
+| `QA-KnowledgeManager` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、knowledge/business-requirement-document-status.md を生成 |
 
 ---
+
+
+## knowledge/ ディレクトリとの関係
+
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21 の文書クラスのうち、QA マッピングが存在するもの）が格納されます。これらは `QA-KnowledgeManager` Agent（`qa-knowledge-management` ワークフロー）によって生成されます（QA マッピングがない D クラスのファイルは生成されません）。
+
+設計・開発の全 Custom Agent（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。
+
+| knowledge ファイル | 主な参照 Custom Agent |
+|------------------|---------------------|
+| `knowledge/D01-事業意図-成功条件定義書.md` | `Arch-ApplicationAnalytics`, `Arch-ArchitectureCandidateAnalyzer` |
+| `knowledge/D05-ユースケース-シナリオカタログ.md` | `Arch-*` 全般, `Dev-*-ServiceCoding`, `Dev-*-TestCoding` |
+| `knowledge/D06-業務ルール-判定表仕様書.md` | `Arch-*`, `Dev-*-ServiceCoding`, `Dev-*-TestCoding`, `Dev-*-UICoding` |
+| `knowledge/D07-用語集-ドメインモデル定義書.md` | `Arch-Microservice-DomainAnalytics`, `Arch-DataModeling`, `Arch-DataCatalog` |
+| `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` | `Arch-DataModeling`, `Dev-*-DataDesign`, `Dev-*-DataDeploy` |
+| `knowledge/D15-非機能-運用-監視-DR-仕様書.md` | `Dev-*-ComputeDesign`, `Dev-*-ComputeDeploy`, `QA-*` |
+| `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` | `Arch-ArchitectureCandidateAnalyzer`, `Dev-*-ComputeDesign`, `QA-AzureArchitectureReview` |
+| `knowledge/D20-セキュア設計-実装ガードレール.md` | `Dev-*-ServiceCoding`, `Dev-*-DataDeploy`, `Dev-*-Deploy`, `QA-*` |
+
+詳細な参照マッピングは各 Custom Agent ファイル（`.github/agents/*.agent.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションを参照してください。
 
 ## Issue テンプレート一覧
 
@@ -208,6 +230,6 @@
 | `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
 | `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
-| `iot-design.yml` | IoT 設計ワークフロー起動 | `auto-iot-design` |
-| `qa-requirement-classification.yml` | 要求定義文書の QA 分類 | `qa-classification` |
+| `qa-knowledge-management.yml` | knowledge ドキュメント管理 | `qa-knowledge-management` |
 | `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
+| `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |

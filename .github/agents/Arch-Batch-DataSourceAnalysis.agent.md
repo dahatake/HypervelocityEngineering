@@ -35,6 +35,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - `docs/batch/batch-data-source-analysis.md`
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+
 ## 3) 実行手順（決定的）
 
 ### 3.1 前提チェック

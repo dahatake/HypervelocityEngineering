@@ -35,4 +35,4 @@ applyTo: ".github/.mcp.json, .github/skills/**"
 ### hve との共有
 - `hve` は Python の `GitHub Copilot CLI SDK` として実装中
 - `.github/.mcp.json` を共有設定ファイルとして利用
-- Skills は Copilot Coding Agent / Copilot CLI / Claude Code のいずれからも参照可能
+- Skills は Copilot cloud agent / Copilot CLI / Claude Code のいずれからも参照可能

@@ -60,7 +60,6 @@ $script:WorkflowDisplayNames = @{
     asdw = 'App Dev Microservice Azure'
     abd  = 'Batch Design'
     abdv = 'Batch Dev'
-    aid  = 'IoT Design'
 }
 
 $script:TriggerLabels = @{
@@ -69,7 +68,6 @@ $script:TriggerLabels = @{
     asdw = 'auto-app-dev-microservice'
     abd  = 'auto-batch-design'
     abdv = 'auto-batch-dev'
-    aid  = 'auto-iot-design'
 }
 
 $script:WorkflowPrefixMap = @{
@@ -78,7 +76,6 @@ $script:WorkflowPrefixMap = @{
     asdw = 'ASDW'
     abd  = 'ABD'
     abdv = 'ABDV'
-    aid  = 'AID'
 }
 
 # ---------------------------------------------------------------------------
@@ -241,7 +238,7 @@ Usage:
   orchestrate.ps1 -Workflow <id> [options]
 
 Options:
-  -Workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv|aid (required)
+  -Workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv (required)
   -Branch <name>         Target branch (default: main)
   -Steps <csv>           Comma-separated step IDs (default: all)
   -AppId <id>            ASDW: Application ID

@@ -39,7 +39,6 @@ declare -A _WORKFLOW_DISPLAY_NAMES=(
   [asdw]="App Dev Microservice Azure"
   [abd]="Batch Design"
   [abdv]="Batch Dev"
-  [aid]="IoT Design"
 )
 
 declare -A _TRIGGER_LABELS=(
@@ -48,7 +47,6 @@ declare -A _TRIGGER_LABELS=(
   [asdw]="auto-app-dev-microservice"
   [abd]="auto-batch-design"
   [abdv]="auto-batch-dev"
-  [aid]="auto-iot-design"
 )
 
 declare -A _WORKFLOW_PREFIX=(
@@ -57,7 +55,6 @@ declare -A _WORKFLOW_PREFIX=(
   [asdw]="ASDW"
   [abd]="ABD"
   [abdv]="ABDV"
-  [aid]="AID"
 )
 
 # ---------------------------------------------------------------------------
@@ -683,7 +680,7 @@ Usage:
   orchestrate.sh --workflow <id> [options]
 
 Options:
-  --workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv|aid (required)
+  --workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv (required)
   --branch <name>         Target branch (default: main)
   --steps <csv>           Comma-separated step IDs (default: all)
   --app-id <id>           ASDW: Application ID

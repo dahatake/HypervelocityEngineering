@@ -62,15 +62,14 @@
 <span class="cls">ASDW</span> = WorkflowDef(id=<span class="str">"asdw"</span>, steps=[…])  <span class="cm"># 24 steps</span>
 <span class="cls">ABD</span>  = WorkflowDef(id=<span class="str">"abd"</span>, steps=[…])   <span class="cm">#  9 steps</span>
 <span class="cls">ABDV</span> = WorkflowDef(id=<span class="str">"abdv"</span>, steps=[…])  <span class="cm">#  7 steps</span>
-<span class="cls">AID</span>  = WorkflowDef(id=<span class="str">"aid"</span>, steps=[…])   <span class="cm"># 10 steps</span>
-<span class="cls">AQRC</span> = WorkflowDef(id=<span class="str">"aqrc"</span>, steps=[…])  <span class="cm">#  1 step</span></div>
+<span class="cls">AQKM</span> = WorkflowDef(id=<span class="str">"aqkm"</span>, steps=[…])  <span class="cm">#  1 step</span></div>
         </article>
         <article class="detail-card">
-          <div class="kicker">Execution</div>
-          <h3>DAGExecutor</h3>
-          <p>完了済みステップから次の起動可能ステップを算出し、asyncio.Semaphore で並列数を制御します。</p>
-          <div class="code-block"><span class="cm"># hve/dag_executor.py — 起動可能判定</span>
-<span class="kw">def</span> <span class="fn">get_next_steps</span>(self, completed, skipped):
+          <div class="kicker">DAG Traversal</div>
+          <h3>WorkflowDef</h3>
+          <p>完了済み・スキップ済みステップ ID を受け取り、次に起動可能なステップを算出します。DAGExecutor がこのメソッドを呼び出して並列数を制御します。</p>
+          <div class="code-block"><span class="cm"># hve/workflow_registry.py — WorkflowDef.get_next_steps()</span>
+<span class="kw">def</span> <span class="fn">get_next_steps</span>(self, completed_step_ids, skipped_step_ids=<span class="str">None</span>):
     <span class="kw">for</span> step <span class="kw">in</span> self.steps:
         deps_satisfied = <span class="fn">all</span>(
             dep <span class="kw">in</span> effective_done
@@ -200,11 +199,11 @@
 <span class="kw">class</span> <span class="cls">SDKConfig</span>:
     model: <span class="kw">str</span>          = <span class="str">"claude-opus-4.6"</span>
     max_parallel: <span class="kw">int</span>   = <span class="str">15</span>
-    auto_qa: <span class="kw">bool</span>       = <span class="str">False</span>            <span class="cm"># QA 自動投入</span>
-    auto_contents_review: <span class="kw">bool</span> = <span class="str">False</span>   <span class="cm"># Review 自動投入</span>
-    create_issues: <span class="kw">bool</span> = <span class="str">False</span>            <span class="cm"># Issue 作成（オプション）</span>
-    create_pr: <span class="kw">bool</span>    = <span class="str">False</span>             <span class="cm"># PR 作成（オプション）</span>
-    mcp_servers: Optional[Dict] = <span class="str">None</span>   <span class="cm"># MCP Server 設定</span></div>
+    auto_qa: <span class="kw">bool</span>       = <span class="str">False</span>            <span class="cm"># QA 自動投入（デフォルト: 無効）</span>
+    auto_contents_review: <span class="kw">bool</span> = <span class="str">False</span>   <span class="cm"># Review 自動投入（デフォルト: 無効）</span>
+    create_issues: <span class="kw">bool</span> = <span class="str">False</span>            <span class="cm"># Issue 作成（デフォルト: 作成しない）</span>
+    create_pr: <span class="kw">bool</span>    = <span class="str">False</span>             <span class="cm"># PR 作成（デフォルト: 作成しない）</span>
+    mcp_servers: Optional[Dict[str, Any]] = <span class="str">None</span>   <span class="cm"># MCP Server 設定</span></div>
     </section>
 
     <section class="footer-card reveal">

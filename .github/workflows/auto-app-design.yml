@@ -1,6 +1,13 @@
 name: AAD Orchestrator
 
 # auto-app-design ラベル付き Issue の opened/labeled/closed イベントで起動
+#
+# 設計メモ:
+#   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
+#     発火せず issues.opened のみを発火する（GitHub Community Discussion #26753）。
+#   - そのため opened イベントも監視し、ジョブレベル if で対象ラベルを持つ Issue のみ実行する。
+#   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
+#   - 既存の冪等化ガード（aad:initialized チェック）により、opened + labeled が同時発火しても安全。
 on:
   issues:
     types: [opened, labeled, closed]
@@ -13,6 +20,12 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    if: >
+      github.event.action != 'opened'
+      || (
+        contains(github.event.issue.labels.*.name, 'auto-app-design')
+        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      )
     concurrency:
       group: aad-orchestrator-${{ github.event.issue.number }}
       cancel-in-progress: false
@@ -128,6 +141,18 @@ jobs:
 
           echo "mode=initialize" >> "$GITHUB_OUTPUT"
           echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: ゲート結果のデバッグ出力
+        if: always()
+        env:
+          GATE_MODE: ${{ steps.gate.outputs.mode }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
+          if [[ "${GATE_MODE}" == "skip" ]]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} のゲートチェックは skip でした（event: ${EVENT_ACTION}）"
+          fi
 
       # ----------------------------------------------------------------
       # 2. ラベル bootstrap

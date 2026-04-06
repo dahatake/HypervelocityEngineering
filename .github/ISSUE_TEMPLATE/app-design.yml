@@ -20,6 +20,8 @@ body:
 
         🤖 **AI Agent 設計**: Step.8（AI Agent 設計）は、チャット・音声等の AI Agent が有効なアプリケーションに対してのみ実行してください。AI Agent 不要な場合は Step.8 をスキップしてください。
 
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
     id: branch
     attributes:

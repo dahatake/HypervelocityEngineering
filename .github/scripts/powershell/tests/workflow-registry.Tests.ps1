@@ -42,13 +42,6 @@ Describe 'workflow-registry.ps1' {
             $wf.steps.Count | Should -Be 7
         }
 
-        It 'retrieves AID workflow' {
-            $wf = Get-Workflow -WorkflowId 'aid'
-            $wf.id | Should -Be 'aid'
-            $wf.name | Should -Be 'IoT Design'
-            $wf.steps.Count | Should -Be 10
-        }
-
         It 'is case-insensitive' {
             $wf = Get-Workflow -WorkflowId 'AAS'
             $wf.id | Should -Be 'aas'
@@ -129,14 +122,6 @@ Describe 'workflow-registry.ps1' {
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '1.1'
             $ids | Should -Contain '1.2'
-        }
-
-        It 'returns root steps for AID' {
-            $next = Get-NextStep -WorkflowId 'aid' -Completed @()
-            $ids = $next | ForEach-Object { $_.id }
-            $ids | Should -Contain '1.1'
-            $ids | Should -Contain '1.2'
-            $ids | Should -Not -Contain '5'
         }
     }
 

@@ -35,6 +35,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - `docs/batch/batch-data-model.md`
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+
 ## 3) 実行手順（決定的）
 
 ### 3.0 依存確認（必須・最初に実行）

@@ -45,15 +45,15 @@
     python -m hve orchestrate --workflow aad \\
       --create-issues --issue-title "Sprint 42: AAD 全ステップ実行"
 
-    # QA 要求分類（デフォルト設定: scope=all, target_files=qa/*.md, force_refresh=true）
-    python -m hve orchestrate --workflow aqrc
+    # QA Knowledge ドキュメント管理（デフォルト設定: scope=all, target_files=qa/*.md, force_refresh=true）
+    python -m hve orchestrate --workflow aqkm
 
-    # QA 要求分類（指定ファイルのみ）
-    python -m hve orchestrate --workflow aqrc --scope specified \\
+    # QA Knowledge ドキュメント管理（指定ファイルのみ）
+    python -m hve orchestrate --workflow aqkm --scope specified \\
       --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
 
-    # QA 要求分類（増分更新: force_refresh を無効化）
-    python -m hve orchestrate --workflow aqrc --no-force-refresh
+    # QA Knowledge ドキュメント管理（増分更新: force_refresh を無効化）
+    python -m hve orchestrate --workflow aqkm --no-force-refresh
 """
 
 from __future__ import annotations
@@ -80,9 +80,9 @@ def _ts() -> str:
 MODEL_AUTO = "Auto"
 _MODEL_AUTO_RESOLVED = "claude-opus-4.6"
 
-# AQRC デフォルト値
-_AQRC_DEFAULT_SCOPE = "all"
-_AQRC_DEFAULT_TARGET_FILES = "qa/*.md"
+# AQKM デフォルト値
+_AQKM_DEFAULT_SCOPE = "all"
+_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
 
 
 def _resolve_model(model: str) -> tuple:
@@ -129,7 +129,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workflow", "-w",
         required=True,
         metavar="WORKFLOW_ID",
-        help="ワークフロー ID: aas / aad / asdw / abd / abdv / aid / aqrc",
+        help="ワークフロー ID: aas / aad / asdw / abd / abdv / aqkm",
     )
 
     # モデル
@@ -328,25 +328,25 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ユースケース ID (ASDW 等で使用)",
     )
 
-    # AQRC 固有パラメータ
+    # AQKM 固有パラメータ
     orch.add_argument(
         "--scope",
         choices=["all", "specified"],
         default=None,
-        help="AQRC: 分類対象スコープ (省略時: all=全ファイル, specified=指定ファイルのみ)",
+        help="AQKM: 分類対象スコープ (省略時: all=全ファイル, specified=指定ファイルのみ)",
     )
     orch.add_argument(
         "--target-files",
         nargs="+",
         default=None,
         metavar="FILE",
-        help="AQRC: 対象ファイルパス (省略時: qa/*.md)",
+        help="AQKM: 対象ファイルパス (省略時: qa/*.md)",
     )
     orch.add_argument(
         "--force-refresh",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="AQRC: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
+        help="AQKM: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
     )
 
     # repo / token
@@ -562,12 +562,12 @@ def _build_params(args: argparse.Namespace) -> dict:
     if args.usecase_id:
         params["usecase_id"] = args.usecase_id
 
-    # AQRC 固有パラメータ
-    if getattr(args, "workflow", None) == "aqrc":
-        params["scope"] = getattr(args, "scope", None) or _AQRC_DEFAULT_SCOPE
+    # AQKM 固有パラメータ
+    if getattr(args, "workflow", None) == "aqkm":
+        params["scope"] = getattr(args, "scope", None) or _AQKM_DEFAULT_SCOPE
         target_files = getattr(args, "target_files", None)
-        params["target_files"] = " ".join(target_files) if target_files else _AQRC_DEFAULT_TARGET_FILES
-        # AQRC では、フラグ未指定(None)の場合はデフォルトで True とする
+        params["target_files"] = " ".join(target_files) if target_files else _AQKM_DEFAULT_TARGET_FILES
+        # AQKM では、フラグ未指定(None)の場合はデフォルトで True とする
         force_refresh = getattr(args, "force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
     else:
@@ -575,7 +575,7 @@ def _build_params(args: argparse.Namespace) -> dict:
             params["scope"] = args.scope
         if getattr(args, "target_files", None):
             params["target_files"] = " ".join(args.target_files)
-        # 非 AQRC では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        # 非 AQKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         force_refresh = getattr(args, "force_refresh", None)
         if force_refresh is not None:
             params["force_refresh"] = force_refresh
@@ -669,11 +669,11 @@ def _cmd_run_interactive() -> int:
     wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
     selected_wf = workflows[wf_idx]
     wf = get_workflow(selected_wf.id)
-    is_aqrc = (wf.id == "aqrc")
+    is_aqkm = (wf.id == "aqkm")
 
     # ── ステップ選択 ──────────────────────────────────────
-    # AQRC はステップが 1 つのみのため、自動で全選択
-    if is_aqrc:
+    # AQKM はステップが 1 つのみのため、自動で全選択
+    if is_aqkm:
         selected_step_ids = []  # 空 = 全ステップ
     else:
         non_container_steps = [s for s in wf.steps if not s.is_container]
@@ -694,7 +694,7 @@ def _cmd_run_interactive() -> int:
 
     # ── オプション設定 ────────────────────────────────────
     branch = con.prompt_input("ベースブランチ", default="main")
-    if is_aqrc:
+    if is_aqkm:
         max_parallel = 15
     else:
         max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
@@ -727,7 +727,7 @@ def _cmd_run_interactive() -> int:
         con.warning("0 以下のタイムアウト値は無効なため、デフォルトの 7200 秒を使用します。")
         timeout_val = 7200.0
 
-    if is_aqrc:
+    if is_aqkm:
         auto_qa = False
         auto_review = False
     else:
@@ -768,10 +768,10 @@ def _cmd_run_interactive() -> int:
 
     # ── ワークフロー固有パラメータ ────────────────────────
     params_extra: dict = {}
-    if is_aqrc:
-        # AQRC の固有パラメータはデフォルト値で自動設定
-        params_extra["scope"] = _AQRC_DEFAULT_SCOPE
-        params_extra["target_files"] = _AQRC_DEFAULT_TARGET_FILES
+    if is_aqkm:
+        # AQKM の固有パラメータはデフォルト値で自動設定
+        params_extra["scope"] = _AQKM_DEFAULT_SCOPE
+        params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
         params_extra["force_refresh"] = True
     else:
         for param_name in wf.params:

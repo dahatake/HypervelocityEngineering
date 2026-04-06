@@ -21,9 +21,21 @@ update_label() {
   fi
 }
 
-update_label "auto-batch-design" "run full batch design workflow"
-update_label "auto-batch-dev" "run full batch dev workflow (Azure resource, coding, deploy, review)"
-update_label "auto-iot-design" "run full IoT / physical AI design document generation workflow"
-update_label "auto-app-selection" "run app selection workflow (usecase to app list and architecture recommendation)"
-update_label "auto-app-design" "run app design workflow (microservice architecture design document generation)"
-update_label "auto-app-dev-microservice" "run full microservice app development workflow on Azure"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+LABELS_FILE="${REPO_ROOT}/.github/labels.json"
+
+if [ ! -f "$LABELS_FILE" ]; then
+  echo "Error: labels.json not found at ${LABELS_FILE}"
+  exit 1
+fi
+
+LABEL_COUNT=$(jq '. | length' "$LABELS_FILE")
+echo "Updating descriptions for ${LABEL_COUNT} labels from ${LABELS_FILE} ..."
+
+for i in $(seq 0 $((LABEL_COUNT - 1))); do
+  NAME=$(jq -r ".[$i].name" "$LABELS_FILE")
+  DESCRIPTION=$(jq -r ".[$i].description" "$LABELS_FILE")
+  update_label "$NAME" "$DESCRIPTION"
+  sleep 1
+done

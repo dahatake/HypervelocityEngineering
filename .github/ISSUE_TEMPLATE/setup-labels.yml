@@ -1,0 +1,59 @@
+name: "Setup Labels: ラベル初期セットアップ"
+description: "リポジトリのワークフロー・PR 制御用ラベルを .github/labels.json の定義に基づいて一括作成・更新します"
+title: "[Setup] ラベル初期セットアップ"
+labels:
+  - "setup-labels"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Setup Labels: ラベル初期セットアップ
+
+        このフォームから Issue を作成すると、`setup-labels` ラベルが付与され、
+        `.github/workflows/setup-labels.yml` が自動起動して `.github/labels.json` に定義された
+        全ラベルをリポジトリに一括作成・更新します。
+
+        ### 実行タイミング
+
+        - **初回**: リポジトリ作成後に **1度だけ** 実行してください。
+        - **再実行**: ラベル定義（`.github/labels.json`）が更新された場合は再実行できます。
+        - 冪等設計のため複数回実行しても安全です（既存ラベルは色・説明が更新されます）。
+
+        ### 管理対象ラベル
+
+        管理対象ラベルの**正本（canonical source）は `.github/labels.json`** です。
+        実際に作成・更新されるラベル名・色・説明の最新一覧は `.github/labels.json` を参照してください。
+
+        補足:
+        - 対象はワークフロートリガー系・PR 制御系・セットアップ系ラベルです。
+        - 詳細は [`workflow-reference.md`](../users-guide/workflow-reference.md#ワークフロートリガー系ラベル) を参照してください。
+
+        ### 管理対象外
+
+        以下のラベルは各オーケストレーターワークフローが自動作成するため、このセットアップワークフローには含まれません:
+
+        - **ステートラベル**: `aas:initialized`, `aas:ready`, `aas:running`, `aas:done`, `aas:blocked` などの `xxx:yyy` 形式のラベル
+        - **Sub Issue 固有ラベル**: 各 Sub Issue 作成時にワークフローが自動付与するラベル
+
+        ### ⚠️ 初回の注意事項（鶏と卵問題）
+
+        `setup-labels` ラベルはこの Issue テンプレートが自動付与しますが、
+        **リポジトリに `setup-labels` ラベルがまだ存在しない場合**、Issue 作成時にラベルは付与されず、
+        ワークフローは起動しません。
+
+        その場合は以下の手順で手動実行してください:
+        1. GitHub リポジトリの **Actions** タブを開く
+        2. 左サイドバーから **Setup Labels** ワークフローを選択
+        3. **Run workflow** ボタンをクリック
+        4. **Run workflow** で実行する
+
+        ワークフローが完了すると `setup-labels` ラベルが作成されるので、
+        以降はこの Issue テンプレートから実行できます。
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: "確認"
+      options:
+        - label: "上記の内容を確認しました。ラベルの一括作成・更新を実行します。"
+          required: true

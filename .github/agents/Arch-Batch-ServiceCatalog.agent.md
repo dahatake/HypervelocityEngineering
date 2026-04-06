@@ -37,6 +37,13 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - `docs/batch/batch-service-catalog.md`
 
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
+- `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md` — システムコンテキスト・責任境界
+- `knowledge/D10-API-Event-File-連携契約パック.md` — API/イベント/ファイル連携契約
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+
 ## 3) 実行手順（決定的）
 
 ### 3.0 依存確認（必須・最初に実行）
