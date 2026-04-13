@@ -23,7 +23,7 @@ _AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
-    "aas": "App Selection",
+    "aas": "App Architecture Design",
     "aad": "App Design",
     "asdw": "App Dev Microservice Azure",
     "abd": "Batch Design",
@@ -127,8 +127,12 @@ def collect_params(wf: WorkflowDef) -> dict:
     params["branch"] = _prompt("対象ブランチ", default="main")
 
     # ワークフロー固有パラメータ
-    if "app_id" in wf.params:
-        params["app_id"] = _prompt("対象アプリケーション (APP-ID)", default="", required=False)
+    if "app_ids" in wf.params or "app_id" in wf.params:
+        raw = _prompt("対象アプリケーション (APP-ID) — カンマ区切りで複数指定可", default="", required=False)
+        if raw:
+            params["app_ids"] = [s.strip() for s in raw.split(",") if s.strip()]
+            if len(params["app_ids"]) == 1:
+                params["app_id"] = params["app_ids"][0]
     if "resource_group" in wf.params:
         params["resource_group"] = _prompt("リソースグループ名", default="", required=False)
     if "usecase_id" in wf.params:
@@ -194,6 +198,19 @@ def _load_template(template_path: str) -> str:
     return full_path.read_text(encoding="utf-8")
 
 
+def _resolve_app_ids(params: dict) -> list:
+    """params から app_ids リストを解決する。
+
+    ``app_ids`` (list) を優先し、なければ ``app_id`` をリスト化して返す。
+    どちらも存在しない場合は空リストを返す。
+    """
+    ids = params.get("app_ids")
+    if ids:
+        return ids
+    single = params.get("app_id")
+    return [single] if single else []
+
+
 def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     """テンプレートの ``{root_ref}`` を展開する。
 
@@ -215,9 +232,9 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     resource_group = params.get("resource_group", "")
     if resource_group:
         parts.append(f"<!-- resource-group: {resource_group} -->")
-    app_id = params.get("app_id", "")
-    if app_id:
-        parts.append(f"<!-- app-id: {app_id} -->")
+    app_ids = _resolve_app_ids(params)
+    if app_ids:
+        parts.append(f"<!-- app-ids: {', '.join(app_ids)} -->")
 
     batch_job_id = params.get("batch_job_id", "")
     if batch_job_id:
@@ -238,15 +255,24 @@ def _build_additional_section(params: dict) -> str:
     return ""
 
 
-def _build_app_id_section(app_id: str) -> str:
-    """ASDW テンプレートの ``{app_id_section}`` を展開する。"""
-    if not app_id:
+def _build_app_id_section(app_id) -> str:
+    """ASDW テンプレートの ``{app_id_section}`` を展開する。
+
+    Args:
+        app_id: 単一の APP-ID 文字列またはリスト。リストの場合は複数 APP-ID に対応。
+    """
+    if isinstance(app_id, list):
+        ids = [aid for aid in app_id if aid]
+    else:
+        ids = [app_id] if app_id else []
+    if not ids:
         return ""
+    id_list = ", ".join(f"`{aid}`" for aid in ids)
     return (
         f"\n\n## 対象アプリケーション\n"
-        f"- APP-ID: `{app_id}`\n"
-        f"- この Step では APP-ID `{app_id}` に関連するサービス/エンティティ/画面のみを対象とする\n"
-        f"- `docs/app-list.md` を参照し、対象 APP-ID に紐づく項目を特定する\n"
+        f"- APP-ID: {id_list}\n"
+        f"- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする\n"
+        f"- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\n"
         f"- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
     )
 
@@ -294,7 +320,8 @@ def render_template(
     body = body.replace("{additional_section}", additional_section)
 
     # ASDW 固有プレースホルダ
-    body = body.replace("{app_id_section}", _build_app_id_section(params.get("app_id", "")))
+    app_ids = _resolve_app_ids(params)
+    body = body.replace("{app_id_section}", _build_app_id_section(app_ids if app_ids else params.get("app_id", "")))
     body = body.replace("{resource_group}", params.get("resource_group", ""))
     body = body.replace("{usecase_id}", params.get("usecase_id", ""))
 
@@ -384,8 +411,9 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     lines.append(f"<!-- branch: {branch} -->")
     if params.get("resource_group"):
         lines.append(f"<!-- resource-group: {params['resource_group']} -->")
-    if params.get("app_id"):
-        lines.append(f"<!-- app-id: {params['app_id']} -->")
+    app_ids = _resolve_app_ids(params)
+    if app_ids:
+        lines.append(f"<!-- app-ids: {', '.join(app_ids)} -->")
     if params.get("batch_job_id"):
         lines.append(f"<!-- batch-job-ids: {params['batch_job_id']} -->")
     lines.append(f"<!-- auto-review: {auto_review} -->")
@@ -395,7 +423,10 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     lines.append(f"ワークフロー: **{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}**")
     lines.append(f"ブランチ: `{branch}`")
 
-    if params.get("app_id"):
+    if params.get("app_ids"):
+        id_list = ", ".join(f"`{aid}`" for aid in params["app_ids"])
+        lines.append(f"APP-ID: {id_list}")
+    elif params.get("app_id"):
         lines.append(f"APP-ID: `{params['app_id']}`")
     if params.get("resource_group"):
         lines.append(f"リソースグループ: `{params['resource_group']}`")

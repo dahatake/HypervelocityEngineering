@@ -209,7 +209,7 @@ Describe 'orchestrate.ps1' {
     It 'shows execution plan for AAS in dry-run' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $output = & $ScriptPath -Workflow aas -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAS.*App Selection'
+        $output | Should -Match 'AAS.*App Architecture Design'
         $output | Should -Match '2'
         $output | Should -Match 'Step\.1:.*アプリケーションリストの作成'
         $output | Should -Match 'Step\.2:.*ソフトウェアアーキテクチャの推薦'

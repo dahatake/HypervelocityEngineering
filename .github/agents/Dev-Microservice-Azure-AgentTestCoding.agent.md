@@ -8,46 +8,40 @@ tools: ["*"]
 AI Agent TDD RED フェーズ テストコード生成専用Agent。
 このエージェントは **Agent テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 # 1) 目的（スコープ固定）
 - 対象は **1 Agent 分のみ**：`{agentId}-{agentName}`。
 - 目的は「Agent テスト仕様書に基づく TDD RED フェーズのテストコード生成」。
 - テストは **コンパイル/ビルドは通るが、テスト実行は失敗する（RED 状態）** を目指す。
 - 実装コード（`src/agent/` 配下）の作成・変更は **スコープ外**（これは後続の `Dev-Microservice-Azure-AgentCoding` が行う）。
-- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら AGENTS.md の分割ルールで別タスク化）。
+- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 # 2) 入力（優先順位順）
 必須:
 - `docs/test-specs/{agentId}-test-spec.md`（Agent 別テスト仕様書 — テストケース表・テストデータ定義・テストダブル設計）
-- `docs/test-strategy.md`（テスト戦略書）
-- `docs/AI-Agents-list.md`（Agent 一覧 — Agent ID / 名前 / 対象ユースケースの確認）
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/test-strategy.md`（テスト戦略書）
+- `docs/ai-agent-catalog.md`（Agent 一覧 — Agent ID / 名前 / 対象ユースケースの確認）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 参照候補（存在すれば読む）:
 - `docs/agent/agent-detail-{agentId}-*.md`（Agent 詳細設計書 — I/O 契約・Tool 定義・状態遷移の確認用）
-- `docs/service-catalog.md`（API 一覧・依存関係マトリクス）
+- `docs/catalog/service-catalog-matrix.md`（API 一覧・依存関係マトリクス）
 - `test/agent/` ディレクトリ構造（既存テストコードのパターン確認）
 - `test/api/` ディレクトリ構造（既存テストプロジェクトのパターン参照 — `test/agent/` が新規の場合に命名規則・構造を踏襲）
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づく Agent特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全 Agent対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## USECASE_ID の取得方法
 - Agent 設計書は `docs/agent/` 配下に配置されているため、USECASE_ID からパスを構築するロジックは不要
-- `docs/AI-Agents-list.md` に Agent とユースケースの対応が記載されている場合はそれを参照する
+- `docs/ai-agent-catalog.md` に Agent とユースケースの対応が記載されている場合はそれを参照する
 
 ## 複数 Agent の処理方針
-- `docs/AI-Agents-list.md` に複数の Agent が定義されている場合、**1 Issue で 1 Agent 分のみを対象** とする
+- `docs/ai-agent-catalog.md` に複数の Agent が定義されている場合、**1 Issue で 1 Agent 分のみを対象** とする
 - 対象 Agent は Issue body の `<!-- agent-id: XXX -->` メタコメントまたは Issue タイトルで指定する
-- 指定がない場合は `docs/AI-Agents-list.md` の最初の未対応 Agent（対応するテストコードが `test/agent/` 配下にない Agent）を対象とする
+- 指定がない場合は `docs/ai-agent-catalog.md` の最初の未対応 Agent（対応するテストコードが `test/agent/` 配下にない Agent）を対象とする
 
 # 3) 出力（成果物）
 必須:
@@ -63,7 +57,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 任意だが推奨:
 - `test/agent/{AgentName}.Tests/README.md`（テストの実行方法・前提条件・RED 状態の説明）
 
-作業ログ（AGENTS.md 既定）:
+作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
 
 # 4) テスト種別（5種）
@@ -83,7 +77,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 | 確認対象 | 停止条件 | 報告メッセージ |
 |---|---|---|
 | `docs/test-specs/{agentId}-test-spec.md` | 存在しない・空・テストケース表がない | 「依存 Step.2.7T（Agent テスト仕様書）が未完了のため実行不可です」 |
-| `docs/test-strategy.md` | 存在しない・空 | 「依存 Step（テスト戦略書）が未完了のため実行不可です」 |
+| `docs/catalog/test-strategy.md` | 存在しない・空 | 「依存 Step（テスト戦略書）が未完了のため実行不可です」 |
 
 # 6) 実行手順（この順で）
 
@@ -112,7 +106,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 # 7) 禁止事項（このタスク固有）
 - `src/agent/` 配下の実装コードを作成・変更しない（これは後続の `Dev-Microservice-Azure-AgentCoding` が行う）。
 - テスト仕様書（`docs/test-specs/`）を変更しない。
-- テスト戦略書（`docs/test-strategy.md`）を変更しない。
+- テスト戦略書（`docs/catalog/test-strategy.md`）を変更しない。
 - Agent 詳細設計書（`docs/agent/`）を変更しない。
 - テスト仕様書から確認できない情報を断定・補完・推測しない。
 - 根拠のないテストケース・テストデータを捏造しない。
@@ -129,7 +123,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - 各テストメソッドが AAA パターンで構造化されている。
 - 作業ログと README が更新されている。
 
-# 9) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 3つの異なる観点（AI Agent TDD RED フェーズ テストコードの場合）
 - **1回目：テスト仕様書との整合性**：テストケース表の全行がテストメソッドに反映されているか、5種全てのテスト種別が含まれているか、テストダブル設計が仕様書の方針と一致しているか
@@ -137,7 +131,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

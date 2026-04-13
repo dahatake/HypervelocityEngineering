@@ -38,7 +38,7 @@ declare -A _WORKFLOW_REGISTRY
 _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
 {
   "id": "aas",
-  "name": "App Selection",
+  "name": "App Architecture Design",
   "label_prefix": "aas",
   "state_labels": {
     "initialized": "aas:initialized",

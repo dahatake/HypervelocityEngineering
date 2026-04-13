@@ -23,11 +23,20 @@ jobs:
 
       - name: Backup custom skills
         run: |
-          mkdir -p /tmp/custom-skills-backup
-          for skill in large-output-chunking repo-onboarding-fast task-dag-planning work-artifacts-layout; do
-            if [ -d ".github/skills/${skill}" ]; then
-              cp -r ".github/skills/${skill}" "/tmp/custom-skills-backup/${skill}"
-              echo "Backed up: ${skill}"
+          mkdir -p /tmp/custom-skills-backup/planning
+          mkdir -p /tmp/custom-skills-backup/output
+          # planning category custom skills
+          for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d ".github/skills/planning/${skill}" ]; then
+              cp -r ".github/skills/planning/${skill}" "/tmp/custom-skills-backup/planning/${skill}"
+              echo "Backed up: planning/${skill}"
+            fi
+          done
+          # output category custom skills
+          for skill in large-output-chunking; do
+            if [ -d ".github/skills/output/${skill}" ]; then
+              cp -r ".github/skills/output/${skill}" "/tmp/custom-skills-backup/output/${skill}"
+              echo "Backed up: output/${skill}"
             fi
           done
 
@@ -37,8 +46,8 @@ jobs:
           for dir in */; do
             dir="${dir%/}"
             case "${dir}" in
-              large-output-chunking|repo-onboarding-fast|task-dag-planning|work-artifacts-layout)
-                echo "Keeping custom skill: ${dir}"
+              planning|output|harness|testing|cicd|observability)
+                echo "Keeping custom category: ${dir}"
                 ;;
               *)
                 rm -rf "${dir}"
@@ -53,11 +62,20 @@ jobs:
 
       - name: Restore custom skills
         run: |
-          for skill in large-output-chunking repo-onboarding-fast task-dag-planning work-artifacts-layout; do
-            if [ -d "/tmp/custom-skills-backup/${skill}" ]; then
-              rm -rf ".github/skills/${skill}"
-              cp -r "/tmp/custom-skills-backup/${skill}" ".github/skills/${skill}"
-              echo "Restored: ${skill}"
+          mkdir -p .github/skills/planning
+          mkdir -p .github/skills/output
+          for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d "/tmp/custom-skills-backup/planning/${skill}" ]; then
+              rm -rf ".github/skills/planning/${skill}"
+              cp -r "/tmp/custom-skills-backup/planning/${skill}" ".github/skills/planning/${skill}"
+              echo "Restored: planning/${skill}"
+            fi
+          done
+          for skill in large-output-chunking; do
+            if [ -d "/tmp/custom-skills-backup/output/${skill}" ]; then
+              rm -rf ".github/skills/output/${skill}"
+              cp -r "/tmp/custom-skills-backup/output/${skill}" ".github/skills/output/${skill}"
+              echo "Restored: output/${skill}"
             fi
           done
 
@@ -90,15 +108,15 @@ jobs:
             ## カスタムスキル（同期対象外）
 
             以下のカスタムスキルは同期対象外のため、変更ありません：
-            - `large-output-chunking`
-            - `repo-onboarding-fast`
-            - `task-dag-planning`
-            - `work-artifacts-layout`
+            - `planning/repo-onboarding-fast`
+            - `planning/task-dag-planning`
+            - `planning/work-artifacts-layout`
+            - `output/large-output-chunking`
 
             ## 確認チェックリスト
 
             - [ ] 新規追加・削除されたスキルフォルダを確認した
             - [ ] 既存スキルの内容変更を確認した
-            - [ ] AGENTS.md §4.2 のスキル参照ルールへの影響がないことを確認した（汎用記述のため影響なし）
+            - [ ] `copilot-instructions.md` §5 のスキル参照ルールへの影響がないことを確認した（汎用記述のため影響なし）
             - [ ] カスタムスキル 4 件が正しく保持されていることを確認した
           delete-branch: true

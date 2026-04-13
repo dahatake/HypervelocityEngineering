@@ -5,23 +5,23 @@
 ## 入力
 - ユースケースID: {usecase_id}
 - ユースケース記述: {usecase_path}
-- ガイドライン: `users-guide/08-AIAgent.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- ガイドライン: `users-guide/08-ai-agent.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 参照（存在すれば）:
-  - `docs/service-catalog.md`
-  - `docs/service-list.md`
-  - `docs/data-model.md`
-  - `docs/domain-analytics.md`
-  - `docs/usecase-list.md`
+  - `docs/catalog/service-catalog-matrix.md`
+  - `docs/catalog/service-catalog.md`
+  - `docs/catalog/data-model.md`
+  - `docs/catalog/domain-analytics.md`
+  - `docs/catalog/use-case-catalog.md`
   - `docs/services/SVC-*.md`
-  - `docs/azure/AzureServices-data.md`
-  - `docs/azure/AzureServices-services-additional.md`
+  - `docs/azure/azure-services-data.md`
+  - `docs/azure/azure-services-additional.md`
 
 ## 成果物
 - `docs/agent/agent-application-definition.md`
 - `docs/agent/agent-architecture.md`
 - `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごと）
-- `docs/AI-Agents-list.md`
+- `docs/ai-agent-catalog.md`
 
 ## Custom Agent
 `Arch-AIAgentDesign` を使用
@@ -30,5 +30,5 @@
 - Step.2.5（Azure Compute Deploy）が `asdw:done` であること
 
 ## 完了条件
-- `docs/AI-Agents-list.md` が作成されている
+- `docs/ai-agent-catalog.md` が作成されている
 - 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

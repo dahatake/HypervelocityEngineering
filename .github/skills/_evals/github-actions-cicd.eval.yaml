@@ -1,0 +1,51 @@
+skill: github-actions-cicd
+skill_path: .github/skills/cicd/github-actions-cicd/SKILL.md
+description: GitHub Actions CI/CD ワークフローの共通仕様。OIDC 認証・workflow_dispatch トリガー・Copilot push 制約対応・シークレット管理・デプロイ保護の原則を提供する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: github-actions-workflow-creation
+    input: "Azure Functions SVC-10 のデプロイ用 GitHub Actions ワークフローを作成してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "OIDC 認証（azure/login@v2）、workflow_dispatch トリガー、environment: copilot を含むワークフロー YAML を生成する"
+    reason: "USE FOR: GitHub Actions, CI/CD workflow に該当する"
+
+  - id: oidc-authentication-setup
+    input: "GitHub Actions から Azure へのデプロイに OIDC 認証を設定したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/cicd-common-spec.md §1.1 の OIDC 認証 YAML 例を参照し、AZURE_CLIENT_ID/TENANT_ID/SUBSCRIPTION_ID の設定を案内する"
+    reason: "USE FOR: OIDC authentication に該当する"
+
+  - id: copilot-push-workaround
+    input: "Copilot が push したコミットで GitHub Actions が自動実行されない。回避方法を教えてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "workflow_dispatch トリガーを追加し、PR description に手動実行案内テンプレートを記載する"
+    reason: "USE FOR: copilot push workaround, workflow_dispatch に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-azure-deployment
+    input: "Azure Container Apps に Docker イメージをデプロイしてほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: application code deployment (use appropriate azure-platform/ deployment skill) に該当する"
+
+  - id: not-for-test-execution
+    input: "pytest のテストを実行して結果を確認してほしい"
+    expected_trigger: false
+    expected_skill: "harness-verification-loop"
+    reason: "DO NOT USE FOR: test execution (use harness-verification-loop) に該当する"
+
+  # --- エッジケース ---
+  - id: edge-environment-copilot-not-set
+    input: "GitHub Actions ワークフローで AZURE_CLIENT_ID が空値になってしまう。原因を調べてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "environment: copilot が未指定の場合、Environment secrets が読み取れず空値になる。environment フィールドの追加を案内する"
+    reason: "OIDC 認証設定の典型的なトラブルシューティング。github-actions-cicd の範囲内"

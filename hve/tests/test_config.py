@@ -21,7 +21,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertEqual(self.cfg.model, "claude-opus-4.6")
 
     def test_timeout_default(self) -> None:
-        self.assertEqual(self.cfg.timeout_seconds, 7200.0)
+        self.assertEqual(self.cfg.timeout_seconds, 21600.0)
 
     def test_review_timeout_default(self) -> None:
         self.assertEqual(self.cfg.review_timeout_seconds, 7200.0)

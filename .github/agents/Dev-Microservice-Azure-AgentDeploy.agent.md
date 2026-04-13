@@ -7,18 +7,14 @@ tools: ["*"]
 
 Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用Agent。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
-- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
-- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+## Agent 固有の Skills 依存
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `github-actions-cicd`：GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- `azure-region-policy`：Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的（スコープ固定）
 - 対象は **1 Agent 分のみ**：`{agentId}-{agentName}`。
 - 目的は「Azure AI Foundry Agent Service への Agent デプロイと GitHub Actions CI/CD 構築」。
@@ -28,20 +24,18 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 # 2) 入力
 必須:
 - `src/agent/{AgentID}-{AgentName}/`（Step.2.7 で実装済みの Agent コード）
-- `docs/AI-Agents-list.md`（Agent 一覧 — Agent ID・名前・ミッションの確認）
-- `docs/azure/AzureServices-services-additional.md`（Azure AI Foundry プロジェクト設定・AI Search インデックス等）
+- `docs/ai-agent-catalog.md`（Agent 一覧 — Agent ID・名前・ミッションの確認）
+- `docs/azure/azure-services-additional.md`（Azure AI Foundry プロジェクト設定・AI Search インデックス等）
 - リソースグループ名（Issue body から取得）
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠）
 
 参照候補（存在すれば読む）:
 - `docs/agent/agent-detail-{agentId}-*.md`（Agent 詳細設計書）
-- `docs/service-catalog.md`（既存サービスとの統合確認）
+- `docs/catalog/service-catalog-matrix.md`（既存サービスとの統合確認）
 - `infra/azure/` 配下の既存スクリプト（命名規則・パターン参照）
 - `.github/workflows/` 配下の既存ワークフロー（CI/CD パターン参照）
 
-## APP-ID スコープ
-- Issue body または メタコメント `<!-- app-id: XXX -->` から対象 APP-ID を取得する
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # 3) 出力（成果物）
 必須:
 - **Azure CLI スクリプト**（`azure-cli-deploy-scripts` Skill 準拠 — 冪等・既存リソースはスキップ）:
@@ -58,7 +52,7 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 任意だが推奨:
 - `infra/azure/README-agent-deploy.md`（デプロイ手順・トラブルシューティング）
 
-作業ログ（AGENTS.md 既定）:
+作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
 
 # 4) 実行フロー（DAG）
@@ -134,7 +128,7 @@ A) スクリプト作成（prep + create + verify）
 
 | # | 確認項目 | 確認方法 |
 |---|---------|---------|
-| 1 | Azure AI Foundry プロジェクトが存在する | `az ai services account show --name <resource-name> --resource-group <rg>` または Azure Portal で確認（`<resource-name>` と `<rg>` は `docs/azure/AzureServices-services-additional.md` から取得） |
+| 1 | Azure AI Foundry プロジェクトが存在する | `az ai services account show --name <resource-name> --resource-group <rg>` または Azure Portal で確認（`<resource-name>` と `<rg>` は `docs/azure/azure-services-additional.md` から取得） |
 | 2 | Agent がプロジェクトに登録されている | Azure AI Foundry SDK（Python/C#）で Agent 一覧を取得してIDが存在することを確認 |
 | 3 | エンドポイントが HTTP 200 を返す | `curl -s -o /dev/null -w "%{http_code}" <endpoint>/health` 等でヘルスチェック |
 | 4 | 代表クエリへの応答が正常 | Agent に簡単なテストメッセージを送信して応答が空でないことを確認 |
@@ -142,7 +136,7 @@ A) スクリプト作成（prep + create + verify）
 | 6 | サービスカタログに Agent エンドポイントが記録されている | `docs/azure/service-catalog.md` の内容確認 |
 
 # 9) サービスカタログ更新ガイドライン
-- `docs/azure/service-catalog.md`（存在する場合）または `docs/service-catalog.md` に Agent エンドポイントを追記する
+- `docs/azure/service-catalog.md`（存在する場合）または `docs/catalog/service-catalog-matrix.md` に Agent エンドポイントを追記する
 - 追記対象ファイルはリポジトリに存在するファイルを優先する（存在しない場合は `docs/azure/service-catalog.md` を新規作成する）
 - 追記形式は既存の記載形式に合わせる（重複行を作らない）
 - 記録する情報: Agent ID・Agent 名・エンドポイント URL・モデル名・デプロイ日時
@@ -165,7 +159,7 @@ A) スクリプト作成（prep + create + verify）
 - `docs/test-specs/deploy-step2-agent-test-spec.md` が作成されている。
 - 作業ログと README が更新されている。
 
-# 13) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 13) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 3つの異なる観点（AI Agent デプロイの場合）
 - **1回目：デプロイ完全性・AC 達成度**：全 AC が満たされているか、Agent エンドポイントが正常応答するか、CI/CD が正しく設定されているか
@@ -173,7 +167,7 @@ A) スクリプト作成（prep + create + verify）
 - **3回目：運用性・保守性**：verify スクリプトが全ての AC をカバーしているか、デプロイ失敗時のロールバック手順が明記されているか、ドキュメントが保守可能な状態か
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

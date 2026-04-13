@@ -12,11 +12,11 @@ body:
         Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
 
         ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
-        - `docs/app-list.md` — App Selection (Step.1) の成果物
+        - `docs/catalog/app-catalog.md` — App Architecture Design (Step.1) の成果物
 
-        💡 **複数回実行可能**: 同じ `docs/app-list.md` に対して設計を複数回実行できます。別ブランチを指定することで、異なる設計方針を並行比較することが可能です。
+        💡 **複数回実行可能**: 同じ `docs/catalog/app-catalog.md` に対して設計を複数回実行できます。別ブランチを指定することで、異なる設計方針を並行比較することが可能です。
 
-        📋 **アプリケーション粒度**: Step.1.2 以降は `docs/app-list.md` のアプリケーション一覧（APP-ID）を参照し、各成果物に APP-ID との紐付けを行います。
+        📋 **アプリケーション粒度**: Step.1.2 以降は `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各成果物に APP-ID との紐付けを行います。
 
         🤖 **AI Agent 設計**: Step.8（AI Agent 設計）は、チャット・音声等の AI Agent が有効なアプリケーションに対してのみ実行してください。AI Agent 不要な場合は Step.8 をスキップしてください。
 
@@ -31,6 +31,17 @@ body:
       value: "main"
     validations:
       required: true
+
+  - type: input
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) メモ — 複数指定可（任意）"
+      description: |
+        関連する APP-ID をメモとして記載できます（カンマ区切り）。
+        現状、この項目は自動ワークフローの対象絞り込みには使用されません。
+      placeholder: "例: APP-01, APP-02"
+    validations:
+      required: false
 
   - type: checkboxes
     id: steps

@@ -6,8 +6,8 @@ TDD RED フェーズ: Agent テスト仕様書（`docs/test-specs/{agentId}-test
 ## 入力
 - `docs/test-specs/{agentId}-test-spec.md`（Step.2.7T で生成済みの Agent テスト仕様書）
 - `docs/agent/agent-detail-*.md`
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
 - `test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（テストコードのみ）

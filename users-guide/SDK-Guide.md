@@ -256,7 +256,7 @@ wizard は以下の 8 段階で進行します。
 
 ```text
 ? ワークフローを選択してください
-  1) App Selection (aas — 2 steps)
+  1) App Architecture Design (aas — 2 steps)
   2) App Design (aad — 16 steps)
   3) App Dev Microservice Azure (asdw — 24 steps)
   4) Batch Design (abd — 9 steps)
@@ -313,7 +313,7 @@ wizard は以下の 8 段階で進行します。
   5) debug
   6) all
 > 2
-? セッション idle タイムアウト（秒。デフォルト: 7200 = 2時間） [7200]: 7200
+? セッション idle タイムアウト（秒。デフォルト: 21600 = 6時間） [21600]: 21600
 ? QA 自動投入を有効にする？ [y/N]: N
 ? Review 自動投入を有効にする？ [y/N]: N
 ? GitHub Issue を作成する？ [y/N]: y
@@ -329,7 +329,7 @@ wizard は以下の 8 段階で進行します。
 | ベースブランチ | `main` | `--branch` |
 | 並列実行数 | `15` | `--max-parallel` |
 | ログレベル | `error` | `--log-level` |
-| タイムアウト | `7200`（2時間） | `--timeout` |
+| タイムアウト | `21600`（6時間） | `--timeout` |
 | QA 自動投入 | OFF | `--auto-qa` |
 | Review 自動投入 | OFF | `--auto-contents-review` |
 | GitHub Issue 作成 | OFF | `--create-issues` |
@@ -344,14 +344,14 @@ wizard は以下の 8 段階で進行します。
 選択したワークフローに固有のパラメータがある場合、自動的にプロンプトが表示されます（全て必須入力）。
 
 ```text
-# asdw ワークフローの場合
-? app_id: APP-04
+# asdw ワークフローの場合（複数 APP-ID 指定可）
+? 対象アプリケーション (APP-ID) — カンマ区切りで複数指定可: APP-04, APP-05
 ? resource_group: rg-dev
 ? usecase_id: UC-01
 ```
 
 固有パラメータを持つワークフロー:
-- `asdw`: `app_id`, `resource_group`, `usecase_id`
+- `asdw`: `app_ids`（複数 APP-ID、カンマ区切り）, `resource_group`, `usecase_id`
 - `abdv`: `resource_group`, `batch_job_id`
 - `aqkm`: `scope`, `target_files`, `force_refresh`
 
@@ -377,7 +377,7 @@ wizard は以下の 8 段階で進行します。
 │  ブランチ     : main                               │
 │  並列数       : 15                                 │
 │  ログレベル   : error                              │
-│  タイムアウト  : 7200 秒                           │
+│  タイムアウト  : 21600 秒                          │
 │  QA 自動      : OFF                               │
 │  Review 自動  : OFF                               │
 │  Issue 作成   : ON                                │
@@ -485,7 +485,7 @@ python -m hve orchestrate \
   --create-pr \
   --repo dahatake/RoyalytyService2ndGen \
   --branch main \
-  --app-id APP-04 \
+  --app-ids APP-01,APP-02,APP-03 \
   --resource-group rg-dev \
   --usecase-id UC-01 \
   --batch-job-id JOB-01 \
@@ -571,7 +571,8 @@ python -m hve orchestrate \
 
 | オプション | 説明 | 対応ワークフロー |
 |-----------|------|--------------|
-| `--app-id` | アプリケーション ID（例: `APP-04`） | `asdw` |
+| `--app-ids` | アプリケーション ID（カンマ区切りで複数指定可。例: `APP-01,APP-02,APP-03`） | `asdw` |
+| `--app-id` | アプリケーション ID（例: `APP-04`。後方互換のため残す。複数指定は `--app-ids` を推奨） | `asdw` |
 | `--resource-group` | Azure リソースグループ名（例: `rg-dev`） | `asdw`, `abdv` |
 | `--usecase-id` | ユースケース ID（例: `UC-01`） | `asdw` |
 | `--batch-job-id` | バッチジョブ ID（カンマ区切り可。例: `JOB-01,JOB-02`） | `abdv` |
@@ -621,6 +622,25 @@ python -m hve orchestrate \
 
 > `GH_TOKEN` が必要です。`--create-issues` または `--create-pr` を指定している状態で `GH_TOKEN` が未設定の場合、前提条件エラーとしてコマンドは終了します。
 
+#### 複数 APP-ID 指定（ASDW）
+
+```bash
+# 複数の APP-ID をカンマ区切りで指定
+python -m hve orchestrate \
+  --workflow asdw \
+  --app-ids APP-01,APP-02,APP-03 \
+  --resource-group rg-dev \
+  --usecase-id UC-01
+
+# 単一 APP-ID（後方互換、--app-ids 推奨）
+python -m hve orchestrate \
+  --workflow asdw \
+  --app-id APP-01 \
+  --resource-group rg-dev
+```
+
+> **2度目実行時の既存成果物再利用**: ワークフロー実行開始時に `docs/`・`src/`・`test/`・`knowledge/` 配下の既存成果物が自動検出されます。既存成果物が見つかった場合、「既存成果物を検出しました（N 件）。再利用モードで実行します。」と表示され、各ステップのプロンプトに再利用ルールが追記されます。Catalog ファイルは既存エントリを保持したまま新規エントリが追加されます。
+
 #### Code Review Agent 有効
 
 ```bash
@@ -643,23 +663,23 @@ python -m hve orchestrate \
 
 | やりたいこと | ワークフロー | コマンド |
 |------------|------------|---------|
-| アプリケーション選定 | `aas` | `python -m hve orchestrate --workflow aas` |
+| アプリケーションアーキテクチャ設計 | `aas` | `python -m hve orchestrate --workflow aas` |
 | アプリケーション設計 | `aad` | `python -m hve orchestrate --workflow aad` |
-| Azure Web アプリ実装 | `asdw` | `python -m hve orchestrate --workflow asdw --app-id APP-04 --resource-group rg-dev --usecase-id UC-01` |
+| Azure Web アプリ実装 | `asdw` | `python -m hve orchestrate --workflow asdw --app-ids APP-01,APP-02 --resource-group rg-dev --usecase-id UC-01` |
 | バッチ設計 | `abd` | `python -m hve orchestrate --workflow abd` |
 | バッチ実装 | `abdv` | `python -m hve orchestrate --workflow abdv --resource-group rg-batch --batch-job-id JOB-01` |
 | QA Knowledge ドキュメント管理 | `aqkm` | `python -m hve orchestrate --workflow aqkm` |
 
-> **ヒント**: インタラクティブモード（`python -m hve`）では、上記のワークフローが番号付きメニューとして表示されます。ワークフロー固有のオプション（`--app-id` 等）も wizard 内で自動的にプロンプトされるため、コマンドを暗記する必要はありません。
+> **ヒント**: インタラクティブモード（`python -m hve`）では、上記のワークフローが番号付きメニューとして表示されます。ワークフロー固有のオプション（`--app-ids` 等）も wizard 内で自動的にプロンプトされるため、コマンドを暗記する必要はありません。
 
 ### 各ワークフローの詳細
 
-#### aas — App Selection（アプリケーション選定）
+#### aas — App Architecture Design（アプリケーションアーキテクチャ設計）
 
 | 項目 | 内容 |
 |------|------|
-| **目的** | ユースケース一覧からアプリケーション候補を自動選定 |
-| **前提条件** | `users-guide/01-Business-Requirement.md` 等の要求定義が存在すること |
+| **目的** | ユースケース一覧からアプリケーションアーキテクチャを自動設計 |
+| **前提条件** | `users-guide/01-business-requirement.md` 等の要求定義が存在すること |
 | **ステップ数** | 2 |
 | **固有オプション** | なし |
 
@@ -668,7 +688,7 @@ python -m hve orchestrate \
 | 項目 | 内容 |
 |------|------|
 | **目的** | ドメイン分析・データモデル・サービスカタログ等の設計を自動実行 |
-| **前提条件** | `aas` ワークフローによるアプリ選定が完了していること |
+| **前提条件** | `aas` ワークフローによるアプリケーションアーキテクチャ設計が完了していること |
 | **ステップ数** | 16 |
 | **固有オプション** | なし |
 
@@ -679,7 +699,7 @@ python -m hve orchestrate \
 | **目的** | Azure マイクロサービスの実装・デプロイを自動実行 |
 | **前提条件** | `aad` ワークフローによる設計が完了していること |
 | **ステップ数** | 24 |
-| **固有オプション** | `--app-id`（必須）, `--resource-group`（必須）, `--usecase-id`（必須） |
+| **固有オプション** | `--app-ids`（推奨）または `--app-id`（後方互換）、`--resource-group`（必須）, `--usecase-id`（必須） |
 
 #### abd — Batch Design（バッチ設計）
 
@@ -986,4 +1006,4 @@ SDK 版でワークフローを実行する際も、`knowledge/` フォルダー
 python -m hve orchestrate --workflow aqkm
 ```
 
-`knowledge/` ファイルが存在すると、以降の設計・実装ワークフロー（`aas`, `aad`, `asdw` 等）での設計品質が向上します。詳細は [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) を参照してください。
+`knowledge/` ファイルが存在すると、以降の設計・実装ワークフロー（`aas`, `aad`, `asdw` 等）での設計品質が向上します。詳細は [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) を参照してください。

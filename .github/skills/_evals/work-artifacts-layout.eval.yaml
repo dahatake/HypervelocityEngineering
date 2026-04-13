@@ -1,0 +1,66 @@
+# .github/skills/_evals/work-artifacts-layout.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: work-artifacts-layout
+skill_path: .github/skills/planning/work-artifacts-layout/SKILL.md
+description: work/ 配下の作業ディレクトリ構造を整備するスキル。README.md の入口設計、contracts/artifacts の分離、qa/ 質問票構造、削除→新規作成ルールを提供する。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: work-directory-setup
+    input: "Issue-123 の作業ディレクトリを work/ 配下に作成してください。README.md も含めて整備してください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "work/Issue-123/README.md が生成されること（入口ファイルとして目的/入口/根拠/現状/検証を含む）"
+      - type: content_contains
+        detail: "work/Issue-123/ 配下の基本構造（例: README.md、必要に応じた contracts/ や artifacts/）が提示されること"
+    reason: "SKILL.md の USE FOR に 'work/ structure, README entry point' が明示されており、work/ 配下のディレクトリ整備依頼は典型的なトリガー"
+
+  - id: contracts-artifacts-separation
+    input: "仕様書を contracts/ に、生成物を artifacts/ に保存する構造を整備してください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "contracts/ ディレクトリに仕様・決定事項ファイルが保存されること（根拠パス付き）"
+      - type: file_creation
+        detail: "artifacts/ ディレクトリに生成物が保存されること"
+    reason: "SKILL.md の USE FOR に 'contracts/ management, artifacts/ management' が明示されており、成果物の分離保存依頼はトリガー条件に該当する"
+
+  - id: qa-questionnaire-structure
+    input: "qa/ 配下に質問票ファイルを作成する構造を確認したいです。ファイルの配置ルールを教えてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "qa/ 配下のファイル命名規則と構造が提示されること"
+    reason: "SKILL.md の USE FOR に 'qa/ structure' が明示されており、qa/ 配下の構造確認・整備依頼はトリガー条件に該当する"
+
+  - id: delete-then-create-rule
+    input: "work/ 配下の既存ファイルを更新したいです。削除してから新規作成するルールを確認してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "§4.1 の delete-then-create ルール（既存ファイルがあれば削除→新規作成）が適用されること"
+    reason: "SKILL.md の USE FOR に 'delete-then-create rule' が明示されており、work/ 配下のファイル更新ルール確認はトリガー条件に該当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: docs-format-request
+    input: "docs/ 配下のドキュメントのフォーマットを整えてください。固定章立てと Mermaid erDiagram を使ってください。"
+    expected_trigger: false
+    expected_skill: docs-output-format
+    reason: "SKILL.md の Non-goals に 'docs/ 配下の成果物フォーマット管理は docs-output-format が担当' と明示されており、docs/ のフォーマット整備は対象外"
+
+  - id: quality-review-request
+    input: "work/ 配下の成果物の品質をレビューしてください。"
+    expected_trigger: false
+    expected_skill: adversarial-review
+    reason: "SKILL.md の Non-goals に '成果物の品質評価・レビューは adversarial-review が担当' と明示されており、品質レビューは対象外"
+
+  # --- エッジケース ---
+  - id: ambiguous-work-or-docs
+    input: "作業成果物を保存したいのですが、work/ と docs/ のどちらに置くべきですか？"
+    expected_trigger: true
+    reason: "work/ 配下の配置ルールを問う依頼は work-artifacts-layout のトリガーに該当する。docs/ への配置判断については docs-output-format も参照する可能性があるが、まず work-artifacts-layout でパス設計の標準を確認するのが適切。"

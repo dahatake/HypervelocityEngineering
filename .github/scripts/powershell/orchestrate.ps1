@@ -55,7 +55,7 @@ $TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
 # ---------------------------------------------------------------------------
 
 $script:WorkflowDisplayNames = @{
-    aas  = 'App Selection'
+    aas  = 'App Architecture Design'
     aad  = 'App Design'
     asdw = 'App Dev Microservice Azure'
     abd  = 'Batch Design'
@@ -126,7 +126,7 @@ function script:BuildAdditionalSection {
 function script:BuildAppIdSection {
     param([string]$RefAppId)
     if (-not $RefAppId) { return '' }
-    return "`n`n## 対象アプリケーション`n- APP-ID: ``$RefAppId```n- この Step では APP-ID ``$RefAppId`` に関連するサービス/エンティティ/画面のみを対象とする`n- ``docs/app-list.md`` を参照し、対象 APP-ID に紐づく項目を特定する`n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
+    return "`n`n## 対象アプリケーション`n- APP-ID: ``$RefAppId```n- この Step では APP-ID ``$RefAppId`` に関連するサービス/エンティティ/画面のみを対象とする`n- ``docs/catalog/app-catalog.md`` を参照し、対象 APP-ID に紐づく項目を特定する`n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
 }
 
 function script:BuildRgSection {

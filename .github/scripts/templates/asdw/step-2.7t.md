@@ -10,12 +10,12 @@ TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、A
 5. **プロンプト回帰テスト** — System Prompt 変更後の動作一貫性（期待出力のマッチング）検証
 
 ## 入力
-- `docs/test-strategy.md`
-- `docs/AI-Agents-list.md`
+- `docs/catalog/test-strategy.md`
+- `docs/ai-agent-catalog.md`
 - `docs/agent/agent-detail-*.md`
-- `docs/service-catalog.md`
-- `docs/data-model.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
 - `docs/test-specs/{agentId}-test-spec.md`（Agent 別テスト仕様書）
@@ -25,7 +25,7 @@ TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、A
 
 ## 依存
 - Step.2.6（AI Agent 構成設計）が `asdw:done` であること
-- `docs/test-strategy.md` が存在すること
+- `docs/catalog/test-strategy.md` が存在すること
 
 ## 完了条件
 - `docs/test-specs/` 配下に Agent 別テスト仕様書が生成されている

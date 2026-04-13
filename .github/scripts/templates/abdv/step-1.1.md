@@ -11,7 +11,7 @@
 - `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）
 
 ## 出力
-- `docs/azure/AzureServices-data.md`（データストア設計）
+- `docs/azure/azure-services-data.md`（データストア設計）
 
 ## Custom Agent
 `Dev-Batch-Deploy` を使用
@@ -20,5 +20,5 @@
 - 依存なし（最初の Step）
 
 ## 完了条件
-- `docs/azure/AzureServices-data.md` が作成または更新されている
+- `docs/azure/azure-services-data.md` が作成または更新されている
 - 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}

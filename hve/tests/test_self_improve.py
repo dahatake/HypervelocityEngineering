@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import SDKConfig
+from config import SDKConfig, generate_run_id
 from self_improve import (
     ScanResult,
     ScanSummary,
@@ -593,6 +593,72 @@ class TestSDKConfigSelfImproveDefaults(unittest.TestCase):
         cfg = SDKConfig(self_improve_skip=True)
         result = run_improvement_loop(cfg)
         self.assertEqual(result["stopped_reason"], "disabled")
+
+
+# ---------------------------------------------------------------------------
+# generate_run_id テスト
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateRunId(unittest.TestCase):
+    """generate_run_id の出力形式を検証する。"""
+
+    def test_format_matches_timestamp_uuid(self) -> None:
+        """生成される run_id が '<timestamp>-<uuid6>' 形式である。"""
+        import re
+        run_id = generate_run_id()
+        # 例: "20260413T143022-a1b2c3"
+        self.assertRegex(run_id, r"^\d{8}T\d{6}-[0-9a-f]{6}$")
+
+    def test_uniqueness(self) -> None:
+        """連続して生成した run_id が異なる（UUID部分で衝突しない）。"""
+        ids = [generate_run_id() for _ in range(10)]
+        self.assertEqual(len(set(ids)), 10)
+
+    def test_run_id_field_default_empty(self) -> None:
+        """SDKConfig.run_id のデフォルトは空文字列。"""
+        cfg = SDKConfig()
+        self.assertEqual(cfg.run_id, "")
+
+    def test_run_id_can_be_set(self) -> None:
+        """SDKConfig.run_id に任意の値を設定できる。"""
+        cfg = SDKConfig(run_id="20260413T000000-abc123")
+        self.assertEqual(cfg.run_id, "20260413T000000-abc123")
+
+
+# ---------------------------------------------------------------------------
+# run_improvement_loop の run_id 伝播テスト
+# ---------------------------------------------------------------------------
+
+
+class TestRunImprovementLoopRunId(unittest.TestCase):
+    """run_improvement_loop が run_id に基づいた work_dir を使用することを検証。"""
+
+    def test_run_id_in_work_dir_path(self) -> None:
+        """run_id が設定されている場合、内部解決された work_dir にそれが反映される。"""
+        cfg = SDKConfig(run_id="20260413T120000-test01")
+        captured_work_dir: dict[str, Path | None] = {"path": None}
+
+        def _capture_acquire_lock(work_dir: Path) -> bool:
+            captured_work_dir["path"] = work_dir
+            return False  # ロック失敗 → "locked" 早期リターン（ループ不要）
+
+        with patch("self_improve._acquire_lock", side_effect=_capture_acquire_lock):
+            result = run_improvement_loop(cfg)
+
+        # _acquire_lock が False を返した場合は "locked" で返る
+        self.assertEqual(result["stopped_reason"], "locked")
+        self.assertIsNotNone(captured_work_dir["path"])
+        self.assertIn(cfg.run_id, str(captured_work_dir["path"]))
+
+    def test_explicit_work_dir_overrides_run_id(self) -> None:
+        """work_dir を明示的に渡した場合は run_id よりも優先される。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            cfg = SDKConfig(run_id="20260413T120000-test02", dry_run=True)
+            result = run_improvement_loop(cfg, work_dir=work_dir)
+            # dry_run=True なので dry_run で返る
+            self.assertEqual(result["stopped_reason"], "dry_run")
 
 
 if __name__ == "__main__":

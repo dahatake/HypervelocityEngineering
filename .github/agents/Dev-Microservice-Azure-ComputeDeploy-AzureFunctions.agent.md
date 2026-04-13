@@ -1,37 +1,30 @@
 ---
 name: Dev-Microservice-Azure-ComputeDeploy-AzureFunctions
-description: サービスリストの全てのサービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う。AGENTS.mdのルールを守り、推測せず、根拠はリポジトリ内資料またはCLIヘルプ/実行結果で残す。AC検証によりAzureリソースの実在確認を必須とする。
+description: サービスリストの全てのサービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う。copilot-instructions.md のルールを守り、推測せず、根拠はリポジトリ内資料またはCLIヘルプ/実行結果で残す。AC検証によりAzureリソースの実在確認を必須とする。
 tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDeploy-AzureFunctions/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
-- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
-- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+## Agent 固有の Skills 依存
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `github-actions-cicd`：GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- `azure-region-policy`：Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # Role / Scope
 Azure Functions + GitHub Actions CI/CD + API smoke test実装専用Agent。
 
 # Inputs（既定の参照場所）
-- サービスリスト: `docs/service-list.md`
-- サービスカタログ: `docs/service-catalog.md`
+- サービスリスト: `docs/catalog/service-catalog.md`
+- サービスカタログ: `docs/catalog/service-catalog-matrix.md`
 - リソースグループ名: `{リソースグループ名}`
-- デプロイ対象コード: `api/{サービスID}-{サービス名}/`
-- アプリケーション一覧: `docs/app-list.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- デプロイ対象コード: `src/api/{サービスID}-{サービス名}/`
+- アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - リージョン: `azure-region-policy` Skill §1 標準リージョン優先順位に従う
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ※Issue割当後の追加コメントは見られない。追加要件が出たら **PRコメント**に書く運用にする。
 
 # Region Policy（固定ルール）
@@ -109,7 +102,7 @@ A) スクリプト作成
 - Functions デプロイ: Azure Functions 用公式 Action を利用（既存 Function App へデプロイ）
 
 ## C) サービスカタログ更新
-- `docs/service-catalog.md` の表に追記/更新
+- `docs/catalog/service-catalog-matrix.md` の表に追記/更新
   - 列: サービスID / マイクロサービス名 / Azureサービス名 / 種類 / URL / AzureリソースID / リージョン
 - **重複防止**：同一（サービスID + 種類）があれば更新、なければ追記
 - URL / AzureリソースID / リージョンは A-exec で取得・記録した値を使用する。Azure CLI 未実行の場合は `TBD（要確認）` と記載する
@@ -152,7 +145,7 @@ AC 検証の見積は DAG 合計に含めること（目安: 2〜3分）。
 | AC-4 | A-exec: 実行 | 必要な値（URL/Resource ID/リージョン）が取得・記録されている | `work-status` に全値が記載されていること | ✅/❌ |
 | AC-5 | B: CI/CD | GitHub Actions ワークフローが構文的に正しい | `.github/workflows/` の YAML を `actionlint`（利用可能なら）または `yamllint` で検証 | ✅/❌ |
 | AC-6 | B: CI/CD | 認証方式（OIDC または代替）が設定されている | ワークフロー YAML 内に `azure/login` + OIDC 設定があること。代替の場合は `infra/README.md` に採用理由が記載されていること | ✅/❌ |
-| AC-7 | C: カタログ | サービスカタログに対象サービスの行が存在する | `docs/service-catalog.md` に行が存在し、全7列が埋まっていること（`grep` / 目視） | ✅/❌ |
+| AC-7 | C: カタログ | サービスカタログに対象サービスの行が存在する | `docs/catalog/service-catalog-matrix.md` に行が存在し、全7列が埋まっていること（`grep` / 目視） | ✅/❌ |
 | AC-8 | C: カタログ | 重複行がない | 同一（サービスID + 種類）の行が複数存在しないこと（`sort | uniq -d` 等で確認） | ✅/❌ |
 | AC-9 | D: テスト | 自動スモークテストが存在する | `test/{サービスID}-{サービス名}/` にテストファイルが存在し、HTTP リクエスト→レスポンス検証のロジックが含まれること | ✅/❌ |
 | AC-10 | D: テスト | 手動UI が存在する | `test/{サービスID}-{サービス名}/` に HTML ファイルが存在し、入力フォーム・API呼び出し・結果表示の要素が含まれること | ✅/❌ |
@@ -199,7 +192,7 @@ AC 検証の見積は DAG 合計に含めること（目安: 2〜3分）。
 - 資格情報をハードコードしない。ログ/生成物に秘密情報を出さない。
 - `ac-verification.md` のセキュリティルールは `azure-ac-verification` Skill §3.4 に従う。
 
-# 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 - **実施タイミング**: AC 検証（上記）の完了後に実施する。AC 検証が NEEDS-VERIFICATION の場合でも、検証済みの範囲でレビューを実施する。
 
 ## 3つの異なる観点（Azure Functions デプロイCI/CD 固有）
@@ -208,7 +201,7 @@ AC 検証の見積は DAG 合計に含めること（目安: 2〜3分）。
 - **3回目：保守性・セキュリティ・堅牢性**：秘密情報がハードコードされていなく、べき等性が保証され、再実行に耐えられるか。`verify-azure-resources.sh` のパラメータがハードコードされていないか
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

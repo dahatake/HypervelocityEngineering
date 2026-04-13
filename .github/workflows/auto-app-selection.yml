@@ -243,6 +243,20 @@ jobs:
       # ----------------------------------------------------------------
       # 3. Issue body パース & Step Issue 生成
       # ----------------------------------------------------------------
+      - name: 成果物ディレクトリの事前作成
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          # 成果物ディレクトリの事前作成
+          mkdir -p docs/catalog
+          mkdir -p docs/batch
+          mkdir -p docs/batch/jobs
+          mkdir -p docs/services
+          mkdir -p docs/screen
+          mkdir -p docs/test-specs
+          mkdir -p docs/agent
+          mkdir -p docs/azure
+          mkdir -p docs/usecase
+
       - name: Issue 初期化とStep Issue 生成
         if: steps.gate.outputs.mode == 'initialize'
         env:
@@ -657,7 +671,7 @@ jobs:
 
           # 追加コメント抽出
           additional_comment = ""
-          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               additional_comment = m.group(1).strip()
               if additional_comment == "_No response_":
@@ -840,7 +854,7 @@ jobs:
 
           # ---- Step.1 ----
           if ! skip_step "1"; then
-            BODY_S1=$(printf '%s\n## 目的\nユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。\n\n## 入力\n- `docs/usecase-list.md`\n\n## 出力\n- `docs/app-list.md`\n\n## Custom Agent\n`Arch-ApplicationAnalytics`\n\n## 依存\n- なし（最初に実行）\n\n## 完了条件\n- `docs/app-list.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+            BODY_S1=$(printf '%s\n## 目的\nユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n\n## 出力\n- `docs/catalog/app-catalog.md`\n\n## Custom Agent\n`Arch-ApplicationAnalytics`\n\n## 依存\n- なし（最初に実行）\n\n## 完了条件\n- `docs/catalog/app-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.1: アプリケーションリストの作成" \
@@ -854,7 +868,7 @@ jobs:
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## 目的\nアプリケーションリスト（docs/app-list.md）の各APPに対し、個別の入力ファイル（docs/architecturally-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リストからアーキテクチャを選定する。\n\n## 入力\n- `docs/app-list.md`\n- `docs/architecturally-requirements-app-xx.md`（存在するもののみ）\n\n## 出力\n- `docs/app-arch-list.md`\n\n## 注意\n- 全APPの入力ファイルが揃っていなくても実行可能です\n- 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます\n- ユーザーが `docs/architecturally-requirements-app-xx.md` を作成する手順は users-guide/02-AppSelection.md の Step 2 を参照してください\n\n## Custom Agent\n`Arch-ArchitectureCandidateAnalyzer`\n\n## 依存\n- Step.1（アプリケーションリストの作成）が `aas:done` であること\n\n## 完了条件\n- `docs/app-arch-list.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+            BODY_S2=$(printf '%s\n## 目的\nアプリケーションリスト（docs/catalog/app-catalog.md）の各APPに対し、個別の入力ファイル（docs/architectural-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リストからアーキテクチャを選定する。\n\n## 入力\n- `docs/catalog/app-catalog.md`\n- `docs/architectural-requirements-app-xx.md`（存在するもののみ）\n\n## 出力\n- `docs/catalog/app-arch-catalog.md`\n\n## 注意\n- 全APPの入力ファイルが揃っていなくても実行可能です\n- 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます\n- ユーザーが `docs/architectural-requirements-app-xx.md` を作成する手順は users-guide/02-app-architecture-design.md の Step 2 を参照してください\n\n## Custom Agent\n`Arch-ArchitectureCandidateAnalyzer`\n\n## 依存\n- Step.1（アプリケーションリストの作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/app-arch-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.2: ソフトウェアアーキテクチャの推薦" \
@@ -1369,7 +1383,7 @@ jobs:
               else
                 echo "Step.2 が存在しません。フェーズ1完了。"
                 add_label "${ROOT_ISSUE}" "aas:done"
-                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーション選定）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
+                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーションアーキテクチャ設計）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
               fi
               ;;
 
@@ -1377,7 +1391,7 @@ jobs:
               # Step.2 完了 → Root Issue に aas:done + 完了コメント
               add_label "${ROOT_ISSUE}" "aas:done"
               echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-              post_comment "${ROOT_ISSUE}" "🎉 フェーズ1（アプリケーション選定）の全ステップが完了しました！\n\n**成果物:**\n- \`docs/app-list.md\` — アプリケーションリスト\n- \`docs/app-arch-list.md\` — アーキテクチャ選定結果\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
+              post_comment "${ROOT_ISSUE}" "🎉 フェーズ1（アプリケーションアーキテクチャ設計）の全ステップが完了しました！\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\` — アプリケーションリスト\n- \`docs/catalog/app-arch-catalog.md\` — アーキテクチャ選定結果\n\nフェーズ2（アプリケーション設計）を実行するには、**App Design** Issue を別途作成してください。"
               echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
               ;;
 

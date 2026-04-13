@@ -52,7 +52,7 @@
   {
     "name": "split-mode",
     "color": "D93F0B",
-    "description": "split mode PR (AGENTS.md section 2.2 SPLIT_REQUIRED)"
+    "description": "split mode PR (copilot-instructions.md §2 SPLIT_REQUIRED)"
   },
   {
     "name": "plan-only",

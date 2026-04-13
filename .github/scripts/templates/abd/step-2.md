@@ -5,7 +5,7 @@
 ## 入力
 - `docs/batch/batch-domain-analytics.md`
 - `docs/batch/batch-data-source-analysis.md`
-- `docs/data-model.md`
+- `docs/catalog/data-model.md`
 
 ## 出力
 - `docs/batch/batch-data-model.md`

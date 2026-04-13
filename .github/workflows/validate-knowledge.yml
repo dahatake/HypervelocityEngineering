@@ -3,14 +3,14 @@ name: Validate knowledge/ Files
 on:
   pull_request:
     paths:
-      - "knowledge/D??-*.md"
+      - "knowledge/D[0-9][0-9]-*.md"
       - ".github/scripts/validate-knowledge-files.py"
       - ".github/workflows/validate-knowledge.yml"
   push:
     branches:
       - main
     paths:
-      - "knowledge/D??-*.md"
+      - "knowledge/D[0-9][0-9]-*.md"
       - ".github/scripts/validate-knowledge-files.py"
       - ".github/workflows/validate-knowledge.yml"
   workflow_dispatch:

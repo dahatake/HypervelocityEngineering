@@ -3,7 +3,7 @@
 データサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。
 
 ## 入力
-- `docs/azure/AzureServices-data.md`
+- `docs/azure/azure-services-data.md`
 - `docs/batch/batch-service-catalog.md`
 - `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）
 

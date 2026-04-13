@@ -5,20 +5,16 @@ tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDeploy/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+## Agent 固有の Skills 依存
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 0.1) スコープ
-- `docs/azure/AzureServices-services-additional.md` を根拠に、追加Azureサービスを **Azure CLI で冪等に作成**する。
+- `docs/azure/azure-services-additional.md` を根拠に、追加Azureサービスを **Azure CLI で冪等に作成**する。
 - 作成結果（resourceId / endpoint / region など）を安定に取得し、以下を更新する：
-  - `docs/service-catalog.md`
+  - `docs/catalog/service-catalog-matrix.md`
   - `{WORK}`（計画・根拠・成果物）
 
 ## 1) 入力（不足があれば最初に1回だけ確認）
@@ -27,8 +23,8 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - （任意だが推奨）`subscription` / `tenant` / 優先リージョン / 命名規則
 
 根拠ファイル（必読）：
-- `docs/azure/AzureServices-services-additional.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/azure/azure-services-additional.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -36,10 +32,7 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
 - `knowledge/D20-セキュア設計-実装ガードレール.md` — セキュア設計・実装ガードレール
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づく追加サービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## 2) 成果物（必ずこの場所へ）
 
 ### インフラ（Azure CLIスクリプト）
@@ -62,15 +55,15 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - 結果を `{WORK}artifacts/cli-evidence.md` に記録する（後続の AC 検証で参照するため）。
 - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）。
 - 未ログイン・権限不足・CLI未導入などで実行不能なら、**実行はしない**。
-  - 代わりに「ユーザーが実行する手順」と「前提条件」を README と `{WORK}plan.md` に残す。
+  - 代わりに「ユーザーが実行する手順」と「前提条件」を `infra/README.md` と `{WORK}plan.md` に残す。
 
 ### 3.2 Plan（実装前に必須）
-`docs/azure/AzureServices-services-additional.md` から「作成対象サービス一覧」を抽出し、
+`docs/azure/azure-services-additional.md` から「作成対象サービス一覧」を抽出し、
 `{WORK}contracts/additional-services.md` に固定する（後続Subが迷わないため）。
 
 その上で `{WORK}plan.md` を作成する（詳細は skills を使う）：
-- `.github/skills/task-dag-planning/SKILL.md`
-- `.github/skills/work-artifacts-layout/SKILL.md`
+- `.github/skills/planning/task-dag-planning/SKILL.md`
+- `.github/skills/planning/work-artifacts-layout/SKILL.md`
 
 #### 3.2.1 受け入れ条件（AC）の定義（plan.md 内に必須）
 
@@ -83,11 +76,11 @@ Issue に AC が部分的に記載されている場合は、Issue の AC を優
 | # | AC 項目 | 重要度 |
 |---|---------|--------|
 | **AC-1** | **スクリプト実行後に、Microsoft Azure 上に作成すべき全リソースが実際に作成されていること**（`az resource show` 等で `provisioningState: Succeeded` を確認） | **最重要** |
-| AC-2 | `docs/azure/AzureServices-services-additional.md` に記載された全サービスに対応するスクリプトが存在する（1スクリプトが複数サービスを扱う場合も可） | 必須 |
+| AC-2 | `docs/azure/azure-services-additional.md` に記載された全サービスに対応するスクリプトが存在する（1スクリプトが複数サービスを扱う場合も可） | 必須 |
 | AC-3 | 各スクリプトが冪等パターン（存在確認→作成/更新→結果取得）を実装している | 必須 |
 | AC-4 | `created-resources.json` に全作成リソースの情報が記録されている（`resourceId` / `region` は必須。`endpoint` はサービスが提供する場合のみ） | 必須 |
-| AC-5 | `docs/service-catalog.md` が更新され、重複行がない | 必須 |
-| AC-6 | README.md に実行手順と前提条件が記載されている | 必須 |
+| AC-5 | `docs/catalog/service-catalog-matrix.md` が更新され、重複行がない | 必須 |
+| AC-6 | `infra/README.md` に実行手順と前提条件が記載されている | 必須 |
 | AC-7 | 秘密情報（鍵・トークン・パスワード等）が成果物に含まれていない | 必須 |
 | AC-8 | 破壊的変更（削除/置換）が行われていない | 必須 |
 
@@ -130,36 +123,38 @@ AC 検証時間の見積目安：
 
 ## 4) ドキュメント更新（冪等・重複禁止）
 ### 4.1 service-catalog.md
-`docs/service-catalog.md` の表を更新する（重複行は作らない）。
+`docs/catalog/service-catalog-matrix.md` の表を更新する（重複行は作らない）。
 - 列（固定）：サービスID | サービス名 | Azureのサービス名 | 機能名 | 機能の種類 | AzureサービスのURL | リージョン
 - "根拠"は近くに1行だけ（例：参照ファイルパス、endpoint取得コマンド）
 
-### 4.2 README.md
-最小追記だけ：
+### 4.2 infra/README.md
+`infra/README.md` に最小追記だけ：
 - 追加サービスの目的（1〜3行）
 - 実行手順（prep → create、前提条件）
 - 注意（資格情報は出力しない / リージョン差 / 再実行）
 
+> ⚠️ **ルートの `/README.md` は変更しないこと。** インフラ手順は `infra/README.md` に集約する。
+
 ## 5) 大量生成・巨大出力になりそうなとき
-- 生成物/抽出が巨大になりそうなら `.github/skills/large-output-chunking/SKILL.md` を使い、
+- 生成物/抽出が巨大になりそうなら `.github/skills/output/large-output-chunking/SKILL.md` を使い、
   `{WORK}artifacts/<name>.index.md` + `part-0001.md...` で分割する。
 
-## 6) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 6) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 6.2 3つの異なる観点（Azure 追加サービスデプロイ固有）
-- **1回目：機能完全性・要件達成度**：AGENTS.md の要件（冪等性、秘密情報無し、破壊的変更無し）がすべて満たされ、service-catalog が更新されているか。§3.2.1 の AC 一覧を参照し、AC-2〜AC-8 を事前確認する。
-- **2回目：ユーザー視点・実行可能性**：README の手順が明確で、前提条件が正確で、環境がない場合の代替手段が示されているか
+- **1回目：機能完全性・要件達成度**：copilot-instructions.md の要件（冪等性、秘密情報無し、破壊的変更無し）がすべて満たされ、service-catalog が更新されているか。§3.2.1 の AC 一覧を参照し、AC-2〜AC-8 を事前確認する。
+- **2回目：ユーザー視点・実行可能性**：`infra/README.md` の手順が明確で、前提条件が正確で、環境がない場合の代替手段が示されているか
 - **3回目：保守性・スケーラビリティ・信頼性**：スクリプトが冪等で、リトライ対応があり、cli-evidence に根拠が残り、再実行に耐えられるか
 
 ### 6.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ## 7) 受け入れ条件（AC）の検証と完了判定（必須 — 本 Agent 固有セクション）
 
-> **位置付け**: AGENTS.md §7（最終品質レビュー）とは別の、本 Agent 固有の最終ゲート。
+> **位置付け**: Skill adversarial-review（最終品質レビュー）とは別の、本 Agent 固有の最終ゲート。
 > §6 の品質レビュー完了後に実行する。本セクションを通過しない限り PR を完了（Ready for Review）にしない。
 >
-> **分割モード時の扱い**: AGENTS.md §2.3（分割モード）に入った場合、本セクションはスキップする（実装が存在しないため検証対象がない）。
+> **分割モード時の扱い**: Skill task-dag-planning（分割モード）に入った場合、本セクションはスキップする（実装が存在しないため検証対象がない）。
 
 ### 7.1 AC 検証の実施（§6 完了後に必ず実行）
 
@@ -181,8 +176,8 @@ AC 検証時間の見積目安：
 | AC-2 | `contracts/additional-services.md` の各サービスに対応するスクリプトファイルの存在確認 |
 | AC-3 | §6 レビュー1回目の結果を引用（冪等パターンの実装確認） |
 | AC-4 | `created-resources.json` の JSON 構造を読み取り、全リソースに `resourceId` / `region` があることを確認 |
-| AC-5 | `docs/service-catalog.md` を読み取り、追加行の存在と重複なしを確認 |
-| AC-6 | README.md に実行手順セクションが存在することを確認 |
+| AC-5 | `docs/catalog/service-catalog-matrix.md` を読み取り、追加行の存在と重複なしを確認 |
+| AC-6 | `infra/README.md` に実行手順セクションが存在することを確認 |
 | AC-7 | §6 レビュー1回目の結果を引用。追加で成果物全体に対し秘密情報パターン（`password`, `secret`, `key=`, Bearer トークン等）の grep を実施 |
 | AC-8 | §6 レビュー1回目の結果を引用（破壊的変更がないことの確認） |
 
@@ -199,7 +194,7 @@ AC 検証時間の見積目安：
 
 ### 7.4 PR description への反映（必須）
 
-AGENTS.md §6 の PR 必須記載（目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub）の `検証結果` に、以下を統合して記載する：
+§6 の PR 必須記載（目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub）の `検証結果` に、以下を統合して記載する：
 - AC-1 の結果を最初に明記（PASS / FAIL / ⏳（手動実行待ち））
 - 完了判定結果（PASS / NEEDS-VERIFICATION / FAIL）
 - 詳細は `ac-verification.md` を参照する旨のリンク

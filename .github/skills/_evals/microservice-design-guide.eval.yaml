@@ -1,0 +1,51 @@
+skill: microservice-design-guide
+skill_path: .github/skills/planning/microservice-design-guide/SKILL.md
+description: マイクロサービスの設計ガイドを提供する。サービス定義・API 設計・境界コンテキストとの対応・デプロイ単位の決定手順を定義する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: service-definition-document
+    input: "SVC-10 AI CS Support のサービス定義書を作成してほしい。API 設計、データモデル、セキュリティを含めて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/microservice-definition.md を参照してサービス定義書テンプレートを使用する"
+    reason: "USE FOR: microservice design, service definition に該当する"
+
+  - id: service-boundary-decision
+    input: "会員管理と注文管理をどこでサービス境界を分けるべきか判断してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Bounded Context との対応に基づきサービス境界を決定する"
+    reason: "USE FOR: service boundary decision, bounded context mapping に該当する"
+
+  - id: api-design-pattern-reference
+    input: "マイクロサービスの REST API 設計パターンを参照して SVC-05 の API を設計したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/microservice-definition.md の API 設計セクションを参照する"
+    reason: "USE FOR: API design, service definition に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-batch-design
+    input: "月次ポイント集計バッチのジョブ設計書を作成してほしい"
+    expected_trigger: false
+    expected_skill: "batch-design-guide"
+    reason: "DO NOT USE FOR: batch design (use batch-design-guide) に該当する"
+
+  - id: not-for-microservice-implementation
+    input: "SVC-10 の function_app.py を Python で実装してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: microservice implementation に該当する。実装は Dev-Microservice-Azure-ServiceCoding 系 Agent が担当"
+
+  # --- エッジケース ---
+  - id: edge-deployment-unit-decision
+    input: "SVC-10 と SVC-15 を同じ Azure Functions App にデプロイするか、別々にするか判断してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "デプロイ単位の決定はマイクロサービス設計の範囲内。サービス境界と責務分離の観点から判断する"
+    reason: "USE FOR: deployment unit decision に該当するエッジケース"

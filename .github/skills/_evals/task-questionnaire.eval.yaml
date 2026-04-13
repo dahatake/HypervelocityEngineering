@@ -1,0 +1,66 @@
+# .github/skills/_evals/task-questionnaire.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: task-questionnaire
+skill_path: .github/skills/planning/task-questionnaire/SKILL.md
+description: タスクの不明点を洗い出し、選択式の質問票を作成するスキル。PR連携モードと非PR連携モードの2つの動作モードを持つ。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: pr-assignment-context-review
+    input: "PR にアサインされました。Issue の要件を確認して質問票を作成してください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "qa/ 配下に質問票ファイルが生成されること（§1.1 PR連携モード）"
+      - type: content_contains
+        detail: "選択式の質問項目が含まれること"
+    reason: "SKILL.md の WHEN に 'PR にアサインされた', 'コンテキスト収集が必要' が明示されており、PR連携時の質問票作成はトリガー条件に該当する"
+
+  - id: requirements-clarification
+    input: "このタスクの要件が曖昧なので、不明点を整理するための質問票を作成してください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "qa/ 配下に質問票ファイルが生成されること（§1.2 非PR連携モード）"
+      - type: content_contains
+        detail: "タスクの前提条件・技術仕様・スコープに関する選択式質問が含まれること"
+    reason: "SKILL.md の USE FOR に 'requirements clarification', 'questionnaire creation' が明示されており、要件確認依頼は典型的なトリガー"
+
+  - id: auto-context-review-flag
+    input: "<!-- auto-context-review: true --> が設定された PR のコンテキスト収集を行ってください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "コンテキストが十分でも設計判断・技術選定・スコープの確認質問が強制作成されること"
+    reason: "SKILL.md に 'auto-context-review: true が指定されている場合、コンテキストが十分でも強制的に質問票を作成する' と明示されている"
+
+  - id: context-gathering-before-implementation
+    input: "新機能の実装を始める前に、前提条件や技術選定を確認したいです。ヒアリングシートを作ってください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "qa/ 配下にヒアリングシートが生成されること"
+    reason: "SKILL.md の WHEN に 'ヒアリングシートを作りたい', '要件定義の抜け漏れを確認したい' が明示されている"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: dag-planning-request
+    input: "タスクの依存関係を DAG で整理して plan.md を作成してください。"
+    expected_trigger: false
+    expected_skill: task-dag-planning
+    reason: "SKILL.md の DO NOT USE FOR に 'DAG planning (use task-dag-planning)' が明示されており、計画作成は task-dag-planning が担当"
+
+  - id: implementation-request
+    input: "Azure Functions の関数コードを実装してください。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "SKILL.md の DO NOT USE FOR に 'implementation' が明示されており、実装依頼は対象外"
+
+  # --- エッジケース ---
+  - id: ambiguous-context-enough-or-not
+    input: "Issue の内容を読みました。実装を始めてください。"
+    expected_trigger: false
+    reason: "入力の主眼が質問票作成や要件明確化ではなく実装開始の指示であり、SKILL.md の DO NOT USE FOR に明記された 'implementation' に該当するため、task-questionnaire の対象外。"

@@ -332,7 +332,7 @@ jobs:
 
           # 追加コメント抽出
           additional_comment = ""
-          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               additional_comment = m.group(1).strip()
               if additional_comment == "_No response_":
@@ -490,7 +490,7 @@ jobs:
 
           # ---- Step.1.1: データサービス選定 ----
           if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
-            BODY_S11=$(printf '%s\n## 目的\nバッチジョブ設計書・サービスカタログを根拠に、データ系 Azure サービスの選定と設計を行う。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）\n\n## 出力\n- `docs/azure/AzureServices-data.md`（データストア設計）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- 依存なし（最初の Step）\n\n## 完了条件\n- `docs/azure/AzureServices-data.md` が作成または更新されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S11=$(printf '%s\n## 目的\nバッチジョブ設計書・サービスカタログを根拠に、データ系 Azure サービスの選定と設計を行う。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）\n\n## 出力\n- `docs/azure/azure-services-data.md`（データストア設計）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- 依存なし（最初の Step）\n\n## 完了条件\n- `docs/azure/azure-services-data.md` が作成または更新されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S11_RESP=$(create_issue \
               "[ABDV] Step.1.1: データサービス選定" \
@@ -506,7 +506,7 @@ jobs:
 
           # ---- Step.1.2: Azure リソース Deploy ----
           if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
-            BODY_S12=$(printf '%s\n## 目的\nデータサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。\n\n## 入力\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）\n\n## 出力\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- Step.1.1（データサービス選定）が `abdv:done` であること\n\n## 完了条件\n- Azure データ系リソースが作成/確認されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S12=$(printf '%s\n## 目的\nデータサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。\n\n## 入力\n- `docs/azure/azure-services-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）\n\n## 出力\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- Step.1.1（データサービス選定）が `abdv:done` であること\n\n## 完了条件\n- Azure データ系リソースが作成/確認されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S12_RESP=$(create_issue \
               "[ABDV] Step.1.2: Azure データリソース Deploy" \
@@ -544,7 +544,7 @@ jobs:
 
           # ---- Step.2.2: TDD GREEN: 本実装 ----
           if [[ ! " ${SKIP_STEPS} " =~ " 2 " ]]; then
-            BODY_S22=$(printf '%s\n## 目的\nテストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。\n\n## 入力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/`（テストコード）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）\n- `docs/azure/AzureServices-data.md`（データストア接続情報）\n\n## 出力\n- `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード\n\n## Custom Agent\n`Dev-Batch-ServiceCoding` を使用\n\n## 依存\n- Step.2.1（TDD RED: テストコード作成）が `abdv:done` であること\n\n## 完了条件\n- `dotnet test` が全テスト PASS（TDD GREEN）になっている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S22=$(printf '%s\n## 目的\nテストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。\n\n## 入力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/`（テストコード）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）\n- `docs/azure/azure-services-data.md`（データストア接続情報）\n\n## 出力\n- `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード\n\n## Custom Agent\n`Dev-Batch-ServiceCoding` を使用\n\n## 依存\n- Step.2.1（TDD RED: テストコード作成）が `abdv:done` であること\n\n## 完了条件\n- `dotnet test` が全テスト PASS（TDD GREEN）になっている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S22_RESP=$(create_issue \
               "[ABDV] Step.2.2: TDD GREEN — バッチジョブ本実装" \
@@ -568,7 +568,7 @@ jobs:
             else
               _S3_DEP="依存なし（Step.1 / Step.2 がスキップされたため）"
             fi
-            BODY_S3=$(printf '%s\n## 目的\nバッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。\n\n## 入力\n- `src/` または `functions/` 配下の本実装コード\n- `docs/azure/AzureServices-data.md`（データストア設計）\n- `docs/batch/batch-service-catalog.md`（サービスカタログ）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）\n- `docs/azure/AzureServices-services.md`（コンピュート設計: 存在する場合のみ参照）\n\n## 出力\n- Azure Functions / コンテナのデプロイ完了\n- CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト: バッチリソース作成）\n- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI スクリプト: バッチリソース検証）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- バッチジョブが Azure 上で稼働している\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S3=$(printf '%s\n## 目的\nバッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。\n\n## 入力\n- `src/` または `functions/` 配下の本実装コード\n- `docs/azure/azure-services-data.md`（データストア設計）\n- `docs/batch/batch-service-catalog.md`（サービスカタログ）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）\n- `docs/azure/azure-services-compute.md`（コンピュート設計: 存在する場合のみ参照）\n\n## 出力\n- Azure Functions / コンテナのデプロイ完了\n- CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト: バッチリソース作成）\n- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI スクリプト: バッチリソース検証）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- バッチジョブが Azure 上で稼働している\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${_S3_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S3_RESP=$(create_issue \
               "[ABDV] Step.3: Azure Functions/コンテナ Deploy" \
@@ -594,7 +594,7 @@ jobs:
             else
               _S41_DEP="依存なし（前段 Step がスキップされたため）"
             fi
-            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みの Azure リソース構成を Azure Well-Architected Framework（WAF）5本柱で評価する。\n\n## 入力\n- デプロイ済みの Azure リソース（Azure Portal / CLI で確認）\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: WAF「運用の優秀性」柱の根拠）\n- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）\n\n## 出力\n- WAF レビューレポート（`docs/azure/waf-review.md`）\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- `docs/azure/waf-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みの Azure リソース構成を Azure Well-Architected Framework（WAF）5本柱で評価する。\n\n## 入力\n- デプロイ済みの Azure リソース（Azure Portal / CLI で確認）\n- `docs/azure/azure-services-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: WAF「運用の優秀性」柱の根拠）\n- `docs/azure/azure-services-compute.md`（存在する場合のみ参照）\n\n## 出力\n- WAF レビューレポート（`docs/azure/waf-review.md`）\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- `docs/azure/waf-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${_S41_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S41_RESP=$(create_issue \
               "[ABDV] Step.4.1: WAF レビュー" \
@@ -610,7 +610,7 @@ jobs:
 
           # ---- Step.4.2: 整合性チェック ----
           if [[ ! " ${SKIP_STEPS} " =~ " 4 " ]]; then
-            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、設計書との整合性を確認する。\n\n## 入力\n- `docs/azure/AzureServices-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ダッシュボード設定の整合確認）\n- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）\n\n## 出力\n- 整合性チェックレポート（`docs/azure/dependency-review.md`）\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.4.1 と同じ前段 Step が `abdv:done` であること（Step.3 → 並列起動）\n\n## 完了条件\n- `docs/azure/dependency-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、設計書との整合性を確認する。\n\n## 入力\n- `docs/azure/azure-services-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ダッシュボード設定の整合確認）\n- `docs/azure/azure-services-compute.md`（存在する場合のみ参照）\n\n## 出力\n- 整合性チェックレポート（`docs/azure/dependency-review.md`）\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.4.1 と同じ前段 Step が `abdv:done` であること（Step.3 → 並列起動）\n\n## 完了条件\n- `docs/azure/dependency-review.md` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S42_RESP=$(create_issue \
               "[ABDV] Step.4.2: 整合性チェック" \

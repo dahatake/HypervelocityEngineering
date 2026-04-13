@@ -5,23 +5,17 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Batch-JobCatalog/Issue-<識別子>/`
 
-## 0) 共通ルール
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## Agent 固有の Skills 依存
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチジョブ設計カタログ作成専用Agent。
 バッチ処理ドメイン分析・データソース分析・データモデルを根拠に、ジョブ分解・依存関係 DAG・スケジュール定義・リトライ戦略・エラーハンドリング方針・チェックポイント設計・並列処理戦略を **1ファイル** にまとめる。
 コード実装は範囲外（`{WORK}` 配下の計画メモのみ可）。
 
-**注意**: 本書の「ジョブ依存関係 DAG」はデータ処理の実行順序を定義するものであり、AGENTS.md の「タスク計画 DAG」（Copilot の作業分割）とは別概念です。混同しないでください。
+**注意**: 本書の「ジョブ依存関係 DAG」はデータ処理の実行順序を定義するものであり、Skill task-dag-planning の「タスク計画 DAG」（Copilot の作業分割）とは別概念です。混同しないでください。
 
 ## 2) 入力・出力
 
@@ -33,7 +27,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 2.2 参照（任意・必要最小限）
 
-- `docs/usecase-list.md`（存在する場合）
+- `docs/catalog/use-case-catalog.md`（存在する場合）
 
 ### 2.3 出力（必須）
 
@@ -68,12 +62,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.2 計画・分割
 
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Execution（Split Mode でない場合のみ）
 
-1. 入力3ファイルを `read` する。`docs/usecase-list.md` が存在する場合も `read` して参照する。
+1. 入力3ファイルを `read` する。`docs/catalog/use-case-catalog.md` が存在する場合も `read` して参照する。
 2. 出力ディレクトリ `docs/batch/` が存在しない場合は作成する。
 3. Job-ID は `JOB-{連番3桁}`（例：`JOB-001`）で採番する。
 4. `docs/batch/batch-job-catalog.md` を以下のチャンク方式で作成する：
@@ -121,7 +115,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 `large-output-chunking` Skill §3 に従う。分割粒度: §5 の出力セクション単位。
 
-## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 7.2 3つの異なる観点（バッチジョブ設計カタログ固有）
 
@@ -130,4 +124,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・安全性**：チェックポイント設計が全ジョブに定義され、エラーハンドリング方針の根拠が妥当で、TBD 運用が適切か
 
 ### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

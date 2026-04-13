@@ -167,7 +167,7 @@ cd .github/scripts/powershell
 
 | ID | 名称 | ステップ数 |
 |----|------|-----------|
-| `aas` | App Selection | 2 |
+| `aas` | App Architecture Design | 2 |
 | `aad` | App Design | 16 |
 | `asdw` | App Dev (Microservice Azure) | 24 |
 | `abd` | Batch Design | 9 |

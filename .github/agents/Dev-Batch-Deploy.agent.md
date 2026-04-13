@@ -5,16 +5,14 @@ tools: ["*"]
 ---
 > **WORK**: `work/Dev-Batch-Deploy/Issue-<識別子>/`
 
-## 0) 共通ルール
-
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 ## 1) 役割（このエージェントがやること）
 
 バッチジョブ デプロイ & CI/CD 構築専用Agent。
 バッチサービスカタログ・ジョブカタログ・ジョブ詳細仕様書を根拠に、
 **Azure リソース作成スクリプト**・**GitHub Actions CI/CD ワークフロー**・**スモークテスト** を整備する。
-"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら AGENTS.md の分割ルールで別タスク化）。
+"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 ## 2) 変数
 
@@ -86,8 +84,8 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 ### 6.1 計画・分割
 
 - `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
-- AGENTS.md §2 に従い分割要否を判定する。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従い分割要否を判定する。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 6.2 ステップ A: Azure 作成スクリプト作成
 
@@ -176,7 +174,7 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 - `infra/azure/batch/README.md` に手順・環境変数・トラブルシューティングが記載されている。
 - 作業ログが更新されている。
 
-## 10) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 10) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 10.1 3つの異なる観点（このエージェント固有）
 
@@ -185,18 +183,10 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 - **3回目：保守性・セキュリティ・コンプライアンス**：スクリプトの可読性と再利用性、パラメータのハードコードがないか、最小権限原則が守られているか（マネージド ID 優先）、既存の `infra/azure/` パターンとの一貫性
 
 ### 10.2 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
-## Skills 参照
-
-- `azure-cli-deploy-scripts`: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- `github-actions-cicd`: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
-- `azure-region-policy`: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
-- `azure-ac-verification`: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
-- `task-dag-planning`: 計画・分割が必要な場合（ジョブ数が多い、15分超の見込みがある場合）に参照する。
-- `work-artifacts-layout`: `{WORK}` の構造を整備する際に参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `github-actions-cicd`：GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- `azure-region-policy`：Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。

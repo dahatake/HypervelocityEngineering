@@ -5,15 +5,11 @@ tools: ["*"]
 ---
 > **WORK**: `work/QA-AzureArchitectureReview/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 目的は **レビュー（読み取り＋レポート生成）**。明示依頼が無い限り **Azureリソース変更はしない**（delete/update/apply 等の破壊・変更操作は禁止）。
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid 記法指針）を参照する。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
 
@@ -22,13 +18,13 @@ tools: ["*"]
   - または サブスクリプション/範囲: `{subscriptionOrScope}`（RGが複数の場合）
 - 参考ドキュメント（存在する範囲で）:
   - `docs/usecase-detail.md`
-  - `docs/service-catalog.md`
-  - `docs/azure/AzureServices-services.md`
-  - `docs/azure/AzureServices-data.md`
-  - `docs/azure/AzureServices-services-additional.md`
-  - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+  - `docs/catalog/service-catalog-matrix.md`
+  - `docs/azure/azure-services-compute.md`
+  - `docs/azure/azure-services-data.md`
+  - `docs/azure/azure-services-additional.md`
+  - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 出力先（固定）:
-  - `docs/azure/Azure-ArchitectureReview-Report.md`
+  - `docs/azure/azure-architecture-review-report.md`
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -38,9 +34,7 @@ tools: ["*"]
 - `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` — ソフトウェアアーキテクチャ・ADR
 - `knowledge/D20-セキュア設計-実装ガードレール.md` — セキュア設計・実装ガードレール
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で関連する Azure リソース/サービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全リソース対象（後方互換）
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 
 ## 2) 事前ゲート（最優先）
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する（同時に「暫定仮定」も短く併記）。
@@ -48,11 +42,9 @@ tools: ["*"]
   - 利用できない場合：レビュー本体は中断し、`{WORK}README.md` に「不足している前提（必要なMCP設定/権限/接続）」と「次に必要なアクション」を出力して終了する。
 
 ## 3) 計画（必須）
-- `AGENTS.md` に従い、実行前に `{WORK}plan.md` を作成する。
+- `Skill task-dag-planning` に従い、実行前に `{WORK}plan.md` を作成する。
 - DAG（依存関係）＋各ノードの概算（分）を付与する。
-- 合計が **15分超** または不確実性が高い場合：
-  - `{WORK}subissues.md` を作成し、**実行（レポート生成）には入らない**（分割Promptの作成に専念）。
-  - 分割後は「最初のSub 1つだけ」を実装対象にする（1タスク=1PR）。
+> 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
 ## 4) 実行（Planが15分以内のときのみ）
 ### 4.1 ドキュメント読解
@@ -89,9 +81,9 @@ tools: ["*"]
 - 各案に「メリット/デメリット/工数（S/M/L）/影響範囲」を書き、推奨案を1つ示す。
 
 ## 5) 出力（Markdown固定）
-- 出力先：`docs/azure/Azure-ArchitectureReview-Report.md`
+- 出力先：`docs/azure/azure-architecture-review-report.md`
 - 書き込み後に再読込して 0文字でないことを確認する。
-- 巨大出力になりそうな場合は `AGENTS.md` と `large-output-chunking` に従って分割して保存する。
+- 巨大出力になりそうな場合は `large-output-chunking` スキルに従って分割して保存する。
 
 ### レポート構成（固定）
 1. タイトル / 対象 / 前提・制約（権限・取得不可範囲）
@@ -107,7 +99,7 @@ tools: ["*"]
 - 途中経過のファイル乱立は避け、最終成果物は上記レポートに集約する。
 - ただし `{WORK}` は「根拠・棚卸し・実行記録」として残す（後続のSubや再実行のため）。
 
-## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 7.2 3つの異なる観点（Azure アーキテクチャレビューの場合）
 - **1回目：レビュー完全性・妥当性**：すべてのリソースが棚卸しされているか、Well-Architected Framework の5本柱がすべてカバーされているか、Azure Security Benchmark v3 に基づく指摘は網羅的か、各推奨の根拠（Microsoft Learn参照）は正確か、複数案が必要な場合に提示されているか
@@ -115,4 +107,4 @@ tools: ["*"]
 - **3回目：保守性・再現性・拡張性**：レビュー手順が再現可能か、新しいリソース追加時の更新方法が明確か、中間成果物（{WORK} の notes・inventory）の記録は十分か、参照リンク（Microsoft Learn）の正確性・最新性、権限不足・取得不可範囲の明記の有無
 
 ### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

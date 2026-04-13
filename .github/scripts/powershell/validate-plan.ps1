@@ -114,12 +114,12 @@ function script:ValidatePlan {
 
     # Rule 1: estimate > 15 must be SPLIT_REQUIRED
     if ($estimate -gt 15 -and $decision -eq 'PROCEED') {
-        $errors += "${PlanPath}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per AGENTS.md §2.2"
+        $errors += "${PlanPath}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2"
     }
 
     # Rule 2: SPLIT_REQUIRED must not have implementation files
     if ($decision -eq 'SPLIT_REQUIRED' -and $implFiles -eq 'true') {
-        $errors += "${PlanPath}: split_decision=SPLIT_REQUIRED but implementation_files=true. Per AGENTS.md §2.3, implementation files are prohibited in split mode."
+        $errors += "${PlanPath}: split_decision=SPLIT_REQUIRED but implementation_files=true. Per Skill task-dag-planning §2.3, implementation files are prohibited in split mode."
     }
 
     # Rule 3: SPLIT_REQUIRED must have subissues.md in same directory

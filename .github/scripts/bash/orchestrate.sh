@@ -34,7 +34,7 @@ _TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
 # ---------------------------------------------------------------------------
 
 declare -A _WORKFLOW_DISPLAY_NAMES=(
-  [aas]="App Selection"
+  [aas]="App Architecture Design"
   [aad]="App Design"
   [asdw]="App Dev Microservice Azure"
   [abd]="Batch Design"
@@ -106,7 +106,7 @@ _build_additional_section() {
 _build_app_id_section() {
   local app_id="${1:-}"
   [[ -z "${app_id}" ]] && return 0
-  printf '\n\n## 対象アプリケーション\n- APP-ID: `%s`\n- この Step では APP-ID `%s` に関連するサービス/エンティティ/画面のみを対象とする\n- `docs/app-list.md` を参照し、対象 APP-ID に紐づく項目を特定する\n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む' "${app_id}" "${app_id}"
+  printf '\n\n## 対象アプリケーション\n- APP-ID: `%s`\n- この Step では APP-ID `%s` に関連するサービス/エンティティ/画面のみを対象とする\n- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む' "${app_id}" "${app_id}"
 }
 
 _build_rg_section() {

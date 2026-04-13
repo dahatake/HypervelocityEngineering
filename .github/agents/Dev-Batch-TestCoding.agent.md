@@ -5,9 +5,7 @@ tools: ["*"]
 ---
 > **WORK**: `work/Dev-Batch-TestCoding/Issue-<識別子>/`
 
-## 0) 共通ルール
-
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 ## 1) 役割（このエージェントがやること）
 
@@ -86,8 +84,8 @@ tools: ["*"]
 
 ### 5.3 計画・分割
 
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: テストケース種別単位（§2 通常テスト → §3.1 冪等性 → §3.2〜§3.6 その他バッチ固有）
 
 ### 5.4 テストコード生成（RED 状態）
@@ -128,7 +126,7 @@ tools: ["*"]
 - 各テストメソッドに出典コメントが付与されている（トレーサビリティ）。
 - 作業ログと README が更新されている。
 
-## 9) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 9.1 3つの異なる観点（このエージェント固有）
 
@@ -137,14 +135,6 @@ tools: ["*"]
 - **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性、Azurite/Testcontainers の設定が再現可能か
 
 ### 9.2 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
-## Skills 参照
-
-- `task-dag-planning`: 計画・分割が必要な場合（テストクラス数が多い、15分超の見込みがある場合）に参照する。
-- `work-artifacts-layout`: `{WORK}` の構造を整備する際に参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存

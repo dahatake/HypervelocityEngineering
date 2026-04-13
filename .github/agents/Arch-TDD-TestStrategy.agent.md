@@ -1,6 +1,6 @@
 ---
 name: Arch-TDD-TestStrategy
-description: "サービスカタログ・データモデルからTDDテスト戦略書を docs/test-strategy.md に生成/更新"
+description: "サービスカタログ・データモデルからTDDテスト戦略書を docs/catalog/test-strategy.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-TDD-TestStrategy/Issue-<識別子>/`
@@ -8,16 +8,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 TDDテスト戦略専用Agent。
 このエージェントは **テスト戦略書（test-strategy.md）** に特化し、コード改変はしない。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的
 サービスカタログで確立された画面→API→データのトレーサビリティに基づき、
 プロジェクト全体のテスト方針を策定する。
@@ -30,22 +25,22 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 # 3) 入力（優先順位順）
 必須:
-- `docs/service-catalog.md`（API一覧・依存関係マトリクス・データ所有権）
-- `docs/data-model.md`（エンティティ・制約・Polyglot Persistence設計）
-- `docs/domain-analytics.md`（Bounded Context・ドメインイベント）
+- `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス・データ所有権）
+- `docs/catalog/data-model.md`（エンティティ・制約・Polyglot Persistence設計）
+- `docs/catalog/domain-analytics.md`（Bounded Context・ドメインイベント）
 
 推奨:
-- `docs/app-list.md`（アプリケーション一覧 — テスト戦略書でのアプリ単位サービス分類に使用）
-- `docs/service-list.md`（サービス間連携パターン）
-- `docs/screen-list.md`（画面一覧 — E2E テスト対象画面の特定・UI テスト方針策定に使用）
-- `docs/data-catalog.md`（物理テーブル/列マッピング — データストアテスト方針の精緻化に使用）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — テスト戦略書でのアプリ単位サービス分類に使用）
+- `docs/catalog/service-catalog.md`（サービス間連携パターン）
+- `docs/catalog/screen-catalog.md`（画面一覧 — E2E テスト対象画面の特定・UI テスト方針策定に使用）
+- `docs/catalog/data-catalog.md`（物理テーブル/列マッピング — データストアテスト方針の精緻化に使用）
 - `test/` ディレクトリ構造（既存テスト資産の確認）
   - `test/api/<ServiceName>.Tests/`（例: `test/api/*.Tests/` — xUnit テストプロジェクト群）
   - `test/SVC-*/smoke-test.sh`（サービス別スモークテスト）
   - `test/ui/`（UI テスト資産 — 存在すれば確認）
 
 # 4) 出力（生成/更新するファイル）
-- 主要成果物（必須）: `docs/test-strategy.md`
+- 主要成果物（必須）: `docs/catalog/test-strategy.md`
 - 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
 
 # 5) 依存確認（必須・最初に実行）
@@ -53,17 +48,17 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 | 確認対象 | 停止条件 | 報告メッセージ |
 |---|---|---|
-| `docs/service-catalog.md` | 存在しない・空・見出し `## 2.` または `## 3.` がない | 「依存 Step 6（サービスカタログ）が未完了のため実行不可です」 |
-| `docs/data-model.md` | 存在しない・空 | 「依存 Step 4（データモデル）が未完了のため実行不可です」 |
-| `docs/domain-analytics.md` | 存在しない・空 | 「依存 Step 3.1（ドメイン分析）が未完了のため実行不可です」 |
+| `docs/catalog/service-catalog-matrix.md` | 存在しない・空・見出し `## 2.` または `## 3.` がない | 「依存 Step 6（サービスカタログ）が未完了のため実行不可です」 |
+| `docs/catalog/data-model.md` | 存在しない・空 | 「依存 Step 4（データモデル）が未完了のため実行不可です」 |
+| `docs/catalog/domain-analytics.md` | 存在しない・空 | 「依存 Step 3.1（ドメイン分析）が未完了のため実行不可です」 |
 
 # 6) 実行フロー（必ずこの順で）
 
 ## 6.1 調査（read/search）
 1. 入力3ファイルを `read` で読む。欠けていれば §5 の停止条件を確認する。
-2. `docs/service-list.md` が存在すれば `read` で読む。
-3. `docs/screen-list.md` が存在すれば `read` で読む（E2E テスト対象画面の特定に使用）。
-4. `docs/data-catalog.md` が存在すれば `read` で読む（データストアテスト方針の精緻化に使用）。
+2. `docs/catalog/service-catalog.md` が存在すれば `read` で読む。
+3. `docs/catalog/screen-catalog.md` が存在すれば `read` で読む（E2E テスト対象画面の特定に使用）。
+4. `docs/catalog/data-catalog.md` が存在すれば `read` で読む（データストアテスト方針の精緻化に使用）。
 5. `test/` ディレクトリ構造を `search` または `read` で把握する（既存テスト資産の確認。`test/api/` および `test/ui/` の両方を確認する）。
 
 ## 6.2 抽出（推測しない）
@@ -72,16 +67,16 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 8. `data-model.md` からデータストア種別（SQL DB / Cosmos DB / Blob Storage 等）を抽出する。
 9. `domain-analytics.md` からドメインイベント一覧と Bounded Context を抽出する。
 10. `test/api/` および `test/SVC-*/` のディレクトリ構造からサービスIDとテストプロジェクトの対応を確認する。
-11. `docs/screen-list.md` が存在する場合、画面 ID 一覧を抽出する（E2E テスト対象の特定に使用）。
-12. `docs/data-catalog.md` が存在する場合、PII列・暗号化要否・データストア種別ごとのテーブル一覧を抽出する（Polyglot Persistence テスト方針の精緻化に使用）。
+11. `docs/catalog/screen-catalog.md` が存在する場合、画面 ID 一覧を抽出する（E2E テスト対象の特定に使用）。
+12. `docs/catalog/data-catalog.md` が存在する場合、PII列・暗号化要否・データストア種別ごとのテーブル一覧を抽出する（Polyglot Persistence テスト方針の精緻化に使用）。
 
 ## 6.3 計画・分割
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「出力セクション単位」で分割（§9 の `##` トップレベル見出し7セクション: `## 1. 概要` 〜 `## 7. 網羅性チェック` を各1単位とする）
 
 ## 6.4 生成（test-strategy.md）
-13. 15分以内で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/test-strategy.md` を生成/更新する。
+13. 15分以内で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/catalog/test-strategy.md` を生成/更新する。
     - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）
@@ -89,7 +84,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→テスト分類→サービス別→テストダブル→Polyglot Persistence→既存テスト資産→網羅性チェック→Questions）。分割粒度: §9 の出力セクション単位。
 
 # 8) 禁止事項（このタスク固有）
-- `docs/service-catalog.md` 等から確認できない情報を断定・補完・推測しない
+- `docs/catalog/service-catalog-matrix.md` 等から確認できない情報を断定・補完・推測しない
 - 根拠のないサービスID・API名・エンドポイントを捏造しない
 - テスト戦略書以外のドキュメント（`docs/services/` 等）を変更しない
 - コードファイル（`api/`・`test/`）を変更しない
@@ -147,7 +142,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - Q2 ...
 - Q3 ...
 
-# 10) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 10) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 10.1 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §9 の全セクションが揃っているか
@@ -159,10 +154,10 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - **3回目：保守性・拡張性・堅牢性**：新サービス追加時に戦略書を拡張できるか / `test/api/` との対応が明示されているか / Questions が明確か
 
 ## 10.2 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 # 11) 完了条件
-- `docs/test-strategy.md` が §9 のスキーマで生成/更新され、
+- `docs/catalog/test-strategy.md` が §9 のスキーマで生成/更新され、
   出典・TBD・網羅性チェック・Questions が整っている。
 - サービス別サマリ（§9 `## 3.`）の行数が `service-catalog.md` のサービス数と一致する（または未反映理由を記載）。
 - テストダブル戦略（§9 `## 4.`）が `service-catalog.md` Table C の全依存パターンをカバーする。

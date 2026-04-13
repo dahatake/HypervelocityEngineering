@@ -140,18 +140,18 @@ No command provided. Please supply a valid command to execute.
 
 ## SDK 版のトラブル
 
-SDK 版（ローカル実行方式）のトラブルシューティングは [SDK-Guide.md 付録D](./SDK-Guide.md#付録d-トラブルシューティング) を参照してください。
+SDK 版（ローカル実行方式）のトラブルシューティングは [sdk-guide.md 付録D](./sdk-guide.md#付録d-トラブルシューティング) を参照してください。
 
 主なトラブルと対応:
 
 | 症状 | 参照箇所 |
 |------|---------|
-| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./SDK-Guide.md#copilot-cli-が見つからない) |
-| `ModuleNotFoundError: No module named 'copilot'` | [付録D: SDK がインストールされていない](./SDK-Guide.md#sdk-がインストールされていない--python--m-hve-が動かない) |
-| セッションタイムアウト | [付録D: セッションタイムアウト](./SDK-Guide.md#セッションタイムアウト) |
-| MCP Server が接続できない | [付録D: MCP Server が接続できない](./SDK-Guide.md#mcp-server-が接続できない) |
-| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./SDK-Guide.md#並列実行でメモリ不足) |
-| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./SDK-Guide.md#pr-作成時に-http-422-エラー) |
+| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./sdk-guide.md#copilot-cli-が見つからない) |
+| `ModuleNotFoundError: No module named 'copilot'` | [付録D: SDK がインストールされていない](./sdk-guide.md#sdk-がインストールされていない--python--m-hve-が動かない) |
+| セッションタイムアウト | [付録D: セッションタイムアウト](./sdk-guide.md#セッションタイムアウト) |
+| MCP Server が接続できない | [付録D: MCP Server が接続できない](./sdk-guide.md#mcp-server-が接続できない) |
+| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./sdk-guide.md#並列実行でメモリ不足) |
+| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./sdk-guide.md#pr-作成時に-http-422-エラー) |
 
 ## knowledge/ ドキュメント関連のトラブル
 
@@ -161,7 +161,7 @@ SDK 版（ローカル実行方式）のトラブルシューティングは [SD
 
 **対処法**:
 1. `qa/` フォルダーに質問票ファイルが存在するか確認する
-2. 質問票が存在する場合は `qa-knowledge-management` ワークフローを実行する（[09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) 参照）
+2. 質問票が存在する場合は `qa-knowledge-management` ワークフローを実行する（[09-qa-knowledge-management.md](./09-qa-knowledge-management.md) 参照）
 3. `knowledge/business-requirement-document-status.md` で D01〜D21 のカバレッジを確認する
 
 ### knowledge/ ファイルが期待通り参照されない

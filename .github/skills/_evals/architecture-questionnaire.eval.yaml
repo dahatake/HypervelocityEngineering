@@ -1,0 +1,51 @@
+skill: architecture-questionnaire
+skill_path: .github/skills/planning/architecture-questionnaire/SKILL.md
+description: アーキテクチャ候補選定時の質問票テンプレート（Q1-Q26）と適合度評価ルールを提供する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: architecture-candidate-analysis
+    input: "APP-02 のアーキテクチャ候補を分析してほしい。非機能要件を収集して適合度表を生成してください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Q1-Q26 の質問票テンプレートを参照し、非機能要件を収集して適合度評価を実施する"
+    reason: "USE FOR: architecture selection, Q1-Q26 questionnaire に該当する"
+
+  - id: nfr-collection-for-app
+    input: "APP-04 の非機能要件（スケーラビリティ・可用性・セキュリティ）を収集して推薦アーキテクチャを決定したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/question-template.md の Q1-Q26 を参照し回答を収集する。判定ロジックに基づき最適なアーキテクチャを選定する"
+    reason: "WHEN: 非機能要件を収集する、APP単位のアーキテクチャを推薦する に該当する"
+
+  - id: cloud-architecture-pattern-fitness
+    input: "マイクロサービス vs サーバーレス vs コンテナ等のクラウドアーキテクチャパターンの適合度を評価してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "クラウドアーキテクチャパターンの適合度表を生成する（assets/output-format.md のフォーマットに従う）"
+    reason: "USE FOR: cloud architecture pattern, fitness evaluation に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-implementation
+    input: "SVC-05 ポイント管理サービスの Python コードを実装してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: implementation に該当する。実装は Dev 系 Agent が担当"
+
+  - id: not-for-deployment
+    input: "Azure Functions の CI/CD ワークフローをデプロイしてほしい"
+    expected_trigger: false
+    expected_skill: "github-actions-cicd"
+    reason: "DO NOT USE FOR: deployment に該当する。CI/CD は github-actions-cicd が担当"
+
+  # --- エッジケース ---
+  - id: edge-no-architectural-requirements-file
+    input: "APP-08 のアーキテクチャを選定したいが、docs/architectural-requirements-app-08.md が存在しない"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "入力ファイルが存在しない場合でも Q1-Q26 の質問票でヒアリングしてデフォルト値で進めるか、TBD を記載して続行する"
+    reason: "質問票テンプレートによるヒアリングで代替できる。アーキテクチャ候補選定の範囲内"

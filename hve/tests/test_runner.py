@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import SDKConfig
 from console import Console
-from runner import StepRunner, _is_review_fail, _make_log_handler, _StderrLogReader
+from runner import StepRunner, _is_review_fail
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
 # Used in test_returns_false_when_sdk_missing to correctly restore sys.modules after the test.
@@ -322,163 +322,173 @@ class TestIsReviewFail(unittest.TestCase):
         self.assertTrue(_is_review_fail(content))
 
 
-class TestMakeCliLogHandler(unittest.TestCase):
-    """StepRunner._make_cli_log_handler() のテスト。"""
+# -----------------------------------------------------------------------
+# run_step Phase 2: qa_prompt 呼び出し有無テスト
+# -----------------------------------------------------------------------
 
-    def _make_runner(self) -> StepRunner:
-        config = SDKConfig()
-        console = Console(verbosity=3)
-        return StepRunner(config, console)
+class _FakeSdkSession:
+    """CopilotSession の最小モック。send_and_wait() に定形レスポンスを返す。"""
 
-    def test_handler_calls_console_cli_log(self) -> None:
-        """コールバックが console.cli_log() を呼び出す。"""
-        runner = self._make_runner()
-        handler = runner._make_cli_log_handler("1")
-        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
-            handler("● Environment loaded: 10 agents")
-            mock_cli_log.assert_called_once_with("1", "● Environment loaded: 10 agents")
+    def __init__(self, responses: list):
+        self._responses = list(responses)
+        self._idx = 0
 
-    def test_handler_splits_multiline(self) -> None:
-        """複数行文字列は行ごとに分割して cli_log() を呼び出す。"""
-        runner = self._make_runner()
-        handler = runner._make_cli_log_handler("1")
-        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
-            handler("○ List directory qa\n  └ qa/")
-            self.assertEqual(mock_cli_log.call_count, 2)
+    async def send_and_wait(self, *args, **kwargs):
+        if self._idx < len(self._responses):
+            resp = self._responses[self._idx]
+            self._idx += 1
+            return resp
+        return None
 
-    def test_handler_ignores_empty_lines(self) -> None:
-        """空行・空白のみの行は cli_log() を呼び出さない。"""
-        runner = self._make_runner()
-        handler = runner._make_cli_log_handler("1")
-        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
-            handler("")
-            handler("   ")
-            handler("\n\n")
-            mock_cli_log.assert_not_called()
-
-    def test_handler_passes_step_id(self) -> None:
-        """step_id がコールバック経由で cli_log() に渡される。"""
-        runner = self._make_runner()
-        handler = runner._make_cli_log_handler("2.3")
-        with unittest.mock.patch.object(runner.console, 'cli_log') as mock_cli_log:
-            handler("○ Search (glob)")
-            mock_cli_log.assert_called_once_with("2.3", "○ Search (glob)")
+    def on(self, handler):
+        pass
 
 
-class TestMakeLogHandlerStandalone(unittest.TestCase):
-    """モジュールレベル _make_log_handler() のテスト（orchestrator.py からも利用）。"""
+class _FakeSdkClient:
+    """CopilotClient の最小モック。create_session() で _FakeSdkSession を返す。"""
 
-    def test_standalone_handler_calls_cli_log(self) -> None:
-        """_make_log_handler() が console.cli_log() を呼び出す。"""
-        console = Console(verbosity=3)
-        handler = _make_log_handler(console, "review")
-        with unittest.mock.patch.object(console, 'cli_log') as mock_cli_log:
-            handler("● Environment loaded: 5 agents")
-            mock_cli_log.assert_called_once_with("review", "● Environment loaded: 5 agents")
+    def __init__(self, session: "_FakeSdkSession"):
+        self._session = session
 
-    def test_standalone_handler_ignores_empty(self) -> None:
-        """空行は cli_log() を呼び出さない。"""
-        console = Console(verbosity=3)
-        handler = _make_log_handler(console, "review")
-        with unittest.mock.patch.object(console, 'cli_log') as mock_cli_log:
-            handler("")
-            handler("  ")
-            mock_cli_log.assert_not_called()
+    async def start(self):
+        pass
+
+    async def create_session(self, **kwargs):
+        return self._session
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        pass
 
 
-class TestStderrLogReader(unittest.TestCase):
-    """_StderrLogReader のユニットテスト。"""
+def _install_fake_sdk(session: "_FakeSdkSession") -> dict:
+    """fake_sdk モジュールを sys.modules に注入し、元の状態を返す。"""
+    import types
 
-    def _make_fake_stderr(self, content: bytes) -> io.BytesIO:
-        """bytes を BytesIO stream に包む。"""
-        return io.BytesIO(content)
+    fake_module = types.ModuleType("copilot")
 
-    def _run_reader(self, content: bytes, step_id: str = "1") -> tuple:
-        """ヘルパー: リーダーを起動してストリームが EOF に達したらスレッドを join する。
-        (sleep を使わず決定論的にテストするため)
-        """
-        console = Console(verbosity=3, quiet=False)
-        fake_stderr = self._make_fake_stderr(content)
-        received: list = []
-        with unittest.mock.patch.object(
-            console, "cli_log", side_effect=lambda sid, line: received.append((sid, line))
-        ):
-            reader = _StderrLogReader(fake_stderr, console, step_id)
-            reader.start()
-            # EOF 到達後にスレッドが自然終了するのを待つ
-            if reader._thread is not None:
-                reader._thread.join(timeout=5.0)
-            reader.stop()
-        return reader, received
+    class _SubprocessConfig:
+        def __init__(self, **kw):
+            pass
 
-    def test_reads_stderr_lines_to_cli_log(self) -> None:
-        """stderr の各行が console.cli_log() に正しく渡される。"""
-        content = "● Environment loaded\n○ List directory\n".encode("utf-8")
-        _, received = self._run_reader(content)
-        lines = [line for _, line in received]
-        self.assertIn("● Environment loaded", lines)
-        self.assertIn("○ List directory", lines)
+    class _ExternalServerConfig:
+        def __init__(self, **kw):
+            pass
 
-    def test_empty_lines_are_skipped(self) -> None:
-        """空行・空白行は cli_log() に渡されない。"""
-        content = "\n\n● Test line\n\n".encode("utf-8")
-        _, received = self._run_reader(content)
-        lines = [line for _, line in received]
-        # 空行は含まれず、"● Test line" のみが受け取られる
-        self.assertTrue(all(line.strip() for line in lines))
-        self.assertTrue(any("Test line" in line for line in lines))
+    class _PermissionHandler:
+        @staticmethod
+        async def approve_all(*a, **kw):
+            return True
 
-    def test_stop_sets_event(self) -> None:
-        """stop() を呼ぶと _stop イベントがセットされる。"""
-        console = Console(verbosity=3, quiet=False)
-        fake_stderr = self._make_fake_stderr(b"line1\n")
-        reader = _StderrLogReader(fake_stderr, console, "1")
-        reader.start()
-        reader.stop()
-        self.assertTrue(reader._stop.is_set())
+    fake_module.CopilotClient = lambda config=None: _FakeSdkClient(session)
+    fake_module.SubprocessConfig = _SubprocessConfig
+    fake_module.ExternalServerConfig = _ExternalServerConfig
+    fake_module.PermissionHandler = _PermissionHandler
 
-    def test_stop_without_start_is_safe(self) -> None:
-        """start() を呼ばずに stop() を呼んでもエラーにならない。"""
-        console = Console(verbosity=3, quiet=False)
-        fake_stderr = self._make_fake_stderr(b"")
-        reader = _StderrLogReader(fake_stderr, console, "1")
-        # start() なし
-        reader.stop()  # 例外が発生しないことを確認
-        self.assertTrue(reader._stop.is_set())
+    originals = {
+        k: sys.modules.get(k, _SENTINEL)
+        for k in ["copilot"]
+    }
+    sys.modules["copilot"] = fake_module
+    return originals
 
-    def test_step_id_passed_to_cli_log(self) -> None:
-        """step_id が cli_log() の第1引数として渡される。"""
-        content = "Remote session established\n".encode("utf-8")
-        _, received = self._run_reader(content, step_id="2.3")
-        self.assertTrue(len(received) > 0)
-        self.assertTrue(all(sid == "2.3" for sid, _ in received))
 
-    def test_handles_text_mode_str_lines(self) -> None:
-        """text mode の stream (readline が str を返す) も正しく処理される。"""
-        console = Console(verbosity=3, quiet=False)
-        received: list = []
+def _restore_sdk(originals: dict) -> None:
+    for k, v in originals.items():
+        if v is _SENTINEL:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
 
-        class _FakeTextStream:
-            def __init__(self, lines):
-                self._lines = iter(lines)
 
-            def readline(self):
-                try:
-                    return next(self._lines)
-                except StopIteration:
-                    return ""
+class TestRunStepPhase2QaPrompt(unittest.TestCase):
+    """run_step() の Phase 2 で qa_prompt() 呼び出し有無が正しいことを検証する。
 
-        fake_stream = _FakeTextStream(["● Loaded\n", "○ Activity\n", ""])
-        with unittest.mock.patch.object(
-            console, "cli_log", side_effect=lambda sid, line: received.append(line)
-        ):
-            reader = _StderrLogReader(fake_stream, console, "1")
-            reader.start()
-            if reader._thread is not None:
-                reader._thread.join(timeout=5.0)
-            reader.stop()
-        self.assertIn("● Loaded", received)
-        self.assertIn("○ Activity", received)
+    パース成功時: qa_prompt() は呼ばれない（整形テーブルのみ表示）
+    パース失敗時: qa_prompt() が呼ばれる（生 Markdown フォールバック）
+    """
+
+    _VALID_QA_CONTENT = (
+        "| No. | 質問 | 選択肢 | デフォルトの回答案 | 選択理由 |\n"
+        "|-----|------|--------|-------------------|----------|\n"
+        "| 1 | テスト？ | A) はい / B) いいえ | A) はい | 理由 |\n"
+    )
+
+    def _make_runner(self, qa_content: str) -> "tuple[StepRunner, Console, list, list]":
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.6",
+            auto_qa=True,
+            auto_contents_review=False,
+            auto_self_improve=False,
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+        return runner, console, qa_content
+
+    def _run_with_fake_sdk(self, qa_content: str) -> "tuple[list, list]":
+        """fake SDK を使って run_step() の Phase 2 を実行し、qa_prompt と questionnaire_table の
+        呼び出し回数を返す。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.6",
+            auto_qa=True,
+            auto_contents_review=False,
+            auto_self_improve=False,
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        qa_prompt_calls: list = []
+        questionnaire_table_calls: list = []
+
+        # send_and_wait の応答順序:
+        #   1回目: Phase 1 メインタスク → None
+        #   2回目: Phase 2a QA生成 → qa_content 相当の文字列レスポンス
+        #   3回目以降: save/consolidate → None
+        class _FakeResponse:
+            def __init__(self, text: str):
+                self.data = type("D", (), {"content": text})()
+
+        session = _FakeSdkSession([
+            None,                            # Phase 1
+            _FakeResponse(qa_content),       # Phase 2a
+            None, None, None,                # Phase 2c save/consolidate / fallback
+        ])
+        originals = _install_fake_sdk(session)
+        try:
+            with unittest.mock.patch.object(
+                console, "qa_prompt",
+                side_effect=lambda *a, **kw: qa_prompt_calls.append(True),
+            ), unittest.mock.patch.object(
+                console, "questionnaire_table",
+                side_effect=lambda *a, **kw: questionnaire_table_calls.append(True),
+            ), unittest.mock.patch.object(
+                console, "answer_summary",
+            ), unittest.mock.patch.object(
+                console, "status",
+            ), unittest.mock.patch("runner._read_stdin_multiline", return_value=""),\
+            unittest.mock.patch("sys.stdin") as mock_stdin:
+                mock_stdin.isatty.return_value = False
+                asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
+        finally:
+            _restore_sdk(originals)
+
+        return qa_prompt_calls, questionnaire_table_calls
+
+    def test_parse_success_no_qa_prompt(self) -> None:
+        """パース成功時: qa_prompt() は呼ばれず、questionnaire_table() が呼ばれる。"""
+        qa_calls, table_calls = self._run_with_fake_sdk(self._VALID_QA_CONTENT)
+        self.assertFalse(qa_calls, "パース成功時は qa_prompt() を呼ばないべき")
+        self.assertTrue(table_calls, "パース成功時は questionnaire_table() が呼ばれるべき")
+
+    def test_parse_failure_calls_qa_prompt(self) -> None:
+        """パース失敗時（空コンテンツ）: qa_prompt() が呼ばれる（生 Markdown フォールバック）。"""
+        qa_calls, table_calls = self._run_with_fake_sdk("")
+        self.assertTrue(qa_calls, "パース失敗時は qa_prompt() が呼ばれるべき")
+        self.assertFalse(table_calls, "パース失敗時は questionnaire_table() を呼ばないべき")
 
 
 if __name__ == "__main__":

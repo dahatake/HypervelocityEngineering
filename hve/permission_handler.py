@@ -12,7 +12,7 @@
     - rm -rf（ファイル破壊）
     - git push --force（Git 破壊）
     - az resource delete / az group delete（Azure 破壊）
-    - その他の破壊的コマンド（AGENTS.md §10.2 安全ガード準拠）
+    - その他の破壊的コマンド（Skill harness-safety-guard 準拠）
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import Any, List
 
 
 # ---------------------------------------------------------------------------
-# 安全ガード定義（AGENTS.md §10.2 準拠）
+# 安全ガード定義（Skill harness-safety-guard 準拠）
 # ---------------------------------------------------------------------------
 
 # CRITICAL 停止: 絶対に実行しない
@@ -68,7 +68,7 @@ class ScopedPermissionHandler:
     """Self-Improve ループ専用の PermissionHandler。
 
     Copilot SDK の PermissionHandler プロトコルに準拠し、
-    AGENTS.md §10.2 安全ガードを実装する。
+    Skill harness-safety-guard を実装する。
 
     使用方法:
         handler = ScopedPermissionHandler()
@@ -179,7 +179,7 @@ class ScopedPermissionHandler:
 def is_safe_command(command: str) -> bool:
     """コマンド文字列が安全かどうかを判定するスタンドアロン関数。
 
-    AGENTS.md §10.2 安全ガードに準拠。
+    Skill harness-safety-guard 準拠。
 
     Args:
         command: チェックするコマンド文字列。

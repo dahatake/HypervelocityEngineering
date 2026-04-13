@@ -5,33 +5,27 @@ tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 ## 1) 目的 / スコープ
 ### 目的
 `docs/services/service-list.md` に列挙された **対象サービス**（APP-ID 指定時はスコープ内のサービス+共有サービスのみ）について、Azure のホスティング先（コンピュート）を選定し、技術的根拠（公式ドキュメントURL）を添えて設計書に残す。
 
 ### 入力（必読）
 - リソースグループ名: `{リソースグループ名}`
-- `docs/service-list.md`
-- `docs/usecase-list.md`
-- `docs/data-model.md`
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
-### APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ### 成果物（必須）
-- 設計書（Markdown）: `docs/azure/AzureServices-services.md`
+- 設計書（Markdown）: `docs/azure/azure-services-compute.md`
 - 進捗ログ（追記）: `{WORK}services-azure-compute-design-work-status.md`
 - 分割が必要な場合: `{WORK}subissues.md`（Sub Issue本文をそのままコピペできる形式）
 
@@ -59,7 +53,7 @@ tools: ["*"]
 
 ## 4) 実行ワークフロー（必ずこの順）
 ### 4.1 Plan（最初に必ず作る）
-- `AGENTS.md` のルールに従って `{WORK}plan.md` を作る（DAG + 見積（分） + リスク + 検証）。
+- `Skill task-dag-planning` のルールに従って `{WORK}plan.md` を作る（DAG + 見積（分） + リスク + 検証）。
 - 見積は粗くてよいが、**合計が15分を超えそう** または **レビュー困難** なら分割へ切り替える。
 
 ### 4.2 分割判定（15分超なら実装しない）
@@ -70,7 +64,7 @@ tools: ["*"]
 
 ### 4.3 Execution（15分以内のときのみ）
 1) 入力3ファイルを読み、対象サービスの完全な一覧を取得（不足や矛盾は notes に記録しつつ先へ進む）。  
-2) 設計書 `docs/azure/AzureServices-services.md` を **小さく作成**（ヘッダ＋空表まで）。  
+2) 設計書 `docs/azure/azure-services-compute.md` を **小さく作成**（ヘッダ＋空表まで）。  
 3) 表を **数行ずつ追記**しながら、対象サービスの Primary / Alternatives / 理由（>=3観点）/ 参照URL を埋める。  
 4) 「共通設計（ホスティング選定に影響する点のみ）」と「未決事項（最大10）」を追記。  
 5) 進捗ログ `{WORK}services-azure-compute-design-work-status.md` に追記（append）。  
@@ -96,13 +90,13 @@ tools: ["*"]
 - `YYYY-MM-DD HH:MM`: 読んだもの / 決めたこと / 次にやること（各1行、合計3行以内）
 
 ## 7) 大きな出力の扱い（失敗回避）
-- 1ファイルが大きくなりそうなら、`AGENTS.md` と `large-output-chunking` のスキルに従い、
+- 1ファイルが大きくなりそうなら、`large-output-chunking` スキルに従い、
   `{WORK}artifacts/` に index + part 分割で保存する（設計書の本体は読みやすさ優先で維持）。
 
 ## 8) 最終品質レビュー（3度のレビューで確実に）
 成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。最終コミット前に、以下を満たすまで修正する（"問題点の大量列挙"は不要）。
 
-- AGENTS.md §7.1 に従う。
+- Skill adversarial-review に従う。
 
 ### 8.2 3つの異なる観点（Azure コンピュート選定設計書の場合）
 - **1回目：技術妥当性・要件達成度**：Azure コンピュート選定の根拠が十分か、AC と入力ドキュメントの要件がすべて満たされているか、代替案の検討が十分か
@@ -118,7 +112,7 @@ tools: ["*"]
 - **変更最小**：無関係ファイルに触れていない
 
 ### 8.4 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

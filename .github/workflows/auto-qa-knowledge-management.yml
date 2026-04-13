@@ -314,7 +314,7 @@ jobs:
 
           # 追加コメント抽出
           additional_comment = ""
-          m = re.search(r"###\s*追加コメント.*?\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               val = m.group(1).strip()
               if val and val != "_No response_":

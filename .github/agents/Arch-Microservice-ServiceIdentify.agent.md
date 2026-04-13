@@ -5,20 +5,17 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Microservice-ServiceIdentify/Issue-<識別子>/`
 
-## 0. 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 ## 1. 入力（読むもの）
-- `docs/usecase-list.md`
-- `docs/domain-analytics.md`
-- `docs/app-list.md`（アプリケーション一覧 — 各サービス候補がどの APP-ID に属するかの判定根拠）
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各サービス候補がどの APP-ID に属するかの判定根拠）
 
 ## 2. 成果物（必須）
-1) `docs/service-list.md`
+1) `docs/catalog/service-catalog.md`
 - 構成は必ず以下の順：
   - **A. サマリ（表）**
   - **B. サービス候補詳細（候補ごと）**
@@ -33,11 +30,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3. 実行フロー（Plan/Execution）
 ### 3.1 事前確認（不足があれば質問：必要な項目をすべて1回のメッセージにまとめる）
 - 入力2ファイルが無い/空/パス違いの場合は、作業開始前に「欠けているファイル」と「必要理由」をすべて質問する（項目数の上限なし）。
-- 不足が致命的なら停止する。非致命的な場合でも、ユーザーが「推論で進めてください」または「作業を進めてください」と明示した場合に限り、AGENTS.md §1.1/§1.2 に従って `TBD（推論: {根拠}）` の形式で記載し、「この回答はCopilot推論をしたものです。」と明記したうえで進める。
+- 不足が致命的なら停止する。非致命的な場合でも、ユーザーが「推論で進めてください」または「作業を進めてください」と明示した場合に限り、Skill task-questionnaire に従って `TBD（推論: {根拠}）` の形式で記載し、「この回答はCopilot推論をしたものです。」と明記したうえで進める。
 
 ### 3.2 計画・分割
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Split Mode（必須条件に該当した場合）
 - `{WORK}subissues.md` に、約15分単位のサブタスクを複数作成する。
@@ -51,7 +48,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **subissues.md 出力後は停止**（このエージェントは1タスク=1PR前提で、最初のSubから着手する）。
 
 ### 3.4 Execution（Split Mode でない場合のみ）
-1) 入力3ファイル（`docs/domain-analytics.md`・`docs/usecase-list.md`・`docs/app-list.md`）を `read` する。
+1) 入力3ファイル（`docs/catalog/domain-analytics.md`・`docs/catalog/use-case-catalog.md`・`docs/catalog/app-catalog.md`）を `read` する。
 2) `domain-analytics.md` を根拠に、以下を抽出してメモする（plan.md または notes に残してよい）：
    - Bounded Context（BC）候補
    - サブドメイン候補
@@ -74,7 +71,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    - 詳細：同一候補IDのセクションは置換（重複作成しない）
 8) 進捗ログを `work-status.md` に追記（最大5行程度）
 
-### 3.5 最終品質レビュー（AGENTS.md §7準拠・3観点）
+### 3.5 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 3.5.2 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：BC/サブドメイン→候補→コンテキストマップが一貫し、根拠がある
@@ -82,7 +79,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・安全性**：べき等性（再実行で重複しない）、出力安全性（空ファイル等）、捏造防止（TBD運用）
 
 ### 3.5.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ## 4. `service-list.md` 固定フォーマット
 ### A. サマリ（先頭）

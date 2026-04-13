@@ -1,0 +1,66 @@
+# .github/skills/_evals/harness-verification-loop.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: harness-verification-loop
+skill_path: .github/skills/harness/harness-verification-loop/SKILL.md
+description: コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順を提供するスキル。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: post-code-change-verification
+    input: "コードの変更が完了しました。ビルドとテストを実行して verification-report.md を作成してください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "verification-report.md が work/ 配下に生成されること"
+      - type: content_contains
+        detail: "Build/Lint/Test/Security/Diff の5フェーズの実行結果が記録されること"
+    reason: "SKILL.md の USE FOR に 'build check, lint, test execution, security scan, diff review, verification-report' が明示されており、コード変更後の検証依頼は典型的なトリガー"
+
+  - id: pr-quality-check
+    input: "PR 提出前の品質確認として、5段階の検証パイプラインを実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "Phase 1 Build → Phase 2 Lint → Phase 3 Test → Phase 4 Security → Phase 5 Diff の順で実行されること"
+      - type: content_contains
+        detail: "各 Phase の PASS/FAIL 結果が verification-report.md に記録されること"
+    reason: "SKILL.md の WHEN に 'PR 提出前の品質確認' が明示されており、PR 前の品質ゲートとしてのトリガーに該当する"
+
+  - id: build-lint-test-execution
+    input: "dotnet build と dotnet test を実行して結果を確認してください。lint も実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "Phase 1 Build (dotnet build)、Phase 2 Lint (dotnet format --verify-no-changes)、Phase 3 Test (dotnet test) が実行されること"
+    reason: "SKILL.md の USE FOR に 'build check, lint, test execution' が明示されており、ビルド・リント・テスト実行依頼はトリガー条件に該当する"
+
+  - id: security-scan-diff-review
+    input: "セキュリティスキャンと diff レビューを実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "Phase 4 Security スキャンと Phase 5 Diff レビューが実行されること"
+    reason: "SKILL.md の USE FOR に 'security scan, diff review' が明示されており、セキュリティスキャン・差分確認はトリガー条件に該当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: error-recovery-request
+    input: "dotnet build が失敗しました。原因を調査してリカバリ手順を教えてください。"
+    expected_trigger: false
+    expected_skill: harness-error-recovery
+    reason: "SKILL.md の Non-goals に 'エラー発生時のリカバリ手順は harness-error-recovery が担当' と明示されており、ビルド失敗後のリカバリは対象外"
+
+  - id: test-code-creation-request
+    input: "テストコードが不足しているので、新しいテストケースを追加してください。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "SKILL.md の Non-goals に 'テストコードの作成・修正は行わない（テストは正解定義のため）' と明示されており、テストコード作成は対象外"
+
+  # --- エッジケース ---
+  - id: ambiguous-check-request
+    input: "問題ないか確認してください。"
+    expected_trigger: true
+    reason: "曖昧な確認依頼は、コード変更後のコンテキストでは5段階検証パイプラインの実行が最も適切。ただし変更がない場合は Diff フェーズのみになる可能性もある。"

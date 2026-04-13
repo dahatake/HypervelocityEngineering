@@ -4,16 +4,16 @@
 
 ## 入力
 - リソースグループ名: `{resource_group}`
-- `docs/service-list.md`
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - `src/api/{サービスID}-{サービス名}/`
 - リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `Southeast Asia`）
 
 ## 出力
 - `infra/azure/create-azure-api-resources-prep.sh`
 - `.github/workflows/` にCI/CD（OIDC + azure/login 優先）
-- `docs/service-catalog.md` 更新
+- `docs/catalog/service-catalog-matrix.md` 更新
 - `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI
 
 ## デプロイ TDD フロー（必須）

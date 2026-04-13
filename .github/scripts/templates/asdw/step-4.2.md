@@ -4,14 +4,14 @@
 
 ## 入力
 - リソースグループ名: `{resource_group}`
-- `docs/service-catalog.md`
-- `docs/azure/AzureServices-services*.md`
-- `docs/azure/AzureServices-data*.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/azure/azure-services-compute.md`
+- `docs/azure/azure-services-data.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - `src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`
 
 ## 出力
-- `docs/azure/DependencyReview-Report.md`
+- `docs/azure/dependency-review-report.md`
 
 ## Custom Agent
 `QA-AzureDependencyReview` を使用
@@ -21,5 +21,5 @@
 - Step.4.1 と並列実行可能
 
 ## 完了条件
-- `docs/azure/DependencyReview-Report.md` が作成されている
+- `docs/azure/dependency-review-report.md` が作成されている
 - 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

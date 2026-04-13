@@ -1,0 +1,76 @@
+# .github/skills/_evals/task-dag-planning.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: task-dag-planning
+skill_path: .github/skills/planning/task-dag-planning/SKILL.md
+description: タスクの依存関係（DAG）で分解し、分単位の見積と分割判断を行うスキル。plan.md / subissues.md を作成し、15分超のタスクを安全に分割する。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: create-plan-request
+    input: "この Issue の実装計画を作成してください。依存関係も整理してほしいです。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "plan.md が work/ 配下に生成されること"
+      - type: content_contains
+        detail: "DAG（依存関係ノード）と見積（分単位）が含まれること"
+      - type: content_contains
+        detail: "分割判定（SPLIT_REQUIRED または PROCEED）が記載されること"
+    reason: "SKILL.md の USE FOR に 'create plan', 'DAG planning' が明示されており、計画作成依頼は典型的なトリガー"
+
+  - id: estimate-task-split
+    input: "このタスクの見積を出して、15分を超えるようなら分割してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "見積合計（分）と 15分との比較結果が plan.md に記載されること"
+      - type: file_creation
+        detail: "15分超の場合は subissues.md が生成されること"
+    reason: "SKILL.md の WHEN に '見積をしたい', '15分超の作業', '分割判定' が明示されており、見積・分割依頼は典型的なトリガー"
+
+  - id: plan-with-subissues
+    input: "Sub Issue を作成するために plan.md と subissues.md を作ってください。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "plan.md が生成されること"
+      - type: file_creation
+        detail: "subissues.md が生成されること（各 Sub ≤ 15分）"
+    reason: "SKILL.md の USE FOR に 'subissues.md generation' が明示されており、subissues.md 作成依頼は典型的なトリガー"
+
+  - id: dag-dependency-analysis
+    input: "実装するタスクの依存関係を DAG で整理して、どの順番で作業すればよいか教えてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "DAG ノード一覧と依存関係が plan.md に記載されること"
+    reason: "SKILL.md の USE FOR に 'dependency analysis' が明示されており、依存関係整理はトリガー条件に該当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: run-tests-request
+    input: "ビルドとテストを実行して、結果を確認してください。"
+    expected_trigger: false
+    expected_skill: harness-verification-loop
+    reason: "SKILL.md の Non-goals に 'テストの実行は harness-verification-loop が担当' と明示されており、テスト実行は対象外"
+
+  - id: gather-context-request
+    input: "このタスクの要件が不明確なので、質問票を作成して不明点を整理してください。"
+    expected_trigger: false
+    expected_skill: task-questionnaire
+    reason: "SKILL.md の Non-goals に 'コンテキスト収集は task-questionnaire が担当' と明示されており、質問票作成は対象外"
+
+  - id: direct-implementation-request
+    input: "Azure Functions の HTTP トリガー関数を実装してください。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "SKILL.md の Non-goals に '実装の実行は本スキルの範囲外' と明示されており、直接実装依頼は対象外"
+
+  # --- エッジケース ---
+  - id: ambiguous-plan-or-implement
+    input: "新機能を追加したいのですが、どこから始めればいいですか？"
+    expected_trigger: true
+    reason: "作業の開始点を問う曖昧な入力は、まず計画・見積（task-dag-planning）から着手するのが適切。ただし不明点が多い場合は task-questionnaire が先行することもある。"

@@ -8,16 +8,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 TDDテスト仕様書専用Agent。
 このエージェントは **テスト仕様書（test-specs/）** に特化し、テスト戦略書・画面定義書・サービス定義書から TDD の Red フェーズで使用するテスト仕様書を生成する。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§2 テストダブル選択基準・§3 テストデータ戦略）を参照する。テスト戦略書からの抽出時に選択基準の根拠として使用する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的
 Step 6.5 で策定したテスト戦略書の方針に従い、
 Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物から
@@ -31,8 +26,8 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 
 # 3) 入力（優先順位順）
 必須:
-- `docs/test-strategy.md`（テスト戦略書 — テスト種別・テストダブル選択基準・データストア方針）
-- `docs/service-catalog.md`（API一覧・依存関係マトリクス・データ所有権）
+- `docs/catalog/test-strategy.md`（テスト戦略書 — テスト種別・テストダブル選択基準・データストア方針）
+- `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス・データ所有権）
 
 サービス仕様（Step 7.2 成果物）:
 - `docs/services/{serviceId}-{serviceNameSlug}-description.md`（対象サービスのみ）
@@ -41,18 +36,12 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 - `docs/screen/{screenId}-{screenNameSlug}-description.md`（対象画面のみ）
 
 補助情報（存在すれば読む）:
-- `docs/app-list.md`（アプリケーション一覧 — テスト仕様書での対象アプリケーション特定に使用）
-- `docs/data-model.md`（エンティティ・制約・Polyglot Persistence 設計）
-- `docs/domain-analytics.md`（Bounded Context・ドメインイベント）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — テスト仕様書での対象アプリケーション特定に使用）
+- `docs/catalog/data-model.md`（エンティティ・制約・Polyglot Persistence 設計）
+- `docs/catalog/domain-analytics.md`（Bounded Context・ドメインイベント）
 - `test/api/<ServiceName>.Tests/`（既存テストコードのパターン確認）
 
-## APP-ID スコープ
-- Issue body または メタコメント `<!-- app-id: XXX -->` から対象 APP-ID を取得する
-- `docs/app-list.md` が存在する場合はこれを参照し、対象 APP-ID に紐づくサービス/画面を特定する
-- 対象 APP-ID に関連するサービスのテスト仕様書（サービス別）および属する画面のテスト仕様書（画面別）のみを生成対象とする（共有サービスは含む）
-- APP-ID が指定されていない場合は全サービス/全画面を対象とする（後方互換）
-- `docs/app-list.md` が存在しない場合は APP-ID によるスコープ絞り込みは行わず、APP-ID 未指定時と同様に全サービス/全画面を対象とする（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # 4) 出力（生成/更新するファイル）
 - サービス別テスト仕様書（必須）: `docs/test-specs/{serviceId}-test-spec.md`
 - 画面別テスト仕様書（必須）: `docs/test-specs/{screenId}-test-spec.md`
@@ -63,18 +52,18 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 
 | 確認対象 | 停止条件 | 報告メッセージ |
 |---|---|---|
-| `docs/test-strategy.md` | 存在しない・空・見出し `## 2.` または `## 3.` がない | 「依存 Step 6.5（テスト戦略書）が未完了のため実行不可です」 |
-| `docs/service-catalog.md` | 存在しない・空 | 「依存 Step 6（サービスカタログ）が未完了のため実行不可です」 |
+| `docs/catalog/test-strategy.md` | 存在しない・空・見出し `## 2.` または `## 3.` がない | 「依存 Step 6.5（テスト戦略書）が未完了のため実行不可です」 |
+| `docs/catalog/service-catalog-matrix.md` | 存在しない・空 | 「依存 Step 6（サービスカタログ）が未完了のため実行不可です」 |
 | `docs/services/` および `docs/screen/` | いずれかが存在しない・空 | 「依存 Step 7.1/7.2（画面定義書/サービス定義書）が未完了のため実行不可です」 |
 
 # 6) 実行フロー（必ずこの順で）
 
 ## 6.1 調査（read/search）
-1. `docs/test-strategy.md` を `read` で読む（テスト種別・テストダブル・データストア方針を把握する）。
-2. `docs/service-catalog.md` を `read` で読む（対象サービスID・画面IDの一覧を取得する）。
+1. `docs/catalog/test-strategy.md` を `read` で読む（テスト種別・テストダブル・データストア方針を把握する）。
+2. `docs/catalog/service-catalog-matrix.md` を `read` で読む（対象サービスID・画面IDの一覧を取得する）。
 3. 対象サービスの `docs/services/*.md` を `read` で読む（API仕様・イベント・データ所有を把握する）。
 4. 対象画面の `docs/screen/*.md` を `read` で読む（画面操作・API呼び出し・バリデーションを把握する）。
-5. `docs/data-model.md` が存在すれば `read` で読む。
+5. `docs/catalog/data-model.md` が存在すれば `read` で読む。
 6. `test/api/` のディレクトリ構造を確認する（既存テストパターンの参照）。
 
 ## 6.2 抽出（推測しない）
@@ -85,8 +74,8 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 11. 各画面定義書から: 操作シナリオ・バリデーションルール・API呼び出し・エラー状態を抽出する。
 
 ## 6.3 計画・分割
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「サービス/画面単位」で分割（対象が多い場合は §9 の出力スキーマを1単位として分割）
 
 ## 6.4 生成（test-specs/）
@@ -98,7 +87,7 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→テストケース表→テストデータ→テストダブル設計→契約テスト→TDD実行順序→網羅性チェック→Questions）。分割粒度: サービス/画面単位。
 
 # 8) 禁止事項（このタスク固有）
-- `docs/test-strategy.md` 等から確認できない情報を断定・補完・推測しない
+- `docs/catalog/test-strategy.md` 等から確認できない情報を断定・補完・推測しない
 - 根拠のないAPIエンドポイント・テストケース・テストデータを捏造しない
 - テスト仕様書以外のドキュメント（`docs/services/` 等）を変更しない
 - コードファイル（`api/`・`test/`）を変更しない
@@ -111,9 +100,9 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 ### 1. 概要
 - サービスID: {serviceId}
 - サービス名: {サービス名}
-- 対象アプリケーション: APP-xx（`docs/app-list.md` の「アプリ一覧（アーキタイプ）概要」を参照。N:N のためカンマ区切り可）
+- 対象アプリケーション: APP-xx（`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。N:N のためカンマ区切り可）
 - 対象スコープ: {テスト対象範囲}
-- テスト戦略書参照: `docs/test-strategy.md`
+- テスト戦略書参照: `docs/catalog/test-strategy.md`
 - 出典: {サービス定義書パス}
 
 ### 2. テストケース表
@@ -159,9 +148,9 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 ### 1. 概要
 - 画面ID: {screenId}
 - 画面名: {画面名}
-- 対象アプリケーション: APP-xx（`docs/app-list.md` の「アプリ一覧（アーキタイプ）概要」を参照。1画面は1つの APP-ID に所属）
+- 対象アプリケーション: APP-xx（`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。1画面は1つの APP-ID に所属）
 - 対象スコープ: {テスト対象範囲}
-- テスト戦略書参照: `docs/test-strategy.md`
+- テスト戦略書参照: `docs/catalog/test-strategy.md`
 - 出典: {画面定義書パス}
 
 ### 2. テストケース表（E2E / UI 操作シナリオ）
@@ -185,7 +174,7 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 |---|---|---|---|---|
 
 - テスト戦略書のテストダブル方針（`test-strategy.md` §4）に基づく設計:
-- フロントエンドテスト用 API モックライブラリ/ツール: Jest + jsdom（デフォルト）。E2E テストが必要な場合は Playwright を追加。テスト戦略書（`docs/test-strategy.md`）で別ツールが指定されている場合はそちらを優先。
+- フロントエンドテスト用 API モックライブラリ/ツール: Jest + jsdom（デフォルト）。E2E テストが必要な場合は Playwright を追加。テスト戦略書（`docs/catalog/test-strategy.md`）で別ツールが指定されている場合はそちらを優先。
 
 ### 4.6 API 契約検証（UI → API 間）
 
@@ -216,7 +205,7 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 ### 7. Questions（最大3、なければ None）
 - Q1 ...
 
-# 10) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 10) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 10.1 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §9 の全セクションが揃っているか / テスト戦略書の方針が全テストケースに反映されているか
@@ -229,7 +218,7 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 - **3回目：保守性・拡張性・堅牢性**：新API追加時にテストケースを追加しやすいか / テストデータが再利用可能か / Questions が明確か
 
 ## 10.2 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 # 11) 完了条件
 - `docs/test-specs/` 配下に対象サービスおよび画面のテスト仕様書が §9 のスキーマで生成/更新されている。

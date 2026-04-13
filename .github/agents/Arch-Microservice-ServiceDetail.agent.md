@@ -5,24 +5,20 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Microservice-ServiceDetail/Issue-<識別子>/`
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 参照順序（最優先の根拠）
-1. 仕様テンプレ（本文構造の正）：`.github/instructions/microservice-definition.instructions.md`
+1. 仕様テンプレ（本文構造の正）：`.github/skills/planning/microservice-design-guide/references/microservice-definition.md`
 2. サービス定義（必ず最初に読む）:
-   - `docs/service-list.md`
-   - `docs/domain-analytics.md`
-   - `docs/service-catalog.md`
-   - `docs/data-model.md`
-   - `docs/app-list.md`（アプリケーション一覧 — サービスが属する APP-ID の判定根拠）
+   - `docs/catalog/service-catalog.md`
+   - `docs/catalog/domain-analytics.md`
+   - `docs/catalog/service-catalog-matrix.md`
+   - `docs/catalog/data-model.md`
+   - `docs/catalog/app-catalog.md`（アプリケーション一覧 — サービスが属する APP-ID の判定根拠）
 3. テスト戦略（存在すれば読む — テスタビリティ観点の設計指針として参照。API 設計時にモック可能なインターフェース設計を考慮する）:
-   - `docs/test-strategy.md`
+   - `docs/catalog/test-strategy.md`
 4. サンプルデータ（値の転記は禁止。要約のみ）:
    - `data/sample-data.json`
 
@@ -45,18 +41,17 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 # 3) 実行フロー（15分バッチ）
 ## 3.1 準備（必須）
-1) `{WORK}` が無ければ作る（README/planは AGENTS.md の規約に従う）。
+1) `{WORK}` が無ければ作る（README/planは Skill work-artifacts-layout の規約に従う）。
 2) 参照ファイルを読み、`service-list` からサービス一覧（serviceId/serviceName）を確定する。
    - 一覧の根拠（どのファイルから確定したか）を `{WORK}plan.md` か `README.md` に残す。
 
 ## 3.2 計画（必須）
-- `AGENTS.md` のフォーマットに従い、DAG+見積を `{WORK}plan.md` に作る。
-- **分割要否は AGENTS.md §2.2 の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**:
-  - **`見積合計 > 15分` または `不確実性が中/高` の場合は `SPLIT_REQUIRED`** として扱う。
+- `Skill task-dag-planning` のフォーマットに従い、DAG+見積を `{WORK}plan.md` に作る。
+- **分割要否は Skill task-dag-planning の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**。詳細は Skill `task-dag-planning` を参照。
   - plan.md のメタデータを §2.3 準拠で設定する（`implementation_files: false` 必須）
-  - `{WORK}subissues.md` を AGENTS.md §2.3 のフォーマットで作成する（`subissues_count ≥ 1` 必須）
+  - `{WORK}subissues.md` を Skill task-dag-planning のフォーマットで作成する（`subissues_count ≥ 1` 必須）
   - **最初のSub（=今回の15分で処理するserviceIdの集合）だけ**実行対象にする。
-  - ⚠️ 「全サービス一括」「1バッチで完了」「完全な解を優先」等の判断は、見積・不確実性を含む AGENTS.md §2.2 の分割判定により禁止。
+  - ⚠️ 「全サービス一括」「1バッチで完了」「完全な解を優先」等の判断は、Skill task-dag-planning の分割判定により禁止。
 
 ## 3.3 実行（15分でできる分だけ）
 - 今回対象の serviceId のみ処理する（対象外は触らない）。
@@ -67,7 +62,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   3) `sample-data.json` の具体値は転記しない（要約のみ）
   4) 進捗ログに1行追記 or 更新（重複行を作らない）
 
-## 3.4 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 3.4 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 3.4.2 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：15分バジェット内に処理対象が完了でき、テンプレ章立てが崩れていないか
@@ -75,7 +70,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・堅牢性**：サンプルデータ要約のみで、根拠が明確で、重複行がなく、再実行に耐えられるか
 
 ### 3.4.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ## 3.5 残作業の切り出し（必須）
 - 未処理サービスが残る場合:
@@ -95,7 +90,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1) `read` で空を確認
   2) 直前の作業を小さな塊（目安 2,000〜5,000文字）に分けて複数回 `edit`
   3) 各回の後に `read` で先頭を確認し、失敗していれば最大3回までやり直す
-- 大量生成/長文は `AGENTS.md` と skill（large-output-chunking）のルールを優先する。
+- 大量生成/長文は `Skill large-output-chunking` のルールを優先する。
 
 # 6) 禁止事項（このタスク固有）
 - `sample-data.json` の値を転記しない（要約のみ）

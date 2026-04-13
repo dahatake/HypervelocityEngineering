@@ -1,0 +1,51 @@
+skill: input-file-validation
+skill_path: .github/skills/planning/input-file-validation/SKILL.md
+description: Custom Agent の入力ファイル（必読ファイル・推奨ファイル）の存在確認と欠損時の処理ルールを提供する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: required-file-check-at-start
+    input: "作業開始時に必読ファイル（docs/catalog/service-catalog.md、docs/catalog/domain-analytics.md）の存在を確認してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "各ファイルの存在を確認し、欠損ファイルがある場合は TBD（ファイル未検出: {パス}）と明記する"
+    reason: "USE FOR: input file check, required file validation に該当する"
+
+  - id: missing-file-tbd-handling
+    input: "docs/architectural-requirements-app-08.md が見つからない場合の処理方針を教えてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "欠損時デフォルト処理を適用: TBD（ファイル未検出: docs/architectural-requirements-app-08.md）と明記し続行する"
+    reason: "USE FOR: missing file handling, TBD fallback for missing files に該当する"
+
+  - id: optional-file-skip-and-continue
+    input: "推奨ファイル（docs/catalog/data-model.md）が存在しない場合に作業を続行できるか確認したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "推奨ファイルは存在しなくても作業は進められる。存在しない場合はスキップして続行する"
+    reason: "WHEN: 推奨ファイルの参照判定 に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-file-creation
+    input: "docs/catalog/service-catalog.md を新規作成してほしい"
+    expected_trigger: false
+    expected_skill: "work-artifacts-layout"
+    reason: "DO NOT USE FOR: file creation (use work-artifacts-layout) に該当する"
+
+  - id: not-for-content-analysis
+    input: "docs/catalog/domain-analytics.md の内容を分析してドメインモデルを抽出してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: file content analysis に該当する。内容分析は Arch 系 Agent が担当"
+
+  # --- エッジケース ---
+  - id: edge-agent-override-stop-on-missing
+    input: "必読ファイルが欠損している場合は作業を停止してユーザーに通知してほしい（Agent 固有のオーバーライド）"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Agent 固有のオーバーライド（停止）を適用する。デフォルトの TBD 記載で続行ではなく、作業を中断しユーザーに通知する"
+    reason: "Agent 固有のオーバーライドセクションに該当するエッジケース"

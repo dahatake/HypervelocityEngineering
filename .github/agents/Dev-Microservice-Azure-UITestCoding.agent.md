@@ -8,50 +8,32 @@ tools: ["*"]
 TDD RED フェーズ UI テストコード生成専用Agent。
 このエージェントは **画面別テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- 本エージェントは、以下の SKILL.md に定義された手順・ルールを前提とする:
-  - `task-dag-planning`
-  - `work-artifacts-layout`
-  - `large-output-chunking`
-  - `repo-onboarding-fast`（必要な場合のみ）
-- これらと他の指示が矛盾する場合の優先順位は、次のとおりとする:
-  1. リポジトリルートの `AGENTS.md`
-  2. 本ファイル（`.github/agents/Dev-Microservice-Azure-UITestCoding.agent.md`）
-  3. 各 `SKILL.md`
+## Agent 固有の Skills 依存
+- `repo-onboarding-fast`：リポジトリ高速オンボーディング（必要な場合のみ）
 
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的（スコープ固定）
 - 対象は **1画面分のみ**：`{画面ID}-{画面名}`。
 - 目的は「画面別テスト仕様書に基づく TDD RED フェーズの UI テストコード生成」。
 - テストは **実行すると失敗する（RED 状態）** を目指す。
-- 実装コード（`app/` 配下）の作成・変更は **スコープ外**（これは後続の `Dev-Microservice-Azure-UICoding` が行う）。
-- "全画面対応""設計刷新""横断リファクタ"は範囲外（必要なら AGENTS.md の分割ルールで別タスク化）。
+- 実装コード（`src/app/` 配下）の作成・変更は **スコープ外**（これは後続の `Dev-Microservice-Azure-UICoding` が行う）。
+- "全画面対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 # 2) 入力（優先順位順）
 必須:
 - `docs/test-specs/{screenId}-test-spec.md`（画面別テスト仕様書 — テストケース表(E2E/UIシナリオ)・バリデーションテストケース・テストデータ定義・APIモック/テストダブル設計・アクセシビリティテスト・TDD実行順序）
-- `docs/test-strategy.md`（テスト戦略書 — テスト種別・テストダブル選択基準）
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/test-strategy.md`（テスト戦略書 — テスト種別・テストダブル選択基準）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 参照候補（存在すれば読む）:
 - `docs/screen/{screenId}-{screenNameSlug}-description.md`（画面定義書 — UI要素・操作シナリオ・バリデーションルールの確認用）
-- `docs/screen-list.md`（画面一覧・遷移図）
-- `docs/service-catalog.md`（API一覧・依存関係マトリクス）
+- `docs/catalog/screen-catalog.md`（画面一覧・遷移図）
+- `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス）
 - `data/sample-data.json`（サンプルデータ）
 - `test/ui/` ディレクトリ構造（既存テストコードのパターン確認）
 
-## APP-ID スコープ
-- Issue body または メタコメント `<!-- app-id: XXX -->` から対象 APP-ID を取得する
-- `docs/app-list.md` が存在する場合はこれを参照し、対象 APP-ID に属する画面を特定する（APP × 画面 = 1:1）
-- 対象 APP-ID に属する画面のみをテストコード生成対象とする
-- APP-ID が指定されていない場合は全画面を対象とする（後方互換）
-- `docs/app-list.md` が存在しない場合は APP-ID によるスコープ絞り込みは行わず、全画面を対象とする（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # 3) 出力（成果物）
 必須:
 - `test/ui/{screenId}/` 配下に UI テストコード
@@ -67,7 +49,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 任意だが推奨:
 - `test/ui/{screenId}/README.md`（テストの実行方法・前提条件・RED 状態の説明）
 
-作業ログ（AGENTS.md 既定）:
+作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
 
 # 4) 依存確認（必須・最初に実行）
@@ -79,13 +61,13 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 | `docs/test-specs/{screenId}-test-spec.md` | バリデーションテストケース表（`### 3.`）がない | 「依存 Step 5.3（画面別テスト仕様書）の §3 バリデーションテストケース表が未完了のため実行不可です」 |
 | `docs/test-specs/{screenId}-test-spec.md` | API モック / テストダブル設計（`### 4.5`）がない | 「依存 Step 5.3（画面別テスト仕様書）の §4.5 API モック設計が未完了のため実行不可です」 |
 | `docs/test-specs/{screenId}-test-spec.md` | TDD 実行順序（`### 5.`）がない | 「依存 Step 5.3（画面別テスト仕様書）の §5 TDD 実行順序が未完了のため実行不可です」 |
-| `docs/test-strategy.md` | 存在しない・空 | 「依存 Step 4.5（テスト戦略書）が未完了のため実行不可です」 |
+| `docs/catalog/test-strategy.md` | 存在しない・空 | 「依存 Step 4.5（テスト戦略書）が未完了のため実行不可です」 |
 
 # 5) 実行手順（この順で）
 
 ## 5.1) リポジトリ慣習の特定（推測禁止）
 - 既存の `test/ui/` 配下にテストがあれば、フレームワーク・構成・命名規則の"型"を踏襲する。
-- 既存の `app/` の技術スタック（HTML5/CSS/JavaScript 等）を確認し、テスト技術を決定する。
+- 既存の `src/app/` の技術スタック（HTML5/CSS/JavaScript 等）を確認し、テスト技術を決定する。
 - 見つからなければ Questions。
 
 ## 5.2) テスト仕様書の解析
@@ -119,9 +101,9 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - 実行結果を作業ログに記録する。
 
 # 6) 禁止事項（このタスク固有）
-- `app/` 配下の実装コードを作成・変更しない（これは後続の `Dev-Microservice-Azure-UICoding` が行う）。
+- `src/app/` 配下の実装コードを作成・変更しない（これは後続の `Dev-Microservice-Azure-UICoding` が行う）。
 - テスト仕様書（`docs/test-specs/`）を変更しない。
-- テスト戦略書（`docs/test-strategy.md`）を変更しない。
+- テスト戦略書（`docs/catalog/test-strategy.md`）を変更しない。
 - 画面定義書（`docs/screen/`）を変更しない。
 - テスト仕様書から確認できない情報を断定・補完・推測しない。
 - 根拠のないテストケース・テストデータを捏造しない。
@@ -138,7 +120,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - 各テストが AAA パターン（Arrange / Act / Assert）で構造化されている。
 - 作業ログと README が更新されている。
 
-# 8) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 8) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 3つの異なる観点（TDD RED フェーズ UI テストコードの場合）
 - **1回目：テスト仕様書との整合性**：テストケース表・バリデーションテスト・A11y テストの全行がテストコードに反映されているか、テストデータが仕様書と一致しているか、API モック設計が仕様書の方針と一致しているか、出典コメントが正確か
@@ -146,7 +128,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/フィクスチャの再利用性、新テストケース追加時の変更容易性、既存テスト資産との一貫性、テストフレームワークの選定妥当性
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

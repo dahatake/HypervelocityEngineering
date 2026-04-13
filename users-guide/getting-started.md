@@ -74,7 +74,6 @@ your-project/
 │   ├── workflows/
 │   ├── scripts/
 │   └── copilot-instructions.md
-├── AGENTS.md
 ├── README.md
 ├── users-guide/
 └── ... (その他のプロジェクトファイル)
@@ -136,7 +135,7 @@ GitHub リポジトリの **Settings → Copilot → Cloud agent → MCP Servers
 - Azure MCP Server 設定: [Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/developer/azure-mcp-server/how-to/github-copilot-coding-agent)
 - Microsoft Learn Docs MCP Server: [Qiita 解説記事](https://qiita.com/dahatake/items/4f6f0deb53333c0200ef)
 
-> SDK 版の MCP Server 設定については [SDK ユーザーガイド 付録A](./SDK-Guide.md#付録a-mcp-server-設定ガイド) を参照してください。
+> SDK 版の MCP Server 設定については [SDK ユーザーガイド 付録A](./sdk-guide.md#付録a-mcp-server-設定ガイド) を参照してください。
 
 ---
 
@@ -161,7 +160,7 @@ npx -y skills add microsoft/skills
 npx skills add microsoft/skills --skill '*' --agent copilot --yes --copy
 ```
 
-インストール後、`.github/skills/` 配下に SKILL.md ファイルが配置され、GitHub Copilot cloud agent が Azure 関連タスクで自動的に Skills を活用します（AGENTS.md §4.2 参照）。
+インストール後、`.github/skills/` 配下に SKILL.md ファイルが配置され、GitHub Copilot cloud agent が Azure 関連タスクで自動的に Skills を活用します（`.github/copilot-instructions.md` §1「ワークフロー概要」および §2「Skills ルーティングテーブル」参照）。
 
 ### 自動同期（推奨）
 
@@ -398,7 +397,7 @@ GitHub リポジトリの **Settings → Labels** からこれらのラベルを
 
 ## knowledge/ ディレクトリについて
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。これらは `qa-knowledge-management` ワークフロー（[09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) 参照）によって生成されます。ただし、**生成されるのは `qa/` の質問データに QA マッピングが存在する D クラスのみ**です（マッピングがない D クラスのファイルは生成されません）。
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。これらは `qa-knowledge-management` ワークフロー（[09-qa-knowledge-management.md](./09-qa-knowledge-management.md) 参照）によって生成されます。ただし、**生成されるのは `qa/` の質問データに QA マッピングが存在する D クラスのみ**です（マッピングがない D クラスのファイルは生成されません）。
 
 | ドキュメント（生成されたもののみ存在） | 内容 |
 |--------------------------------------|------|
@@ -427,8 +426,10 @@ GitHub リポジトリの **Settings → Labels** からこれらのラベルを
 
 ## 次のステップ
 
-セットアップが完了したら、いずれかの方法でワークフローを開始してください。
+セットアップが完了したら、まず全体像を把握してから方式を選んでください。
 
-- **Web UI 方式**: [web-ui-guide.md](./web-ui-guide.md)
-- **GitHub Copilot CLI SDK 版（ローカル実行）**: [SDK-Guide.md](./SDK-Guide.md)
+- **全体像の把握**: まず [overview.md](./overview.md) で全体像と 3 つの使い方を把握してください
+- **方式1（個別 Issue + Custom Agent 手動実行）**: [web-ui-guide.md](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
+- **方式2（ワークフローオーケストレーション Web）**: [web-ui-guide.md](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
+- **方式3（ローカル: GitHub Copilot CLI SDK 版）**: [sdk-guide.md](./sdk-guide.md)
 - **フェーズ別ガイド**: [README](../README.md)

@@ -1,0 +1,25 @@
+name: Validate Agents
+
+on:
+  push:
+    paths:
+      - '.github/agents/**'
+      - '.github/scripts/validate-agents.py'
+  pull_request:
+    paths:
+      - '.github/agents/**'
+      - '.github/scripts/validate-agents.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-agents:
+    name: Validate .agent.md frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate .agent.md files
+        run: |
+          python3 .github/scripts/validate-agents.py

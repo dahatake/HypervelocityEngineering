@@ -157,6 +157,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="QA 自動投入を有効化 (デフォルト: 無効)",
     )
     orch.add_argument(
+        "--force-interactive",
+        action="store_true",
+        default=False,
+        help=(
+            "QA 回答入力の TTY 判定をバイパスしてインタラクティブモードを強制する"
+            " (デフォルト: 無効。IDE ターミナル等で stdin が非 TTY 扱いになる場合に使用)"
+        ),
+    )
+    orch.add_argument(
         "--auto-contents-review",
         action="store_true",
         default=False,
@@ -274,9 +283,9 @@ def _build_parser() -> argparse.ArgumentParser:
     orch.add_argument(
         "--timeout",
         type=float,
-        default=7200.0,
+        default=21600.0,
         metavar="SECONDS",
-        help="idle タイムアウト秒数 (デフォルト: 7200 = 2時間)",
+        help="idle タイムアウト秒数 (デフォルト: 21600 = 6時間)",
     )
     orch.add_argument(
         "--review-timeout",
@@ -307,7 +316,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--app-id",
         default=None,
         metavar="APP_ID",
-        help="アプリ ID (ASDW/ABDV 等で使用)",
+        help="アプリ ID (ASDW/ABDV 等で使用)。後方互換のため残す。複数指定は --app-ids を使用",
+    )
+    orch.add_argument(
+        "--app-ids",
+        default=None,
+        metavar="APP_IDS",
+        help="対象アプリケーション (APP-ID) — カンマ区切りで複数指定可 (例: APP-01,APP-02,APP-03)",
     )
     orch.add_argument(
         "--resource-group",
@@ -363,6 +378,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PROMPT",
         help="全 Custom Agent の prompt 末尾に追記する文字列 (省略可)",
+    )
+
+    # 追加コメント
+    orch.add_argument(
+        "--additional-comment",
+        default=None,
+        metavar="COMMENT",
+        help="追加コメント（Issue body の ## 追加コメント セクションに反映される）",
     )
 
     # Issue タイトル
@@ -481,6 +504,7 @@ def _build_config(args: argparse.Namespace):
     cfg.model, _ = _resolve_model(cfg.model)
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
+    cfg.force_interactive = getattr(args, "force_interactive", False)
     cfg.auto_contents_review = args.auto_contents_review
     cfg.auto_coding_agent_review = args.auto_coding_agent_review
     cfg.auto_coding_agent_review_auto_approval = args.auto_coding_agent_review_auto_approval
@@ -553,8 +577,13 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["steps"] = []
 
     # ワークフロー固有
-    if args.app_id:
-        params["app_id"] = args.app_id
+    if getattr(args, "app_ids", None):
+        params["app_ids"] = [s.strip() for s in args.app_ids.split(",") if s.strip()]
+        if len(params["app_ids"]) == 1:
+            params["app_id"] = params["app_ids"][0]
+    elif args.app_id:
+        params["app_ids"] = [args.app_id.strip()]
+        params["app_id"] = args.app_id  # 後方互換
     if args.resource_group:
         params["resource_group"] = args.resource_group
     if args.batch_job_id:
@@ -583,6 +612,10 @@ def _build_params(args: argparse.Namespace) -> dict:
     # Issue タイトル上書き
     if args.issue_title:
         params["issue_title"] = args.issue_title
+
+    # 追加コメント
+    if args.additional_comment:
+        params["additional_comment"] = args.additional_comment
 
     return params
 
@@ -716,22 +749,33 @@ def _cmd_run_interactive() -> int:
 
     # ── タイムアウト設定 ────────────────────────────────
     timeout_str = con.prompt_input(
-        "セッション idle タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
+        "セッション idle タイムアウト（秒。デフォルト: 21600 = 6時間）", default="21600"
     )
     try:
-        timeout_val = float(timeout_str or "7200")
+        timeout_val = float(timeout_str or "21600")
     except ValueError:
-        con.warning("無効な値のため、デフォルトの 7200 秒を使用します。")
-        timeout_val = 7200.0
+        con.warning("無効な値のため、デフォルトの 21600 秒を使用します。")
+        timeout_val = 21600.0
     if timeout_val <= 0:
-        con.warning("0 以下のタイムアウト値は無効なため、デフォルトの 7200 秒を使用します。")
-        timeout_val = 7200.0
+        con.warning("0 以下のタイムアウト値は無効なため、デフォルトの 21600 秒を使用します。")
+        timeout_val = 21600.0
 
     if is_aqkm:
         auto_qa = False
         auto_review = False
+        qa_answer_mode = None
+        force_interactive = False
     else:
         auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
+        if auto_qa:
+            qa_answer_mode = con.prompt_answer_mode()
+            force_interactive = con.prompt_yes_no(
+                "インタラクティブ入力を強制する（IDE 等で stdin が非 TTY 扱いになる場合）？",
+                default=False,
+            )
+        else:
+            qa_answer_mode = None
+            force_interactive = False
         auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
     create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
     create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
@@ -793,6 +837,13 @@ def _cmd_run_interactive() -> int:
         f"出力レベル   : {verbosity_key}",
         f"タイムアウト  : {timeout_val:.0f} 秒",
         f"QA 自動      : {'ON' if auto_qa else 'OFF'}",
+    ]
+    if auto_qa and qa_answer_mode:
+        _qa_mode_display = "全問一括" if qa_answer_mode == "all" else "1問ずつ" if qa_answer_mode == "one" else qa_answer_mode
+        summary_lines.append(f"QA 回答モード : {_qa_mode_display}")
+    if auto_qa and force_interactive:
+        summary_lines.append(f"強制インタラクティブ: ON")
+    summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
         f"PR  作成     : {'ON' if create_pr else 'OFF'}",
@@ -824,7 +875,9 @@ def _cmd_run_interactive() -> int:
     cfg.model = model
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
+    cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
+    cfg.qa_answer_mode = qa_answer_mode
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
     cfg.verbosity = verbosity_value
@@ -852,6 +905,7 @@ def _cmd_run_interactive() -> int:
         "auto_qa": auto_qa,
         "auto_contents_review": auto_review,
         "steps": selected_step_ids,
+        "qa_answer_mode": qa_answer_mode,
     }
     params.update(params_extra)
 
@@ -869,7 +923,6 @@ def _cmd_run_interactive() -> int:
 
     # ── 実行 ──────────────────────────────────────────────
     con._print("", ts=False)
-    con.spinner_start("ワークフローを実行中...")
     try:
         result = asyncio.run(
             run_workflow(
@@ -879,11 +932,8 @@ def _cmd_run_interactive() -> int:
             )
         )
     except KeyboardInterrupt:
-        con.spinner_stop()
         con._print(f"\n  {s.YELLOW}中断されました。{s.RESET}")
         return 1
-    finally:
-        con.spinner_stop()
 
     # ── 結果表示 ──────────────────────────────────────────
     if result.get("error"):

@@ -5,16 +5,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Batch-MonitoringDesign/Issue-<識別子>/`
 
-## 0) 共通ルール
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## Agent 固有の Skills 依存
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチ処理監視・運用設計書作成専用Agent。
@@ -56,8 +50,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.2 計画・分割
 
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Execution（Split Mode でない場合のみ）
 
@@ -115,7 +109,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→メトリクス→アラート→ダッシュボード→ログ→運用手順→参照）。分割粒度: §5 の出力セクション単位。
 
-## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 7.2 3つの異なる観点（このエージェント固有）
 
@@ -124,4 +118,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・安全性**：メトリクス定義と閾値の根拠が明記されているか。ログ設計が Application Insights の `customDimensions` と整合しているか。TBD の運用が適切か。
 
 ### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

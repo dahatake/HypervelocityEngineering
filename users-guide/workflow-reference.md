@@ -19,7 +19,7 @@
 
 | ファイル名 | 用途 | トリガー |
 |-----------|------|---------|
-| `auto-app-selection.yml` | アプリケーション選定（AAS）オーケストレーター | `auto-app-selection` ラベル付き Issue |
+| `auto-app-selection.yml` | アプリケーションアーキテクチャ設計（AAS）オーケストレーター | `auto-app-selection` ラベル付き Issue |
 | `auto-app-design.yml` | アプリケーション設計（AAD）オーケストレーター | `auto-app-design` ラベル付き Issue |
 | `auto-app-dev-microservice-azure.yml` | マイクロサービス実装（ASDW）オーケストレーター | `auto-app-dev-microservice` ラベル付き Issue |
 | `auto-batch-design.yml` | バッチ設計（ABD）オーケストレーター | `auto-batch-design` ラベル付き Issue |
@@ -35,7 +35,7 @@
 | `label-split-mode.yml` | `[WIP]` タイトルの PR に `split-mode` ラベルを付与 | PR オープン / 編集 |
 | `check-split-mode.yml` | `split-mode` PR での実装ファイル変更を検知・警告 | PR プッシュ |
 | `validate-plan.yml` | `plan.md` のフォーマット・分割判定を検証 | PR プッシュ |
-| `audit-plans.yml` | plan.md の監査（全 plan.md の AGENTS.md 違反スキャン） | 毎週月曜 3:00 UTC / 手動 |
+| `audit-plans.yml` | plan.md の監査（全 plan.md のメタデータ違反スキャン／Skill `task-dag-planning` 準拠チェック） | 毎週月曜 3:00 UTC / 手動 |
 | `validate-knowledge.yml` | knowledge ドキュメントの検証 | `knowledge/D??-*.md` の PR / push / 手動 |
 | `setup-labels.yml` | ラベル初期セットアップ（`.github/labels.json` から一括作成・更新） | `setup-labels` ラベル付き Issue / `workflow_dispatch` |
 | `sync-azure-skills.yml` | microsoft/skills から Azure Skills を定期同期 | 毎週月曜 9:00 UTC / 手動 |
@@ -46,7 +46,7 @@
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
-| `aas` | App Selection | `auto-app-selection.yml` |
+| `aas` | App Architecture Design | `auto-app-selection.yml` |
 | `aad` | App Design | `auto-app-design.yml` |
 | `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure.yml` |
 | `abd` | Batch Design | `auto-batch-design.yml` |
@@ -63,7 +63,7 @@
 
 | ラベル名 | 役割 |
 |---------|------|
-| `auto-app-selection` | **アプリケーション選定ワークフロー（AAS）の起動トリガー**。Issue にこのラベルが付与されると、AAS オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする |
+| `auto-app-selection` | **アプリケーションアーキテクチャ設計ワークフロー（AAS）の起動トリガー**。Issue にこのラベルが付与されると、AAS オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-design` | **アプリケーション設計ワークフロー（AAD）の起動トリガー**。Issue にこのラベルが付与されると、AAD オーケストレーターが起動し、Step.1〜7.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-software-design` | **[過去互換/未使用] 設計ワークフロー用ラベル**。現在、このラベルに対応する ASD ワークフローや Issue テンプレートは `.github/workflows/` / `.github/ISSUE_TEMPLATE/` に存在しないため、付与してもオーケストレーターは起動しません |
 | `auto-app-dev-microservice` | **マイクロサービス開発ワークフローの起動トリガー**。Issue にこのラベルが付与されると、ASDW オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
@@ -137,7 +137,7 @@
 
 | Agent 名 | 用途 |
 |---------|------|
-| `Arch-AIAgentDesign` | AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、docs/AI-Agents-list.md に出力 |
+| `Arch-AIAgentDesign` | AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、docs/ai-agent-catalog.md に出力 |
 
 ### アーキテクチャ設計 — 改善
 
@@ -149,7 +149,7 @@
 
 | Agent 名 | 用途 |
 |---------|------|
-| `Arch-TDD-TestStrategy` | サービスカタログ・データモデルから TDD テスト戦略書を docs/test-strategy.md に生成 |
+| `Arch-TDD-TestStrategy` | サービスカタログ・データモデルから TDD テスト戦略書を docs/catalog/test-strategy.md に生成 |
 | `Arch-TDD-TestSpec` | テスト戦略書・画面/サービス定義書から TDD テスト仕様書を docs/test-specs/ に生成 |
 | `Arch-Batch-TestStrategy` | バッチ処理テスト戦略書（冪等性 / データ品質 / 障害注入）を docs/batch/batch-test-strategy.md に作成 |
 | `Arch-Batch-TDD-TestSpec` | バッチ TDD テスト仕様書をジョブごとに docs/test-specs/{jobId}-test-spec.md に生成 |
@@ -194,7 +194,7 @@
 | `QA-AzureDependencyReview` | サービスカタログ準拠で Azure 依存（参照 / 設定 / IaC）を証跡付きで点検 |
 | `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
 | `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
-| `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。AGENTS.md §10.1 Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
+| `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。Skill: harness-verification-loop Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
 | `QA-KnowledgeManager` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、knowledge/business-requirement-document-status.md を生成 |
 
 ---
@@ -225,7 +225,7 @@
 
 | ファイル名 | 用途 | トリガーラベル |
 |-----------|------|-------------|
-| `app-selection.yml` | アプリケーション選定ワークフロー起動 | `auto-app-selection` |
+| `app-selection.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` |
 | `app-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-design` |
 | `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
@@ -233,3 +233,46 @@
 | `qa-knowledge-management.yml` | knowledge ドキュメント管理 | `qa-knowledge-management` |
 | `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
 | `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |
+
+---
+
+## Skills 一覧と Agent-Skills 対応
+
+`.github/skills/` 配下の全 Skills と、主な利用 Agent の対応表です。
+
+### 共通 Skills（全 Agent）
+
+| Skill 名 | パス | 説明 |
+|---------|------|------|
+| `agent-common-preamble` | `.github/skills/planning/agent-common-preamble/` | 全 Agent 共通ルール・Skills 参照リスト |
+| `input-file-validation` | `.github/skills/planning/input-file-validation/` | 必読ファイル確認・欠損時処理 |
+| `app-scope-resolution` | `.github/skills/planning/app-scope-resolution/` | APP-ID スコープ解決 |
+| `task-questionnaire` | `.github/skills/planning/task-questionnaire/` | 質問票作成 |
+| `task-dag-planning` | `.github/skills/planning/task-dag-planning/` | DAG計画・分割判定 |
+| `work-artifacts-layout` | `.github/skills/planning/work-artifacts-layout/` | work/ 構造設計 |
+
+### ドメイン Skills
+
+| Skill 名 | パス | 主な利用 Agent |
+|---------|------|-------------|
+| `architecture-questionnaire` | `.github/skills/planning/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer` |
+| `knowledge-management` | `.github/skills/planning/knowledge-management/` | `QA-KnowledgeManager` |
+| `mcp-server-design` | `.github/skills/planning/mcp-server-design/` | MCP Server 設計時 |
+| `batch-design-guide` | `.github/skills/planning/batch-design-guide/` | `Arch-Batch-*`, `Dev-Batch-*` |
+| `microservice-design-guide` | `.github/skills/planning/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*` |
+
+## APP-ID 指定方法
+
+Issue body または PR body に以下の HTML コメントを含めることで、特定の APP-ID にスコープを絞り込めます：
+
+```html
+<!-- app-id: APP-01 -->
+```
+
+複数の APP-ID を指定する場合：
+
+```html
+<!-- app-id: APP-01, APP-03 -->
+```
+
+APP-ID 未指定の場合は全サービス/全画面が対象となります（後方互換）。

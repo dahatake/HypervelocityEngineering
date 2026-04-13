@@ -5,13 +5,11 @@ tools: ["*"]
 ---
 > **WORK**: `work/QA-AzureDependencyReview/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 ## スコープ（このエージェントの専門）
 - **サービスカタログ（docs/usecase/<usecase>/service-catalog.md）を一次情報**として、コード/設定/IaC/CI が Azure リソースを **正しく参照**しているかを点検する。
 - 目的は「**依存関係の整合性レビュー + 証跡（evidence）付きレポート**」。
@@ -20,21 +18,18 @@ tools: ["*"]
 ## 入力（未確定なら質問）
 必須：
 - リソースグループ名：`<resource-group>`（実環境照会を行う場合のみ必須）
-- 必読：`docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- 必読：`docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 推奨（存在するなら参照）：
-- `docs/azure/AzureServices-services*.md`
-- `docs/azure/AzureServices-data*.md`
-- 参照先コード：`app/`, `api/`, `infra/`, `config/`, `.github/workflows/`
+- `docs/azure/azure-services-compute.md`
+- `docs/azure/azure-services-data.md`
+- 参照先コード：`src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で関連する Azure 依存特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全依存対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## 出力（固定）
-- 最終成果物：`docs/azure/DependencyReview-Report.md`
-- 中間成果物（計画/メモ/抽出物）：`{WORK}`（AGENTS.mdの規約に従う）
+- 最終成果物：`docs/azure/dependency-review-report.md`
+- 中間成果物（計画/メモ/抽出物）：`{WORK}`（Skill work-artifacts-layout の規約に従う）
 
 ## 実行モード
 - **Review mode（既定）**：レポート作成のみ。コード変更は行わない。
@@ -42,9 +37,9 @@ tools: ["*"]
   - 例外：明らかな誤参照（typo/古いRG/存在しないキー名など）で、影響が局所・検証可能なら、自動修正してよい（ただし変更理由と検証を必ず記載）。
 
 ## 手順（Azure依存レビューの最短ループ）
-### 1) 事前計画（AGENTS.mdに従いDAG+見積）
+### 1) 事前計画（Skill task-dag-planning に従いDAG+見積）
 - まず `{WORK}plan.md` に、調査→抽出→照合→レポート→（必要なら）最小修正→検証 のDAGと見積を作る。
-- **>15分見込みなら分割**し、`{WORK}subissues.md` を出力して停止（AGENTS.md準拠）。
+- **>15分見込みなら分割**し、`{WORK}subissues.md` を出力して停止（Skill task-dag-planning 準拠）。
 
 ### 2) “期待される依存” を確定（Expected）
 - `service-catalog.md` から対象 Azure リソースを一覧化し、各リソースに対して「期待参照」を整理する：
@@ -52,7 +47,7 @@ tools: ["*"]
 - 期待参照の根拠（見出し/箇所）を控える。
 
 ### 3) “実際の参照” を抽出（Actual）
-- `app/`, `api/`, `config/`, `infra/`, `.github/workflows/` を検索し、対象リソースへの参照候補を抽出：
+- `src/app/`, `src/api/`, `config/`, `infra/`, `.github/workflows/` を検索し、対象リソースへの参照候補を抽出：
   - URL / host / resource id / subscription / rg / KV secret名 / env var key / SDK設定 など
 - **秘密値（接続文字列/キー/シークレット値）は絶対に出力しない**。キー名・参照元だけ記録する。
 
@@ -71,7 +66,7 @@ tools: ["*"]
 - 修正後は、可能な範囲で build/test/lint を実行し、コマンドと結果（or 未実施理由）を記載。
 
 ### 6) レポート作成（証跡付き）
-`docs/azure/DependencyReview-Report.md` は次の構成で固定：
+`docs/azure/dependency-review-report.md` は次の構成で固定：
 
 1. Summary
    - 対象ユースケース/対象範囲
@@ -83,6 +78,7 @@ tools: ["*"]
 |---|---|---|---|---|---|
 
 - Evidence は必ず具体（`path:line` か ドキュメント見出し）。
+- **Evidence に記載するパスは `read` で実在確認すること（copilot-instructions.md §0 捏造禁止準拠）。実在確認できないパスは `TBD（未確認）` と明記する。**
 - 値が不明なら `null`。推測は禁止。
 
 3. Fixes Applied（修正した場合のみ）
@@ -94,7 +90,7 @@ tools: ["*"]
 
 ※最終出力は **レポートファイルの内容のみ**（途中の草稿・内部メモは出さない）。
 
-## 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 3つの異なる観点（Azure 依存関係レビューの場合）
 - **1回目：レビュー完全性・妥当性**：service-catalog に記載されたすべての Azure 依存が漏らさず抽出されているか、Expected vs Actual の照合が正確か、Severity の付与（Blocker/High/Medium/Low）が正当か、Evidence（参照元の具体的パス/行番号/ドキュメント見出し）は十分か、秘密値を含めず参照情報のみが記録されているか
@@ -102,7 +98,7 @@ tools: ["*"]
 - **3回目：保守性・安全性・再現性**：秘密情報（接続文字列・キー・シークレット値）が混入していないか、推測や根拠なき判断が入っていないか、修正が最小差分で影響範囲が明確か、検証方法は再現可能か、Azure 実環境への非破壊操作に限定されているか、将来の依存追加時の更新方法は明確か
 
 ### 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

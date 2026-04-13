@@ -74,7 +74,7 @@ class TestBuildRootRef:
                 "skip_review": True,
                 "skip_qa": True,
                 "resource_group": "rg-test",
-                "app_id": "APP-01",
+                "app_ids": ["APP-01", "APP-02"],
                 "batch_job_id": "JOB-1,JOB-2",
             },
         )
@@ -82,12 +82,23 @@ class TestBuildRootRef:
         assert "<!-- auto-review: false -->" in ref
         assert "<!-- auto-qa: false -->" in ref
         assert "<!-- resource-group: rg-test -->" in ref
-        assert "<!-- app-id: APP-01 -->" in ref
+        assert "<!-- app-ids: APP-01, APP-02 -->" in ref
         assert "<!-- batch-job-ids: JOB-1,JOB-2 -->" in ref
+
+    def test_with_app_id_legacy(self):
+        """旧形式 app_id 単体でも app-ids として出力されること。"""
+        ref = _build_root_ref(10, params={"app_id": "APP-01"})
+        assert "<!-- app-ids: APP-01 -->" in ref
+        assert "<!-- app-id:" not in ref
+
+    def test_app_ids_list(self):
+        """app_ids リストが app-ids コメントとして出力されること。"""
+        ref = _build_root_ref(1, params={"app_ids": ["APP-01", "APP-02"]})
+        assert "<!-- app-ids: APP-01, APP-02 -->" in ref
 
     def test_empty_optional_params_omitted(self):
         ref = _build_root_ref(1, params={"app_id": "", "resource_group": ""})
-        assert "app-id" not in ref
+        assert "app-ids" not in ref
         assert "resource-group" not in ref
 
 
@@ -115,10 +126,25 @@ class TestBuildAppIdSection:
     def test_empty(self):
         assert _build_app_id_section("") == ""
 
+    def test_empty_list(self):
+        assert _build_app_id_section([]) == ""
+
     def test_with_id(self):
         result = _build_app_id_section("APP-05")
         assert "APP-05" in result
-        assert "docs/app-list.md" in result
+        assert "docs/catalog/app-catalog.md" in result
+
+    def test_with_multiple_ids(self):
+        result = _build_app_id_section(["APP-01", "APP-02", "APP-03"])
+        assert "APP-01" in result
+        assert "APP-02" in result
+        assert "APP-03" in result
+        assert "docs/catalog/app-catalog.md" in result
+
+    def test_with_single_id_list(self):
+        result = _build_app_id_section(["APP-05"])
+        assert "APP-05" in result
+        assert "docs/catalog/app-catalog.md" in result
 
 
 # ---------------------------------------------------------------------------
@@ -244,24 +270,34 @@ class TestBuildRootIssueBody:
     def test_aas(self):
         wf = get_workflow("aas")
         body = build_root_issue_body(wf, {"branch": "main"})
-        assert "# [AAS] App Selection" in body
+        assert "# [AAS] App Architecture Design" in body
         assert "<!-- branch: main -->" in body
-        assert "ワークフロー: **App Selection**" in body
+        assert "ワークフロー: **App Architecture Design**" in body
 
     def test_asdw_with_params(self):
         wf = get_workflow("asdw")
         body = build_root_issue_body(wf, {
             "branch": "feature/x",
+            "app_ids": ["APP-05"],
             "app_id": "APP-05",
             "resource_group": "rg-prod",
             "usecase_id": "UC-42",
         })
         assert "# [ASDW]" in body
-        assert "<!-- app-id: APP-05 -->" in body
+        assert "<!-- app-ids: APP-05 -->" in body
         assert "<!-- resource-group: rg-prod -->" in body
         assert "APP-ID: `APP-05`" in body
         assert "リソースグループ: `rg-prod`" in body
         assert "ユースケースID: `UC-42`" in body
+
+    def test_asdw_with_multiple_app_ids(self):
+        wf = get_workflow("asdw")
+        body = build_root_issue_body(wf, {
+            "branch": "feature/x",
+            "app_ids": ["APP-01", "APP-02"],
+        })
+        assert "<!-- app-ids: APP-01, APP-02 -->" in body
+        assert "APP-ID: `APP-01`, `APP-02`" in body
 
     def test_additional_comment(self):
         wf = get_workflow("abd")
@@ -280,3 +316,51 @@ class TestBuildRootIssueBody:
         })
         assert "<!-- batch-job-ids: JOB-A,JOB-B -->" in body
         assert "バッチジョブ ID: `JOB-A,JOB-B`" in body
+
+
+# ---------------------------------------------------------------------------
+# 全テンプレートに {additional_section} が含まれること
+# ---------------------------------------------------------------------------
+
+
+class TestAllTemplatesHaveAdditionalSection:
+    def test_all_templates_have_placeholder(self):
+        """全テンプレートファイルに {additional_section} プレースホルダが含まれること。"""
+        templates_dir = _TEMPLATES_BASE / "templates"
+        missing = []
+        for md_file in sorted(templates_dir.rglob("*.md")):
+            content = md_file.read_text(encoding="utf-8")
+            if "{additional_section}" not in content:
+                missing.append(str(md_file.relative_to(templates_dir)))
+        assert not missing, f"以下のテンプレートに {{additional_section}} がありません: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# render_template で追加コメントが展開されること
+# ---------------------------------------------------------------------------
+
+
+class TestRenderTemplateAdditionalComment:
+    def test_additional_comment_rendered_in_body(self):
+        """追加コメントが render_template で展開されること。"""
+        wf = get_workflow("asdw")
+        body = render_template(
+            "templates/asdw/step-2.1.md",
+            root_issue_num=99,
+            params={"additional_comment": "Vue.jsで作成する", "branch": "main"},
+            wf=wf,
+        )
+        assert "## 追加コメント" in body
+        assert "Vue.jsで作成する" in body
+
+    def test_no_additional_comment_leaves_no_placeholder(self):
+        """追加コメントなしの場合 {additional_section} が残らないこと。"""
+        wf = get_workflow("asdw")
+        body = render_template(
+            "templates/asdw/step-2.1.md",
+            root_issue_num=99,
+            params={"branch": "main"},
+            wf=wf,
+        )
+        assert "{additional_section}" not in body
+        assert "## 追加コメント" not in body

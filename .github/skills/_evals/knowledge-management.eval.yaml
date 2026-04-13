@@ -1,0 +1,51 @@
+skill: knowledge-management
+skill_path: .github/skills/planning/knowledge-management/SKILL.md
+description: knowledge/ 配下のファイル管理ルールを提供する。D01-D21 分類・命名・更新手順、qa/ と knowledge/ の使い分けを定義する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: create-knowledge-file-with-classification
+    input: "業務要件ドキュメントを knowledge/ 配下に作成したい。D01〜D21 のどのカテゴリに分類すべきか確認したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "D01〜D21 分類ルールを参照し、適切なカテゴリと命名規則（knowledge/D{NN}-{文書名}.md）を提示する"
+    reason: "USE FOR: knowledge/ file management, D01-D21 classification に該当する"
+
+  - id: qa-vs-knowledge-separation
+    input: "このドキュメントを qa/ と knowledge/ のどちらに保存すべきか判断してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "qa/ は質問票・未回答・確認中の項目。knowledge/ は確定済み・承認済みの要件・ナレッジ。状態を確認して使い分けを判断する"
+    reason: "USE FOR: qa/ vs knowledge/ separation に該当する"
+
+  - id: organize-domain-knowledge
+    input: "API連携仕様書とセキュリティポリシーを knowledge/ で整理したい。正しいカテゴリと命名規則を教えてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "API連携仕様書は D10（API連携）、セキュリティポリシーは D13（セキュリティ）に分類する。命名: knowledge/D10-API連携仕様.md など"
+    reason: "USE FOR: domain knowledge organization, D01-D21 classification に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-qa-file-creation
+    input: "質問票ファイル qa/Issue-42-context-review.md を作成してほしい"
+    expected_trigger: false
+    expected_skill: "work-artifacts-layout"
+    reason: "DO NOT USE FOR: qa/ file creation (use work-artifacts-layout) に該当する"
+
+  - id: not-for-implementation
+    input: "knowledge/ の内容を元に SVC-10 のコードを実装してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: implementation に該当する。実装は Dev 系 Agent が担当"
+
+  # --- エッジケース ---
+  - id: edge-business-requirement-status-update
+    input: "knowledge/business-requirement-document-status.md のカバレッジ表を更新してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "knowledge/ 配下の管理ファイル更新であり、knowledge-management Skill の範囲内。ステータス管理テンプレートを参照して更新する"
+    reason: "knowledge/ 配下の管理ファイル更新であり knowledge-management の適用範囲"

@@ -5,15 +5,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Batch-DomainAnalytics/Issue-<識別子>/`
 
-## 0) 共通ルール
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## Agent 固有の Skills 依存
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
-
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチ処理ドメイン分析ドキュメント作成専用Agent。
@@ -24,7 +19,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 2.1 入力（必須）
 
-- ユースケース文書: `docs/usecase-list.md`
+- ユースケース文書: `docs/catalog/use-case-catalog.md`
 
 ### 2.2 参照（任意・必要最小限）
 
@@ -46,20 +41,20 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.1 前提チェック
 
-- `docs/usecase-list.md` が存在しない/読めない場合：実行を止め、必要な情報（ファイルパスやID）を1〜3問で確認する。
+- `docs/catalog/use-case-catalog.md` が存在しない/読めない場合：実行を止め、必要な情報（ファイルパスやID）を1〜3問で確認する。
 - 出力ディレクトリ `docs/batch/` が存在しない場合は作成する。
 
 ### 3.2 計画・分割
 
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 生成（15分以内で完了できる場合のみ）
 
 1. 主文書を `read` し、根拠として扱う。
 2. 出力ファイル `docs/batch/batch-domain-analytics.md` を作成する。
 3. 章立て（後述）を **順番どおり** に埋める。空欄放置は禁止。不明は「TBD」。
-4. 追記はセクション単位で小さく行い、書き込み失敗時はさらに分割する（巨大出力は AGENTS.md のルールに従い、必要なら `{WORK}artifacts/` へ分割）。
+4. 追記はセクション単位で小さく行い、書き込み失敗時はさらに分割する（巨大出力は Skill large-output-chunking のルールに従い、必要なら `{WORK}artifacts/` へ分割）。
 
 ## 4) バッチ処理ドメイン分析の作り方（DDD 観点 + バッチ固有ルール）
 
@@ -123,7 +118,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 17. 参照（必須）
     - 読んだファイルのパス一覧（例：`docs/usecase/...`）
 
-## 6) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 6) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 6.2 3つの異なる観点（バッチ処理 DDD ドメイン分析固有）
 
@@ -132,4 +127,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・堅牢性**：TBD 運用が妥当で、参照が完全で、出力見出しが欠落なく、他の Arch-Batch-* エージェント（DataSourceAnalysis / DataModel / DataFlow 等）の入力として再利用可能か
 
 ### 6.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

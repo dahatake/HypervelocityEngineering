@@ -1,6 +1,6 @@
 ---
 name: Arch-Microservice-ServiceCatalog
-description: "画面→機能→API→SoTデータのマッピングを docs/service-catalog.md に生成/更新"
+description: "画面→機能→API→SoTデータのマッピングを docs/catalog/service-catalog-matrix.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Microservice-ServiceCatalog/Issue-<識別子>/`
@@ -8,15 +8,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 サービスカタログ生成専用Agent。
 このエージェントは **ドキュメント化（service-catalog.md）** に特化し、コード改変は最小限（原則しない）。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 # 1) 目的
 指定ユースケースの既存ドキュメントを根拠に、次の対応関係をカタログ化する：
 **画面 → 画面内機能 →（画面内処理 | API呼び出し）→（APIのSoTデータ）**
@@ -26,14 +21,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 # 3) 入力（優先順位順）
 原則として次の5ファイルを読む。無い場合は `search` で同等の資料を特定し、差分（不足・代替）を明記する。
-- `docs/service-list.md`
-- `docs/domain-analytics.md`
-- `docs/data-model.md`
-- `docs/screen-list.md`
-- `docs/app-list.md`（アプリケーション一覧 — 各サービス・画面がどの APP-ID に属するかの判定根拠）
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/screen-catalog.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各サービス・画面がどの APP-ID に属するかの判定根拠）
 
 # 4) 出力（生成/更新するファイル）
-- 主要成果物（必須）: `docs/service-catalog.md`
+- 主要成果物（必須）: `docs/catalog/service-catalog-matrix.md`
 - 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
 
 # 5) 実行手順（必ずこの順で）
@@ -47,8 +42,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 5. `usecase-detail` から：画面内処理やAPI呼び出しの手掛かり（シーケンス/手順/項目）を抽出。
 
 ## 5.3 計画・分割
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「セクション単位」で分割
 
 ## 5.4 生成（service-catalog.md）
@@ -56,10 +51,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 ## 5.5 成果物の分割ルール
-- `docs/service-catalog.md` は常に「索引/統合版」のマスターファイルとして残し、削除・他ファイルへの置き換えをしてはならない。
-- 1つの APP-ID のみで利用されるサービスがある場合、補助ビューとして APP-ID 単位のファイル分割を行ってよい（内容は `docs/service-catalog.md` と整合させること）。
+- `docs/catalog/service-catalog-matrix.md` は常に「索引/統合版」のマスターファイルとして残し、削除・他ファイルへの置き換えをしてはならない。
+- 1つの APP-ID のみで利用されるサービスがある場合、補助ビューとして APP-ID 単位のファイル分割を行ってよい（内容は `docs/catalog/service-catalog-matrix.md` と整合させること）。
   - 分割例: `docs/service-catalog-app-01.md`（APP-01 専用サービス）、`docs/service-catalog-app-02.md`（APP-02 専用サービス）
-  - 複数 APP で共有されるサービスは、原則として `docs/service-catalog.md` に「利用APP」列をカンマ区切りで記載して表現する（必要に応じて `docs/service-catalog-app-shared.md` のような共有ビューを追加してもよいが、追加した場合は `docs/service-catalog.md` を正とし、生成時に必ず `docs/service-catalog.md` の「利用APP」列から再抽出して内容を同期させること）。
+  - 複数 APP で共有されるサービスは、原則として `docs/catalog/service-catalog-matrix.md` に「利用APP」列をカンマ区切りで記載して表現する（必要に応じて `docs/service-catalog-app-shared.md` のような共有ビューを追加してもよいが、追加した場合は `docs/catalog/service-catalog-matrix.md` を正とし、生成時に必ず `docs/catalog/service-catalog-matrix.md` の「利用APP」列から再抽出して内容を同期させること）。
 
 # 6) 書き込み安全策（空ファイル/欠落対策）
 
@@ -102,7 +97,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - Q2 ...
 - Q3 ...
 
-# 8) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 8) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 8.2 3つの異なる観点
 - **1回目：機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か
@@ -110,10 +105,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・完全性**：screen-list の画面が Table A に全て現れる（未反映は明示）/ 新規追加時の対応が容易か / Questions が明確か
 
 ## 8.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 # 9) 完了条件
-- `docs/service-catalog.md` が上記スキーマで生成/更新され、
+- `docs/catalog/service-catalog-matrix.md` が上記スキーマで生成/更新され、
   出典・TBD・網羅性チェック・Questions が整っている。
 
 ### knowledge/ 参照（任意・存在する場合のみ）

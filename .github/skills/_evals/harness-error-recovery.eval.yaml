@@ -1,0 +1,68 @@
+# .github/skills/_evals/harness-error-recovery.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: harness-error-recovery
+skill_path: .github/skills/harness/harness-error-recovery/SKILL.md
+description: エラー発生時の統一リカバリ契約。エラー分類ごとのリカバリフローと3要素出力（root_cause_hint / safe_retry_instruction / stop_condition）を提供するスキル。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: build-failure-recovery
+    input: "dotnet build が失敗しました。エラーメッセージは 'CS0103: The name X does not exist' です。リカバリ手順を教えてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "root_cause_hint（原因推定）、safe_retry_instruction（再試行手順）、stop_condition（停止条件）の3要素が出力されること"
+      - type: content_contains
+        detail: "E-01 Build 失敗のリカバリフローに従い、対象ファイル・行番号の特定と修正手順が提示されること"
+    reason: "SKILL.md の USE FOR に 'build failure recovery' が明示されており、ビルド失敗後のリカバリ依頼は典型的なトリガー"
+
+  - id: test-failure-recovery
+    input: "pytest を実行したところ、テストが失敗しました。AssertionError: Expected 200, got 500 というエラーです。リカバリしてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "E-02 Test 失敗のリカバリフローに従い、ロジックエラーか環境依存かを判別する手順が提示されること"
+      - type: content_contains
+        detail: "3要素出力（root_cause_hint / safe_retry_instruction / stop_condition）が含まれること"
+    reason: "SKILL.md の USE FOR に 'test failure recovery' が明示されており、テスト失敗後のリカバリ依頼はトリガー条件に該当する"
+
+  - id: api-timeout-retry
+    input: "Azure API の呼び出しがタイムアウトしました。リトライ方法を教えてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "API タイムアウトのリカバリフローが提示されること"
+      - type: content_contains
+        detail: "stop_condition（3回失敗時の停止条件）が含まれること"
+    reason: "SKILL.md の USE FOR に 'API timeout' が明示されており、API タイムアウト時のリカバリ依頼はトリガー条件に該当する"
+
+  - id: file-write-failure
+    input: "ファイルへの書き込みが失敗しました。空ファイルが生成されてしまいます。リカバリ手順を確認したいです。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "ファイル書き込み失敗のリカバリフロー（段階的書き込み・リトライ）が提示されること"
+    reason: "SKILL.md の USE FOR に 'file write failure' が明示されており、ファイル書き込み失敗はトリガー条件に該当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: normal-build-execution
+    input: "dotnet build を実行してビルドが成功するか確認してください。"
+    expected_trigger: false
+    expected_skill: harness-verification-loop
+    reason: "SKILL.md の Non-goals に '検証パイプラインの実行は harness-verification-loop が担当' と明示されており、正常なビルド実行は対象外"
+
+  - id: safety-guard-check
+    input: "このコマンドを実行する前に安全かどうか確認してください：rm -rf /tmp/test"
+    expected_trigger: false
+    expected_skill: harness-safety-guard
+    reason: "SKILL.md の Non-goals に '安全ガード検出は harness-safety-guard が担当' と明示されており、コマンド実行前の安全確認は対象外"
+
+  # --- エッジケース ---
+  - id: permission-denied-error
+    input: "権限不足エラー（403 Forbidden）が発生しました。どうすればいいですか？"
+    expected_trigger: true
+    reason: "SKILL.md の USE FOR に 'permission denied' が明示されており、権限不足エラーはトリガー条件に該当する。ただし権限付与の実行は Non-goals（ユーザーへ報告して処理停止）のため、stop_condition 出力が主な成果物となる。"

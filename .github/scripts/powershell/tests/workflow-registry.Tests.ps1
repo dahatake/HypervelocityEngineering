@@ -10,7 +10,7 @@ Describe 'workflow-registry.ps1' {
         It 'retrieves AAS workflow' {
             $wf = Get-Workflow -WorkflowId 'aas'
             $wf.id | Should -Be 'aas'
-            $wf.name | Should -Be 'App Selection'
+            $wf.name | Should -Be 'App Architecture Design'
             $wf.steps.Count | Should -Be 2
         }
 

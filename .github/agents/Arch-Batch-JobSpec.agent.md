@@ -5,16 +5,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Batch-JobSpec/Issue-<識別子>/`
 
-## 0) 共通ルール
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## Agent 固有の Skills 依存
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチジョブ詳細仕様書作成専用Agent。
@@ -68,8 +62,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 - `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
 - ジョブ数 × 概算（1ジョブあたり 3〜5分）で合計見積を算出する。
-- AGENTS.md §2 に従い分割要否を判定する。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従い分割要否を判定する。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
   - 進捗ファイル: `{WORK}work-status.md`（フォーマットは §6 参照）
   - 分割時: `{WORK}subissues.md`
 
@@ -83,7 +77,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    - **ステップ3**: 「5. バリデーションルール」「6. エラーハンドリング詳細」を `edit` で追記 → `read` 確認
    - **ステップ4**: 「7. パフォーマンス要件」「8. 設定値一覧」「9. 参照」を `edit` で追記 → `read` 確認
    - 失敗/空になった場合：さらに小さいチャンクで再試行（最大3回）
-4. 各ジョブ完了後、既存の `{WORK}work-status.md` があれば必ず削除してから、新しい内容で `{WORK}work-status.md` を新規作成し、Done リストを反映する（追記/patch/edit は禁止。必ず AGENTS.md §4.1 の delete→create で扱う）。
+4. 各ジョブ完了後、既存の `{WORK}work-status.md` があれば必ず削除してから、新しい内容で `{WORK}work-status.md` を新規作成し、Done リストを反映する（追記/patch/edit は禁止。必ず Skill work-artifacts-layout §4.1 の delete→create で扱う）。
 5. べき等性（再実行耐性）：既存の `{jobId}-*-spec.md` は上書き更新（重複作成しない）。
 
 ## 4) ジョブ仕様書の作り方（ルール）
@@ -124,7 +118,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 6) 書き込み安全策 & 進捗ファイル（空ファイル/欠落対策）
 
-`large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要+入力→出力+変換→バリデーション+エラー→パフォーマンス+設定+参照）。分割粒度: ジョブ単位（AGENTS.md §4.1 に従い、既存ファイルがあれば必ず削除してから新規作成する）。
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要+入力→出力+変換→バリデーション+エラー→パフォーマンス+設定+参照）。分割粒度: ジョブ単位（Skill work-artifacts-layout §4.1 に従い、既存ファイルがあれば必ず削除してから新規作成する）。
 
 ### 進捗ファイルのフォーマット（`{WORK}work-status.md`）
 
@@ -149,7 +143,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 * <最大3項目、無ければ None>
 ```
 
-## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 7.2 3つの異なる観点（このエージェント固有）
 
@@ -158,4 +152,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・安全性・整合性**：DLQ 配置先が `batch-service-catalog.md` と整合しているか。シークレット参照が Key Vault 形式になっているか。TBD の運用が妥当か。
 
 ### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

@@ -245,7 +245,7 @@ quality_score は 0〜100 の整数で、100 が完全に問題なしです。
 # プレースホルダー: {iteration} = 現在のイテレーション番号
 # プレースホルダー: {previous_learning} = 前回の学習サマリー（初回は空文字列）
 SELF_IMPROVE_PLAN_PROMPT: str = """あなたは改善計画立案エキスパートです。
-コードベーススキャン結果を受け取り、AGENTS.md §2 に準拠した改善計画を策定してください。
+コードベーススキャン結果を受け取り、`copilot-instructions.md` / Skill `task-dag-planning` に準拠した改善計画を策定してください。
 
 ## 現在のイテレーション
 {iteration}
@@ -262,7 +262,7 @@ SELF_IMPROVE_PLAN_PROMPT: str = """あなたは改善計画立案エキスパー
 
 1. **優先度付け**: Critical > Major > Minor の順で対処する
 2. **15分ルール**: 各改善タスクは 15分以内に完了できる粒度に分割する
-3. **AGENTS.md §2 準拠**: DAG 依存関係・見積（分）を付与する
+3. **Skill `task-dag-planning`（`.github/skills/task-dag-planning/SKILL.md`）準拠**: DAG 依存関係・見積（分）を付与する
 4. **捏造禁止**: スキャン結果に存在する問題のみ対象とする
 
 ## 出力フォーマット（必須）

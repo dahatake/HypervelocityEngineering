@@ -558,6 +558,7 @@ class TestRequestCodeReviewSDK(unittest.TestCase):
         pass_response.data = pass_data
 
         mock_session = unittest.mock.AsyncMock()
+        mock_session.on = unittest.mock.MagicMock()
         mock_session.send_and_wait = unittest.mock.AsyncMock(return_value=pass_response)
 
         mock_client = unittest.mock.AsyncMock()
@@ -602,6 +603,7 @@ class TestRequestCodeReviewSDK(unittest.TestCase):
         fix_response.data = fix_data
 
         mock_session = unittest.mock.AsyncMock()
+        mock_session.on = unittest.mock.MagicMock()
         mock_session.send_and_wait = unittest.mock.AsyncMock(
             side_effect=[fail_response, fix_response]
         )
@@ -794,6 +796,127 @@ class TestCreatePrIfNeeded(unittest.TestCase):
 
         self.assertEqual(pr_num, 43)
         self.assertNotIn("Related Issue", captured_body.get("body", ""))
+
+
+class TestDetectExistingArtifacts(unittest.TestCase):
+    """_detect_existing_artifacts() のテスト。"""
+
+    def test_returns_empty_when_no_artifacts(self) -> None:
+        """成果物が存在しない場合、空の辞書を返すことを確認。"""
+        from orchestrator import _detect_existing_artifacts
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = _detect_existing_artifacts("asdw", {})
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result, {})
+
+    def test_detects_existing_catalog(self) -> None:
+        """app-catalog.md が存在する場合に検出されることを確認。"""
+        from orchestrator import _detect_existing_artifacts
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            catalog_dir = os.path.join(tmpdir, "docs", "catalog")
+            os.makedirs(catalog_dir)
+            catalog_path = os.path.join(catalog_dir, "app-catalog.md")
+            with open(catalog_path, "w") as f:
+                f.write("# App Catalog\n")
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = _detect_existing_artifacts("asdw", {})
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertIn("app_catalog", result)
+        self.assertEqual(result["app_catalog"], "docs/catalog/app-catalog.md")
+
+
+class TestBuildReuseContext(unittest.TestCase):
+    """_build_reuse_context() のテスト。"""
+
+    def test_empty_artifacts_returns_empty_string(self) -> None:
+        """成果物が空の場合、空文字を返すことを確認。"""
+        from orchestrator import _build_reuse_context
+        result = _build_reuse_context({})
+        self.assertEqual(result, "")
+
+    def test_non_empty_artifacts_returns_context(self) -> None:
+        """成果物がある場合、再利用コンテキスト文字列を返すことを確認。"""
+        from orchestrator import _build_reuse_context
+        artifacts = {
+            "app_catalog": "docs/catalog/app-catalog.md",
+            "service_specs": ["docs/services/SVC-01.md", "docs/services/SVC-02.md"],
+        }
+        result = _build_reuse_context(artifacts)
+        self.assertIn("🔄 既存成果物", result)
+        self.assertIn("docs/catalog/app-catalog.md", result)
+        self.assertIn("docs/services/SVC-01.md", result)
+        self.assertIn("再利用ルール", result)
+
+    def test_list_truncated_at_10(self) -> None:
+        """リスト型の成果物が 10 件以上ある場合、省略表示されることを確認。"""
+        from orchestrator import _build_reuse_context
+        artifacts = {
+            "src_files": [f"src/file{i}.py" for i in range(15)],
+        }
+        result = _build_reuse_context(artifacts)
+        self.assertIn("...他 5 ファイル", result)
+
+
+class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
+    """_collect_params_non_interactive() の app_ids 対応テスト。"""
+
+    def _make_wf(self):
+        from unittest.mock import MagicMock
+        wf = MagicMock()
+        wf.id = "asdw"
+        return wf
+
+    def test_app_ids_list_passed_through(self) -> None:
+        """app_ids リストがそのまま params に設定されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {
+            "branch": "main",
+            "app_ids": ["APP-01", "APP-02"],
+        }
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertEqual(params["app_ids"], ["APP-01", "APP-02"])
+
+    def test_app_ids_single_also_sets_app_id(self) -> None:
+        """app_ids に1件のみの場合、app_id にも設定されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {
+            "branch": "main",
+            "app_ids": ["APP-01"],
+        }
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertEqual(params["app_ids"], ["APP-01"])
+        self.assertEqual(params.get("app_id"), "APP-01")
+
+    def test_app_id_legacy_normalised_to_app_ids(self) -> None:
+        """旧 app_id が app_ids リストに正規化されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {
+            "branch": "main",
+            "app_id": "APP-05",
+        }
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertEqual(params["app_ids"], ["APP-05"])
+        self.assertEqual(params["app_id"], "APP-05")
 
 
 if __name__ == "__main__":

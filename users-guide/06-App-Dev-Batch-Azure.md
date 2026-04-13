@@ -17,7 +17,7 @@
 
 本チュートリアルを開始する前に、以下の条件が満たされていることを確認してください。
 
-> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図・スコープ・業務プロセス・ユースケース・データモデル・セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) のワークフローを実行して `knowledge/` を充実させることを推奨します。
+> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図・スコープ・業務プロセス・ユースケース・データモデル・セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) のワークフローを実行して `knowledge/` を充実させることを推奨します。
 
 
 ### リポジトリ設定
@@ -34,7 +34,7 @@
 
 | ファイル | 作成元ワークフロー | 用途 |
 |---|---|---|
-| `docs/usecase-list.md` | 手動作成（PM / 要件定義） | Step.1.1 / Step.1.2 の入力 |
+| `docs/catalog/use-case-catalog.md` | 手動作成（PM / 要件定義） | Step.1.1 / Step.1.2 の入力 |
 | `docs/batch/batch-domain-analytics.md` | Step.1.1: `Arch-Batch-DomainAnalytics` | Step.2 以降の入力 |
 | `docs/batch/batch-data-source-analysis.md` | Step.1.2: `Arch-Batch-DataSourceAnalysis` | Step.2 以降の入力 |
 | `docs/batch/batch-data-model.md` | Step.2: `Arch-Batch-DataModel` | Step.3 以降の入力 |
@@ -146,8 +146,8 @@ Sub Issue の状態:
 
 | Step | Custom Agent | 入力ファイル | 成果物 |
 |---|---|---|---|
-| step-1.1 | [`Arch-Batch-DomainAnalytics`](../.github/agents/Arch-Batch-DomainAnalytics.agent.md) | `docs/usecase-list.md` | `docs/batch/batch-domain-analytics.md` |
-| step-1.2 | [`Arch-Batch-DataSourceAnalysis`](../.github/agents/Arch-Batch-DataSourceAnalysis.agent.md) | `docs/usecase-list.md`, `docs/data-model.md`（任意） | `docs/batch/batch-data-source-analysis.md` |
+| step-1.1 | [`Arch-Batch-DomainAnalytics`](../.github/agents/Arch-Batch-DomainAnalytics.agent.md) | `docs/catalog/use-case-catalog.md` | `docs/batch/batch-domain-analytics.md` |
+| step-1.2 | [`Arch-Batch-DataSourceAnalysis`](../.github/agents/Arch-Batch-DataSourceAnalysis.agent.md) | `docs/catalog/use-case-catalog.md`, `docs/catalog/data-model.md`（任意） | `docs/batch/batch-data-source-analysis.md` |
 | step-2 | [`Arch-Batch-DataModel`](../.github/agents/Arch-Batch-DataModel.agent.md) | `batch-domain-analytics.md`, `batch-data-source-analysis.md` | `docs/batch/batch-data-model.md` |
 | step-3 | [`Arch-Batch-JobCatalog`](../.github/agents/Arch-Batch-JobCatalog.agent.md) | `batch-domain-analytics.md`, `batch-data-source-analysis.md`, `batch-data-model.md` | `docs/batch/batch-job-catalog.md` |
 | step-4 | [`Arch-Batch-ServiceCatalog`](../.github/agents/Arch-Batch-ServiceCatalog.agent.md) | `batch-job-catalog.md`, `batch-data-model.md`, `batch-domain-analytics.md` | `docs/batch/batch-service-catalog.md` |
@@ -349,7 +349,7 @@ docs/
 
 **対処**:
 1. PR の差分を確認し、`work/` 配下以外の実装ファイルをコミットから除去する
-2. `plan.md` の見積合計が 15 分以内か確認する（AGENTS.md §2.2 参照）
+2. `plan.md` の見積合計が 15 分以内か確認する（Skill: task-dag-planning 参照）
 3. 必要であれば作業を Sub Issue に分割して再 PR する
 
 ---
@@ -415,5 +415,5 @@ docs/
 |---|---|
 | [`users-guide/04-AppDesign-Batch.md`](./04-AppDesign-Batch.md) | ABD ワークフロー詳細運用ドキュメント |
 | [`docs/batch/batch-agent-common-patterns.md`](../batch/batch-agent-common-patterns.md) | Batch Agent 共通パターン集 |
-| [`AGENTS.md`](../AGENTS.md) | リポジトリ全体の Copilot Agent 運用ルール |
+| [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) | リポジトリ全体の Copilot Agent 運用ルール |
 | [`work/Issue-20260306-batch-implementation-workflow-plan/contracts/asset-inventory.md`](../work/Issue-20260306-batch-implementation-workflow-plan/contracts/asset-inventory.md) | GitHub 運用資産 棚卸し & 命名規約 |

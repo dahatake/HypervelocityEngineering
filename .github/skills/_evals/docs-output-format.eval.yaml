@@ -1,0 +1,51 @@
+skill: docs-output-format
+skill_path: .github/skills/output/docs-output-format/SKILL.md
+description: docs/ 成果物フォーマットの共通原則。固定章立て・不足は TBD・各表の各行に出典必須・Mermaid erDiagram 記法指針を提供する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: docs-format-with-citation
+    input: "docs/catalog/service-catalog.md の各行に出典（参照元ファイル#見出し）を追加してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "各表の各行に出典列を追加し、docs/catalog/domain-analytics.md#BC-01 形式で記載する"
+    reason: "USE FOR: citation required per row に該当する"
+
+  - id: mermaid-erdiagram-notation
+    input: "Cosmos DB のエンティティ関連図を Mermaid erDiagram 形式で作成してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/heading-and-mermaid-rules.md §2 の Mermaid erDiagram 記法指針に従い、PascalCase エンティティ名・属性定義・リレーションを記述する"
+    reason: "USE FOR: Mermaid erDiagram notation guide に該当する"
+
+  - id: fixed-heading-order
+    input: "ドキュメント成果物の見出し順序が統一されているか確認・修正してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "固定章立てルール（見出し固定順序・順序の入れ替え・省略は禁止）に従い確認・修正する"
+    reason: "USE FOR: fixed heading order, document output standardization に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-work-format
+    input: "work/Issue-42/artifacts/ に保存する成果物のフォーマットを教えてほしい"
+    expected_trigger: false
+    expected_skill: "work-artifacts-layout"
+    reason: "DO NOT USE FOR: work/ format (use work-artifacts-layout) に該当する"
+
+  - id: not-for-test-spec-format
+    input: "テスト仕様書のフォーマットテンプレートを教えてほしい"
+    expected_trigger: false
+    expected_skill: "test-strategy-template"
+    reason: "DO NOT USE FOR: test specification format (use test-strategy-template) に該当する"
+
+  # --- エッジケース ---
+  - id: edge-erdiagram-split-by-service
+    input: "全16サービス（SVC-01〜SVC-16）のエンティティ関連図を1つの Mermaid 図にまとめてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "1つの erDiagram ブロックに含めるエンティティは10個以下が目安。サービス単位で分割して複数の図を作成することを提案する"
+    reason: "Mermaid erDiagram の分割の目安（10個以下）のエッジケース。docs-output-format が対応"

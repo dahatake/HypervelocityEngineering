@@ -7,19 +7,16 @@ tools: ["*"]
 
 Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フェーズ）専用Agent。
 
-# 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 # 1) 目的（スコープ固定）
 - 対象は **1 Agent 分のみ**：`{agentId}-{agentName}`。
 - 目的は「Agent 詳細設計書の System Prompt・Tool Catalog・State Machine を実装コードに変換し、TDD テストを全て PASS させる」。
 - **Microsoft Foundry（Azure AI Foundry Agent Service）** を使用して Agent を実装する。
-- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら AGENTS.md の分割ルールで別タスク化）。
+- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 # 2) Microsoft Foundry 実装制約（必須遵守）
 
@@ -51,30 +48,27 @@ Issue body または追加コメントにプログラミング言語の指定が
 # 3) 入力（優先順位順）
 必須:
 - `docs/agent/agent-detail-{agentId}-*.md`（Agent 詳細設計書）
-- `docs/AI-Agents-list.md`（Agent 一覧）
+- `docs/ai-agent-catalog.md`（Agent 一覧）
 - `test/agent/{AgentName}.Tests/`（TDD テストコード — RED 状態。Step.2.7TC の成果物）
 - `docs/test-specs/{agentId}-test-spec.md`（Agent テスト仕様書）
-- `docs/service-catalog.md`（Tool として呼び出すサービスの API 一覧）
-- `docs/azure/AzureServices-services-additional.md`（Azure AI Foundry プロジェクト・AI Search 等の設定）
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠）
+- `docs/catalog/service-catalog-matrix.md`（Tool として呼び出すサービスの API 一覧）
+- `docs/azure/azure-services-additional.md`（Azure AI Foundry プロジェクト・AI Search 等の設定）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠）
 
 参照候補（存在すれば読む）:
-- `docs/azure/AzureServices-data.md`（データストア構成）
-- `docs/service-list.md`（マイクロサービス一覧）
+- `docs/azure/azure-services-data.md`（データストア構成）
+- `docs/catalog/service-catalog.md`（マイクロサービス一覧）
 - `src/agent/` 配下の既存実装（パターン参照）
 
-## APP-ID スコープ
-- Issue body または メタコメント `<!-- app-id: XXX -->` から対象 APP-ID を取得する
-- `docs/app-list.md` が存在する場合はこれを参照し、対象 APP-ID に紐づく Agent を特定する
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## 複数 Agent の処理方針
-- `docs/AI-Agents-list.md` に複数の Agent が定義されている場合、**1 Issue で 1 Agent 分のみを対象** とする
+- `docs/ai-agent-catalog.md` に複数の Agent が定義されている場合、**1 Issue で 1 Agent 分のみを対象** とする
 - 対象 Agent は Issue body の `<!-- agent-id: XXX -->` メタコメントまたは Issue タイトルで指定する
-- 指定がない場合は `docs/AI-Agents-list.md` の最初の未実装 Agent を対象とする
+- 指定がない場合は `docs/ai-agent-catalog.md` の最初の未実装 Agent を対象とする
 
 ## USECASE_ID の取得方法
 - Agent 設計書は `docs/agent/` 配下に配置されているため、USECASE_ID からパスを構築するロジックは不要
-- `docs/AI-Agents-list.md` に Agent とユースケースの対応が記載されている場合はそれを参照する
+- `docs/ai-agent-catalog.md` に Agent とユースケースの対応が記載されている場合はそれを参照する
 
 # 4) 出力（成果物）
 必須:
@@ -91,7 +85,7 @@ Issue body または追加コメントにプログラミング言語の指定が
 任意だが推奨:
 - `src/agent/{AgentID}-{AgentName}/README.md`（起動方法・設定項目・テスト実行方法）
 
-作業ログ（AGENTS.md 既定）:
+作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
 
 # 5) 実装内容（詳細設計書の各セクションとのマッピング）
@@ -176,7 +170,7 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 ## Tool（Function calling）定義ガイドライン
 - 詳細設計書 Section 7 の Tool Catalog の各 Tool を Function calling 形式で定義する
 - 各 Tool の入出力スキーマは設計書の Tool I/O Schema に従う
-- 既存マイクロサービス API は HTTP クライアント経由で呼び出す（`docs/service-catalog.md` の API 仕様に従う）
+- 既存マイクロサービス API は HTTP クライアント経由で呼び出す（`docs/catalog/service-catalog-matrix.md` の API 仕様に従う）
 - Tool の実行エラー時は設計書 Section 10 のエラーハンドリング方針に従う
 
 ## System Prompt 管理ガイドライン
@@ -211,7 +205,7 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 - 環境変数・設定項目が設定ファイルで管理されている（ハードコードなし）。
 - 作業ログと README が更新されている。
 
-# 11) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 11) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 3つの異なる観点（AI Agent 実装の場合）
 - **1回目：設計書との整合性・要件達成度**：Agent 詳細設計書の全セクション（特に Section 7/8/10/12）が実装に反映されているか、Tool Catalog が完全に実装されているか、System Prompt が設計書と一致しているか
@@ -219,7 +213,7 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 - **3回目：保守性・セキュリティ・堅牢性**：環境変数管理が適切か、エラーハンドリング・縮退動作が設計書通りか、Guardrails が正しく実装されているか、Tool 失敗時の動作が定義されているか
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

@@ -1,0 +1,51 @@
+skill: batch-design-guide
+skill_path: .github/skills/planning/batch-design-guide/SKILL.md
+description: バッチ処理の設計ガイドを統合的に提供する。要件定義・ジョブ定義・データフロー・非機能要件・テスト仕様を references/ に集約する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: batch-job-design
+    input: "ポイント集計バッチのジョブ設計書を作成したい。DAG、スケジューリング、リトライ設計を含めてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/batch-job-design.md を参照してジョブ設計書テンプレートを使用する"
+    reason: "USE FOR: batch design, job definition に該当する"
+
+  - id: batch-data-flow-design
+    input: "Azure Blob Storage から Cosmos DB へのデータフローを設計してほしい。Mermaid 図も含めて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/batch-data-flow.md を参照してデータフロー定義書テンプレートを使用する"
+    reason: "USE FOR: data flow design, batch workflow specification に該当する"
+
+  - id: batch-test-strategy
+    input: "ポイント集計バッチのテスト戦略書を作成してほしい。冪等性テスト・データ品質テストを含めて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/batch-test-strategy.md を参照してバッチテスト戦略書テンプレートを使用する"
+    reason: "USE FOR: batch test strategy に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-batch-implementation
+    input: "ポイント集計バッチの Azure Functions コードを Python で実装してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: batch implementation に該当する。実装は Dev-Batch-ServiceCoding Agent が担当"
+
+  - id: not-for-microservice-design
+    input: "SVC-10 AI CS Support マイクロサービスのAPI設計書を作成してほしい"
+    expected_trigger: false
+    expected_skill: "microservice-design-guide"
+    reason: "DO NOT USE FOR: real-time API design (use microservice-design-guide) に該当する"
+
+  # --- エッジケース ---
+  - id: edge-batch-or-microservice-ambiguous
+    input: "定期的にデータを処理するサービスを設計してほしい（詳細は未定）"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "バッチ処理の設計に関する質問として解釈し、batch-design-guide を適用する。リアルタイム API が必要な場合は microservice-design-guide を案内する"
+    reason: "定期処理・バッチ設計の範囲として解釈できる。エッジケースとして batch-design-guide を選択"

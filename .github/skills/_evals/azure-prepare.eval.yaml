@@ -1,0 +1,65 @@
+# .github/skills/_evals/azure-prepare.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: azure-prepare
+skill_path: .github/skills/azure-platform/azure-prepare/SKILL.md
+description: Prepare Azure apps for deployment (infra Bicep/Terraform, azure.yaml, Dockerfiles).
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: create-new-web-app
+    input: "Azure App Service に React + Node.js の Web アプリを作成してデプロイする準備をしてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: ".azure/plan.md を作成してユーザーに承認を求めること"
+      - type: content_contains
+        detail: "Bicep または Terraform の IaC ファイルを生成すること"
+    reason: "SKILL.md の description に 'create app', 'create web app', 'deploy to Azure App Service' がトリガーキーワードとして含まれており、新規 Web アプリの Azure デプロイ準備は本 Skill の対象"
+
+  - id: generate-bicep-infrastructure
+    input: "Azure Container Apps 用の Bicep テンプレートを生成してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "infra/ 配下に Bicep ファイルを生成し .azure/plan.md に記録すること"
+    reason: "SKILL.md の description に 'generate Bicep', 'deploy to Azure Container Apps' がトリガーキーワードとして含まれており、IaC ファイル生成は本 Skill が担当する"
+
+  - id: add-managed-identity
+    input: "既存の Azure Functions アプリにマネージド ID を追加して Key Vault への接続を設定してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "MODIFY モードで .azure/plan.md を更新し、マネージド ID の Bicep リソースを追加すること"
+    reason: "SKILL.md の description に 'managed identity' がトリガーキーワードとして含まれており、既存アプリへのサービス追加も本 Skill の MODIFY モードで対応する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: execute-azd-up
+    input: "azure-prepare が完了しました。今すぐ azd up を実行してデプロイしてください。"
+    expected_trigger: false
+    expected_skill: azure-deploy
+    reason: "デプロイ実行（azd up）は azure-deploy の責務。本 Skill は準備（IaC 生成・計画）までを担当し、実行は azure-validate → azure-deploy の順で行う"
+
+  - id: migrate-from-aws
+    input: "AWS Lambda 関数を Azure Functions に移行してください。"
+    expected_trigger: false
+    expected_skill: azure-cloud-migrate
+    reason: "SKILL.md の Phase 0 Specialized Technology Check に 'Lambda, AWS Lambda, migrate AWS' は azure-cloud-migrate を先に呼び出すと明示されている"
+
+  - id: validate-bicep-only
+    input: ".azure/plan.md が Approved 状態です。Bicep の検証だけ実行してください。"
+    expected_trigger: false
+    expected_skill: azure-validate
+    reason: "プランが既に Approved の場合、次のステップは azure-validate による preflight check。本 Skill の仕事は完了しており、検証・デプロイは後続 Skill が担当する"
+
+  # --- エッジケース ---
+  - id: plan-exists-but-not-approved
+    input: ".azure/plan.md はありますが、まだ Approved になっていません。新しいアプリの準備を続けてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "既存の .azure/plan.md を読み込み、MODIFY モードまたは進行中の計画として扱い、plan の承認フローを継続すること"
+    reason: "SKILL.md の PLAN-FIRST WORKFLOW に '.azure/plan.md が Approved になるまで Phase 2 に進めない' と明示されており、plan 存在かつ未 Approved の状態でも本 Skill の MODIFY モードで対応する境界条件"

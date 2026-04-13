@@ -7,37 +7,34 @@ tools: ["*"]
 
 # 役割（このエージェントがやること）
 - Web UIの実装
-- `docs/service-catalog.md` に基づき、UIから呼ぶ **APIクライアント層** を整備する（base URLの注入・フォールバック含む）。
+- `docs/catalog/service-catalog-matrix.md` に基づき、UIから呼ぶ **APIクライアント層** を整備する（base URLの注入・フォールバック含む）。
 - 進捗を `{WORK}work-status.md` に更新する（同一画面IDは重複追記しない）。
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 # 入力（参照順）
 
 1. 画面定義書: `docs/screen/{画面ID}-description.md`
-2. 画面一覧・遷移: `docs/screen-list.md`
-3. サービスカタログ: `docs/service-catalog.md`
-4. UI実装技術: `HTML5/CSS/JavaScript（リポジトリ既存規約に合わせる）`
-5. 参考: `docs/usecase-list.md`
-6. サンプルデータ: `data/sample-data.json`
+2. 画面一覧・遷移: `docs/catalog/screen-catalog.md`
+3. サービスカタログ: `docs/catalog/service-catalog-matrix.md`
+4. UI実装技術: HTML5/CSS/JavaScript を基本とする。Vue SFC (.vue) / React (JSX/TSX) 等のフレームワークを使用する場合は、ビルド基盤（package.json + ビルドツール設定）を必ず同時に生成すること。画面定義書の複雑度が「静的ページ + API 呼び出し」程度であれば素の HTML/JS を優先する
+5. 参考: `docs/catalog/use-case-catalog.md`
+6. サンプルデータ: `src/data/sample-data.json`
 7. TDD テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（Step.3.0T の成果物）
-8. アプリケーション一覧: `docs/app-list.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+8. アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
-## APP-ID スコープ
-- Issue body または メタコメント `<!-- app-id: XXX -->` から対象 APP-ID を取得する
-- `docs/app-list.md` が存在する場合はこれを参照し、対象 APP-ID に所属する画面を特定する（APP × 画面 = 1:1）
-- 対象 APP-ID に属する画面のみを実装対象とする
-- APP-ID が指定されていない場合は全画面を対象とする（後方互換）
-- `docs/app-list.md` が存在しない場合は APP-ID によるスコープ絞り込みは行わず、全画面を対象とする（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # 出力（作る場所）
-- 実装: `app/` 配下（既存構造がある場合はそれに合わせる）
+- 実装: `src/app/` 配下（既存構造がある場合はそれに合わせる）
+  - **ビルド基盤**: SFC（.vue）、TypeScript、JSX 等のトランスパイルが必要な技術を使用する場合、以下を必須成果物に含める：
+    - `src/app/package.json`（依存定義 + `build`/`dev` スクリプト）
+    - `src/app/main.js`（または相当のエントリポイント）
+    - ビルドツール設定ファイル（`vite.config.js` 等）
+  - **判定基準**: 生成する `.vue`、`.tsx`、`.ts` ファイルが1つでもある場合、ビルド基盤は必須
+  - **素の HTML/CSS/JS のみの場合**: ビルド基盤は不要
 - 進捗: `{WORK}work-status.md`
 - テスト: `test/ui/` にテストコード（テスト仕様書から変換。Jest + jsdom をデフォルト、E2E は Playwright）
 
@@ -52,7 +49,7 @@ tools: ["*"]
 
 ## 1) 15分判定（必須）
 - 15分を超えそう、または不確実性が高い場合は **実装を開始せず** 分割へ切り替える。
-- `AGENTS.md` に従い `{WORK}plan.md` と `{WORK}subissues.md` を作成して終了。
+- `Skill task-dag-planning` に従い `{WORK}plan.md` と `{WORK}subissues.md` を作成して終了。
   - Subは「画面骨子」「API接続+状態表示」「ペルソナ差分」「進捗更新・テスト整備」などに分ける。
 
 ## 2) 不足情報の扱い
@@ -95,8 +92,13 @@ PASS しないテストが発生した場合はリファクタリングを戻し
 
 ## 4) API接続方針（安全・現実的）
 - 画面からは「当該画面で必要なエンドポイント」だけ実呼び出しする。
-- base URL は環境変数で注入（リポジトリ既存規約に合わせる）。
-- base URL 未設定でも画面が壊れないよう、開発用に `sample-data.json` へフォールバック可能にする（本番相当では無効/警告）。
+- base URL の**プロジェクト標準キー**は `API_BASE_URL` とする。
+  - Vite / Vue CLI 系のフロントエンドコードは `VITE_API_BASE_URL` を参照する（ビルド時埋め込み）。
+  - SWA などの設定では `API_BASE_URL` を管理し、ビルド時に `VITE_API_BASE_URL` へ受け渡す。
+  - 素の HTML/JS の場合は `API_BASE_URL` を SWA アプリ設定から動的取得、またはサーバーサイド設定で注入する。
+- base URL 未設定時の動作:
+  - **SWA Linked Backend / APIM 経由の場合**: 同一オリジン（空文字列）で正常動作する設計とする
+  - **直接接続の場合**: 開発用に `sample-data.json` へフォールバック可能にする（本番では無効/警告）
 - リトライ等の信頼性処理は **APIクライアント層に限定** し、UIは状態表示に集中する。
 
 ## 5) ペルソナ（見せ分け）
@@ -117,7 +119,7 @@ PASS しないテストが発生した場合はリファクタリングを戻し
 
 ## 8) 書き込み失敗/巨大出力対策
 - 大きいファイルが空になる等の失敗が起きたら、章/画面/関数単位で小分けにして追記する。
-- 大量生成や長文になりそうなときは、`AGENTS.md` の巨大出力ルールに従って分割する。
+- 大量生成や長文になりそうなときは、`Skill large-output-chunking` のルールに従って分割する。
 
 ## 9) 最終セルフチェック・品質レビュー（必須）
 
@@ -129,7 +131,7 @@ PASS しないテストが発生した場合はリファクタリングを戻し
 2. **既存規約（命名/構造/例外/ログ）に合わせているか**
 3. **最低1つの検証（テスト/ビルド/静的解析）を実施したか**（不可なら理由と代替）
 
-- AGENTS.md §7.1 に従う。
+- Skill adversarial-review に従う。
 
 ### 9.3 3つの異なる観点（Web UI 実装の場合）
 - **1回目：実装完全性・要件達成度**：画面定義書のすべての要素が実装されているか、状態管理（loading/empty/error）は完全か、API接続が画面の定義に基づいているか、ペルソナ差分は正しく実装されているか、トラブルシューティング・ログ出力は適切か、環境変数の注入と base URL フォールバック設定は正しいか
@@ -137,7 +139,7 @@ PASS しないテストが発生した場合はリファクタリングを戻し
 - **3回目：保守性・拡張性・堅牢性**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コード品質と既存規約への準拠、API クライアント層の設計が再利用可能か、エラーハンドリングは完全・一貫か、テスト拡張性（ユニット/E2E/スモークテスト）、将来の画面追加時の変更容易性、認証・認可・セキュリティの実装が適切か、秘密情報のハードコード有無
 
 ### 9.4 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

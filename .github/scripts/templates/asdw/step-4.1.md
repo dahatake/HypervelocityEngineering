@@ -4,15 +4,15 @@
 
 ## 入力
 - リソースグループ名: `{resource_group}`
-- `docs/usecase-list.md`
-- `docs/service-catalog.md`
-- `docs/azure/AzureServices-services.md`
-- `docs/azure/AzureServices-data.md`
-- `docs/azure/AzureServices-services-additional.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/azure/azure-services-compute.md`
+- `docs/azure/azure-services-data.md`
+- `docs/azure/azure-services-additional.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
-- `docs/azure/Azure-ArchitectureReview-Report.md`
+- `docs/azure/azure-architecture-review-report.md`
 
 ## Custom Agent
 `QA-AzureArchitectureReview` を使用
@@ -22,5 +22,5 @@
 - Step.4.2 と並列実行可能
 
 ## 完了条件
-- `docs/azure/Azure-ArchitectureReview-Report.md` が作成されている
+- `docs/azure/azure-architecture-review-report.md` が作成されている
 - 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

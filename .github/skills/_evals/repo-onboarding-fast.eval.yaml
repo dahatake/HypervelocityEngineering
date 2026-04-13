@@ -1,0 +1,51 @@
+skill: repo-onboarding-fast
+skill_path: .github/skills/planning/repo-onboarding-fast/SKILL.md
+description: 初見のリポジトリで最小限の読解により入口・境界・標準コマンドを確定し、onboarding.md に固定するスキル。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: first-assignment-onboarding
+    input: "このリポジトリに初めてアサインされた。どこから読み始めればよいか教えてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "README / docs / CI から標準コマンドを拾い、公開I/F・データ境界を特定し、類似実装を1つ見つけて work/<task>/onboarding.md に固定する"
+    reason: "USE FOR: repository onboarding, first assignment に該当する"
+
+  - id: entry-point-discovery
+    input: "リポジトリの入口（主要なエントリーポイント）と標準コマンドを確認したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "手順1（README/docs/CI から標準コマンド取得）と手順2（境界特定）を実施し、onboarding.md に記録する"
+    reason: "USE FOR: entry point discovery, standard commands に該当する"
+
+  - id: onboarding-md-creation
+    input: "onboarding.md を作成してほしい。入口・境界・標準コマンドをまとめて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "onboarding.md 最小フォーマット（入口/境界/踏襲元/標準コマンド/不明点）に従い work/<task>/onboarding.md を作成する"
+    reason: "USE FOR: onboarding.md creation に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-full-code-analysis
+    input: "リポジトリの全コードを分析して品質レポートを作成してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: full code analysis に該当する。包括的なコード分析は本Skillの範囲外"
+
+  - id: not-for-architecture-design
+    input: "このリポジトリの新しいマイクロサービスアーキテクチャを設計してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: architecture design に該当する。アーキテクチャ設計は Arch 系 Agent が担当"
+
+  # --- エッジケース ---
+  - id: edge-existing-onboarding-md-update
+    input: "既存の onboarding.md を最新の状態に更新してほしい（APIが追加された）"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "既存の onboarding.md を削除してから新規作成する（copilot-instructions.md §0 work/ 書き込みルール：delete→create）"
+    reason: "既存 onboarding.md がある場合の更新ルールのエッジケース。repo-onboarding-fast の範囲内"

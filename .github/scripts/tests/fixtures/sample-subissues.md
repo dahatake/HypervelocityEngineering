@@ -9,7 +9,7 @@
 
 ## 完了条件
 
-- [ ] docs/domain-analytics.md が作成されている
+- [ ] docs/catalog/domain-analytics.md が作成されている
 - [ ] Bounded Context が定義されている
 
 ---
@@ -26,7 +26,7 @@
 
 ## 完了条件
 
-- [ ] docs/service-list.md が作成されている
+- [ ] docs/catalog/service-catalog.md が作成されている
 - [ ] サービス境界が定義されている
 
 ---
@@ -43,5 +43,5 @@
 
 ## 完了条件
 
-- [ ] docs/data-model.md が作成されている
+- [ ] docs/catalog/data-model.md が作成されている
 - [ ] ER 図（Mermaid）が含まれている

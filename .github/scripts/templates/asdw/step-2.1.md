@@ -4,14 +4,14 @@
 
 ## 入力
 - リソースグループ名: `{resource_group}`
-- `docs/service-list.md`
-- `docs/usecase-list.md`
-- `docs/data-model.md`
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
-- `docs/azure/AzureServices-services.md`
+- `docs/azure/azure-services-compute.md`
 
 ## Custom Agent
 `Dev-Microservice-Azure-ComputeDesign` を使用
@@ -20,5 +20,5 @@
 - Step.1（データコンテナ）が `asdw:done` であること
 
 ## 完了条件
-- `docs/azure/AzureServices-services.md` が作成されている
+- `docs/azure/azure-services-compute.md` が作成されている
 - 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

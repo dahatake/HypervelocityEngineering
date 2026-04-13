@@ -76,29 +76,29 @@ validate() {
 
   # Rule 0: required metadata must exist and have valid values
   if [[ "${decision}" == "MISSING" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- split_decision: ... -->. See AGENTS.md §2.1.2 for required plan.md metadata format")
+    errors+=("${plan_path}: missing required metadata <!-- split_decision: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
   elif [[ "${decision}" != "PROCEED" && "${decision}" != "SPLIT_REQUIRED" ]]; then
     errors+=("${plan_path}: invalid split_decision='${decision}'. Must be PROCEED or SPLIT_REQUIRED")
   fi
 
   if [[ "${estimate}" == "0" ]] && ! echo "${content}" | grep -qP '<!--\s*estimate_total:'; then
-    errors+=("${plan_path}: missing required metadata <!-- estimate_total: ... -->. See AGENTS.md §2.1.2 for required plan.md metadata format")
+    errors+=("${plan_path}: missing required metadata <!-- estimate_total: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
   fi
 
   if [[ "${impl_files}" == "MISSING" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- implementation_files: ... -->. See AGENTS.md §2.1.2 for required plan.md metadata format")
+    errors+=("${plan_path}: missing required metadata <!-- implementation_files: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
   elif [[ "${impl_files}" != "true" && "${impl_files}" != "false" ]]; then
     errors+=("${plan_path}: invalid implementation_files='${impl_files}'. Must be true or false")
   fi
 
   # Rule 1: estimate > 15 must be SPLIT_REQUIRED
   if (( estimate > 15 )) && [[ "${decision}" == "PROCEED" ]]; then
-    errors+=("${plan_path}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per AGENTS.md §2.2")
+    errors+=("${plan_path}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
   fi
 
   # Rule 2: SPLIT_REQUIRED must not have implementation files
   if [[ "${decision}" == "SPLIT_REQUIRED" && "${impl_files}" == "true" ]]; then
-    errors+=("${plan_path}: split_decision=SPLIT_REQUIRED but implementation_files=true. Per AGENTS.md §2.3, implementation files are prohibited in split mode.")
+    errors+=("${plan_path}: split_decision=SPLIT_REQUIRED but implementation_files=true. Per Skill task-dag-planning §2.3, implementation files are prohibited in split mode.")
   fi
 
   # Rule 3: SPLIT_REQUIRED must have subissues.md in same directory
@@ -120,7 +120,7 @@ validate() {
 
   # Rule 5: 分割判定 section should exist
   if ! echo "${content}" | grep -q "## 分割判定"; then
-    errors+=("${plan_path}: missing required section '## 分割判定'. See AGENTS.md §2.1.2 for the required plan.md metadata/section format")
+    errors+=("${plan_path}: missing required section '## 分割判定'. See Skill task-dag-planning §2.1.2 for the required plan.md metadata/section format")
   fi
 
   if (( ${#errors[@]} > 0 )); then

@@ -26,12 +26,12 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 以下が作成されている状態が完了です。
 
 - `docs/business-requirement.md`（事業分析レポート）
-- `docs/usecase-list.md`（ユースケース一覧）
+- `docs/catalog/use-case-catalog.md`（ユースケース一覧）
 - `knowledge/business-requirement-document-status.md`（要求定義ドキュメントのステータス・qa/分類）
 
 ---
 
-> 💡 **knowledge/ との関連**: Step.4（`QA-KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続のアプリケーション設計・開発ワークフロー（App Selection / App Design / App Dev）で業務コンテキストとして自動参照されます。詳細は [09-QA-Knowledge-Management.md](./09-QA-Knowledge-Management.md) を参照してください。
+> 💡 **knowledge/ との関連**: Step.4（`QA-KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続のアプリケーション設計・開発ワークフロー（App Architecture Design / App Design / App Dev）で業務コンテキストとして自動参照されます。詳細は [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) を参照してください。
 
 
 ## ツール
@@ -77,7 +77,7 @@ Step.4 は独立して実行可能（Step.1 以降に並行実施推奨）
 |------|---------|-----------|------|------|------|
 | Step.1 | 事業分析ドキュメントの作成 | Microsoft 365 Copilot 等 | 社内文書・メール・プロジェクトプラン等 | `docs/business-requirement.md` | なし |
 | Step.2 | ビジネスドキュメントの一覧の作成 | Microsoft 365 Copilot 等 | `docs/business-requirement.md`、各種既存文書 | 不足文書一覧・追加文書（`docs/` 配下） | Step.1 |
-| Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 | `docs/business-requirement.md`、各種文書 | `docs/usecase-list.md` | Step.2 |
+| Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 | `docs/business-requirement.md`、各種文書 | `docs/catalog/use-case-catalog.md` | Step.2 |
 | Step.4 | qa/ 質問票ベースの要求定義プロセス | `QA-KnowledgeManager` | `qa/` 質問票ファイル | `knowledge/business-requirement-document-status.md` | なし |
 
 ---
@@ -631,7 +631,7 @@ D01 から D21 を全件出力すること。
 作成した業務分析のドキュメントなどから、ユースケースの一覧を作成します。
 
 - 使用するツール: Microsoft 365 Copilot 等
-- 出力先: `docs/usecase-list.md`
+- 出力先: `docs/catalog/use-case-catalog.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -932,7 +932,7 @@ Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足
 - **D01〜D18**: 要求定義として必要な標準文書クラス
 - **D19〜D21**: 追加した新規文書クラス（アーキテクチャ・セキュア設計・CI/CD）
 
-出典: `AGENTS.md §1.1 / §1.2`、`template/business-requirement-document-master-list.md`
+出典: `Skill: task-questionnaire`、`template/business-requirement-document-master-list.md`
 
 ---
 
@@ -973,20 +973,20 @@ flowchart TD
 1. GitHub.com で Issue を作成
 2. Issue の右側サイドバー「Copilot」セクションで「Select agent」から該当する Agent を選択
 3. Assignees に @copilot を設定
-4. Copilot がコンテキスト不足を検知した場合、`AGENTS.md §1.1` に従い選択式質問票を PR コメントに投稿します
+4. Copilot がコンテキスト不足を検知した場合、`Skill: task-questionnaire` に従い選択式質問票を PR コメントに投稿します
 
-出典: `AGENTS.md §1.1 ステップ2〜4`
+出典: `Skill: task-questionnaire` ステップ2〜4
 
 #### 方法C: VS Code Agent Mode（手動トリガー）
 
 1. VS Code でリポジトリを開く
 2. Copilot Agent Mode を使用
-3. Copilot がコンテキスト不足を検知した場合、`AGENTS.md §1.2` に従い `qa/` 配下に質問票ファイルを作成します
+3. Copilot がコンテキスト不足を検知した場合、`Skill: task-questionnaire` に従い `qa/` 配下に質問票ファイルを作成します
 
 - この場合、質問票は PR コメントではなく `qa/` 配下の Markdown ファイルとして保存されます
-- **ファイル命名規則**（`AGENTS.md §1.2 ステップ3` 準拠）: `Issue-42-context-review.md`、`Arch-DataModeling-Issue-58.md` 等
+- **ファイル命名規則**（`Skill: task-questionnaire` 準拠）: `Issue-42-context-review.md`、`Arch-DataModeling-Issue-58.md` 等
 
-出典: `AGENTS.md §1.2 ステップ3`
+出典: `Skill: task-questionnaire`
 
 ---
 
@@ -1008,7 +1008,7 @@ flowchart TD
    - 1-b. `qa/` ファイルを直接編集して Git push する
 2. **Copilot の推論で進める**: 「推論で進めてください」とリプライします。この場合、Copilot はデフォルト回答案を採用し、不確実な箇所に `TBD（推論: {根拠}）` と明記します
 
-出典: `AGENTS.md §1.1 ステップ3〜4`
+出典: `Skill: task-questionnaire` ステップ3〜4
 
 ---
 
@@ -1040,7 +1040,7 @@ flowchart TD
 
 #### 敵対的レビュー結果の活用
 
-`QA-KnowledgeManager` は `AGENTS.md §7` に従い、5軸（要件充足性・技術的正確性・整合性・非機能品質・捏造検出）で自己レビューを実施します。レビュー結果は `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` に保存されます。Critical 指摘がある場合は自動修正→再レビュー（最大2サイクル）が実行されます。
+`QA-KnowledgeManager` は `Skill: adversarial-review` に従い、5軸（要件充足性・技術的正確性・整合性・非機能品質・捏造検出）で自己レビューを実施します。レビュー結果は `work/QA-KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` に保存されます。Critical 指摘がある場合は自動修正→再レビュー（最大2サイクル）が実行されます。
 
 ---
 
@@ -1079,9 +1079,9 @@ flowchart TD
 
 | ファイル | パス | 役割 |
 |---------|------|------|
-| AGENTS.md | `/AGENTS.md` | 全 Agent 共通の強制ルール（§1.1/§1.2 コンテキスト収集プロトコル） |
+| copilot-instructions.md | `/.github/copilot-instructions.md` | 全 Agent 共通の強制ルール（コンテキスト収集プロトコル） |
 | QA-KnowledgeManager | `.github/agents/QA-KnowledgeManager.agent.md` | qa/ 質問票の D01〜D21 分類 Agent |
-| 分類ルール | `.github/instructions/knowledge-management.instructions.md` | D01〜D21 分類・状態判定基準 |
+| 分類ルール | `.github/skills/planning/knowledge-management/references/knowledge-management-guide.md` | D01〜D21 分類・状態判定基準 |
 | マスターリスト | `template/business-requirement-document-master-list.md` | D01〜D21 文書クラス定義と非捏造運用ルール |
 | auto-qa ワークフロー | `.github/workflows/copilot-auto-qa.yml` | PR への質問票作成指示の自動投稿 |
 | QA→レビュー遷移 | `.github/workflows/auto-qa-to-review-transition.yml` | QA 完了後の auto-context-review ラベル自動付与 |
@@ -1094,4 +1094,4 @@ flowchart TD
 詳細は [参考: 要求定義として必要な文書の一覧](../template/business-requirement-document-master-list.md) を参照してください。
 
 > [!NOTE]
-> 次のステップ（アプリケーション選定）は [02-App-Selection.md](./02-App-Selection.md) を参照してください。
+> 次のステップ（アプリケーションアーキテクチャ設計）は [02-app-architecture-design.md](./02-app-architecture-design.md) を参照してください。

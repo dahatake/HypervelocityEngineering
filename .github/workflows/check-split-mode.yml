@@ -70,7 +70,7 @@ jobs:
               echo "  実装ファイルの存在を確認します..."
 
               if [ -n "$IMPL_FILES" ]; then
-                echo "::error::Split mode PR に実装ファイルが含まれています (AGENTS.md §2.3 違反)。原因: $plan が SPLIT_REQUIRED です。"
+                echo "::error::Split mode PR に実装ファイルが含まれています (Skill task-dag-planning §2.3 違反)。原因: $plan が SPLIT_REQUIRED です。"
                 echo "該当ファイル:"
                 echo "$IMPL_FILES"
                 HAS_ERROR=true

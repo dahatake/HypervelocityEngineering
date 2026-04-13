@@ -4,10 +4,10 @@
 
 ## 入力
 - `src/` または `functions/` 配下の本実装コード
-- `docs/azure/AzureServices-data.md`（データストア設計）
+- `docs/azure/azure-services-data.md`（データストア設計）
 - `docs/batch/batch-service-catalog.md`（サービスカタログ）
 - `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）
-- `docs/azure/AzureServices-services.md`（コンピュート設計: 存在する場合のみ参照）
+- `docs/azure/azure-services-compute.md`（コンピュート設計: 存在する場合のみ参照）
 
 ## 出力
 - Azure Functions / コンテナのデプロイ完了

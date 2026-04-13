@@ -3,13 +3,13 @@
 テスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。
 
 ## 入力
-- `docs/test-strategy.md`
+- `docs/catalog/test-strategy.md`
 - `docs/services/{{serviceId}}-{{serviceNameSlug}}-description.md`
 - `docs/screen/{{screenId}}-{{screenNameSlug}}-description.md`
-- `docs/service-catalog.md`
-- `docs/data-model.md`
-- `docs/domain-analytics.md`
-- `docs/app-list.md`（アプリケーション一覧）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧）
 
 ## 出力
 - `docs/test-specs/{{serviceId}}-test-spec.md`（サービスごとに1ファイル）
@@ -24,7 +24,7 @@
 - Step.7.2（マイクロサービス定義書）が `aad:done` であること
 
 ## アプリケーション粒度
-📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/app-list.md` の「アプリ一覧（アーキタイプ）概要」を参照。
+📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。
 
 ## 完了条件
 - テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている

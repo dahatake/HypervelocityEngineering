@@ -5,9 +5,9 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 ## 入力
 - リソースグループ名: `{resource_group}`
 - `src/agent/{agentId}-{agentName}/`
-- `docs/AI-Agents-list.md`
-- `docs/azure/AzureServices-services-additional.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/ai-agent-catalog.md`
+- `docs/azure/azure-services-additional.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
 - `infra/azure/create-azure-agent-resources-prep.sh`

@@ -8,19 +8,15 @@ tools: ["*"]
 # 役割
 Azure上のデータストア最小構成デプロイ + サンプルデータ一括登録専門Agent（冪等・検証可能な形で実装・文書化）。
 
-## 0. 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- **`azure-cli-deploy-scripts`**: Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- **`azure-cosmosdb`**: Azure Cosmos DB for NoSQL へのデータプレーン操作共通パターン（§1 Bearer token 非対応の理由・§2 SDK セットアップ・§3 quoted heredoc 呼び出し・§4 upsert + 件数検証 + 結果ファイル・§5 COUNT クエリ・§6 verify 連携・§7 RBAC 設定）を参照する。Cosmos DB へのドキュメント登録を行う場合は必ず参照すること。
-- **`github-actions-cicd`**: GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
-- **`azure-region-policy`**: Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
-- **`azure-ac-verification`**: AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+## Agent 固有の Skills 依存
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
+- `azure-cosmosdb`：Azure Cosmos DB for NoSQL へのデータプレーン操作共通パターン（§1 Bearer token 非対応の理由・§2 SDK セットアップ・§3 quoted heredoc 呼び出し・§4 upsert + 件数検証 + 結果ファイル・§5 COUNT クエリ・§6 verify 連携・§7 RBAC 設定）を参照する。Cosmos DB へのドキュメント登録を行う場合は必ず参照すること。
+- `github-actions-cicd`：GitHub Actions CI/CD の共通仕様（OIDC 認証・`workflow_dispatch` トリガー・Copilot push 制約対応・PR description 手動実行案内）を参照する。
+- `azure-region-policy`：Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 0.1 実行環境の前提（必読）
 - この agent は **GitHub Actions runner + Azure MCP Server** が利用可能な環境で動作する前提とする。
 - Azure 操作の実行手段は以下の **優先順位** で使用する：
@@ -42,7 +38,7 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 
 ## 1. ゴール（この agent の完了条件）
 以下が揃って初めて **Complete**：
-1) `docs/azure/AzureServices-data.md` に列挙された「データストア」サービス群が、Azure上に**最小構成**で**作成された**
+1) `docs/azure/azure-services-data.md` に列挙された「データストア」サービス群が、Azure上に**最小構成**で**作成された**
 2) サンプルデータが各サービス向けに変換され、**一括登録された**
 3) 登録後に**最小検証**（件数/サンプル取得/クエリ等）が**実施された**
 4) ドキュメントが**事実ベース**で**更新された**（未確定事項は書かない）
@@ -69,33 +65,30 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 
 ## 2. 入力（必読）
 - リソースグループ名: Issue 本文から取得。値がなければ質問する
-- データストア定義: `docs/azure/AzureServices-data.md`
-- サービスカタログ: `docs/service-catalog.md`
-- アプリケーション一覧: `docs/app-list.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- データストア定義: `docs/azure/azure-services-data.md`
+- サービスカタログ: `docs/catalog/service-catalog-matrix.md`
+- アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - サンプルデータ: `data/sample-data.json`
 - 既存の命名規約/タグ規約/環境変数規約（リポジトリ内にあれば優先）
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくデータストア/エンティティ特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全データストア対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## 3. 進め方（実行フロー）
 ### 3.1 調査 → 計画 → モード判定（必須）
 - Inputs を読み、作成対象（サービス名・種類・想定SKU・リージョン・依存）を棚卸しする
 - `{WORK}plan.md` に、DAG（依存関係）＋概算（分）＋検証計画＋リスクを作る
-- **plan.md の見積合計を算出し、モードを決定する（モード判定基準は AGENTS.md §2.2 を参照）**
+- **plan.md の見積合計を算出し、モードを決定する（モード判定基準は Skill task-dag-planning を参照）**
   ※ただし Azure 実行の待ち時間（リソースプロビジョニング等）は見積に含めない
 
 ### 3.2 Split Mode（分割時）
 - `{WORK}subissues.md` を作成し、**10〜15分程度で終わるSub**に分割した Issue 本文（コピペ可能）を出力する
 - 例（必要に応じて調整）：
-  1) AzureServices-data.md の解析＋最小構成方針の確定（SKU/リージョン/命名/タグ）
+  1) azure-services-data.md の解析＋最小構成方針の確定（SKU/リージョン/命名/タグ）
   2) `create-azure-data-resources-prep.sh` 作成＋shellcheck 検証
   3) `create-azure-data-resources.sh` 作成＋shellcheck 検証（サービス作成のみ）
   4) `data-registration-script.sh` 作成＋shellcheck 検証（変換→登録→検証）
   5) **Azure リソース作成＋データ登録の実行**（prep.sh → create-resources.sh → data-registration-script.sh の順に実行し `az show` で確認）※Copilot cloud agent による自動実行を前提とする
-  6) docs更新（service-catalog/work-status/README）
-- Split Mode では **「次にやる最初のSub」**を明記して終了する（AGENTS.md §2.3 の完了条件に従う）
+  6) docs更新（service-catalog/work-status/infra/azure/data/README.md）
+- Split Mode では **「次にやる最初のSub」**を明記して終了する（Skill task-dag-planning の完了条件に従う）
 
 ### 3.3 Execution Mode（ゲート付き段階実行）
 
@@ -141,6 +134,10 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 **ゲート 4**: 登録件数が期待値と一致 → ステップ 5 へ / NG → Sub Issue 化
 
 **ステップ 5: docs更新**（事実のみ記録）
+- `docs/catalog/service-catalog-matrix.md`：サービスカタログのマスターとして重複行を作らず追記・更新する（§4.4 参照）
+- `docs/azure/service-catalog.md`：Azure 向け補助ビュー。必要に応じてマスター (`docs/catalog/service-catalog-matrix.md`) と整合するよう更新する（§4.4 参照）
+- `{WORK}work-status.md`：各ステップの状態を記録（§4.4 参照）
+- `infra/azure/data/README.md`：スクリプトの実行手順・前提条件・検証手順・トラブルシューティング
 
 **各ゲート NG 時の必須アクション**：
 - `{WORK}work-status.md` にステップ状態を記録（`✅` / `⏭️` / `❌`）
@@ -185,7 +182,7 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
   - 列：ServiceID / マイクロサービス名 / サービス種別 / サービスURL / Azure Resource ID / リージョン
   - リソースは必ず作成済みの状態で記載する。作成に失敗した場合はエラー理由を記載し、Sub Issue で再実行する
 - `{WORK}work-status.md`：日付/実施/結果/次/課題（各ステップの `✅` / `⏭️` / `❌` を含む）
-- `/README.md`：このStepで確定した事実（手順・検証）だけ
+- `infra/azure/data/README.md`：このStepで確定した事実（手順・検証・前提条件）だけ
 
 ## 5. セキュリティ/認証（必須）
 - 資格情報をハードコードしない（Key Vault / 環境変数 / Managed Identity 前提）
@@ -206,12 +203,12 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 - 長文生成や大量出力が必要なら、リポジトリの共通スキル `large-output-chunking` に従って分割する
 - 長文を書いた後は「空になっていない」ことを確認し、空なら分割して再書き込みする
 
-## 8. 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 8. 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
-> **この agent で作成するスクリプト（prep.sh / create-resources.sh / data-registration-script.sh）は実装ファイルであるため、AGENTS.md §7 の3回レビューは必ず実施すること。**
+> **この agent で作成するスクリプト（prep.sh / create-resources.sh / data-registration-script.sh）は実装ファイルであるため、Skill adversarial-review の3回レビューは必ず実施すること。**
 > **Sub Issue の実行がブロックされた場合でも、スクリプト自体の品質レビューは省略しない。**
 
-以下の Azure データデプロイ固有の観点で成果物をレビューする（AGENTS.md セクション7の共通レビュー手順に従う）：
+以下の Azure データデプロイ固有の観点で成果物をレビューする（Skill adversarial-review の共通レビュー手順に従う）：
 
 ### 1回目：実行可能性・技術妥当性
 - スクリプトが実際に実行可能か（構文エラー、パス間違い、環境依存）

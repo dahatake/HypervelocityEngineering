@@ -11,23 +11,23 @@ body:
         このフォームから Issue を作成すると、自動で以下の開発タスクが
         Sub-issue として生成され、Copilot cloud agent が順次実行します。
 
-        **本ワークフローは 1 度の実行で 1 つのアプリケーション (APP-ID) のみを対象とします。**
+        **本ワークフローは 1 度の実行で複数のアプリケーション (APP-ID) を対象とできます（カンマ区切り）。**
 
         ### 前提条件
-        - `users-guide/08-AIAgent.md` がリポジトリ内に存在していること（Step.2.6 で使用）
+        - `users-guide/08-ai-agent.md` がリポジトリ内に存在していること（Step.2.6 で使用）
         - アプリケーション設計ワークフロー（App Design / AAD）が完了し、以下のドキュメントが存在していること:
-          - `docs/domain-analytics.md`, `docs/service-list.md`, `docs/data-model.md`
-          - `docs/screen-list.md`, `docs/service-catalog.md`
-          - `docs/usecase-list.md`
+          - `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`
+          - `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`
+          - `docs/catalog/use-case-catalog.md`
           - `docs/screen/`, `docs/services/` 配下の定義書
           - `src/data/sample-data.json`
-          - `docs/test-strategy.md`（設計ワークフローの TDD テスト戦略書生成ステップで作成済み）
+          - `docs/catalog/test-strategy.md`（設計ワークフローの TDD テスト戦略書生成ステップで作成済み）
           - `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。サービス別テスト仕様書）
           - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。画面別テスト仕様書）
-          - `docs/app-list.md`（アプリケーション一覧。App Selection の成果物。存在しない場合はアプリケーション名を直接入力可）
+          - `docs/catalog/app-catalog.md`（アプリケーション一覧。App Architecture Design の成果物。存在しない場合はアプリケーション名を直接入力可）
         - リポジトリに以下のシークレットが設定されていること:
           - `COPILOT_PAT`
-          - `AZURE_STATIC_WEB_APPS_API_TOKEN`（Step.3.2 の SWA デプロイで使用）
+          - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、`AZURE_STATIC_WEB_APPS_API_TOKEN` の GitHub Secret への手動設定は不要
 
         ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
         | ステップ | 内容 | サブステップ |
@@ -40,14 +40,13 @@ body:
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
-    id: app_id
+    id: app_ids
     attributes:
-      label: "対象アプリケーション (APP-ID)"
+      label: "対象アプリケーション (APP-ID) — 複数指定可"
       description: |
-        `docs/app-list.md` のアプリ一覧（アーキタイプ）概要セクションから APP-ID（例: `APP-01`）を入力してください。
-        `docs/app-list.md` が存在しない場合は、アプリケーションの名称をそのまま入力してください（入力した名称が ID として扱われます）。
-        1 度の実行で 1 つのアプリケーションのみを対象とします。
-      placeholder: "例: APP-01 または 会員ポータル"
+        `docs/catalog/app-catalog.md` のアプリ一覧（アーキタイプ）概要セクションから APP-ID を入力してください（カンマ区切りで複数指定可）。
+        `docs/catalog/app-catalog.md` が存在しない場合は、アプリケーションの名称をそのまま入力してください（入力した名称が ID として扱われます）。
+      placeholder: "例: APP-01 または APP-01, APP-02, APP-03"
     validations:
       required: true
 

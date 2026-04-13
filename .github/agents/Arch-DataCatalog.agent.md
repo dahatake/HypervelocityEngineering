@@ -5,28 +5,20 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-DataCatalog/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須、§2 Mermaid 記法指針）を参照する。
-- `large-output-chunking`：エンティティ数が多く `data-catalog.md` が 20,000 文字を超える見込みの場合に適用する。書き込み安全策は §3（セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
-  - **分割先**: `{WORK}artifacts/data-catalog.index.md`（結合順・セクション一覧）+ `{WORK}artifacts/data-catalog.part-0001.md` …
-  - **最終成果物**: `docs/data-catalog.md` を index ファイル（各 part へのリンク付き）として出力する。part ファイルは `work/` 配下に置き、`docs/data-catalog.md` から参照する。
-  - 分割しない場合は `docs/data-catalog.md` に全文を直接出力する（通常ケース）。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 入力（必読ソース）
 
 ### 必須入力
-- `docs/data-model.md`
-- `docs/domain-analytics.md`
-- `docs/app-list.md`（アプリケーション一覧 — エンティティと APP-ID の紐付け判定根拠）
+- `docs/catalog/data-model.md`
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — エンティティと APP-ID の紐付け判定根拠）
 
 ### 推奨入力（存在すれば読む）
-- `docs/service-list.md`
-- `docs/service-catalog.md`
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/service-catalog-matrix.md`
 
 ### 入力解決ポリシー（汎用性の担保）
 - 入力パスをハードコードせず、`search` で同等資料を動的に特定できる場合はその旨を明記する
@@ -44,9 +36,9 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 2) 成果物（固定）
 
 ### A) データカタログ
-- `docs/data-catalog.md`（新規作成。既存ファイルがある場合は上書き）
+- `docs/catalog/data-catalog.md`（新規作成。既存ファイルがある場合は上書き）
 
-### B) 進捗ログ（AGENTS.md §4.1 準拠：read → delete → create）
+### B) 進捗ログ（Skill work-artifacts-layout §4.1 準拠：read → delete → create）
 - `{WORK}work-status.md`
 
 ### C) 分割が必要になった場合（共通ルール）
@@ -56,7 +48,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3) 実行フロー（15分超は"実装開始前"に分割）
 
 ### 3.0 依存確認（必須・最初に実行）
-- `docs/data-model.md` と `docs/domain-analytics.md` の両方を `read` で確認する
+- `docs/catalog/data-model.md` と `docs/catalog/domain-analytics.md` の両方を `read` で確認する
 - いずれかが存在しない、空、または見出し構造が不完全な場合：
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と質問して **即座に停止** する
   - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）
@@ -72,8 +64,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - PII/機密マーキング
 
 ### 3.2 計画・分割
-- AGENTS.md §2 に従う
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Execution（成果物の作成）
 
@@ -124,7 +116,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - 未確定点と仮定（最大10程度）
 ```
 
-#### 進捗ログを更新する（AGENTS.md §4.1 準拠：delete + create）
+#### 進捗ログを更新する（Skill work-artifacts-layout §4.1 準拠：delete + create）
 `{WORK}work-status.md` を以下の手順で更新する：
 1. 既存ファイルが存在する場合は `read` で現在の内容を取得する
 2. 既存ファイルを削除する
@@ -135,21 +127,21 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    - ブロッカー/質問:
 
 ## 3.5) 成果物の分割ルール
-- どのような分割を行う場合でも、**`docs/data-catalog.md` は常に索引/統合版として維持し、ワークフローの入出力契約とする。**
-- 1つの APP-ID のみが利用するエンティティ群がある場合、APP-ID 単位の「ビュー」を追加生成してもよいが、元データは `docs/data-catalog.md` に集約する。
-  - 追加ビューの例: `docs/data-catalog-app-01.md`（APP-01 が利用するエンティティおよびそれに関連するサービス所有権・属性マッピングを `docs/data-catalog.md` から抽出・整形した派生物）
-  - 複数 APP で共有されるエンティティは `docs/data-catalog.md` 上で管理し、「利用APP」列をカンマ区切りで記載して区別する（別ファイルには分割しない）。
+- どのような分割を行う場合でも、**`docs/catalog/data-catalog.md` は常に索引/統合版として維持し、ワークフローの入出力契約とする。**
+- 1つの APP-ID のみが利用するエンティティ群がある場合、APP-ID 単位の「ビュー」を追加生成してもよいが、元データは `docs/catalog/data-catalog.md` に集約する。
+  - 追加ビューの例: `docs/data-catalog-app-01.md`（APP-01 が利用するエンティティおよびそれに関連するサービス所有権・属性マッピングを `docs/catalog/data-catalog.md` から抽出・整形した派生物）
+  - 複数 APP で共有されるエンティティは `docs/catalog/data-catalog.md` 上で管理し、「利用APP」列をカンマ区切りで記載して区別する（別ファイルには分割しない）。
 
 ## 4) 書き込み安全策（空ファイル/欠落対策）
 
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: ## 1. 〜 ## 9.）。エンティティ数が多く 20,000 文字を超える見込みの場合は `large-output-chunking` スキルの分割手順（§1–§2）を適用する。
 
 ## 5) 完了条件
-- `docs/data-catalog.md` が作成され、§1〜§9 の全セクションを含む
+- `docs/catalog/data-catalog.md` が作成され、§1〜§9 の全セクションを含む
 - 全エンティティが data-model.md と1:1対応している（TBD は許容するが理由を明記）
 - 完了時に自身の Issue に `aad:done` ラベルを付与する
 
-### 5.1 最終品質レビュー（AGENTS.md §7準拠・3観点）
+### 5.1 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 5.2 3つの異なる観点（このエージェント固有）
 - **1回目：網羅性・一貫性**：全エンティティが data-model.md と1:1対応しているか
@@ -157,4 +149,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：実用性・DevOps活用性**：開発者がDDL生成・マイグレーション・テストデータ作成に直接使える精度か
 
 ### 5.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

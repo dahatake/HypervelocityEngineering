@@ -11,12 +11,12 @@ QA-KnowledgeManager Agent の定義（`.github/agents/QA-KnowledgeManager.agent.
 1. **入力ファイル収集** — スコープに従い `qa/*.md` を収集し、メタデータを抽出する
 2. **マスターリスト読み込み** — `template/business-requirement-document-master-list.md` を読み込む
 3. **質問項目の抽出・正規化** — 各ファイルの質問テーブルをパースし、質問 ID を生成する
-4. **D01〜D21 マッピング** — Primary D / Contributing D を判定する（`.github/instructions/knowledge-management.instructions.md` の §2 マッピングルールに従う）
+4. **D01〜D21 マッピング** — Primary D / Contributing D を判定する（`.github/skills/planning/knowledge-management/references/knowledge-management-guide.md` の §2 マッピングルールに従う）
 5. **状態判定** — Confirmed / Tentative / Unknown を判定する（§3 状態判定ルールに従う）
 6. **カバレッジ分析** — D クラス別のカバレッジと不足項目を分析する（§5 カバレッジ分析ルールに従う）
 7. **status.md 生成** — `knowledge/business-requirement-document-status.md` を §4 テンプレートに従い生成・更新する
 7.5. **knowledge/ 文書生成** — QA マッピングが存在する各 D クラスについて `knowledge/D{NN}-<文書名>.md` を §7 テンプレートに従い個別生成する（マッピング 0 件の D クラスはスキップ）
-8. **敵対的レビュー**（オプション — `adversarial-review` ラベルまたは `<!-- adversarial-review: true -->` が指定された場合のみ実行）— AGENTS.md §7 に従い 5 軸（要件充足性/技術的正確性/整合性/非機能品質/捏造検出）で成果物をレビューし、Critical 指摘を修正する
+8. **敵対的レビュー**（オプション — `adversarial-review` ラベルまたは `<!-- adversarial-review: true -->` が指定された場合のみ実行）— Skill `adversarial-review`（`.github/skills/harness/adversarial-review/SKILL.md` 参照）に従い 5 軸（要件充足性/技術的正確性/整合性/非機能品質/捏造検出）で成果物をレビューし、Critical 指摘を修正する
 
 ## 実行パラメータ
 
@@ -29,7 +29,7 @@ QA-KnowledgeManager Agent の定義（`.github/agents/QA-KnowledgeManager.agent.
 ## 入力
 - `qa/*.md`（スコープに応じてフィルタリング）
 - `template/business-requirement-document-master-list.md`
-- `.github/instructions/knowledge-management.instructions.md`
+- `.github/skills/planning/knowledge-management/references/knowledge-management-guide.md`
 
 ## 出力
 - `knowledge/business-requirement-document-status.md`（生成・更新）

@@ -241,5 +241,336 @@ class TestCollectQaAnswersNonTty(unittest.TestCase):
         self.assertEqual(raw, "", "非 TTY 時は user_answers_raw は空のはず")
 
 
+class TestCollectQaAnswersWithPresetMode(unittest.TestCase):
+    """_collect_qa_answers() で config.qa_answer_mode が設定済みの場合の動作検証。
+
+    ウィザードで事前に選択した回答モード（"all" or "one"）が
+    config.qa_answer_mode に設定されているとき、
+    実行時に prompt_answer_mode() が呼ばれず、設定値がそのまま使われることを確認する。
+    """
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1), _make_question(no=2)]
+        return doc
+
+    def test_preset_mode_all_skips_prompt_answer_mode(self) -> None:
+        """config.qa_answer_mode='all' → prompt_answer_mode は呼ばれず、一括入力フローが使われる。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", qa_answer_mode="all")
+
+        mode_called = []
+
+        async def fake_read_multiline(*args, **kwargs):
+            return "1: A\n2: B"
+
+        with unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "one"
+        ), unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "answer_summary"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin, \
+        unittest.mock.patch("runner._read_stdin_multiline", side_effect=fake_read_multiline):
+            mock_stdin.isatty.return_value = True
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertFalse(mode_called, "qa_answer_mode 設定済みなら prompt_answer_mode を呼ばないべき")
+        self.assertFalse(skip)
+        self.assertIn("1: A", raw)
+
+    def test_preset_mode_one_skips_prompt_answer_mode(self) -> None:
+        """config.qa_answer_mode='one' → prompt_answer_mode は呼ばれず、1問ずつフローが使われる。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", qa_answer_mode="one")
+
+        mode_called = []
+
+        with unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "all"
+        ), unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "answer_summary"
+        ), unittest.mock.patch.object(
+            c, "prompt_question_answer", return_value="A"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertFalse(mode_called, "qa_answer_mode 設定済みなら prompt_answer_mode を呼ばないべき")
+        self.assertFalse(skip)
+        self.assertIn("1: A", raw)
+        self.assertIn("2: A", raw)
+
+
+class TestCollectQaAnswersNonTtyWarning(unittest.TestCase):
+    """非 TTY 時に console.warning() が呼ばれることを検証する。"""
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1), _make_question(no=2)]
+        return doc
+
+    def test_non_tty_calls_console_warning(self) -> None:
+        """非 TTY 時: console.warning() が呼ばれ、内容に非対話モードの旨が含まれること。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6")
+
+        warning_messages = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "status"
+        ), unittest.mock.patch.object(
+            c, "warning", side_effect=lambda msg: warning_messages.append(msg)
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(skip, "非 TTY 時は skip=True のはず")
+        self.assertTrue(warning_messages, "非 TTY 時は console.warning() が呼ばれるべき")
+        combined = "\n".join(warning_messages)
+        self.assertIn("非対話", combined, "警告メッセージに非対話モードの旨が含まれるべき")
+
+
+class TestCollectQaAnswersForceInteractive(unittest.TestCase):
+    """force_interactive=True 時に TTY 判定をバイパスすることを検証する。"""
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1), _make_question(no=2)]
+        return doc
+
+    def test_force_interactive_bypasses_tty_check(self) -> None:
+        """force_interactive=True 時: sys.stdin.isatty()=False でも prompt_answer_mode が呼ばれる。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", force_interactive=True)
+
+        mode_called = []
+
+        async def fake_read_multiline(*args, **kwargs):
+            return "1: A\n2: B"
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "answer_summary"
+        ), unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "all"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin, \
+        unittest.mock.patch("runner._read_stdin_multiline", side_effect=fake_read_multiline):
+            mock_stdin.isatty.return_value = False  # TTY ではない
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(mode_called, "force_interactive=True 時は prompt_answer_mode が呼ばれるべき")
+        self.assertFalse(skip, "force_interactive=True 時は skip=False のはず")
+
+
+class TestSkipInputNoAnswerSummary(unittest.TestCase):
+    """skip_input=True 時に answer_summary() が呼ばれないことを検証する。"""
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1)]
+        return doc
+
+    def test_skip_input_calls_status_not_answer_summary(self) -> None:
+        """非 TTY (skip_input=True) 時: answer_summary は呼ばれず status が呼ばれること。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6")
+
+        summary_called = []
+        status_called = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "warning"
+        ), unittest.mock.patch.object(
+            c, "answer_summary", side_effect=lambda *a, **kw: summary_called.append(True)
+        ), unittest.mock.patch.object(
+            c, "status", side_effect=lambda msg: status_called.append(msg)
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertFalse(summary_called, "skip_input=True 時は answer_summary を呼ばないべき")
+        self.assertTrue(status_called, "skip_input=True 時は status が呼ばれるべき")
+
+
+class TestCharWidth(unittest.TestCase):
+    """_char_width() の基本動作検証。"""
+
+    def test_ascii_is_1(self) -> None:
+        """ASCII 文字の幅は 1。"""
+        self.assertEqual(Console._char_width("a"), 1)
+        self.assertEqual(Console._char_width("Z"), 1)
+        self.assertEqual(Console._char_width("0"), 1)
+
+    def test_fullwidth_is_2(self) -> None:
+        """全角文字の幅は 2。"""
+        self.assertEqual(Console._char_width("あ"), 2)
+        self.assertEqual(Console._char_width("テ"), 2)
+        self.assertEqual(Console._char_width("漢"), 2)
+
+
+class TestWrapText(unittest.TestCase):
+    """_wrap_text() の動作検証。"""
+
+    def test_short_text_no_wrap(self) -> None:
+        """折り返し不要な短文はそのまま1要素リストを返す。"""
+        result = Console._wrap_text("hello", 20)
+        self.assertEqual(result, ["hello"])
+
+    def test_empty_string(self) -> None:
+        """空文字列は [""] を返す。"""
+        result = Console._wrap_text("", 20)
+        self.assertEqual(result, [""])
+
+    def test_fullwidth_long_preserves_all_chars(self) -> None:
+        """全角長文の折り返しで全文字が保持される。"""
+        text = "あいうえおかきくけこさしすせそたちつてとなにぬねの"
+        result = Console._wrap_text(text, 10)
+        self.assertEqual("".join(result), text)
+
+    def test_ascii_long_wraps(self) -> None:
+        """ASCII 長文が折り返される。"""
+        text = "a" * 50
+        result = Console._wrap_text(text, 10)
+        self.assertGreater(len(result), 1)
+        self.assertEqual("".join(result), text)
+
+    def test_kinsoku_head_not_at_line_start(self) -> None:
+        """行頭禁則文字（。等）が行頭に来ないこと。"""
+        # 幅10で、11文字目が「。」になるように構成
+        text = "あいうえお。かきくけこ。"
+        result = Console._wrap_text(text, 10)
+        # 1行目は入力の先頭から始まるため行頭禁則文字が現れる可能性はない。
+        # 2行目以降は禁則処理により行頭禁則文字が行頭に来ないことを検証する。
+        for line in result[1:]:
+            if line:
+                self.assertNotIn(line[0], "。、．，）)」』】〕〉》｝}！？!?ー・：；…‥")
+
+    def test_kinsoku_tail_not_at_line_end(self) -> None:
+        """行末禁則文字（「等）が行末に来ないこと（行末禁則が効く場合）。"""
+        # 幅10ちょうどで「が行末になる文字列を作る
+        text = "あいうえ「かきくけこさ"
+        result = Console._wrap_text(text, 10)
+        for line in result[:-1]:  # 最終行以外をチェック
+            if line:
+                self.assertNotIn(line[-1], "（(「『【〔〈《｛{")
+
+    def test_mixed_text_preserves_all_chars(self) -> None:
+        """全角＋ASCII 混在テキストで全文字が保持される。"""
+        text = "Test テスト ABC あいうえお XYZ かきくけこ"
+        result = Console._wrap_text(text, 12)
+        self.assertEqual("".join(result), text)
+
+    def test_no_line_exceeds_max_width(self) -> None:
+        """各行の表示幅が max_width を超えないこと。"""
+        text = "あいうえおかきくけこ。さしすせそたちつてと。なにぬねの"
+        max_w = 10
+        result = Console._wrap_text(text, max_w)
+        c = _make_console()
+        for line in result:
+            self.assertLessEqual(c._visible_len(line), max_w)
+
+
+class TestQuestionnaireTableNoTruncation(unittest.TestCase):
+    """questionnaire_table() で長文が省略されないことを検証する。"""
+
+    def setUp(self) -> None:
+        self.c = _make_console()
+        # 非 TTY 強制（罫線文字のフィルタ不要で堅牢）
+        self.c._is_tty = False
+
+    def _capture_table(self, questions: list[QAQuestion]) -> str:
+        buf = io.StringIO()
+        with unittest.mock.patch("sys.stdout", buf):
+            self.c.questionnaire_table(questions)
+        return buf.getvalue()
+
+    def test_long_question_not_truncated(self) -> None:
+        """40幅超の質問文が省略されず全文表示されること。"""
+        long_question = "出力先は Issue 指定どおり `docs/app-catalog.md` に準拠しますか？"
+        q = _make_question(no=1, question=long_question)
+        output = self._capture_table([q])
+        self.assertNotIn("...", output)
+        # 省略されていれば消えるはずの末尾付近のテキストが存在することを確認
+        self.assertIn("log.md", output)
+        self.assertIn("に準拠しますか", output)
+
+    def test_long_choices_not_truncated(self) -> None:
+        """40幅超の選択肢が省略されず全文表示されること。"""
+        choices = [
+            Choice(label="A", text="上書き再作成（既存ファイルを削除してから再生成）"),
+            Choice(label="B", text="追記更新（既存ファイルに差分を追記）"),
+        ]
+        q = _make_question(no=1, choices=choices)
+        output = self._capture_table([q])
+        self.assertNotIn("...", output)
+        # 省略されていれば消えるはずのテキストが存在することを確認
+        self.assertIn("上書き再作成", output)
+        self.assertIn("から再生成", output)
+        self.assertIn("追記更新", output)
+
+    def test_header_fifth_column_is_correct(self) -> None:
+        """ヘッダー5列目が "回答案の理由" であること。"""
+        q = _make_question(no=1)
+        output = self._capture_table([q])
+        self.assertIn("回答案の理由", output)
+        self.assertNotIn("選択理由", output)
+
+
+class TestQuestionnaireTableFixedWidth(unittest.TestCase):
+    """ターミナル幅をモックしてテーブル幅を検証する。"""
+
+    def setUp(self) -> None:
+        self.c = _make_console()
+        self.c._is_tty = False
+
+    def _capture_with_width(self, questions: list[QAQuestion], term_width: int) -> str:
+        buf = io.StringIO()
+        with unittest.mock.patch("sys.stdout", buf), \
+             unittest.mock.patch("shutil.get_terminal_size", return_value=unittest.mock.MagicMock(columns=term_width)):
+            self.c.questionnaire_table(questions)
+        return buf.getvalue()
+
+    def _max_line_width(self, output: str) -> int:
+        c = _make_console()
+        return max((c._visible_len(line) for line in output.splitlines()), default=0)
+
+    def test_width_80(self) -> None:
+        """幅80でレンダリングしてもターミナル幅を超えないこと。"""
+        questions = [
+            _make_question(no=1, question="出力先は Issue 指定どおり `docs/app-catalog.md` に準拠しますか？"),
+        ]
+        output = self._capture_with_width(questions, 80)
+        self.assertLessEqual(self._max_line_width(output), 80)
+
+    def test_width_120(self) -> None:
+        """幅120でレンダリングしてもターミナル幅を超えないこと。"""
+        questions = [
+            _make_question(no=1, question="出力先は Issue 指定どおり `docs/app-catalog.md` に準拠しますか？"),
+        ]
+        output = self._capture_with_width(questions, 120)
+        self.assertLessEqual(self._max_line_width(output), 120)
+
+    def test_width_200(self) -> None:
+        """幅200でレンダリングしてもターミナル幅を超えないこと。"""
+        questions = [
+            _make_question(no=1, question="出力先は Issue 指定どおり `docs/app-catalog.md` に準拠しますか？"),
+        ]
+        output = self._capture_with_width(questions, 200)
+        self.assertLessEqual(self._max_line_width(output), 200)
+
+
 if __name__ == "__main__":
     unittest.main()

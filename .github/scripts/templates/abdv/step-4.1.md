@@ -4,10 +4,10 @@
 
 ## 入力
 - デプロイ済みの Azure リソース（Azure Portal / CLI で確認）
-- `docs/azure/AzureServices-data.md`
+- `docs/azure/azure-services-data.md`
 - `docs/batch/batch-service-catalog.md`
 - `docs/batch/batch-monitoring-design.md`（監視設計書: WAF「運用の優秀性」柱の根拠）
-- `docs/azure/AzureServices-services.md`（存在する場合のみ参照）
+- `docs/azure/azure-services-compute.md`（存在する場合のみ参照）
 
 ## 出力
 - WAF レビューレポート（`docs/azure/waf-review.md`）

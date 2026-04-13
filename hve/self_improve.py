@@ -8,7 +8,7 @@
 実行パス B（Issue → Copilot cloud agent）:
     GitHub Issue (.github/ISSUE_TEMPLATE/self-improve.yml) 作成
     → Copilot 自動アサイン
-    → AGENTS.md §2.2 に従い Sub Issue を 15分以内に分割
+    → .github/skills/task-dag-planning/SKILL.md §2.2 に従い Sub Issue を 15分以内に分割
     → 各 Sub Issue で改善 → Verification Loop → 学習記録
 
 設計方針:
@@ -16,7 +16,7 @@
     - scan_codebase は subprocess でツールを実行（LLM 統合評価）
     - ScopedPermissionHandler で操作スコープを制限
     - work/.self-improve-lock でローカル競合制御
-    - artifacts/learning-NNN.md に学習ログを AGENTS.md §4.1 準拠で保存
+    - artifacts/learning-NNN.md に学習ログを Skill work-artifacts-layout §4.1 準拠で保存
 """
 
 from __future__ import annotations
@@ -26,6 +26,11 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
+
+try:
+    from .config import generate_run_id
+except ImportError:
+    from config import generate_run_id  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +295,7 @@ def record_learning(
     """イテレーションごとの学習ログを
     work/Issue-<N>/artifacts/learning-{iteration:03d}.md に保存する。
 
-    AGENTS.md §4.1 準拠: 既存ファイルを削除してから新規作成。
+    Skill work-artifacts-layout §4.1 準拠: 既存ファイルを削除してから新規作成。
 
     並列安全性:
       - 各呼び出しは固有の work_dir と iteration 番号を持つため、
@@ -407,7 +412,11 @@ def run_improvement_loop(
             stopped_reason="disabled",
         )
 
-    _work_dir = work_dir or Path("work/self-improve")
+    _run_id = getattr(config, "run_id", "")
+    if not _run_id:
+        _run_id = generate_run_id()
+        setattr(config, "run_id", _run_id)
+    _work_dir = work_dir or Path(f"work/self-improve/run-{_run_id}")
 
     # ロック取得（競合制御）
     if not _acquire_lock(_work_dir):

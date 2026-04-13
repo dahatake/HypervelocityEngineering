@@ -8,7 +8,7 @@
 - `docs/batch/batch-service-catalog.md`
 - `docs/batch/batch-test-strategy.md`（テスト戦略書）
 - `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）
-- `docs/azure/AzureServices-data.md`（データストア接続情報）
+- `docs/azure/azure-services-data.md`（データストア接続情報）
 
 ## 出力
 - `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード

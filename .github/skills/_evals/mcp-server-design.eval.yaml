@@ -1,0 +1,51 @@
+skill: mcp-server-design
+skill_path: .github/skills/planning/mcp-server-design/SKILL.md
+description: MCP Server の設計指針を提供する。Skills と MCP Server の関係性、責務分離、API 設計パターンを定義する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: mcp-server-design-for-azure
+    input: "Azure リソース操作用の MCP Server を設計したい。Skills との責務分担をどう定義すればよいか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/mcp-server-skills-design.md を参照して MCP Server と Skills の役割分担（知識層/実行層/設定層）を設計する"
+    reason: "USE FOR: MCP Server design, skills and MCP relationship に該当する"
+
+  - id: mcp-json-configuration
+    input: ".github/.mcp.json の設定方法を教えてほしい。サーバーエンドポイントと認証方式の定義方法を確認したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "MCP Server の設定層（.github/.mcp.json）の設定方法を参照する"
+    reason: "USE FOR: .github/.mcp.json, server configuration に該当する"
+
+  - id: mcp-api-design-pattern
+    input: "MCP Server の API 設計パターンを参照したい。現在の構成（azure, context7）との整合性を確認してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/mcp-server-skills-design.md の MCP API 設計パターンを参照する"
+    reason: "USE FOR: MCP API design pattern に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-mcp-implementation
+    input: "MCP Server の Python コードを実装してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: MCP Server implementation に該当する。実装は Dev 系 Agent が担当"
+
+  - id: not-for-skill-content-creation
+    input: "新しい SKILL.md ファイルを作成してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: skill content creation に該当する"
+
+  # --- エッジケース ---
+  - id: edge-skills-vs-mcp-boundary
+    input: "Azure リソース操作をスキルで処理すべきか、MCP Server に委譲すべきかを判断してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "知識層（呼び出しパターン・エラーハンドリング手順）は SKILL.md、実行層は .github/.mcp.json という役割分担に基づいて判断する"
+    reason: "Skills と MCP Server の境界判断は mcp-server-design の主要な用途"

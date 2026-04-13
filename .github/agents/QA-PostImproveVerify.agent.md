@@ -1,19 +1,15 @@
 ---
 name: QA-PostImproveVerify
-description: 自己改善実行後の品質検証を行う。AGENTS.md §10.1 Verification Loop（Build/Lint/Test/Security/Diff の5段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループ（Self-Improve）の Phase 4d として使用される。
+description: 自己改善実行後の品質検証を行う。Skill `harness-verification-loop` Verification Loop（Build/Lint/Test/Security/Diff の5段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループ（Self-Improve）の Phase 4d として使用される。
 tools: ["*"]
 ---
 > **WORK**: `work/QA-PostImproveVerify/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 目的は **改善後検証（読み取り＋検証）**。明示依頼が無い限り **コードの変更はしない**。
-- §10.2 安全ガード: 破壊的操作は絶対に実行しない。
+- Skill harness-safety-guard: 破壊的操作は絶対に実行しない。
 
-## Skills 参照
-- `harness-verification-loop`：§10.1 Verification Loop（5段階パイプライン）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
@@ -30,35 +26,9 @@ tools: ["*"]
 ## 2) 事前ゲート
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する。
 
-## 3) Verification Loop 実行（§10.1 準拠）
+## 3) Verification Loop 実行（Skill `harness-verification-loop` 準拠）
 
-### Phase 1: Build
-```bash
-python -m py_compile {changed_files}
-# または
-dotnet build --no-restore  # C# の場合
-```
-
-### Phase 2: Lint
-```bash
-ruff check {target_scope} --output-format text
-```
-
-### Phase 3: Test
-```bash
-pytest --cov {target_scope} --cov-report=term-missing -q --tb=short
-```
-
-### Phase 4: Security Scan
-```bash
-grep -rn "sk-\|password=\|connectionstring=\|Bearer \|api_key" {target_scope}
-```
-
-### Phase 5: Diff Review
-```bash
-git diff --stat
-```
-- 無関係な変更（整形のみ等）が含まれていないか確認する
+> Build → Lint → Test → Security Scan → Diff Review の5段階を順番に実行する。詳細手順は Skill `harness-verification-loop` を参照。
 
 ## 4) デグレード判定
 以下のいずれかに該当する場合 `degraded=true`:
@@ -86,10 +56,10 @@ git diff --stat
 ```
 
 ## 6) 成果物保存
-- 検証レポートを `{WORK}artifacts/verification-{iteration:03d}.md` に保存する（§4.1 準拠）
+- 検証レポートを `{WORK}artifacts/verification-{iteration:03d}.md` に保存する（Skill work-artifacts-layout §4.1 準拠）
 - `{WORK}verification-report.md` を更新する
 
-## 7) 出力（§10.3 準拠）
+## 7) 出力（copilot-instructions.md §8 準拠）
 ```
 ## 成果物サマリー
 - status: PASS/FAIL

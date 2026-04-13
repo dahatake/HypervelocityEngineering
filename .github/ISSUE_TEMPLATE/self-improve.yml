@@ -12,7 +12,7 @@ body:
         このフォームから Issue を作成すると、Copilot cloud agent が以下のループを実行します:
 
         1. **Phase 4a**: コードベーススキャン（ruff / pytest --cov / markdownlint）
-        2. **Phase 4b**: LLM 統合評価 + 改善計画策定（AGENTS.md §2 準拠）
+        2. **Phase 4b**: LLM 統合評価 + 改善計画策定（Skill: `task-dag-planning` 準拠）
         3. **Phase 4c**: 改善実装（セッション内）
         4. **Phase 4d**: 改善後検証（§10.1 Verification Loop）
         5. **Phase 4e**: 学習ログ記録（`work/Issue-<N>/artifacts/learning-NNN.md`）
@@ -32,7 +32,7 @@ body:
         - `Arch-ImprovementPlanner` — 改善計画立案
         - `QA-PostImproveVerify` — 改善後検証
 
-        ⚠️ **注意**: この Issue に Copilot をアサインすると、AGENTS.md §2.2 の分割判定が実行されます。
+        ⚠️ **注意**: この Issue に Copilot をアサインすると、Skill `task-dag-planning` の分割判定が実行されます。
         見積合計 > 15分の場合は `plan.md` と `subissues.md` のみ作成し、Sub Issue に分割されます。
 
 
@@ -85,7 +85,7 @@ body:
           required: false
         - label: "ドキュメント（Markdown 整合性）"
           required: false
-        - label: "AGENTS.md 準拠チェック"
+        - label: "copilot-instructions.md 準拠チェック"
           required: false
 
   - type: textarea

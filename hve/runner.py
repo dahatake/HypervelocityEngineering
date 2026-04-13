@@ -5,21 +5,43 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import re
 import sys
-import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # 同時 stdin アクセスを防止し、全ステップで共有される sys.stdin を順番に利用させる。
 # asyncio.Lock により同一イベントループ内の複数コルーチンからの同時入力を直列化する。
-_stdin_lock = asyncio.Lock()
+# Python 3.10+ の DeprecationWarning を回避するため、イベントループ起動後に遅延生成する。
+_stdin_lock: Optional[asyncio.Lock] = None
+
+
+def _get_stdin_lock() -> asyncio.Lock:
+    """asyncio.Lock を遅延生成して返す（イベントループ起動後に初回生成）。"""
+    global _stdin_lock
+    if _stdin_lock is None:
+        _stdin_lock = asyncio.Lock()
+    return _stdin_lock
+
+
+def _safe_run_id(run_id: str) -> str:
+    """run_id を安全なパスコンポーネントに正規化する。
+
+    - 空の場合は generate_run_id() で自動生成（StepRunner 単独使用への対応）
+    - 許可文字: 英数字・ハイフン・アンダースコアのみ（`/` や `..` 等のパストラバーサル文字を除去）
+    """
+    rid = run_id or generate_run_id()
+    # 安全でない文字を除去（英数字・ハイフン・アンダースコア以外）
+    rid = re.sub(r"[^A-Za-z0-9\-_]", "", rid)
+    # 除去の結果が空になった場合もフォールバック生成
+    return rid or generate_run_id()
 
 try:
-    from .config import SDKConfig
+    from .config import SDKConfig, generate_run_id
     from .console import Console, timestamp_prefix
     from .prompts import (
-        QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
+        QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
         SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
     )
@@ -29,12 +51,11 @@ try:
         ImprovementRecord, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
     )
-    from .permission_handler import ScopedPermissionHandler
 except ImportError:
-    from config import SDKConfig  # type: ignore[no-redef]
+    from config import SDKConfig, generate_run_id  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
-        QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
+        QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
         SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
     )
@@ -44,7 +65,6 @@ except ImportError:
         ImprovementRecord, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
     )
-    from permission_handler import ScopedPermissionHandler  # type: ignore[no-redef]
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
 _MAX_SCAN_OUTPUT_LENGTH: int = 8000
@@ -115,12 +135,22 @@ async def _collect_qa_answers(
     """
     console.questionnaire_table(doc.questions)
 
-    if not sys.stdin.isatty():
+    _is_interactive = config.force_interactive or sys.stdin.isatty()
+    if not _is_interactive:
         # 非 TTY: テーブル表示のみ行いデフォルト採用
+        console.warning(
+            "stdin が非対話モード（TTY ではない）のため、全問デフォルト回答を自動採用します。\n"
+            "  インタラクティブ入力を強制する場合は --force-interactive オプション（orchestrate コマンド）"
+            " または wizard モードの「強制インタラクティブ」設定を有効にしてください。"
+        )
+        console.status("全問デフォルト回答を採用しました。")
         return "", True
 
     # TTY: フルインタラクティブフロー
-    mode = console.prompt_answer_mode()
+    if config.qa_answer_mode:
+        mode = config.qa_answer_mode
+    else:
+        mode = console.prompt_answer_mode()
 
     if mode == "all":
         # 4A. 全問一括入力モード
@@ -131,7 +161,7 @@ async def _collect_qa_answers(
                 "  空行で入力終了 / skip または何も入力せず Enter でデフォルト回答を採用:"
             ),
             console=console,
-            timeout=config.timeout_seconds,
+            timeout=config.qa_input_timeout_seconds,
         )
         if user_answers_raw.strip().lower() in ("", "skip"):
             # 全問空入力 → デフォルト採用確認
@@ -150,7 +180,7 @@ async def _collect_qa_answers(
                         "  空行で入力終了:"
                     ),
                     console=console,
-                    timeout=config.timeout_seconds,
+                    timeout=config.qa_input_timeout_seconds,
                 )
                 skip_input = user_answers_raw.strip().lower() in ("", "skip")
         else:
@@ -168,9 +198,12 @@ async def _collect_qa_answers(
         )
         skip_input = False
 
-    # 回答サマリー表示
-    _parsed_answers = QAMerger.parse_answers(user_answers_raw)
-    console.answer_summary(doc.questions, _parsed_answers)
+    # 回答サマリー表示（skip_input 時は全問デフォルト採用のステータスのみ）
+    if skip_input:
+        console.status("全問デフォルト回答を採用しました。")
+    else:
+        _parsed_answers = QAMerger.parse_answers(user_answers_raw)
+        console.answer_summary(doc.questions, _parsed_answers)
 
     return user_answers_raw, skip_input
 
@@ -245,6 +278,9 @@ class StepRunner:
         """
         start = time.time()
 
+        # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）
+        self.config.run_id = _safe_run_id(self.config.run_id)
+
         # --- dry_run ---
         if self.config.dry_run:
             self.console.step_start(step_id, title, agent=custom_agent)
@@ -269,37 +305,26 @@ class StepRunner:
 
         session = None
         client = None
-        log_reader: Optional[_StderrLogReader] = None
         try:
-            # SDK v0.2.0: CopilotClient(config=SubprocessConfig|ExternalServerConfig)
+            # SDK v0.2.2: CopilotClient(config=SubprocessConfig|ExternalServerConfig)
             if self.config.cli_url:
                 sdk_config = ExternalServerConfig(url=self.config.cli_url)
             else:
-                _cfg_kwargs: Dict[str, Any] = dict(
+                # verbosity >= 3 (verbose) かつデフォルトの log_level ("error") の場合のみ debug に昇格。
+                # ユーザーが明示的に log_level を指定している場合はそれを尊重する。
+                _effective_log_level = (
+                    "debug"
+                    if self.config.verbosity >= 3 and self.config.log_level == "error"
+                    else self.config.log_level
+                )
+                sdk_config = SubprocessConfig(
                     cli_path=self.config.cli_path,
                     github_token=self.config.resolve_token() or None,
-                    log_level=self.config.log_level,
+                    log_level=_effective_log_level,
+                    cli_args=self.config.cli_args,
                 )
-                _on_log_supported = True
-                try:
-                    sdk_config = SubprocessConfig(
-                        **_cfg_kwargs,
-                        on_log=self._make_cli_log_handler(step_id),
-                    )
-                except TypeError:
-                    # on_log パラメータ未対応の SDK バージョン — stderr キャプチャにフォールバック
-                    _on_log_supported = False
-                    self.console.event(
-                        f"  📋 [{step_id}] SDK が on_log 未対応のため stderr キャプチャにフォールバック"
-                    )
-                    sdk_config = SubprocessConfig(**_cfg_kwargs)
             client = CopilotClient(config=sdk_config)
             await client.start()
-
-            # on_log 未対応時のみ: サブプロセスの stderr をキャプチャしてログを表示
-            # (on_log が通った場合はコールバック経由で既にログ取得されるため重複を避ける)
-            if not self.config.cli_url and not _on_log_supported:
-                log_reader = self._try_attach_log_reader(client, step_id)
 
             # セッション構築オプション
             session_opts: Dict[str, Any] = {
@@ -387,13 +412,16 @@ class StepRunner:
                 self.console.step_phase_start(step_id, current_phase, total_phases, "QA レビュー")
                 qa_response = await session.send_and_wait(QA_PROMPT_V2, timeout=self.config.timeout_seconds)
                 qa_content = _extract_text(qa_response)
-                self.console.qa_prompt(qa_content)
+                if not qa_content:
+                    self.console.warning("QA 質問票の生成に失敗しました（LLM の応答が空）。")
 
                 # Phase 2b: 回答収集（新フロー）
                 # まず QADocument をパースして questions が存在するか確認する
                 parsed_qa_preview = QAMerger.parse_qa_content(qa_content)
-                if not parsed_qa_preview.questions:
-                    # パース失敗フォールバック: 旧フロー
+                _parse_succeeded = bool(parsed_qa_preview.questions)
+                if not _parse_succeeded:
+                    # パース失敗フォールバック: 旧フロー（生 Markdown を表示してから入力待ち）
+                    self.console.qa_prompt(qa_content)
                     user_answers_raw = await _read_stdin_multiline(
                         prompt_msg=(
                             f"[Step.{step_id}] QA 回答を入力してください\n"
@@ -401,7 +429,7 @@ class StepRunner:
                             "  空行で入力終了 / skip または何も入力せず Enter でデフォルト回答を採用:"
                         ),
                         console=self.console,
-                        timeout=self.config.timeout_seconds,
+                        timeout=self.config.qa_input_timeout_seconds,
                     )
                     skip_input = user_answers_raw.strip().lower() in ("", "skip")
                 else:
@@ -410,53 +438,61 @@ class StepRunner:
                     )
 
                 # Phase 2c: QA 回答マージ + qa/ ファイル永続化
+                # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
                 merge_succeeded = False
-                try:
-                    parsed_qa = QAMerger.parse_qa_content(qa_content)
-                    if skip_input:
-                        # デフォルト回答を全問採用
-                        answers: Dict[int, str] = {}
-                        merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
-                    else:
-                        answers = QAMerger.parse_answers(user_answers_raw)
-                        merged_qa = QAMerger.merge_answers(parsed_qa, answers)
-                    merged_content = QAMerger.render_merged(merged_qa)
-
-                    # Agent にマージ済みファイル保存を指示
-                    # 並列安全性: ファイルパスはステップ ID で分離されているため
-                    # 並列ステップ間での同一ファイルへの同時書き込みは発生しない。
-                    save_prompt = QA_MERGE_SAVE_PROMPT.format(
-                        merged_content=merged_content,
-                        qa_file_path=f"qa/{step_id}-qa-merged.md",
-                    )
-                    save_response = await session.send_and_wait(save_prompt, timeout=self.config.timeout_seconds)
-                    if save_response is None:
-                        self.console.warning(
-                            "マージ済みファイルの保存指示に対する応答がありませんでした。"
-                        )
-
-                    # 統合ドキュメント生成
-                    try:
-                        consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
-                            merged_qa_content=merged_content,
-                        )
-                        consolidate_response = await session.send_and_wait(
-                            consolidate_prompt, timeout=self.config.timeout_seconds
-                        )
-                        if consolidate_response is None:
-                            self.console.warning(
-                                "統合ドキュメント生成の応答がありませんでした（マージ済みファイルは保存済み）。"
-                            )
-                    except Exception as consolidate_exc:
-                        self.console.warning(
-                            f"統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {consolidate_exc}"
-                        )
-
-                    merge_succeeded = True
-                except Exception as merge_exc:
+                if not _parse_succeeded:
                     self.console.warning(
-                        f"QA マージ処理に失敗しました。従来の QA_APPLY_PROMPT にフォールバックします: {merge_exc}"
+                        "QA 質問票のパースに失敗したため、マージ処理をスキップします。"
+                        " QA_APPLY_PROMPT にフォールバックします。"
                     )
+                else:
+                    try:
+                        parsed_qa = parsed_qa_preview
+                        if skip_input:
+                            # デフォルト回答を全問採用
+                            answers: Dict[int, str] = {}
+                            merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
+                        else:
+                            answers = QAMerger.parse_answers(user_answers_raw)
+                            merged_qa = QAMerger.merge_answers(parsed_qa, answers)
+                        merged_content = QAMerger.render_merged(merged_qa)
+
+                        # Agent にマージ済みファイル保存を指示
+                        # 並列安全性: ファイルパスは run_id + ステップ ID で分離されているため
+                        # 並列ステップ間・再実行間での同一ファイルへの同時書き込みは発生しない。
+                        # run_id は run_step() 冒頭で正規化済みのため _safe_run_id() の再呼び出しは不要。
+                        save_prompt = QA_MERGE_SAVE_PROMPT.format(
+                            merged_content=merged_content,
+                            qa_file_path=f"qa/{self.config.run_id}-{step_id}-qa-merged.md",
+                        )
+                        save_response = await session.send_and_wait(save_prompt, timeout=self.config.timeout_seconds)
+                        if save_response is None:
+                            self.console.warning(
+                                "マージ済みファイルの保存指示に対する応答がありませんでした。"
+                            )
+
+                        # 統合ドキュメント生成
+                        try:
+                            consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
+                                merged_qa_content=merged_content,
+                            )
+                            consolidate_response = await session.send_and_wait(
+                                consolidate_prompt, timeout=self.config.timeout_seconds
+                            )
+                            if consolidate_response is None:
+                                self.console.warning(
+                                    "統合ドキュメント生成の応答がありませんでした（マージ済みファイルは保存済み）。"
+                                )
+                        except Exception as consolidate_exc:
+                            self.console.warning(
+                                f"統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {consolidate_exc}"
+                            )
+
+                        merge_succeeded = True
+                    except Exception as merge_exc:
+                        self.console.warning(
+                            f"QA マージ処理に失敗しました。従来の QA_APPLY_PROMPT にフォールバックします: {merge_exc}"
+                        )
 
                 if not merge_succeeded:
                     # フォールバック: 既存の QA_APPLY_PROMPT
@@ -538,12 +574,10 @@ class StepRunner:
                 phase4_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "自己改善ループ")
 
-                # 共通ロックを使って並列ステップ間での同時実行を防ぐ
-                _work_dir = Path("work/self-improve")
+                # _work_dir は run_id + ステップ ID で分離されたパスを使用する（並列安全性）
+                # run_id は run_step() 冒頭で正規化済みのため _safe_run_id() の再呼び出しは不要。
+                _work_dir = Path(f"work/self-improve/run-{self.config.run_id}/step-{step_id}")
                 _max_iter = self.config.self_improve_max_iterations
-
-                # ScopedPermissionHandler: Phase 4 の改善実行時に安全ガードを適用
-                _permission_handler = ScopedPermissionHandler(strict=True)
 
                 for _iteration in range(1, _max_iter + 1):
                     _iter_start = time.time()
@@ -603,9 +637,7 @@ class StepRunner:
                         f"  🔧 [{step_id}] 自己改善 {_iteration}/{_max_iter}: 改善実行中..."
                     )
                     _exec_prompt = (
-                        f"以下の改善計画を実行してください。"
-                        f"ScopedPermissionHandler により操作スコープが制限されています（work/ と qa/ 以外への書き込み、"
-                        f"破壊的コマンドは拒否されます）。\n\n{_plan_content[:_MAX_PLAN_SCAN_LENGTH]}"
+                        f"以下の改善計画を実行してください。\n\n{_plan_content[:_MAX_PLAN_SCAN_LENGTH]}"
                     )
                     await session.send_and_wait(
                         _exec_prompt, timeout=self.config.timeout_seconds
@@ -697,8 +729,6 @@ class StepRunner:
             self.console.step_end(step_id, "failed", elapsed=elapsed)
             return False
         finally:
-            if log_reader is not None:
-                log_reader.stop()
             if session is not None:
                 try:
                     await session.disconnect()
@@ -722,7 +752,7 @@ class StepRunner:
     def _get(data: Any, *names: str, default: Any = "") -> Any:
         """data オブジェクトから属性を安全に取得する。
 
-        SDK v0.2.0 Python では snake_case 属性名を使用するが、
+        SDK v0.2.2 Python では snake_case 属性名を使用するが、
         将来の変更に備え camelCase もフォールバックで試す。
         """
         if data is None:
@@ -740,10 +770,10 @@ class StepRunner:
     def _handle_session_event(self, event: Any) -> None:
         """CopilotSession のイベントを受け取り Console に出力する。
 
-        SDK v0.2.0 のイベントタイプ一覧:
+        SDK v0.2.2 のイベントタイプ一覧:
         https://github.com/github/copilot-sdk/blob/main/docs/features/streaming-events.md
         """
-        # SDK v0.2.0: event.type は SessionEventType enum、.value で文字列取得
+        # SDK v0.2.2: event.type は SessionEventType enum、.value で文字列取得
         etype = getattr(getattr(event, "type", None), "value", "") or ""
         data = getattr(event, "data", None)
         step_id = getattr(self, "_current_step_id", "")
@@ -829,7 +859,7 @@ class StepRunner:
             return
 
         if etype == "assistant.reasoning_delta":
-            # 推論ストリーム — show_stream 時のみ表示
+            # 推論ストリーム — Console 側で show_stream を制御
             token = _get(data, "delta_content", "deltaContent") or ""
             if token:
                 self.console.stream_token(step_id, token)
@@ -967,126 +997,10 @@ class StepRunner:
         # 未知のイベントタイプ: 将来の SDK 更新に備え verbose で表示
         self.console.event(f"[{step_id}] event: {etype}")
 
-    def _make_cli_log_handler(self, step_id: str):
-        """CLI プロセスの on_log コールバックを生成する（インスタンスメソッドラッパー）。"""
-        return _make_log_handler(self.console, step_id)
-
-    def _try_attach_log_reader(
-        self, client: Any, step_id: str
-    ) -> "Optional[_StderrLogReader]":
-        """CopilotClient の内部サブプロセスから stderr リーダーをアタッチする。
-
-        SDK の内部構造に依存するため、失敗しても警告のみで続行する。
-
-        探索パス（優先順）:
-          1. client._process.stderr
-          2. client._subprocess.stderr
-          3. client.process.stderr
-
-        Returns:
-            _StderrLogReader インスタンス（アタッチ成功時）、None（失敗時）
-        """
-        # ExternalServerConfig 使用時はサブプロセスがないためスキップ
-        if self.config.cli_url:
-            return None
-
-        process = None
-        for attr_path in ("_process", "_subprocess", "process"):
-            proc = getattr(client, attr_path, None)
-            if proc is not None and hasattr(proc, "stderr") and proc.stderr is not None:
-                process = proc
-                break
-
-        if process is None:
-            self.console.warning(
-                f"⚠️ [{step_id}] CLI プロセスの stderr にアクセスできません。"
-                "CLI ログ表示をスキップします。"
-            )
-            return None
-
-        reader = _StderrLogReader(process.stderr, self.console, step_id)
-        reader.start()
-        self.console.event(f"  📋 [{step_id}] CLI ログキャプチャ開始")
-        return reader
-
 
 # ------------------------------------------------------------------
 # 内部ヘルパー
 # ------------------------------------------------------------------
-
-
-class _StderrLogReader:
-    """CopilotClient の内部サブプロセスの stderr を非同期に読み取り、
-    Console.cli_log() にリレーするバックグラウンドスレッド。
-
-    SDK が on_log をサポートしていない場合のフォールバック。
-    """
-
-    def __init__(
-        self,
-        process_stderr: Any,
-        console: Any,
-        step_id: str,
-    ) -> None:
-        self._stderr = process_stderr
-        self._console = console
-        self._step_id = step_id
-        self._stop = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-
-    def start(self) -> None:
-        """バックグラウンドスレッドを開始する。"""
-        self._thread = threading.Thread(target=self._read_loop, daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        """スレッドに停止を通知し、最大 2 秒待機する。"""
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=2.0)
-
-    def _read_loop(self) -> None:
-        try:
-            while True:
-                if self._stop.is_set():
-                    break
-                raw_line = self._stderr.readline()
-                # EOF またはストリームクローズ時はループ終了
-                if not raw_line:
-                    break
-                if isinstance(raw_line, bytes):
-                    line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
-                else:
-                    # text mode（str）の場合はそのまま利用
-                    line = str(raw_line).rstrip("\n\r")
-                if line.strip():
-                    self._console.cli_log(self._step_id, line)
-        except (OSError, ValueError):
-            pass  # プロセス終了時のエラーは無視
-
-
-def _make_log_handler(console: Any, step_id: str):
-    """CLI プロセスの on_log コールバックを生成する（モジュールレベル）。
-
-    SubprocessConfig.on_log に渡すコールバック関数を返す。
-    CLI プロセスのログ行を受け取り、Console.cli_log() 経由で
-    既存のコンソール出力と階層的にマージして表示する。
-
-    Args:
-        console: Console インスタンス。
-        step_id: 対象ステップの識別子。
-
-    Returns:
-        Callable[[str], None]: on_log コールバック関数。
-    """
-    def _on_log(line: str) -> None:
-        if not line or not line.strip():
-            return
-        for sub_line in line.splitlines():
-            if sub_line.strip():
-                console.cli_log(step_id, sub_line)
-
-    return _on_log
 
 
 def _blocking_stdin_read() -> str:
@@ -1117,12 +1031,13 @@ async def _read_stdin_async(
         )
         return ""
 
-    async with _stdin_lock:
+    async with _get_stdin_lock():
         # 他のステップのストリーム出力と視覚的に分離
+        _separator = "─" * 50
         print(flush=True)
-        print(f"{timestamp_prefix()} {"─" * 50}", flush=True)
+        print(f"{timestamp_prefix()} {_separator}", flush=True)
         console.warning(prompt_msg)
-        print(f"{timestamp_prefix()} {"─" * 50}", flush=True)
+        print(f"{timestamp_prefix()} {_separator}", flush=True)
 
         loop = asyncio.get_running_loop()
         try:
@@ -1165,7 +1080,7 @@ async def _read_stdin_multiline(
         )
         return ""
 
-    async with _stdin_lock:
+    async with _get_stdin_lock():
         # 他のステップのストリーム出力と視覚的に分離
         print(flush=True)
         print(f"{timestamp_prefix()} {'─' * 50}", flush=True)
@@ -1200,14 +1115,14 @@ async def _read_stdin_multiline(
 def _extract_text(response: Any) -> str:
     """SDK レスポンスからテキスト部分を取り出す。
 
-    SDK v0.2.0: send_and_wait() は SessionEvent | None を返す。
+    SDK v0.2.2: send_and_wait() は SessionEvent | None を返す。
     テキストは event.data.content に格納される。
     """
     if response is None:
         return ""
     if isinstance(response, str):
         return response
-    # SDK v0.2.0: SessionEvent.data.content
+    # SDK v0.2.2: SessionEvent.data.content
     data = getattr(response, "data", None)
     if data is not None:
         for attr in ("content", "message"):
@@ -1233,8 +1148,7 @@ def _extract_json_block(text: str) -> Optional[str]:
         JSON 文字列（抽出できない場合は None）。
     """
     # ```json ... ``` フェンス内を先に探す（フェンスの開始 `{` から深さカウント）
-    import re as _re
-    _fence_start = _re.compile(r"```(?:json)?\s*\n?")
+    _fence_start = re.compile(r"```(?:json)?\s*\n?")
     m = _fence_start.search(text)
     search_text = text[m.end():] if m else text
 

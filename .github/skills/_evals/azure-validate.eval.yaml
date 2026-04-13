@@ -1,0 +1,63 @@
+# .github/skills/_evals/azure-validate.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: azure-validate
+skill_path: .github/skills/azure-platform/azure-validate/SKILL.md
+description: Pre-deployment validation for Azure readiness. Run deep checks on configuration, infrastructure (Bicep or Terraform), permissions, and prerequisites before deploying.
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: validate-before-deploy
+    input: "azure-prepare が完了しました。デプロイ前の検証を実行してください。.azure/plan.md は Approved 状態です。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "レシピに応じた検証コマンド（azd provision --preview / bicep build / terraform validate 等）を実行すること"
+      - type: content_contains
+        detail: ".azure/plan.md の Section 7: Validation Proof に実行結果を記録してから status を Validated に更新すること"
+    reason: "SKILL.md の description に 'validate my app', 'check deployment readiness', 'run preflight checks' がトリガーキーワードとして含まれており、デプロイ前検証は本 Skill の対象"
+
+  - id: validate-azure-yaml
+    input: "azure.yaml と Bicep テンプレートの構文チェックと権限確認を行ってください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "bicep build による構文検証と、必要な Azure RBAC 権限の確認を実施すること"
+    reason: "SKILL.md の description に 'validate azure.yaml', 'validate Bicep' がトリガーキーワードとして明示されており、IaC ファイルの検証は本 Skill が担当する"
+
+  - id: troubleshoot-deployment-error
+    input: "前回のデプロイが失敗しました。設定を確認して問題を特定してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: ".azure/plan.md のプランを再読み込みし、エラーの根本原因を特定してから修正案を提示すること"
+    reason: "SKILL.md の description に 'troubleshoot deployment errors' がトリガーキーワードとして含まれており、デプロイ失敗の診断・修正も本 Skill のスコープに含まれる"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: execute-deployment-after-validate
+    input: "検証が完了して Validated 状態になりました。今すぐデプロイを実行してください。"
+    expected_trigger: false
+    expected_skill: azure-deploy
+    reason: "Validated 状態になった後のデプロイ実行は azure-deploy の責務。本 Skill は検証・ステータス更新までを担当し、実際の実行コマンド（azd up 等）は azure-deploy が行う"
+
+  - id: create-infrastructure-from-scratch
+    input: "新しいマイクロサービスのインフラを Terraform で作成して Azure Container Apps にデプロイしてください。"
+    expected_trigger: false
+    expected_skill: azure-prepare
+    reason: "インフラ作成・IaC 生成は azure-prepare の責務。.azure/plan.md が存在しない状態では本 Skill を実行できない（SKILL.md に 'azure-prepare was invoked ... .azure/plan.md exists' が前提条件として明示）"
+
+  - id: monitor-deployed-app
+    input: "デプロイ済みの Azure Functions アプリのログを確認したい。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "デプロイ済みアプリの監視・ログ確認は本 Skill のスコープ外。azure-diagnostics または Azure Monitor 系 Skill が適切"
+
+  # --- エッジケース ---
+  - id: validate-without-plan-file
+    input: "デプロイ前の検証を実行してください。azure-prepare はまだ実行していません。"
+    expected_trigger: false
+    expected_skill: azure-prepare
+    reason: "SKILL.md の PREREQUISITE CHECK に '.azure/plan.md が存在しない場合は STOP して azure-prepare を先に実行' と明示されている。plan なし状態での検証依頼は本 Skill を起動できない境界条件"

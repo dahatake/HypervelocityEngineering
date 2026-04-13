@@ -1,0 +1,65 @@
+# .github/skills/_evals/azure-deploy.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: azure-deploy
+skill_path: .github/skills/azure-platform/azure-deploy/SKILL.md
+description: Execute Azure deployments for ALREADY-PREPARED applications that have existing .azure/plan.md and infrastructure files.
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: run-azd-up-explicit
+    input: "azure-prepare と azure-validate が完了しました。azd up を実行してデプロイしてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: ".azure/plan.md の status が Validated であることを確認してから azd up を実行すること"
+      - type: content_contains
+        detail: "Pre-Deploy Checklist が完了されること"
+    reason: "SKILL.md の description に 'run azd up' がトリガーキーワードとして明示されており、azure-prepare/azure-validate 完了後の azd up 実行依頼は本 Skill の発動条件に該当する"
+
+  - id: push-to-production
+    input: "本番環境へのデプロイを実行してください。.azure/plan.md は Validated 状態です。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "plan.md の Validation Proof セクションが実際の検証結果で埋まっていることを確認すること"
+    reason: "SKILL.md の description に 'push to production' / 'execute deployment' がトリガーキーワードとして含まれており、Validated 状態のプランを前提とした本番デプロイ依頼は本 Skill の対象"
+
+  - id: terraform-apply-prepared
+    input: "terraform apply を実行してください。infra/ の Terraform ファイルは azure-prepare で生成済みで、azure-validate も通過しています。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "terraform apply の実行前に .azure/plan.md status = Validated を確認すること"
+    reason: "SKILL.md の description に 'terraform apply' がトリガーキーワードとして含まれており、準備済み・検証済みの Terraform デプロイは本 Skill が担当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: create-and-deploy-new-app
+    input: "新しい Azure Functions アプリを作成して Azure にデプロイしてください。"
+    expected_trigger: false
+    expected_skill: azure-prepare
+    reason: "SKILL.md の description に 'create and deploy', 'create a new app' は DO NOT USE WHEN として明示されており、新規アプリ作成を含む場合は azure-prepare が担当する"
+
+  - id: generate-bicep-template
+    input: "Bicep テンプレートを生成して Azure Container Apps へのデプロイ準備をしてください。"
+    expected_trigger: false
+    expected_skill: azure-prepare
+    reason: "本 Skill は既存の .azure/plan.md とインフラファイルが存在する前提のデプロイ実行 Skill。インフラコード生成・準備は azure-prepare が担当する"
+
+  - id: validate-before-deploy
+    input: "デプロイ前に azure.yaml と Bicep の検証を実行してください。"
+    expected_trigger: false
+    expected_skill: azure-validate
+    reason: "デプロイ前検証（preflight check）は azure-validate の責務。本 Skill は azure-validate が Validated ステータスを付与した後にのみ実行する"
+
+  # --- エッジケース ---
+  - id: plan-validated-but-no-proof
+    input: ".azure/plan.md の status が Validated になっています。デプロイを開始してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "Validation Proof セクション（Section 7）が実際の検証コマンドと結果で埋まっているか確認すること。空の場合は STOP して azure-validate を再実行すること"
+    reason: "Validated ステータスだけでは不十分で、SKILL.md に 'Validation Proof section is populated' の確認が必須と明示されている。プルーフが空の場合は azure-validate を再度実行させる境界条件"

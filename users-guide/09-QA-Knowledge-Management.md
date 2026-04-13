@@ -235,7 +235,7 @@ python -m hve
 
 ```text
 ? ワークフローを選択してください
-  1) App Selection (aas — 2 steps)
+  1) App Architecture Design (aas — 2 steps)
   2) App Design (aad — 16 steps)
   3) App Dev Microservice Azure (asdw — 24 steps)
   4) Batch Design (abd — 9 steps)
@@ -330,7 +330,7 @@ python -m hve orchestrate --workflow aqkm --branch main \
 > `--create-pr` を使用する場合、デフォルトの `ignore_paths` には `docs` / `images` / `infra` / `qa` / `src` / `test` / `work` が含まれます。
 > `--ignore-paths` は既定の ignore_paths を部分的に変更するのではなく、**指定したパスリストで全体を上書き**するオプションです。
 > そのため、`work` もスキャン対象に含めつつ他の既定無視パスを維持したい場合は、`work` を除いた残りのパスをすべて列挙して指定してください（例: `--ignore-paths docs images infra qa src test`）。
-> 詳細は → [SDK-Guide.md](SDK-Guide.md) を参照してください。
+> 詳細は → [sdk-guide.md](sdk-guide.md) を参照してください。
 
 ---
 

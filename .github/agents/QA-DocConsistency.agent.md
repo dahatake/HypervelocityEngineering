@@ -5,15 +5,11 @@ tools: ["*"]
 ---
 > **WORK**: `work/QA-DocConsistency/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 目的は **ドキュメント整合性チェック（読み取り＋検証）**。明示依頼が無い限り **ドキュメントの変更はしない**。
-- §10.2 安全ガード: 破壊的操作は絶対に実行しない。
+- Skill harness-safety-guard: 破壊的操作は絶対に実行しない。
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
@@ -41,7 +37,7 @@ find {target_scope} -name "*.md" -not -path "*/node_modules/*"
 2. **API/インターフェース整合性**: コード実装と API ドキュメントが一致しているか
 3. **リンク有効性**: 内部リンク・参照先ファイルが存在するか
 4. **TBD の適切な使用**: 根拠なく具体的な値が書かれていないか（捏造検出）
-5. **AGENTS.md 準拠**: docs/ 成果物フォーマットルールを満たしているか
+5. **Skill docs-output-format 準拠**: docs/ 成果物フォーマットルールを満たしているか
 
 ### 3.3 整合性レポート生成
 問題を以下の形式で分類する:
@@ -52,9 +48,9 @@ find {target_scope} -name "*.md" -not -path "*/node_modules/*"
 重大度: critical（矛盾・捏造）/ major（欠落・不整合）/ minor（表記揺れ）
 
 ## 4) 成果物保存
-- チェック結果を `{WORK}artifacts/doc-consistency-report.md` に保存する（§4.1 準拠: delete → create）
+- チェック結果を `{WORK}artifacts/doc-consistency-report.md` に保存する（Skill work-artifacts-layout §4.1 準拠: delete → create）
 
-## 5) 出力（§10.3 準拠）
+## 5) 出力（copilot-instructions.md §8 準拠）
 ```
 ## 成果物サマリー
 - status: 成功/失敗/部分完了

@@ -8,16 +8,13 @@ tools: ["*"]
 # 目的（スコープ固定）
 - 対象は **1サービス分のみ**：`{サービスID}-{サービス名}`。
 - 目的は「定義書どおりに動く *最小の本実装*」＋「CIで決定的に通る単体テスト」＋「利用者が実行/検証できる最小ドキュメント」。
-- “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら AGENTS.md の分割ルールで別タスク化）。
+- “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 # 入力（不足なら Questions：必要な項目をすべて）
 最低限ほしい情報：
 - マイクロサービス定義書（例）：
@@ -26,25 +23,22 @@ tools: ["*"]
 - TDD テスト仕様書（Step.2.3T の成果物）：
   - `docs/test-specs/{serviceId}-test-spec.md`
 - 参照候補（存在すれば読む）：
-  - `docs/service-list.md`
-  - `docs/data-model.md`
-  - `docs/service-catalog.md`
-  - `docs/azure/AzureServices-*.md`
-  - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+  - `docs/catalog/service-catalog.md`
+  - `docs/catalog/data-model.md`
+  - `docs/catalog/service-catalog-matrix.md`
+  - `docs/azure/azure-services-*.md`
+  - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 不足があれば「何が足りない/なぜ必要か/代替案（仮置き）をするなら何か」を添えて Questions に必要な項目をすべて出す。捏造は禁止。
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # 成果物（必須）
 - 実装：
-  - `api/{サービスID}-{サービス名}/` 配下に Azure Functionsを作成/更新
+  - `src/api/{サービスID}-{サービス名}/` 配下に Azure Functionsを作成/更新
 - テスト：
   - `test/api/` に単体テスト（外部I/Oはモック。CIで決定的に）
 - 手動スモーク（任意だが推奨。自動テストに混ぜない）：
   - `test/api/smoke-ui/index.html`
-- 作業ログ（AGENTS.md 既定の `{WORK}` に従う）
+- 作業ログ（Skill work-artifacts-layout 既定の `{WORK}` に従う）
   - 仕様要約（エンドポイント/入出力/エラー/依存/設定キー/認証）
   - 実行したコマンド（build/test/lint）
 
@@ -66,7 +60,7 @@ tools: ["*"]
    - テストダブル設計（§4）に基づき、モック/スタブの構成を実装する。
    - テストデータ定義（§3）に基づき、テストデータを準備する。
    - 既存テスト（`test/api/` 配下）がある場合は保持し、仕様書ベースで不足分を追加する。
-   - モッキングライブラリは既存テストプロジェクトの慣習に従う。慣習がない場合は xUnit + Moq（または NSubstitute）を既定とする。テスト戦略書（`docs/test-strategy.md` §4 テストダブル戦略）で別ライブラリが指定されている場合はそちらを優先する。
+   - モッキングライブラリは既存テストプロジェクトの慣習に従う。慣習がない場合は xUnit + Moq（または NSubstitute）を既定とする。テスト戦略書（`docs/catalog/test-strategy.md` §4 テストダブル戦略）で別ライブラリが指定されている場合はそちらを優先する。
 
 4) **RED 確認（TDD RED フェーズ）**
    - テストコードをビルドし、コンパイルが成功することを確認する。
@@ -105,14 +99,14 @@ tools: ["*"]
    - 依存導入が不安定/遅い場合、`copilot-setup-steps.yml` による事前導入（存在すれば更新/無ければ追加検討）を行う。
 
 # 完了条件（DoD）
-- `api/{サービスID}-{サービス名}/` がビルド可能
+- `src/api/{サービスID}-{サービス名}/` がビルド可能
 - `test/api/` の単体テストが決定的に実行可能
 - `dotnet test` の全テストが **PASS** であること（TDD GREEN 確認済み）
 - TDD REFACTOR フェーズを実施し、リファクタリング後も全テストが **PASS** であること
 - テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）のテストケースが、テストコードとしてすべて実装されていること
 - 作業ログと README が更新され、設定キー/実行手順/検証手順が分かる
 
-# 最終品質レビュー（AGENTS.md §7準拠・3観点）
+# 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ## 3つの異なる観点（Azure Functions 実装の場合）
 - **1回目：技術妥当性・実装完全性**：コードが定義書に正しく基づいているか、エラーハンドリングは十分か、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、テストカバレッジは十分か、受入条件（入力/出力/エラー/HTTPコード）が実装・テスト・READMEで一致しているか
@@ -120,7 +114,7 @@ tools: ["*"]
 - **3回目：保守性・堅牢性・スケーラビリティ**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、テスト拡張性と再利用可能性、他サービスへの波及リスク、スコープは1サービスのみか（他サービスへ波及していないか）
 
 ## 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

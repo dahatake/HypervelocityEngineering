@@ -22,6 +22,8 @@ Copilot SDK でローカル実行するバージョン。
 from __future__ import annotations
 
 import asyncio
+import glob as _glob
+import os
 import subprocess
 import sys
 import time
@@ -33,16 +35,16 @@ from typing import Dict, List, Optional, Set
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
 # -----------------------------------------------------------------------
 try:
-    from .config import SDKConfig
+    from .config import SDKConfig, generate_run_id
     from .console import Console, timestamp_prefix
     from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT
-    from .runner import StepRunner, _is_review_fail, _extract_text, _make_log_handler
+    from .runner import StepRunner, _is_review_fail, _extract_text
     from .dag_executor import DAGExecutor
 except ImportError:
-    from config import SDKConfig  # type: ignore[no-redef]
+    from config import SDKConfig, generate_run_id  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT  # type: ignore[no-redef]
-    from runner import StepRunner, _is_review_fail, _extract_text, _make_log_handler  # type: ignore[no-redef]
+    from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
     from dag_executor import DAGExecutor  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
@@ -110,11 +112,16 @@ def _collect_params_non_interactive(
         "selected_steps": steps_value,
         "skip_review": not args.get("auto_contents_review", False),
         "skip_qa": not args.get("auto_qa", False),
-        "additional_comment": "",
+        "additional_comment": args.get("additional_comment", ""),
     }
 
     # ワークフロー固有パラメータ
-    if args.get("app_id"):
+    if args.get("app_ids"):
+        params["app_ids"] = args["app_ids"]  # リストとしてそのまま渡す
+        if len(args["app_ids"]) == 1:
+            params["app_id"] = args["app_ids"][0]
+    elif args.get("app_id"):
+        params["app_ids"] = [args["app_id"]]
         params["app_id"] = args["app_id"]
     if args.get("resource_group"):
         params["resource_group"] = args["resource_group"]
@@ -406,12 +413,136 @@ def _build_step_prompt(
         parts.append(f"対象ブランチ: `{params['branch']}`")
     if params.get("resource_group"):
         parts.append(f"リソースグループ: `{params['resource_group']}`")
-    if params.get("app_id"):
+    app_ids = params.get("app_ids", [])
+    if app_ids:
+        parts.append(f"APP-ID: {', '.join(f'`{aid}`' for aid in app_ids)}")
+    elif params.get("app_id"):
         parts.append(f"APP-ID: `{params['app_id']}`")
     fallback = "\n".join(parts)
     if additional_prompt:
         fallback = fallback + "\n\n" + additional_prompt
     return fallback
+
+
+# -----------------------------------------------------------------------
+# 既存成果物検出・再利用コンテキスト
+# -----------------------------------------------------------------------
+
+def _collect_file_samples(root: str, limit: int = 10) -> list:
+    """指定ディレクトリから最大 limit 件のファイルパスを収集して返す。
+
+    大規模リポジトリでの全列挙を避けるため、limit 件見つかった時点で走査を打ち切る。
+    """
+    from pathlib import Path
+    root_path = Path(root)
+    if not root_path.is_dir():
+        return []
+    files: list = []
+    for path in root_path.rglob("*"):
+        if path.is_file():
+            files.append(str(path))
+            if len(files) >= limit:
+                break
+    return files
+
+
+def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
+    """既存の成果物を検出し、再利用可能なファイルリストを返す。"""
+    existing: dict = {}
+
+    catalog_files = {
+        "app_catalog": "docs/catalog/app-catalog.md",
+        "service_catalog": "docs/catalog/service-catalog.md",
+        "data_model": "docs/catalog/data-model.md",
+        "domain_analytics": "docs/catalog/domain-analytics.md",
+        "screen_catalog": "docs/catalog/screen-catalog.md",
+        "test_strategy": "docs/catalog/test-strategy.md",
+        "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
+        "use_case_catalog": "docs/catalog/use-case-catalog.md",
+        "batch_job_catalog": "docs/batch/batch-job-catalog.md",
+        "batch_service_catalog": "docs/batch/batch-service-catalog.md",
+        "batch_data_model": "docs/batch/batch-data-model.md",
+        "batch_domain_analytics": "docs/batch/batch-domain-analytics.md",
+    }
+
+    for key, path in catalog_files.items():
+        if os.path.exists(path):
+            existing[key] = path
+
+    # サービス詳細仕様書の検出
+    service_specs = _glob.glob("docs/services/*.md")
+    if service_specs:
+        existing["service_specs"] = service_specs
+
+    # 画面定義書の検出
+    screen_specs = _glob.glob("docs/screen/*.md")
+    if screen_specs:
+        existing["screen_specs"] = screen_specs
+
+    # テスト仕様書の検出
+    test_specs = _glob.glob("docs/test-specs/*.md")
+    if test_specs:
+        existing["test_specs"] = test_specs
+
+    # ソースコードの検出（上限付き早期終了）
+    src_files = _collect_file_samples("src")
+    if src_files:
+        existing["src_files"] = src_files
+
+    # テストコードの検出（上限付き早期終了）
+    test_files = _collect_file_samples("test")
+    if test_files:
+        existing["test_files"] = test_files
+
+    # knowledge/ フォルダーの検出
+    knowledge_files = _glob.glob("knowledge/*.md")
+    if knowledge_files:
+        existing["knowledge"] = knowledge_files
+
+    # Agent 設計書の検出
+    agent_specs = _glob.glob("docs/agent/*.md")
+    if agent_specs:
+        existing["agent_specs"] = agent_specs
+
+    # バッチジョブ仕様書の検出
+    batch_job_specs = _glob.glob("docs/batch/jobs/*.md")
+    if batch_job_specs:
+        existing["batch_job_specs"] = batch_job_specs
+
+    return existing
+
+
+def _build_reuse_context(existing_artifacts: dict) -> str:
+    """既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。"""
+    if not existing_artifacts:
+        return ""
+
+    lines = [
+        "\n\n## 🔄 既存成果物（再利用対象）",
+        "以下の成果物が既に存在します。これらを参照・再利用してください：",
+        "",
+    ]
+
+    for key, paths in existing_artifacts.items():
+        if isinstance(paths, list):
+            for p in paths[:10]:  # 上限10件表示
+                lines.append(f"- `{p}`")
+            if len(paths) > 10:
+                lines.append(f"  ...他 {len(paths) - 10} ファイル")
+        else:
+            lines.append(f"- `{paths}`")
+
+    lines.extend([
+        "",
+        "**再利用ルール:**",
+        "- 既存のドキュメント/コード構造を尊重し、差分のみを更新する",
+        "- 新規 APP-ID に関する追記は、既存ファイルのフォーマットに従う",
+        "- Catalog ファイルは既存エントリを保持したまま、新規エントリを追加する",
+        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
+        "- `docs/catalog/app-catalog.md` の既存アプリケーション定義を参照し、一貫性を保つ",
+    ])
+
+    return "\n".join(lines)
 
 
 # -----------------------------------------------------------------------
@@ -453,6 +584,10 @@ async def run_workflow(
     """
     if config is None:
         config = SDKConfig()
+
+    # run_id が未設定の場合、ワークフロー実行開始時に1回生成する（並列安全性）
+    if not config.run_id:
+        config.run_id = generate_run_id()
 
     console = Console(verbose=config.verbose, quiet=config.quiet, show_stream=config.show_stream,
                       verbosity=config.verbosity)
@@ -604,7 +739,38 @@ async def run_workflow(
     phase_start_dag = time.time()
     console.phase_start(p, _total_phases, "実行計画 → DAG 実行")
 
+    # --- 成果物ディレクトリの事前作成 ---
+    _REQUIRED_DIRS = [
+        "docs/catalog",
+        "docs/batch",
+        "docs/batch/jobs",
+        "docs/services",
+        "docs/screen",
+        "docs/test-specs",
+        "docs/agent",
+        "docs/azure",
+        "docs/usecase",
+    ]
+    for _dir in _REQUIRED_DIRS:
+        os.makedirs(_dir, exist_ok=True)
+    console.event(f"成果物ディレクトリを確認/作成しました（{len(_REQUIRED_DIRS)} 件）")
+
     runner = StepRunner(config=config, console=console)
+
+    # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
+    existing_artifacts = _detect_existing_artifacts(workflow_id, effective_params)
+    reuse_context = _build_reuse_context(existing_artifacts)
+    if reuse_context:
+        artifact_count = sum(
+            len(v) if isinstance(v, list) else 1
+            for v in existing_artifacts.values()
+        )
+        console.event(f"既存成果物を検出しました（{artifact_count} 件）。再利用モードで実行します。")
+        effective_additional_prompt = (
+            (config.additional_prompt or "") + reuse_context
+        ).strip() or None
+    else:
+        effective_additional_prompt = config.additional_prompt
 
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
@@ -617,7 +783,7 @@ async def run_workflow(
             root_issue_num=root_issue_num,
             render_template_fn=render_template,
             wf=wf,
-            additional_prompt=config.additional_prompt,
+            additional_prompt=effective_additional_prompt,
         )
 
     # --- 6-7. DAGExecutor 実行 ---
@@ -892,22 +1058,22 @@ async def _request_code_review(
         )
 
     # 3. CopilotClient セッション開始
-    _cfg_kwargs = dict(
-        cli_path=config.cli_path,
-        github_token=config.resolve_token() or None,
-        log_level=config.log_level,
+    # verbosity >= 3 (verbose) かつデフォルトの log_level ("error") の場合のみ debug に昇格。
+    # ユーザーが明示的に log_level を指定している場合はそれを尊重する。
+    _effective_log_level = (
+        "debug"
+        if config.verbosity >= 3 and config.log_level == "error"
+        else config.log_level
     )
     if config.cli_url:
         sdk_config = ExternalServerConfig(url=config.cli_url)
     else:
-        try:
-            sdk_config = SubprocessConfig(
-                **_cfg_kwargs,
-                on_log=_make_log_handler(console, "review"),
-            )
-        except TypeError:
-            console.warning("⚠️ [review] SDK が on_log 未対応のため CLI ログ表示をスキップ")
-            sdk_config = SubprocessConfig(**_cfg_kwargs)
+        sdk_config = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level=_effective_log_level,
+            cli_args=config.cli_args,
+        )
     client = CopilotClient(config=sdk_config)
     await client.start()
 
@@ -918,6 +1084,18 @@ async def _request_code_review(
             on_permission_request=PermissionHandler.approve_all,
             streaming=True,
         )
+
+        # session.log イベントを Console に転送（CLI ログを表示するため）
+        def _review_session_event(event: Any) -> None:
+            etype = getattr(getattr(event, "type", None), "value", "") or ""
+            data = getattr(event, "data", None)
+            if etype == "session.log":
+                level = getattr(data, "level", None) or "info"
+                message = getattr(data, "message", None) or ""
+                if message:
+                    console.cli_log("review", f"[{level}] {message}")
+
+        session.on(_review_session_event)
 
         # 4. /review プロンプト送信
         review_prompt = CODE_REVIEW_CLI_PROMPT.format(diff=diff)

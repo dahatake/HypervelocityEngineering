@@ -5,15 +5,11 @@ tools: ["*"]
 ---
 > **WORK**: `work/QA-CodeQualityScan/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 目的は **コード品質スキャン（読み取り＋評価）**。明示依頼が無い限り **コードの変更はしない**。
-- §10.2 安全ガード: `rm -rf`・`git push --force`・`az delete` 系は絶対に実行しない。
+- Skill harness-safety-guard: `rm -rf`・`git push --force`・`az delete` 系は絶対に実行しない。
 
-## Skills 参照
-- `harness-verification-loop`：§10.1 Verification Loop（Build/Lint/Test/Security/Diff の5段階）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
@@ -78,10 +74,10 @@ markdownlint "**/*.md" --ignore node_modules
 quality_score は 0〜100 の整数（100 = 完全に問題なし）。
 
 ## 4) 成果物保存
-- スキャン結果を `{WORK}artifacts/scan-result.json` に保存する（§4.1 準拠: delete → create）
+- スキャン結果を `{WORK}artifacts/scan-result.json` に保存する（Skill work-artifacts-layout §4.1 準拠: delete → create）
 - サマリーを `{WORK}artifacts/scan-summary.md` に保存する
 
-## 5) 出力（§10.3 準拠）
+## 5) 出力（copilot-instructions.md §8 準拠）
 ```
 ## 成果物サマリー
 - status: 成功/失敗/部分完了

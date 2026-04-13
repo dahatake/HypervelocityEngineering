@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Scan all plan.md for AGENTS.md violations
+      - name: Scan all plan.md for plan.md metadata violations
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -29,23 +29,23 @@ jobs:
 
           if [ "$EXIT_CODE" -ne 0 ]; then
             VIOLATION_COUNT=$(echo "$VIOLATION_LOG" | grep -c '^::error::' || true)
-            echo "::error::${VIOLATION_COUNT} 件の AGENTS.md 違反が検出されました"
+            echo "::error::${VIOLATION_COUNT} 件の plan.md メタデータ違反が検出されました"
 
             CURRENT_DATETIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             AUDIT_DATE=$(date -u +%Y-%m-%d)
 
             {
-              printf '## 🚨 plan.md 監査で AGENTS.md 違反を検出\n\n'
+              printf '## 🚨 plan.md 監査で plan.md メタデータ違反を検出\n\n'
               printf '**検出日**: %s\n' "$CURRENT_DATETIME"
               printf '**違反数**: %s 件\n\n' "$VIOLATION_COUNT"
               printf '### 違反詳細\n\n'
               printf '```\n%s\n```\n\n' "$VIOLATION_LOG"
               printf '### 対応方法\n\n'
-              printf '各 plan.md のメタデータを AGENTS.md §2.2/§2.3 に準拠するよう修正してください。\n\n'
+              printf '各 plan.md のメタデータを `.github/skills/planning/task-dag-planning/SKILL.md` §2.2/§2.3 に準拠するよう修正してください。\n\n'
               printf -- '- `split_decision: SPLIT_REQUIRED` の場合: `implementation_files: false` + `subissues_count >= 1` + `subissues.md` 必須\n'
               printf -- '- `estimate_total > 15` の場合: `split_decision: SPLIT_REQUIRED` 必須\n'
             } | gh issue create \
-              --title "[Audit] plan.md AGENTS.md 違反検出 (${AUDIT_DATE})" \
+              --title "[Audit] plan.md メタデータ違反検出 (${AUDIT_DATE})" \
               --body-file - \
               --label "bug"
             exit 1

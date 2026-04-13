@@ -6,8 +6,8 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 ## 入力
 - `docs/test-specs/{serviceId}-test-spec.md`（Step.2.3T で生成済みのサービス別テスト仕様書）
 - `docs/services/{serviceId}-*.md`（サービス定義書）
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
 - `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）

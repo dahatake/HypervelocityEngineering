@@ -6,8 +6,8 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 ## 入力
 - `docs/test-specs/{screenId}-test-spec.md`（Step.3.0T で生成済みの画面別テスト仕様書）
 - `docs/screen/{screenId}-*.md`（画面定義書）
-- `docs/service-catalog.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
 - `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）

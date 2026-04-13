@@ -61,6 +61,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.branch, "main")
         self.assertIsNone(args.steps)
         self.assertIsNone(args.app_id)
+        self.assertIsNone(args.app_ids)
         self.assertIsNone(args.resource_group)
         self.assertIsNone(args.batch_job_id)
         self.assertIsNone(args.usecase_id)
@@ -70,7 +71,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
         self.assertIsNone(args.mcp_config)
-        self.assertEqual(args.timeout, 7200.0)
+        self.assertEqual(args.timeout, 21600.0)
         self.assertEqual(args.log_level, "error")
 
     def test_log_level_option(self) -> None:
@@ -139,9 +140,14 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.steps, "1,2")
 
     def test_app_id_option(self) -> None:
-        """--app-id オプションのテスト。"""
+        """--app-id オプションのテスト（後方互換）。"""
         args = _parse(["orchestrate", "-w", "asdw", "--app-id", "APP-03"])
         self.assertEqual(args.app_id, "APP-03")
+
+    def test_app_ids_option(self) -> None:
+        """--app-ids オプション（カンマ区切り複数指定）のテスト。"""
+        args = _parse(["orchestrate", "-w", "asdw", "--app-ids", "APP-01,APP-02,APP-03"])
+        self.assertEqual(args.app_ids, "APP-01,APP-02,APP-03")
 
     def test_resource_group_option(self) -> None:
         """--resource-group オプションのテスト。"""
@@ -223,10 +229,25 @@ class TestBuildParams(unittest.TestCase):
         self.assertTrue(params["auto_qa"])
 
     def test_app_id_in_params(self) -> None:
-        """app_id がパラメータに含まれることを確認。"""
+        """app_id (旧形式) が app_ids リストにも正規化されることを確認。"""
         args = _parse(["orchestrate", "-w", "asdw", "--app-id", "APP-05"])
         params = _build_params(args)
         self.assertEqual(params["app_id"], "APP-05")
+        self.assertEqual(params["app_ids"], ["APP-05"])
+
+    def test_app_ids_in_params(self) -> None:
+        """--app-ids がカンマ分割されてリストになることを確認。"""
+        args = _parse(["orchestrate", "-w", "asdw", "--app-ids", "APP-01,APP-02,APP-03"])
+        params = _build_params(args)
+        self.assertEqual(params["app_ids"], ["APP-01", "APP-02", "APP-03"])
+        self.assertNotIn("app_id", params)
+
+    def test_app_ids_single_also_sets_app_id(self) -> None:
+        """--app-ids に1件だけ指定すると app_id にも設定されることを確認。"""
+        args = _parse(["orchestrate", "-w", "asdw", "--app-ids", "APP-01"])
+        params = _build_params(args)
+        self.assertEqual(params["app_ids"], ["APP-01"])
+        self.assertEqual(params["app_id"], "APP-01")
 
     def test_resource_group_in_params(self) -> None:
         """resource_group がパラメータに含まれることを確認。"""

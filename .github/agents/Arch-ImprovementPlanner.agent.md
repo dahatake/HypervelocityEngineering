@@ -1,18 +1,15 @@
 ---
 name: Arch-ImprovementPlanner
-description: コード品質スキャン結果を受け取り、AGENTS.md §2 に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 15分以内の粒度に分割し、優先度付きで出力する。
+description: コード品質スキャン結果を受け取り、Skill task-dag-planning に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 15分以内の粒度に分割し、優先度付きで出力する。
 tools: ["*"]
 ---
 > **WORK**: `work/Arch-ImprovementPlanner/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - 目的は **改善計画策定（設計）**。明示依頼が無い限り **コードの変更はしない**（計画フェーズ専用）。
 - §2.2 分割判定を機械的に実行し、結果を plan.md の `## 分割判定` セクションに記録する。
 
-## Skills 参照
-- `harness-verification-loop`：§10.1 Verification Loop の計画への組み込み方
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
@@ -41,20 +38,19 @@ tools: ["*"]
 3. severity=major
 4. severity=minor
 
-### 3.2 タスク分割（AGENTS.md §2.2 準拠）
+### 3.2 タスク分割（Skill task-dag-planning 準拠）
 - 各問題に対応する改善タスクを 15分以内の粒度に分割する
 - 依存関係を明記し DAG を構築する
 - 見積は R+P+I+V+F の合計で算出する
 
 ### 3.3 §2.2 分割判定（機械的に実行）
-- 見積合計 > 15分 → SPLIT_REQUIRED → subissues.md を作成
-- 見積合計 ≤ 15分 かつ 不確実性「低」→ PROCEED
+> 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
 ## 4) 成果物保存
-- `{WORK}plan.md` を作成する（§4.1 準拠: delete → create）。**AGENTS.md §2.1.2 の plan.md 必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
+- `{WORK}plan.md` を作成する（Skill work-artifacts-layout §4.1 準拠: delete → create）。**Skill task-dag-planning の plan.md 必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
 - SPLIT_REQUIRED の場合は `{WORK}subissues.md` も作成する
 
-## 5) 出力（§10.3 準拠）
+## 5) 出力（copilot-instructions.md §8 準拠）
 
 改善不要の場合:
 ```

@@ -5,17 +5,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Batch-TestStrategy/Issue-<識別子>/`
 
-## 0) 共通ルール
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
-
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
-- `large-output-chunking`：書き込み安全策（§3 セクション単位の段階的書き込み・`read` 検証・最大3回リトライ・分割切替）を参照する。
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 役割（このエージェントがやること）
 
 バッチ処理テスト戦略書作成専用Agent。
@@ -65,8 +59,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.2 計画・分割
 
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Execution（Split Mode でない場合のみ）
 
@@ -78,7 +72,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    - **チャンク3**: 「4. テストダブル戦略」「5. カバレッジ方針」を `edit` で追記 → `read` 確認
    - **チャンク4**: 「6. CI/CD パイプラインとの統合」「7. 参照」を `edit` で追記 → `read` 確認
    - 失敗/空になった場合：さらに小さく分割して再試行（最大3回）
-4. べき等性（再実行耐性）：`docs/batch/batch-test-strategy.md` は上書き更新（重複作成しない）。`work/` 配下のファイルは AGENTS.md §4.1 に従い削除→新規作成とする。
+4. べき等性（再実行耐性）：`docs/batch/batch-test-strategy.md` は上書き更新（重複作成しない）。`work/` 配下のファイルは Skill work-artifacts-layout §4.1 に従い削除→新規作成とする。
 
 ## 4) バッチ固有テスト戦略の作り方（ルール）
 
@@ -130,7 +124,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: テストピラミッド→バッチ固有テスト→テストデータ→テストダブル→カバレッジ→CI/CD統合→参照）。分割粒度: §5 の出力セクション単位。
 
-## 7) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 7.2 3つの異なる観点（このエージェント固有）
 
@@ -139,4 +133,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・安全性**：データ品質テストの閾値が `batch-data-model.md` と整合しているか。TBD の運用が適切か。CI/CD 統合方針が実行可能か。
 
 ### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

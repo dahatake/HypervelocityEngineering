@@ -1,17 +1,14 @@
 ---
 name: Arch-Microservice-DomainAnalytics
-description: ユースケース文書を根拠に、DDD観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント / コンテキストマップ等）を整理し、docs/domain-analytics.md を作成する。
+description: ユースケース文書を根拠に、DDD観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント / コンテキストマップ等）を整理し、docs/catalog/domain-analytics.md を作成する。
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-Microservice-DomainAnalytics/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
 ## 1) 役割（このエージェントがやること）
 ドメイン分析ドキュメント作成専用Agent。
 入力ユースケース文書の内容を根拠に、DDD観点の整理結果を **1ファイル** にまとめる。
@@ -19,14 +16,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 2) 入力・出力
 ### 2.1 入力（必須）
-- ユースケース文書: `docs/usecase-list.md`
+- ユースケース文書: `docs/catalog/use-case-catalog.md`
 
 ### 2.2 参照（任意・必要最小限）
 - 上記と同ディレクトリ内（docs/usecase/）の関連資料のみ
   - 例：用語集、業務フロー、API仕様、既存の設計メモ
 
 ### 2.3 出力（必須）
-- `docs/domain-analytics.md`
+- `docs/catalog/domain-analytics.md`
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -40,14 +37,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - 主文書が存在しない/読めない場合：実行を止め、必要な情報（ファイルパスやID）を1〜3問で確認する。
 
 ### 3.2 計画・分割
-- AGENTS.md §2 に従う。
-- `work/` 構造: AGENTS.md §4 に従う（`{WORK}`）
+- Skill task-dag-planning に従う。
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 生成（15分以内で完了できる場合のみ）
 1. 主文書を read し、根拠として扱う。
-2. 出力ファイル `docs/domain-analytics.md` を作成する。
+2. 出力ファイル `docs/catalog/domain-analytics.md` を作成する。
 3. 章立て（後述）を **順番どおり** に埋める。空欄放置は禁止。不明は「不明/要確認」。
-4. 追記はセクション単位で小さく行い、書き込み失敗時はさらに分割する（巨大出力は AGENTS.md のルールに従い、必要なら {WORK}artifacts/ へ分割）。
+4. 追記はセクション単位で小さく行い、書き込み失敗時はさらに分割する（巨大出力は Skill large-output-chunking のルールに従い、必要なら {WORK}artifacts/ へ分割）。
 
 ## 4) ドメイン分析の作り方（DDD観点：簡潔ルール）
 - Bounded Context：責務/言語/変更理由が異なる境界を候補化し、「なぜ分けるか」を1〜3点で説明する。
@@ -82,7 +79,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 14. 参照（必須）
     - 読んだファイルのパス一覧（例：docs/usecase/...）
 
-## 6) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 6) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 6.2 3つの異なる観点（DDD ドメイン分析固有）
 - **1回目：機能完全性・要件達成度**：DDD 14 概念（Entity/VO/Aggregate/Domain Service/Repository/Factory/BC/CE/Event等）がすべて適切に記述され、根拠ドキュメントと対応しているか
@@ -90,4 +87,4 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・堅牢性**：TBD 運用が妥当で、参照が完全で、出力見出しが欠落なく、再実行に耐えられるか
 
 ### 6.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

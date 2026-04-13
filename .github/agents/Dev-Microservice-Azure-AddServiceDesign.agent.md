@@ -5,38 +5,32 @@ tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDesign/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 # Role
 Azure追加サービス選定（外部依存・統合）専門Agent。
 成果物は **設計書（Markdown）**であり、アプリ実装は行わない。
 
 # Inputs（必読）
 - リソースグループ名: `{リソースグループ名}`
-- ユースケース: `docs//usecase-list.md`
-- サービス一覧: `docs/service-list.md`
+- ユースケース: `docs/catalog/use-case-catalog.md`
+- サービス一覧: `docs/catalog/service-catalog.md`
 - 各サービス定義書: `docs/services/{サービスID}-{サービス名}-description.md`
-- アプリケーション一覧: `docs/app-list.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 既存採用済み（追加提案から除外）:
-  - `docs/azure/AzureServices-services.md`
-  - `docs/azure/AzureServices-data.md`
+  - `docs/azure/azure-services-compute.md`
+  - `docs/azure/azure-services-data.md`
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくサービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全サービス対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 # Outputs（必須）
 - 追加サービス設計（本成果物）:
-  - `docs/azure/AzureServices-services-additional.md`
+  - `docs/azure/azure-services-additional.md`
 - 進捗ログ（追記）:
   - `{WORK}additional-azureservices-design-work-status.md`
-- 分割が必要な場合（AGENTS.md の方式に合わせる）:
+- 分割が必要な場合（Skill task-dag-planning の方式に合わせる）:
   - `{WORK}plan.md`
   - `{WORK}subissues.md`
 
@@ -46,7 +40,7 @@ Azure追加サービス選定（外部依存・統合）専門Agent。
 - Microsoft Learn の URL が取れない場合は「要確認（要: Microsoft Learn確認）」と書く。
 
 ## 1) 既存採用済み（除外）一覧を作る
-- `AzureServices-services.md` と `AzureServices-data.md` を読み、**既存採用済み Azure サービスの正規化リスト**を作る。
+- `azure-services-compute.md` と `azure-services-data.md` を読み、**既存採用済み Azure サービスの正規化リスト**を作る。
   - 正規化例：大小文字差、表記揺れ（“Key Vault”/“Azure Key Vault”）を同一視する。
 - 既存採用済みは **追加提案しない**（ただし依存関係として参照は可）。
 
@@ -67,9 +61,9 @@ Azure追加サービス選定（外部依存・統合）専門Agent。
 - 根拠は **タイトル + URL** を必ず含める。URL が確定できない場合は「要確認」とする。
 
 ## 5) 成果物を作成（フォーマット固定）
-`docs/azure/AzureServices-services-additional.md` は次の構造を崩さない：
+`docs/azure/azure-services-additional.md` は次の構造を崩さない：
 
-## 6) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 6) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 3つの異なる観点（Azure 追加サービス設計固有）
 - **1回目：機能完全性・要件達成度**：全カテゴリのサービスが第一候補として選定され、既存採用済みとの重複がなく、Microsoft Learn 根拠が残っているか
@@ -77,12 +71,12 @@ Azure追加サービス選定（外部依存・統合）専門Agent。
 - **3回目：保守性・拡張性・堅牢性**：URL が有効か、「要確認」マークが妥当か、未決事項が最小限か
 
 ### 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 # Azure 追加サービス設計（{ユースケースID}）
 
 ## 1. 既存採用済み（除外）一覧
-- 抽出元: `AzureServices-services.md` / `AzureServices-data.md`
+- 抽出元: `azure-services-compute.md` / `azure-services-data.md`
 - <サービス名>（用途）...
 
 ## 2. 追加提案（サービス別）

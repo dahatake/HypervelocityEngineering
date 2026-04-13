@@ -162,10 +162,10 @@ def _make_state_labels(prefix: str) -> Dict[str, str]:
 # ワークフロー定義
 # ---------------------------------------------------------------------------
 
-# --- AAS: App Selection ---
+# --- AAS: App Architecture Design ---
 AAS = WorkflowDef(
     id="aas",
-    name="App Selection",
+    name="App Architecture Design",
     label_prefix="aas",
     state_labels=_make_state_labels("aas"),
     params=[],
@@ -210,7 +210,7 @@ ASDW = WorkflowDef(
     name="App Dev Microservice Azure",
     label_prefix="asdw",
     state_labels=_make_state_labels("asdw"),
-    params=["app_id", "resource_group", "usecase_id"],
+    params=["app_ids", "app_id", "resource_group", "usecase_id"],
     steps=[
         # コンテナ
         StepDef(id="1", title="データ（コンテナ）", custom_agent=None, is_container=True),

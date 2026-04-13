@@ -3,10 +3,10 @@
 ユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。
 
 ## 入力
-- `docs/usecase-list.md`
+- `docs/catalog/use-case-catalog.md`
 
 ## 出力
-- `docs/app-list.md`
+- `docs/catalog/app-catalog.md`
 
 ## Custom Agent
 `Arch-ApplicationAnalytics`
@@ -15,5 +15,5 @@
 - なし（最初に実行）
 
 ## 完了条件
-- `docs/app-list.md` が作成されている
+- `docs/catalog/app-catalog.md` が作成されている
 - 完了時に自身に `aas:done` ラベルを付与すること{additional_section}

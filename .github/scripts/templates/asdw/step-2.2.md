@@ -4,16 +4,16 @@
 
 ## 入力
 - リソースグループ名: `{resource_group}`
-- `docs/usecase-list.md`
-- `docs/service-list.md`
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/service-catalog.md`
 - `docs/services/{サービスID}-{サービス名}-description.md`
-- `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 既存採用済み（追加提案から除外）:
-  - `docs/azure/AzureServices-services.md`
-  - `docs/azure/AzureServices-data.md`
+  - `docs/azure/azure-services-compute.md`
+  - `docs/azure/azure-services-data.md`
 
 ## 出力
-- `docs/azure/AzureServices-services-additional.md`
+- `docs/azure/azure-services-additional.md`
 
 ## Custom Agent
 `Dev-Microservice-Azure-AddServiceDesign` を使用
@@ -22,5 +22,5 @@
 - Step.2.1（Azure コンピュート選定）が `asdw:done` であること
 
 ## 完了条件
-- `docs/azure/AzureServices-services-additional.md` が作成されている
+- `docs/azure/azure-services-additional.md` が作成されている
 - 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}

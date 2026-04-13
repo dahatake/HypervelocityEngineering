@@ -5,14 +5,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-UI-List/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) このエージェントの目的
 `docs/` の資料を根拠に、ユースケースとUI(画面)の関係性のベストプラクティスを示したうえで、アクターの中の「人」毎のUIを
 - 画面一覧（表）
@@ -22,10 +18,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 2) 入力（読む順序）
 最優先：
-- `docs/domain-analytics.md`
-- `docs/service-list.md`（機能/責務の補助）
-- `docs/data-model.md`（表示/入力項目の補助）
-- `docs/app-list.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/service-catalog.md`（機能/責務の補助）
+- `docs/catalog/data-model.md`（表示/入力項目の補助）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -33,12 +29,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `knowledge/D11-画面-UX-操作意味仕様書.md` — 画面UX・操作仕様
 
 ## 3) 出力（必須）
-- 主要成果物：`docs/screen-list.md`
+- 主要成果物：`docs/catalog/screen-catalog.md`
 - 進捗ログ：`{WORK}screen-modeling-work-status.md`
 
-`<識別子>` は `AGENTS.md` §4 の命名規則に従う。
+`<識別子>` は `Skill work-artifacts-layout` の命名規則に従う。
 - 既に作業フォルダがあるならそれを使う
-- なければ `{WORK}` を作る（AGENTS.md §4 に従う）
+- なければ `{WORK}` を作る（Skill work-artifacts-layout に従う）
 
 ## 4) UI設計の制約（このエージェント固有）
 - 人のアクター毎に別の画面を作成する
@@ -75,11 +71,11 @@ Markdown表（列固定）：
 - アクター×APP 単位での画面グルーピングを検討する。
   - 1つの APP-ID のみに属する画面群がある場合、アクター×APP 単位での `screen-list.md` の分割を検討する。
   - 複数 APP で共有される画面はない（1:1 関係のため）が、アクター視点ではAPP 単位でのグルーピングが可読性を高める場合がある。
-  - **重要**: ASD の後続 Step（例: Step.7.1）は `docs/screen-list.md` を入力として前提にしているため、分割する場合でも `docs/screen-list.md` 自体は必ず残すこと。
-  - APP 別にファイルを分割する場合は、`docs/screen-list.md` を各 APP 別ファイルへのリンク/索引として機能させ、ASD のワークフロー契約（`docs/screen-list.md` を唯一の入口とする前提）を崩さない。
+  - **重要**: ASD の後続 Step（例: Step.7.1）は `docs/catalog/screen-catalog.md` を入力として前提にしているため、分割する場合でも `docs/catalog/screen-catalog.md` 自体は必ず残すこと。
+  - APP 別にファイルを分割する場合は、`docs/catalog/screen-catalog.md` を各 APP 別ファイルへのリンク/索引として機能させ、ASD のワークフロー契約（`docs/catalog/screen-catalog.md` を唯一の入口とする前提）を崩さない。
 
 ## 6) 作業手順（実行）
-### 6.1 計画（必須：AGENTS.mdに従う）
+### 6.1 計画（必須：Skill task-dag-planning に従う）
 - まずDAG（依存関係）と見積（分）を作る。
 - 見積合計が閾値を超える/レビュー困難なら、**実装（編集）に入らず分割**して `{WORK}subissues.md` を作る。
   - Sub issue を自動作成できない場合でも、`subissues.md` に “そのままIssue化できる本文” を出力する。
@@ -97,11 +93,11 @@ Markdown表（列固定）：
 - 箇条書き：実施内容 / 参照した資料 / 次の作業
 - 同日同内容の重複追記は避け、必要なら差し替え更新を優先する。
 
-## 8) 大容量書き込み（AGENTS.mdに従う）
+## 8) 大容量書き込み（Skill large-output-chunking に従う）
 - 1回の edit で失敗しそうなら、ファイルを段階的に作成・更新する。
-- 長文化・大量生成が見込まれる場合は、AGENTS.md の分割/チャンク規約に従う。
+- 長文化・大量生成が見込まれる場合は、Skill large-output-chunking の分割/チャンク規約に従う。
 
-## 9) 最終品質レビュー（AGENTS.md §7準拠・3観点）
+## 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 9.2 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：画面一覧が漏れ/重複なく、screen_id が安定採番され、遷移図でポータルから主要画面へ到達できるか
@@ -109,4 +105,4 @@ Markdown表（列固定）：
 - **3回目：保守性・拡張性・安全性**：捏造なし（TBD運用）、質問が最大3点、既存 screen_id は維持されているか
 
 ### 9.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

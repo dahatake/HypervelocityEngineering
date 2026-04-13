@@ -5,32 +5,28 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ---
 > **WORK**: `work/Arch-UI-Detail/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 - この agent は **docs/screen/** と **work/** 以外を原則変更しない（例外が必要なら理由を明記）。
 
-## Skills 参照
-- `docs-output-format`：`docs/` 成果物フォーマットの共通原則（§1 固定章立て・TBD・出典必須）を参照する。
+## Agent 固有の Skills 依存
 
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
 ## 1) 目的（このagent固有）
-`docs/screen-list.md` に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
+`docs/catalog/screen-catalog.md` に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
 - アクター毎に別の画面を作成する。
 - UX / A11y / セキュリティ / テスト可能な受け入れ基準を含める
 - 参照元ドキュメントと整合し、**不明点は捏造せず TODO/Questions に落とす**
 
 ## 2) 入力（存在確認して読む）
 必須:
-- `docs/screen-list.md`
+- `docs/catalog/screen-catalog.md`
 
 推奨（存在すれば読む）:
-- `docs/app-list.md`（アプリケーション一覧 — 各画面の所属 APP-ID 確認に使用）
-- `docs/domain-analytics.md`
-- `docs/service-list.md`
-- `docs/data-model.md`
-- `docs/service-catalog.md`
-- `docs/test-strategy.md`（テスト戦略書 — テスタビリティ観点の設計指針として参照。受け入れ基準 §9 の作成時にテスト種別・テストダブル方針を考慮する）
+- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面の所属 APP-ID 確認に使用）
+- `docs/catalog/domain-analytics.md`
+- `docs/catalog/service-catalog.md`
+- `docs/catalog/data-model.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/test-strategy.md`（テスト戦略書 — テスタビリティ観点の設計指針として参照。受け入れ基準 §9 の作成時にテスト種別・テストダブル方針を考慮する）
 - `data/sample-data.json`（存在しなければ付録は作らず Questions へ）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
@@ -43,7 +39,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3) 作業ディレクトリ（このagent固有）
 - task-slug: `screen-detail`
 - `{WORK}`
-  - `plan.md`（**必須** — AGENTS.md §2.1 条件「大量/生成」に該当するタスクでは常に作成。§2.3 必須セクション形式に従うこと）
+  - `plan.md`（**必須** — Skill task-dag-planning 条件「大量/生成」に該当するタスクでは常に作成。§2.3 必須セクション形式に従うこと）
   - `screen-detail-work-status.md`（進捗：フォーマット固定）
   - `subissues.md`（SPLIT_REQUIRED 判定時に必須。Sub Issue 用本文）
 
@@ -52,18 +48,15 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ### 4.1 Planner（最初に必ず / 大量生成はしない）
 1) `screen-list.md` から画面IDと画面名を抽出して画面数を確定  
 2) 画面ごとに概算（X–Y分）と合計を見積（厳密不要）  
-3) **AGENTS.md §2.1 の条件判定を実施する**（必須。スキップ禁止）
-4) **`{WORK}plan.md` を AGENTS.md §2.3 の必須セクション形式で作成する**（見積結果に関わらず必須）
-5) AGENTS.md §2.2 の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
+3) **Skill task-dag-planning の条件判定を実施する**（必須。スキップ禁止）
+4) **`{WORK}plan.md` を Skill task-dag-planning の必須セクション形式で作成する**（見積結果に関わらず必須）
+5) Skill task-dag-planning の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
 6) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録
 
-> ⚠️ **plan.md の作成は見積結果に関わらず必須**。AGENTS.md §2.1 の条件「大規模/大量/生成」に全画面一括生成タスクは常に該当するため。
-> ⚠️ plan.md を作成せずに docs/screen/ 配下のファイルを生成することは禁止（AGENTS.md §2.2 違反）。
+> ⚠️ **plan.md の作成は見積結果に関わらず必須**。Skill task-dag-planning の条件「大規模/大量/生成」に全画面一括生成タスクは常に該当するため。
+> ⚠️ plan.md を作成せずに docs/screen/ 配下のファイルを生成することは禁止（Skill task-dag-planning 違反）。
 
-分割判定（AGENTS.md §2.2 準拠）:
-- 合計見積が **15分超** → SPLIT_REQUIRED（不確実性に関わらず。AGENTS.md §2.2 の if 分岐が最優先）
-- 合計見積が **15分以下** かつ 不確実性が **中/高** → SPLIT_REQUIRED
-- 合計見積が **15分以下** かつ 不確実性が **低** → PROCEED（Execution に進んでよい）
+> 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
 ### 4.2 Split Mode（合計>15分 など）
 - `{WORK}subissues.md` を作成し、**そのままSub Issue化できる本文**を出力する
@@ -85,7 +78,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `docs/screen/sample-data-appendix.md`
   - 先頭に `<!-- SAMPLE_DATA: REMOVE_WHEN_API_READY -->`
   - `data/sample-data.json` の全文を `json` コードブロックで掲載
-  - 長大な場合は `AGENTS.md` の巨大出力ルールに従い、**小チャンクで追記**して完成させる
+  - 長大な場合は `Skill large-output-chunking` のルールに従い、**小チャンクで追記**して完成させる
 
 2) 各画面の画面定義書を作成/更新
 - 出力先:
@@ -99,7 +92,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 3) 進捗更新（追記のみ）
 - `{WORK}screen-detail-work-status.md` に Done/Pending を更新（フォーマット固定）
 
-### 4.4 最終品質レビュー（AGENTS.md §7準拠・3観点）
+### 4.4 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 4.4.2 3つの異なる観点（このエージェント固有）
 - **1回目：機能完全性・要件達成度**：画面定義書（UX/A11y/セキュリティ/AC）が screen-list および参照ドキュメントと整合し、対応する実装に使用可能か
@@ -107,7 +100,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **3回目：保守性・拡張性・堅牢性**：テンプレ構造が統一され、サンプルデータ/API接続/状態管理が明確で、将来の画面追加に対応可能か
 
 ### 4.4.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ## 5) 書き込み失敗（空ファイル化等）対策（このagent固有・必須）
 - 1回の edit の目安: **最大200行 or 6–8KB**
@@ -140,7 +133,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ```md
 ## 1. 概要
-* 所属アプリケーション: APP-xx（`docs/app-list.md` の「アプリ一覧（アーキタイプ）概要」を参照）
+* 所属アプリケーション: APP-xx（`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照）
 * 目的 / 想定ユーザー / 前提
 
 ## 2. 画面構成

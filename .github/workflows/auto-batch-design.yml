@@ -173,6 +173,23 @@ jobs:
         uses: actions/checkout@v4
 
       # ----------------------------------------------------------------
+      # 1.6. 成果物ディレクトリの事前作成
+      # ----------------------------------------------------------------
+      - name: 成果物ディレクトリの事前作成
+        if: steps.gate.outputs.mode != 'skip'
+        run: |
+          # 成果物ディレクトリの事前作成
+          mkdir -p docs/catalog
+          mkdir -p docs/batch
+          mkdir -p docs/batch/jobs
+          mkdir -p docs/services
+          mkdir -p docs/screen
+          mkdir -p docs/test-specs
+          mkdir -p docs/agent
+          mkdir -p docs/azure
+          mkdir -p docs/usecase
+
+      # ----------------------------------------------------------------
       # 2. ラベル bootstrap
       # ----------------------------------------------------------------
       - name: ラベル bootstrap
@@ -301,7 +318,7 @@ jobs:
 
           # 追加コメント抽出
           additional_comment = ""
-          m = re.search(r"###\s*追加コメント\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               additional_comment = m.group(1).strip()
               if additional_comment == "_No response_":
@@ -492,7 +509,7 @@ jobs:
 
           # ---- Step.1.1 ----
           if ! skip_step "1.1"; then
-            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でバッチドメイン分析（冪等性・トランザクション境界・最終的一貫性・チェックポイント/リスタート等）を行い、docs/batch/batch-domain-analytics.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n\n## 出力\n- `docs/batch/batch-domain-analytics.md`\n\n## Custom Agent\n`Arch-Batch-DomainAnalytics` を使用\n\n## 完了条件\n- `docs/batch/batch-domain-analytics.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でバッチドメイン分析（冪等性・トランザクション境界・最終的一貫性・チェックポイント/リスタート等）を行い、docs/batch/batch-domain-analytics.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n\n## 出力\n- `docs/batch/batch-domain-analytics.md`\n\n## Custom Agent\n`Arch-Batch-DomainAnalytics` を使用\n\n## 完了条件\n- `docs/batch/batch-domain-analytics.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ABD] Step.1.1: バッチドメイン分析" \
@@ -506,7 +523,7 @@ jobs:
 
           # ---- Step.1.2 ----
           if ! skip_step "1.2"; then
-            BODY_S12=$(printf '%s\n## 目的\nユースケース文書を根拠に、データソース/デスティネーション分析（接続先・スキーマ概要・データ量見積・変換ルール・SLA/SLO）を行い、docs/batch/batch-data-source-analysis.md を作成する。\n\n## 入力\n- `docs/usecase-list.md`\n- `docs/data-model.md`（任意）\n\n## 出力\n- `docs/batch/batch-data-source-analysis.md`\n\n## Custom Agent\n`Arch-Batch-DataSourceAnalysis` を使用\n\n## 完了条件\n- `docs/batch/batch-data-source-analysis.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書を根拠に、データソース/デスティネーション分析（接続先・スキーマ概要・データ量見積・変換ルール・SLA/SLO）を行い、docs/batch/batch-data-source-analysis.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/data-model.md`（任意）\n\n## 出力\n- `docs/batch/batch-data-source-analysis.md`\n\n## Custom Agent\n`Arch-Batch-DataSourceAnalysis` を使用\n\n## 完了条件\n- `docs/batch/batch-data-source-analysis.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ABD] Step.1.2: データソース/デスティネーション分析" \
@@ -520,7 +537,7 @@ jobs:
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とデータソース分析結果を根拠に、バッチデータモデル（入力/ステージング/中間/出力モデル・冪等性キー・パーティション戦略・ER図）を設計する。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/data-model.md`\n\n## 出力\n- `docs/batch/batch-data-model.md`\n\n## Custom Agent\n`Arch-Batch-DataModel` を使用\n\n## 依存\n- Step.1.1（バッチドメイン分析）が `abd:done` であること（AND依存）\n- Step.1.2（データソース/デスティネーション分析）が `abd:done` であること（AND依存）\n\n## 完了条件\n- `docs/batch/batch-data-model.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
+            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とデータソース分析結果を根拠に、バッチデータモデル（入力/ステージング/中間/出力モデル・冪等性キー・パーティション戦略・ER図）を設計する。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/catalog/data-model.md`\n\n## 出力\n- `docs/batch/batch-data-model.md`\n\n## Custom Agent\n`Arch-Batch-DataModel` を使用\n\n## 依存\n- Step.1.1（バッチドメイン分析）が `abd:done` であること（AND依存）\n- Step.1.2（データソース/デスティネーション分析）が `abd:done` であること（AND依存）\n\n## 完了条件\n- `docs/batch/batch-data-model.md` が作成されている\n- 完了時に自身に `abd:done` ラベルを付与すること%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ABD] Step.2: バッチデータモデル" \

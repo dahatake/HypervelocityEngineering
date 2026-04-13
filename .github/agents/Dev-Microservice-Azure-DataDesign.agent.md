@@ -1,18 +1,15 @@
 ---
 name: Dev-Microservice-Azure-DataDesign
-description: Polyglot Persistence に基づき、指定ユースケースの全エンティティに対する最適 Azure データストア選定と根拠、整合性/運用方針を docs/azure/AzureServices-data.md に文書化する。
+description: Polyglot Persistence に基づき、指定ユースケースの全エンティティに対する最適 Azure データストア選定と根拠、整合性/運用方針を docs/azure/azure-services-data.md に文書化する。
 tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
 
-## 0) 共通ルール
-- **AGENTS.md** と **`.github/copilot-instructions.md`** を最優先で遵守する。本ファイルは固有ルールのみを記載する。
+## 共通ルール → Skill `agent-common-preamble` を参照
 
 
-## Skills 参照
-- `harness-verification-loop`：コード変更の5段階検証パイプライン（AGENTS.md §10.1）
-- `harness-safety-guard`：破壊的操作の事前検知（AGENTS.md §10.2）
-- `harness-error-recovery`：エラー発生時の3要素出力（AGENTS.md §10.4）
+## Agent 固有の Skills 依存
+
 ## 1) 適用範囲（このエージェントの役割）
 - 対象：ユースケースの **全エンティティ**について、Azure のデータストア（および必要なら補助コンポーネント）を選定し、根拠と整合性/運用方針を文書化する。
 - 目的：後続の実装・運用・レビューができる **決定と根拠の記録**を作る（「なぜそれが最適か」「代替は何で、なぜ採用しないか」まで）。
@@ -20,12 +17,12 @@ tools: ["*"]
 
 ## 2) 入力（必読）
 - 必読ファイル
-  - `docs/data-model.md`
-  - `docs/service-list.md`
-  - `docs/domain-analytics.md`
-  - `docs/app-list.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+  - `docs/catalog/data-model.md`
+  - `docs/catalog/service-catalog.md`
+  - `docs/catalog/domain-analytics.md`
+  - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 任意（存在すれば参照）
-  - `.github/instructions/agent-playbook.instructions.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
+  - `.github/skills/planning/agent-common-preamble/references/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -33,18 +30,15 @@ tools: ["*"]
 - `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` — セキュリティ・プライバシー・監査
 - `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
 
-## APP-ID スコープ
-- Issue body / `<!-- app-id: XXX -->` から APP-ID 取得 → `docs/app-list.md` で紐づくエンティティ/サービス特定（共有含む）
-- APP-ID未指定 or `docs/app-list.md` 不在 → 全エンティティ対象（後方互換）
-
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ## 3) 成果物（必須）
 1) 設計ドキュメント（作成/更新）
-- `docs/azure/AzureServices-data.md`
+- `docs/azure/azure-services-data.md`
 
 2) 進捗ログ（追記専用）
 - `{WORK}data-azure-design-work-status.md`
 
-※`{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `/AGENTS.md` に従う。
+※`{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
 ## 4) 重要制約（品質と安全）
 - 公式根拠を優先（Microsoft Learn / 公式ドキュメントが取得できる場合はリンクを残す）。取得できない場合は「確認できていない」旨を明記してTBDにする。
@@ -52,7 +46,7 @@ tools: ["*"]
 
 ## 5) 作業手順（この順番で）
 ### 5.1 まずスコープ固定（AC/非対象）
-- `AzureServices-data.md` の「0. 概要」に入れる粒度で、ユースケース要約と評価軸を確定する。
+- `azure-services-data.md` の「0. 概要」に入れる粒度で、ユースケース要約と評価軸を確定する。
 - 受け入れ条件（AC）を最低3つ定義（例：全エンティティ行が埋まっている／各行に根拠リンクがある／整合性方針が記述されている）。
 
 ### 5.2 入力から抽出（棚卸し）
@@ -84,7 +78,7 @@ tools: ["*"]
 - `{WORK}data-azure-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
-## 6) 出力フォーマット（AzureServices-data.md は固定）
+## 6) 出力フォーマット（azure-services-data.md は固定）
 既存ファイルがある場合は **同一見出しを維持し、差分最小で更新**する（章や表を増殖させない）。
 
 ### 0. 概要
@@ -115,7 +109,7 @@ tools: ["*"]
 - Assumptions（必要なら併記）
 
 ## 7) 書き込み失敗/巨大出力への対策
-- まず `/AGENTS.md` と `large-output-chunking` スキルのルールに従う。
+- まず `large-output-chunking` スキルのルールに従う。
 - それでも書き込みが失敗する場合のみ、見出し境界で **小さめのチャンク（例：1〜2千文字）**にして追記で復旧する（全置換を避ける）。
 
 ## 8) 最終チェックと品質レビュー（必須）
@@ -128,7 +122,7 @@ tools: ["*"]
 - 質問が3つ以内、かつ本当にブロッカーのみ
 
 ### 8.2 品質レビュー（異なる観点で3度のレビュー）
-- AGENTS.md §7.1 に従う。
+- Skill adversarial-review に従う。
 
 #### 3つの異なる観点（Azure データストア選定設計の場合）
 - **1回目：技術妥当性・要件達成度**
@@ -150,4 +144,4 @@ tools: ["*"]
   - ドキュメント保守性と見直し周期の妥当性
 
 ### 8.3 出力方法
-レビュー記録は `{WORK}` に保存（§4.1準拠）。PR本文にも記載。最終版のみ成果物出力。
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

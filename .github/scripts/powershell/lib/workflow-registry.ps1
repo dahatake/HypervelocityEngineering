@@ -48,10 +48,10 @@ function script:NewWorkflowStep {
 
 $script:WorkflowRegistryData = @{}
 
-# AAS — App Selection (2 steps)
+# AAS — App Architecture Design (2 steps)
 $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     id            = 'aas'
-    name          = 'App Selection'
+    name          = 'App Architecture Design'
     label_prefix  = 'aas'
     state_labels  = [PSCustomObject]@{
         initialized = 'aas:initialized'

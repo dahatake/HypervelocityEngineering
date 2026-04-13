@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+
+def generate_run_id() -> str:
+    """ワークフロー実行ごとのユニークID。
+
+    タイムスタンプ（人間可読 + ソート可能）+ UUID短縮（衝突防止）
+    例: "20260413T143022-a1b2c3"
+    """
+    ts = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    short_uuid = uuid.uuid4().hex[:6]
+    return f"{ts}-{short_uuid}"
 
 
 @dataclass
 class SDKConfig:
     # --- 基本設定 ---
     model: str = "claude-opus-4.6"          # デフォルトモデル
-    timeout_seconds: float = 7200.0         # セッションの idle タイムアウト
+    timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
     base_branch: str = "main"               # ベースブランチ
     cli_path: Optional[str] = None          # Copilot CLI のパス (COPILOT_CLI_PATH)
     cli_url: Optional[str] = None           # 外部 CLI サーバー URL (例: localhost:4321)
@@ -23,11 +36,15 @@ class SDKConfig:
     # --- Post-step 自動プロンプト ---
     auto_qa: bool = False                   # QA 自動投入（デフォルト: 無効）
     auto_contents_review: bool = False      # Review 自動投入（デフォルト: 無効）
+    qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, None = 実行時に選択
+
+    force_interactive: bool = False         # True のとき sys.stdin.isatty() 判定をバイパスしてインタラクティブモードを強制する（--force-interactive）
+    qa_input_timeout_seconds: float = 300.0  # QA 回答入力専用タイムアウト秒数（デフォルト: 300 秒）
 
     # --- Code Review Agent ---
     auto_coding_agent_review: bool = False              # Code Review Agent 呼び出し（デフォルト: 無効）
     auto_coding_agent_review_auto_approval: bool = False  # 自動承認（デフォルト: 無効）
-    review_timeout_seconds: float = 7200.0              # Code Review Agent レビュー待ちタイムアウト
+    review_timeout_seconds: float = 7200.0              # Code Review Agent レビュー待ちタイムアウト（セッション idle タイムアウトとは別設定）
     review_base_ref: str = "HEAD~1"                     # git diff の基点 (例: "HEAD~1", "main", "origin/main")
 
     # --- Issue/PR 作成 ---
@@ -41,6 +58,12 @@ class SDKConfig:
     show_stream: bool = False               # トークンストリーム表示（デフォルト: 無効）
     log_level: str = "error"                # CLI ログレベル (none/error/warning/info/debug/all)
     verbosity: int = 1                      # Console verbosity: 0=quiet, 1=compact, 2=normal, 3=verbose
+
+    # --- SDK ---
+    cli_args: List[str] = field(default_factory=list)
+    # SubprocessConfig.cli_args に渡す追加 CLI 引数。例:
+    # ["--log-dir", "/path/to/logs"]  でログファイル永続化
+    # ["--some-flag"]                 で診断オプション有効化
 
     # --- MCP Servers ---
     mcp_servers: Optional[Dict[str, Any]] = None
@@ -84,6 +107,9 @@ class SDKConfig:
     self_improve_max_requests: int = 50         # コストハードリミット（リクエスト上限）
     self_improve_target_scope: str = ""         # 改善対象スコープ（空 = 全体）
     self_improve_skip: bool = False             # --no-self-improve で True
+
+    # --- 実行 ID ---
+    run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
 
     # --- その他 ---
     dry_run: bool = False                   # ドライラン
