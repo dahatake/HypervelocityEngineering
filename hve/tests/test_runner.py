@@ -411,6 +411,12 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
     """
 
     _VALID_QA_CONTENT = (
+        "| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 |\n"
+        "|-----|------|--------|----------|----------------|\n"
+        "| 1 | テスト？ | A) はい / B) いいえ | A) はい | 理由 |\n"
+    )
+
+    _LEGACY_QA_CONTENT = (
         "| No. | 質問 | 選択肢 | デフォルトの回答案 | 選択理由 |\n"
         "|-----|------|--------|-------------------|----------|\n"
         "| 1 | テスト？ | A) はい / B) いいえ | A) はい | 理由 |\n"
@@ -489,6 +495,12 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
         qa_calls, table_calls = self._run_with_fake_sdk("")
         self.assertTrue(qa_calls, "パース失敗時は qa_prompt() が呼ばれるべき")
         self.assertFalse(table_calls, "パース失敗時は questionnaire_table() を呼ばないべき")
+
+    def test_legacy_format_parsed_as_success(self) -> None:
+        """旧形式（デフォルトの回答案/選択理由）はパース成功扱いになる。"""
+        qa_calls, table_calls = self._run_with_fake_sdk(self._LEGACY_QA_CONTENT)
+        self.assertFalse(qa_calls, "旧形式でもパース成功時は qa_prompt() を呼ばないべき")
+        self.assertTrue(table_calls, "旧形式でもパース成功時は questionnaire_table() が呼ばれるべき")
 
 
 if __name__ == "__main__":

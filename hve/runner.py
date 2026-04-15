@@ -120,7 +120,7 @@ async def _collect_qa_answers(
         questionnaire_table() → prompt_answer_mode() → "all"/"one" フロー → answer_summary()
 
     非 TTY 時:
-        questionnaire_table() のみ表示し、デフォルト回答を全採用する。
+        questionnaire_table() のみ表示し、既定値候補を全採用する。
 
     Args:
         console: Console インスタンス。
@@ -135,15 +135,23 @@ async def _collect_qa_answers(
     """
     console.questionnaire_table(doc.questions)
 
-    _is_interactive = config.force_interactive or sys.stdin.isatty()
+    _is_interactive = (
+        not config.unattended
+        and (config.force_interactive or sys.stdin.isatty())
+    )
     if not _is_interactive:
-        # 非 TTY: テーブル表示のみ行いデフォルト採用
-        console.warning(
-            "stdin が非対話モード（TTY ではない）のため、全問デフォルト回答を自動採用します。\n"
-            "  インタラクティブ入力を強制する場合は --force-interactive オプション（orchestrate コマンド）"
-            " または wizard モードの「強制インタラクティブ」設定を有効にしてください。"
-        )
-        console.status("全問デフォルト回答を採用しました。")
+        # 非 TTY または全自動モード: テーブル表示のみ行いデフォルト採用
+        if config.unattended:
+            console.warning(
+                "全自動モードのため、全問既定値候補を自動採用します。"
+            )
+        else:
+            console.warning(
+                "stdin が非対話モード（TTY ではない）のため、全問既定値候補を自動採用します。\n"
+                "  インタラクティブ入力を強制する場合は --force-interactive オプション（orchestrate コマンド）"
+                " または wizard モードの「強制インタラクティブ」設定を有効にしてください。"
+            )
+        console.status("全問既定値候補を採用しました。")
         return "", True
 
     # TTY: フルインタラクティブフロー
@@ -158,15 +166,15 @@ async def _collect_qa_answers(
             prompt_msg=(
                 f"[Step.{step_id}] QA 回答を入力してください\n"
                 "  形式: 「番号: 選択肢」を1行1問で入力（例: 1: A）\n"
-                "  空行で入力終了 / skip または何も入力せず Enter でデフォルト回答を採用:"
+                "  空行で入力終了 / skip または何も入力せず Enter で既定値候補を採用:"
             ),
             console=console,
             timeout=config.qa_input_timeout_seconds,
         )
         if user_answers_raw.strip().lower() in ("", "skip"):
-            # 全問空入力 → デフォルト採用確認
+            # 全問空入力 → 既定値採用確認
             adopt = console.prompt_yes_no(
-                "全問デフォルト回答を採用しますか？",
+                "全問既定値候補を採用しますか？",
                 default=True,
             )
             if adopt:
@@ -200,7 +208,7 @@ async def _collect_qa_answers(
 
     # 回答サマリー表示（skip_input 時は全問デフォルト採用のステータスのみ）
     if skip_input:
-        console.status("全問デフォルト回答を採用しました。")
+        console.status("全問既定値候補を採用しました。")
     else:
         _parsed_answers = QAMerger.parse_answers(user_answers_raw)
         console.answer_summary(doc.questions, _parsed_answers)
@@ -220,10 +228,10 @@ class StepRunner:
     │                                                    │
     │  [auto_qa=True の場合]                              │
     │  Phase 2a: session.send_and_wait(QA_PROMPT_V2)     │
-    │    → Agent が 5列テーブル形式の質問票を生成          │
+    │    → Agent が構造化形式の質問票を生成                │
     │  Phase 2b: CLI stdin で複数行回答入力               │
     │    → "番号: 選択肢" 形式 / 空行で終了               │
-    │    → skip/空 入力でデフォルト回答適用               │
+    │    → skip/空 入力で既定値候補適用                    │
     │  Phase 2c: QA 回答マージ + qa/ ファイル永続化        │
     │    → QAMerger でパース → マージ → Markdown 生成     │
     │    → session.send_and_wait(QA_MERGE_SAVE_PROMPT)   │
@@ -408,7 +416,7 @@ class StepRunner:
             if self.config.auto_qa:
                 current_phase += 1
                 phase2_start = time.time()
-                # Phase 2a: QA 質問票生成（QA_PROMPT_V2 で5列テーブル形式）
+                # Phase 2a: QA 質問票生成（QA_PROMPT_V2 で構造化形式）
                 self.console.step_phase_start(step_id, current_phase, total_phases, "QA レビュー")
                 qa_response = await session.send_and_wait(QA_PROMPT_V2, timeout=self.config.timeout_seconds)
                 qa_content = _extract_text(qa_response)
@@ -426,7 +434,7 @@ class StepRunner:
                         prompt_msg=(
                             f"[Step.{step_id}] QA 回答を入力してください\n"
                             "  形式: 「番号: 選択肢」を1行1問で入力（例: 1: A）\n"
-                            "  空行で入力終了 / skip または何も入力せず Enter でデフォルト回答を採用:"
+                            "  空行で入力終了 / skip または何も入力せず Enter で既定値候補を採用:"
                         ),
                         console=self.console,
                         timeout=self.config.qa_input_timeout_seconds,
@@ -449,7 +457,7 @@ class StepRunner:
                     try:
                         parsed_qa = parsed_qa_preview
                         if skip_input:
-                            # デフォルト回答を全問採用
+                            # 既定値候補を全問採用
                             answers: Dict[int, str] = {}
                             merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
                         else:
@@ -497,7 +505,7 @@ class StepRunner:
                 if not merge_succeeded:
                     # フォールバック: 既存の QA_APPLY_PROMPT
                     if skip_input:
-                        fallback_answers = "(デフォルト回答を採用)"
+                        fallback_answers = "(既定値候補を採用)"
                     else:
                         fallback_answers = user_answers_raw
                     apply_prompt = QA_APPLY_PROMPT.format(user_answers=fallback_answers)

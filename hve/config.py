@@ -111,6 +111,9 @@ class SDKConfig:
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
 
+    # --- 全自動モード ---
+    unattended: bool = False                # True の場合、実行中のインタラクティブ入力を全てスキップ
+
     # --- その他 ---
     dry_run: bool = False                   # ドライラン
 

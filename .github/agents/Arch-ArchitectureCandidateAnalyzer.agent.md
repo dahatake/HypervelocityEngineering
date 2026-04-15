@@ -441,6 +441,17 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 
 ## 9) 計画・分割
 - Skill task-dag-planning に従う。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - APP数が多い場合（目安: 7APP超）、1回の対話で全APPの判定を完了できない可能性がある。その場合はSkill task-dag-planningの分割基準に従い、APPをグループに分割して処理する。
 - 分割粒度の目安: Phase単位（例: Phase 1のAPP群 → Phase 2のAPP群 → Phase 3のAPP群）

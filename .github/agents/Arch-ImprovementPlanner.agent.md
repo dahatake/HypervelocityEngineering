@@ -47,7 +47,18 @@ tools: ["*"]
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
 ## 4) 成果物保存
-- `{WORK}plan.md` を作成する（Skill work-artifacts-layout §4.1 準拠: delete → create）。**Skill task-dag-planning の plan.md 必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
+- `{WORK}plan.md` を作成する（Skill work-artifacts-layout §4.1 準拠: delete → create）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - SPLIT_REQUIRED の場合は `{WORK}subissues.md` も作成する
 
 ## 5) 出力（copilot-instructions.md §8 準拠）

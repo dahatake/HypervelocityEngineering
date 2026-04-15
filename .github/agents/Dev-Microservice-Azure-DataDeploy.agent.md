@@ -76,6 +76,17 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
 ### 3.1 調査 → 計画 → モード判定（必須）
 - Inputs を読み、作成対象（サービス名・種類・想定SKU・リージョン・依存）を棚卸しする
 - `{WORK}plan.md` に、DAG（依存関係）＋概算（分）＋検証計画＋リスクを作る
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - **plan.md の見積合計を算出し、モードを決定する（モード判定基準は Skill task-dag-planning を参照）**
   ※ただし Azure 実行の待ち時間（リソースプロビジョニング等）は見積に含めない
 

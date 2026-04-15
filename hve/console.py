@@ -958,9 +958,11 @@ class Console:
         questions: List[QAQuestion],
         max_col_width: int = 40,
     ) -> None:
-        """QA 質問票を 5列テーブル形式で表示する。
+        """QA 質問票を動的列数テーブル形式で表示する。
 
-        5列: No. | 質問 | 選択肢 | デフォルトの回答案 | 回答案の理由
+        新フィールド（priority, category, impact_if_unanswered）がある質問が1つでもあれば8列、なければ5列で表示。
+        - 8列: No. | 重要度 | 分類項目 | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響
+        - 5列: No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由
 
         TTY 接続時はボックス罫線 + ANSI カラーで描画し、
         非 TTY 時はプレーンテキストテーブル（| 区切り）を出力する。
@@ -973,7 +975,13 @@ class Console:
         if not questions:
             return
 
-        headers = ["No.", "質問", "選択肢", "デフォルトの回答案", "回答案の理由"]
+        # 新フィールドの有無に応じて列数を動的決定
+        use_extended = any(q.priority or q.category or q.impact_if_unanswered for q in questions)
+
+        if use_extended:
+            headers = ["No.", "重要度", "分類項目", "質問", "選択肢", "既定値候補", "既定値候補の理由", "未回答のまま進めた場合の影響"]
+        else:
+            headers = ["No.", "質問", "選択肢", "既定値候補", "既定値候補の理由"]
 
         # 各行のセルを構築
         rows: List[List[str]] = []
@@ -982,13 +990,25 @@ class Console:
                 choices_str = " / ".join(f"{c.label}) {c.text}" for c in q.choices)
             else:
                 choices_str = ""
-            rows.append([
-                str(q.no),
-                q.question,
-                choices_str,
-                q.default_answer,
-                q.reason,
-            ])
+            if use_extended:
+                rows.append([
+                    str(q.no),
+                    q.priority,
+                    q.category,
+                    q.question,
+                    choices_str,
+                    q.default_answer,
+                    q.reason,
+                    q.impact_if_unanswered,
+                ])
+            else:
+                rows.append([
+                    str(q.no),
+                    q.question,
+                    choices_str,
+                    q.default_answer,
+                    q.reason,
+                ])
 
         # 列ごとの最大幅を計算（ヘッダーと全行から、クリップなし）
         header_widths = [self._visible_len(h) for h in headers]

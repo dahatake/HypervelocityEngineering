@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT
+from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT, QA_PROMPT_V2
 
 
 class TestPromptsNotEmpty(unittest.TestCase):
@@ -36,11 +36,11 @@ class TestPromptsNotEmpty(unittest.TestCase):
         """QA_APPLY_PROMPT には {user_answers} プレースホルダーが含まれる。"""
         self.assertIn("{user_answers}", QA_APPLY_PROMPT)
 
-    def test_qa_prompt_mentions_markdown(self) -> None:
-        """QA_PROMPT には Markdown または選択式に関する記述が含まれる。"""
+    def test_qa_prompt_mentions_selection_or_priority(self) -> None:
+        """QA_PROMPT には選択式または重要度に関する記述が含まれる。"""
         self.assertTrue(
-            "Markdown" in QA_PROMPT or "選択" in QA_PROMPT,
-            "QA_PROMPT should mention Markdown or selection format",
+            "選択" in QA_PROMPT or "重要度" in QA_PROMPT,
+            "QA_PROMPT should mention selection or priority",
         )
 
     def test_review_prompt_mentions_adversarial_review(self) -> None:
@@ -76,6 +76,39 @@ class TestAdversarialRecheckPrompt(unittest.TestCase):
     def test_adversarial_recheck_prompt_has_cycle_placeholder(self) -> None:
         """{cycle} プレースホルダーが含まれることを確認。"""
         self.assertIn("{cycle}", ADVERSARIAL_RECHECK_PROMPT)
+
+
+class TestQaPromptV2(unittest.TestCase):
+    """QA_PROMPT_V2 の検証。"""
+
+    def test_qa_prompt_v2_is_str(self) -> None:
+        self.assertIsInstance(QA_PROMPT_V2, str)
+
+    def test_qa_prompt_v2_not_empty(self) -> None:
+        self.assertTrue(QA_PROMPT_V2.strip(), "QA_PROMPT_V2 should not be empty")
+
+    def test_qa_prompt_v2_mentions_priority(self) -> None:
+        """QA_PROMPT_V2 には重要度の記述が含まれる。"""
+        self.assertIn("重要度", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_mentions_default_candidate(self) -> None:
+        """QA_PROMPT_V2 には既定値候補の記述が含まれる。"""
+        self.assertIn("既定値候補", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_mentions_category(self) -> None:
+        """QA_PROMPT_V2 には分類項目の記述が含まれる。"""
+        self.assertIn("分類項目", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_no_fabrication(self) -> None:
+        """QA_PROMPT_V2 には捏造禁止の記述が含まれる。"""
+        self.assertIn("捏造", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_alpha_labels(self) -> None:
+        """QA_PROMPT_V2 にはアルファベットラベル (A. または A/B/C) の記述が含まれる。"""
+        self.assertTrue(
+            "A." in QA_PROMPT_V2 or "A/B/C" in QA_PROMPT_V2,
+            "QA_PROMPT_V2 should mention alphabetic labels (A. or A/B/C)",
+        )
 
 
 if __name__ == "__main__":

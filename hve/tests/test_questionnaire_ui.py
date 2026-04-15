@@ -89,8 +89,8 @@ class TestQuestionnaireTable(unittest.TestCase):
         output = self._capture_table([q])
         self.assertIn("質問", output)
         self.assertIn("選択肢", output)
-        self.assertIn("デフォルトの回答案", output)
-        self.assertIn("回答案の理由", output)
+        self.assertIn("既定値候補", output)
+        self.assertIn("既定値候補の理由", output)
         self.assertIn("○○を選択しますか？", output)
         self.assertIn("1", output)
 
@@ -372,7 +372,86 @@ class TestCollectQaAnswersForceInteractive(unittest.TestCase):
         self.assertFalse(skip, "force_interactive=True 時は skip=False のはず")
 
 
-class TestSkipInputNoAnswerSummary(unittest.TestCase):
+class TestCollectQaAnswersUnattended(unittest.TestCase):
+    """`unattended=True` 時の _collect_qa_answers() 動作を検証する。
+
+    TTY 接続時でも unattended=True なら非対話モードと同等の挙動になることを確認する。
+    """
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1), _make_question(no=2)]
+        return doc
+
+    def test_unattended_skips_mode_and_uses_defaults(self) -> None:
+        """unattended=True 時: TTY でも prompt_answer_mode が呼ばれず skip=True。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True)
+
+        table_called = []
+        mode_called = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table", side_effect=lambda *a, **kw: table_called.append(True)
+        ), unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "all"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True  # TTY 接続中でも
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(table_called, "questionnaire_table は呼ばれるべき")
+        self.assertFalse(mode_called, "unattended=True 時は prompt_answer_mode を呼ばないべき")
+        self.assertTrue(skip, "unattended=True 時は skip_input=True のはず")
+        self.assertEqual(raw, "", "unattended=True 時は user_answers_raw は空のはず")
+
+    def test_unattended_warning_message(self) -> None:
+        """unattended=True 時: 全自動モード向けの警告メッセージが出ること。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True)
+
+        warning_messages: list[str] = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "warning", side_effect=lambda msg: warning_messages.append(msg)
+        ), unittest.mock.patch.object(
+            c, "status"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(warning_messages, "unattended=True 時は warning が呼ばれるべき")
+        combined = "\n".join(warning_messages)
+        self.assertIn("全自動", combined, "警告メッセージに全自動モードの旨が含まれるべき")
+
+    def test_unattended_takes_precedence_over_force_interactive(self) -> None:
+        """unattended=True は force_interactive=True より優先される。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True, force_interactive=True)
+
+        mode_called = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "warning"
+        ), unittest.mock.patch.object(
+            c, "status"
+        ), unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "all"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertFalse(mode_called, "unattended=True 時は force_interactive=True でも prompt_answer_mode は呼ばれないべき")
+        self.assertTrue(skip, "unattended=True 時は skip=True のはず")
+
+
+
     """skip_input=True 時に answer_summary() が呼ばれないことを検証する。"""
 
     def _make_doc(self) -> QADocument:
@@ -522,10 +601,10 @@ class TestQuestionnaireTableNoTruncation(unittest.TestCase):
         self.assertIn("追記更新", output)
 
     def test_header_fifth_column_is_correct(self) -> None:
-        """ヘッダー5列目が "回答案の理由" であること。"""
+        """ヘッダー5列目が "既定値候補の理由" であること。"""
         q = _make_question(no=1)
         output = self._capture_table([q])
-        self.assertIn("回答案の理由", output)
+        self.assertIn("既定値候補の理由", output)
         self.assertNotIn("選択理由", output)
 
 
@@ -570,6 +649,64 @@ class TestQuestionnaireTableFixedWidth(unittest.TestCase):
         ]
         output = self._capture_with_width(questions, 200)
         self.assertLessEqual(self._max_line_width(output), 200)
+
+
+class TestQuestionnaireTableDynamicColumns(unittest.TestCase):
+    """questionnaire_table() の動的列数テスト。"""
+
+    def setUp(self) -> None:
+        self.c = _make_console()
+
+    def _capture_table(self, questions: list[QAQuestion]) -> str:
+        buf = io.StringIO()
+        with unittest.mock.patch("sys.stdout", buf):
+            self.c.questionnaire_table(questions)
+        return buf.getvalue()
+
+    def test_8col_with_new_fields(self) -> None:
+        """新フィールド（priority, category, impact_if_unanswered）ありで8列ヘッダーが含まれる。"""
+        q = QAQuestion(
+            no=1,
+            question="テスト",
+            choices=[Choice(label="A", text="はい")],
+            default_answer="A) はい",
+            reason="理由",
+            priority="最重要",
+            category="設計",
+            impact_if_unanswered="設計が未確定になる",
+        )
+        output = self._capture_table([q])
+        self.assertIn("重要度", output)
+        self.assertIn("分類項目", output)
+        self.assertIn("未回答のまま進めた場合の影響", output)
+
+    def test_impact_only_triggers_extended(self) -> None:
+        """impact_if_unanswered だけあっても8列ヘッダーになる。"""
+        q = QAQuestion(
+            no=1,
+            question="テスト",
+            default_answer="A) はい",
+            reason="理由",
+            impact_if_unanswered="影響あり",
+        )
+        output = self._capture_table([q])
+        self.assertIn("未回答のまま進めた場合の影響", output)
+
+    def test_5col_without_new_fields(self) -> None:
+        """新フィールドなしで5列ヘッダー（重要度・分類項目なし）。"""
+        q = _make_question(no=1, question="テスト")
+        output = self._capture_table([q])
+        self.assertNotIn("重要度", output)
+        self.assertNotIn("分類項目", output)
+
+    def test_5col_uses_new_terms(self) -> None:
+        """5列でも新用語「既定値候補」「既定値候補の理由」が使われる。"""
+        q = _make_question(no=1, question="テスト")
+        output = self._capture_table([q])
+        self.assertIn("既定値候補", output)
+        self.assertIn("既定値候補の理由", output)
+        self.assertNotIn("デフォルトの回答案", output)
+        self.assertNotIn("回答案の理由", output)
 
 
 if __name__ == "__main__":

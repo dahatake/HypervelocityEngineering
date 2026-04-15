@@ -77,6 +77,17 @@ Markdown表（列固定）：
 ## 6) 作業手順（実行）
 ### 6.1 計画（必須：Skill task-dag-planning に従う）
 - まずDAG（依存関係）と見積（分）を作る。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - 見積合計が閾値を超える/レビュー困難なら、**実装（編集）に入らず分割**して `{WORK}subissues.md` を作る。
   - Sub issue を自動作成できない場合でも、`subissues.md` に “そのままIssue化できる本文” を出力する。
 

@@ -66,7 +66,7 @@ tools: ["*"]
 
 ## §4 処理手順（9 ステップ）
 
-> **plan.md 作成は Skill task-dag-planning の必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須。欠落は CI で自動拒否される）。
+> **plan.md 作成は Skill task-dag-planning の必須手順に従うこと**（メタデータ4行 + `## 分割判定` セクション必須。欠落は CI で自動拒否される）。テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照。コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する。
 > 合計 15 分超または不確実性が高い場合は `{WORK}subissues.md` を作成して停止する（Skill task-dag-planning 準拠）。
 
 ### Step 1: 入力ファイル収集

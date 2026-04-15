@@ -72,6 +72,17 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 ## 6.3 計画・分割
 - Skill task-dag-planning に従う。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「出力セクション単位」で分割（§9 の `##` トップレベル見出し7セクション: `## 1. 概要` 〜 `## 7. 網羅性チェック` を各1単位とする）
 

@@ -1,0 +1,185 @@
+name: QA 質問票 → PR コメント自動展開
+
+# Copilot が qa/ 配下に質問票ファイルを作成してコミットした際に、
+# PR コメントに全質問が展開されていない場合はファイル内容を自動投稿する。
+#
+# トリガー: pull_request_target: [synchronize]
+#   （Copilot がコミットを push した時に発火）
+#
+# 実行条件:
+#   - PR に auto-qa ラベルが付いている
+#   - PR が draft でない
+#   - PR の変更ファイル一覧に qa/ 配下の .md ファイルが追加・変更として含まれている
+#   - PR コメントに <!-- qa-full-posted --> マーカーが存在しない（未投稿）
+#
+# 冪等化:
+#   - <!-- qa-full-posted --> マーカーで重複投稿を防止
+#   （Copilot が Skill 指示に従い投稿済みの場合はスキップ）
+
+on:
+  pull_request_target:
+    types: [synchronize]
+
+concurrency:
+  group: post-qa-to-pr-comment-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  post-qa-comment:
+    if: >
+      contains(github.event.pull_request.labels.*.name, 'auto-qa')
+      && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+    steps:
+      - name: qa/ 配下の質問票ファイルを検出
+        id: detect-qa
+        run: |
+          set -euo pipefail
+
+          # PR の変更ファイル一覧から qa/ 配下の .md ファイルを検出（API 経由）
+          api_response=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --paginate 2>&1) || {
+            echo "::error::PR ファイル一覧の取得に失敗しました: ${api_response}"
+            exit 1
+          }
+
+          qa_files=$(echo "${api_response}" | \
+            jq -r '.[] | select(.filename | startswith("qa/")) | select(.filename | endswith(".md")) | select(.status == "added" or .status == "modified") | .filename' \
+            2>/dev/null) || qa_files=""
+
+          if [ -z "${qa_files}" ]; then
+            echo "qa/ 配下に質問票ファイルが見つかりません。スキップします。"
+            echo "found=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "検出された qa/ ファイル:"
+          echo "${qa_files}"
+          # 最初のファイルを使用（通常1つだが、複数ある場合は最初のもの）
+          first_file=$(echo "${qa_files}" | head -1)
+          # ファイルパスを英数字・スラッシュ・ハイフン・アンダースコア・ドットのみに制限（セキュリティ）
+          # ディレクトリトラバーサル（../ や ./）を明示的に拒否
+          if ! echo "${first_file}" | grep -qE '^qa/[a-zA-Z0-9_.-][a-zA-Z0-9_.-]*(/[a-zA-Z0-9_.-][a-zA-Z0-9_.-]*)*\.md$' \
+              || echo "${first_file}" | grep -qE '(^|/)\.\.(/|$)' \
+              || echo "${first_file}" | grep -qE '(^|/)\.(/|$)'; then
+            echo "::error::予期しないファイルパス形式です: ${first_file}"
+            exit 1
+          fi
+          echo "qa_file=${first_file}" >> "${GITHUB_OUTPUT}"
+          echo "found=true" >> "${GITHUB_OUTPUT}"
+
+      - name: PR コメントの <!-- qa-full-posted --> マーカーを確認
+        id: guard
+        if: steps.detect-qa.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+          MARKER="<!-- qa-full-posted -->"
+          api_response=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate 2>&1) || {
+            echo "::error::PR コメント一覧の取得に失敗しました: ${api_response}"
+            exit 1
+          }
+          existing=$(echo "${api_response}" | \
+            jq -s --arg marker "${MARKER}" '[.[][] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing=0
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "質問票の全文コメントは既に投稿済みです。スキップします。"
+            echo "posted=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "posted=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: 質問票ファイルの内容を GitHub API 経由で取得し PR コメントとして投稿
+        if: >
+          steps.detect-qa.outputs.found == 'true'
+          && steps.guard.outputs.posted != 'true'
+        env:
+          QA_FILE: ${{ steps.detect-qa.outputs.qa_file }}
+        run: |
+          set -euo pipefail
+
+          # GitHub コメントの上限は 65536 文字。余裕を持って 60000 文字で切り詰める
+          # CONTENT_MAX_CHARS: 切り詰め判定の閾値
+          # CONTENT_TRUNCATE_AT: 実際に切り詰める文字数（ヘッダー・フッター分のバッファを含む）
+          CONTENT_MAX_CHARS=60000
+          CONTENT_TRUNCATE_AT=58000
+
+          # ファイル内容を GitHub API 経由で取得（untrusted code execution を避けるため checkout しない）
+          file_content_b64=$(gh api \
+            "/repos/${REPO}/contents/${QA_FILE}?ref=${HEAD_SHA}" \
+            --jq '.content' 2>&1) || {
+            echo "::error::ファイル ${QA_FILE} の取得に失敗しました: ${file_content_b64}"
+            exit 1
+          }
+
+          # base64 デコード（改行を除去してからデコード）
+          qa_content=$(echo "${file_content_b64}" | tr -d '\n' | base64 -d 2>/dev/null) || {
+            echo "::error::ファイル ${QA_FILE} の base64 デコードに失敗しました。"
+            exit 1
+          }
+
+          # ファイルURLのパス部分をパーセントエンコード（スペース等の特殊文字対応）
+          encoded_path=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe='/'))" "${QA_FILE}")
+
+          # 文字数チェックと切り詰めを Python で統一（日本語等マルチバイト文字を文字単位で扱う）
+          char_count=$(QA_CONTENT="${qa_content}" python3 - <<'PY'
+import os
+print(len(os.environ["QA_CONTENT"]))
+PY
+          )
+          truncated_note=""
+          if [ "${char_count}" -gt "${CONTENT_MAX_CHARS}" ]; then
+            echo "::warning::ファイルが大きいため（約${char_count}文字）、先頭 ${CONTENT_TRUNCATE_AT} 文字のみ投稿します。"
+            qa_content=$(QA_CONTENT="${qa_content}" CONTENT_TRUNCATE_AT="${CONTENT_TRUNCATE_AT}" python3 - <<'PY'
+import os
+print(os.environ["QA_CONTENT"][:int(os.environ["CONTENT_TRUNCATE_AT"])], end="")
+PY
+            )
+            truncated_note="
+
+---
+> ⚠️ ファイルサイズが大きいため、一部省略されています。全文は [\`${QA_FILE}\`](https://github.com/${REPO}/blob/${HEAD_SHA}/${encoded_path}) を参照してください。"
+          fi
+
+          # コメント本文を一時ファイルに書き込み（シェル特殊文字を安全に扱う）
+          comment_file=$(mktemp)
+          {
+            echo "<!-- qa-full-posted -->"
+            echo "## 📋 質問票（全文展開）"
+            echo ""
+            printf '> 以下は [`%s`](https://github.com/%s/blob/%s/%s) の全文です。回答はこのコメントにリプライしてください。\n' \
+              "${QA_FILE}" "${REPO}" "${HEAD_SHA}" "${encoded_path}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "${qa_content}"
+            if [ -n "${truncated_note}" ]; then
+              printf '%s\n' "${truncated_note}"
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            echo "> ℹ️ このコメントは \`post-qa-to-pr-comment.yml\` によって自動投稿されました。"
+          } > "${comment_file}"
+
+          if gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body-file "${comment_file}"; then
+            echo "✅ 質問票の全文を PR #${PR_NUMBER} にコメントとして投稿しました。"
+          else
+            echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
+            rm -f "${comment_file}"
+            exit 1
+          fi
+          rm -f "${comment_file}"

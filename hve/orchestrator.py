@@ -1119,6 +1119,10 @@ async def _request_code_review(
                     "全ての指摘を自動修正します。"
                 )
                 approve = True
+            elif config.unattended:
+                console.warning(
+                    "全自動モードのため Code Review の修正確認をスキップします。"
+                )
             else:
                 console.warning(
                     "Code Review Agent の指摘があります。修正を実行しますか？ [y/N]: "

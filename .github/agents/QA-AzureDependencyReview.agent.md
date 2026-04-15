@@ -39,6 +39,17 @@ tools: ["*"]
 ## 手順（Azure依存レビューの最短ループ）
 ### 1) 事前計画（Skill task-dag-planning に従いDAG+見積）
 - まず `{WORK}plan.md` に、調査→抽出→照合→レポート→（必要なら）最小修正→検証 のDAGと見積を作る。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - **>15分見込みなら分割**し、`{WORK}subissues.md` を出力して停止（Skill task-dag-planning 準拠）。
 
 ### 2) “期待される依存” を確定（Expected）

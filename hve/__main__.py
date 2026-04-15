@@ -725,110 +725,166 @@ def _cmd_run_interactive() -> int:
     model_idx = con.menu_select("使用するモデルを選択", model_options)
     model, model_display = _resolve_model(model_options[model_idx])
 
-    # ── オプション設定 ────────────────────────────────────
-    branch = con.prompt_input("ベースブランチ", default="main")
-    if is_aqkm:
-        max_parallel = 15
-    else:
-        max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
-
-    # ── 出力レベル選択（verbosity）────────────────────────
-    _verbosity_options = [
-        "quiet   — エラーのみ",
-        "compact — 重要イベントのみ",
-        "normal  — compact + intent/subagent",
-        "verbose — 全詳細",
+    # ── 実行モード選択 ────────────────────────────────────
+    _exec_mode_options = [
+        "クイック全自動  — デフォルト値で即実行（確認あり）",
+        "カスタム全自動  — 全設定を手動入力後に自動実行",
+        "手動           — 従来どおり（実行中も対話あり）",
     ]
-    _verbosity_keys = ["quiet", "compact", "normal", "verbose"]
-    _VERBOSITY_DEFAULT = 1  # compact
-    con._print(f"  {con.s.DIM}(Enter = compact){con.s.RESET}", ts=False)
-    _raw_idx = con.menu_select("コンソール出力レベルを選択", _verbosity_options, allow_empty=True)
-    verbosity_idx = _VERBOSITY_DEFAULT if _raw_idx == -1 else _raw_idx
-    verbosity_key = _verbosity_keys[verbosity_idx]
-    verbosity_value = verbosity_idx  # quiet=0, compact=1, normal=2, verbose=3
+    exec_mode_idx = con.menu_select("実行モードを選択", _exec_mode_options)
+    is_quick_auto = (exec_mode_idx == 0)
+    is_custom_auto = (exec_mode_idx == 1)
+    is_manual = (exec_mode_idx == 2)
+    is_any_auto = is_quick_auto or is_custom_auto
 
-    # ── タイムアウト設定 ────────────────────────────────
-    timeout_str = con.prompt_input(
-        "セッション idle タイムアウト（秒。デフォルト: 21600 = 6時間）", default="21600"
-    )
-    try:
-        timeout_val = float(timeout_str or "21600")
-    except ValueError:
-        con.warning("無効な値のため、デフォルトの 21600 秒を使用します。")
-        timeout_val = 21600.0
-    if timeout_val <= 0:
-        con.warning("0 以下のタイムアウト値は無効なため、デフォルトの 21600 秒を使用します。")
-        timeout_val = 21600.0
-
-    if is_aqkm:
+    # ── オプション設定 ────────────────────────────────────
+    if is_quick_auto:
+        # クイック全自動: ステップ5〜7aをデフォルト値で自動設定
+        branch = "main"
+        max_parallel = 1 if is_aqkm else 15
+        verbosity_key = "normal"
+        verbosity_value = 2  # normal（クイック全自動は長時間実行が前提のため、compact より情報量の多い normal を採用）
+        timeout_val = 86400.0  # 24時間
         auto_qa = False
-        auto_review = False
         qa_answer_mode = None
         force_interactive = False
+        auto_review = False
+        create_issues = False
+        create_pr = False
+        auto_coding_agent_review = False
+        auto_coding_agent_review_auto_approval = False
+        review_timeout = 7200.0
+        repo_input = os.environ.get("REPO", "")
+        dry_run = False
+        # ワークフロー固有パラメータ
+        params_extra: dict = {}
+        if is_aqkm:
+            params_extra["scope"] = _AQKM_DEFAULT_SCOPE
+            params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
+            params_extra["force_refresh"] = True
+        elif wf.params:
+            # 非AQKM かつ必須パラメータあり: 入力を求める（クイック全自動でも例外）
+            for param_name in wf.params:
+                val = con.prompt_input(f"{param_name}", required=True)
+                params_extra[param_name] = val
+        additional_prompt = None
     else:
-        auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
-        if auto_qa:
-            qa_answer_mode = con.prompt_answer_mode()
-            force_interactive = con.prompt_yes_no(
-                "インタラクティブ入力を強制する（IDE 等で stdin が非 TTY 扱いになる場合）？",
-                default=False,
-            )
+        # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
+        branch = con.prompt_input("ベースブランチ", default="main")
+        if is_aqkm:
+            max_parallel = 15
         else:
+            max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
+
+        # ── 出力レベル選択（verbosity）────────────────────────
+        _verbosity_options = [
+            "quiet   — エラーのみ",
+            "compact — 重要イベントのみ",
+            "normal  — compact + intent/subagent",
+            "verbose — 全詳細",
+        ]
+        _verbosity_keys = ["quiet", "compact", "normal", "verbose"]
+        _VERBOSITY_DEFAULT = 1  # compact
+        con._print(f"  {con.s.DIM}(Enter = compact){con.s.RESET}", ts=False)
+        _raw_idx = con.menu_select("コンソール出力レベルを選択", _verbosity_options, allow_empty=True)
+        verbosity_idx = _VERBOSITY_DEFAULT if _raw_idx == -1 else _raw_idx
+        verbosity_key = _verbosity_keys[verbosity_idx]
+        verbosity_value = verbosity_idx  # quiet=0, compact=1, normal=2, verbose=3
+
+        # ── タイムアウト設定 ────────────────────────────────
+        if is_custom_auto:
+            _timeout_label = "セッション idle タイムアウト（秒。デフォルト: 86400 = 24時間）"
+            _timeout_default = "86400"
+            _timeout_fallback = 86400.0
+        else:
+            _timeout_label = "セッション idle タイムアウト（秒。デフォルト: 21600 = 6時間）"
+            _timeout_default = "21600"
+            _timeout_fallback = 21600.0
+        timeout_str = con.prompt_input(_timeout_label, default=_timeout_default)
+        try:
+            timeout_val = float(timeout_str or _timeout_default)
+        except ValueError:
+            con.warning(f"無効な値のため、デフォルトの {_timeout_default} 秒を使用します。")
+            timeout_val = _timeout_fallback
+        if timeout_val <= 0:
+            con.warning(f"0 以下のタイムアウト値は無効なため、デフォルトの {_timeout_default} 秒を使用します。")
+            timeout_val = _timeout_fallback
+
+        if is_aqkm:
+            auto_qa = False
+            auto_review = False
             qa_answer_mode = None
             force_interactive = False
-        auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
-    create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
-    create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
+        else:
+            auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
+            if auto_qa:
+                qa_answer_mode = con.prompt_answer_mode()
+                force_interactive = con.prompt_yes_no(
+                    "インタラクティブ入力を強制する（IDE 等で stdin が非 TTY 扱いになる場合）？",
+                    default=False,
+                )
+            else:
+                qa_answer_mode = None
+                force_interactive = False
+            auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
+        create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
+        create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
 
-    # ── Code Review Agent ─────────────────────────────
-    auto_coding_agent_review = con.prompt_yes_no(
-        "GitHub Copilot Code Review Agent（ローカル実行）を有効にする？", default=False
-    )
-    auto_coding_agent_review_auto_approval = False
-    review_timeout = 7200.0
-    if auto_coding_agent_review:
-        auto_coding_agent_review_auto_approval = con.prompt_yes_no(
-            "Code Review Agent の修正提案を自動承認する？", default=False
+        # ── Code Review Agent ─────────────────────────────
+        auto_coding_agent_review = con.prompt_yes_no(
+            "GitHub Copilot Code Review Agent（ローカル実行）を有効にする？", default=False
         )
-        review_timeout_str = con.prompt_input(
-            "Review タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
-        )
-        try:
-            review_timeout = float(review_timeout_str or "7200")
-        except ValueError:
-            con.warning("無効な値のため、デフォルトの 7200 秒を使用します。")
-            review_timeout = 7200.0
-        if review_timeout <= 0:
-            con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
-            review_timeout = 7200.0
+        auto_coding_agent_review_auto_approval = False
+        review_timeout = 7200.0
+        if auto_coding_agent_review:
+            auto_coding_agent_review_auto_approval = con.prompt_yes_no(
+                "Code Review Agent の修正提案を自動承認する？", default=False
+            )
+            review_timeout_str = con.prompt_input(
+                "Review タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
+            )
+            try:
+                review_timeout = float(review_timeout_str or "7200")
+            except ValueError:
+                con.warning("無効な値のため、デフォルトの 7200 秒を使用します。")
+                review_timeout = 7200.0
+            if review_timeout <= 0:
+                con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
+                review_timeout = 7200.0
 
-    # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
-    repo_input = ""
-    if create_issues or create_pr:
-        repo_default = os.environ.get("REPO", "")
-        repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
+        # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
+        repo_input = ""
+        if create_issues or create_pr:
+            repo_default = os.environ.get("REPO", "")
+            repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
 
-    dry_run = con.prompt_yes_no("ドライラン（実際の SDK 呼び出しをしない）？", default=False)
+        dry_run = con.prompt_yes_no("ドライラン（実際の SDK 呼び出しをしない）？", default=False)
 
-    # ── ワークフロー固有パラメータ ────────────────────────
-    params_extra: dict = {}
-    if is_aqkm:
-        # AQKM の固有パラメータはデフォルト値で自動設定
-        params_extra["scope"] = _AQKM_DEFAULT_SCOPE
-        params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
-        params_extra["force_refresh"] = True
-    else:
-        for param_name in wf.params:
-            val = con.prompt_input(f"{param_name}", required=True)
-            params_extra[param_name] = val
+        # ── ワークフロー固有パラメータ ────────────────────────
+        params_extra: dict = {}
+        if is_aqkm:
+            # AQKM の固有パラメータはデフォルト値で自動設定
+            params_extra["scope"] = _AQKM_DEFAULT_SCOPE
+            params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
+            params_extra["force_refresh"] = True
+        else:
+            for param_name in wf.params:
+                val = con.prompt_input(f"{param_name}", required=True)
+                params_extra[param_name] = val
 
-    # ── 追加プロンプト ────────────────────────────────────
-    additional_prompt = con.prompt_input("追加プロンプト（省略可）")
+        # ── 追加プロンプト ────────────────────────────────────
+        additional_prompt = con.prompt_input("追加プロンプト（省略可）")
+
 
     # ── 確認パネル ────────────────────────────────────────
     s = con.s
     step_display = ", ".join(selected_step_ids) if selected_step_ids else "全ステップ"
-    summary_lines = [
+    summary_lines = []
+    if is_quick_auto:
+        summary_lines.append(f"実行モード   : {s.GREEN}クイック全自動{s.RESET}")
+    elif is_custom_auto:
+        summary_lines.append(f"実行モード   : {s.GREEN}カスタム全自動{s.RESET}")
+    summary_lines += [
         f"ワークフロー : {s.CYAN}{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}{s.RESET} ({wf.id})",
         f"ステップ     : {step_display}",
         f"モデル       : {model_display}",
@@ -870,6 +926,9 @@ def _cmd_run_interactive() -> int:
         con._print(f"\n  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
         return 0
 
+    if is_any_auto:
+        con._print(f"\n  {s.GREEN}✓ 全自動モードで実行を開始します。実行中の入力は不要です。{s.RESET}", ts=False)
+
     # ── SDKConfig 構築 ────────────────────────────────────
     cfg = SDKConfig.from_env()
     cfg.model = model
@@ -898,6 +957,15 @@ def _cmd_run_interactive() -> int:
         cfg.repo = repo_input
     elif not cfg.repo:
         cfg.repo = os.environ.get("REPO", "")
+
+    # ── 全自動モードフラグを SDKConfig に反映 ─────────────
+    cfg.unattended = is_any_auto
+    if is_any_auto:
+        cfg.force_interactive = False
+        if cfg.auto_qa:
+            cfg.qa_answer_mode = "all"  # 全自動モード時は QA 全問デフォルト値を一括採用（非TTY扱い）
+        if cfg.auto_coding_agent_review:
+            cfg.auto_coding_agent_review_auto_approval = True  # 自動承認を強制
 
     # params dict 構築
     params: dict = {

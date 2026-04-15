@@ -37,6 +37,16 @@ metadata:
 
 → Skill `task-dag-planning` を参照。
 
+## plan.md コミット前バリデーション（全 Agent 必須）
+
+plan.md を作成・更新した場合、コミット前に以下を `execute` で実行すること:
+
+```bash
+bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
+```
+
+`✅ PASS` を確認してからコミットする。`❌ FAIL` の場合はエラーメッセージを確認し、plan.md のメタデータ（冒頭4行の HTML コメント）または `## 分割判定` セクションを修正する。
+
 ## 書き込み失敗/巨大出力への対策
 
 → Skill `large-output-chunking` を参照。

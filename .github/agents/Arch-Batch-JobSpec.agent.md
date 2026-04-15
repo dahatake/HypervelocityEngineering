@@ -63,6 +63,17 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
 - ジョブ数 × 概算（1ジョブあたり 3〜5分）で合計見積を算出する。
 - Skill task-dag-planning に従い分割要否を判定する。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
   - 進捗ファイル: `{WORK}work-status.md`（フォーマットは §6 参照）
   - 分割時: `{WORK}subissues.md`

@@ -724,7 +724,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         con.s = mock.MagicMock(
             CYAN="", RESET="", DIM="", GREEN="", YELLOW="",
         )
-        con.menu_select.side_effect = [0, 0, 1]  # workflow, model, log_level
+        con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(手動=2), verbosity
         con.prompt_multi_select.return_value = []  # 全ステップ
         con.prompt_yes_no.side_effect = lambda *a, **kw: next(yes_no_iter)
         con.prompt_input.side_effect = lambda *a, **kw: next(input_iter)
@@ -809,6 +809,131 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         cfg = self._run_interactive_with_inputs(code_review=True, review_timeout="abc")
         self.assertIsNotNone(cfg)
         self.assertEqual(cfg.review_timeout_seconds, 7200.0)
+
+
+class TestInteractiveModeAutoExecModes(unittest.TestCase):
+    """インタラクティブモードのクイック全自動/カスタム全自動モードのテスト。"""
+
+    def _run_interactive_auto_mode(
+        self,
+        exec_mode: int,  # 0=クイック全自動, 1=カスタム全自動
+        *,
+        auto_coding_agent_review: bool = False,
+        custom_timeout: str = "86400",
+    ) -> "SDKConfig":
+        """Console メソッドをモックして指定した全自動モードで _cmd_run_interactive を実行し、
+        構築された SDKConfig を返す。
+        """
+        import unittest.mock as mock
+        import asyncio
+
+        captured_config = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured_config["cfg"] = config
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(
+            id="s1", title="Step1", is_container=False, depends_on=[], params=[],
+        )
+        mock_wf = mock.MagicMock(id="aas", steps=[mock_step], params=[])
+        mock_display_names = {"aas": "AAS"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+
+        if exec_mode == 0:
+            # クイック全自動: workflow, model, exec_mode(0) のみ
+            con.menu_select.side_effect = [0, 0, 0]
+            # 実行確認のみ
+            con.prompt_yes_no.side_effect = [True]
+        else:
+            # カスタム全自動: workflow, model, exec_mode(1), verbosity
+            con.menu_select.side_effect = [0, 0, 1, 1]
+            # QA自動→False, Review自動→False, Issue→False, PR→False,
+            # Code Review→auto_coding_agent_review, (自動承認→False), ドライラン→False, 実行確認→True
+            yes_no_answers = [False, False, False, False, auto_coding_agent_review]
+            if auto_coding_agent_review:
+                yes_no_answers.append(False)  # 自動承認
+            yes_no_answers += [False, True]  # dry_run, 実行確認
+            con.prompt_yes_no.side_effect = yes_no_answers
+            # ブランチ, 並列数, タイムアウト, (review_timeout), 追加プロンプト
+            input_answers = ["main", "15", custom_timeout]
+            if auto_coding_agent_review:
+                input_answers.append("7200")  # review timeout
+            input_answers.append("")  # 追加プロンプト
+            con.prompt_input.side_effect = input_answers
+
+        con.prompt_multi_select.return_value = []
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+        }):
+            _cmd_run_interactive = _main_mod._cmd_run_interactive
+            _cmd_run_interactive()
+
+        return captured_config.get("cfg")
+
+    def test_quick_auto_sets_unattended_true(self) -> None:
+        """クイック全自動: cfg.unattended=True が設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.unattended)
+
+    def test_quick_auto_sets_timeout_86400(self) -> None:
+        """クイック全自動: タイムアウトが 86400 秒に設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.timeout_seconds, 86400.0)
+
+    def test_quick_auto_sets_verbosity_normal(self) -> None:
+        """クイック全自動: verbosity が normal (2) に設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.verbosity, 2)
+
+    def test_quick_auto_disables_force_interactive(self) -> None:
+        """クイック全自動: force_interactive=False が強制される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.force_interactive)
+
+    def test_custom_auto_sets_unattended_true(self) -> None:
+        """カスタム全自動: cfg.unattended=True が設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=1)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.unattended)
+
+    def test_custom_auto_default_timeout_86400(self) -> None:
+        """カスタム全自動: タイムアウトのデフォルト入力で 86400 秒が設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=1, custom_timeout="86400")
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.timeout_seconds, 86400.0)
+
+    def test_custom_auto_code_review_forces_auto_approval(self) -> None:
+        """カスタム全自動 + auto_coding_agent_review=True: auto_approval が強制 True になる。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=1, auto_coding_agent_review=True)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_coding_agent_review)
+        self.assertTrue(cfg.auto_coding_agent_review_auto_approval)
 
 
 class TestInteractiveMode(unittest.TestCase):

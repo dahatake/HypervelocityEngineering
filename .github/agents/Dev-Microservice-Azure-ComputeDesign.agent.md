@@ -54,6 +54,17 @@ tools: ["*"]
 ## 4) 実行ワークフロー（必ずこの順）
 ### 4.1 Plan（最初に必ず作る）
 - `Skill task-dag-planning` のルールに従って `{WORK}plan.md` を作る（DAG + 見積（分） + リスク + 検証）。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- estimate_total: XX -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - 見積は粗くてよいが、**合計が15分を超えそう** または **レビュー困難** なら分割へ切り替える。
 
 ### 4.2 分割判定（15分超なら実装しない）

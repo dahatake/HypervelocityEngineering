@@ -49,7 +49,17 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 1) `screen-list.md` から画面IDと画面名を抽出して画面数を確定  
 2) 画面ごとに概算（X–Y分）と合計を見積（厳密不要）  
 3) **Skill task-dag-planning の条件判定を実施する**（必須。スキップ禁止）
-4) **`{WORK}plan.md` を Skill task-dag-planning の必須セクション形式で作成する**（見積結果に関わらず必須）
+4) **plan.md 作成時の必須手順（省略禁止）**:
+   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+      ```
+      <!-- estimate_total: XX -->
+      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+      <!-- subissues_count: N -->
+      <!-- implementation_files: true or false -->
+      ```
+   3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 5) Skill task-dag-planning の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
 6) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録
 
