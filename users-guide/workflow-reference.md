@@ -25,6 +25,7 @@
 | `auto-batch-design.yml` | バッチ設計（ABD）オーケストレーター | `auto-batch-design` ラベル付き Issue |
 | `auto-batch-dev.yml` | バッチ実装（ABDV）オーケストレーター | `auto-batch-dev` ラベル付き Issue |
 | `auto-qa-knowledge-management.yml` | QA Knowledge ドキュメント管理（AQKM）オーケストレーター | `qa-knowledge-management` ラベル付き Issue |
+| `auto-qa-original-docs-import.yml` | original-docs 取り込み（AODI）オーケストレーター | `qa-original-docs-import` ラベル付き Issue |
 | `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
 | `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
 | `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
@@ -52,8 +53,9 @@
 | `abd` | Batch Design | `auto-batch-design.yml` |
 | `abdv` | Batch Dev | `auto-batch-dev.yml` |
 | `aqkm` | QA Knowledge Management | `auto-qa-knowledge-management.yml` |
+| `aodi` | Original Docs Import | `auto-qa-original-docs-import.yml` |
 
-> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aqkm` を使用してください。
+> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aqkm` / `aodi` を使用してください。
 
 ---
 
@@ -70,6 +72,7 @@
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `qa-knowledge-management` | **QA Knowledge ドキュメント管理ワークフロー（AQKM）の起動トリガー**。Issue にこのラベルが付与されると、AQKM オーケストレーターが起動し、`[AQKM] Step.1: QA Knowledge ドキュメント生成・管理` Sub Issue を自動生成して `QA-KnowledgeManager` Agent で Copilot にアサインする。**Setup Labels ワークフローで自動作成できます。** |
+| `qa-original-docs-import` | **original-docs 取り込みワークフロー（AODI）の起動トリガー**。Issue にこのラベルが付与されると、AODI オーケストレーターが起動し、`[AODI] Step.1: original-docs/ 取り込み・整合性チェック` Sub Issue を自動生成して `QA-OriginalDocsImporter` Agent で Copilot にアサインする。 |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
 | `split-mode` | **分割モード PR の識別ラベル**。`label-split-mode.yml` が `work/**/plan.md` に `SPLIT_REQUIRED` を検知した場合に PR に自動付与する。`check-split-mode.yml` がこのラベル付き PR の実装ファイル混入を検知・警告する。 |
@@ -196,13 +199,14 @@
 | `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
 | `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。Skill: harness-verification-loop Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
 | `QA-KnowledgeManager` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、knowledge/business-requirement-document-status.md を生成 |
+| `QA-OriginalDocsImporter` | `original-docs/` の原本ドキュメントを D01〜D21 に分類し、矛盾検出と status/knowledge 更新を実行 |
 
 ---
 
 
 ## knowledge/ ディレクトリとの関係
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21 の文書クラスのうち、QA マッピングが存在するもの）が格納されます。これらは `QA-KnowledgeManager` Agent（`qa-knowledge-management` ワークフロー）によって生成されます（QA マッピングがない D クラスのファイルは生成されません）。
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21 の文書クラスのうち、マッピングが存在するもの）が格納されます。これらは `QA-KnowledgeManager` Agent（`qa-knowledge-management` ワークフロー）と `QA-OriginalDocsImporter` Agent（`qa-original-docs-import` ワークフロー）によって生成・更新されます。
 
 設計・開発の全 Custom Agent（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。
 
@@ -231,6 +235,7 @@
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
 | `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
 | `qa-knowledge-management.yml` | knowledge ドキュメント管理 | `qa-knowledge-management` |
+| `qa-original-docs-import.yml` | original-docs 取り込みワークフロー起動 | `qa-original-docs-import` |
 | `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
 | `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |
 

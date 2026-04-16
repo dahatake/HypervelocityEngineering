@@ -54,6 +54,8 @@ jobs:
 
       - name: 冪等化チェック（既に同期済みかどうか確認）
         id: guard
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
         run: |
           set -euo pipefail
           MARKER="<!-- sync-issue-labels-done -->"
@@ -65,8 +67,24 @@ jobs:
             | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
             2>/dev/null) || existing=0
           if [ "${existing:-0}" -gt 0 ]; then
-            echo "ラベル同期は既に完了しています。スキップします。"
-            echo "done=true" >> "${GITHUB_OUTPUT}"
+            # マーカーが既存でも、auto-approve-ready が PR に未付与かつ
+            # ready_for_review イベントの場合は再実行を許可する
+            if ! pr_labels=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+              --jq '[.labels[].name]' 2>/dev/null); then
+              echo "::warning::PR ラベルの取得に失敗したため、空配列として扱います。"
+              pr_labels="[]"
+            fi
+            has_approve_ready=$(echo "${pr_labels}" \
+              | jq -r 'if contains(["auto-approve-ready"]) then "true" else "false" end')
+
+            if [ "${has_approve_ready}" = "false" ] \
+              && [ "${EVENT_ACTION}" = "ready_for_review" ]; then
+              echo "マーカー既存だが auto-approve-ready 未付与 + ready_for_review イベント: 再実行を許可します。"
+              echo "done=false" >> "${GITHUB_OUTPUT}"
+            else
+              echo "ラベル同期は既に完了しています。スキップします。"
+              echo "done=true" >> "${GITHUB_OUTPUT}"
+            fi
           else
             echo "done=false" >> "${GITHUB_OUTPUT}"
           fi
@@ -98,7 +116,8 @@ jobs:
 
           has_auto_qa=$(echo "${issue_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
           has_auto_review=$(echo "${issue_labels}" | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
-          echo "auto-qa: ${has_auto_qa}, auto-context-review: ${has_auto_review}"
+          has_auto_approve_ready=$(echo "${issue_labels}" | jq -r 'if contains(["auto-approve-ready"]) then "true" else "false" end')
+          echo "auto-qa: ${has_auto_qa}, auto-context-review: ${has_auto_review}, auto-approve-ready: ${has_auto_approve_ready}"
 
           labels_applied=""
           labels_deferred=""
@@ -123,12 +142,21 @@ jobs:
             labels_applied="auto-context-review"
             echo "deferred=false" >> "${GITHUB_OUTPUT}"
           else
-            echo "auto-qa / auto-context-review ラベルが Issue にありません。スキップします。"
-            echo "deferred=false" >> "${GITHUB_OUTPUT}"
+            # QA も Review も無効の場合: auto-approve-ready の直接付与を検討
+            if [ "${has_auto_approve_ready}" = "true" ]; then
+              echo "=== QA/Review 無効 + auto-approve-ready あり: PR に直接 auto-approve-ready を付与します ==="
+              gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-approve-ready"
+              labels_applied="auto-approve-ready"
+              echo "deferred=false" >> "${GITHUB_OUTPUT}"
+            else
+              echo "auto-qa / auto-context-review / auto-approve-ready ラベルが Issue にありません。"
+              echo "deferred=false" >> "${GITHUB_OUTPUT}"
+            fi
           fi
 
           echo "labels_applied=${labels_applied}" >> "${GITHUB_OUTPUT}"
           echo "labels_deferred=${labels_deferred}" >> "${GITHUB_OUTPUT}"
+          echo "has_auto_approve_ready=${has_auto_approve_ready}" >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
         if: steps.guard.outputs.done != 'true' && steps.find-issue.outputs.issue_number != ''
@@ -137,6 +165,7 @@ jobs:
           LABELS_APPLIED: ${{ steps.apply-labels.outputs.labels_applied }}
           LABELS_DEFERRED: ${{ steps.apply-labels.outputs.labels_deferred }}
           DEFERRED: ${{ steps.apply-labels.outputs.deferred }}
+          HAS_AUTO_APPROVE_READY: ${{ steps.apply-labels.outputs.has_auto_approve_ready }}
         run: |
           set -euo pipefail
 
@@ -145,8 +174,10 @@ jobs:
             # （マーカーを付けないと次の ready_for_review イベントで再実行されるため）
             echo "付与するラベルがないため、スキップコメントを投稿してマーカーを設定します。"
             # バックティックを printf のフォーマット内に置き、二重引用符での曖昧さを避ける
-            skip_msg=$(printf 'Issue #%s に `auto-qa` / `auto-context-review` ラベルがないため、PR へのラベル付与をスキップしました。' \
-              "${ISSUE_NUMBER}")
+            skip_msg=$(printf 'Issue #%s に `auto-qa` / `auto-context-review` ラベルがないため、PR へのラベル付与をスキップしました。' "${ISSUE_NUMBER}")
+            if [ "${HAS_AUTO_APPROVE_READY}" = "true" ]; then
+              skip_msg="${skip_msg} Issue 側には \`auto-approve-ready\` が設定されていますが、QA/レビュー完了後の遷移ワークフローで PR へ付与されます。"
+            fi
             COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s' \
               '<!-- sync-issue-labels-done -->' \
               '## 🏷️ Issue ラベル同期: スキップ' \
@@ -168,6 +199,11 @@ jobs:
           # バックティックを printf のフォーマット内に置き、二重引用符での曖昧さを避ける
           # DEFERRED_MSG は空文字列 or "\n- ⏳ ..." のどちらかであり、applied_msg の末尾に連結する
           applied_msg=$(printf '%s ✅ **付与済み**: `%s`%s' "-" "${LABELS_APPLIED}" "${DEFERRED_MSG}")
+          if [[ "${HAS_AUTO_APPROVE_READY}" = "true" && ",${LABELS_APPLIED}," != *",auto-approve-ready,"* ]]; then
+            applied_msg=$(printf '%s\n%s' \
+              "${applied_msg}" \
+              '- ℹ️ **検出**: Issue 側に `auto-approve-ready` が設定されています（PR 付与は後続ワークフローで実施）')
+          fi
           sync_msg=$(printf 'Issue #%s のラベルを PR に同期しました。' "${ISSUE_NUMBER}")
           COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s' \
             '<!-- sync-issue-labels-done -->' \

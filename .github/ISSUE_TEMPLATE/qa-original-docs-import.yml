@@ -1,0 +1,79 @@
+name: "original-docs/ → knowledge/ 取り込み・整合性チェック"
+description: "original-docs/ の原本ドキュメントを D01〜D21 に分類し knowledge/ を生成・更新する"
+title: "[AODI] original-docs/ 取り込み・整合性チェック"
+labels:
+  - "qa-original-docs-import"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## original-docs/ から knowledge/ への自動取り込み（AODI）
+
+        `original-docs/` フォルダーのドキュメントを D01〜D21 文書クラスへマッピングし、
+        `knowledge/business-requirement-document-status.md` と `knowledge/D{NN}-*.md` を生成・更新します。
+
+        ### 処理フロー
+        1. `original-docs/` の対象ファイルを読み取り、見出し単位でセクション分割
+        2. 各セクションを D01〜D21 に分類（Primary / Contributing）
+        3. 状態判定（Confirmed / Tentative / Unknown / Conflict）
+        4. 矛盾検出・SoT 優先順位に基づく未解決記録
+        5. `knowledge/` ステータスと D クラス文書を生成・更新
+
+        ### 受け入れ条件（AC）
+        - [ ] 対象 `original-docs/` ファイルがすべて処理されている
+        - [ ] セクション単位で D01〜D21 へ Primary マッピングされている
+        - [ ] status.md に矛盾一覧 / 横断未決一覧が反映されている
+        - [ ] `original-docs/` 配下ファイルは変更されていない（読み取り専用）
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: "対象スコープ"
+      description: "取り込み対象の original-docs/ ファイル範囲を選択してください"
+      options:
+        - "全ファイル — original-docs/ 配下の全対応ファイルを対象"
+        - "指定ファイルのみ — 下の「対象ファイル」欄で指定したファイルのみ対象"
+    validations:
+      required: true
+
+  - type: textarea
+    id: target_files
+    attributes:
+      label: "対象ファイル（スコープが「指定ファイルのみ」の場合）"
+      description: |
+        対象にする original-docs/ 配下のファイルを1行1ファイルで記載してください。
+        スコープが「全ファイル」の場合は空欄で構いません。
+      placeholder: |
+        original-docs/requirements.md
+        original-docs/design/system-context.md
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: force_refresh
+    attributes:
+      label: "再生成オプション"
+      description: |
+        チェックを入れると、既存の knowledge 出力を完全再生成します。
+        チェックなしの場合は差分更新を試みます。
+      options:
+        - label: "既存 knowledge 出力を完全に再生成する（force-refresh）"
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ 人間レビューなしで PR がマージされるため注意してください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。"
+      placeholder: "例: 今回は original-docs/requirements-v2.md のみ取り込みたい"
+    validations:
+      required: false

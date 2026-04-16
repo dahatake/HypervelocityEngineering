@@ -192,6 +192,7 @@ jobs:
           create_label "aad:blocked"       "D73A4A" ""
           create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-qa"             "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready" "0E8A16" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
       # 2.5 aad:initialized 即時付与（二重実行防止）
@@ -380,7 +381,17 @@ jobs:
                   # 新形式: チェック → 有効
                   auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa}
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          merge_section = re.search(
+              r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if merge_section:
+              section_text = merge_section.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge}
           print(json.dumps(result))
           PYEOF
           )
@@ -390,11 +401,13 @@ jobs:
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
           if [[ -n "${SKIP_STEPS}" ]]; then
             echo "Root Issue body から未チェックのステップを除去します..."
@@ -452,20 +465,28 @@ jobs:
           fi
 
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
-          output_file = sys.argv[2]
+          auto_merge = sys.argv[2]
+          output_file = sys.argv[3]
 
-          tag = f"<!-- auto-context-review: {auto_context_review} -->"
-          pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
+          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
 
-          if pat.search(body):
-              body = pat.sub(tag, body)
+          if context_pat.search(body):
+              body = context_pat.sub(context_tag, body)
           else:
-              body = body.rstrip() + "\n" + tag + "\n"
+              body = body.rstrip() + "\n" + context_tag + "\n"
+
+          if merge_pat.search(body):
+              body = merge_pat.sub(merge_tag, body)
+          else:
+              body = body.rstrip() + "\n" + merge_tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
@@ -474,8 +495,8 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}）。" \
-            || echo "WARNING: Root Issue body の auto-context-review タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
 
@@ -491,6 +512,11 @@ jobs:
           if [[ "${AUTO_QA}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-qa"
             echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
           fi
 
           # ---- Step Issue 生成 ----
@@ -511,7 +537,7 @@ jobs:
           S82_NUM="" S82_ID=""
           S83_NUM="" S83_ID=""
 
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
@@ -529,6 +555,10 @@ jobs:
             STEP_LABELS='["auto-app-design","auto-qa"]'
           else
             STEP_LABELS='["auto-app-design"]'
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi
 
           # ---- Step.1 ----

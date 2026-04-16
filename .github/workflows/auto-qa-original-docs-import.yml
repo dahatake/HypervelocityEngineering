@@ -1,0 +1,564 @@
+name: AODI Orchestrator
+
+# qa-original-docs-import ラベル付き Issue の opened/labeled/closed イベントで起動
+#
+# 設計メモ:
+#   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
+#     発火せず issues.opened のみを発火する（GitHub Community Discussion #26753）。
+#   - そのため opened イベントも監視し、ジョブレベル if で対象ラベルを持つ Issue のみ実行する。
+#   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
+#   - 既存の冪等化ガード（aodi:initialized チェック）により、opened + labeled が同時発火しても安全。
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.action != 'opened'
+      || (
+        contains(github.event.issue.labels.*.name, 'qa-original-docs-import')
+        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      )
+    concurrency:
+      group: aodi-orchestrator-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: qa-original-docs-import ラベルあり + aodi:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: "${{ github.event.label.name || '' }}"
+        run: |
+          set -euo pipefail
+
+          # Issue の情報を API 経由で一括取得（YAML 展開問題を回避・API 呼び出し回数を削減）
+          if ! ISSUE_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}"); then
+            echo "WARNING: Issue API 取得に失敗しました。スキップします。" >&2
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ISSUE_TITLE=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          ISSUE_LABELS=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          export ISSUE_TITLE
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "aodi:done" ]]; then
+              if [[ "${ISSUE_TITLE}" =~ ^\[AODI\] ]]; then
+                echo "Sub Issue ([AODI] タイトル) への aodi:done 付与を検知: state_transition に進みます。"
+                echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+                echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+                exit 0
+              else
+                echo "Root Issue への aodi:done 付与を検知: ワークフローはスキップします。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            elif [[ "${LABEL_NAME}" == "qa-original-docs-import" ]]; then
+              # qa-original-docs-import ラベルが後から付与された場合:
+              # 下の has_aodi_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に aodi:initialized 済みの場合は has_aodi_init チェックで skip になる。
+              echo "qa-original-docs-import labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "aodi:done / qa-original-docs-import 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [AODI] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[AODI\] ]]; then
+              # 既に aodi:done がついていれば labeled イベントが後で来るのでスキップ
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'aodi:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                echo "既に aodi:done ラベル済み。closed イベントをスキップ（labeled イベントで処理済み or 処理中）。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # aodi:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [AODI] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [AODI] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[AODI\] ]]; then
+            echo "[AODI] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # qa-original-docs-import ラベルを持つか確認
+          has_aodi=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'qa-original-docs-import' in labels else 'false')
+          PY
+          )
+
+          if [[ "${has_aodi}" != "true" ]]; then
+            echo "qa-original-docs-import ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # aodi:initialized / aodi:ready / aodi:running / aodi:done / aodi:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_aodi_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'aodi:initialized', 'aodi:ready', 'aodi:running', 'aodi:done', 'aodi:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_aodi_init}" == "true" ]]; then
+            echo "aodi:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: ゲート結果のデバッグ出力
+        if: always()
+        env:
+          GATE_MODE: ${{ steps.gate.outputs.mode }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
+          if [[ "${GATE_MODE}" == "skip" ]]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} のゲートチェックは skip でした（event: ${EVENT_ACTION}）"
+          fi
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベルを作成する関数（422 = 既存の場合は無視）
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local desc="$3"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            if [[ "${http_code}" == "201" ]]; then
+              echo "ラベル作成: ${name}"
+            elif [[ "${http_code}" == "422" ]]; then
+              echo "ラベル既存（スキップ）: ${name}"
+            else
+              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
+            fi
+            sleep 1
+          }
+
+          create_label "qa-original-docs-import" "0E8A16" "run original-docs import workflow (original-docs/ files to D01-D21 mapping)"
+          create_label "aodi:initialized"  "C5DEF5" ""
+          create_label "aodi:ready"        "0075CA" ""
+          create_label "aodi:running"      "E4E669" ""
+          create_label "aodi:done"         "0E8A16" ""
+          create_label "aodi:blocked"      "D73A4A" ""
+          create_label "auto-approve-ready" "0E8A16" "Ready for auto-approve and auto-merge"
+
+      # ----------------------------------------------------------------
+      # 2.5 aodi:initialized 即時付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 aodi:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          echo "二重実行防止のため aodi:initialized を即座に付与します..."
+          success=0
+          for attempt in 1 2 3; do
+            echo "aodi:initialized 付与試行 ${attempt}/3..."
+            if curl -sf -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aodi:initialized"]}' > /dev/null; then
+              success=1
+              break
+            fi
+            echo "WARN: aodi:initialized の付与に失敗しました。リトライします..." >&2
+            sleep 2
+          done
+          if [[ "${success}" -ne 1 ]]; then
+            echo "ERROR: aodi:initialized の付与に失敗しました（3回試行後も失敗）。" >&2
+            exit 1
+          fi
+          echo "aodi:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
+
+      # ----------------------------------------------------------------
+      # 2.6 リポジトリチェックアウト
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 3. Issue body パース & Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: Issue 初期化と Step Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT:-}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/aodi-common.sh"
+
+          # ERR トラップを関数にも継承させる（auto-app-design.yml と同様）
+          set -E
+          trap 'set +e; trap - ERR; post_comment "${ROOT_ISSUE}" "⚠️ ワークフローエラー: Step 処理中に予期しないエラーが発生しました (exit code: $?)" || true' ERR
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # 現行の AODI Issue Template には対象ブランチ項目がないため固定値を使用
+          branch = "main"
+
+          # 対象スコープ抽出
+          # Issue Template dropdown: "全ファイル — ..." / "指定ファイルのみ — ..."
+          scope = "all"
+          m = re.search(r"###\s*対象スコープ\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              scope_text = m.group(1).strip()
+              if re.search(r"指定ファイルのみ", scope_text):
+                  scope = "specified"
+
+          # 対象ファイル抽出（1行1ファイル）
+          target_files = ""
+          m = re.search(r"###\s*対象ファイル.*?\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              raw = m.group(1).strip()
+              if raw and raw != "_No response_":
+                  lines = [l.strip() for l in raw.splitlines() if l.strip() and not l.strip().startswith("#")]
+                  target_files = " ".join(lines)
+
+          # force_refresh 抽出（チェックボックス）
+          # "- [x] 既存 status.md を完全に再生成する" → True
+          force_refresh = False
+          m = re.search(r"###\s*再生成オプション\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              force_refresh = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          m = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              val = m.group(1).strip()
+              if val and val != "_No response_":
+                  additional_comment = val
+
+          result = {
+              "branch": branch,
+              "scope": scope,
+              "target_files": target_files,
+              "force_refresh": force_refresh,
+              "auto_merge": auto_merge,
+              "additional_comment": additional_comment,
+          }
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          SCOPE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['scope'])")
+          TARGET_FILES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['target_files'])")
+          FORCE_REFRESH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('force_refresh') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "スコープ: ${SCOPE}"
+          echo "対象ファイル: ${TARGET_FILES}"
+          echo "force_refresh: ${FORCE_REFRESH}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+
+          # ---- Root Issue body に auto-merge タグを埋め込み ----
+          MERGE_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_MERGE}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_merge = sys.argv[1]
+          output_file = sys.argv[2]
+
+          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+
+          if merge_pat.search(body):
+              body = merge_pat.sub(merge_tag, body)
+          else:
+              body = body.rstrip() + "\n" + merge_tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYMERGE
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-merge タグを埋め込みました（auto-merge: ${AUTO_MERGE}）。" \
+            || echo "WARNING: Root Issue body の auto-merge タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${MERGE_TAG_FILE}"
+
+          # ---- Root Issue に aodi:initialized を付与（Step bootstrap で付与済みだが念のため） ----
+          add_label "${ROOT_ISSUE}" "aodi:initialized"
+          echo "aodi:initialized を付与しました。"
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+
+          # ---- Step Issue の body に埋め込む共通メタ情報 ----
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_MERGE}")
+
+          # 追加コメントが存在する場合のフッター
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+          else
+            ADDITIONAL_SECTION=""
+          fi
+
+          # Step Issue に付与するラベルセット
+          STEP_LABELS='["qa-original-docs-import"]'
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
+          fi
+
+          # ---- Step.1 ----
+          # force_refresh の表示テキストを用意
+          FORCE_REFRESH_DISPLAY="無効（差分更新）"
+          if [[ "${FORCE_REFRESH}" == "true" ]]; then
+            FORCE_REFRESH_DISPLAY="有効（完全再生成）"
+          fi
+
+          # スコープの表示テキストを用意
+          SCOPE_DISPLAY="全ファイル（original-docs/*）"
+          if [[ "${SCOPE}" == "specified" ]]; then
+            SCOPE_DISPLAY="指定ファイルのみ"
+          fi
+
+          # 対象ファイルの表示テキストを用意
+          TARGET_FILES_DISPLAY="（スコープが「全ファイル」のため省略）"
+          if [[ "${SCOPE}" == "specified" ]]; then
+            if [[ -z "${TARGET_FILES}" ]]; then
+              post_comment "${ROOT_ISSUE}" "⚠️ `scope=specified` が指定されていますが、`target_files` が未入力のため Step.1 Issue を作成できません。Root Issue を更新して対象ファイルを指定してから再実行してください。" || true
+              echo "ERROR: scope=specified requires target_files, but target_files is empty." >&2
+              exit 1
+            fi
+          fi
+          if [[ -n "${TARGET_FILES}" ]]; then
+            TARGET_FILES_DISPLAY=$(printf '%s' "${TARGET_FILES}" | tr ' ' '\n' | sed 's/^/- /')
+          fi
+
+          BODY_S1=$(printf '%s\n## 目的\n`original-docs/` フォルダーの原本ドキュメントを D01〜D21 に分類し、knowledge ファイルを生成・更新する。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| 対象スコープ | %s |\n| force_refresh | %s |\n\n### 対象ファイル\n%s\n\n## 入力\n- `original-docs/*`\n- `template/business-requirement-document-master-list.md`\n\n## 出力\n- `knowledge/business-requirement-document-status.md`\n- `knowledge/D{NN}-<文書名>.md`（マッピング有 D クラス分）\n\n## Custom Agent\n`QA-OriginalDocsImporter`\n\n## 依存\n- なし（単独ステップ）\n\n## 完了条件\n- `knowledge/business-requirement-document-status.md` が生成されている\n- original-docs マッピングがある D クラスについて `knowledge/D{NN}-<文書名>.md` が生成されている\n- 完了時に自身に `aodi:done` ラベルを付与すること%s' \
+            "${ROOT_REF}" "${SCOPE_DISPLAY}" "${FORCE_REFRESH_DISPLAY}" "${TARGET_FILES_DISPLAY}" "${ADDITIONAL_SECTION}")
+
+          if RESP=$(create_issue \
+            "[AODI] Step.1: original-docs/ 取り込み・整合性チェック" \
+            "${BODY_S1}" \
+            "${STEP_LABELS}"); then
+            S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S1_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1 作成: #${S1_NUM}"
+            sleep 3
+          else
+            post_comment "${ROOT_ISSUE}" "⚠️ Step Issue の作成に失敗しました: [AODI] Step.1 (ワークフローログを確認してください)" || true
+            echo "ERROR: create_issue に失敗しました。ワークフローを中断します。" >&2
+            exit 1
+          fi
+
+          # ---- Sub Issue 紐付け ----
+          echo "Sub Issue 紐付けを開始します..."
+          link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"
+          echo "Root → Step.1 紐付け完了"
+
+          # ---- Step.1 を起動 ----
+          add_label "${S1_NUM}" "aodi:ready"
+          CUSTOM_INSTRUCTIONS=""
+          if [[ "${FORCE_REFRESH}" == "true" ]]; then
+            CUSTOM_INSTRUCTIONS="force_refresh が有効です。既存の knowledge/business-requirement-document-status.md を完全に再生成してください。"
+          fi
+          CA=$(extract_custom_agent "${BODY_S1}")
+          if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "${CUSTOM_INSTRUCTIONS}"; then
+            add_label "${S1_NUM}" "aodi:running"
+            echo "Step.1 に copilot アサイン + aodi:running 付与完了"
+          else
+            echo "WARNING: Step.1 へのアサイン失敗。aodi:running は付与しません。"
+          fi
+
+          echo "初期化完了。"
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移: aodi:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得（YAML 展開問題を回避）
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: aodi:done ラベルをまだ持っていなければ付与する
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'aodi:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "aodi:done ラベルを付与します（closed イベント由来）..."
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aodi:done"]}' || true
+            echo "aodi:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          # ---- ユーティリティ関数 ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/aodi-common.sh"
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[AODI\] Step\.(\d+(?:\.\d+)?)', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- 依存関係マップに基づき処理 ----
+          # AODI はステップが 1 つのみ: Step.1 完了 → Root Issue に aodi:done + 完了コメント
+          case "${STEP_MATCH}" in
+            "1")
+              add_label "${ROOT_ISSUE}" "aodi:done"
+              echo "Root Issue #${ROOT_ISSUE} に aodi:done を付与しました。"
+              _done_msg=$(printf '🎉 AODI（original-docs 取り込み）が完了しました！\n\n**生成された成果物:**\n- `knowledge/business-requirement-document-status.md` — D01〜D21 クラス別ステータス・カバレッジギャップ・詳細マッピング\n- `knowledge/D{NN}-<文書名>.md` — original-docs マッピングが存在する D クラスごとの個別文書ファイル\n- `work/QA-OriginalDocsImporter/Issue-xxx/plan.md` — 実行計画')
+              post_comment "${ROOT_ISSUE}" "${_done_msg}"
+              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac

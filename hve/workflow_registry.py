@@ -58,7 +58,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -297,6 +297,24 @@ AQKM = WorkflowDef(
     ],
 )
 
+# --- AODI: Original Docs Import ---
+AODI = WorkflowDef(
+    id="aodi",
+    name="Original Docs Import",
+    label_prefix="aodi",
+    state_labels=_make_state_labels("aodi"),
+    params=["scope", "target_files", "force_refresh"],
+    steps=[
+        StepDef(
+            id="1",
+            title="original-docs/ 取り込み・整合性チェック",
+            custom_agent="QA-OriginalDocsImporter",
+            depends_on=[],
+            body_template_path="templates/aodi/step-1.md",
+        ),
+    ],
+)
+
 # --- ADOC: App Documentation ---
 ADOC = WorkflowDef(
     id="adoc",
@@ -344,7 +362,7 @@ ADOC = WorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM, ADOC]
+    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM, AODI, ADOC]
 }
 
 

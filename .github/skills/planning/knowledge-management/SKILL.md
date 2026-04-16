@@ -6,7 +6,8 @@ description: >
   qa/ と knowledge/ の使い分けと整合性管理を含む。
   USE FOR: knowledge/ file management, D01-D21 classification,
   domain knowledge organization, business requirements structuring,
-  qa/ vs knowledge/ separation.
+  qa/ vs knowledge/ separation, original-docs/ file format rules,
+  folder responsibility matrix, SoT priority resolution.
   DO NOT USE FOR: qa/ file creation (use work-artifacts-layout),
   implementation, deployment, testing.
   WHEN: knowledge/ 配下にファイルを作成・更新する、ドメイン知識を整理する、
@@ -52,6 +53,30 @@ metadata:
 |---------|------|
 | `qa/` | 質問票・未回答・確認中の項目 |
 | `knowledge/` | 確定済み・承認済みの要件・ナレッジ |
+
+### original-docs/ と qa/ と knowledge/ と docs/catalog/ の責務分担
+
+| フォルダー | 責務 | SoT 対象 | 書き込み主体 |
+|-----------|------|----------|-------------|
+| `original-docs/` | ユーザー提供の原本（テキスト形式: `.md` / `.txt` / `.csv`） | 原本そのもの | ユーザー手動 |
+| `qa/` | Copilot が生成した質問票・チェックリスト | QA プロセスの証跡 | 各 Agent（task-questionnaire 経由） |
+| `knowledge/` | qa/ + original-docs/ 由来の構造化ドキュメント（D01〜D21） | セッション間の参照ハブ | QA-KnowledgeManager / QA-OriginalDocsImporter |
+| `docs/catalog/` | 確定済みの正式仕様（app-catalog, use-case-catalog 等） | アプリ仕様・アーキテクチャ仕様の正本 | Arch-* Agent 群 |
+
+#### SoT 優先順位（矛盾時の解決ルール）
+1. `original-docs/` のユーザー原本が最優先（ユーザーが提供した事実）
+2. `qa/` のユーザー回答（Confirmed）が次に優先
+3. `knowledge/` の構造化ドキュメント（1, 2 から派生）
+4. `docs/catalog/` の設計仕様（3 から派生）
+
+### original-docs/ のファイル形式ルール
+
+- Copilot が読み取り可能な **テキスト形式のみ** を配置する（`.md`, `.txt`, `.csv`）
+- Word / Excel / PDF 等のバイナリは **Markdown に変換してから配置** する
+- 変換前の原本を保管する場合は `original-docs/binary-originals/` に配置し、変換後ファイルの冒頭に以下を付与する:
+  ```
+  <!-- source: binary-originals/{filename}, converted: {YYYY-MM-DD} -->
+  ```
 
 ### ファイル命名規則
 

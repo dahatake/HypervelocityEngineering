@@ -8,7 +8,9 @@ name: QA 完了 → auto-context-review 自動遷移
 #   1. PR に auto-qa ラベルが付いている
 #   2. PR に auto-context-review ラベルがまだ付いていない
 #   3. PR が draft でない
-#   4. 紐づく Issue に auto-context-review ラベルがある（レビューが有効な場合のみ遷移する。レビュー無効時はこの条件で遷移不要と判定）
+#   4. (改修) 紐づく Issue の auto-context-review ラベルを確認し、後続ステップで分岐する
+#      - ラベルあり → auto-context-review ラベルを PR に付与してレビューへ遷移
+#      - ラベルなし → auto-approve-ready ラベルを PR に直接付与（レビューなしパス）
 #   5. <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在する（QA 指示済み）
 #   6. QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在する（回答投稿済み）
 #      ※「質問なし」パターン: user_reply_count == 0 かつ QA 指示後の Bot コメントにチェックボックス（- [ ]）がない場合も QA 完了と判定
@@ -147,27 +149,29 @@ jobs:
 
           echo "=== QA 完了条件チェック開始 ==="
           qa_complete="false"
+          direct_approve="false"
           reason=""
 
-          # 条件 4: 紐づく Issue に auto-context-review ラベルがあるか
+          # 条件 4 (改修): 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
+          # ※ レビューなしの場合でも QA 完了判定は続行し、後続で分岐する
+          has_issue_review_label="false"
+          has_issue_auto_merge="false"
           if [ -n "${ISSUE_NUMBER}" ]; then
-            issue_labels=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
-              --jq '[.labels[].name]' 2>/dev/null) || issue_labels="[]"
-            has_review_label=$(echo "${issue_labels}" \
+            issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data='{}'
+            issue_labels=$(echo "${issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
+            has_issue_review_label=$(echo "${issue_labels}" \
               | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
-            echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_review_label}"
-
-            if [ "${has_review_label}" != "true" ]; then
-              reason="Issue #${ISSUE_NUMBER} に auto-context-review ラベルがありません。順次制御の対象外です。"
-              echo "${reason}"
-              echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
-              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
-              exit 0
+            issue_body=$(echo "${issue_data}" | jq -r '.body // ""')
+            if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+              has_issue_auto_merge="true"
             fi
+            echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
+            echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
           else
             reason="Issue 番号が特定できませんでした。QA 完了判定をスキップします。"
             echo "${reason}"
             echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+            echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
             echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -225,8 +229,14 @@ jobs:
               if [ "${has_questionnaire:-0}" -eq 0 ]; then
                 # 質問なしパターン → QA 完了
                 echo "✅ 質問なしパターンを検知しました。QA 完了と判定します。"
+                if [ "${has_issue_review_label}" != "true" ] && [ "${has_issue_auto_merge}" = "true" ]; then
+                  direct_approve="true"
+                fi
                 echo "qa_complete=true" >> "${GITHUB_OUTPUT}"
+                echo "direct_approve=${direct_approve}" >> "${GITHUB_OUTPUT}"
                 echo "reason=QA 完了（質問なし）: Copilot が QA 指示に対して質問なしと回答しました。" >> "${GITHUB_OUTPUT}"
+                echo "has_issue_review_label=${has_issue_review_label}" >> "${GITHUB_OUTPUT}"
+                echo "has_issue_auto_merge=${has_issue_auto_merge}" >> "${GITHUB_OUTPUT}"
                 exit 0
               fi
             fi
@@ -266,16 +276,25 @@ jobs:
             echo "✅ ユーザー回答後にコミットが存在します。QA 完了と判定します。"
             qa_complete="true"
             reason="QA 完了: ユーザーの @copilot 回答投稿後に Copilot がコミットを push しました。"
+            if [ "${has_issue_review_label}" != "true" ] && [ "${has_issue_auto_merge}" = "true" ]; then
+              direct_approve="true"
+            fi
           else
             reason="ユーザーの回答後にコミットがまだありません。Copilot のタスク実行待ちです。"
             echo "${reason}"
           fi
 
           echo "qa_complete=${qa_complete}" >> "${GITHUB_OUTPUT}"
+          echo "direct_approve=${direct_approve}" >> "${GITHUB_OUTPUT}"
           echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+          echo "has_issue_review_label=${has_issue_review_label}" >> "${GITHUB_OUTPUT}"
+          echo "has_issue_auto_merge=${has_issue_auto_merge}" >> "${GITHUB_OUTPUT}"
 
       - name: auto-context-review ラベルを PR に付与
-        if: steps.pr-info.outputs.skip != 'true' && steps.check-qa-complete.outputs.qa_complete == 'true'
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-qa-complete.outputs.qa_complete == 'true'
+          && steps.check-qa-complete.outputs.has_issue_review_label == 'true'
         run: |
           set -euo pipefail
           echo "=== auto-context-review ラベルを PR #${PR_NUMBER} に付与します ==="
@@ -285,7 +304,10 @@ jobs:
           echo "✅ auto-context-review ラベルを付与しました。copilot-auto-review.yml が発火します。"
 
       - name: サマリーコメントを PR に投稿（遷移完了）
-        if: steps.pr-info.outputs.skip != 'true' && steps.check-qa-complete.outputs.qa_complete == 'true'
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-qa-complete.outputs.qa_complete == 'true'
+          && steps.check-qa-complete.outputs.has_issue_review_label == 'true'
         env:
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
           REASON: ${{ steps.check-qa-complete.outputs.reason }}
@@ -315,3 +337,25 @@ jobs:
           # 未完了の場合はログのみ出力（PR コメントは投稿しない。synchronize は頻繁に発火するため）
           echo "⏳ QA 完了条件を満たしていません: ${REASON}"
           echo "次の synchronize または issue_comment イベントで再チェックします。"
+
+      - name: auto-approve-ready ラベルを PR に付与（レビューなしパス）
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-qa-complete.outputs.qa_complete == 'true'
+          && steps.find-issue.outputs.issue_number != ''
+          && steps.check-qa-complete.outputs.direct_approve == 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          # 紐づく Issue に auto-context-review ラベルがなく、auto-merge 有効の場合のみ直接遷移
+          echo "Issue に auto-context-review ラベルがなく、auto-merge が有効なため直接 auto-approve-ready に遷移します。"
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-approve-ready"
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s' \
+            '## 🔄 QA → Approve 直接遷移（レビューなしパス）' \
+            'QA 完了を検知しました。Issue にレビュー設定がなく、`auto-merge: true` のため `auto-approve-ready` ラベルを直接 PR に付与しました。' \
+            "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
+            '- 🔍 **判定理由**: Issue に auto-context-review ラベルなし + <!-- auto-merge: true -->' \
+            '> ℹ️ このコメントは `auto-qa-to-review-transition.yml` によって自動投稿されました。')
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${COMMENT}"
+          echo "✅ auto-approve-ready ラベルを PR に付与しました（レビューなしパス）。"

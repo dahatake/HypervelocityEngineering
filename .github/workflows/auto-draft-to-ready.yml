@@ -1,0 +1,163 @@
+name: Draft PR 自動 Ready 化
+
+on:
+  pull_request_target:
+    types: [synchronize, labeled]
+
+concurrency:
+  group: auto-draft-to-ready-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  mark-ready:
+    if: >
+      (
+        (
+          github.event.action == 'synchronize'
+          && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
+        )
+        || (
+          github.event.action == 'labeled'
+          && github.event.label.name == 'auto-approve-ready'
+        )
+      )
+      && github.event.pull_request.draft
+      && !contains(github.event.pull_request.labels.*.name, 'split-mode')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+      PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+      DEBOUNCE_SECONDS: "180"
+
+    steps:
+      - name: Copilot PR かどうか確認
+        id: check-copilot
+        run: |
+          set -euo pipefail
+          IS_COPILOT="false"
+          if [ "${PR_AUTHOR_TYPE}" = "Bot" ]; then
+            if [ "${PR_AUTHOR_LOGIN}" = "Copilot" ] \
+              || [ "${PR_AUTHOR_LOGIN}" = "copilot-swe-agent" ] \
+              || [ "${PR_AUTHOR_LOGIN}" = "copilot-swe-agent[bot]" ] \
+              || [ "${PR_AUTHOR_LOGIN}" = "copilot[bot]" ]; then
+              IS_COPILOT="true"
+            fi
+          fi
+          if [ "${IS_COPILOT}" != "true" ]; then
+            echo "Copilot 以外の PR (${PR_AUTHOR_LOGIN}) です。スキップします。"
+          fi
+          echo "is_copilot=${IS_COPILOT}" >> "${GITHUB_OUTPUT}"
+
+      - name: 冪等化チェック
+        if: steps.check-copilot.outputs.is_copilot == 'true'
+        id: guard
+        run: |
+          set -euo pipefail
+          MARKER="<!-- auto-draft-to-ready-done -->"
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER}" \
+              '[.[] | select(.body | contains($marker))] | length' \
+              2>/dev/null) || existing=0
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "既に Ready 化済みです。スキップします。"
+            echo "done=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "done=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: デバウンス待機
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.guard.outputs.done != 'true'
+        run: |
+          set -euo pipefail
+          echo "::notice::Copilot の作業完了を待機します（${DEBOUNCE_SECONDS}秒）。新しいコミットが来た場合はこの実行はキャンセルされます。"
+          sleep "${DEBOUNCE_SECONDS}"
+
+      - name: PR が依然 draft かどうか再確認
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.guard.outputs.done != 'true'
+        id: recheck
+        run: |
+          set -euo pipefail
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>/dev/null) || pr_data=""
+          if [ -z "${pr_data}" ]; then
+            echo "::warning::PR 情報の再取得に失敗しました。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          is_draft=$(echo "${pr_data}" | jq -r '.draft // "unknown"')
+          has_label=$(echo "${pr_data}" \
+            | jq -r '[.labels[].name] | if contains(["auto-approve-ready"]) then "true" else "false" end')
+          has_split_mode=$(echo "${pr_data}" \
+            | jq -r '[.labels[].name] | if contains(["split-mode"]) then "true" else "false" end')
+          echo "draft=${is_draft}, auto-approve-ready=${has_label}, split-mode=${has_split_mode}"
+          if [ "${is_draft}" = "true" ] \
+            && [ "${has_label}" = "true" ] \
+            && [ "${has_split_mode}" != "true" ]; then
+            echo "proceed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "条件を満たしません（draft=${is_draft}, label=${has_label}, split-mode=${has_split_mode}）。スキップします。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Draft → Ready 遷移
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.guard.outputs.done != 'true'
+          && steps.recheck.outputs.proceed == 'true'
+        id: mark-ready
+        run: |
+          set -euo pipefail
+          ready_success="true"
+          if gh pr ready "${PR_NUMBER}" --repo "${REPO}"; then
+            echo "✅ PR #${PR_NUMBER} を Ready for review に変更しました。"
+          else
+            echo "::warning::PR #${PR_NUMBER} の Ready 化に失敗しました。"
+            ready_success="false"
+          fi
+          echo "ready_success=${ready_success}" >> "${GITHUB_OUTPUT}"
+
+      - name: サマリーコメントを PR に投稿
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.guard.outputs.done != 'true'
+          && steps.recheck.outputs.proceed == 'true'
+        env:
+          READY_SUCCESS: ${{ steps.mark-ready.outputs.ready_success }}
+        run: |
+          set -euo pipefail
+
+          if [ "${READY_SUCCESS}" = "true" ]; then
+            STATUS="✅ Draft → Ready 遷移が完了しました。auto-approve-and-merge.yml が自動発火します。"
+            COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s\n%s\n\n%s' \
+              '<!-- auto-draft-to-ready-done -->' \
+              '## 🔓 Draft PR 自動 Ready 化' \
+              "${STATUS}" \
+              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため、Copilot の作業完了と判定しました。" \
+              '- 🏷️ **トリガー**: `auto-approve-ready` ラベル + draft PR の検知' \
+              '> ℹ️ このコメントは `auto-draft-to-ready.yml` によって自動投稿されました。')
+          else
+            STATUS="❌ Draft → Ready 遷移に失敗しました。手動で PR を Ready for review に変更してください。"
+            COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s\n%s' \
+              '## 🔓 Draft PR 自動 Ready 化' \
+              "${STATUS}" \
+              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため、Copilot の作業完了と判定しました。" \
+              '- 🏷️ **トリガー**: `auto-approve-ready` ラベル + draft PR の検知' \
+              '> ℹ️ このコメントは `auto-draft-to-ready.yml` によって自動投稿されました。')
+          fi
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}"

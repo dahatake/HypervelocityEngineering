@@ -1,0 +1,115 @@
+name: "App Documentation"
+description: "Issue からアプリケーションドキュメント生成ワークフロー (Step.1〜Step.6) を自動起動します"
+title: "[App Documentation] アプリケーションドキュメント生成"
+labels:
+  - "auto-app-documentation"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## App Documentation
+        このフォームから Issue を作成すると、自動で Step.1〜Step.6 のドキュメント生成タスクが
+        Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
+
+        ### 4層構造
+        - レイヤー1: ファイルインベントリ + 個別ファイルサマリー
+        - レイヤー2: コンポーネント/モジュール分析
+        - レイヤー2.5: コンポーネントインデックス
+        - レイヤー3〜4: 横断分析 + 目的特化ドキュメント生成
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/adoc"
+      value: "main"
+    validations:
+      required: true
+
+  - type: input
+    id: target_dirs
+    attributes:
+      label: "対象ディレクトリ（任意）"
+      description: "ドキュメント生成対象ディレクトリ（カンマ区切り）。未指定時はリポジトリ全体が対象です"
+      placeholder: "例: src/,hve/,infra/"
+    validations:
+      required: false
+
+  - type: input
+    id: exclude_patterns
+    attributes:
+      label: "除外パターン（任意）"
+      description: "除外対象パターン（カンマ区切り）"
+      value: "node_modules/,vendor/,dist/,*.lock,__pycache__/"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: doc_purpose
+    attributes:
+      label: "ドキュメントの主目的"
+      description: "内部ID（CLI と同一値）: all / onboarding / refactoring / migration"
+      options:
+        - "all"
+        - "onboarding"
+        - "refactoring"
+        - "migration"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: max_file_lines
+    attributes:
+      label: "大規模ファイル分割閾値"
+      description: "閾値を超えるファイルは分割してサマリー化します"
+      options:
+        - "300"
+        - "500"
+        - "1000"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+      options:
+        - label: "Step.1 — ファイルインベントリ"
+        - label: "Step.2 — ファイルサマリー（2.1〜2.5 並列）"
+        - label: "Step.3 — コンポーネント分析（3.1〜3.5 並列）"
+        - label: "Step.4 — コンポーネントインデックス"
+        - label: "Step.5 — アーキテクチャ横断分析（5.1〜5.4 並列）"
+        - label: "Step.6 — 目的特化ドキュメント（6.1〜6.3 並列）"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: docs-generated/ 配下のみ更新したい。"
+    validations:
+      required: false

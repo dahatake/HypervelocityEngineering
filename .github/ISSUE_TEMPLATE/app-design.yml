@@ -89,6 +89,17 @@ body:
       options:
         - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
 
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
   - type: textarea
     id: additional_comment
     attributes:

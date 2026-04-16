@@ -1,0 +1,163 @@
+name: PR 自動 Approve & Auto-merge
+
+# auto-approve-ready ラベルが付与された PR に対して、自動 Approve → auto-merge（squash）を有効化する。
+#
+# 安全装置:
+#   - split-mode ラベル付き PR はジョブ条件で除外
+#   - 冪等化マーカー <!-- auto-approve-and-merge-done --> で重複実行防止
+#   - 既存 Approve レビューの API 直接確認（dismiss 考慮）
+#   - Approve/Merge 失敗時のグレースフルフォールバック（手動対応を促すコメント）
+#
+# 注意:
+#   - pull_request_target を使用（Copilot が作成した PR のブランチには
+#     ワークフロー定義がない可能性があるため、ベースブランチの定義で実行）
+#   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
+#   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
+
+on:
+  pull_request_target:
+    types: [labeled, ready_for_review]
+
+concurrency:
+  group: auto-approve-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  approve-and-merge:
+    # labeled イベント: auto-approve-ready ラベルが付与された時
+    # ready_for_review イベント: draft → ready 遷移後に auto-approve-ready ラベルがある場合
+    # （draft 中にラベルが付いた場合、labeled では !draft 条件を満たさず実行されないため）
+    if: >
+      (
+        (
+          github.event.action == 'labeled'
+          && github.event.label.name == 'auto-approve-ready'
+        )
+        || (
+          github.event.action == 'ready_for_review'
+          && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
+        )
+      )
+      && !github.event.pull_request.draft
+      && !contains(github.event.pull_request.labels.*.name, 'split-mode')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: 冪等化チェック（既に完了・Approve 済みかどうか確認）
+        id: guard
+        run: |
+          set -euo pipefail
+
+          # <!-- auto-approve-and-merge-done --> マーカーの存在確認（このワークフローが完了済みの証拠）
+          MARKER="<!-- auto-approve-and-merge-done -->"
+          existing_marker=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing_marker=0
+          echo "auto-approved マーカーコメント数: ${existing_marker}"
+
+          if [ "${existing_marker:-0}" -gt 0 ]; then
+            echo "auto-approved マーカーが存在します。ワークフロー完了済みです。スキップします。"
+            echo "already_done=true" >> "${GITHUB_OUTPUT}"
+            echo "already_approved=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "already_done=false" >> "${GITHUB_OUTPUT}"
+
+          # 既存 Approve レビューの API 直接確認（dismiss 考慮）
+          # Approve 済みの場合は Approve ステップのみスキップ（Auto-merge は引き続き実行）
+          approved_count=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/reviews" \
+            --jq '[.[] | select(.state == "APPROVED")] | length' \
+            2>/dev/null) || approved_count=0
+          echo "既存 Approve レビュー数: ${approved_count}"
+
+          if [ "${approved_count:-0}" -gt 0 ]; then
+            echo "既に Approve 済みです。Approve ステップをスキップし Auto-merge のみ実行します。"
+            echo "already_approved=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "already_approved=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: PR を Approve
+        id: approve
+        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          approved="true"
+          if gh pr review "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --approve \
+            --body "✅ 自動 Approve（auto-approve-and-merge.yml）"; then
+            echo "✅ PR #${PR_NUMBER} を Approve しました。"
+          else
+            echo "::warning::PR #${PR_NUMBER} の Approve に失敗しました。手動で Approve してください。"
+            approved="false"
+          fi
+          echo "approved=${approved}" >> "${GITHUB_OUTPUT}"
+
+      - name: Auto-merge を有効化（squash）
+        id: merge
+        if: steps.guard.outputs.already_done != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          merge_enabled="true"
+          if gh pr merge "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --auto \
+            --squash; then
+            echo "✅ PR #${PR_NUMBER} の Auto-merge（squash）を有効化しました。"
+          else
+            echo "::warning::PR #${PR_NUMBER} の Auto-merge 有効化に失敗しました。手動でマージしてください。"
+            merge_enabled="false"
+          fi
+          echo "merge_enabled=${merge_enabled}" >> "${GITHUB_OUTPUT}"
+
+      - name: サマリーコメントを PR に投稿
+        if: steps.guard.outputs.already_done != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+          APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}
+          MERGE_ENABLED: ${{ steps.merge.outputs.merge_enabled }}
+        run: |
+          set -euo pipefail
+
+          if [ "${APPROVED}" = "true" ] && [ "${MERGE_ENABLED}" = "true" ]; then
+            STATUS_ICON="✅"
+            STATUS_TEXT="Approve と Auto-merge（squash）の有効化が完了しました。全ての必須チェックが通過次第、自動マージされます。"
+          elif [ "${APPROVED}" = "true" ]; then
+            STATUS_ICON="⚠️"
+            STATUS_TEXT="Approve は完了しましたが、Auto-merge の有効化に失敗しました。手動でマージしてください。"
+          elif [ "${MERGE_ENABLED}" = "true" ]; then
+            STATUS_ICON="⚠️"
+            STATUS_TEXT="Auto-merge（squash）は有効化しましたが、Approve に失敗しました。手動で Approve してください。"
+          else
+            STATUS_ICON="❌"
+            STATUS_TEXT="Approve と Auto-merge の両方に失敗しました。手動で Approve → Merge してください。"
+          fi
+
+          COMMENT=$(printf '%s\n\n%s %s\n\n%s\n%s\n\n%s' \
+            '<!-- auto-approve-and-merge-done -->' \
+            "## ${STATUS_ICON} 自動 Approve & Auto-merge" \
+            "${STATUS_TEXT}" \
+            "- 🔑 **Approve**: $([ "${APPROVED}" = "true" ] && echo "✅ 完了" || echo "❌ 失敗（手動対応が必要です）")" \
+            "- 🔀 **Auto-merge（squash）**: $([ "${MERGE_ENABLED}" = "true" ] && echo "✅ 有効化済み" || echo "❌ 失敗（手動対応が必要です）")" \
+            '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。')
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}"
+          echo "✅ サマリーコメントを PR #${PR_NUMBER} に投稿しました。"

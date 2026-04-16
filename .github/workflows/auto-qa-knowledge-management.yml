@@ -205,6 +205,7 @@ jobs:
           create_label "aqkm:running"      "E4E669" ""
           create_label "aqkm:done"         "0E8A16" ""
           create_label "aqkm:blocked"      "D73A4A" ""
+          create_label "auto-approve-ready" "0E8A16" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
       # 2.5 aqkm:initialized 即時付与（二重実行防止）
@@ -312,6 +313,13 @@ jobs:
               section_text = m.group(1)
               force_refresh = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          m = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
           # 追加コメント抽出
           additional_comment = ""
           m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
@@ -325,6 +333,7 @@ jobs:
               "scope": scope,
               "target_files": target_files,
               "force_refresh": force_refresh,
+              "auto_merge": auto_merge,
               "additional_comment": additional_comment,
           }
           print(json.dumps(result))
@@ -335,19 +344,55 @@ jobs:
           SCOPE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['scope'])")
           TARGET_FILES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['target_files'])")
           FORCE_REFRESH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('force_refresh') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スコープ: ${SCOPE}"
           echo "対象ファイル: ${TARGET_FILES}"
           echo "force_refresh: ${FORCE_REFRESH}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+
+          # ---- Root Issue body に auto-merge タグを埋め込み ----
+          MERGE_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_MERGE}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_merge = sys.argv[1]
+          output_file = sys.argv[2]
+
+          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+
+          if merge_pat.search(body):
+              body = merge_pat.sub(merge_tag, body)
+          else:
+              body = body.rstrip() + "\n" + merge_tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYMERGE
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-merge タグを埋め込みました（auto-merge: ${AUTO_MERGE}）。" \
+            || echo "WARNING: Root Issue body の auto-merge タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${MERGE_TAG_FILE}"
 
           # ---- Root Issue に aqkm:initialized を付与（Step bootstrap で付与済みだが念のため） ----
           add_label "${ROOT_ISSUE}" "aqkm:initialized"
           echo "aqkm:initialized を付与しました。"
 
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+
           # ---- Step Issue の body に埋め込む共通メタ情報 ----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->' "${ROOT_ISSUE}" "${BRANCH}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_MERGE}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
@@ -358,6 +403,10 @@ jobs:
 
           # Step Issue に付与するラベルセット
           STEP_LABELS='["qa-knowledge-management"]'
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
+          fi
 
           # ---- Step.1 ----
           # force_refresh の表示テキストを用意

@@ -32,6 +32,7 @@ metadata:
 - `harness-safety-guard`：破壊的操作の事前検知
 - `harness-error-recovery`：エラー発生時の3要素出力
 - `docs-output-format`：`docs/` 成果物フォーマットの共通原則
+- `knowledge-management`：knowledge/ の分類・状態判定・更新手順
 
 ## 分割ルール
 
@@ -54,6 +55,13 @@ bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
 ## 最終品質レビュー
 
 → Skill `adversarial-review` を参照。Agent 固有の「3つの観点」は Agent 側で定義する。
+
+## knowledge/ STALENESS CHECK（セッション開始時）
+
+1. `knowledge/` 配下の対象ファイル冒頭にある STALENESS メタブロック（sources / blob_sha / generated_at / generator）を確認する
+2. 記録された source path の現在 blob SHA とメタブロックの SHA を比較する
+3. 不一致がある場合は「stale」と判定し、knowledge ファイルの再生成を優先する
+4. 再生成時は work-artifacts-layout §4.1（削除→新規作成）に従い、メタブロックも最新 SHA で再作成する
 
 ## 入力ファイル確認
 
@@ -80,5 +88,6 @@ bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
 | `harness-safety-guard` | 参照 | 破壊的操作の事前検知 |
 | `harness-error-recovery` | 参照 | エラー発生時の3要素出力 |
 | `docs-output-format` | 参照 | `docs/` 成果物フォーマットの共通原則 |
+| `knowledge-management` | 参照 | knowledge/ 分類・状態判定・ステータス管理 |
 | `input-file-validation` | 参照 | 入力ファイル確認・欠損時処理 |
 | `app-scope-resolution` | 参照 | APP-ID スコープ解決 |

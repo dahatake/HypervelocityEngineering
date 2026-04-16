@@ -1,0 +1,305 @@
+name: レビュー完了 → auto-approve-ready 自動遷移
+
+# copilot-auto-review.yml がレビュー指示を投稿し、Copilot が修正コミットを push した後、
+# レビュー結果を検証して auto-approve-ready ラベルを PR に付与する。
+#
+# 判定条件（すべて満たす必要あり）:
+#   1. PR に auto-context-review ラベルが付いている
+#   2. PR に auto-approve-ready ラベルがまだ付いていない
+#   3. PR が draft でない
+#   4. <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在する（レビュー指示済み）
+#   5. レビュー指示後の Copilot コメントの <!-- review-verdict: --> マーカーを確認:
+#      - PASS マーカー発見 → 即完了
+#      - FAIL マーカー発見 → ブロック（修正完了待ち）
+#      - マーカーなし → 条件 6 のフォールバック判定を使用
+#   6. synchronize イベントの場合: 最新コミット日時がレビュー指示日時より後（フォールバック）
+#      issue_comment イベントの場合: Bot の回答コメントが存在する（フォールバック）
+#
+# トリガー: pull_request_target: [synchronize], issue_comment: [created]
+#   - synchronize = PR へのコミット push（Copilot がタスク完了後に push する）
+#   - issue_comment = PR へのコメント（Bot が完了報告のみでコメントした場合のフォールバック）
+#
+# 注意:
+#   - pull_request_target を使用（Copilot が作成した PR のブランチには
+#     ワークフロー定義がない可能性があるため、ベースブランチの定義で実行）
+#   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
+#   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
+
+on:
+  pull_request_target:
+    types: [synchronize]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: auto-review-to-approve-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  transition:
+    # 事前フィルタ（pull_request_target の場合）:
+    #   - PR に auto-context-review ラベルが付いている
+    #   - PR に auto-approve-ready ラベルがまだ付いていない
+    #   - PR が draft でない
+    # 事前フィルタ（issue_comment の場合）:
+    #   - PR へのコメントである（issue.pull_request が存在する）
+    #   - Copilot Bot のコメントである（copilot-swe-agent または Copilot ログインで限定）
+    if: >
+      (
+        github.event_name == 'pull_request_target'
+        && contains(github.event.pull_request.labels.*.name, 'auto-context-review')
+        && !contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
+        && !github.event.pull_request.draft
+      )
+      || (
+        github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && github.event.sender.type == 'Bot'
+        && (startsWith(github.event.sender.login, 'copilot-swe-agent') || github.event.sender.login == 'Copilot')
+      )
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+      EVENT_NAME: ${{ github.event_name }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+
+    steps:
+      - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
+        uses: actions/checkout@v4
+
+      - name: PR 情報を取得（issue_comment 対応）
+        id: pr-info
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "issue_comment" ]; then
+            pr_api_err=$(mktemp)
+            pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
+              echo "PR #${PR_NUMBER} の情報取得に失敗しました。スキップします。エラー詳細:"
+              cat "${pr_api_err}" || true
+              rm -f "${pr_api_err}"
+              echo "skip=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            }
+            rm -f "${pr_api_err}"
+            has_context_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-context-review"]) then "true" else "false" end')
+            has_approve_ready=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-approve-ready"]) then "true" else "false" end')
+            is_draft=$(echo "${pr_data}" | jq -r '.draft')
+            if [ "${has_context_review}" != "true" ] || [ "${has_approve_ready}" = "true" ] || [ "${is_draft}" = "true" ]; then
+              echo "スキップ条件: auto-context-review=${has_context_review}, auto-approve-ready=${has_approve_ready}, draft=${is_draft}"
+              echo "skip=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            # PR body を GITHUB_ENV に設定（find_issue_number Method 2 用）
+            pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+            EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+            {
+              echo "PR_BODY<<${EOF_MARKER}"
+              echo "${pr_body}"
+              echo "${EOF_MARKER}"
+            } >> "${GITHUB_ENV}"
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: 紐づく Issue 番号を特定
+        id: find-issue
+        if: steps.pr-info.outputs.skip != 'true'
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/pr-common.sh"
+          find_issue_number
+          echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      - name: レビュー完了条件を判定
+        id: check-review-complete
+        if: steps.pr-info.outputs.skip != 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          echo "=== レビュー完了条件チェック開始 ==="
+          review_complete="false"
+          issue_auto_merge="false"
+          reason=""
+
+          if [ -n "${ISSUE_NUMBER}" ]; then
+            issue_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || echo "")
+            if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+              issue_auto_merge="true"
+            else
+              reason="紐づく Issue #${ISSUE_NUMBER} に <!-- auto-merge: true --> がありません。"
+              echo "${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          else
+            reason="紐づく Issue を特定できないため auto-merge 判定ができません。"
+            echo "${reason}"
+            echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+            echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # PR コメント一覧を取得（以降の条件チェックで使用）
+          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
+
+          # 条件 4: <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在するか
+          review_posted_count=$(echo "${pr_comments}" \
+            | jq '[.[] | select(.body | contains("<!-- copilot-auto-review-posted -->"))] | length')
+          echo "レビュー指示コメント数: ${review_posted_count}"
+
+          if [ "${review_posted_count:-0}" -eq 0 ]; then
+            reason="レビュー指示コメント（<!-- copilot-auto-review-posted -->）が見つかりません。レビュー未開始です。"
+            echo "${reason}"
+            echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # レビュー指示コメントの投稿日時を取得（最新のものを使用）
+          review_posted_at=$(echo "${pr_comments}" \
+            | jq -r '[.[] | select(.body | contains("<!-- copilot-auto-review-posted -->"))] | .[-1].created_at')
+          echo "レビュー指示日時: ${review_posted_at}"
+
+          # 条件 5: レビュー指示後の Copilot コメントの review-verdict マーカーを確認
+          # copilot-auto-review.yml の指示で Copilot は結果末尾に以下のいずれかを出力する:
+          #   <!-- review-verdict: PASS -->  (Critical = 0)
+          #   <!-- review-verdict: FAIL -->  (Critical > 0)
+          # 最新の verdict マーカーが FAIL なら修正完了待ちでブロック
+          # PASS なら条件 6 に進む。マーカーなし（旧形式）はフォールバック判定を使用。
+          bot_comments_after_review=$(echo "${pr_comments}" \
+            | jq --arg review_at "${review_posted_at}" \
+              '[.[] | select(
+                .created_at > $review_at
+                and (.user.type == "Bot")
+                and ((.user.login | startswith("copilot-swe-agent")) or .user.login == "Copilot")
+              )]')
+          echo "レビュー指示後の Copilot コメント数: $(echo "${bot_comments_after_review}" | jq 'length')"
+
+          # review-verdict マーカーを含む最新コメントを検索
+          latest_verdict=$(echo "${bot_comments_after_review}" \
+            | jq -r '
+              [ .[] | select(
+                  (.body | contains("<!-- review-verdict: PASS -->"))
+                  or (.body | contains("<!-- review-verdict: FAIL -->"))
+                )
+              ] | .[-1] |
+              if . == null then "none"
+              elif (.body | contains("<!-- review-verdict: FAIL -->")) then "FAIL"
+              else "PASS"
+              end
+            ')
+          echo "最新の review-verdict: ${latest_verdict}"
+
+          if [ "${latest_verdict}" = "FAIL" ]; then
+            reason="review-verdict: FAIL マーカーを検知しました。Copilot の修正完了を待っています。"
+            echo "${reason}"
+            echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # PASS 判定の場合は条件 6 をスキップして即完了
+          if [ "${latest_verdict}" = "PASS" ]; then
+            echo "✅ review-verdict: PASS マーカーを検知しました。レビュー完了と判定します。"
+            echo "review_complete=true" >> "${GITHUB_OUTPUT}"
+            echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+            echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました。" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # マーカーなし（フォールバック）: 旧形式またはまだ verdict が出ていない場合
+          if [ "${EVENT_NAME}" = "pull_request_target" ]; then
+            # synchronize イベント: 最新コミット日時がレビュー指示日時より後であれば完了
+            latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
+              --paginate \
+              --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
+            echo "最新コミット日時: ${latest_commit_at}"
+
+            if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${review_posted_at}" +%s 2>/dev/null || echo 0)" ]; then
+              echo "✅ レビュー指示後にコミットが存在します。レビュー完了と判定します。"
+              review_complete="true"
+              reason="レビュー完了: レビュー指示後に Copilot がコミットを push しました（verdict マーカーなしフォールバック）。"
+            else
+              reason="レビュー指示後にコミットがまだありません。Copilot の修正完了待ちです。"
+              echo "${reason}"
+            fi
+          elif [ "${EVENT_NAME}" = "issue_comment" ]; then
+            # issue_comment イベント: Bot の回答コメントが存在すれば完了
+            bot_reply_count=$(echo "${bot_comments_after_review}" | jq 'length')
+            if [ "${bot_reply_count:-0}" -gt 0 ]; then
+              echo "✅ レビュー指示後に Copilot の回答コメントが存在します。レビュー完了と判定します。"
+              review_complete="true"
+              reason="レビュー完了: Copilot がレビュー指示に対して回答しました（verdict マーカーなしフォールバック）。"
+            else
+              reason="レビュー指示後に Copilot の回答コメントがまだありません。"
+              echo "${reason}"
+            fi
+          fi
+
+          echo "review_complete=${review_complete}" >> "${GITHUB_OUTPUT}"
+          echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+          echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+
+      - name: auto-approve-ready ラベルを PR に付与
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-review-complete.outputs.review_complete == 'true'
+          && steps.check-review-complete.outputs.issue_auto_merge == 'true'
+        run: |
+          set -euo pipefail
+          echo "=== auto-approve-ready ラベルを PR #${PR_NUMBER} に付与します ==="
+          gh pr edit "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --add-label "auto-approve-ready"
+          echo "✅ auto-approve-ready ラベルを付与しました。auto-approve-and-merge.yml が発火します。"
+
+      - name: サマリーコメントを PR に投稿（遷移完了）
+        if: steps.pr-info.outputs.skip != 'true' && steps.check-review-complete.outputs.review_complete == 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          REASON: ${{ steps.check-review-complete.outputs.reason }}
+        run: |
+          set -euo pipefail
+
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s' \
+            '## 🔄 レビュー完了 → Approve 自動遷移' \
+            'レビュー完了を検知しました。`auto-approve-ready` ラベルを PR に付与しました。' \
+            "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
+            "- 🔍 **判定理由**: ${REASON}" \
+            '次のステップ:' \
+            '- `auto-approve-and-merge.yml` が自動発火し、PR の Approve と Auto-merge が実行されます。' \
+            '> ℹ️ このコメントは `auto-review-to-approve-transition.yml` によって自動投稿されました。')
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}"
+          echo "✅ サマリーコメントを PR #${PR_NUMBER} に投稿しました。"
+
+      - name: サマリーコメントを PR に投稿（未完了）
+        if: steps.pr-info.outputs.skip != 'true' && steps.check-review-complete.outputs.review_complete != 'true'
+        env:
+          REASON: ${{ steps.check-review-complete.outputs.reason }}
+        run: |
+          set -euo pipefail
+          # 未完了の場合はログのみ出力（PR コメントは投稿しない。synchronize は頻繁に発火するため）
+          echo "⏳ レビュー完了条件を満たしていません: ${REASON}"
+          echo "次の synchronize または issue_comment イベントで再チェックします。"

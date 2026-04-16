@@ -81,6 +81,7 @@ graph TB
     end
 
     subgraph "データ層"
+        OD["original-docs/<br>ユーザー原本"]
         QA["qa/<br>質問票"]
         KN["knowledge/<br>業務要件 D01-D21"]
         DOCS["docs/<br>設計ドキュメント"]
@@ -101,6 +102,7 @@ graph TB
     CA -->|"生成"| WK
     GHA --> SCR
 
+    OD -->|"QA-OriginalDocsImporter"| KN
     QA -->|"QA-KnowledgeManager"| KN
 ```
 
@@ -162,13 +164,13 @@ Skills は `.github/skills/` 配下に、カテゴリ別ディレクトリで管
 
 詳細は [workflow-reference.md](./workflow-reference.md) を参照してください。
 
-### knowledge/ と qa/ の関係
+### knowledge/ と qa/ と original-docs/ の関係
 
-`qa/` フォルダーには業務要件に関する質問票（YAML ファイル）が格納されています。`QA-KnowledgeManager` Agent がこれらを処理し、`knowledge/` フォルダーに D01〜D21 分類の業務要件ドキュメントを自動生成します。
+`qa/` フォルダーには質問票、`original-docs/` フォルダーにはユーザー提供原本（Markdown 変換済み）が格納されます。`QA-KnowledgeManager`（qa 起点）と `QA-OriginalDocsImporter`（original-docs 起点）がこれらを処理し、`knowledge/` フォルダーに D01〜D21 分類の業務要件ドキュメントを生成・更新します。
 
 ```
-qa/ 質問票ファイル
-  → hve qa-merge コマンド / QA-KnowledgeManager Agent
+original-docs/ 原本 + qa/ 質問票
+  → QA-OriginalDocsImporter / QA-KnowledgeManager
     → knowledge/ D01〜D21 業務要件ドキュメント
       → 各 Custom Agent が業務コンテキストとして自動参照
 ```
@@ -176,7 +178,7 @@ qa/ 質問票ファイル
 > [!NOTE]
 > 設計・開発ワークフローを開始する前に `qa-knowledge-management` ワークフローを実行しておくことを推奨します。`knowledge/` が存在すると、各 Custom Agent が業務要件コンテキストを自動参照し、より精度の高い成果物を生成します。
 
-詳細は [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) を参照してください。
+詳細は [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) および [11-original-docs-import.md](./11-original-docs-import.md) を参照してください。
 
 ---
 
@@ -300,6 +302,7 @@ python -m hve（wizard または CLI）
 | AI Agent を簡易設計したい | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
 | AI Agent を本格設計したい | [08-ai-agent.md](./08-ai-agent.md) | — |
 | 業務知識を整理・管理したい | [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) | `aqkm` |
+| original-docs 原本を取り込みたい | [11-original-docs-import.md](./11-original-docs-import.md) | `aodi` |
 | コード品質を改善したい | [web-ui-guide.md](./web-ui-guide.md)（QA Agent セクション） | — |
 | トラブルが発生した | [troubleshooting.md](./troubleshooting.md) | — |
 | プロンプト例を参照したい | [prompt-examples.md](./prompt-examples.md) | — |
@@ -317,6 +320,7 @@ python -m hve（wizard または CLI）
 | **07 — AI Agent（Quick）** | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
 | **08 — AI Agent（本格）** | [08-ai-agent.md](./08-ai-agent.md) | — |
 | **QA Knowledge ドキュメント管理** | [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) | `aqkm` |
+| **AODI: original-docs 取り込み** | [11-original-docs-import.md](./11-original-docs-import.md) | `aodi` |
 
 > 01（要求定義）、07（AI Agent Quick）、および `aqkm`（QA Knowledge ドキュメント管理）は手動実行です。それ以外はワークフローによる自動実行が可能です。
 

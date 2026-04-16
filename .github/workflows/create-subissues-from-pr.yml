@@ -145,20 +145,25 @@ jobs:
             echo "No parent issue detected — sub-issue links will not be created."
           fi
 
-          # ── check auto-context-review / auto-qa labels on parent issue ─────
+          # ── check auto-context-review / auto-qa labels and auto-merge tag on parent issue ─────
           HAS_CONTEXT_REVIEW="false"
           HAS_QA="false"
+          HAS_AUTO_MERGE="false"
           if [ -n "$PARENT_ISSUE" ]; then
-            _PARENT_LABELS=$(gh api "/repos/${REPO}/issues/${PARENT_ISSUE}" \
-              --jq '[.labels[].name]' \
-              2>/dev/null || echo "[]")
+            _PARENT_ISSUE=$(gh api "/repos/${REPO}/issues/${PARENT_ISSUE}" 2>/dev/null || echo '{}')
+            _PARENT_LABELS=$(echo "${_PARENT_ISSUE}" | jq '(.labels // []) | map(.name)' 2>/dev/null || echo "[]")
+            _PARENT_BODY=$(echo "${_PARENT_ISSUE}" | jq -r '.body // ""' 2>/dev/null || echo "")
             HAS_CONTEXT_REVIEW=$(echo "${_PARENT_LABELS}" | python3 -c \
               "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-context-review' in lbls else 'false')")
             HAS_QA=$(echo "${_PARENT_LABELS}" | python3 -c \
               "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-qa' in lbls else 'false')")
+            if printf '%s' "${_PARENT_BODY}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+              HAS_AUTO_MERGE="true"
+            fi
           fi
           echo "auto-context-review ラベル伝播: ${HAS_CONTEXT_REVIEW}"
           echo "auto-qa ラベル伝播: ${HAS_QA}"
+          echo "auto-merge メタコメント伝播: ${HAS_AUTO_MERGE}"
 
           # ── helper: create issue with exponential backoff retry ──────────
           create_issue() {
@@ -559,6 +564,7 @@ jobs:
                 fi
                 printf '<!-- pr-number: %s -->\n' "${PR_NUMBER}"
                 printf '<!-- pr-head-branch: %s -->\n' "${PR_HEAD_BRANCH}"
+                printf '<!-- auto-merge: %s -->\n' "${HAS_AUTO_MERGE}"
                 cat "$body_file"
               } > "/tmp/body_meta_${block_idx}.md" && mv "/tmp/body_meta_${block_idx}.md" "$body_file"
 

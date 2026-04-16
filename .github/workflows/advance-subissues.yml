@@ -16,9 +16,11 @@ name: Advance Sub Issues
 on:
   pull_request:
     types: [closed]
+  issues:
+    types: [labeled]
 
 concurrency:
-  group: advance-subissues-${{ github.event.pull_request.number }}
+  group: ${{ github.event_name == 'pull_request' && format('advance-subissues-pr-{0}', github.event.pull_request.number) || format('advance-subissues-issue-{0}', github.event.issue.number) }}
   cancel-in-progress: false
 
 permissions:
@@ -28,7 +30,7 @@ permissions:
 
 jobs:
   advance:
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -651,4 +653,256 @@ jobs:
               --body-file /tmp/advance_comment.md || true
           else
             echo "この実行では前進させた Sub Issue はありませんでした（依存関係が未解決、または対象なし）。"
+          fi
+
+  advance_adoc:
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'adoc:done'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      DONE_ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Advance ADOC sub issues
+        run: |
+          set -euo pipefail
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/aqkm-common.sh"
+
+          DONE_ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" || echo '{}')
+          DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+
+          if [[ ! "${DONE_ISSUE_TITLE}" =~ ^\[ADOC\] ]]; then
+            echo "[ADOC] Sub Issue 以外は処理しません。"
+            exit 0
+          fi
+
+          STEP_DONE=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          t = sys.stdin.read().strip()
+          m = re.search(r'\[ADOC\] Step\.(\d+(?:\.\d+)?)', t)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*root-issue:\s*#(\d+)\s*-->', b)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_DONE}" ]] || [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Step または Root Issue を特定できないためスキップ。"
+            exit 0
+          fi
+
+          BRANCH=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*branch:\s*(.+?)\s*-->', b)
+          print(m.group(1) if m else 'main')
+          PY
+          )
+          AUTO_CONTEXT_REVIEW=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', b)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', b)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          TARGET_DIRS=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*target-dirs:\s*(.*?)\s*-->', b)
+          print(m.group(1) if m else '')
+          PY
+          )
+          EXCLUDE_PATTERNS=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*exclude-patterns:\s*(.*?)\s*-->', b)
+          print(m.group(1) if m else 'node_modules/,vendor/,dist/,*.lock,__pycache__/')
+          PY
+          )
+          DOC_PURPOSE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*doc-purpose:\s*(.*?)\s*-->', b)
+          print(m.group(1) if m else 'all')
+          PY
+          )
+          MAX_FILE_LINES=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*max-file-lines:\s*(.*?)\s*-->', b)
+          print(m.group(1) if m else '500')
+          PY
+          )
+
+          SUB_ISSUES_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" || echo '[]')
+          export SUB_ISSUES_JSON
+
+          ANALYSIS=$(python3 - <<'PY'
+          import os, json, re
+          ADOC_DAG = {
+              "1":   [],
+              "2.1": ["1"], "2.2": ["1"], "2.3": ["1"], "2.4": ["1"], "2.5": ["1"],
+              "3.1": ["2.1","2.2","2.3","2.4","2.5"],
+              "3.2": ["2.1","2.2","2.3","2.4","2.5"],
+              "3.3": ["2.1","2.2","2.3","2.4","2.5"],
+              "3.4": ["2.2"],
+              "3.5": ["2.1","2.2","2.3","2.4","2.5"],
+              "4":   ["3.1","3.2","3.3","3.4","3.5"],
+              "5.1": ["4"], "5.2": ["4"], "5.3": ["4"],
+              "5.4": ["4","3.4","3.5"],
+              "6.1": ["5.1","5.2"],
+              "6.2": ["5.2","5.4","3.5"],
+              "6.3": ["5.1","5.3","5.4"],
+          }
+          STEP_TITLES = {
+              "1": "ファイルインベントリ",
+              "2.1": "ファイルサマリー（プロダクションコード）",
+              "2.2": "ファイルサマリー（テストコード）",
+              "2.3": "ファイルサマリー（設定・IaC）",
+              "2.4": "ファイルサマリー（CI/CD）",
+              "2.5": "ファイルサマリー（大規模ファイル分割）",
+              "3.1": "コンポーネント設計書",
+              "3.2": "API 仕様書",
+              "3.3": "データモデル定義書",
+              "3.4": "テスト仕様サマリー",
+              "3.5": "技術的負債一覧",
+              "4": "コンポーネントインデックス",
+              "5.1": "アーキテクチャ概要",
+              "5.2": "依存関係マップ",
+              "5.3": "インフラ依存分析",
+              "5.4": "非機能要件現状分析",
+              "6.1": "オンボーディングガイド",
+              "6.2": "リファクタリングガイド",
+              "6.3": "移行アセスメント",
+          }
+          try:
+              issues = json.loads(os.environ.get("SUB_ISSUES_JSON", "[]"))
+              if not isinstance(issues, list):
+                  issues = []
+          except Exception:
+              issues = []
+
+          existing = set()
+          completed = set()
+          for i in issues:
+              title = i.get('title', '')
+              m = re.search(r'\[ADOC\] Step\.(\d+(?:\.\d+)?)', title)
+              if not m:
+                  continue
+              sid = m.group(1)
+              existing.add(sid)
+              labels = {l.get('name', '') for l in i.get('labels', []) if isinstance(l, dict)}
+              if 'adoc:done' in labels:
+                  completed.add(sid)
+
+          ready = []
+          for sid, deps in ADOC_DAG.items():
+              if sid in existing:
+                  continue
+              if all(d in completed for d in deps):
+                  ready.append(sid)
+
+          all_done = all(sid in completed for sid in ADOC_DAG)
+          print(json.dumps({'ready': ready, 'all_done': all_done, 'step_titles': STEP_TITLES}))
+          PY
+          )
+
+          READY_IDS=$(echo "${ANALYSIS}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d.get('ready', [])))")
+          ALL_DONE=$(echo "${ANALYSIS}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('all_done') else 'false')")
+
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
+
+          if [[ -n "${READY_IDS}" ]]; then
+            for STEP_ID in ${READY_IDS}; do
+              TEMPLATE_PATH="${GITHUB_WORKSPACE}/.github/scripts/templates/adoc/step-${STEP_ID}.md"
+              if [[ ! -f "${TEMPLATE_PATH}" ]]; then
+                continue
+              fi
+
+              STEP_TITLE=$(echo "${ANALYSIS}" | python3 - "${STEP_ID}" <<'PY'
+          import sys, json
+          info = json.load(sys.stdin)
+          step_id = sys.argv[1]
+          print(info.get('step_titles', {}).get(step_id, step_id))
+          PY
+              )
+
+              BODY=$(python3 - "${TEMPLATE_PATH}" "${ROOT_REF}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}" <<'PY'
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          body = p.read_text(encoding='utf-8')
+          body = body.replace('{root_ref}', sys.argv[2])
+          body = body.replace('{target_dirs}', sys.argv[3])
+          body = body.replace('{exclude_patterns}', sys.argv[4])
+          body = body.replace('{doc_purpose}', sys.argv[5])
+          body = body.replace('{max_file_lines}', str(sys.argv[6]))
+          body = body.replace('{additional_section}', '')
+          print(body)
+          PY
+              )
+
+              if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+                STEP_LABELS='["auto-app-documentation","auto-context-review","auto-qa"]'
+              elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                STEP_LABELS='["auto-app-documentation","auto-context-review"]'
+              elif [[ "${AUTO_QA}" == "true" ]]; then
+                STEP_LABELS='["auto-app-documentation","auto-qa"]'
+              else
+                STEP_LABELS='["auto-app-documentation"]'
+              fi
+
+              ALREADY_EXISTS=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                | python3 /dev/fd/3 "${STEP_ID}" 3<<'PY'
+          import sys, json, re
+          step_id = sys.argv[1]
+          try:
+              issues = json.load(sys.stdin)
+              if not isinstance(issues, list):
+                  issues = []
+          except Exception:
+              issues = []
+          pattern = re.compile(rf'^\[ADOC\] Step\.{re.escape(step_id)}:\s')
+          print('true' if any(pattern.search(i.get('title', '')) for i in issues) else 'false')
+          PY
+              )
+              if [[ "${ALREADY_EXISTS}" == "true" ]]; then
+                echo "Step.${STEP_ID} は既存のため作成をスキップします。"
+                continue
+              fi
+
+              RESP=$(create_issue "[ADOC] Step.${STEP_ID}: ${STEP_TITLE}" "${BODY}" "${STEP_LABELS}")
+              NEW_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+              NEW_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+
+              link_sub_issue "${ROOT_ISSUE}" "${NEW_ID}"
+              add_label "${NEW_NUM}" "adoc:ready"
+              CA=$(extract_custom_agent "${BODY}")
+              if assign_copilot "${NEW_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${NEW_NUM}" "adoc:running"
+              fi
+            done
+          fi
+
+          if [[ "${ALL_DONE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "adoc:done"
           fi

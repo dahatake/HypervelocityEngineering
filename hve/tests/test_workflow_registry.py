@@ -24,6 +24,7 @@ EXPECTED_STEP_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aqkm": 1,
+    "aodi": 1,
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
@@ -34,6 +35,7 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aqkm": 1,
+    "aodi": 1,
     "adoc": 19,
 }
 
@@ -41,7 +43,7 @@ EXPECTED_NON_CONTAINER_COUNTS = {
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -55,14 +57,14 @@ class TestGetWorkflow:
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
     def test_step_count_matches_bash(self, wf_id: str):
         """各ワークフローのステップ数が bash 版と一致すること。"""
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -237,11 +239,11 @@ class TestListWorkflows:
 
     def test_list_workflows_returns_seven(self):
         wfs = list_workflows()
-        assert len(wfs) == 7
+        assert len(wfs) == 8
 
     def test_all_ids(self):
         wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "aqkm", "asdw"]
+        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "aodi", "aqkm", "asdw"]
 
 
 class TestAQKMWorkflow:
@@ -331,6 +333,43 @@ class TestADOCWorkflow:
         nexts = get_next_steps("adoc", completed_step_ids=completed)
         next_ids = sorted(s.id for s in nexts)
         assert next_ids == ["6.1", "6.2", "6.3"]
+
+
+class TestAODIWorkflow:
+    """AODI ワークフロー固有テスト。"""
+
+    def test_aodi_exists(self):
+        wf = get_workflow("aodi")
+        assert wf is not None
+        assert wf.name == "Original Docs Import"
+        assert wf.label_prefix == "aodi"
+
+    def test_aodi_params(self):
+        wf = get_workflow("aodi")
+        assert wf is not None
+        assert wf.params == ["scope", "target_files", "force_refresh"]
+
+    def test_aodi_single_step(self):
+        wf = get_workflow("aodi")
+        assert wf is not None
+        assert len(wf.steps) == 1
+        assert wf.steps[0].id == "1"
+        assert wf.steps[0].custom_agent == "QA-OriginalDocsImporter"
+
+    def test_aodi_root_step(self):
+        roots = get_root_steps("aodi")
+        assert len(roots) == 1
+        assert roots[0].id == "1"
+
+    def test_aodi_template_path(self):
+        step = get_step("aodi", "1")
+        assert step is not None
+        assert step.body_template_path == "templates/aodi/step-1.md"
+
+    def test_aodi_template_mentions_original_docs(self):
+        from hve.template_engine import _load_template
+        content = _load_template("templates/aodi/step-1.md")
+        assert "original-docs/" in content
 
 
 class TestStepDefFields:

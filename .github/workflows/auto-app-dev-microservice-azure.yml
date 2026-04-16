@@ -204,6 +204,7 @@ jobs:
           create_label "asdw:test-failed"           "EE0701" "test execution failed (TDD RED not confirmed or GREEN not reached)"
           create_label "auto-context-review"       "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-qa"                    "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready"         "0E8A16" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
       # 2.5. 即時 asdw:initialized 付与（二重実行防止）
@@ -716,6 +717,16 @@ jobs:
                   # 新形式: チェック → 有効
                   auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          merge_section = re.search(
+              r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if merge_section:
+              section_text = merge_section.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
           # APP-ID 抽出（複数 APP-ID に対応：カンマ区切りで分割・正規化）
           app_ids_raw = ""
           m = re.search(r"###\s*対象アプリケーション.*?\n+(.+)", body)
@@ -729,7 +740,7 @@ jobs:
           # 後方互換: 単一 APP-ID の場合は app_id にも設定
           app_id = app_ids_list[0] if len(app_ids_list) == 1 else ""
 
-          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "app_ids": app_ids_list, "app_id": app_id}
+          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "app_id": app_id}
           print(json.dumps(result))
           PYEOF
           )
@@ -741,6 +752,7 @@ jobs:
           USECASE_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('usecase_id',''))")
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           APP_IDS_JSON=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('app_ids',[])))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
           APP_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('app_id',''))")
@@ -752,10 +764,11 @@ jobs:
           echo "対象アプリケーション: ${APP_IDS}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
           # ---- ROOT_REF（リソースグループメタコメント含む）----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->' \
-            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
@@ -842,20 +855,28 @@ jobs:
 
           # ---- Root Issue に auto-context-review タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
-          output_file = sys.argv[2]
+          auto_merge = sys.argv[2]
+          output_file = sys.argv[3]
 
-          tag = f"<!-- auto-context-review: {auto_context_review} -->"
-          pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
+          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
 
-          if pat.search(body):
-              body = pat.sub(tag, body)
+          if context_pat.search(body):
+              body = context_pat.sub(context_tag, body)
           else:
-              body = body.rstrip() + "\n" + tag + "\n"
+              body = body.rstrip() + "\n" + context_tag + "\n"
+
+          if merge_pat.search(body):
+              body = merge_pat.sub(merge_tag, body)
+          else:
+              body = body.rstrip() + "\n" + merge_tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
@@ -864,8 +885,8 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}）。" \
-            || echo "WARNING: Root Issue body の auto-context-review タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
 
@@ -882,22 +903,17 @@ jobs:
             echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
           fi
 
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+
           # skip_step helper: SKIP_STEPS に Step 番号が含まれていれば true
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
 
           # ---- APP-ID スコープセクション（複数 APP-ID 対応）----
           if [[ -n "${APP_IDS}" ]]; then
-            APP_ID_SECTION=$(python3 -c "
-import sys, os
-ids_str = os.environ.get('APP_IDS', '')
-ids = [s.strip() for s in ids_str.split(',') if s.strip()]
-id_list = ', '.join('\`' + aid + '\`' for aid in ids)
-print('\n\n## 対象アプリケーション')
-print('- APP-ID: ' + id_list)
-print('- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする')
-print('- \`docs/catalog/app-catalog.md\` を参照し、対象 APP-ID に紐づく項目を特定する')
-print('- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む')
-")
+            APP_ID_SECTION=$(APP_IDS="${APP_IDS}" python3 -c 'import os; ids=[s.strip() for s in os.environ.get("APP_IDS","").split(",") if s.strip()]; id_list=", ".join("`"+aid+"`" for aid in ids); print("\\n\\n## 対象アプリケーション\\n- APP-ID: "+id_list+"\\n- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする\\n- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\\n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む")')
           else
             APP_ID_SECTION=""
           fi
@@ -914,6 +930,10 @@ print('- 共有サービス/エンティティ（複数 APP で利用される�
             STEP_LABELS='["auto-app-dev-microservice","auto-qa"]'
           else
             STEP_LABELS='["auto-app-dev-microservice"]'
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi
 
           # ---- Step Issue 生成 ----

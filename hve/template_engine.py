@@ -18,8 +18,13 @@ from .workflow_registry import WorkflowDef
 # テンプレートディレクトリのベースパス（リポジトリルート相対）
 _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
-# AQKM デフォルト値
-_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# scope/target_files 系ワークフローのデフォルト対象ファイル。
+# ここで指定するパターンは orchestrator 側の glob 展開で評価される。
+# `qa/*.md` は単一階層、`original-docs/*` は直下エントリを既定とする。
+_DEFAULT_TARGET_FILES: Dict[str, str] = {
+    "aqkm": "qa/*.md",
+    "aodi": "original-docs/*",
+}
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
@@ -29,6 +34,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "abd": "Batch Design",
     "abdv": "Batch Dev",
     "aqkm": "QA Knowledge Management",
+    "aodi": "Original Docs Import",
     "adoc": "App Documentation",
 }
 
@@ -40,6 +46,7 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "abd": "ABD",
     "abdv": "ABDV",
     "aqkm": "AQKM",
+    "aodi": "AODI",
     "adoc": "ADOC",
 }
 
@@ -144,7 +151,7 @@ def collect_params(wf: WorkflowDef) -> dict:
             "対象バッチジョブ ID（カンマ区切り）", default="", required=False
         )
 
-    # AQKM 固有パラメータ
+    # AQKM/AODI 固有パラメータ
     if "scope" in wf.params:
         print("\n分類対象スコープを選択してください:")
         print("  1) 全ファイル (all)")
@@ -161,12 +168,13 @@ def collect_params(wf: WorkflowDef) -> dict:
                 print("  ⚠️ 1 または 2 を入力してください。")
 
     if "target_files" in wf.params and params.get("scope") == "specified":
+        default_target_files = _DEFAULT_TARGET_FILES.get(wf.id, "")
         target_files = _prompt(
-            "対象ファイルパス（スペース区切り）", default=_AQKM_DEFAULT_TARGET_FILES, required=False
+            "対象ファイルパス（スペース区切り）", default=default_target_files, required=False
         )
-        params["target_files"] = target_files.strip() if target_files.strip() else _AQKM_DEFAULT_TARGET_FILES
+        params["target_files"] = target_files.strip() if target_files.strip() else default_target_files
     elif "target_files" in wf.params:
-        params["target_files"] = _AQKM_DEFAULT_TARGET_FILES
+        params["target_files"] = _DEFAULT_TARGET_FILES.get(wf.id, "")
 
     if "force_refresh" in wf.params:
         params["force_refresh"] = _prompt_yes_no(
@@ -336,7 +344,7 @@ def _build_job_section(batch_job_id: str) -> str:
 
 
 def _build_target_files_section(target_files: str) -> str:
-    """AQKM テンプレートの ``{aqkm_target_files_section}`` を展開する。"""
+    """AQKM/AODI テンプレートの対象ファイルセクションを展開する。"""
     if not target_files:
         return ""
     files = [f.strip() for f in target_files.split() if f.strip()]
@@ -381,6 +389,15 @@ def render_template(
     )
     body = body.replace(
         "{aqkm_force_refresh}",
+        str(params.get("force_refresh", True)).lower(),
+    )
+    body = body.replace("{aodi_scope}", params.get("scope", "all"))
+    body = body.replace(
+        "{aodi_target_files_section}",
+        _build_target_files_section(params.get("target_files", "")),
+    )
+    body = body.replace(
+        "{aodi_force_refresh}",
         str(params.get("force_refresh", True)).lower(),
     )
 

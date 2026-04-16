@@ -143,6 +143,10 @@ jobs:
             - 修正完了後、修正内容の概要を箇条書きで報告してください。
 
             捏造は絶対に禁止です。
+
+            **重要**: レビュー結果のサマリーの最後（合格判定の後）に、以下のいずれかの HTML コメントマーカーを必ず出力してください（機械的な判定に使用します）:
+            - Critical = 0 の場合: `<!-- review-verdict: PASS -->`
+            - Critical > 0 の場合: `<!-- review-verdict: FAIL -->`
         run: |
           set -euo pipefail
           if gh pr comment "${PR_NUMBER}" \

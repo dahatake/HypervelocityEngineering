@@ -34,7 +34,7 @@ jobs:
           # checksums_hashes_order で SHA256 の列番号を特定してから抽出する
           if curl -fsSL -o "$TMP_DIR/checksums_hashes_order" "$YQ_URL/checksums_hashes_order" 2>/dev/null \
              && [ -s "$TMP_DIR/checksums_hashes_order" ]; then
-            SHA256_LINE=$(grep -n '^SHA256$' "$TMP_DIR/checksums_hashes_order" | cut -d: -f1 | head -1 || true)
+            SHA256_LINE=$(grep -nE '^SHA-?256$' "$TMP_DIR/checksums_hashes_order" | cut -d: -f1 | head -1 || true)
             if [ -n "$SHA256_LINE" ]; then
               SHA256_COL=$(( SHA256_LINE + 1 ))  # +1: 先頭のファイル名列分
               EXPECTED_SUM=$(grep "^yq_linux_amd64[[:space:]]" "$TMP_DIR/checksums" \
