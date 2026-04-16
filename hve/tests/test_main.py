@@ -68,6 +68,10 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.scope)
         self.assertIsNone(args.target_files)
         self.assertIsNone(args.force_refresh)
+        self.assertIsNone(args.target_dirs)
+        self.assertIsNone(args.exclude_patterns)
+        self.assertIsNone(args.doc_purpose)
+        self.assertIsNone(args.max_file_lines)
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
         self.assertIsNone(args.mcp_config)
@@ -200,6 +204,22 @@ class TestParserBasic(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all", "--force-refresh"])
         self.assertTrue(args.force_refresh)
 
+    def test_adoc_target_dirs_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adoc", "--target-dirs", "src/,hve/"])
+        self.assertEqual(args.target_dirs, "src/,hve/")
+
+    def test_adoc_exclude_patterns_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adoc", "--exclude-patterns", "dist/,*.lock"])
+        self.assertEqual(args.exclude_patterns, "dist/,*.lock")
+
+    def test_adoc_doc_purpose_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adoc", "--doc-purpose", "migration"])
+        self.assertEqual(args.doc_purpose, "migration")
+
+    def test_adoc_max_file_lines_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adoc", "--max-file-lines", "1000"])
+        self.assertEqual(args.max_file_lines, 1000)
+
 
 class TestBuildParams(unittest.TestCase):
     """_build_params() のテスト。"""
@@ -322,11 +342,80 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertNotIn("force_refresh", params)
 
+    def test_adoc_params_defaults(self) -> None:
+        args = _parse(["orchestrate", "-w", "adoc"])
+        params = _build_params(args)
+        self.assertEqual(params["target_dirs"], "")
+        self.assertEqual(params["exclude_patterns"], "node_modules/,vendor/,dist/,*.lock,__pycache__/")
+        self.assertEqual(params["doc_purpose"], "all")
+        self.assertEqual(params["max_file_lines"], 500)
+
+    def test_adoc_params_custom_values(self) -> None:
+        args = _parse([
+            "orchestrate", "-w", "adoc",
+            "--target-dirs", "src/,hve/",
+            "--exclude-patterns", "dist/,node_modules/",
+            "--doc-purpose", "refactoring",
+            "--max-file-lines", "300",
+        ])
+        params = _build_params(args)
+        self.assertEqual(params["target_dirs"], "src/,hve/")
+        self.assertEqual(params["exclude_patterns"], "dist/,node_modules/")
+        self.assertEqual(params["doc_purpose"], "refactoring")
+        self.assertEqual(params["max_file_lines"], 300)
+
     def test_model_auto_resolved_in_config(self) -> None:
         """--model Auto が claude-opus-4.6 に解決されることを確認。"""
         args = _parse(["orchestrate", "-w", "aas", "--model", "Auto"])
         config = _build_config(args)
         self.assertEqual(config.model, "claude-opus-4.6")
+
+
+class TestReviewModelCLI(unittest.TestCase):
+    """review/qa モデル CLI の動作を検証する。"""
+
+    def test_review_model_parsed(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--review-model", "claude-opus-4.6"])
+        self.assertEqual(args.review_model, "claude-opus-4.6")
+
+    def test_qa_model_parsed(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--qa-model", "gpt-5.4"])
+        self.assertEqual(args.qa_model, "gpt-5.4")
+
+    def test_review_model_default_none(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas"])
+        self.assertIsNone(args.review_model)
+
+    def test_qa_model_default_none(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas"])
+        self.assertIsNone(args.qa_model)
+
+    def test_review_model_auto_resolved_in_config(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--review-model", "Auto"])
+        config = _build_config(args)
+        self.assertEqual(config.review_model, "claude-opus-4.6")
+
+    def test_review_model_auto_resolved_from_env_when_cli_missing(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["REVIEW_MODEL"] = "Auto"
+            args = _parse(["orchestrate", "-w", "aas"])
+            config = _build_config(args)
+            self.assertEqual(config.review_model, "claude-opus-4.6")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_qa_model_auto_resolved_from_env_when_cli_missing(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["QA_MODEL"] = "Auto"
+            args = _parse(["orchestrate", "-w", "aas"])
+            config = _build_config(args)
+            self.assertEqual(config.qa_model, "claude-opus-4.6")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -404,7 +493,7 @@ class TestMainDryRun(unittest.TestCase):
 
     def test_main_all_valid_workflows_dry_run(self) -> None:
         """全ての有効なワークフローで dry_run が成功することを確認。"""
-        for wf_id in ["aas", "aad", "asdw", "abd", "abdv"]:
+        for wf_id in ["aas", "aad", "asdw", "abd", "abdv", "adoc"]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
                     "orchestrate",
@@ -684,15 +773,16 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             return {"completed": [], "failed": [], "skipped": []}
 
         # prompt_yes_no の回答順序:
-        # 1. QA 自動 → False
-        # 2. Review 自動 → False
-        # 3. Issue 作成 → create_issues
-        # 4. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる)
-        # 5. Code Review Agent → code_review
-        # 6. 自動承認 → auto_approval (code_review=True 時のみ)
-        # 7. ドライラン → False
-        # 8. 実行確認 → True
-        yes_no_answers = [False, False, create_issues]
+        # 1. レビュー/QA サブモデル利用確認 → False
+        # 2. QA 自動 → False
+        # 3. Review 自動 → False
+        # 4. Issue 作成 → create_issues
+        # 5. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる)
+        # 6. Code Review Agent → code_review
+        # 7. 自動承認 → auto_approval (code_review=True 時のみ)
+        # 8. ドライラン → False
+        # 9. 実行確認 → True
+        yes_no_answers = [False, False, False, create_issues]
         if not create_issues:
             yes_no_answers.append(create_pr)
         yes_no_answers.append(code_review)
@@ -810,6 +900,28 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertEqual(cfg.review_timeout_seconds, 7200.0)
 
+    def test_interactive_keeps_review_model_from_env_when_not_selected(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["REVIEW_MODEL"] = "claude-sonnet-4.6"
+            cfg = self._run_interactive_with_inputs(code_review=False)
+            self.assertIsNotNone(cfg)
+            self.assertEqual(cfg.review_model, "claude-sonnet-4.6")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_interactive_keeps_qa_model_from_env_when_not_selected(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["QA_MODEL"] = "gpt-5.4"
+            cfg = self._run_interactive_with_inputs(code_review=False)
+            self.assertIsNotNone(cfg)
+            self.assertEqual(cfg.qa_model, "gpt-5.4")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
 
 class TestInteractiveModeAutoExecModes(unittest.TestCase):
     """インタラクティブモードのクイック全自動/カスタム全自動モードのテスト。"""
@@ -846,14 +958,14 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         if exec_mode == 0:
             # クイック全自動: workflow, model, exec_mode(0) のみ
             con.menu_select.side_effect = [0, 0, 0]
-            # 実行確認のみ
-            con.prompt_yes_no.side_effect = [True]
+            # use_different_models, 実行確認
+            con.prompt_yes_no.side_effect = [False, True]
         else:
             # カスタム全自動: workflow, model, exec_mode(1), verbosity
             con.menu_select.side_effect = [0, 0, 1, 1]
-            # QA自動→False, Review自動→False, Issue→False, PR→False,
+            # use_different_models→False, QA自動→False, Review自動→False, Issue→False, PR→False,
             # Code Review→auto_coding_agent_review, (自動承認→False), ドライラン→False, 実行確認→True
-            yes_no_answers = [False, False, False, False, auto_coding_agent_review]
+            yes_no_answers = [False, False, False, False, False, auto_coding_agent_review]
             if auto_coding_agent_review:
                 yes_no_answers.append(False)  # 自動承認
             yes_no_answers += [False, True]  # dry_run, 実行確認
@@ -934,6 +1046,73 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertTrue(cfg.auto_coding_agent_review)
         self.assertTrue(cfg.auto_coding_agent_review_auto_approval)
+
+
+class TestInteractiveDocPurposeValidation(unittest.TestCase):
+    def _run_with_doc_purpose_inputs(self, *, exec_mode: int, answers: list[str]) -> dict:
+        import unittest.mock as mock
+
+        captured = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured["params"] = params
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(id="1", title="Step1", is_container=False, depends_on=[], params=[])
+        mock_wf = mock.MagicMock(id="adoc", steps=[mock_step], params=["doc_purpose"])
+        mock_display_names = {"adoc": "ADOC"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        con.prompt_multi_select.return_value = []
+
+        if exec_mode == 0:
+            con.menu_select.side_effect = [0, 0, 0]  # workflow, model, exec_mode
+            con.prompt_yes_no.side_effect = [False, True]  # use_different_models, confirmation
+            con.prompt_input.side_effect = answers
+        else:
+            con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(manual), verbosity
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
+            con.prompt_input.side_effect = answers
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+        }):
+            _main_mod._cmd_run_interactive()
+
+        captured["warning_called"] = con.warning.call_count
+        return captured
+
+    def test_doc_purpose_validation_in_quick_auto(self) -> None:
+        captured = self._run_with_doc_purpose_inputs(exec_mode=0, answers=["invalid", "migration"])
+        self.assertEqual(captured["params"]["doc_purpose"], "migration")
+        self.assertGreater(captured["warning_called"], 0)
+
+    def test_doc_purpose_validation_in_manual(self) -> None:
+        captured = self._run_with_doc_purpose_inputs(
+            exec_mode=2,
+            answers=["main", "15", "7200", "wrong", "all", ""],
+        )
+        self.assertEqual(captured["params"]["doc_purpose"], "all")
+        self.assertGreater(captured["warning_called"], 0)
 
 
 class TestInteractiveMode(unittest.TestCase):

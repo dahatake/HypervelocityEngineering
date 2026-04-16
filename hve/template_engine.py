@@ -29,6 +29,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "abd": "Batch Design",
     "abdv": "Batch Dev",
     "aqkm": "QA Knowledge Management",
+    "adoc": "App Documentation",
 }
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
@@ -39,6 +40,7 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "abd": "ABD",
     "abdv": "ABDV",
     "aqkm": "AQKM",
+    "adoc": "ADOC",
 }
 
 
@@ -170,6 +172,48 @@ def collect_params(wf: WorkflowDef) -> dict:
         params["force_refresh"] = _prompt_yes_no(
             "既存の status.md を完全に再生成する？", default=True
         )
+
+    # ADOC 固有パラメータ
+    if "target_dirs" in wf.params:
+        params["target_dirs"] = _prompt(
+            "ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）",
+            default="",
+            required=False,
+        )
+    if "exclude_patterns" in wf.params:
+        params["exclude_patterns"] = _prompt(
+            "除外パターン（カンマ区切り）",
+            default="node_modules/,vendor/,dist/,*.lock,__pycache__/",
+            required=False,
+        )
+    if "doc_purpose" in wf.params:
+        print("\nドキュメントの主目的を選択してください:")
+        print("  1) all")
+        print("  2) onboarding")
+        print("  3) refactoring")
+        print("  4) migration")
+        while True:
+            purpose_input = input("選択 [1]: ").strip() or "1"
+            purpose_map = {
+                "1": "all",
+                "2": "onboarding",
+                "3": "refactoring",
+                "4": "migration",
+            }
+            if purpose_input in purpose_map:
+                params["doc_purpose"] = purpose_map[purpose_input]
+                break
+            print("  ⚠️ 1〜4 を入力してください。")
+    if "max_file_lines" in wf.params:
+        while True:
+            val = _prompt("大規模ファイル分割閾値（行数）", default="500", required=False).strip()
+            if not val:
+                params["max_file_lines"] = 500
+                break
+            if val.isdigit():
+                params["max_file_lines"] = int(val)
+                break
+            print("  ⚠️ 数値を入力してください。")
 
     # ステップ選択
     params["selected_steps"] = _prompt_steps(wf)
@@ -339,6 +383,15 @@ def render_template(
         "{aqkm_force_refresh}",
         str(params.get("force_refresh", True)).lower(),
     )
+
+    # ADOC 固有プレースホルダ
+    body = body.replace("{target_dirs}", params.get("target_dirs", ""))
+    body = body.replace(
+        "{exclude_patterns}",
+        params.get("exclude_patterns", "node_modules/,vendor/,dist/,*.lock,__pycache__/"),
+    )
+    body = body.replace("{doc_purpose}", params.get("doc_purpose", "all"))
+    body = body.replace("{max_file_lines}", str(params.get("max_file_lines", 500)))
 
     # コンテナ固有プレースホルダ (AAD step-7)
     body = body.replace("{s7_subtasks}", "Step.7.1, Step.7.2, Step.7.3")

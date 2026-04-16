@@ -24,6 +24,7 @@ EXPECTED_STEP_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aqkm": 1,
+    "adoc": 23,  # 4 containers + 19 real steps
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
@@ -33,13 +34,14 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "abd": 9,
     "abdv": 7,
     "aqkm": 1,
+    "adoc": 19,
 }
 
 
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -53,14 +55,14 @@ class TestGetWorkflow:
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
     def test_step_count_matches_bash(self, wf_id: str):
         """各ワークフローのステップ数が bash 版と一致すること。"""
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"])
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -233,13 +235,13 @@ class TestGetStep:
 class TestListWorkflows:
     """list_workflows() のテスト。"""
 
-    def test_returns_six(self):
+    def test_list_workflows_returns_seven(self):
         wfs = list_workflows()
-        assert len(wfs) == 6
+        assert len(wfs) == 7
 
     def test_all_ids(self):
         wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "aqkm", "asdw"]
+        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "aqkm", "asdw"]
 
 
 class TestAQKMWorkflow:
@@ -297,6 +299,38 @@ class TestAQKMWorkflow:
         from hve.template_engine import _load_template
         content = _load_template("templates/aqkm/step-1.md")
         assert "knowledge/D{NN}" in content
+
+
+class TestADOCWorkflow:
+    """ADOC ワークフロー固有テスト。"""
+
+    def test_adoc_params(self):
+        wf = get_workflow("adoc")
+        assert wf is not None
+        assert "target_dirs" in wf.params
+        assert "exclude_patterns" in wf.params
+        assert "doc_purpose" in wf.params
+        assert "max_file_lines" in wf.params
+
+    def test_adoc_root_step(self):
+        roots = get_root_steps("adoc")
+        assert len(roots) == 1
+        assert roots[0].id == "1"
+
+    def test_adoc_parallel_step_2(self):
+        nexts = get_next_steps("adoc", completed_step_ids=["1"])
+        next_ids = sorted(s.id for s in nexts)
+        assert next_ids == ["2.1", "2.2", "2.3", "2.4", "2.5"]
+
+    def test_adoc_final_parallel_step_6(self):
+        completed = [
+            "1", "2.1", "2.2", "2.3", "2.4", "2.5",
+            "3.1", "3.2", "3.3", "3.4", "3.5",
+            "4", "5.1", "5.2", "5.3", "5.4",
+        ]
+        nexts = get_next_steps("adoc", completed_step_ids=completed)
+        next_ids = sorted(s.id for s in nexts)
+        assert next_ids == ["6.1", "6.2", "6.3"]
 
 
 class TestStepDefFields:

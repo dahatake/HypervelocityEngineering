@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-6 つのオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AQKM) のステップ DAG
+7 個のオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AQKM/ADOC) のステップ DAG
 定義をデータとして保持する。状態遷移ロジックはデータドリブンに実装する。
 
 依存パターン:
@@ -58,7 +58,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm", "adoc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -297,13 +297,54 @@ AQKM = WorkflowDef(
     ],
 )
 
+# --- ADOC: App Documentation ---
+ADOC = WorkflowDef(
+    id="adoc",
+    name="App Documentation",
+    label_prefix="adoc",
+    state_labels=_make_state_labels("adoc"),
+    params=["target_dirs", "exclude_patterns", "doc_purpose", "max_file_lines"],
+    steps=[
+        # コンテナ
+        StepDef(id="2", title="ファイルサマリー（コンテナ）", custom_agent=None, is_container=True),
+        StepDef(id="3", title="コンポーネント分析（コンテナ）", custom_agent=None, is_container=True),
+        StepDef(id="5", title="アーキテクチャ横断分析（コンテナ）", custom_agent=None, is_container=True),
+        StepDef(id="6", title="目的特化ドキュメント（コンテナ）", custom_agent=None, is_container=True),
+        # Step.1
+        StepDef(id="1", title="ファイルインベントリ", custom_agent="Doc-FileInventory", depends_on=[], body_template_path="templates/adoc/step-1.md"),
+        # Step.2.x — 並列 fork
+        StepDef(id="2.1", title="ファイルサマリー（プロダクションコード）", custom_agent="Doc-FileSummary", depends_on=["1"], body_template_path="templates/adoc/step-2.1.md"),
+        StepDef(id="2.2", title="ファイルサマリー（テストコード）", custom_agent="Doc-TestSummary", depends_on=["1"], body_template_path="templates/adoc/step-2.2.md"),
+        StepDef(id="2.3", title="ファイルサマリー（設定・IaC）", custom_agent="Doc-ConfigSummary", depends_on=["1"], body_template_path="templates/adoc/step-2.3.md"),
+        StepDef(id="2.4", title="ファイルサマリー（CI/CD）", custom_agent="Doc-CICDSummary", depends_on=["1"], body_template_path="templates/adoc/step-2.4.md"),
+        StepDef(id="2.5", title="ファイルサマリー（大規模ファイル分割）", custom_agent="Doc-LargeFileSummary", depends_on=["1"], body_template_path="templates/adoc/step-2.5.md"),
+        # Step.3.x — AND join + 並列 fork
+        StepDef(id="3.1", title="コンポーネント設計書", custom_agent="Doc-ComponentDesign", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.1.md"),
+        StepDef(id="3.2", title="API 仕様書", custom_agent="Doc-APISpec", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.2.md"),
+        StepDef(id="3.3", title="データモデル定義書", custom_agent="Doc-DataModel", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.3.md"),
+        StepDef(id="3.4", title="テスト仕様サマリー", custom_agent="Doc-TestSpecSummary", depends_on=["2.2"], body_template_path="templates/adoc/step-3.4.md"),
+        StepDef(id="3.5", title="技術的負債一覧", custom_agent="Doc-TechDebt", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.5.md"),
+        # Step.4 — AND join
+        StepDef(id="4", title="コンポーネントインデックス", custom_agent="Doc-ComponentIndex", depends_on=["3.1", "3.2", "3.3", "3.4", "3.5"], body_template_path="templates/adoc/step-4.md"),
+        # Step.5.x — 並列 fork
+        StepDef(id="5.1", title="アーキテクチャ概要", custom_agent="Doc-ArchOverview", depends_on=["4"], body_template_path="templates/adoc/step-5.1.md"),
+        StepDef(id="5.2", title="依存関係マップ", custom_agent="Doc-DependencyMap", depends_on=["4"], body_template_path="templates/adoc/step-5.2.md"),
+        StepDef(id="5.3", title="インフラ依存分析", custom_agent="Doc-InfraDeps", depends_on=["4"], body_template_path="templates/adoc/step-5.3.md"),
+        StepDef(id="5.4", title="非機能要件現状分析", custom_agent="Doc-NFRAnalysis", depends_on=["4", "3.4", "3.5"], body_template_path="templates/adoc/step-5.4.md"),
+        # Step.6.x — 並列 fork
+        StepDef(id="6.1", title="オンボーディングガイド", custom_agent="Doc-Onboarding", depends_on=["5.1", "5.2"], body_template_path="templates/adoc/step-6.1.md"),
+        StepDef(id="6.2", title="リファクタリングガイド", custom_agent="Doc-Refactoring", depends_on=["5.2", "5.4", "3.5"], body_template_path="templates/adoc/step-6.2.md"),
+        StepDef(id="6.3", title="移行アセスメント", custom_agent="Doc-Migration", depends_on=["5.1", "5.3", "5.4"], body_template_path="templates/adoc/step-6.3.md"),
+    ],
+)
+
 
 # ---------------------------------------------------------------------------
 # レジストリ
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM]
+    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM, ADOC]
 }
 
 

@@ -83,6 +83,16 @@ _MODEL_AUTO_RESOLVED = "claude-opus-4.6"
 # AQKM デフォルト値
 _AQKM_DEFAULT_SCOPE = "all"
 _AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
+_ADOC_DOC_PURPOSE_CHOICES = ("all", "onboarding", "refactoring", "migration")
+
+
+def _prompt_valid_doc_purpose(con) -> str:
+    """ADOC の doc_purpose を許容値で入力させる。"""
+    while True:
+        val = (con.prompt_input("doc_purpose", default="all", required=False).strip() or "all")
+        if val in _ADOC_DOC_PURPOSE_CHOICES:
+            return val
+        con.warning("doc_purpose は all / onboarding / refactoring / migration のいずれかを指定してください。")
 
 
 def _resolve_model(model: str) -> tuple:
@@ -129,7 +139,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workflow", "-w",
         required=True,
         metavar="WORKFLOW_ID",
-        help="ワークフロー ID: aas / aad / asdw / abd / abdv / aqkm",
+        help=(
+            "ワークフロー ID: "
+            "aas(App Architecture Design) / "
+            "aad(App Design) / "
+            "asdw(App Dev Microservice Azure) / "
+            "abd(Batch Design) / "
+            "abdv(Batch Dev) / "
+            "aqkm(QA Knowledge Management) / "
+            "adoc(App Documentation)"
+        ),
     )
 
     # モデル
@@ -138,6 +157,21 @@ def _build_parser() -> argparse.ArgumentParser:
         default="claude-opus-4.6",
         metavar="MODEL",
         help="使用するモデル名 (デフォルト: claude-opus-4.6)。Auto を指定するとデフォルトモデルが自動選択されます",
+    )
+    orch.add_argument(
+        "--review-model",
+        default=None,
+        metavar="MODEL",
+        help=(
+            "敵対的レビュー（--auto-contents-review）および Code Review Agent"
+            "（--auto-coding-agent-review）で使用するモデル（省略時は --model と同じ）"
+        ),
+    )
+    orch.add_argument(
+        "--qa-model",
+        default=None,
+        metavar="MODEL",
+        help="QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）",
     )
 
     # 並列実行
@@ -363,6 +397,31 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="AQKM: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
     )
+    orch.add_argument(
+        "--target-dirs",
+        default=None,
+        metavar="DIRS",
+        help="ADOC: ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）",
+    )
+    orch.add_argument(
+        "--exclude-patterns",
+        default=None,
+        metavar="PATTERNS",
+        help="ADOC: 除外パターン（カンマ区切り。デフォルト: node_modules/,vendor/,dist/,*.lock,__pycache__/）",
+    )
+    orch.add_argument(
+        "--doc-purpose",
+        choices=["all", "onboarding", "refactoring", "migration"],
+        default=None,
+        help="ADOC: ドキュメントの主目的",
+    )
+    orch.add_argument(
+        "--max-file-lines",
+        type=int,
+        default=None,
+        metavar="N",
+        help="ADOC: 大規模ファイル分割閾値（行数。デフォルト: 500）",
+    )
 
     # repo / token
     orch.add_argument(
@@ -502,6 +561,16 @@ def _build_config(args: argparse.Namespace):
     cfg.model = args.model
     # Auto モデル解決
     cfg.model, _ = _resolve_model(cfg.model)
+    _raw_review_model = getattr(args, "review_model", None)
+    if _raw_review_model:
+        cfg.review_model, _ = _resolve_model(_raw_review_model)
+    elif getattr(cfg, "review_model", None):
+        cfg.review_model, _ = _resolve_model(cfg.review_model)
+    _raw_qa_model = getattr(args, "qa_model", None)
+    if _raw_qa_model:
+        cfg.qa_model, _ = _resolve_model(_raw_qa_model)
+    elif getattr(cfg, "qa_model", None):
+        cfg.qa_model, _ = _resolve_model(cfg.qa_model)
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
     cfg.force_interactive = getattr(args, "force_interactive", False)
@@ -608,6 +677,13 @@ def _build_params(args: argparse.Namespace) -> dict:
         force_refresh = getattr(args, "force_refresh", None)
         if force_refresh is not None:
             params["force_refresh"] = force_refresh
+
+    # ADOC 固有パラメータ
+    if getattr(args, "workflow", None) == "adoc":
+        params["target_dirs"] = getattr(args, "target_dirs", None) or ""
+        params["exclude_patterns"] = getattr(args, "exclude_patterns", None) or "node_modules/,vendor/,dist/,*.lock,__pycache__/"
+        params["doc_purpose"] = getattr(args, "doc_purpose", None) or "all"
+        params["max_file_lines"] = getattr(args, "max_file_lines", None) or 500
 
     # Issue タイトル上書き
     if args.issue_title:
@@ -724,6 +800,25 @@ def _cmd_run_interactive() -> int:
     model_options = [MODEL_AUTO, "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"]
     model_idx = con.menu_select("使用するモデルを選択", model_options)
     model, model_display = _resolve_model(model_options[model_idx])
+    review_model = None
+    review_model_display = None
+    qa_model = None
+    qa_model_display = None
+    use_different_models = con.prompt_yes_no(
+        "レビュー/QA にメインモデルとは別のモデルを使う？", default=False
+    )
+    if use_different_models:
+        _sub_model_options = model_options
+        review_model_idx = con.menu_select("レビュー用モデルを選択", _sub_model_options)
+        review_model, review_model_display = _resolve_model(_sub_model_options[review_model_idx])
+        if review_model == model:
+            review_model = None
+            review_model_display = None
+        qa_model_idx = con.menu_select("QA 用モデルを選択", _sub_model_options)
+        qa_model, qa_model_display = _resolve_model(_sub_model_options[qa_model_idx])
+        if qa_model == model:
+            qa_model = None
+            qa_model_display = None
 
     # ── 実行モード選択 ────────────────────────────────────
     _exec_mode_options = [
@@ -765,7 +860,10 @@ def _cmd_run_interactive() -> int:
         elif wf.params:
             # 非AQKM かつ必須パラメータあり: 入力を求める（クイック全自動でも例外）
             for param_name in wf.params:
-                val = con.prompt_input(f"{param_name}", required=True)
+                if param_name == "doc_purpose":
+                    val = _prompt_valid_doc_purpose(con)
+                else:
+                    val = con.prompt_input(f"{param_name}", required=True)
                 params_extra[param_name] = val
         additional_prompt = None
     else:
@@ -869,7 +967,10 @@ def _cmd_run_interactive() -> int:
             params_extra["force_refresh"] = True
         else:
             for param_name in wf.params:
-                val = con.prompt_input(f"{param_name}", required=True)
+                if param_name == "doc_purpose":
+                    val = _prompt_valid_doc_purpose(con)
+                else:
+                    val = con.prompt_input(f"{param_name}", required=True)
                 params_extra[param_name] = val
 
         # ── 追加プロンプト ────────────────────────────────────
@@ -888,6 +989,8 @@ def _cmd_run_interactive() -> int:
         f"ワークフロー : {s.CYAN}{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}{s.RESET} ({wf.id})",
         f"ステップ     : {step_display}",
         f"モデル       : {model_display}",
+        f"レビューモデル: {review_model_display or '(メインと同じ)'}",
+        f"QA モデル    : {qa_model_display or '(メインと同じ)'}",
         f"ブランチ     : {branch}",
         f"並列数       : {max_parallel}",
         f"出力レベル   : {verbosity_key}",
@@ -932,6 +1035,10 @@ def _cmd_run_interactive() -> int:
     # ── SDKConfig 構築 ────────────────────────────────────
     cfg = SDKConfig.from_env()
     cfg.model = model
+    if review_model is not None:
+        cfg.review_model = review_model
+    if qa_model is not None:
+        cfg.qa_model = qa_model
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
     cfg.force_interactive = force_interactive

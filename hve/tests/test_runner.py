@@ -503,5 +503,26 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
         self.assertTrue(table_calls, "旧形式でもパース成功時は questionnaire_table() が呼ばれるべき")
 
 
+class TestStepRunnerModelSwitchDryRun(unittest.TestCase):
+    """レビュー/QA モデル切替判定のドライラン系テスト。"""
+
+    def test_review_model_different_from_model(self) -> None:
+        cfg = SDKConfig(model="gpt-5.4", review_model="claude-opus-4.6")
+        self.assertNotEqual(cfg.get_review_model(), cfg.model)
+
+    def test_review_model_same_as_model(self) -> None:
+        cfg = SDKConfig(model="gpt-5.4", review_model="gpt-5.4")
+        self.assertEqual(cfg.get_review_model(), cfg.model)
+
+    def test_qa_model_different_from_model(self) -> None:
+        cfg = SDKConfig(model="gpt-5.4", qa_model="claude-opus-4.6")
+        self.assertNotEqual(cfg.get_qa_model(), cfg.model)
+
+    def test_build_sub_session_opts_exists(self) -> None:
+        cfg = SDKConfig(dry_run=True, model="gpt-5.4")
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        self.assertTrue(hasattr(runner, "_build_sub_session_opts"))
+
+
 if __name__ == "__main__":
     unittest.main()

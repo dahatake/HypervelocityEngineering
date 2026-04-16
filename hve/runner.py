@@ -70,6 +70,7 @@ except ImportError:
 _MAX_SCAN_OUTPUT_LENGTH: int = 8000
 _MAX_PLAN_SCAN_LENGTH: int = 4000
 _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
+_MAX_CONTEXT_INJECTION_LENGTH: int = 50_000
 
 
 def _is_review_fail(content: str) -> bool:
@@ -219,7 +220,7 @@ async def _collect_qa_answers(
 class StepRunner:
     """1 ステップを CopilotSession で実行する。
 
-    フロー (1ステップ内、同一セッション):
+    フロー (1ステップ内、メイン + 必要時サブセッション):
     ┌──────────────────────────────────────────────────┐
     │ CopilotSession (同一セッション = コンテキスト保持)   │
     │                                                    │
@@ -262,6 +263,22 @@ class StepRunner:
         self.config = config
         self.console = console
 
+    def _build_sub_session_opts(self, model: str) -> Dict[str, Any]:
+        """レビュー/QA 用の別セッション構築オプションを生成する。
+
+        メインセッションの custom_agent / custom_agents を除外した
+        最小限のオプションセットを返す。MCP servers はツール利用のため引き継ぐ。
+        """
+        from copilot.session import PermissionHandler
+        opts: Dict[str, Any] = {
+            "model": model,
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+        }
+        if self.config.mcp_servers:
+            opts["mcp_servers"] = self.config.mcp_servers
+        return opts
+
     # ------------------------------------------------------------------
     # 公開 API
     # ------------------------------------------------------------------
@@ -299,8 +316,9 @@ class StepRunner:
 
         # --- SDK インポート確認 ---
         try:
-            from copilot import CopilotClient, PermissionHandler  # type: ignore[import]
+            from copilot import CopilotClient  # type: ignore[import]
             from copilot import SubprocessConfig, ExternalServerConfig  # type: ignore[import]
+            from copilot.session import PermissionHandler  # type: ignore[import]
         except ImportError:
             self.console.error(
                 "GitHub Copilot SDK がインストールされていません。\n"
@@ -406,7 +424,8 @@ class StepRunner:
             current_phase += 1
             phase1_start = time.time()
             self.console.step_phase_start(step_id, current_phase, total_phases, "メインタスク")
-            await session.send_and_wait(prompt, timeout=self.config.timeout_seconds)
+            main_response = await session.send_and_wait(prompt, timeout=self.config.timeout_seconds)
+            main_output = _extract_text(main_response)
             self.console.step_phase_end(
                 step_id, current_phase, total_phases, "メインタスク",
                 elapsed=time.time() - phase1_start,
@@ -418,98 +437,127 @@ class StepRunner:
                 phase2_start = time.time()
                 # Phase 2a: QA 質問票生成（QA_PROMPT_V2 で構造化形式）
                 self.console.step_phase_start(step_id, current_phase, total_phases, "QA レビュー")
-                qa_response = await session.send_and_wait(QA_PROMPT_V2, timeout=self.config.timeout_seconds)
-                qa_content = _extract_text(qa_response)
-                if not qa_content:
-                    self.console.warning("QA 質問票の生成に失敗しました（LLM の応答が空）。")
-
-                # Phase 2b: 回答収集（新フロー）
-                # まず QADocument をパースして questions が存在するか確認する
-                parsed_qa_preview = QAMerger.parse_qa_content(qa_content)
-                _parse_succeeded = bool(parsed_qa_preview.questions)
-                if not _parse_succeeded:
-                    # パース失敗フォールバック: 旧フロー（生 Markdown を表示してから入力待ち）
-                    self.console.qa_prompt(qa_content)
-                    user_answers_raw = await _read_stdin_multiline(
-                        prompt_msg=(
-                            f"[Step.{step_id}] QA 回答を入力してください\n"
-                            "  形式: 「番号: 選択肢」を1行1問で入力（例: 1: A）\n"
-                            "  空行で入力終了 / skip または何も入力せず Enter で既定値候補を採用:"
-                        ),
-                        console=self.console,
-                        timeout=self.config.qa_input_timeout_seconds,
-                    )
-                    skip_input = user_answers_raw.strip().lower() in ("", "skip")
-                else:
-                    user_answers_raw, skip_input = await _collect_qa_answers(
-                        self.console, parsed_qa_preview, step_id, self.config
-                    )
-
-                # Phase 2c: QA 回答マージ + qa/ ファイル永続化
-                # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
-                merge_succeeded = False
-                if not _parse_succeeded:
-                    self.console.warning(
-                        "QA 質問票のパースに失敗したため、マージ処理をスキップします。"
-                        " QA_APPLY_PROMPT にフォールバックします。"
-                    )
-                else:
-                    try:
-                        parsed_qa = parsed_qa_preview
-                        if skip_input:
-                            # 既定値候補を全問採用
-                            answers: Dict[int, str] = {}
-                            merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
-                        else:
-                            answers = QAMerger.parse_answers(user_answers_raw)
-                            merged_qa = QAMerger.merge_answers(parsed_qa, answers)
-                        merged_content = QAMerger.render_merged(merged_qa)
-
-                        # Agent にマージ済みファイル保存を指示
-                        # 並列安全性: ファイルパスは run_id + ステップ ID で分離されているため
-                        # 並列ステップ間・再実行間での同一ファイルへの同時書き込みは発生しない。
-                        # run_id は run_step() 冒頭で正規化済みのため _safe_run_id() の再呼び出しは不要。
-                        save_prompt = QA_MERGE_SAVE_PROMPT.format(
-                            merged_content=merged_content,
-                            qa_file_path=f"qa/{self.config.run_id}-{step_id}-qa-merged.md",
+                _qa_model = self.config.get_qa_model()
+                _use_qa_sub_session = (_qa_model != self.config.model)
+                _qa_session = None
+                try:
+                    _effective_qa_session = session
+                    _effective_qa_prompt = QA_PROMPT_V2
+                    if _use_qa_sub_session:
+                        _qa_session = await client.create_session(**self._build_sub_session_opts(_qa_model))
+                        _qa_session.on(self._handle_session_event)
+                        _qa_context = (main_output or "")[:_MAX_CONTEXT_INJECTION_LENGTH]
+                        _effective_qa_prompt = (
+                            "以下は同一ステップのメインタスク出力です。"
+                            "この内容を前提として QA 質問票を作成してください。\n\n"
+                            f"=== メインタスク出力（最大{_MAX_CONTEXT_INJECTION_LENGTH:,}文字） ===\n"
+                            f"{_qa_context}\n"
+                            "=== メインタスク出力ここまで ===\n\n"
+                            f"{QA_PROMPT_V2}"
                         )
-                        save_response = await session.send_and_wait(save_prompt, timeout=self.config.timeout_seconds)
-                        if save_response is None:
-                            self.console.warning(
-                                "マージ済みファイルの保存指示に対する応答がありませんでした。"
-                            )
+                        _effective_qa_session = _qa_session
 
-                        # 統合ドキュメント生成
-                        try:
-                            consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
-                                merged_qa_content=merged_content,
-                            )
-                            consolidate_response = await session.send_and_wait(
-                                consolidate_prompt, timeout=self.config.timeout_seconds
-                            )
-                            if consolidate_response is None:
-                                self.console.warning(
-                                    "統合ドキュメント生成の応答がありませんでした（マージ済みファイルは保存済み）。"
-                                )
-                        except Exception as consolidate_exc:
-                            self.console.warning(
-                                f"統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {consolidate_exc}"
-                            )
+                    qa_response = await _effective_qa_session.send_and_wait(
+                        _effective_qa_prompt, timeout=self.config.timeout_seconds
+                    )
+                    qa_content = _extract_text(qa_response)
+                    if not qa_content:
+                        self.console.warning("QA 質問票の生成に失敗しました（LLM の応答が空）。")
 
-                        merge_succeeded = True
-                    except Exception as merge_exc:
-                        self.console.warning(
-                            f"QA マージ処理に失敗しました。従来の QA_APPLY_PROMPT にフォールバックします: {merge_exc}"
+                    # Phase 2b: 回答収集（新フロー）
+                    # まず QADocument をパースして questions が存在するか確認する
+                    parsed_qa_preview = QAMerger.parse_qa_content(qa_content)
+                    _parse_succeeded = bool(parsed_qa_preview.questions)
+                    if not _parse_succeeded:
+                        # パース失敗フォールバック: 旧フロー（生 Markdown を表示してから入力待ち）
+                        self.console.qa_prompt(qa_content)
+                        user_answers_raw = await _read_stdin_multiline(
+                            prompt_msg=(
+                                f"[Step.{step_id}] QA 回答を入力してください\n"
+                                "  形式: 「番号: 選択肢」を1行1問で入力（例: 1: A）\n"
+                                "  空行で入力終了 / skip または何も入力せず Enter で既定値候補を採用:"
+                            ),
+                            console=self.console,
+                            timeout=self.config.qa_input_timeout_seconds,
                         )
-
-                if not merge_succeeded:
-                    # フォールバック: 既存の QA_APPLY_PROMPT
-                    if skip_input:
-                        fallback_answers = "(既定値候補を採用)"
+                        skip_input = user_answers_raw.strip().lower() in ("", "skip")
                     else:
-                        fallback_answers = user_answers_raw
-                    apply_prompt = QA_APPLY_PROMPT.format(user_answers=fallback_answers)
-                    await session.send_and_wait(apply_prompt, timeout=self.config.timeout_seconds)
+                        user_answers_raw, skip_input = await _collect_qa_answers(
+                            self.console, parsed_qa_preview, step_id, self.config
+                        )
+
+                    # Phase 2c: QA 回答マージ + qa/ ファイル永続化
+                    # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
+                    merge_succeeded = False
+                    if not _parse_succeeded:
+                        self.console.warning(
+                            "QA 質問票のパースに失敗したため、マージ処理をスキップします。"
+                            " QA_APPLY_PROMPT にフォールバックします。"
+                        )
+                    else:
+                        try:
+                            parsed_qa = parsed_qa_preview
+                            if skip_input:
+                                # 既定値候補を全問採用
+                                answers: Dict[int, str] = {}
+                                merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
+                            else:
+                                answers = QAMerger.parse_answers(user_answers_raw)
+                                merged_qa = QAMerger.merge_answers(parsed_qa, answers)
+                            merged_content = QAMerger.render_merged(merged_qa)
+
+                            # Agent にマージ済みファイル保存を指示
+                            # 並列安全性: ファイルパスは run_id + ステップ ID で分離されているため
+                            # 並列ステップ間・再実行間での同一ファイルへの同時書き込みは発生しない。
+                            # run_id は run_step() 冒頭で正規化済みのため _safe_run_id() の再呼び出しは不要。
+                            save_prompt = QA_MERGE_SAVE_PROMPT.format(
+                                merged_content=merged_content,
+                                qa_file_path=f"qa/{self.config.run_id}-{step_id}-qa-merged.md",
+                            )
+                            save_response = await _effective_qa_session.send_and_wait(
+                                save_prompt, timeout=self.config.timeout_seconds
+                            )
+                            if save_response is None:
+                                self.console.warning(
+                                    "マージ済みファイルの保存指示に対する応答がありませんでした。"
+                                )
+
+                            # 統合ドキュメント生成
+                            try:
+                                consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
+                                    merged_qa_content=merged_content,
+                                )
+                                consolidate_response = await _effective_qa_session.send_and_wait(
+                                    consolidate_prompt, timeout=self.config.timeout_seconds
+                                )
+                                if consolidate_response is None:
+                                    self.console.warning(
+                                        "統合ドキュメント生成の応答がありませんでした（マージ済みファイルは保存済み）。"
+                                    )
+                            except Exception as consolidate_exc:
+                                self.console.warning(
+                                    f"統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {consolidate_exc}"
+                                )
+
+                            merge_succeeded = True
+                        except Exception as merge_exc:
+                            self.console.warning(
+                                f"QA マージ処理に失敗しました。従来の QA_APPLY_PROMPT にフォールバックします: {merge_exc}"
+                            )
+
+                    if not merge_succeeded:
+                        # フォールバック: 既存の QA_APPLY_PROMPT
+                        if skip_input:
+                            fallback_answers = "(既定値候補を採用)"
+                        else:
+                            fallback_answers = user_answers_raw
+                        apply_prompt = QA_APPLY_PROMPT.format(user_answers=fallback_answers)
+                        await _effective_qa_session.send_and_wait(
+                            apply_prompt, timeout=self.config.timeout_seconds
+                        )
+                finally:
+                    if _qa_session is not None:
+                        await _qa_session.disconnect()
 
                 self.console.step_phase_end(
                     step_id, current_phase, total_phases, "QA レビュー",
@@ -517,64 +565,88 @@ class StepRunner:
                 )
 
             # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
-            # 同一セッション内で実行する（成果物のコンテキストを保持するため）
             if self.config.auto_contents_review:
                 current_phase += 1
                 phase3_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "敵対的レビュー")
-                # 1回目: 敵対的レビュー実行
-                review_response = await session.send_and_wait(
-                    REVIEW_PROMPT, timeout=self.config.timeout_seconds
-                )
-                review_content = _extract_text(review_response)
-                self.console.review_result(review_content)
+                _review_model = self.config.get_review_model()
+                _use_review_sub_session = (_review_model != self.config.model)
+                _review_session = None
+                try:
+                    _effective_review_session = session
+                    _effective_review_prompt = REVIEW_PROMPT
+                    if _use_review_sub_session:
+                        _review_session = await client.create_session(
+                            **self._build_sub_session_opts(_review_model)
+                        )
+                        _review_session.on(self._handle_session_event)
+                        _review_context = (main_output or "")[:_MAX_CONTEXT_INJECTION_LENGTH]
+                        _effective_review_prompt = (
+                            "以下は同一ステップのメインタスク出力です。"
+                            "この内容を前提としてレビューしてください。\n\n"
+                            f"=== メインタスク出力（最大{_MAX_CONTEXT_INJECTION_LENGTH:,}文字） ===\n"
+                            f"{_review_context}\n"
+                            "=== メインタスク出力ここまで ===\n\n"
+                            f"{REVIEW_PROMPT}"
+                        )
+                        _effective_review_session = _review_session
 
-                # 初回 PASS 判定
-                if not _is_review_fail(review_content):
-                    self.console.status(
-                        "✅ 敵対的レビュー PASS（初回） — 再レビュー不要"
+                    # 1回目: 敵対的レビュー実行
+                    review_response = await _effective_review_session.send_and_wait(
+                        _effective_review_prompt, timeout=self.config.timeout_seconds
                     )
-                    self.console.step_phase_end(
-                        step_id, current_phase, total_phases, "敵対的レビュー",
-                        elapsed=time.time() - phase3_start, result="PASS",
-                    )
-                else:
-                    # 再レビューサイクル（最大2回）
-                    review_passed = False
-                    for cycle in range(1, 3):  # cycle 1, 2
+                    review_content = _extract_text(review_response)
+                    self.console.review_result(review_content)
+
+                    # 初回 PASS 判定
+                    if not _is_review_fail(review_content):
                         self.console.status(
-                            f"❌ 敵対的レビュー FAIL — 再レビューサイクル {cycle}/2 を実行"
+                            "✅ 敵対的レビュー PASS（初回） — 再レビュー不要"
                         )
-                        recheck_prompt = ADVERSARIAL_RECHECK_PROMPT.format(cycle=cycle)
-                        recheck_response = await session.send_and_wait(
-                            recheck_prompt, timeout=self.config.timeout_seconds
-                        )
-                        review_content = _extract_text(recheck_response)
-                        self.console.review_result(review_content)
-
-                        if not _is_review_fail(review_content):
-                            self.console.status(
-                                f"✅ 敵対的レビュー PASS（再レビューサイクル {cycle}/2 後）"
-                            )
-                            self.console.step_phase_end(
-                                step_id, current_phase, total_phases, "敵対的レビュー",
-                                elapsed=time.time() - phase3_start, result="PASS",
-                            )
-                            review_passed = True
-                            break
-
-                    if not review_passed:
                         self.console.step_phase_end(
                             step_id, current_phase, total_phases, "敵対的レビュー",
-                            elapsed=time.time() - phase3_start, result="FAIL",
+                            elapsed=time.time() - phase3_start, result="PASS",
                         )
-                        self.console.status(
-                            "⚠️ 最大再レビューサイクル到達 — Critical が残存しています"
-                        )
-                        # Critical が残存している場合はステップ失敗として扱う
-                        raise RuntimeError(
-                            "Critical issues remain after maximum adversarial review cycles."
-                        )
+                    else:
+                        # 再レビューサイクル（最大2回）
+                        review_passed = False
+                        for cycle in range(1, 3):  # cycle 1, 2
+                            self.console.status(
+                                f"❌ 敵対的レビュー FAIL — 再レビューサイクル {cycle}/2 を実行"
+                            )
+                            recheck_prompt = ADVERSARIAL_RECHECK_PROMPT.format(cycle=cycle)
+                            recheck_response = await _effective_review_session.send_and_wait(
+                                recheck_prompt, timeout=self.config.timeout_seconds
+                            )
+                            review_content = _extract_text(recheck_response)
+                            self.console.review_result(review_content)
+
+                            if not _is_review_fail(review_content):
+                                self.console.status(
+                                    f"✅ 敵対的レビュー PASS（再レビューサイクル {cycle}/2 後）"
+                                )
+                                self.console.step_phase_end(
+                                    step_id, current_phase, total_phases, "敵対的レビュー",
+                                    elapsed=time.time() - phase3_start, result="PASS",
+                                )
+                                review_passed = True
+                                break
+
+                        if not review_passed:
+                            self.console.step_phase_end(
+                                step_id, current_phase, total_phases, "敵対的レビュー",
+                                elapsed=time.time() - phase3_start, result="FAIL",
+                            )
+                            self.console.status(
+                                "⚠️ 最大再レビューサイクル到達 — Critical が残存しています"
+                            )
+                            # Critical が残存している場合はステップ失敗として扱う
+                            raise RuntimeError(
+                                "Critical issues remain after maximum adversarial review cycles."
+                            )
+                finally:
+                    if _review_session is not None:
+                        await _review_session.disconnect()
 
             # Phase 4: 自己改善ループ（auto_self_improve=True かつ skip でない場合）
             if self.config.auto_self_improve and not self.config.self_improve_skip:

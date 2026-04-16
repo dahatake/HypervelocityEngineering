@@ -841,6 +841,60 @@ class TestDetectExistingArtifacts(unittest.TestCase):
         self.assertIn("app_catalog", result)
         self.assertEqual(result["app_catalog"], "docs/catalog/app-catalog.md")
 
+    def test_detects_docs_generated_artifacts(self) -> None:
+        """docs-generated 配下の成果物が検出されることを確認。"""
+        from orchestrator import _detect_existing_artifacts
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = os.path.join(tmpdir, "docs-generated", "guides")
+            os.makedirs(out_dir)
+            out_path = os.path.join(out_dir, "onboarding.md")
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write("# onboarding\n")
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = _detect_existing_artifacts("adoc", {})
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertIn("doc_generated", result)
+        self.assertEqual(result["doc_generated"], ["docs-generated/guides/onboarding.md"])
+
+    def test_does_not_detect_docs_generated_for_non_adoc(self) -> None:
+        """ADOC 以外では docs-generated を検出しないこと。"""
+        from orchestrator import _detect_existing_artifacts
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = os.path.join(tmpdir, "docs-generated", "guides")
+            os.makedirs(out_dir)
+            out_path = os.path.join(out_dir, "onboarding.md")
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write("# onboarding\n")
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                result = _detect_existing_artifacts("aas", {})
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertNotIn("doc_generated", result)
+
+    def test_doc_generated_path_is_normalized(self) -> None:
+        """doc_generated のパスが / 区切りに正規化されること。"""
+        from orchestrator import _detect_existing_artifacts
+        from unittest.mock import patch
+
+        with patch("orchestrator._glob.glob", return_value=[r"docs-generated\guides\onboarding.md"]):
+            result = _detect_existing_artifacts("adoc", {})
+        self.assertEqual(result["doc_generated"], ["docs-generated/guides/onboarding.md"])
+
 
 class TestBuildReuseContext(unittest.TestCase):
     """_build_reuse_context() のテスト。"""

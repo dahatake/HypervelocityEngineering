@@ -145,5 +145,49 @@ class TestSDKConfigResolveToken(unittest.TestCase):
             os.environ.update(env_backup)
 
 
+class TestSDKConfigModelResolution(unittest.TestCase):
+    """レビュー/QA モデル解決の動作を検証する。"""
+
+    def test_review_model_default_is_none(self) -> None:
+        self.assertIsNone(SDKConfig().review_model)
+
+    def test_qa_model_default_is_none(self) -> None:
+        self.assertIsNone(SDKConfig().qa_model)
+
+    def test_get_review_model_fallback(self) -> None:
+        self.assertEqual(SDKConfig(model="gpt-5.4").get_review_model(), "gpt-5.4")
+
+    def test_get_review_model_explicit(self) -> None:
+        cfg = SDKConfig(model="gpt-5.4", review_model="claude-opus-4.6")
+        self.assertEqual(cfg.get_review_model(), "claude-opus-4.6")
+
+    def test_get_qa_model_fallback(self) -> None:
+        self.assertEqual(SDKConfig(model="gpt-5.4").get_qa_model(), "gpt-5.4")
+
+    def test_get_qa_model_explicit(self) -> None:
+        cfg = SDKConfig(model="gpt-5.4", qa_model="claude-opus-4.6")
+        self.assertEqual(cfg.get_qa_model(), "claude-opus-4.6")
+
+    def test_from_env_reads_review_model(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["REVIEW_MODEL"] = "claude-opus-4.6"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.review_model, "claude-opus-4.6")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_reads_qa_model(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["QA_MODEL"] = "gpt-5.4"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.qa_model, "gpt-5.4")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+
 if __name__ == "__main__":
     unittest.main()

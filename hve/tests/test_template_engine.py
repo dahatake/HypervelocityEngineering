@@ -15,6 +15,7 @@ from hve.template_engine import (
     _load_template,
     _TEMPLATES_BASE,
     build_root_issue_body,
+    collect_params,
     render_template,
     resolve_selected_steps,
 )
@@ -214,6 +215,99 @@ class TestRenderTemplate:
             # usecase_id プレースホルダが展開されている
             assert "{usecase_id}" not in body
 
+    def test_adoc_placeholders(self):
+        """ADOC テンプレートの固有プレースホルダが展開されること。"""
+        wf = get_workflow("adoc")
+        body = render_template(
+            "templates/adoc/step-1.md",
+            root_issue_num=60,
+            params={
+                "target_dirs": "src/,hve/",
+                "exclude_patterns": "dist/,node_modules/",
+                "doc_purpose": "all",
+                "max_file_lines": 300,
+            },
+            wf=wf,
+        )
+        assert "{target_dirs}" not in body
+        assert "{exclude_patterns}" not in body
+        assert "{doc_purpose}" not in body
+        assert "{max_file_lines}" not in body
+        assert "`src/,hve/`" in body
+        assert "`dist/,node_modules/`" in body
+        assert "`all`" in body
+        assert "`300` 行" in body
+
+    def test_adoc_doc_purpose_default_all(self):
+        """ADOC doc_purpose のデフォルトが all であること。"""
+        wf = get_workflow("adoc")
+        body = render_template(
+            "templates/adoc/step-1.md",
+            root_issue_num=61,
+            params={},
+            wf=wf,
+        )
+        assert "`all`" in body
+
+
+class TestCollectParams:
+    def test_adoc_collect_params(self):
+        wf = get_workflow("adoc")
+        inputs = iter([
+            "main",                 # branch
+            "src/,hve/",            # target_dirs
+            "dist/,node_modules/",  # exclude_patterns
+            "3",                    # doc_purpose -> refactoring
+            "1000",                 # max_file_lines
+            "",                     # selected_steps = all
+            "n",                    # skip_review
+            "n",                    # skip_qa
+            "",                     # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf)
+        assert params["branch"] == "main"
+        assert params["target_dirs"] == "src/,hve/"
+        assert params["exclude_patterns"] == "dist/,node_modules/"
+        assert params["doc_purpose"] == "refactoring"
+        assert params["max_file_lines"] == 1000
+
+    def test_adoc_collect_params_retries_invalid_doc_purpose(self):
+        wf = get_workflow("adoc")
+        inputs = iter([
+            "main",                # branch
+            "",                    # target_dirs
+            "",                    # exclude_patterns
+            "5",                   # invalid doc_purpose
+            "2",                   # valid doc_purpose -> onboarding
+            "500",                 # max_file_lines
+            "",                    # selected_steps = all
+            "n",                   # skip_review
+            "n",                   # skip_qa
+            "",                    # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf)
+        assert params["doc_purpose"] == "onboarding"
+
+    def test_adoc_collect_params_retries_invalid_max_file_lines(self):
+        wf = get_workflow("adoc")
+        inputs = iter([
+            "main",                # branch
+            "",                    # target_dirs
+            "",                    # exclude_patterns
+            "1",                   # doc_purpose -> all
+            "abc",                 # invalid max_file_lines
+            "300",                 # valid max_file_lines
+            "",                    # selected_steps = all
+            "n",                   # skip_review
+            "n",                   # skip_qa
+            "",                    # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf)
+        assert params["max_file_lines"] == 300
+
 
 # ---------------------------------------------------------------------------
 # resolve_selected_steps
@@ -316,6 +410,11 @@ class TestBuildRootIssueBody:
         })
         assert "<!-- batch-job-ids: JOB-A,JOB-B -->" in body
         assert "バッチジョブ ID: `JOB-A,JOB-B`" in body
+
+    def test_adoc_title_prefix(self):
+        wf = get_workflow("adoc")
+        body = build_root_issue_body(wf, {"branch": "main"})
+        assert "# [ADOC] App Documentation" in body
 
 
 # ---------------------------------------------------------------------------

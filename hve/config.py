@@ -23,6 +23,8 @@ def generate_run_id() -> str:
 class SDKConfig:
     # --- 基本設定 ---
     model: str = "claude-opus-4.6"          # デフォルトモデル
+    review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
+    qa_model: Optional[str] = None          # QA 専用モデル（未指定時は model）
     timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
     base_branch: str = "main"               # ベースブランチ
     cli_path: Optional[str] = None          # Copilot CLI のパス (COPILOT_CLI_PATH)
@@ -125,7 +127,24 @@ class SDKConfig:
             github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
             repo=os.environ.get("REPO", ""),
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
+            review_model=os.environ.get("REVIEW_MODEL") or None,
+            qa_model=os.environ.get("QA_MODEL") or None,
         )
+
+    def get_review_model(self) -> str:
+        """レビュー用モデルを返す。
+
+        敵対的レビュー（auto_contents_review）および
+        Code Review Agent（auto_coding_agent_review）で使用する。
+        """
+        return self.review_model or self.model
+
+    def get_qa_model(self) -> str:
+        """QA 用モデルを返す。
+
+        QA 質問票生成（auto_qa）で使用する。
+        """
+        return self.qa_model or self.model
 
     def resolve_token(self) -> str:
         """有効なトークンを返す。"""

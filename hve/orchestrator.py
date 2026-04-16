@@ -509,6 +509,15 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     if batch_job_specs:
         existing["batch_job_specs"] = batch_job_specs
 
+    # ADOC (docs-generated/) の既存成果物検出
+    if workflow_id == "adoc":
+        doc_gen_files = [
+            p.replace("\\", "/")
+            for p in _glob.glob("docs-generated/**/*.md", recursive=True)
+        ]
+        if doc_gen_files:
+            existing["doc_generated"] = doc_gen_files
+
     return existing
 
 
@@ -750,6 +759,11 @@ async def run_workflow(
         "docs/agent",
         "docs/azure",
         "docs/usecase",
+        "docs-generated",
+        "docs-generated/files",
+        "docs-generated/components",
+        "docs-generated/architecture",
+        "docs-generated/guides",
     ]
     for _dir in _REQUIRED_DIRS:
         os.makedirs(_dir, exist_ok=True)
@@ -1049,8 +1063,9 @@ async def _request_code_review(
 
     # 2. Copilot CLI SDK インポート確認（runner.py と同じパターン）
     try:
-        from copilot import CopilotClient, PermissionHandler  # type: ignore[import]
+        from copilot import CopilotClient  # type: ignore[import]
         from copilot import SubprocessConfig, ExternalServerConfig  # type: ignore[import]
+        from copilot.session import PermissionHandler  # type: ignore[import]
     except ImportError:
         return (
             "GitHub Copilot SDK がインストールされていません。\n"
@@ -1080,10 +1095,12 @@ async def _request_code_review(
     session = None
     try:
         session = await client.create_session(
-            model=config.model,
+            model=config.get_review_model(),
             on_permission_request=PermissionHandler.approve_all,
             streaming=True,
         )
+        if config.get_review_model() != config.model:
+            console.event(f"Code Review Agent モデル: {config.get_review_model()}")
 
         # session.log イベントを Console に転送（CLI ログを表示するため）
         def _review_session_event(event: Any) -> None:
