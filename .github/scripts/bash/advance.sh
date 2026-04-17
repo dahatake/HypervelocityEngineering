@@ -28,6 +28,8 @@ source "${_SCRIPT_DIR}/lib/copilot-assign.sh"
 source "${_SCRIPT_DIR}/lib/issue-parser.sh"
 # shellcheck source=lib/workflow-registry.sh
 source "${_SCRIPT_DIR}/lib/workflow-registry.sh"
+# shellcheck source=lib/auto-close.sh
+source "${_SCRIPT_DIR}/lib/auto-close.sh"
 
 # ---------------------------------------------------------------------------
 # Title parsing — extract workflow ID and step ID
@@ -353,6 +355,7 @@ _mark_container_done() {
     if [[ -n "${container_issue_num}" ]]; then
       add_label "${container_issue_num}" "${done_label}" "${repo}" 2>/dev/null || true
       echo "  コンテナ Step.${container_id} (#${container_issue_num}) に ${done_label} ラベルを付与しました。"
+      auto_close_container_if_done "${container_issue_num}" "${repo}" || true
     fi
   fi
 }
@@ -378,6 +381,7 @@ _mark_workflow_done() {
   local wf_name
   wf_name=$(echo "${wf_json}" | jq -r '.name // ""')
   post_comment "${root_issue}" "## ✅ ワークフロー完了\n\n**${wf_name}** のすべてのステップが完了しました。" "${repo}" 2>/dev/null || true
+  auto_close_root_if_all_done "${root_issue}" "${repo}" || true
 }
 
 # ---------------------------------------------------------------------------

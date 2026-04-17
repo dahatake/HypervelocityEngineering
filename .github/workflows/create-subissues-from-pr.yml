@@ -149,6 +149,7 @@ jobs:
           HAS_CONTEXT_REVIEW="false"
           HAS_QA="false"
           HAS_AUTO_MERGE="false"
+          PARENT_MODEL=""
           if [ -n "$PARENT_ISSUE" ]; then
             _PARENT_ISSUE=$(gh api "/repos/${REPO}/issues/${PARENT_ISSUE}" 2>/dev/null || echo '{}')
             _PARENT_LABELS=$(echo "${_PARENT_ISSUE}" | jq '(.labels // []) | map(.name)' 2>/dev/null || echo "[]")
@@ -157,6 +158,8 @@ jobs:
               "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-context-review' in lbls else 'false')")
             HAS_QA=$(echo "${_PARENT_LABELS}" | python3 -c \
               "import sys,json; lbls=json.load(sys.stdin); print('true' if 'auto-qa' in lbls else 'false')")
+            PARENT_MODEL=$(echo "${_PARENT_LABELS}" | python3 -c \
+              "import sys,json; lbls=json.load(sys.stdin); vals=[x.split('/',1)[1] for x in lbls if isinstance(x,str) and x.startswith('model/')]; print(vals[0] if vals else '')")
             if printf '%s' "${_PARENT_BODY}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
               HAS_AUTO_MERGE="true"
             fi
@@ -206,11 +209,42 @@ jobs:
           }
 
           # ── helper: assign Copilot via GraphQL (ported from auto-software-design.yml) ──
+          extract_model() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+            import sys, re
+            body = sys.stdin.read()
+            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
+            if not m:
+                print("")
+                raise SystemExit(0)
+            val = m.group(1).strip()
+            allowed = {"Auto", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
+            print(val if val in allowed else "")
+            PY
+          }
+
+          resolve_model() {
+            local raw="$1"
+            if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
+              echo "claude-opus-4-7"
+            else
+              echo "${raw}"
+            fi
+          }
+
           assign_copilot() {
             local issue_num="$1"
             local custom_agent="${2:-}"
             local base_branch="${3:-main}"
             local custom_instructions="${4:-}"
+            local model_raw="${5:-}"
+            local selected_model
+            if [[ -z "${model_raw}" || "${model_raw}" == "Auto" ]]; then
+              selected_model="claude-opus-4-7"
+            else
+              selected_model="${model_raw}"
+            fi
 
             echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
             echo "  custom_agent: ${custom_agent}"
@@ -359,7 +393,7 @@ jobs:
               result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
                 -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
                 -f query="
-          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
             addAssigneesToAssignable(input: {
               assignableId: \$assignableId,
               assigneeIds: [\$botId],
@@ -389,6 +423,7 @@ jobs:
                 -f baseRef="${base_branch}" \
                 -f customInstructions="${custom_instructions}" \
                 -f customAgent="${custom_agent}" \
+                -f model="${selected_model}" \
                 2>&1) || true
 
               echo "  GraphQL mutation レスポンス: ${result}"
@@ -592,6 +627,10 @@ jobs:
                 fi
                 label_args="${label_args} --label auto-qa"
               fi
+              if [ -n "$PARENT_MODEL" ]; then
+                gh label create "model/${PARENT_MODEL}" --color "6f42c1" --repo "$REPO" 2>/dev/null || true
+                label_args="${label_args} --label model/${PARENT_MODEL}"
+              fi
 
               echo "  Creating: ${title}"
               issue_json=$(create_issue "$title" "$body_file" "$label_args")
@@ -719,7 +758,7 @@ jobs:
               if [ -z "$deps" ]; then
                 # Root node: assign Copilot immediately
                 if [ -n "$agent" ]; then
-                  if assign_copilot "$issue_num" "$agent" "$FILE_BASE_BRANCH" ""; then  # custom_instructions: unused in this workflow
+                  if assign_copilot "$issue_num" "$agent" "$FILE_BASE_BRANCH" "" "$PARENT_MODEL"; then  # custom_instructions: unused in this workflow
                     assign_result="✅ 即時"
                   else
                     assign_result="⚠️ 失敗"

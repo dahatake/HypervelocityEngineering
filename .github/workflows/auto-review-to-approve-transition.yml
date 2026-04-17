@@ -6,7 +6,7 @@ name: レビュー完了 → auto-approve-ready 自動遷移
 # 判定条件（すべて満たす必要あり）:
 #   1. PR に auto-context-review ラベルが付いている
 #   2. PR に auto-approve-ready ラベルがまだ付いていない
-#   3. PR が draft でない
+#   3. PR が draft でない（job if の pull_request_target 分岐で `&& !github.event.pull_request.draft` を判定。issue_comment 分岐では判定しない）
 #   4. <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在する（レビュー指示済み）
 #   5. レビュー指示後の Copilot コメントの <!-- review-verdict: --> マーカーを確認:
 #      - PASS マーカー発見 → 即完了
@@ -49,6 +49,7 @@ jobs:
     # 事前フィルタ（issue_comment の場合）:
     #   - PR へのコメントである（issue.pull_request が存在する）
     #   - Copilot Bot のコメントである（copilot-swe-agent または Copilot ログインで限定）
+    #   - draft 判定は行わない（issue_comment 経路は draft PR でも遷移判定を継続）
     if: >
       (
         github.event_name == 'pull_request_target'
@@ -91,9 +92,8 @@ jobs:
             rm -f "${pr_api_err}"
             has_context_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-context-review"]) then "true" else "false" end')
             has_approve_ready=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-approve-ready"]) then "true" else "false" end')
-            is_draft=$(echo "${pr_data}" | jq -r '.draft')
-            if [ "${has_context_review}" != "true" ] || [ "${has_approve_ready}" = "true" ] || [ "${is_draft}" = "true" ]; then
-              echo "スキップ条件: auto-context-review=${has_context_review}, auto-approve-ready=${has_approve_ready}, draft=${is_draft}"
+            if [ "${has_context_review}" != "true" ] || [ "${has_approve_ready}" = "true" ]; then
+              echo "スキップ条件: auto-context-review=${has_context_review}, auto-approve-ready=${has_approve_ready}"
               echo "skip=true" >> "${GITHUB_OUTPUT}"
               exit 0
             fi

@@ -9,6 +9,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -23,6 +24,8 @@ _build_params = _main_mod._build_params
 _build_config = _main_mod._build_config
 _load_mcp_config = _main_mod._load_mcp_config
 _validate_auto_coding_agent_review = _main_mod._validate_auto_coding_agent_review
+_resolve_model = _main_mod._resolve_model
+_prompt_valid_aqod_depth = _main_mod._prompt_valid_aqod_depth
 main = _main_mod.main
 
 
@@ -46,9 +49,9 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.workflow, "aas")
 
     def test_defaults(self) -> None:
-        """デフォルト値の確認。"""
+        """argparse で --model 未指定時は None になることを確認。"""
         args = _parse(["orchestrate", "--workflow", "aad"])
-        self.assertEqual(args.model, "claude-opus-4.6")
+        self.assertIsNone(args.model)
         self.assertEqual(args.max_parallel, 15)
         self.assertFalse(args.auto_qa)
         self.assertFalse(args.auto_contents_review)
@@ -65,9 +68,12 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.resource_group)
         self.assertIsNone(args.batch_job_id)
         self.assertIsNone(args.usecase_id)
-        self.assertIsNone(args.scope)
+        self.assertEqual(args.sources, "qa")
         self.assertIsNone(args.target_files)
         self.assertIsNone(args.force_refresh)
+        self.assertIsNone(args.target_scope)
+        self.assertIsNone(args.depth)
+        self.assertIsNone(args.focus_areas)
         self.assertIsNone(args.target_dirs)
         self.assertIsNone(args.exclude_patterns)
         self.assertIsNone(args.doc_purpose)
@@ -184,24 +190,29 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.repo, "owner/repo")
 
     def test_scope_option(self) -> None:
-        """--scope オプションのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all"])
-        self.assertEqual(args.scope, "all")
+        """--sources オプションのテスト。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "qa"])
+        self.assertEqual(args.sources, "qa")
 
-    def test_scope_specified_option(self) -> None:
-        """--scope specified のテスト。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified"])
-        self.assertEqual(args.scope, "specified")
+    def test_scope_both_option(self) -> None:
+        """--sources both のテスト。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "both"])
+        self.assertEqual(args.sources, "both")
+
+    def test_sources_original_docs_option(self) -> None:
+        """--sources original-docs のテスト。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "original-docs"])
+        self.assertEqual(args.sources, "original-docs")
 
     def test_target_files_option(self) -> None:
         """--target-files オプションのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified",
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "both",
                         "--target-files", "qa/file1.md", "qa/file2.md"])
         self.assertEqual(args.target_files, ["qa/file1.md", "qa/file2.md"])
 
     def test_force_refresh_flag(self) -> None:
         """--force-refresh フラグのテスト。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all", "--force-refresh"])
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "qa", "--force-refresh"])
         self.assertTrue(args.force_refresh)
 
     def test_adoc_target_dirs_option(self) -> None:
@@ -219,6 +230,18 @@ class TestParserBasic(unittest.TestCase):
     def test_adoc_max_file_lines_option(self) -> None:
         args = _parse(["orchestrate", "-w", "adoc", "--max-file-lines", "1000"])
         self.assertEqual(args.max_file_lines, 1000)
+
+    def test_aqod_target_scope_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "aqod", "--target-scope", "original-docs/"])
+        self.assertEqual(args.target_scope, "original-docs/")
+
+    def test_aqod_depth_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "aqod", "--depth", "lightweight"])
+        self.assertEqual(args.depth, "lightweight")
+
+    def test_aqod_focus_areas_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "aqod", "--focus-areas", "データ整合性"])
+        self.assertEqual(args.focus_areas, "データ整合性")
 
 
 class TestBuildParams(unittest.TestCase):
@@ -281,63 +304,84 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertEqual(params["steps"], ["1", "2", "3"])
 
-    def test_aqkm_scope_in_params(self) -> None:
-        """AQKM scope がパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all"])
+    def test_akm_scope_in_params(self) -> None:
+        """AKM sources がパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "qa"])
         params = _build_params(args)
-        self.assertEqual(params["scope"], "all")
+        self.assertEqual(params["sources"], "qa")
 
-    def test_aqkm_target_files_in_params(self) -> None:
-        """AQKM target_files がスペース区切り文字列としてパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "specified",
+    def test_akm_target_files_in_params(self) -> None:
+        """AKM target_files がスペース区切り文字列としてパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "both",
                         "--target-files", "qa/f1.md", "qa/f2.md"])
         params = _build_params(args)
         self.assertEqual(params["target_files"], "qa/f1.md qa/f2.md")
 
-    def test_aqkm_force_refresh_in_params(self) -> None:
-        """AQKM force_refresh フラグがパラメータに含まれることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--scope", "all", "--force-refresh"])
+    def test_akm_force_refresh_in_params(self) -> None:
+        """AKM force_refresh フラグがパラメータに含まれることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "qa", "--force-refresh"])
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_aqkm_force_refresh_default_true(self) -> None:
-        """AQKM force_refresh デフォルト値が True であることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm"])
+    def test_akm_force_refresh_default_true(self) -> None:
+        """AKM force_refresh デフォルト値が True であることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm"])
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_aqkm_no_force_refresh_sets_false(self) -> None:
-        """AQKM --no-force-refresh で force_refresh が False になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm", "--no-force-refresh"])
+    def test_akm_no_force_refresh_sets_false(self) -> None:
+        """AKM --no-force-refresh で force_refresh が False になることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm", "--no-force-refresh"])
         params = _build_params(args)
         self.assertFalse(params["force_refresh"])
 
-    def test_aqkm_scope_default_all_when_not_specified(self) -> None:
-        """AQKM scope が未指定時に 'all' になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm"])
+    def test_akm_sources_default_when_not_specified(self) -> None:
+        """AKM sources が未指定時に 'qa' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm"])
         params = _build_params(args)
-        self.assertEqual(params["scope"], "all")
+        self.assertEqual(params["sources"], "qa")
 
-    def test_aqkm_target_files_default_qa_glob_when_not_specified(self) -> None:
-        """AQKM target_files が未指定時に 'qa/*.md' になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aqkm"])
+    def test_akm_target_files_default_when_not_specified(self) -> None:
+        """AKM target_files が未指定時に 'qa/*.md' になることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm"])
         params = _build_params(args)
         self.assertEqual(params["target_files"], "qa/*.md")
 
-    def test_non_aqkm_scope_not_set_when_not_specified(self) -> None:
-        """非 AQKM ワークフローで --scope 未指定時は params に scope が含まれないことを確認。"""
+    def test_akm_target_files_default_original_docs_when_sources_original_docs(self) -> None:
+        """AKM target_files は sources=original-docs で 'original-docs/*' を既定にする。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "original-docs"])
+        params = _build_params(args)
+        self.assertEqual(params["target_files"], "original-docs/*")
+
+    def test_akm_target_files_default_empty_when_sources_both(self) -> None:
+        """AKM target_files は sources=both で未指定（空）を既定にする。"""
+        args = _parse(["orchestrate", "-w", "akm", "--sources", "both"])
+        params = _build_params(args)
+        self.assertEqual(params["target_files"], "")
+
+    def test_akm_target_files_in_params_when_specified(self) -> None:
+        """AKM --target-files 指定時は指定値（スペース区切り）が優先されることを確認。"""
+        args = _parse([
+            "orchestrate", "-w", "akm", "--sources", "both",
+            "--target-files", "original-docs/f1.md", "original-docs/f2.md",
+        ])
+        params = _build_params(args)
+        self.assertEqual(params["target_files"], "original-docs/f1.md original-docs/f2.md")
+
+    def test_non_akm_sources_not_set_when_not_specified(self) -> None:
+        """非 AKM ワークフローで --sources 未指定時は params に sources が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
-        self.assertNotIn("scope", params)
+        self.assertNotIn("sources", params)
 
-    def test_non_aqkm_target_files_not_set_when_not_specified(self) -> None:
-        """非 AQKM ワークフローで --target-files 未指定時は params に target_files が含まれないことを確認。"""
+    def test_non_akm_target_files_not_set_when_not_specified(self) -> None:
+        """非 AKM ワークフローで --target-files 未指定時は params に target_files が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
         self.assertNotIn("target_files", params)
 
-    def test_non_aqkm_force_refresh_not_in_params_when_not_specified(self) -> None:
-        """非 AQKM ワークフローで --force-refresh 未指定時は params に force_refresh が含まれないことを確認。"""
+    def test_non_akm_force_refresh_not_in_params_when_not_specified(self) -> None:
+        """非 AKM ワークフローで --force-refresh 未指定時は params に force_refresh が含まれないことを確認。"""
         args = _parse(["orchestrate", "-w", "aas"])
         params = _build_params(args)
         self.assertNotIn("force_refresh", params)
@@ -364,11 +408,54 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(params["doc_purpose"], "refactoring")
         self.assertEqual(params["max_file_lines"], 300)
 
+    def test_aqod_params_defaults(self) -> None:
+        args = _parse(["orchestrate", "-w", "aqod"])
+        params = _build_params(args)
+        self.assertEqual(params["target_scope"], "original-docs/")
+        self.assertEqual(params["depth"], "standard")
+        self.assertEqual(params["focus_areas"], "")
+
+    def test_aqod_params_custom_values(self) -> None:
+        args = _parse([
+            "orchestrate", "-w", "aqod",
+            "--target-scope", "original-docs/subdir/",
+            "--depth", "lightweight",
+            "--focus-areas", "データ整合性",
+        ])
+        params = _build_params(args)
+        self.assertEqual(params["target_scope"], "original-docs/subdir/")
+        self.assertEqual(params["depth"], "lightweight")
+        self.assertEqual(params["focus_areas"], "データ整合性")
+
+
     def test_model_auto_resolved_in_config(self) -> None:
-        """--model Auto が claude-opus-4.6 に解決されることを確認。"""
+        """--model Auto が claude-opus-4-7 に解決されることを確認。"""
         args = _parse(["orchestrate", "-w", "aas", "--model", "Auto"])
         config = _build_config(args)
+        self.assertEqual(config.model, "claude-opus-4-7")
+
+    def test_model_4_6_still_selectable(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4.6"])
+        config = _build_config(args)
         self.assertEqual(config.model, "claude-opus-4.6")
+
+    def test_env_model_4_6_preserves_old_default(self) -> None:
+        with mock.patch.dict(os.environ, {"MODEL": "claude-opus-4.6"}, clear=False):
+            args = _parse(["orchestrate", "-w", "aas"])
+            config = _build_config(args)
+            self.assertEqual(config.model, "claude-opus-4.6")
+
+    def test_default_model_used_when_cli_and_env_missing(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = _parse(["orchestrate", "-w", "aas"])
+            config = _build_config(args)
+            self.assertEqual(config.model, "claude-opus-4-7")
+
+    def test_cli_explicit_default_model_overrides_env_model(self) -> None:
+        with mock.patch.dict(os.environ, {"MODEL": "claude-opus-4.6"}, clear=False):
+            args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4-7"])
+            config = _build_config(args)
+            self.assertEqual(config.model, "claude-opus-4-7")
 
 
 class TestReviewModelCLI(unittest.TestCase):
@@ -393,7 +480,7 @@ class TestReviewModelCLI(unittest.TestCase):
     def test_review_model_auto_resolved_in_config(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--review-model", "Auto"])
         config = _build_config(args)
-        self.assertEqual(config.review_model, "claude-opus-4.6")
+        self.assertEqual(config.review_model, "claude-opus-4-7")
 
     def test_review_model_auto_resolved_from_env_when_cli_missing(self) -> None:
         env_backup = os.environ.copy()
@@ -401,7 +488,7 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["REVIEW_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.review_model, "claude-opus-4.6")
+            self.assertEqual(config.review_model, "claude-opus-4-7")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -412,10 +499,19 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["QA_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.qa_model, "claude-opus-4.6")
+            self.assertEqual(config.qa_model, "claude-opus-4-7")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
+
+    def test_qa_merge_default_model_is_opus_4_7(self) -> None:
+        args = _parse(["qa-merge", "--qa-file", "qa/sample.md"])
+        self.assertEqual(args.model, "claude-opus-4-7")
+
+    def test_qa_merge_auto_resolved_to_opus_4_7(self) -> None:
+        args = _parse(["qa-merge", "--qa-file", "qa/sample.md", "--model", "Auto"])
+        model, _ = _resolve_model(args.model)
+        self.assertEqual(model, "claude-opus-4-7")
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -503,34 +599,34 @@ class TestMainDryRun(unittest.TestCase):
                 ])
                 self.assertEqual(exit_code, 0, f"{wf_id} の dry_run で終了コードが 0 以外")
 
-    def test_aqkm_scope_specified_without_target_files_returns_0(self) -> None:
-        """aqkm で --scope specified だが --target-files 未指定の場合、デフォルト値 qa/*.md で続行するため終了コードが 0。"""
+    def test_akm_scope_both_without_target_files_returns_0(self) -> None:
+        """akm で --sources both だが --target-files 未指定の場合、デフォルト値 qa/*.md で続行するため終了コードが 0。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqkm",
-            "--scope", "specified",
+            "--workflow", "akm",
+            "--sources", "both",
             "--dry-run",
             "--quiet",
         ])
         self.assertEqual(exit_code, 0)
 
-    def test_aqkm_scope_all_dry_run_returns_0(self) -> None:
-        """aqkm で --scope all（--target-files 不要）の dry_run が成功する。"""
+    def test_akm_scope_all_dry_run_returns_0(self) -> None:
+        """akm で --sources all（--target-files 不要）の dry_run が成功する。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqkm",
-            "--scope", "all",
+            "--workflow", "akm",
+            "--sources", "qa",
             "--dry-run",
             "--quiet",
         ])
         self.assertEqual(exit_code, 0)
 
-    def test_aqkm_scope_specified_with_target_files_dry_run_returns_0(self) -> None:
-        """aqkm で --scope specified + --target-files 指定の dry_run が成功する。"""
+    def test_akm_scope_both_with_target_files_dry_run_returns_0(self) -> None:
+        """akm で --sources both + --target-files 指定の dry_run が成功する。"""
         exit_code = main([
             "orchestrate",
-            "--workflow", "aqkm",
-            "--scope", "specified",
+            "--workflow", "akm",
+            "--sources", "both",
             "--target-files", "qa/file1.md",
             "--dry-run",
             "--quiet",
@@ -1109,10 +1205,30 @@ class TestInteractiveDocPurposeValidation(unittest.TestCase):
     def test_doc_purpose_validation_in_manual(self) -> None:
         captured = self._run_with_doc_purpose_inputs(
             exec_mode=2,
-            answers=["main", "15", "7200", "wrong", "all", ""],
+            answers=["main", "15", "7200", "wrong", "all", "", ""],
         )
         self.assertEqual(captured["params"]["doc_purpose"], "all")
         self.assertGreater(captured["warning_called"], 0)
+
+
+class TestAqodDepthPrompt(unittest.TestCase):
+    """AQOD depth 対話入力のバリデーション。"""
+
+    def test_accepts_valid_depth_lowercased(self) -> None:
+        con = mock.MagicMock()
+        con.prompt_input = mock.MagicMock(side_effect=["LIGHTWEIGHT"])
+        con.warning = mock.MagicMock()
+        depth = _prompt_valid_aqod_depth(con)
+        self.assertEqual(depth, "lightweight")
+        con.warning.assert_not_called()
+
+    def test_reprompts_on_invalid_depth(self) -> None:
+        con = mock.MagicMock()
+        con.prompt_input = mock.MagicMock(side_effect=["invalid", "standard"])
+        con.warning = mock.MagicMock()
+        depth = _prompt_valid_aqod_depth(con)
+        self.assertEqual(depth, "standard")
+        self.assertEqual(con.warning.call_count, 1)
 
 
 class TestInteractiveMode(unittest.TestCase):

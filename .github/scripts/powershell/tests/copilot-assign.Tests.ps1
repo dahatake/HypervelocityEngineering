@@ -34,6 +34,24 @@ Describe 'copilot-assign.ps1' {
             $result | Should -Be $true
         }
 
+        It 'accepts Model parameter with explicit value' {
+            $result = Invoke-CopilotAssign -Repo 'test/repo' -IssueNumber '42' `
+                -Model 'claude-opus-4-7' 6>$null
+            $result | Should -Be $true
+        }
+
+        It 'defaults Model to empty string' {
+            $result = Invoke-CopilotAssign -Repo 'test/repo' -IssueNumber '42' 6>$null
+            $result | Should -Be $true
+        }
+
+        It 'accepts Model with other parameters' {
+            $result = Invoke-CopilotAssign -Repo 'test/repo' -IssueNumber '42' `
+                -CustomAgent 'Arch-DataModeling' -BaseBranch 'develop' `
+                -Model 'claude-opus-4-7' -MaxRetries 2 6>$null
+            $result | Should -Be $true
+        }
+
         It 'defaults BaseBranch to main' {
             # Verify by checking that the function runs without error
             $result = Invoke-CopilotAssign -Repo 'test/repo' -IssueNumber '1' 6>$null

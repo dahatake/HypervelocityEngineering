@@ -7,15 +7,15 @@ name: QA 完了 → auto-context-review 自動遷移
 # QA 完了の判定条件（すべて満たす必要あり）:
 #   1. PR に auto-qa ラベルが付いている
 #   2. PR に auto-context-review ラベルがまだ付いていない
-#   3. PR が draft でない
-#   4. (改修) 紐づく Issue の auto-context-review ラベルを確認し、後続ステップで分岐する
+#   3. 紐づく Issue の auto-context-review ラベルを確認し、後続ステップで分岐する
 #      - ラベルあり → auto-context-review ラベルを PR に付与してレビューへ遷移
 #      - ラベルなし → auto-approve-ready ラベルを PR に直接付与（レビューなしパス）
-#   5. <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在する（QA 指示済み）
-#   6. QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在する（回答投稿済み）
+#   4. <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在する（QA 指示済み）
+#   5. QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在する（回答投稿済み）
 #      ※「質問なし」パターン: user_reply_count == 0 かつ QA 指示後の Bot コメントにチェックボックス（- [ ]）がない場合も QA 完了と判定
-#   7. synchronize イベントで発火している（Copilot がコミットを push した = タスク実行完了）
-#      ※ issue_comment トリガー経由の場合は条件7を省略
+#   6. synchronize イベントで発火している（Copilot がコミットを push した = タスク実行完了）
+#      ※ issue_comment トリガー経由の場合は条件6を省略
+# ※ draft 状態でも動作する（最終的な Ready 化・Merge は別ワークフローで安全に制御）
 #
 # トリガー: pull_request_target: [synchronize], issue_comment: [created]
 #   - synchronize = PR へのコミット push（Copilot がタスク完了後に push する）
@@ -62,7 +62,6 @@ jobs:
     # 事前フィルタ（pull_request_target の場合）:
     #   - PR に auto-qa ラベルが付いている
     #   - PR に auto-context-review ラベルがまだ付いていない
-    #   - PR が draft でない
     # 事前フィルタ（issue_comment の場合）:
     #   - PR へのコメントである（issue.pull_request が存在する）
     #   - Copilot Bot のコメントである（copilot-swe-agent のログインで限定）
@@ -71,7 +70,6 @@ jobs:
         github.event_name == 'pull_request_target'
         && contains(github.event.pull_request.labels.*.name, 'auto-qa')
         && !contains(github.event.pull_request.labels.*.name, 'auto-context-review')
-        && !github.event.pull_request.draft
       )
       || (
         github.event_name == 'issue_comment'
@@ -108,9 +106,8 @@ jobs:
             rm -f "${pr_api_err}"
             has_auto_qa=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-qa"]) then "true" else "false" end')
             has_auto_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-context-review"]) then "true" else "false" end')
-            is_draft=$(echo "${pr_data}" | jq -r '.draft')
-            if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_review}" = "true" ] || [ "${is_draft}" = "true" ]; then
-              echo "スキップ条件: auto-qa=${has_auto_qa}, auto-context-review=${has_auto_review}, draft=${is_draft}"
+            if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_review}" = "true" ]; then
+              echo "スキップ条件: auto-qa=${has_auto_qa}, auto-context-review=${has_auto_review}"
               echo "skip=true" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
@@ -152,7 +149,8 @@ jobs:
           direct_approve="false"
           reason=""
 
-          # 条件 4 (改修): 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
+          # 条件 3: 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
+          # （pull_request_target / issue_comment の両経路で共通して実施）
           # ※ レビューなしの場合でも QA 完了判定は続行し、後続で分岐する
           has_issue_review_label="false"
           has_issue_auto_merge="false"
@@ -183,7 +181,7 @@ jobs:
             --paginate \
             --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
 
-          # 条件 5: <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在するか
+          # 条件 4: <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在するか
           qa_posted_count=$(echo "${pr_comments}" \
             | jq '[.[] | select(.body | startswith("<!-- copilot-auto-qa-posted -->"))] | length')
           echo "QA 指示コメント数: ${qa_posted_count}"
@@ -202,7 +200,7 @@ jobs:
             | jq -r '[.[] | select(.body | startswith("<!-- copilot-auto-qa-posted -->"))] | .[-1].created_at')
           echo "QA 指示日時: ${qa_posted_at}"
 
-          # 条件 6: QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在するか
+          # 条件 5: QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在するか
           # （ユーザーが回答を投稿した証拠）
           user_reply_count=$(echo "${pr_comments}" \
             | jq --arg qa_at "${qa_posted_at}" \
@@ -258,8 +256,9 @@ jobs:
               ] | .[0].created_at')
           echo "ユーザー回答日時: ${user_replied_at}"
 
-          # 条件 7: synchronize イベント（Copilot がコミットを push した）は
-          # ジョブの if 条件（pull_request_target: synchronize）で保証済み。
+          # 条件 6: synchronize イベント（Copilot がコミットを push した）は
+          # pull_request_target 経路ではジョブの if 条件（event_name == pull_request_target）で保証済み。
+          # issue_comment 経路では条件6を適用しない（ヘッダー記載どおり）。
           # ここでは「ユーザー回答後」のコミットかどうかを追加確認する。
           # ※ 「質問なし」分岐（user_reply_count == 0 かつ質問票なし）は上の exit 0 で
           #   先に抜けるため、ここに到達するのはユーザー回答がある場合のみ。

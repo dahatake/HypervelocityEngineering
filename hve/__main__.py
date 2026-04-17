@@ -14,7 +14,7 @@
     # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
-    # 基本実行 (デフォルト: claude-opus-4.6, 並列15, compact, Issue/PR作成なし)
+    # 基本実行 (デフォルト: claude-opus-4-7, 並列15, compact, Issue/PR作成なし)
     python -m hve orchestrate --workflow aad
 
     # QA + Review 有効
@@ -45,15 +45,18 @@
     python -m hve orchestrate --workflow aad \\
       --create-issues --issue-title "Sprint 42: AAD 全ステップ実行"
 
-    # QA Knowledge ドキュメント管理（デフォルト設定: scope=all, target_files=qa/*.md, force_refresh=true）
-    python -m hve orchestrate --workflow aqkm
+    # Knowledge Management（デフォルト設定: sources=qa, target_files=qa/*.md, force_refresh=true）
+    python -m hve orchestrate --workflow akm
 
-    # QA Knowledge ドキュメント管理（指定ファイルのみ）
-    python -m hve orchestrate --workflow aqkm --scope specified \\
-      --target-files qa/AAS-Step1-context-review.md qa/AAD-Step1-2-service-list-context-review.md
+    # original-docs 起点
+    python -m hve orchestrate --workflow akm --sources original-docs
 
-    # QA Knowledge ドキュメント管理（増分更新: force_refresh を無効化）
-    python -m hve orchestrate --workflow aqkm --no-force-refresh
+    # 両方 + custom source dir
+    python -m hve orchestrate --workflow akm --sources both --custom-source-dir docs/specs
+
+    # AQOD（original-docs 横断分析質問票）
+    python -m hve orchestrate --workflow aqod
+    python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth lightweight
 """
 
 from __future__ import annotations
@@ -67,6 +70,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+try:
+    from .config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig
+except ImportError:
+    from config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
+
 
 def _ts() -> str:
     """現在時刻のプレフィックス文字列を返す。"""
@@ -78,12 +86,23 @@ def _ts() -> str:
 # -----------------------------------------------------------------------
 
 MODEL_AUTO = "Auto"
-_MODEL_AUTO_RESOLVED = "claude-opus-4.6"
+_MODEL_AUTO_RESOLVED = DEFAULT_MODEL
 
-# AQKM デフォルト値
-_AQKM_DEFAULT_SCOPE = "all"
-_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# AKM デフォルト値
+_AKM_DEFAULT_SOURCES = "qa"
+_AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+_AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
+_AQOD_DEFAULT_DEPTH = "standard"
 _ADOC_DOC_PURPOSE_CHOICES = ("all", "onboarding", "refactoring", "migration")
+
+
+def _default_akm_target_files(sources: str) -> str:
+    """AKM の sources に応じた target_files 既定値を返す。"""
+    if sources == "original-docs":
+        return "original-docs/*"
+    if sources == "both":
+        return ""
+    return _AKM_DEFAULT_TARGET_FILES
 
 
 def _prompt_valid_doc_purpose(con) -> str:
@@ -93,6 +112,17 @@ def _prompt_valid_doc_purpose(con) -> str:
         if val in _ADOC_DOC_PURPOSE_CHOICES:
             return val
         con.warning("doc_purpose は all / onboarding / refactoring / migration のいずれかを指定してください。")
+
+
+def _prompt_valid_aqod_depth(con) -> str:
+    """AQOD の depth を許容値で入力させる。"""
+    valid_depths = {"standard", "lightweight"}
+    while True:
+        depth_input = con.prompt_input("depth", default=_AQOD_DEFAULT_DEPTH)
+        depth = (depth_input or _AQOD_DEFAULT_DEPTH).strip().lower()
+        if depth in valid_depths:
+            return depth
+        con.warning("depth は standard / lightweight のいずれかを指定してください。")
 
 
 def _resolve_model(model: str) -> tuple:
@@ -146,7 +176,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "asdw(App Dev Microservice Azure) / "
             "abd(Batch Design) / "
             "abdv(Batch Dev) / "
-            "aqkm(QA Knowledge Management) / "
+            "akm(Knowledge Management) / "
+            "aqod(QA Original Docs Review) / "
             "adoc(App Documentation)"
         ),
     )
@@ -154,9 +185,9 @@ def _build_parser() -> argparse.ArgumentParser:
     # モデル
     orch.add_argument(
         "--model", "-m",
-        default="claude-opus-4.6",
+        default=None,
         metavar="MODEL",
-        help="使用するモデル名 (デフォルト: claude-opus-4.6)。Auto を指定するとデフォルトモデルが自動選択されます",
+        help=f"使用するモデル名 (デフォルト: {DEFAULT_MODEL})。Auto を指定するとデフォルトモデルが自動選択されます",
     )
     orch.add_argument(
         "--review-model",
@@ -377,25 +408,50 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ユースケース ID (ASDW 等で使用)",
     )
 
-    # AQKM 固有パラメータ
+    # AKM 固有パラメータ
     orch.add_argument(
-        "--scope",
-        choices=["all", "specified"],
-        default=None,
-        help="AQKM: 分類対象スコープ (省略時: all=全ファイル, specified=指定ファイルのみ)",
+        "--sources",
+        choices=["qa", "original-docs", "both"],
+        default="qa",
+        help="AKM: 取り込みソース (qa / original-docs / both)",
     )
     orch.add_argument(
         "--target-files",
         nargs="+",
         default=None,
         metavar="FILE",
-        help="AQKM: 対象ファイルパス (省略時: qa/*.md)",
+        help="AKM: 対象ファイルパス (省略時: --sources で選択したソース配下の全件)",
     )
     orch.add_argument(
         "--force-refresh",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="AQKM: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
+        help="AKM: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
+    )
+    orch.add_argument(
+        "--custom-source-dir",
+        nargs="+",
+        default=None,
+        metavar="PATH",
+        help="AKM: custom_source_dir 追加入力（複数指定可）",
+    )
+    orch.add_argument(
+        "--target-scope",
+        default=None,
+        metavar="PATH",
+        help="AQOD: チェック対象スコープ（省略時: original-docs/）",
+    )
+    orch.add_argument(
+        "--depth",
+        choices=["standard", "lightweight"],
+        default=None,
+        help="AQOD: 分析の深さ（standard / lightweight）",
+    )
+    orch.add_argument(
+        "--focus-areas",
+        default=None,
+        metavar="TEXT",
+        help="AQOD: 重点観点（任意）",
     )
     orch.add_argument(
         "--target-dirs",
@@ -508,9 +564,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     qa_merge.add_argument(
         "--model", "-m",
-        default="claude-opus-4.6",
+        default=DEFAULT_MODEL,
         metavar="MODEL",
-        help="一貫性検証に使用するモデル（デフォルト: claude-opus-4.6）",
+        help=f"一貫性検証に使用するモデル（デフォルト: {DEFAULT_MODEL}）",
     )
 
     return parser
@@ -550,15 +606,23 @@ def _build_config(args: argparse.Namespace):
         sys.path.insert(0, str(_sdk_dir))
 
     try:
-        from .config import SDKConfig
+        from .config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig
     except ImportError:
-        from config import SDKConfig  # type: ignore[no-redef]
+        from config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
 
     # 環境変数から base 設定を読み込み
     cfg = SDKConfig.from_env()
 
     # CLI 引数で上書き
-    cfg.model = args.model
+    env_model = os.environ.get("MODEL")
+    cli_model = args.model
+    # 優先順位: 明示 CLI > MODEL 環境変数 > 既定値
+    if cli_model is not None:
+        cfg.model = cli_model
+    elif env_model:
+        cfg.model = env_model
+    else:
+        cfg.model = DEFAULT_MODEL
     # Auto モデル解決
     cfg.model, _ = _resolve_model(cfg.model)
     _raw_review_model = getattr(args, "review_model", None)
@@ -660,20 +724,26 @@ def _build_params(args: argparse.Namespace) -> dict:
     if args.usecase_id:
         params["usecase_id"] = args.usecase_id
 
-    # AQKM 固有パラメータ
-    if getattr(args, "workflow", None) == "aqkm":
-        params["scope"] = getattr(args, "scope", None) or _AQKM_DEFAULT_SCOPE
+    # AKM 固有パラメータ
+    if getattr(args, "workflow", None) == "akm":
+        params["sources"] = getattr(args, "sources", None) or _AKM_DEFAULT_SOURCES
         target_files = getattr(args, "target_files", None)
-        params["target_files"] = " ".join(target_files) if target_files else _AQKM_DEFAULT_TARGET_FILES
-        # AQKM では、フラグ未指定(None)の場合はデフォルトで True とする
+        params["target_files"] = " ".join(target_files) if target_files else _default_akm_target_files(params["sources"])
+        custom_source_dir = getattr(args, "custom_source_dir", None)
+        params["custom_source_dir"] = " ".join(custom_source_dir) if custom_source_dir else ""
+        # AKM では、フラグ未指定(None)の場合はデフォルトで True とする
         force_refresh = getattr(args, "force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
+    elif getattr(args, "workflow", None) == "aqod":
+        params["target_scope"] = getattr(args, "target_scope", None) or _AQOD_DEFAULT_TARGET_SCOPE
+        params["depth"] = getattr(args, "depth", None) or _AQOD_DEFAULT_DEPTH
+        params["focus_areas"] = getattr(args, "focus_areas", None) or ""
     else:
-        if getattr(args, "scope", None):
-            params["scope"] = args.scope
         if getattr(args, "target_files", None):
             params["target_files"] = " ".join(args.target_files)
-        # 非 AQKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        if getattr(args, "custom_source_dir", None):
+            params["custom_source_dir"] = " ".join(args.custom_source_dir)
+        # 非 AKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         force_refresh = getattr(args, "force_refresh", None)
         if force_refresh is not None:
             params["force_refresh"] = force_refresh
@@ -778,11 +848,13 @@ def _cmd_run_interactive() -> int:
     wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
     selected_wf = workflows[wf_idx]
     wf = get_workflow(selected_wf.id)
-    is_aqkm = (wf.id == "aqkm")
+    is_akm = (wf.id == "akm")
+    is_aqod = (wf.id == "aqod")
+    is_single_step_workflow = is_akm or is_aqod
 
     # ── ステップ選択 ──────────────────────────────────────
-    # AQKM はステップが 1 つのみのため、自動で全選択
-    if is_aqkm:
+    # AKM はステップが 1 つのみのため、自動で全選択
+    if is_single_step_workflow:
         selected_step_ids = []  # 空 = 全ステップ
     else:
         non_container_steps = [s for s in wf.steps if not s.is_container]
@@ -797,7 +869,7 @@ def _cmd_run_interactive() -> int:
             selected_step_ids = []  # 空 = 全ステップ
 
     # ── モデル選択 ────────────────────────────────────────
-    model_options = [MODEL_AUTO, "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"]
+    model_options = [MODEL_AUTO, *MODEL_CHOICES]
     model_idx = con.menu_select("使用するモデルを選択", model_options)
     model, model_display = _resolve_model(model_options[model_idx])
     review_model = None
@@ -836,7 +908,7 @@ def _cmd_run_interactive() -> int:
     if is_quick_auto:
         # クイック全自動: ステップ5〜7aをデフォルト値で自動設定
         branch = "main"
-        max_parallel = 1 if is_aqkm else 15
+        max_parallel = 1 if is_single_step_workflow else 15
         verbosity_key = "normal"
         verbosity_value = 2  # normal（クイック全自動は長時間実行が前提のため、compact より情報量の多い normal を採用）
         timeout_val = 86400.0  # 24時間
@@ -853,12 +925,16 @@ def _cmd_run_interactive() -> int:
         dry_run = False
         # ワークフロー固有パラメータ
         params_extra: dict = {}
-        if is_aqkm:
-            params_extra["scope"] = _AQKM_DEFAULT_SCOPE
-            params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
+        if is_akm:
+            params_extra["sources"] = _AKM_DEFAULT_SOURCES
+            params_extra["target_files"] = _default_akm_target_files(params_extra["sources"])
             params_extra["force_refresh"] = True
+        elif is_aqod:
+            params_extra["target_scope"] = _AQOD_DEFAULT_TARGET_SCOPE
+            params_extra["depth"] = _AQOD_DEFAULT_DEPTH
+            params_extra["focus_areas"] = ""
         elif wf.params:
-            # 非AQKM かつ必須パラメータあり: 入力を求める（クイック全自動でも例外）
+            # 非AKM かつ必須パラメータあり: 入力を求める（クイック全自動でも例外）
             for param_name in wf.params:
                 if param_name == "doc_purpose":
                     val = _prompt_valid_doc_purpose(con)
@@ -869,8 +945,8 @@ def _cmd_run_interactive() -> int:
     else:
         # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
         branch = con.prompt_input("ベースブランチ", default="main")
-        if is_aqkm:
-            max_parallel = 15
+        if is_single_step_workflow:
+            max_parallel = 1
         else:
             max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
 
@@ -908,7 +984,7 @@ def _cmd_run_interactive() -> int:
             con.warning(f"0 以下のタイムアウト値は無効なため、デフォルトの {_timeout_default} 秒を使用します。")
             timeout_val = _timeout_fallback
 
-        if is_aqkm:
+        if is_single_step_workflow:
             auto_qa = False
             auto_review = False
             qa_answer_mode = None
@@ -960,11 +1036,17 @@ def _cmd_run_interactive() -> int:
 
         # ── ワークフロー固有パラメータ ────────────────────────
         params_extra: dict = {}
-        if is_aqkm:
-            # AQKM の固有パラメータはデフォルト値で自動設定
-            params_extra["scope"] = _AQKM_DEFAULT_SCOPE
-            params_extra["target_files"] = _AQKM_DEFAULT_TARGET_FILES
+        if is_akm:
+            # AKM の固有パラメータはデフォルト値で自動設定
+            params_extra["sources"] = _AKM_DEFAULT_SOURCES
+            params_extra["target_files"] = _default_akm_target_files(params_extra["sources"])
             params_extra["force_refresh"] = True
+        elif is_aqod:
+            params_extra["target_scope"] = con.prompt_input(
+                "target_scope", default=_AQOD_DEFAULT_TARGET_SCOPE
+            )
+            params_extra["depth"] = _prompt_valid_aqod_depth(con)
+            params_extra["focus_areas"] = con.prompt_input("focus_areas", default="")
         else:
             for param_name in wf.params:
                 if param_name == "doc_purpose":

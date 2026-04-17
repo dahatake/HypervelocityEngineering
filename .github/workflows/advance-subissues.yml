@@ -58,11 +58,42 @@ jobs:
 
           # ── assign_copilot() ─────────────────────────────────────────────
           # auto-app-dev-microservice-azure.yml / create-subissues-from-pr.yml と同じパターン
+          extract_model() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+            import sys, re
+            body = sys.stdin.read()
+            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
+            if not m:
+                print("")
+                raise SystemExit(0)
+            val = m.group(1).strip()
+            allowed = {"Auto", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
+            print(val if val in allowed else "")
+            PY
+          }
+
+          resolve_model() {
+            local raw="$1"
+            if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
+              echo "claude-opus-4-7"
+            else
+              echo "${raw}"
+            fi
+          }
+
           assign_copilot() {
             local issue_num="$1"
             local custom_agent="${2:-}"
             local base_branch="${3:-main}"
             local custom_instructions="${4:-}"
+            local model_raw="${5:-}"
+            local selected_model
+            if [[ -z "${model_raw}" || "${model_raw}" == "Auto" ]]; then
+              selected_model="claude-opus-4-7"
+            else
+              selected_model="${model_raw}"
+            fi
 
             echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
             echo "  custom_agent: ${custom_agent}"
@@ -210,7 +241,7 @@ jobs:
               result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
                 -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
                 -f query="
-          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
             addAssigneesToAssignable(input: {
               assignableId: \$assignableId,
               assigneeIds: [\$botId],
@@ -240,6 +271,7 @@ jobs:
                 -f baseRef="${base_branch}" \
                 -f customInstructions="${custom_instructions}" \
                 -f customAgent="${custom_agent}" \
+                -f model="${selected_model}" \
                 2>&1) || true
 
               echo "  GraphQL mutation レスポンス: ${result}"
@@ -655,6 +687,105 @@ jobs:
             echo "この実行では前進させた Sub Issue はありませんでした（依存関係が未解決、または対象なし）。"
           fi
 
+          # ── 親 Issue 自動クローズ判定（auto-merge 有効時のみ）────────────────────
+          has_auto_close_marker() {
+            local issue_num="$1"
+            local page=1
+            while true; do
+              local comments_json
+              comments_json=$(gh api "/repos/${REPO}/issues/${issue_num}/comments?per_page=100&page=${page}" 2>/dev/null || echo '[]')
+              local has_marker
+              has_marker=$(echo "${comments_json}" | python3 -c "import json,sys; \
+try: data=json.load(sys.stdin); data=data if isinstance(data,list) else [] \
+except Exception: data=[]; \
+print('true' if any('<!-- auto-close-done -->' in ((c.get('body') or '') if isinstance(c,dict) else '') for c in data) else 'false')")
+              has_marker="${has_marker:-false}"
+              if [[ "${has_marker}" == "true" ]]; then
+                return 0
+              fi
+              local count
+              count=$(echo "${comments_json}" | python3 -c "import json,sys; \
+try: data=json.load(sys.stdin); print(len(data) if isinstance(data,list) else 0) \
+except Exception: print(0)") || count=0
+              if (( count < 100 )); then
+                break
+              fi
+              page=$((page + 1))
+            done
+            return 1
+          }
+
+          all_sub_issues_closed() {
+            local issue_num="$1"
+            local page=1
+            while true; do
+              local subs_json
+              subs_json=$(gh api "/repos/${REPO}/issues/${issue_num}/sub_issues?per_page=100&page=${page}" 2>/dev/null) || {
+                printf '%s\n' "WARNING: #${issue_num} の sub_issues 取得に失敗しました。安全のため自動クローズをスキップします。" >&2
+                return 1
+              }
+              local all_closed
+              all_closed=$(echo "${subs_json}" | python3 -c "import json,sys; \
+try: data=json.load(sys.stdin); data=data if isinstance(data,list) else [] \
+except Exception: data=[]; \
+print('true' if all(((i.get('state') if isinstance(i,dict) else None) == 'closed') for i in data) else 'false')")
+              all_closed="${all_closed:-false}"
+              if [[ "${all_closed}" != "true" ]]; then
+                return 1
+              fi
+              local count
+              count=$(echo "${subs_json}" | python3 -c "import json,sys; \
+try: data=json.load(sys.stdin); print(len(data) if isinstance(data,list) else 0) \
+except Exception: print(0)") || count=0
+              if (( count < 100 )); then
+                break
+              fi
+              page=$((page + 1))
+            done
+            return 0
+          }
+
+          for PARENT_NUM in "${!PROCESSED_PARENTS[@]}"; do
+            [[ "${PARENT_NUM}" =~ ^[0-9]+$ ]] || continue
+            echo "=== Parent #${PARENT_NUM} 自動クローズ判定 ==="
+
+            PARENT_JSON=$(gh api "/repos/${REPO}/issues/${PARENT_NUM}" 2>/dev/null || echo '{}')
+            PARENT_STATE=$(echo "${PARENT_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
+            if [[ "${PARENT_STATE}" != "open" ]]; then
+              echo "  Parent #${PARENT_NUM} は open ではありません（state=${PARENT_STATE:-unknown}）。スキップ。"
+              continue
+            fi
+
+            AUTO_MERGE_ENABLED=$(echo "${PARENT_JSON}" | python3 -c "import json,re,sys; \
+try: d=json.load(sys.stdin) \
+except Exception: print('false'); sys.exit(0); \
+labels=[l.get('name','') for l in d.get('labels',[]) if isinstance(l,dict)]; \
+body=d.get('body') or ''; \
+print('true' if ('auto-approve-ready' in labels or re.search(r'<!--\\s*auto-merge:\\s*true\\s*-->', body)) else 'false')") || AUTO_MERGE_ENABLED="false"
+            if [[ "${AUTO_MERGE_ENABLED}" != "true" ]]; then
+              echo "  Parent #${PARENT_NUM} は auto-merge 無効のためスキップ。"
+              continue
+            fi
+
+            if has_auto_close_marker "${PARENT_NUM}"; then
+              echo "  Parent #${PARENT_NUM} は auto-close マーカー済みのためスキップ。"
+              continue
+            fi
+
+            if ! all_sub_issues_closed "${PARENT_NUM}"; then
+              echo "  Parent #${PARENT_NUM} は未完了 Sub Issue があるためクローズしません。"
+              continue
+            fi
+
+            PARENT_CLOSE_COMMENT=$(printf '## ✅ Auto Close\n\n全ての Sub Issue が完了したため、この親 Issue を自動クローズします。\n\n<!-- auto-close-done -->')
+            gh issue comment "${PARENT_NUM}" --repo "${REPO}" --body "${PARENT_CLOSE_COMMENT}" >/dev/null 2>&1 || true
+            if gh issue close "${PARENT_NUM}" --repo "${REPO}" --reason completed >/dev/null 2>&1; then
+              echo "  Parent #${PARENT_NUM} を自動クローズしました。"
+            else
+              echo "::warning::Parent #${PARENT_NUM} の自動クローズに失敗しました。"
+            fi
+          done
+
   advance_adoc:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'adoc:done'
     runs-on: ubuntu-latest
@@ -671,11 +802,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          source "${GITHUB_WORKSPACE}/.github/scripts/aqkm-common.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
 
           DONE_ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" || echo '{}')
           DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
           DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+          SELECTED_MODEL_RAW=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); labels=[l.get('name','') for l in d.get('labels',[]) if isinstance(l,dict)]; vals=[x.split('/',1)[1] for x in labels if x.startswith('model/')]; print(vals[0] if vals else '')")
+          SELECTED_MODEL=$(resolve_model "${SELECTED_MODEL_RAW}")
 
           if [[ ! "${DONE_ISSUE_TITLE}" =~ ^\[ADOC\] ]]; then
             echo "[ADOC] Sub Issue 以外は処理しません。"
@@ -870,6 +1003,9 @@ jobs:
               else
                 STEP_LABELS='["auto-app-documentation"]'
               fi
+              if [[ -n "${SELECTED_MODEL}" ]]; then
+                STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+              fi
 
               ALREADY_EXISTS=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
                 | python3 /dev/fd/3 "${STEP_ID}" 3<<'PY'
@@ -897,7 +1033,7 @@ jobs:
               link_sub_issue "${ROOT_ISSUE}" "${NEW_ID}"
               add_label "${NEW_NUM}" "adoc:ready"
               CA=$(extract_custom_agent "${BODY}")
-              if assign_copilot "${NEW_NUM}" "${CA}" "${BRANCH}" ""; then
+              if assign_copilot "${NEW_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
                 add_label "${NEW_NUM}" "adoc:running"
               fi
             done
@@ -905,4 +1041,22 @@ jobs:
 
           if [[ "${ALL_DONE}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "adoc:done"
+
+            AUTO_MERGE=$(echo "${DONE_ISSUE_BODY}" | python3 -c "import re,sys; body=sys.stdin.read(); m=re.search(r'<!--\\s*auto-merge:\\s*(true|false)\\s*-->', body); print(m.group(1) if m else 'false')")
+
+            if [[ "${AUTO_MERGE}" == "true" ]]; then
+              ROOT_STATE=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
+              if [[ "${ROOT_STATE}" == "open" ]]; then
+                if ! HAS_MARKER=$(gh api --paginate "/repos/${REPO}/issues/${ROOT_ISSUE}/comments" 2>/dev/null | \
+                  jq -s 'flatten | any(.[]; (.body // "") | contains("<!-- auto-close-done -->"))' 2>/dev/null); then
+                  echo "WARNING: Root #${ROOT_ISSUE} の auto-close マーカー確認に失敗したため、安全のため自動クローズをスキップします。" >&2
+                else
+                  if [[ "${HAS_MARKER}" != "true" ]]; then
+                    ROOT_CLOSE_COMMENT=$(printf '## ✅ Auto Close\n\n全ての ADOC Sub Issue が完了したため、Root Issue を自動クローズします。\n\n<!-- auto-close-done -->')
+                    gh issue comment "${ROOT_ISSUE}" --repo "${REPO}" --body "${ROOT_CLOSE_COMMENT}" >/dev/null 2>&1 || true
+                  fi
+                  gh issue close "${ROOT_ISSUE}" --repo "${REPO}" --reason completed >/dev/null 2>&1 || true
+                fi
+              fi
+            fi
           fi

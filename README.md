@@ -103,8 +103,10 @@ graph TD
 | MCP Server | GitHub 管理の MCP 設定 | GitHub 管理の MCP 設定 | 対応（`--mcp-config` で任意設定） |
 | Custom Agents | GitHub Issue 経由で選択 | Bootstrap Workflow で自動選択 | SDK の API でステップごとに指定 |
 | 必要な認証 | 不要（Copilot は手動アサイン） | `COPILOT_PAT` | GitHub Copilot CLI 認証（`gh auth login`） |
-| モデルデフォルト | GitHub 管理（変更不可） | GitHub 管理（変更不可） | `claude-opus-4.6` |
+| モデルデフォルト | Issue の「使用するモデル」で選択（既定: Auto=`claude-opus-4-7`） | Issue の「使用するモデル」で選択（既定: Auto=`claude-opus-4-7`） | `claude-opus-4-7` |
 | 課金 | GitHub Actions 分 | GitHub Actions 分 | Copilot ライセンスのみ |
+
+> `MODEL=claude-opus-4.6` を設定すると、SDK 実行時に旧既定へ固定できます（後方互換）。
 
 ### 方法 1: Copilot cloud agent 手動実行
 
@@ -151,7 +153,9 @@ Issue Template から親 Issue を作成すると、Bootstrap Workflow が Sub I
 | **06 — Batch 実装** | [06-App-Dev-Batch-Azure.md](users-guide/06-app-dev-batch-azure.md) | `abdv` |
 | **07 — AI Agent（Quick）** | [07-ai-agent-simple.md](users-guide/07-ai-agent-simple.md) | — |
 | **08 — AI Agent（本格）** | [08-ai-agent.md](users-guide/08-ai-agent.md) | — |
-| **QA Knowledge ドキュメント管理** | [09-QA-Knowledge-Management.md](users-guide/09-qa-knowledge-management.md) | `aqkm` |
+| **QA Knowledge ドキュメント管理** | [km-qa-guide.md](users-guide/km-qa-guide.md) | `aqkm` |
+| **Original Docs Import** | [original-docs-guide.md](users-guide/original-docs-guide.md) | `aodi` |
+| **Source Codeからのドキュメント作成** | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) | `adoc` |
 
 > 01（要求定義）、07（AI Agent Quick）、および `aqkm`（QA Knowledge ドキュメント管理）は手動実行です。それ以外はワークフローによる自動実行が可能です。
 
@@ -170,7 +174,9 @@ Issue Template から親 Issue を作成すると、Bootstrap Workflow が Sub I
 | [workflow-reference.md](users-guide/workflow-reference.md) | ワークフロー一覧・ラベル一覧・Custom Agent 完全一覧 |
 | [prompt-examples.md](users-guide/prompt-examples.md) | 便利なプロンプト例（敵対的レビュー・質問票・エラー対応） |
 | [troubleshooting.md](users-guide/troubleshooting.md) | トラブルシューティング |
-| [09-QA-Knowledge-Management.md](users-guide/09-qa-knowledge-management.md) | QA Knowledge ドキュメント管理: qa/ 質問データから `knowledge/` フォルダーへの D クラス別文書生成・管理・ステータス更新 |
+| [km-qa-guide.md](users-guide/km-qa-guide.md) | QA Knowledge ドキュメント管理: qa/ 質問データから `knowledge/` フォルダーへの D クラス別文書生成・管理・ステータス更新 |
+| [original-docs-guide.md](users-guide/original-docs-guide.md) | Original Docs Import: `original-docs/` から `knowledge/` への取り込み・整合性チェック |
+| [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) | Source Codeからのドキュメント作成: ソースコードからの段階的ドキュメント生成 |
 
 #### 共通セットアップ手順
 
@@ -220,6 +226,9 @@ Issue Template から親 Issue を作成すると、Bootstrap Workflow が Sub I
 │   ├── 06-App-Dev-Batch-Azure.md
 │   ├── 07-ai-agent-simple.md
 │   ├── 08-ai-agent.md
+│   ├── km-qa-guide.md              ← QA Knowledge ドキュメント管理（AQKM）
+│   ├── original-docs-guide.md      ← Original Docs Import（AODI）
+│   ├── sourcecode-documentation.md ← Source Codeからのドキュメント作成（adoc）
 ├── .github/
 │   ├── agents/                     ← Custom Agent 定義ファイル（46 個）
 │   ├── ISSUE_TEMPLATE/             ← ワークフロー起動用 Issue テンプレート

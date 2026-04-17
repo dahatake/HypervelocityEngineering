@@ -18,13 +18,21 @@ from .workflow_registry import WorkflowDef
 # テンプレートディレクトリのベースパス（リポジトリルート相対）
 _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
-# scope/target_files 系ワークフローのデフォルト対象ファイル。
+# target_files 系ワークフローのデフォルト対象ファイル。
 # ここで指定するパターンは orchestrator 側の glob 展開で評価される。
 # `qa/*.md` は単一階層、`original-docs/*` は直下エントリを既定とする。
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
-    "aqkm": "qa/*.md",
-    "aodi": "original-docs/*",
+    "akm": "qa/*.md",
 }
+
+
+def _get_default_akm_target_files(sources: str) -> str:
+    """AKM の sources に応じた target_files 既定値を返す。"""
+    if sources == "original-docs":
+        return "original-docs/*"
+    if sources == "both":
+        return ""
+    return _DEFAULT_TARGET_FILES.get("akm", "")
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
@@ -33,8 +41,8 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "asdw": "App Dev Microservice Azure",
     "abd": "Batch Design",
     "abdv": "Batch Dev",
-    "aqkm": "QA Knowledge Management",
-    "aodi": "Original Docs Import",
+    "akm": "Knowledge Management",
+    "aqod": "QA Original Docs Review",
     "adoc": "App Documentation",
 }
 
@@ -45,8 +53,8 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "asdw": "ASDW",
     "abd": "ABD",
     "abdv": "ABDV",
-    "aqkm": "AQKM",
-    "aodi": "AODI",
+    "akm": "AKM",
+    "aqod": "AQOD",
     "adoc": "ADOC",
 }
 
@@ -151,34 +159,60 @@ def collect_params(wf: WorkflowDef) -> dict:
             "対象バッチジョブ ID（カンマ区切り）", default="", required=False
         )
 
-    # AQKM/AODI 固有パラメータ
-    if "scope" in wf.params:
-        print("\n分類対象スコープを選択してください:")
-        print("  1) 全ファイル (all)")
-        print("  2) 指定ファイルのみ (specified)")
+    # AKM 固有パラメータ
+    if "sources" in wf.params:
+        print("\n取り込みソースを選択してください:")
+        print("  1) qa")
+        print("  2) original-docs")
+        print("  3) both")
         while True:
-            scope_input = input("選択 [1]: ").strip() or "1"
-            if scope_input == "1":
-                params["scope"] = "all"
+            source_input = input("選択 [1]: ").strip() or "1"
+            source_map = {"1": "qa", "2": "original-docs", "3": "both"}
+            if source_input in source_map:
+                params["sources"] = source_map[source_input]
                 break
-            elif scope_input == "2":
-                params["scope"] = "specified"
-                break
-            else:
-                print("  ⚠️ 1 または 2 を入力してください。")
+            print("  ⚠️ 1〜3 を入力してください。")
 
-    if "target_files" in wf.params and params.get("scope") == "specified":
-        default_target_files = _DEFAULT_TARGET_FILES.get(wf.id, "")
+    if "target_files" in wf.params:
+        if wf.id == "akm":
+            default_target_files = _get_default_akm_target_files(params.get("sources", "qa"))
+        else:
+            default_target_files = _DEFAULT_TARGET_FILES.get(wf.id, "")
         target_files = _prompt(
             "対象ファイルパス（スペース区切り）", default=default_target_files, required=False
         )
         params["target_files"] = target_files.strip() if target_files.strip() else default_target_files
-    elif "target_files" in wf.params:
-        params["target_files"] = _DEFAULT_TARGET_FILES.get(wf.id, "")
 
     if "force_refresh" in wf.params:
         params["force_refresh"] = _prompt_yes_no(
             "既存の status.md を完全に再生成する？", default=True
+        )
+    if "custom_source_dir" in wf.params:
+        params["custom_source_dir"] = _prompt(
+            "custom_source_dir（スペース区切り・任意）", default="", required=False
+        )
+
+    # AQOD 固有パラメータ
+    if wf.id == "aqod":
+        params["target_scope"] = _prompt(
+            "対象スコープ（省略時: original-docs/）",
+            default="original-docs/",
+            required=False,
+        )
+        print("\n分析の深さを選択してください:")
+        print("  1) standard")
+        print("  2) lightweight")
+        while True:
+            depth_input = input("選択 [1]: ").strip() or "1"
+            depth_map = {"1": "standard", "2": "lightweight"}
+            if depth_input in depth_map:
+                params["depth"] = depth_map[depth_input]
+                break
+            print("  ⚠️ 1〜2 を入力してください。")
+        params["focus_areas"] = _prompt(
+            "重点観点（任意）",
+            default="",
+            required=False,
         )
 
     # ADOC 固有パラメータ
@@ -344,7 +378,7 @@ def _build_job_section(batch_job_id: str) -> str:
 
 
 def _build_target_files_section(target_files: str) -> str:
-    """AQKM/AODI テンプレートの対象ファイルセクションを展開する。"""
+    """AKM テンプレートの対象ファイルセクションを展開する。"""
     if not target_files:
         return ""
     files = [f.strip() for f in target_files.split() if f.strip()]
@@ -381,25 +415,23 @@ def render_template(
     body = body.replace("{rg_section}", _build_rg_section(params.get("resource_group", "")))
     body = body.replace("{job_section}", _build_job_section(params.get("batch_job_id", "")))
 
-    # AQKM 固有プレースホルダ
-    body = body.replace("{aqkm_scope}", params.get("scope", "all"))
+    # AKM 固有プレースホルダ
+    body = body.replace("{akm_sources}", params.get("sources", "qa"))
+    body = body.replace("{akm_target_files}", params.get("target_files", ""))
     body = body.replace(
-        "{aqkm_target_files_section}",
+        "{akm_target_files_section}",
         _build_target_files_section(params.get("target_files", "")),
     )
     body = body.replace(
-        "{aqkm_force_refresh}",
+        "{akm_force_refresh}",
         str(params.get("force_refresh", True)).lower(),
     )
-    body = body.replace("{aodi_scope}", params.get("scope", "all"))
-    body = body.replace(
-        "{aodi_target_files_section}",
-        _build_target_files_section(params.get("target_files", "")),
-    )
-    body = body.replace(
-        "{aodi_force_refresh}",
-        str(params.get("force_refresh", True)).lower(),
-    )
+    body = body.replace("{akm_custom_source_dir}", params.get("custom_source_dir", ""))
+
+    # AQOD 固有プレースホルダ
+    body = body.replace("{aqod_target_scope}", params.get("target_scope", "original-docs/"))
+    body = body.replace("{aqod_depth}", params.get("depth", "standard"))
+    body = body.replace("{aqod_focus_areas}", params.get("focus_areas", ""))
 
     # ADOC 固有プレースホルダ
     body = body.replace("{target_dirs}", params.get("target_dirs", ""))
@@ -504,10 +536,20 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"ユースケースID: `{params['usecase_id']}`")
     if params.get("batch_job_id"):
         lines.append(f"バッチジョブ ID: `{params['batch_job_id']}`")
-    if params.get("scope"):
-        lines.append(f"スコープ: `{params['scope']}`")
+    if params.get("sources"):
+        lines.append(f"sources: `{params['sources']}`")
+    if params.get("target_files"):
+        lines.append(f"target_files: `{params['target_files']}`")
+    if params.get("custom_source_dir"):
+        lines.append(f"custom_source_dir: `{params['custom_source_dir']}`")
     if params.get("force_refresh"):
         lines.append(f"force_refresh: `{params['force_refresh']}`")
+    if params.get("target_scope"):
+        lines.append(f"target_scope: `{params['target_scope']}`")
+    if params.get("depth"):
+        lines.append(f"depth: `{params['depth']}`")
+    if params.get("focus_areas"):
+        lines.append(f"focus_areas: `{params['focus_areas']}`")
     additional = params.get("additional_comment", "")
     if additional:
         lines.append(f"\n## 追加コメント\n{additional}")

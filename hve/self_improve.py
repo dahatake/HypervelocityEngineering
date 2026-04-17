@@ -15,7 +15,7 @@
     - 全関数に TypedDict ベースの引数・戻り値型を定義
     - scan_codebase は subprocess でツールを実行（LLM 統合評価）
     - ScopedPermissionHandler で操作スコープを制限
-    - work/.self-improve-lock でローカル競合制御
+    - work_dir/.self-improve-lock でローカル競合制御
     - artifacts/learning-NNN.md に学習ログを Skill work-artifacts-layout §4.1 準拠で保存
 """
 
@@ -248,7 +248,7 @@ def scan_codebase(
 
 
 def _acquire_lock(work_dir: Path) -> bool:
-    """work/.self-improve-lock ファイルで排他制御する。
+    """work_dir/.self-improve-lock ファイルで排他制御する。
 
     `os.open()` と `O_CREAT | O_EXCL` を使った原子的ロック取得。
     並行実行時に両方がロックを取得してしまう競合（race）を防ぐ。

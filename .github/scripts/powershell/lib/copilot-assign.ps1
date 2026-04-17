@@ -122,6 +122,8 @@ function Invoke-CopilotAssign {
         Custom instructions text (optional)
     .PARAMETER MaxRetries
         Maximum retry count (default: 3)
+    .PARAMETER Model
+        Copilot model (default: "")
     #>
     [CmdletBinding()]
     param(
@@ -130,7 +132,8 @@ function Invoke-CopilotAssign {
         [string]$CustomAgent = '',
         [string]$BaseBranch = 'main',
         [string]$CustomInstructions = '',
-        [int]$MaxRetries = 3
+        [int]$MaxRetries = 3,
+        [string]$Model = ''
     )
 
     Write-Information "=== Copilot アサイン開始: Issue #$IssueNumber ==="
@@ -272,7 +275,8 @@ mutation(
   $targetRepositoryId: ID!,
   $baseRef: String!,
   $customInstructions: String!,
-  $customAgent: String!
+  $customAgent: String!,
+  $model: String!
 ) {
   addAssigneesToAssignable(input: {
     assignableId: $assignableId,
@@ -282,7 +286,7 @@ mutation(
       baseRef: $baseRef,
       customInstructions: $customInstructions,
       customAgent: $customAgent,
-      model: ""
+      model: $model
     }
   }) {
     assignable {
@@ -306,7 +310,8 @@ mutation(
                 -f "targetRepositoryId=$repoNodeId" `
                 -f "baseRef=$BaseBranch" `
                 -f "customInstructions=$CustomInstructions" `
-                -f "customAgent=$CustomAgent" 2>&1
+                -f "customAgent=$CustomAgent" `
+                -f "model=$Model" 2>&1
 
             if ($LASTEXITCODE -ne 0) {
                 Write-Warning "GraphQL mutation 失敗 (試行 $attempt/$MaxRetries)"

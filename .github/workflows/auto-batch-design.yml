@@ -228,7 +228,7 @@ jobs:
           create_label "abd:blocked"                 "D73A4A" ""
           create_label "auto-context-review"         "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-qa"                     "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
-          create_label "auto-approve-ready"          "0E8A16" "Ready for auto-approve and auto-merge"
+          create_label "auto-approve-ready"          "1D76DB" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
       # 2.5. 即時 abd:initialized 付与（二重実行防止）
@@ -1221,3 +1221,28 @@ jobs:
               echo "未定義の Step: ${STEP_MATCH}。スキップ。"
               ;;
           esac
+          # ── 自動クローズ判定（auto-merge 有効時）──────────────
+          if [[ -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+            # コンテナ Issue の自動クローズ判定
+            _AC_CONTAINER_NUM=""
+            if [[ "${DONE_ISSUE_TITLE}" =~ ^\[ABD\]\ Step\.[0-9]+\.[0-9] ]]; then
+              _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+                | grep -oP '\[ABD\]\s*Step\.\K\d+' | head -1)
+              if [[ -n "${_AC_PARENT_STEP}" ]]; then
+                _AC_CONTAINER_NUM=$(gh api --paginate \
+                  "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                  --jq ".[] | select(.title | test(\"\\\\[ABD\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                  2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+              fi
+            fi
+
+            if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+              echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+              auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+            fi
+
+            echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+            auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+          fi

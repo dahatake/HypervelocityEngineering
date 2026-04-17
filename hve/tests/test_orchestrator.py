@@ -102,7 +102,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "aqkm"]
+        valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod"]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
@@ -971,6 +971,77 @@ class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
         params = _collect_params_non_interactive(wf, cli_args)
         self.assertEqual(params["app_ids"], ["APP-05"])
         self.assertEqual(params["app_id"], "APP-05")
+
+
+class TestCollectParamsNonInteractiveAkmDefaults(unittest.TestCase):
+    """_collect_params_non_interactive() の AKM デフォルト適用テスト。"""
+
+    def _make_wf(self):
+        from unittest.mock import MagicMock
+        wf = MagicMock()
+        wf.id = "akm"
+        return wf
+
+    def test_defaults_applied_when_akm_params_not_specified(self) -> None:
+        """AKM で sources/target_files/force_refresh 未指定時は既定値が適用されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {"branch": "main"}
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertEqual(params["sources"], "qa")
+        self.assertEqual(params["target_files"], "qa/*.md")
+        self.assertTrue(params["force_refresh"])
+
+    def test_sources_value_passthrough(self) -> None:
+        """AKM で sources=qa/original-docs/both がそのまま反映されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        for sources in ["qa", "original-docs", "both"]:
+            with self.subTest(sources=sources):
+                params = _collect_params_non_interactive(wf, {"branch": "main", "sources": sources})
+                self.assertEqual(params["sources"], sources)
+
+    def test_force_refresh_false_overrides_default(self) -> None:
+        """AKM で force_refresh=False が明示された場合は False が優先されることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {"branch": "main", "force_refresh": False}
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertFalse(params["force_refresh"])
+
+
+class TestCollectParamsNonInteractiveAqodDefaults(unittest.TestCase):
+    """_collect_params_non_interactive() の AQOD デフォルト適用テスト。"""
+
+    def _make_wf(self):
+        from unittest.mock import MagicMock
+        wf = MagicMock()
+        wf.id = "aqod"
+        return wf
+
+    def test_defaults_applied_when_aqod_params_not_specified(self) -> None:
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        params = _collect_params_non_interactive(wf, {"branch": "main"})
+        self.assertEqual(params["target_scope"], "original-docs/")
+        self.assertEqual(params["depth"], "standard")
+        self.assertEqual(params["focus_areas"], "")
+
+    def test_custom_values_passthrough(self) -> None:
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        params = _collect_params_non_interactive(
+            wf,
+            {
+                "branch": "main",
+                "target_scope": "original-docs/sub/",
+                "depth": "lightweight",
+                "focus_areas": "冪等性",
+            },
+        )
+        self.assertEqual(params["target_scope"], "original-docs/sub/")
+        self.assertEqual(params["depth"], "lightweight")
+        self.assertEqual(params["focus_areas"], "冪等性")
 
 
 if __name__ == "__main__":

@@ -249,6 +249,26 @@ class TestRenderTemplate:
         )
         assert "`all`" in body
 
+    def test_aqod_placeholders(self):
+        """AQOD テンプレートの固有プレースホルダが展開されること。"""
+        wf = get_workflow("aqod")
+        body = render_template(
+            "templates/aqod/step-1.md",
+            root_issue_num=70,
+            params={
+                "target_scope": "original-docs/",
+                "depth": "lightweight",
+                "focus_areas": "データ整合性",
+            },
+            wf=wf,
+        )
+        assert "{aqod_target_scope}" not in body
+        assert "{aqod_depth}" not in body
+        assert "{aqod_focus_areas}" not in body
+        assert "`original-docs/`" in body
+        assert "`lightweight`" in body
+        assert "`データ整合性`" in body
+
 
 class TestCollectParams:
     def test_adoc_collect_params(self):

@@ -1,0 +1,232 @@
+name: AQOD Orchestrator
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    if: >
+      (
+        github.event.action == 'opened'
+        && contains(github.event.issue.labels.*.name, 'qa-original-docs')
+        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      )
+      || (
+        github.event.action == 'labeled'
+        && github.event.label.name == 'qa-original-docs'
+        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
+      )
+    concurrency:
+      group: aqod-orchestrator-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      LABEL_QA_ORIGINAL_DOCS: qa-original-docs
+
+    steps:
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: "${{ github.event.label.name || '' }}"
+        run: |
+          set -euo pipefail
+
+          ISSUE_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}")
+
+          ISSUE_TITLE=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          ISSUE_LABELS=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          export ISSUE_TITLE
+
+          if [[ "${EVENT_ACTION}" == "labeled" ]] && [[ "${LABEL_NAME}" != "${LABEL_QA_ORIGINAL_DOCS}" ]]; then
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          has_aqod=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          import os
+          trigger_label = os.environ.get('LABEL_QA_ORIGINAL_DOCS', 'qa-original-docs')
+          print('true' if trigger_label in labels else 'false')
+          PY
+          )
+          if [[ "${has_aqod}" != "true" ]]; then
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'aqod:initialized', 'aqod:ready', 'aqod:running', 'aqod:done', 'aqod:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+          if [[ "${has_init}" == "true" ]]; then
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+          create_label() {
+            local name="$1"
+            local color="$2"
+            local desc="$3"
+            curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}" >/dev/null || true
+          }
+          create_label "${LABEL_QA_ORIGINAL_DOCS}" "0E8A16" "run AQOD original docs questionnaire workflow"
+          create_label "aqod:initialized" "C5DEF5" ""
+          create_label "aqod:ready" "0075CA" ""
+          create_label "aqod:running" "E4E669" ""
+          create_label "aqod:done" "0E8A16" ""
+          create_label "aqod:blocked" "D73A4A" ""
+          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa" "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
+
+      - name: 即時 aqod:initialized 付与
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+            -d '{"labels":["aqod:initialized"]}' >/dev/null
+
+      - name: Checkout repository
+        if: steps.gate.outputs.mode == 'initialize'
+        uses: actions/checkout@v4
+
+      - name: Step Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
+
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          PARSED=$(python3 - <<'PYEOF'
+          import os, re, json
+          body = os.environ.get("ISSUE_BODY", "")
+          def section(name):
+              m = re.search(rf"###\s*{re.escape(name)}\s*\n+(.*?)(?=\n###|\Z)", body, re.DOTALL)
+              if not m:
+                  return ""
+              v = m.group(1).strip()
+              return "" if v == "_No response_" else v
+
+          def first_line(name, default=""):
+              text = section(name)
+              if not text:
+                  return default
+              lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+              return lines[0] if lines else default
+
+          target_scope = first_line("対象スコープ", "original-docs/")
+          depth = first_line("分析の深さ", "standard")
+          focus_areas = first_line("重点観点（任意）", "")
+          model = first_line("使用するモデル", "Auto")
+          sec = section("PR完全自動化設定")
+          auto_merge = bool(re.search(r"-\s*\[[xX]\]", sec))
+          print(json.dumps({
+              "target_scope": target_scope or "original-docs/",
+              "depth": depth if depth in ("standard", "lightweight") else "standard",
+              "focus_areas": focus_areas,
+              "model": model or "Auto",
+              "auto_merge": auto_merge
+          }, ensure_ascii=False))
+          PYEOF
+          )
+
+          TARGET_SCOPE=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['target_scope'])")
+          DEPTH=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['depth'])")
+          FOCUS_AREAS=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['focus_areas'])")
+          MODEL=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_merge'] else 'false')")
+          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL AUTO_MERGE
+
+          STEP_TITLE="[AQOD] original-docs 質問票生成"
+          STEP_BODY=$(python3 - <<'PYEOF'
+          from pathlib import Path
+          import os
+          issue_num = os.environ["ISSUE_NUMBER"]
+          target_scope = os.environ["TARGET_SCOPE"]
+          depth = os.environ["DEPTH"]
+          focus_areas = os.environ["FOCUS_AREAS"]
+          model = os.environ["MODEL"]
+          auto_merge = os.environ["AUTO_MERGE"]
+          template = Path(".github/scripts/templates/aqod/step-1.md").read_text(encoding="utf-8")
+          root_ref = "\n".join([
+              f"<!-- root-issue: #{issue_num} -->",
+              "<!-- branch: main -->",
+              "<!-- auto-review: true -->",
+              "<!-- auto-context-review: true -->",
+              "<!-- auto-qa: true -->",
+              "<!-- mode: original-docs-questionnaire -->",
+          ])
+          additional = f"\n\n## 追加コメント\n- model: {model}\n- auto-merge: {auto_merge}"
+          body = (template
+              .replace("{root_ref}", root_ref)
+              .replace("{aqod_target_scope}", target_scope)
+              .replace("{aqod_depth}", depth)
+              .replace("{aqod_focus_areas}", focus_areas)
+              .replace("{additional_section}", additional)
+          )
+          print(body)
+          PYEOF
+          )
+
+          LABELS='["aqod:ready","auto-context-review","auto-qa"]'
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            LABELS='["aqod:ready","auto-context-review","auto-qa","auto-approve-ready"]'
+          fi
+
+          STEP_RESPONSE=$(create_issue "${STEP_TITLE}" "${STEP_BODY}" "${LABELS}")
+          STEP_NUM=$(echo "${STEP_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+          STEP_NODE_ID=$(echo "${STEP_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('node_id',''))")
+
+          if [[ -n "${STEP_NODE_ID}" ]]; then
+            link_sub_issue "${ISSUE_NUMBER}" "${STEP_NODE_ID}" || true
+          fi
+
+          assign_copilot "${STEP_NUM}" "QA-DocConsistency" "main" "mode: original-docs-questionnaire" || true
+          post_comment "${ISSUE_NUMBER}" "✅ AQOD Step Issue を作成しました: #${STEP_NUM}"

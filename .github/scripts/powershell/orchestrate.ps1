@@ -6,12 +6,13 @@
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   .\orchestrate.ps1 -Workflow aad -Branch main -Steps "1.1,1.2" -DryRun
+#   .\orchestrate.ps1 -Workflow aad -Branch main -Steps "1.1,1.2" -Model claude-opus-4-7 -DryRun
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format
 #   GH_TOKEN    — GitHub API token
 #   COPILOT_PAT — Copilot assignment PAT
+#   MODEL       — Copilot model (省略時は空文字 = GitHub 管理既定モデル)
 #   DRY_RUN     — Set to "1" for dry-run mode
 
 [CmdletBinding(SupportsShouldProcess)]
@@ -30,6 +31,7 @@ param(
     [switch]$SkipReview,
     [switch]$SkipQa,
     [string]$Repo = '',
+    [string]$Model = '',
     [switch]$DryRun,
     [switch]$Help
 )
@@ -46,6 +48,7 @@ $ScriptDir = $PSScriptRoot
 
 if ($DryRun) { $env:DRY_RUN = '1' }
 if (-not $Repo) { $Repo = $env:REPO }
+if (-not $Model) { $Model = $env:MODEL }
 
 # Templates base path: .github/scripts/templates/
 $TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
@@ -551,7 +554,7 @@ foreach ($cand in $candidates) {
     }
 
     try {
-        $null = Invoke-CopilotAssign -Repo $Repo -IssueNumber $candNum -CustomAgent $candAgent -BaseBranch $Branch
+        $null = Invoke-CopilotAssign -Repo $Repo -IssueNumber $candNum -CustomAgent $candAgent -BaseBranch $Branch -Model $Model
         Write-Information "  ✅ Step.$candId にアサイン成功"
         $runningLabel = $wf.state_labels.running
         if ($runningLabel) {

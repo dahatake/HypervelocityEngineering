@@ -102,7 +102,7 @@ _has_open_pr() {
 # Public API
 # ---------------------------------------------------------------------------
 
-# assign_copilot REPO ISSUE_NUMBER [CUSTOM_AGENT] [BASE_BRANCH] [CUSTOM_INSTRUCTIONS] [MAX_RETRIES]
+# assign_copilot REPO ISSUE_NUMBER [CUSTOM_AGENT] [BASE_BRANCH] [CUSTOM_INSTRUCTIONS] [MAX_RETRIES] [MODEL]
 #
 # 3-stage dispatch for Copilot assignment:
 #   1. `copilot assign` (future: standalone copilot CLI with assign subcommand)
@@ -116,6 +116,7 @@ _has_open_pr() {
 #   BASE_BRANCH         — Base branch for Copilot (default: "main")
 #   CUSTOM_INSTRUCTIONS — Custom instructions text (optional)
 #   MAX_RETRIES         — Maximum retry count (default: 3)
+#   MODEL               — Copilot model (default: "")
 #
 # Returns:
 #   0 on success (or already assigned), 1 on failure
@@ -126,6 +127,7 @@ assign_copilot() {
   local base_branch="${4:-main}"
   local custom_instructions="${5:-}"
   local max_retries="${6:-3}"
+  local model="${7:-}"
 
   echo "=== Copilot アサイン開始: Issue #${issue_number} ==="
   echo "  custom_agent: ${custom_agent}"
@@ -250,7 +252,8 @@ mutation(
   $targetRepositoryId: ID!,
   $baseRef: String!,
   $customInstructions: String!,
-  $customAgent: String!
+  $customAgent: String!,
+  $model: String!
 ) {
   addAssigneesToAssignable(input: {
     assignableId: $assignableId,
@@ -260,7 +263,7 @@ mutation(
       baseRef: $baseRef,
       customInstructions: $customInstructions,
       customAgent: $customAgent,
-      model: ""
+      model: $model
     }
   }) {
     assignable {
@@ -279,7 +282,8 @@ mutation(
       -f targetRepositoryId="${repo_node_id}" \
       -f baseRef="${base_branch}" \
       -f customInstructions="${custom_instructions}" \
-      -f customAgent="${custom_agent:-}" 2>&1) || {
+      -f customAgent="${custom_agent:-}" \
+      -f model="${model}" 2>&1) || {
       echo "WARNING: GraphQL mutation 失敗 (試行 ${attempt}/${max_retries})" >&2
       if ((attempt < max_retries)); then sleep "${wait}"; wait=$((wait * 2)); fi
       continue

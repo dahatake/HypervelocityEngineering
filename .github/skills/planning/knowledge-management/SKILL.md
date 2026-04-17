@@ -60,7 +60,7 @@ metadata:
 |-----------|------|----------|-------------|
 | `original-docs/` | ユーザー提供の原本（テキスト形式: `.md` / `.txt` / `.csv`） | 原本そのもの | ユーザー手動 |
 | `qa/` | Copilot が生成した質問票・チェックリスト | QA プロセスの証跡 | 各 Agent（task-questionnaire 経由） |
-| `knowledge/` | qa/ + original-docs/ 由来の構造化ドキュメント（D01〜D21） | セッション間の参照ハブ | QA-KnowledgeManager / QA-OriginalDocsImporter |
+| `knowledge/` | qa/ + original-docs/ 由来の構造化ドキュメント（D01〜D21） | セッション間の参照ハブ | KnowledgeManager / KnowledgeManager |
 | `docs/catalog/` | 確定済みの正式仕様（app-catalog, use-case-catalog 等） | アプリ仕様・アーキテクチャ仕様の正本 | Arch-* Agent 群 |
 
 #### SoT 優先順位（矛盾時の解決ルール）

@@ -1,19 +1,20 @@
 name: Copilot PR 質問票作成指示
 
-# auto-qa ラベルが PR に付与されており、かつ PR が ready（非 draft）状態の場合に、
+# auto-qa ラベルが PR に付与されている場合に、
 # 自動的に質問票作成指示コメントを PR に投稿する。
+# （draft PR でも動作する。最終的な Approve/Merge は Ready 化後に別ワークフローで実施）
 # （Copilot が依頼内容を分析し、目的達成に必要な確認事項を分類・重要度判定した
 #  優先順位付き質問票を作成して提示する。各質問は選択式で、既定値候補・理由・
 #  未回答時の影響を含む）
 #
 # トリガー条件:
-#   - labeled: PR にラベルが付与された時（ジョブ if で auto-qa + !draft をチェック）
-#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベル + !draft をチェック）
+#   - labeled: PR にラベルが付与された時（ジョブ if で auto-qa をチェック）
+#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベルをチェック）
 #   → どちらの操作順序でも動作する（ラベル→ready / ready→ラベル）
+#   → draft PR でも labeled イベントで動作する
 #
 # ジョブ実行条件:
 #   - PR に auto-qa ラベルが付与されていること
-#   - PR が draft でないこと（ready 状態）
 #   - すべてを満たす場合のみジョブが実行される
 #
 # opt-out チェック（ステップレベル）:
@@ -48,7 +49,6 @@ jobs:
   auto-qa:
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-qa')
-      && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}

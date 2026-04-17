@@ -280,7 +280,7 @@ class TestRecordLearning(unittest.TestCase):
 
 
 class TestLockControl(unittest.TestCase):
-    """work/.self-improve-lock の排他制御をテスト。"""
+    """work_dir/.self-improve-lock の排他制御をテスト。"""
 
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()

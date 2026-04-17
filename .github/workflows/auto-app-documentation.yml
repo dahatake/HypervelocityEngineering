@@ -147,7 +147,7 @@ jobs:
           create_label "adoc:blocked" "D73A4A" ""
           create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-qa" "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
-          create_label "auto-approve-ready" "0E8A16" "Ready for auto-approve and auto-merge"
+          create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
 
       - name: 即時 adoc:initialized 付与（二重実行防止）
         if: steps.gate.outputs.mode == 'initialize'
@@ -270,6 +270,13 @@ jobs:
             local custom_agent="${2:-}"
             local base_branch="${3:-main}"
             local custom_instructions="${4:-}"
+            local model_raw="${5:-}"
+            local selected_model
+            if [[ -z "${model_raw}" || "${model_raw}" == "Auto" ]]; then
+              selected_model="claude-opus-4-7"
+            else
+              selected_model="${model_raw}"
+            fi
 
             if [[ -z "${COPILOT_PAT:-}" ]]; then
               echo "WARNING: COPILOT_PAT が未設定のため assign をスキップ"
@@ -322,7 +329,7 @@ jobs:
             result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
               -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
               -f query="
-          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
             addAssigneesToAssignable(input: {
               assignableId: \$assignableId,
               assigneeIds: [\$botId],
@@ -348,6 +355,7 @@ jobs:
               -f baseRef="${base_branch}" \
               -f customInstructions="${custom_instructions}" \
               -f customAgent="${custom_agent}" \
+              -f model="${selected_model}" \
               2>/dev/null || true)
 
             is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
@@ -383,6 +391,30 @@ jobs:
             m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
             print(m.group(1) if m else '')
             PY
+          }
+
+          extract_model() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+            import sys, re
+            body = sys.stdin.read()
+            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
+            if not m:
+                print("")
+                raise SystemExit(0)
+            val = m.group(1).strip()
+            allowed = {"Auto", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
+            print(val if val in allowed else "")
+            PY
+          }
+
+          resolve_model() {
+            local raw="$1"
+            if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
+              echo "claude-opus-4-7"
+            else
+              echo "${raw}"
+            fi
           }
 
           PARSED=$(python3 - <<'PYEOF'
@@ -427,6 +459,7 @@ jobs:
           
           auto_context_review = parse_checkbox("レビュー設定")
           auto_qa = parse_checkbox("質問票設定")
+          auto_merge = parse_checkbox("PR完全自動化設定")
           
           def parse_field(title, default=""):
               m = re.search(rf"###\s*{re.escape(title)}[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
@@ -448,6 +481,7 @@ jobs:
               "additional_comment": additional_comment,
               "auto_context_review": auto_context_review,
               "auto_qa": auto_qa,
+              "auto_merge": auto_merge,
               "target_dirs": target_dirs,
               "exclude_patterns": exclude_patterns,
               "doc_purpose": doc_purpose,
@@ -462,6 +496,9 @@ jobs:
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          MODEL_RAW=$(extract_model "${ISSUE_BODY}")
+          SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
           TARGET_DIRS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['target_dirs'])")
           EXCLUDE_PATTERNS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['exclude_patterns'])")
           DOC_PURPOSE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['doc_purpose'])")
@@ -473,8 +510,43 @@ jobs:
           if [[ "${AUTO_QA}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-qa"
           fi
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
+          fi
 
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
+          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge タグを埋め込み ----
+          export AUTO_CONTEXT_REVIEW AUTO_QA AUTO_MERGE
+          _ROOT_UPDATED=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get("ISSUE_BODY", "")
+          meta = [
+              ("auto-context-review", os.environ.get("AUTO_CONTEXT_REVIEW", "false")),
+              ("auto-qa", os.environ.get("AUTO_QA", "false")),
+              ("auto-merge", os.environ.get("AUTO_MERGE", "false")),
+          ]
+          updated = body
+          for key, value in meta:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:\s*(true|false)\s*-->")
+              if pat.search(updated):
+                  updated = pat.sub(tag, updated, count=1)
+              else:
+                  updated += f"\n{tag}"
+          print(updated)
+          PY
+          )
+          export _ROOT_UPDATED
+          _ROOT_PAYLOAD=$(python3 - <<'PY'
+          import json, os
+          print(json.dumps({"body": os.environ.get("_ROOT_UPDATED", "")}))
+          PY
+          )
+          api_call PATCH "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" "${_ROOT_PAYLOAD}" > /dev/null || true
+
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
 
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
@@ -503,14 +575,20 @@ jobs:
           PY
           )
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-documentation","auto-context-review","auto-qa"]'
-          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS='["auto-app-documentation","auto-context-review"]'
-          elif [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-documentation","auto-qa"]'
-          else
-            STEP_LABELS='["auto-app-documentation"]'
+          STEP_LABELS=$(python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" <<'PY'
+          import json, sys
+          labels = ["auto-app-documentation"]
+          if sys.argv[1] == "true":
+              labels.append("auto-context-review")
+          if sys.argv[2] == "true":
+              labels.append("auto-qa")
+          if sys.argv[3] == "true":
+              labels.append("auto-approve-ready")
+          print(json.dumps(labels))
+          PY
+          )
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
           fi
 
           RESP=$(create_issue "[ADOC] Step.1: ファイルインベントリ" "${BODY_S1}" "${STEP_LABELS}")
@@ -520,7 +598,7 @@ jobs:
           link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"
           add_label "${S1_NUM}" "adoc:ready"
           CA=$(extract_custom_agent "${BODY_S1}")
-          if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" ""; then
+          if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
             add_label "${S1_NUM}" "adoc:running"
           fi
 

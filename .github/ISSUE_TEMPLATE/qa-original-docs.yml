@@ -1,0 +1,68 @@
+name: "QA Original Docs Review（AQOD）"
+description: "original-docs/ を横断分析し、不明瞭点・矛盾点の質問票を自動生成する"
+title: "[AQOD-ROOT] original-docs 質問票生成"
+labels:
+  - "qa-original-docs"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AQOD: QA Original Docs Review
+
+        `original-docs/` 配下を横断分析し、質問票 (`qa/QA-DocConsistency-Issue-<N>.md`) を生成します。
+
+        - mode: `original-docs-questionnaire`
+        - custom agent: `QA-DocConsistency`
+
+  - type: input
+    id: target_scope
+    attributes:
+      label: "対象スコープ"
+      description: "分析対象ディレクトリ（省略時: original-docs/）"
+      placeholder: "original-docs/"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: depth
+    attributes:
+      label: "分析の深さ"
+      description: "standard=全カテゴリ、lightweight=不明瞭/矛盾のみ"
+      options:
+        - "standard"
+        - "lightweight"
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: focus_areas
+    attributes:
+      label: "重点観点（任意）"
+      description: "例: データ整合性、冪等性、運用設計"
+      placeholder: "データ整合性、冪等性"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      options:
+        - "Auto"
+        - "claude-opus-4-7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false

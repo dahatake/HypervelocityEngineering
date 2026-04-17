@@ -21,7 +21,7 @@ body:
         🤖 **AI Agent 設計**: Step.8（AI Agent 設計）は、チャット・音声等の AI Agent が有効なアプリケーションに対してのみ実行してください。AI Agent 不要な場合は Step.8 をスキップしてください。
 
 
-        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `qa-knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
   - type: input
     id: branch
     attributes:
@@ -68,6 +68,26 @@ body:
         - label: "Step.7 — 詳細設計書生成 (Step.7.1 画面定義書 / Step.7.2 マイクロサービス詳細仕様書)"
         - label: "Step.7.3 — テスト駆動開発用テスト仕様書 (サービス別テスト仕様書 `docs/test-specs/{serviceId}-test-spec.md` + 画面別テスト仕様書 `docs/test-specs/{screenId}-test-spec.md` を全件生成。テストダブル設計・契約テスト・A11yテスト含む) ※ Step.6 + Step.7 (7.1 / 7.2) が必須。この成果物は Dev ワークフロー (ASDW Step.2.3TC / Step.3.0TC) の前提条件"
         - label: "Step.8 — AI Agent 設計 (Step.8.1 アプリケーション定義 / Step.8.2 粒度設計 / Step.8.3 詳細設計) ※ Step.7.3 が必須"
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      description: |
+        Copilot cloud agent が使用する AI モデルを選択してください。
+        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4-7）が使用されます。
+        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+      options:
+        - "Auto"
+        - "claude-opus-4-7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false
 
   - type: checkboxes
     id: enable_review

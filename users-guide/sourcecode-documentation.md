@@ -1,4 +1,6 @@
-# App Documentation（ソースコードからの段階的ドキュメント生成）
+# Source Code からの Documentation（ソースコードからの段階的ドキュメント生成）
+
+← [README](../README.md)
 
 ---
 
@@ -31,9 +33,23 @@
 
 ## 方法2: ワークフローオーケストレーション（Web）
 
-1. Issues → New issue で **App Documentation** を選択
+1. Issues → New issue で **Source Codeからのドキュメント作成** を選択
 2. `branch` / `target_dirs` / `doc_purpose` などを入力
 3. Submit 後、`auto-app-documentation` ラベルでオーケストレーションを開始
+
+### Issue Template フィールド詳細
+
+| フィールド | 目的 | 入力例 |
+|---|---|---|
+| `branch` | ドキュメント生成を実行する対象ブランチ | `main` / `feature/adoc` |
+| `target_dirs` | 対象ディレクトリを限定（未指定時は全体） | `src/,hve/` |
+| `exclude_patterns` | 解析対象から除外するパターン | `node_modules/,dist/,*.lock` |
+| `doc_purpose` | 生成物の主目的 | `all` / `onboarding` / `refactoring` / `migration` |
+| `max_file_lines` | 大規模ファイル分割の閾値 | `300` / `500` / `1000` |
+| `steps` | 実行する Step の限定（未選択時は全 Step） | Step.1〜Step.6 から選択 |
+| `enable_review` | PR 完了時のセルフレビュー自動化 | チェックで `auto-context-review` 付与 |
+| `enable_qa` | QA 質問票自動化 | チェックで `auto-qa` 付与 |
+| `additional_comment` | ステップへ引き継ぐ追加条件 | `docs-generated/ のみ更新したい` |
 
 ---
 

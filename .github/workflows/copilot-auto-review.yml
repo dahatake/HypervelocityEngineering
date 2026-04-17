@@ -1,17 +1,18 @@
 name: Copilot PR レビュー指示
 
-# auto-context-review ラベルが PR に付与されており、かつ PR が ready（非 draft）状態の場合に、
+# auto-context-review ラベルが PR に付与されている場合に、
 # 自動的にレビュー指示コメントを PR に投稿する。
+# （draft PR でも動作する。最終的な Approve/Merge は Ready 化後に別ワークフローで実施）
 # （敵対的レビュー指示）
 #
 # トリガー条件:
-#   - labeled: PR にラベルが付与された時（ジョブ if で auto-context-review + !draft をチェック）
-#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベル + !draft をチェック）
+#   - labeled: PR にラベルが付与された時（ジョブ if で auto-context-review をチェック）
+#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベルをチェック）
 #   → どちらの操作順序でも動作する（ラベル→ready / ready→ラベル）
+#   → draft PR でも labeled イベントで動作する
 #
 # ジョブ実行条件:
 #   - PR に auto-context-review ラベルが付与されていること
-#   - PR が draft でないこと（ready 状態）
 #   - すべてを満たす場合のみジョブが実行される
 #
 # opt-out チェック（ステップレベル）:
@@ -46,7 +47,6 @@ jobs:
   auto-review:
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-context-review')
-      && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}

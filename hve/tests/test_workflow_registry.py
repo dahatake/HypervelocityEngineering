@@ -23,8 +23,8 @@ EXPECTED_STEP_COUNTS = {
     "asdw": 24,  # 4 containers + 20 real steps
     "abd": 9,
     "abdv": 7,
-    "aqkm": 1,
-    "aodi": 1,
+    "akm": 1,
+    "aqod": 1,
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
@@ -34,8 +34,8 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "asdw": 20,
     "abd": 9,
     "abdv": 7,
-    "aqkm": 1,
-    "aodi": 1,
+    "akm": 1,
+    "aqod": 1,
     "adoc": 19,
 }
 
@@ -43,7 +43,7 @@ EXPECTED_NON_CONTAINER_COUNTS = {
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -57,14 +57,14 @@ class TestGetWorkflow:
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
     def test_step_count_matches_bash(self, wf_id: str):
         """各ワークフローのステップ数が bash 版と一致すること。"""
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"])
+    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -237,70 +237,103 @@ class TestGetStep:
 class TestListWorkflows:
     """list_workflows() のテスト。"""
 
-    def test_list_workflows_returns_seven(self):
+    def test_list_workflows_returns_eight(self):
         wfs = list_workflows()
         assert len(wfs) == 8
 
     def test_all_ids(self):
         wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "aodi", "aqkm", "asdw"]
+        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "akm", "aqod", "asdw"]
 
 
-class TestAQKMWorkflow:
-    """AQKM ワークフロー固有テスト。"""
+class TestAKMWorkflow:
+    """AKM ワークフロー固有テスト。"""
 
-    def test_aqkm_params(self):
-        wf = get_workflow("aqkm")
+    def test_akm_params(self):
+        wf = get_workflow("akm")
         assert wf is not None
-        assert "scope" in wf.params
-        assert "target_files" in wf.params
-        assert "force_refresh" in wf.params
+        assert wf.params == ["sources", "target_files", "force_refresh", "custom_source_dir"]
 
-    def test_aqkm_single_step(self):
-        wf = get_workflow("aqkm")
+    @pytest.mark.parametrize("sources", ["qa", "original-docs", "both"])
+    def test_akm_sources_values_documented(self, sources: str):
+        """AKM が受け入れる sources 値をテストで固定化する。"""
+        assert sources in ["qa", "original-docs", "both"]
+
+    def test_akm_single_step(self):
+        wf = get_workflow("akm")
         assert wf is not None
         assert len(wf.steps) == 1
         assert wf.steps[0].id == "1"
 
-    def test_aqkm_custom_agent(self):
-        wf = get_workflow("aqkm")
+    def test_akm_custom_agent(self):
+        wf = get_workflow("akm")
         assert wf is not None
-        assert wf.steps[0].custom_agent == "QA-KnowledgeManager"
+        assert wf.steps[0].custom_agent == "KnowledgeManager"
 
-    def test_aqkm_template_path(self):
-        step = get_step("aqkm", "1")
+    def test_akm_template_path(self):
+        step = get_step("akm", "1")
         assert step is not None
-        assert step.body_template_path == "templates/aqkm/step-1.md"
+        assert step.body_template_path == "templates/akm/step-1.md"
 
-    def test_aqkm_root_step(self):
-        roots = get_root_steps("aqkm")
+    def test_akm_root_step(self):
+        roots = get_root_steps("akm")
         assert len(roots) == 1
         assert roots[0].id == "1"
 
-    def test_aqkm_template_mentions_knowledge(self):
-        """AQKM step-1.md テンプレートが knowledge/ 出力への言及を含むこと。"""
+    def test_akm_template_mentions_knowledge(self):
+        """AKM step-1.md テンプレートが knowledge/ 出力への言及を含むこと。"""
         from hve.template_engine import _load_template
-        content = _load_template("templates/aqkm/step-1.md")
+        content = _load_template("templates/akm/step-1.md")
         assert "knowledge/" in content
 
-    def test_aqkm_template_uses_correct_master_list_path(self):
-        """AQKM step-1.md テンプレートが正しいパス template/ を参照していること（docs/ ではない）。"""
+    def test_akm_template_uses_correct_master_list_path(self):
+        """AKM step-1.md テンプレートが正しいパス template/ を参照していること（docs/ ではない）。"""
         from hve.template_engine import _load_template
-        content = _load_template("templates/aqkm/step-1.md")
+        content = _load_template("templates/akm/step-1.md")
         assert "template/business-requirement-document-master-list.md" in content
         assert "docs/business-requirement-document-master-list.md" not in content
 
-    def test_aqkm_template_has_9_steps(self):
-        """AQKM step-1.md テンプレートが 9 ステップの処理フローを記述していること。"""
+    def test_akm_template_has_12_steps(self):
+        """AKM step-1.md テンプレートが拡張ステップを記述していること。"""
         from hve.template_engine import _load_template
-        content = _load_template("templates/aqkm/step-1.md")
-        assert "9 ステップ" in content
+        content = _load_template("templates/akm/step-1.md")
+        assert "Step 6.5" in content
 
-    def test_aqkm_template_output_lists_knowledge(self):
-        """AQKM step-1.md テンプレートの出力セクションに knowledge/ が含まれること。"""
+    def test_akm_template_output_lists_knowledge(self):
+        """AKM step-1.md テンプレートの出力セクションに knowledge/ が含まれること。"""
         from hve.template_engine import _load_template
-        content = _load_template("templates/aqkm/step-1.md")
+        content = _load_template("templates/akm/step-1.md")
         assert "knowledge/D{NN}" in content
+
+
+class TestAQODWorkflow:
+    """AQOD ワークフロー固有テスト。"""
+
+    def test_aqod_params(self):
+        wf = get_workflow("aqod")
+        assert wf is not None
+        assert wf.params == ["target_scope", "depth", "focus_areas"]
+
+    def test_aqod_single_step(self):
+        wf = get_workflow("aqod")
+        assert wf is not None
+        assert len(wf.steps) == 1
+        assert wf.steps[0].id == "1"
+
+    def test_aqod_custom_agent(self):
+        wf = get_workflow("aqod")
+        assert wf is not None
+        assert wf.steps[0].custom_agent == "QA-DocConsistency"
+
+    def test_aqod_template_path(self):
+        step = get_step("aqod", "1")
+        assert step is not None
+        assert step.body_template_path == "templates/aqod/step-1.md"
+
+    def test_aqod_root_step(self):
+        roots = get_root_steps("aqod")
+        assert len(roots) == 1
+        assert roots[0].id == "1"
 
 
 class TestADOCWorkflow:
@@ -333,43 +366,6 @@ class TestADOCWorkflow:
         nexts = get_next_steps("adoc", completed_step_ids=completed)
         next_ids = sorted(s.id for s in nexts)
         assert next_ids == ["6.1", "6.2", "6.3"]
-
-
-class TestAODIWorkflow:
-    """AODI ワークフロー固有テスト。"""
-
-    def test_aodi_exists(self):
-        wf = get_workflow("aodi")
-        assert wf is not None
-        assert wf.name == "Original Docs Import"
-        assert wf.label_prefix == "aodi"
-
-    def test_aodi_params(self):
-        wf = get_workflow("aodi")
-        assert wf is not None
-        assert wf.params == ["scope", "target_files", "force_refresh"]
-
-    def test_aodi_single_step(self):
-        wf = get_workflow("aodi")
-        assert wf is not None
-        assert len(wf.steps) == 1
-        assert wf.steps[0].id == "1"
-        assert wf.steps[0].custom_agent == "QA-OriginalDocsImporter"
-
-    def test_aodi_root_step(self):
-        roots = get_root_steps("aodi")
-        assert len(roots) == 1
-        assert roots[0].id == "1"
-
-    def test_aodi_template_path(self):
-        step = get_step("aodi", "1")
-        assert step is not None
-        assert step.body_template_path == "templates/aodi/step-1.md"
-
-    def test_aodi_template_mentions_original_docs(self):
-        from hve.template_engine import _load_template
-        content = _load_template("templates/aodi/step-1.md")
-        assert "original-docs/" in content
 
 
 class TestStepDefFields:

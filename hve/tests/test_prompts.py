@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT, QA_PROMPT_V2
+from prompts import QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT, QA_PROMPT_V2, AQOD_PROMPT
 
 
 class TestPromptsNotEmpty(unittest.TestCase):
@@ -109,6 +109,23 @@ class TestQaPromptV2(unittest.TestCase):
             "A." in QA_PROMPT_V2 or "A/B/C" in QA_PROMPT_V2,
             "QA_PROMPT_V2 should mention alphabetic labels (A. or A/B/C)",
         )
+
+
+class TestAqodPrompt(unittest.TestCase):
+    """AQOD_PROMPT の検証。"""
+
+    def test_aqod_prompt_is_str(self) -> None:
+        self.assertIsInstance(AQOD_PROMPT, str)
+
+    def test_aqod_prompt_not_empty(self) -> None:
+        self.assertTrue(AQOD_PROMPT.strip(), "AQOD_PROMPT should not be empty")
+
+    def test_aqod_prompt_mentions_original_docs(self) -> None:
+        self.assertIn("original-docs/", AQOD_PROMPT)
+
+    def test_aqod_prompt_mentions_dedup_and_severity(self) -> None:
+        self.assertIn("重大度", AQOD_PROMPT)
+        self.assertIn("重複", AQOD_PROMPT)
 
 
 if __name__ == "__main__":

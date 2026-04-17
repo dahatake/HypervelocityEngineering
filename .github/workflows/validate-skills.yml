@@ -102,7 +102,7 @@ jobs:
             FRONTMATTER=$(awk '/^---$/{if(++count==2) exit; if(count==1) next} count==1' "$skill_file")
 
             # 2. name フィールドの存在チェック
-            NAME=$(printf '%s\n' "$FRONTMATTER" | yq -r '.name // empty')
+            NAME=$(printf '%s\n' "$FRONTMATTER" | yq -r '.name // ""')
             if [ -z "$NAME" ]; then
               echo "❌ FAIL: 'name' フィールドがありません: $skill_file"
               FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -110,7 +110,7 @@ jobs:
             fi
 
             # 3. description フィールドの存在チェック
-            DESC=$(printf '%s\n' "$FRONTMATTER" | yq -r '.description // empty')
+            DESC=$(printf '%s\n' "$FRONTMATTER" | yq -r '.description // ""')
             if [ -z "$DESC" ]; then
               echo "❌ FAIL: 'description' フィールドがありません: $skill_file"
               FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -118,7 +118,7 @@ jobs:
             fi
 
             # 4. metadata.version フィールドの存在チェック（警告のみ、FAIL にはしない）
-            VERSION=$(printf '%s\n' "$FRONTMATTER" | yq -r '.metadata.version // empty')
+            VERSION=$(printf '%s\n' "$FRONTMATTER" | yq -r '.metadata.version // ""')
             if [ -z "$VERSION" ]; then
               echo "⚠️ WARN: 'metadata.version' がありません: $skill_file"
             fi

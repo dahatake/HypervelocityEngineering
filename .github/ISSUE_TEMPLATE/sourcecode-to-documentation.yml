@@ -1,13 +1,13 @@
-name: "App Documentation"
-description: "Issue からアプリケーションドキュメント生成ワークフロー (Step.1〜Step.6) を自動起動します"
-title: "[App Documentation] アプリケーションドキュメント生成"
+name: "Source Codeからのドキュメント作成"
+description: "Issue からSource Codeからのドキュメント生成ワークフロー (Step.1〜Step.6) を自動起動します"
+title: "[Source Codeからのドキュメント作成] Source Codeからのドキュメント作成"
 labels:
   - "auto-app-documentation"
 body:
   - type: markdown
     attributes:
       value: |
-        ## App Documentation
+        ## Source Codeからのドキュメント作成
         このフォームから Issue を作成すると、自動で Step.1〜Step.6 のドキュメント生成タスクが
         Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
 
@@ -85,6 +85,26 @@ body:
         - label: "Step.5 — アーキテクチャ横断分析（5.1〜5.4 並列）"
         - label: "Step.6 — 目的特化ドキュメント（6.1〜6.3 並列）"
 
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      description: |
+        Copilot cloud agent が使用する AI モデルを選択してください。
+        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4-7）が使用されます。
+        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+      options:
+        - "Auto"
+        - "claude-opus-4-7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false
+
   - type: checkboxes
     id: enable_review
     attributes:
@@ -104,6 +124,17 @@ body:
         デフォルト（チェックなし）では質問票は作成されません。
       options:
         - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
 
   - type: textarea
     id: additional_comment

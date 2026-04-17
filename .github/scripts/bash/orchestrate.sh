@@ -251,6 +251,7 @@ orchestrate() {
   local additional_comment="${8:-}"
   local skip_review="${9:-false}"
   local skip_qa="${10:-false}"
+  local model="${11:-${MODEL:-}}"
   local repo="${REPO:-}"
   local dry_run="${DRY_RUN:-0}"
 
@@ -622,7 +623,7 @@ orchestrate() {
       add_label "${cand_num}" "${ready_label}" "${repo}" 2>/dev/null || true
     fi
 
-    if assign_copilot "${repo}" "${cand_num}" "${cand_agent}" "${branch}"; then
+    if assign_copilot "${repo}" "${cand_num}" "${cand_agent}" "${branch}" "" "3" "${model}"; then
       echo "  ✅ Step.${cand_id} にアサイン成功"
       local running_label
       running_label=$(echo "${wf_json}" | jq -r '.state_labels.running // ""')
@@ -691,13 +692,14 @@ Options:
   --skip-review           Skip self-review
   --skip-qa               Skip QA questionnaire
   --repo <owner/repo>     Repository (env: REPO)
+  --model <name>          Copilot model（省略時は workflow 側で既定モデル claude-opus-4-7 に解決。claude-opus-4-7 などを指定可能）
   --dry-run               Preview without API calls
   -h, --help              Show this help
 EOF
 }
 
 main() {
-  local workflow="" branch="main" steps="" app_id="" resource_group="" usecase_id=""
+  local workflow="" branch="main" steps="" app_id="" resource_group="" usecase_id="" model=""
   local batch_job_id="" comment="" skip_review="false" skip_qa="false"
 
   while (( $# > 0 )); do
@@ -713,6 +715,7 @@ main() {
       --skip-review)     skip_review="true"; shift ;;
       --skip-qa)         skip_qa="true"; shift ;;
       --repo)            export REPO="${2:?--repo requires an argument}"; shift 2 ;;
+      --model)           model="${2:?--model requires an argument}"; shift 2 ;;
       --dry-run)         export DRY_RUN=1; shift ;;
       -h|--help)         usage; exit 0 ;;
       *)                 echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -726,7 +729,7 @@ main() {
   fi
 
   orchestrate "${workflow}" "${branch}" "${steps}" "${resource_group}" "${app_id}" \
-    "${batch_job_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}"
+    "${batch_job_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}"
 }
 
 main "$@"

@@ -30,6 +30,8 @@
 | GitHub Copilot CLI | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
 
+> Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: `claude-opus-4-7`）または任意モデルを選択できます。
+
 ---
 
 ## Step.1. リポジトリの作成
@@ -247,7 +249,7 @@ bash infra/azure/create-azure-webui-resources.sh
 > [!WARNING]
 > **このステップは、他のワークフローを使い始める前に必ず完了してください。**
 >
-> ラベルが未設定の状態では、**すべての Issue テンプレート経由のワークフロー起動が動作しません**。これは `setup-labels` だけでなく、`auto-app-selection`・`auto-app-design`・`qa-knowledge-management` など**全ワークフロートリガー系ラベル**に影響します。
+> ラベルが未設定の状態では、**すべての Issue テンプレート経由のワークフロー起動が動作しません**。これは `setup-labels` だけでなく、`auto-app-selection`・`auto-app-design`・`knowledge-management` など**全ワークフロートリガー系ラベル**に影響します。
 >
 > GitHub の Issue Template の `labels:` フィールドは、リポジトリに**既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合は Issue 作成時にラベルの付与がサイレントにスキップされ、**ラベル付与を前提とした対象ジョブや処理は実行されません（ジョブがスキップされます）**。
 
@@ -321,19 +323,21 @@ bash infra/azure/create-azure-webui-resources.sh
 
 Setup Labels ワークフローが作成・更新するラベル一覧です:
 
-**ワークフロートリガー系（8 個）**
+**ワークフロートリガー系（9 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
 | `auto-app-design` | `#0E8A16` | AAD ワークフロートリガー |
-| `auto-app-dev-microservice` | `#0E8A16` | ASDW ワークフロートリガー |
+| `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー |
 | `auto-batch-design` | `#0E8A16` | ABD ワークフロートリガー |
 | `auto-batch-dev` | `#0E8A16` | ABDV ワークフロートリガー |
-| `qa-knowledge-management` | `#0E8A16` | AQKM ワークフロートリガー |
+| `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
+| `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
 | `self-improve` | `#0E8A16` | 自己改善ループトリガー |
+| `qa-original-docs` | `#0E8A16` | AQOD ワークフロートリガー |
 
-**PR 制御系（5 個）**
+**PR 制御系（6 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
@@ -342,6 +346,7 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `create-subissues` | `#E4E669` | Sub Issue 自動作成トリガー |
 | `split-mode` | `#D93F0B` | 分割モード PR 識別 |
 | `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
+| `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
 **セットアップ系（1 個）**
 
@@ -351,6 +356,8 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 
 > [!IMPORTANT]
 > **ステートラベル**（`aas:initialized`, `aas:ready`, `aas:running`, `aas:done`, `aas:blocked` など）は、各オーケストレーターワークフローが自動作成します。手動作成は不要です。
+>
+> `auto-app-documentation` / `knowledge-management` / `auto-approve-ready` は `.github/labels.json` の管理対象です。ラベル定義を更新した場合は Setup Labels ワークフローを再実行してください。
 
 ラベルの詳細一覧は [workflow-reference.md](./workflow-reference.md#ワークフロートリガー系ラベル) を参照してください。
 
@@ -362,27 +369,21 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 
 ![Label設定の後のPRのコメント](../images/subissue-label-IssueCreated.png)
 
-### レガシー方式: 手動でラベルを作成する
+### レガシー方式（過去互換）: 手動でラベルを作成する
 
-Setup Labels ワークフローを使わず、手動でラベルを作成することもできます:
+> [!NOTE]
+> 現在は Setup Labels ワークフローで自動管理されています。このセクションは過去バージョンとの互換運用や緊急時の手動作成が必要な場合のために残しています。
+
+過去互換や緊急時に手動作成する場合は、以下を **Settings → Labels** から作成してください:
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
-| `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
-| `auto-app-design` | `#0E8A16` | AAD ワークフロートリガー |
-| `auto-app-dev-microservice` | `#0E8A16` | ASDW ワークフロートリガー |
-| `auto-batch-design` | `#0E8A16` | ABD ワークフロートリガー |
-| `auto-batch-dev` | `#0E8A16` | ABDV ワークフロートリガー |
-| `qa-knowledge-management` | `#0E8A16` | AQKM ワークフロートリガー |
-| `self-improve` | `#0E8A16` | 自己改善ループトリガー |
-| `auto-context-review` | `#1D76DB` | Copilot 敵対的レビュートリガー |
-| `auto-qa` | `#BFD4F2` | Copilot 質問票作成トリガー |
-| `create-subissues` | `#E4E669` | Sub Issue 自動作成トリガー |
-| `split-mode` | `#D93F0B` | 分割モード PR 識別 |
-| `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
-| `setup-labels` | `#C5DEF5` | Setup Labels ワークフロートリガー |
+| `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
+| `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
+| `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
-GitHub リポジトリの **Settings → Labels** からこれらのラベルを手動作成してください。
+GitHub リポジトリの **Settings → Labels** から上記を手動作成してください。  
+それ以外のラベルは Setup Labels ワークフロー（`.github/labels.json`）で管理されます。
 
 ---
 
@@ -397,7 +398,7 @@ GitHub リポジトリの **Settings → Labels** からこれらのラベルを
 
 ## knowledge/ ディレクトリについて
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。これらは `qa-knowledge-management` ワークフロー（[09-qa-knowledge-management.md](./09-qa-knowledge-management.md) 参照）によって生成されます。ただし、**生成されるのは `qa/` の質問データに QA マッピングが存在する D クラスのみ**です（マッピングがない D クラスのファイルは生成されません）。
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。これらは `knowledge-management` ワークフロー（[km-guide.md](./km-guide.md) 参照）によって生成されます。ただし、**生成されるのは `qa/` の質問データに QA マッピングが存在する D クラスのみ**です（マッピングがない D クラスのファイルは生成されません）。
 
 | ドキュメント（生成されたもののみ存在） | 内容 |
 |--------------------------------------|------|
@@ -422,7 +423,7 @@ GitHub リポジトリの **Settings → Labels** からこれらのラベルを
 | `knowledge/D20-セキュア設計-実装ガードレール.md` | セキュア設計・実装ガードレール |
 | `knowledge/D21-CI-CD-ビルド-リリース-供給網管理仕様書.md` | CI/CD・ビルド・リリース |
 
-`knowledge/` ファイルが存在すると、設計・開発の各 Custom Agent が業務要件・制約のコンテキストとして自動参照します。アプリケーション設計・開発ワークフローを開始する前に、`qa-knowledge-management` ワークフローを実行しておくことを推奨します。
+`knowledge/` ファイルが存在すると、設計・開発の各 Custom Agent が業務要件・制約のコンテキストとして自動参照します。アプリケーション設計・開発ワークフローを開始する前に、`knowledge-management` ワークフローを実行しておくことを推奨します。
 
 ## 次のステップ
 

@@ -2,7 +2,7 @@
   {
     "name": "auto-app-selection",
     "color": "0E8A16",
-    "description": "run app selection workflow (usecase to app list and architecture recommendation)"
+    "description": "run app architecture design workflow (usecase to app list and architecture recommendation)"
   },
   {
     "name": "auto-app-design",
@@ -23,11 +23,6 @@
     "name": "auto-batch-dev",
     "color": "0E8A16",
     "description": "run full batch dev workflow (Azure resource, coding, deploy, review)"
-  },
-  {
-    "name": "qa-knowledge-management",
-    "color": "0E8A16",
-    "description": "run QA knowledge management workflow (qa/ files to knowledge/ D01-D21 documents)"
   },
   {
     "name": "self-improve",
@@ -60,8 +55,58 @@
     "description": "PR contains only plan.md and subissues.md (no implementation files)"
   },
   {
+    "name": "auto-app-documentation",
+    "color": "0E8A16",
+    "description": "run source code documentation workflow (multi-layer doc generation from codebase)"
+  },
+  {
+    "name": "qa-original-docs",
+    "color": "0E8A16",
+    "description": "run AQOD original docs review workflow (cross-analysis questionnaire generation)"
+  },
+  {
+    "name": "auto-approve-ready",
+    "color": "1D76DB",
+    "description": "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
+  },
+  {
+    "name": "model/claude-opus-4-7",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: claude-opus-4-7"
+  },
+  {
+    "name": "model/claude-opus-4.6",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: claude-opus-4.6"
+  },
+  {
+    "name": "model/claude-sonnet-4.6",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: claude-sonnet-4.6"
+  },
+  {
+    "name": "model/gpt-5.4",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: gpt-5.4"
+  },
+  {
+    "name": "model/gpt-5.3-codex",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: gpt-5.3-codex"
+  },
+  {
+    "name": "model/gemini-2.5-pro",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: gemini-2.5-pro"
+  },
+  {
     "name": "setup-labels",
     "color": "C5DEF5",
     "description": "trigger label setup workflow (run once after repository creation, re-runnable for updates)"
+  },
+  {
+    "name": "knowledge-management",
+    "color": "0E8A16",
+    "description": "run knowledge management workflow (qa/original-docs to knowledge D01-D21 documents)"
   }
 ]

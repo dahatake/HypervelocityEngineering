@@ -336,9 +336,9 @@ class TestConsolePanel(unittest.TestCase):
     def test_panel_shows_title_and_lines(self) -> None:
         c = Console(verbose=True, quiet=False)
         with _CaptureOutput() as cap:
-            c.panel("設定確認", ["モデル: claude-opus-4.6", "並列: 15"])
+            c.panel("設定確認", ["モデル: claude-opus-4-7", "並列: 15"])
         self.assertIn("設定確認", cap.stdout)
-        self.assertIn("claude-opus-4.6", cap.stdout)
+        self.assertIn("claude-opus-4-7", cap.stdout)
 
     def test_panel_suppressed_when_quiet(self) -> None:
         c = Console(verbose=True, quiet=True)
@@ -661,7 +661,7 @@ class TestConsoleCliLog(unittest.TestCase):
         """verbosity=3 で └ ツリー行が確定行として出力される。"""
         con = Console(verbosity=3)
         with unittest.mock.patch.object(con, '_emit') as mock_emit:
-            con.cli_log("1", '  └ ".github/agents/QA-KnowledgeManager*"')
+            con.cli_log("1", '  └ ".github/agents/KnowledgeManager*"')
             mock_emit.assert_called_once()
 
     def test_step_id_prefix_always_present(self) -> None:

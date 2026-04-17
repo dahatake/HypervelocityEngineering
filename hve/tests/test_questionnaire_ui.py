@@ -222,7 +222,7 @@ class TestCollectQaAnswersNonTty(unittest.TestCase):
         """非 TTY 時: questionnaire_table は呼ばれ、prompt_answer_mode は呼ばれず skip=True。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6")
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7")
 
         table_called = []
         mode_called = []
@@ -258,7 +258,7 @@ class TestCollectQaAnswersWithPresetMode(unittest.TestCase):
         """config.qa_answer_mode='all' → prompt_answer_mode は呼ばれず、一括入力フローが使われる。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", qa_answer_mode="all")
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", qa_answer_mode="all")
 
         mode_called = []
 
@@ -284,7 +284,7 @@ class TestCollectQaAnswersWithPresetMode(unittest.TestCase):
         """config.qa_answer_mode='one' → prompt_answer_mode は呼ばれず、1問ずつフローが使われる。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", qa_answer_mode="one")
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", qa_answer_mode="one")
 
         mode_called = []
 
@@ -318,7 +318,7 @@ class TestCollectQaAnswersNonTtyWarning(unittest.TestCase):
         """非 TTY 時: console.warning() が呼ばれ、内容に非対話モードの旨が含まれること。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6")
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7")
 
         warning_messages = []
 
@@ -350,7 +350,7 @@ class TestCollectQaAnswersForceInteractive(unittest.TestCase):
         """force_interactive=True 時: sys.stdin.isatty()=False でも prompt_answer_mode が呼ばれる。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", force_interactive=True)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", force_interactive=True)
 
         mode_called = []
 
@@ -387,7 +387,7 @@ class TestCollectQaAnswersUnattended(unittest.TestCase):
         """unattended=True 時: TTY でも prompt_answer_mode が呼ばれず skip=True。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", unattended=True)
 
         table_called = []
         mode_called = []
@@ -409,7 +409,7 @@ class TestCollectQaAnswersUnattended(unittest.TestCase):
         """unattended=True 時: 全自動モード向けの警告メッセージが出ること。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", unattended=True)
 
         warning_messages: list[str] = []
 
@@ -431,7 +431,7 @@ class TestCollectQaAnswersUnattended(unittest.TestCase):
         """unattended=True は force_interactive=True より優先される。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", unattended=True, force_interactive=True)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", unattended=True, force_interactive=True)
 
         mode_called = []
 
@@ -463,7 +463,7 @@ class TestCollectQaAnswersUnattended(unittest.TestCase):
         """非 TTY (skip_input=True) 時: answer_summary は呼ばれず status が呼ばれること。"""
         c = _make_console()
         doc = self._make_doc()
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6")
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7")
 
         summary_called = []
         status_called = []

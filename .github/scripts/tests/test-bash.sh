@@ -119,6 +119,14 @@ else
   fail "orchestrate: rejects unknown workflow — expected '不明なワークフロー', got: ${output}"
 fi
 
+# 3c. --model option help
+output=$(bash "${BASH_DIR}/orchestrate.sh" --help 2>&1) || true
+if echo "${output}" | grep -q -- "--model"; then
+  pass "orchestrate: supports --model option"
+else
+  fail "orchestrate: supports --model option — got: ${output}"
+fi
+
 # ===========================================================================
 # 4. create-subissues.sh — dry-run テスト
 # ===========================================================================
@@ -159,6 +167,36 @@ if echo "${output}" | grep -q "orchestrate\|advance\|create-subissues\|validate-
   pass "run-workflow: help shows subcommands"
 else
   fail "run-workflow: help shows subcommands — got: ${output}"
+fi
+
+# ===========================================================================
+# 6. auto-close.sh — 判定ロジックテスト
+# ===========================================================================
+echo ""
+echo "=== auto-close.sh ==="
+
+output=$(bash -c '
+  set -euo pipefail
+  source "'"${BASH_DIR}"'/lib/auto-close.sh"
+  json="{\"labels\":[{\"name\":\"auto-approve-ready\"}],\"body\":\"\"}"
+  _is_auto_merge_enabled "${json}"
+' 2>&1) || true
+if echo "${output}" | grep -q "true"; then
+  pass "auto-close: label-based auto-merge detection"
+else
+  fail "auto-close: label-based auto-merge detection — got: ${output}"
+fi
+
+output=$(bash -c '
+  set -euo pipefail
+  source "'"${BASH_DIR}"'/lib/auto-close.sh"
+  json="{\"labels\":[],\"body\":\"<!-- auto-merge: true -->\"}"
+  _is_auto_merge_enabled "${json}"
+' 2>&1) || true
+if echo "${output}" | grep -q "true"; then
+  pass "auto-close: metadata-based auto-merge detection"
+else
+  fail "auto-close: metadata-based auto-merge detection — got: ${output}"
 fi
 
 # ===========================================================================

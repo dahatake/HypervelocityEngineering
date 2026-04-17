@@ -1,0 +1,70 @@
+name: "knowledge/ ドキュメント生成・管理"
+description: "qa/original-docs/custom source から knowledge/ D01〜D21 を生成・管理する"
+title: "knowledge/ 生成・管理"
+labels:
+  - "knowledge-management"
+body:
+  - type: dropdown
+    id: sources
+    attributes:
+      label: "ソース"
+      description: "取り込み対象を選択してください"
+      options:
+        - "qa のみ"
+        - "original-docs のみ"
+        - "両方"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: target_files
+    attributes:
+      label: "target_files（任意）"
+      description: "選択ソース内のサブセットを 1 行 1 ファイルで指定"
+      placeholder: |
+        qa/AAS-Step1-context-review.md
+        original-docs/requirements.md
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: force_refresh
+    attributes:
+      label: "再生成オプション"
+      options:
+        - label: "既存 knowledge/ 出力を完全に再生成する（force_refresh）"
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "`custom_source_dir: <path>` を 1 行ずつ指定できます（複数可）"
+      placeholder: |
+        custom_source_dir: docs/specs
+        custom_source_dir: work/input
+    validations:
+      required: false
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      options:
+        - "Auto"
+        - "claude-opus-4-7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false

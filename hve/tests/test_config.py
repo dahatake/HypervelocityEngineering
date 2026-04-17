@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import SDKConfig
+from config import MODEL_CHOICES, SDKConfig
 
 
 class TestSDKConfigDefaults(unittest.TestCase):
@@ -18,7 +18,14 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.cfg = SDKConfig()
 
     def test_model_default(self) -> None:
-        self.assertEqual(self.cfg.model, "claude-opus-4.6")
+        self.assertEqual(self.cfg.model, "claude-opus-4-7")
+
+    def test_default_model_is_opus_4_7(self) -> None:
+        self.assertEqual(SDKConfig().model, "claude-opus-4-7")
+
+    def test_model_choices_contains_both_46_and_47(self) -> None:
+        self.assertIn("claude-opus-4-7", MODEL_CHOICES)
+        self.assertIn("claude-opus-4.6", MODEL_CHOICES)
 
     def test_timeout_default(self) -> None:
         self.assertEqual(self.cfg.timeout_seconds, 21600.0)

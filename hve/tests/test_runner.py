@@ -46,7 +46,7 @@ class TestStepRunnerDryRun(unittest.TestCase):
     """dry_run=True の場合、SDK 呼び出しをスキップして True を返す。"""
 
     def _make_runner(self, verbose: bool = True, **cfg_kwargs) -> StepRunner:
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.6", **cfg_kwargs)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", **cfg_kwargs)
         console = Console(verbose=verbose, quiet=False)
         return StepRunner(config=cfg, console=console)
 
@@ -97,7 +97,7 @@ class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
     """dry_run=False で SDK 未インストール時に False を返す。"""
 
     def test_returns_false_when_sdk_missing(self) -> None:
-        cfg = SDKConfig(dry_run=False, model="claude-opus-4.6")
+        cfg = SDKConfig(dry_run=False, model="claude-opus-4-7")
         console = Console(verbose=False, quiet=True)
         runner = StepRunner(config=cfg, console=console)
 
@@ -425,7 +425,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
     def _make_runner(self, qa_content: str) -> "tuple[StepRunner, Console, list, list]":
         cfg = SDKConfig(
             dry_run=False,
-            model="claude-opus-4.6",
+            model="claude-opus-4-7",
             auto_qa=True,
             auto_contents_review=False,
             auto_self_improve=False,
@@ -439,7 +439,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
         呼び出し回数を返す。"""
         cfg = SDKConfig(
             dry_run=False,
-            model="claude-opus-4.6",
+            model="claude-opus-4-7",
             auto_qa=True,
             auto_contents_review=False,
             auto_self_improve=False,

@@ -87,9 +87,20 @@ _COPILOT_USERNAMES = (
 # git diff の最大文字数（トークン上限対策）
 _MAX_DIFF_CHARS = 80_000
 
-# AQKM デフォルト値
-_AQKM_DEFAULT_SCOPE = "all"
-_AQKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# AKM デフォルト値
+_AKM_DEFAULT_SOURCES = "qa"
+_AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+_AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
+_AQOD_DEFAULT_DEPTH = "standard"
+
+
+def _default_akm_target_files(sources: str) -> str:
+    """AKM の sources に応じた target_files 既定値を返す。"""
+    if sources == "original-docs":
+        return "original-docs/*"
+    if sources == "both":
+        return ""
+    return _AKM_DEFAULT_TARGET_FILES
 
 
 # -----------------------------------------------------------------------
@@ -130,19 +141,31 @@ def _collect_params_non_interactive(
     if args.get("batch_job_id"):
         params["batch_job_id"] = args["batch_job_id"]
 
-    # AQKM 固有パラメータ
-    if wf.id == "aqkm":
-        params["scope"] = args.get("scope") or _AQKM_DEFAULT_SCOPE
-        params["target_files"] = args.get("target_files") or _AQKM_DEFAULT_TARGET_FILES
-        # AQKM では、フラグ未指定(None)の場合はデフォルトで True とする
+    # AKM 固有パラメータ
+    if wf.id == "akm":
+        params["sources"] = args.get("sources") or _AKM_DEFAULT_SOURCES
+        params["target_files"] = args.get("target_files") or _default_akm_target_files(params["sources"])
+        params["custom_source_dir"] = args.get("custom_source_dir") or ""
         force_refresh = args.get("force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
+    elif wf.id == "aqod":
+        params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
+        params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
+        params["focus_areas"] = args.get("focus_areas") or ""
     else:
-        if args.get("scope"):
-            params["scope"] = args["scope"]
+        if args.get("sources"):
+            params["sources"] = args["sources"]
         if args.get("target_files"):
             params["target_files"] = args["target_files"]
-        # 非 AQKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
+        if args.get("custom_source_dir"):
+            params["custom_source_dir"] = args["custom_source_dir"]
+        if args.get("target_scope"):
+            params["target_scope"] = args["target_scope"]
+        if args.get("depth"):
+            params["depth"] = args["depth"]
+        if args.get("focus_areas"):
+            params["focus_areas"] = args["focus_areas"]
+        # 非 AKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         if "force_refresh" in args:
             params["force_refresh"] = args["force_refresh"]
 

@@ -49,7 +49,7 @@
 | **Workflow** | DAG 依存関係に従って複数の Custom Agent ステップを実行する自動化パイプライン。GitHub Actions または `hve` パッケージで実行 |
 | **Sub Issue** | 親 Issue（Bootstrap Workflow）から自動生成されるステップ単位の子 Issue。Copilot が各 Sub Issue に自動アサインされる |
 | **DAG** | 有向非巡回グラフ（Directed Acyclic Graph）。ステップ間の依存関係を表現し、並列実行可能なステップを同時に処理する |
-| **knowledge/** | `qa/` の質問票から QA-KnowledgeManager が自動生成する業務要件ドキュメント（D01〜D21 分類）。各 Custom Agent が業務コンテキストとして参照する |
+| **knowledge/** | `qa/` / `original-docs/`（必要に応じて `custom_source_dir`）を入力として KnowledgeManager が自動生成する業務要件ドキュメント（D01〜D21 分類）。各 Custom Agent が業務コンテキストとして参照する |
 | **MCP Server** | Model Context Protocol に基づく外部ツール連携。Copilot が GitHub・Azure・ファイルシステム等の外部ツールを呼び出す仕組み |
 | **Bootstrap Workflow** | Issue Template から起動し、ワークフロー定義に従って Sub Issue を一括生成する GitHub Actions ワークフロー |
 
@@ -69,14 +69,14 @@ graph TB
 
     subgraph "オーケストレーション層"
         IT[".github/ISSUE_TEMPLATE/<br>Issue テンプレート"]
-        GHA[".github/workflows/<br>GitHub Actions (24 本)"]
+        GHA[".github/workflows/<br>GitHub Actions (30 本・実測)"]
         SCR[".github/scripts/<br>CLI スクリプト"]
         HVE["hve/<br>SDK オーケストレーター"]
     end
 
     subgraph "AI 実行層"
         CI[".github/copilot-instructions.md<br>Agent 行動規約"]
-        CA[".github/agents/<br>Custom Agent (46 個)"]
+        CA[".github/agents/<br>Custom Agent (65 個)"]
         SK[".github/skills/<br>Skills（技術手順）"]
     end
 
@@ -102,8 +102,8 @@ graph TB
     CA -->|"生成"| WK
     GHA --> SCR
 
-    OD -->|"QA-OriginalDocsImporter"| KN
-    QA -->|"QA-KnowledgeManager"| KN
+    OD -->|"KnowledgeManager"| KN
+    QA -->|"KnowledgeManager"| KN
 ```
 
 ### Agent の行動ルール
@@ -134,10 +134,13 @@ Agent の行動ルールは `.github/copilot-instructions.md` と `.github/skill
 | `qa_merger.py` | QA 結果の統合 |
 | `self_improve.py` | 自己改善ループ実行 |
 | `permission_handler.py` | 権限チェック・前提条件検証 |
+| `__init__.py` | パッケージ初期化 |
+| `pytest.ini` | hve テスト設定 |
+| `tests/` | hve パッケージの単体テスト群 |
 
 ### Custom Agent のカテゴリ
 
-リポジトリには計 **46 個** の Custom Agent が `.github/agents/` に定義されています。4 つの系統に分類されます。
+リポジトリには計 **65 個** の Custom Agent が `.github/agents/` に定義されています。5 つの系統に分類されます。
 
 | カテゴリ | 接頭辞 | 主な役割 | 詳細参照 |
 |---------|--------|----------|---------|
@@ -145,6 +148,7 @@ Agent の行動ルールは `.github/copilot-instructions.md` と `.github/skill
 | **アーキテクチャ設計** | `Arch-*` | ドメインモデル・サービス設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
 | **実装** | `Dev-*` | Azure リソース作成・コード生成・デプロイ・CI/CD 構築 | [workflow-reference.md](./workflow-reference.md) |
 | **QA / レビュー** | `QA-*` | コード品質・アーキテクチャレビュー・knowledge 管理 | [workflow-reference.md](./workflow-reference.md) |
+| **ドキュメント生成** | `Doc-*` | API/データモデル/依存関係/オンボーディング等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
 
 Custom Agent の完全な一覧は [workflow-reference.md](./workflow-reference.md) および [web-ui-guide.md](./web-ui-guide.md) を参照してください。
 
@@ -166,19 +170,19 @@ Skills は `.github/skills/` 配下に、カテゴリ別ディレクトリで管
 
 ### knowledge/ と qa/ と original-docs/ の関係
 
-`qa/` フォルダーには質問票、`original-docs/` フォルダーにはユーザー提供原本（Markdown 変換済み）が格納されます。`QA-KnowledgeManager`（qa 起点）と `QA-OriginalDocsImporter`（original-docs 起点）がこれらを処理し、`knowledge/` フォルダーに D01〜D21 分類の業務要件ドキュメントを生成・更新します。
+`qa/` フォルダーには質問票、`original-docs/` フォルダーにはユーザー提供原本（Markdown 変換済み）が格納されます。`KnowledgeManager` がこれらを処理し、`knowledge/` フォルダーに D01〜D21 分類の業務要件ドキュメントを生成・更新します。
 
 ```
 original-docs/ 原本 + qa/ 質問票
-  → QA-OriginalDocsImporter / QA-KnowledgeManager
+  → KnowledgeManager
     → knowledge/ D01〜D21 業務要件ドキュメント
       → 各 Custom Agent が業務コンテキストとして自動参照
 ```
 
 > [!NOTE]
-> 設計・開発ワークフローを開始する前に `qa-knowledge-management` ワークフローを実行しておくことを推奨します。`knowledge/` が存在すると、各 Custom Agent が業務要件コンテキストを自動参照し、より精度の高い成果物を生成します。
+> 設計・開発ワークフローを開始する前に `knowledge-management` ワークフローを実行しておくことを推奨します。`knowledge/` が存在すると、各 Custom Agent が業務要件コンテキストを自動参照し、より精度の高い成果物を生成します。
 
-詳細は [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) および [11-original-docs-import.md](./11-original-docs-import.md) を参照してください。
+詳細は [km-guide.md](./km-guide.md) を参照してください。
 
 ---
 
@@ -234,9 +238,11 @@ flowchart LR
 | **GitHub Actions 依存** | あり | あり | なし |
 | **Copilot アサイン** | 手動 | 自動（`COPILOT_PAT` 必要） | しない（ローカル直接実行） |
 | **MCP Server** | GitHub 管理の MCP 設定 | GitHub 管理の MCP 設定 | `--mcp-config` で任意設定可 |
+| **モデル選択** | Issue の「使用するモデル」で選択可（既定: Auto=`claude-opus-4-7`） | Issue の「使用するモデル」で選択可（既定: Auto=`claude-opus-4-7`） | `--model` / `--review-model` / `--qa-model` で指定可（既定: `claude-opus-4-7`） |
 | **認証** | 不要（Copilot アサイン時のみ `COPILOT_PAT`） | `COPILOT_PAT`（自動アサイン時に必要） | `gh auth login`（Copilot CLI） |
 | **課金** | GitHub Actions 分 | GitHub Actions 分 | Copilot ライセンスのみ |
 | **並列実行** | なし（逐次手動） | GitHub Actions 並列ジョブ | asyncio 並列（デフォルト上限: 15） |
+| **PR 完全自動化** | なし | Issue Template の設定で有効化可能（`auto-approve-ready` ラベル連携） | CLI では `--auto-coding-agent-review-auto-approval` で自動承認まで対応 |
 | **推奨ユースケース** | 単一タスクの試行・デバッグ | フルワークフローの自動実行 | ローカル環境・GitHub Actions 不使用時 |
 
 > [!NOTE]
@@ -301,17 +307,25 @@ python -m hve（wizard または CLI）
 | バッチ処理を実装したい | [06-app-dev-batch-azure.md](./06-app-dev-batch-azure.md) | `abdv` |
 | AI Agent を簡易設計したい | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
 | AI Agent を本格設計したい | [08-ai-agent.md](./08-ai-agent.md) | — |
-| 業務知識を整理・管理したい | [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) | `aqkm` |
-| original-docs 原本を取り込みたい | [11-original-docs-import.md](./11-original-docs-import.md) | `aodi` |
+| 業務知識を整理・管理したい（qa/original-docs） | [km-guide.md](./km-guide.md) | `akm` |
+| original-docs から質問票を生成したい | [qa-original-docs.md](./qa-original-docs.md) | `aqod` |
+| ソースコードから技術文書を自動生成したい | [sourcecode-documentation.md](./sourcecode-documentation.md) | `adoc` |
 | コード品質を改善したい | [web-ui-guide.md](./web-ui-guide.md)（QA Agent セクション） | — |
 | トラブルが発生した | [troubleshooting.md](./troubleshooting.md) | — |
 | プロンプト例を参照したい | [prompt-examples.md](./prompt-examples.md) | — |
 
 ### フェーズ一覧
 
+#### 要求定義
+
 | フェーズ | ガイド | ワークフロー ID |
 |---------|--------|:---:|
 | **01 — 要求定義** | [01-business-requirement.md](./01-business-requirement.md) | — |
+
+#### アプリケーション開発
+
+| フェーズ | ガイド | ワークフロー ID |
+|---------|--------|:---:|
 | **02 — アプリケーションアーキテクチャ設計** | [02-app-architecture-design.md](./02-app-architecture-design.md) | `aas` |
 | **03 — Microservice 設計** | [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | `aad` |
 | **04 — Batch 設計** | [04-app-design-batch.md](./04-app-design-batch.md) | `abd` |
@@ -319,10 +333,21 @@ python -m hve（wizard または CLI）
 | **06 — Batch 実装** | [06-app-dev-batch-azure.md](./06-app-dev-batch-azure.md) | `abdv` |
 | **07 — AI Agent（Quick）** | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
 | **08 — AI Agent（本格）** | [08-ai-agent.md](./08-ai-agent.md) | — |
-| **QA Knowledge ドキュメント管理** | [09-qa-knowledge-management.md](./09-qa-knowledge-management.md) | `aqkm` |
-| **AODI: original-docs 取り込み** | [11-original-docs-import.md](./11-original-docs-import.md) | `aodi` |
 
-> 01（要求定義）、07（AI Agent Quick）、および `aqkm`（QA Knowledge ドキュメント管理）は手動実行です。それ以外はワークフローによる自動実行が可能です。
+#### Knowledge Management
+
+| フェーズ | ガイド | ワークフロー ID |
+|---------|--------|:---:|
+| **AKM: Knowledge Management（qa/original-docs）** | [km-guide.md](./km-guide.md) | `akm` |
+| **AQOD: Original Docs 質問票生成** | [qa-original-docs.md](./qa-original-docs.md) | `aqod` |
+
+#### Source Codeからの Documentation
+
+| フェーズ | ガイド | ワークフロー ID |
+|---------|--------|:---:|
+| **ADOC: Source Codeからのドキュメント作成** | [sourcecode-documentation.md](./sourcecode-documentation.md) | `adoc` |
+
+> 01（要求定義）、07（AI Agent Quick）、08（AI Agent 本格）は手動実行です。それ以外はワークフローによる自動実行が可能です。
 
 ---
 

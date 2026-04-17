@@ -75,6 +75,41 @@
 
 ---
 
+### ADOC / AKM が起動しない
+
+**症状**: `sourcecode-to-documentation.yml` または `knowledge-management.yml` から Issue を作成しても実行されない。
+
+**確認事項**:
+
+1. Issue に `auto-app-documentation` または `knowledge-management` ラベルが付いているか
+2. **Actions** タブで `auto-app-documentation.yml` / `auto-knowledge-management.yml` が有効か
+3. ラベル未作成の場合は [getting-started.md Step.5](./getting-started.md#step5-ラベル設定) を参照し、少なくとも `auto-app-documentation` と `knowledge-management` を明示的に作成
+
+---
+
+### PR 完全自動化が動かない（Auto Approve / Auto-merge）
+
+**症状**: チェックボックスを有効化したのに自動 Approve / Auto-merge されない。
+
+### 選択したモデルで 400 エラーになる
+
+**症状**: Issue Template でモデル指定後、Copilot アサイン時に 400 系エラーになる。
+
+**対処**:
+- Issue Template のモデルを `Auto` に戻す
+- SDK 実行時は `MODEL=claude-opus-4.6` などで一時固定して再実行する
+- workflow 実行ログを確認し、必要に応じて `Auto`（既定）に戻して再実行する
+
+> 命名規則メモ: 新規追加モデル（`claude-opus-4-7`）は公式表記のハイフン区切り、既存モデル（`claude-opus-4.6` など）は従来通りドット区切りです。これは意図した設計差分です。
+
+**確認事項**:
+
+1. PR に `auto-approve-ready` ラベルが付与されているか
+2. PR が `split-mode` になっていないか（`split-mode` 付きは自動化対象外）
+3. `auto-review-to-approve-transition.yml` / `auto-approve-and-merge.yml` の実行ログに失敗がないか
+
+---
+
 ### Azure Static Web Apps デプロイエラー
 
 **症状**: SWA デプロイ workflow が失敗する、または `::warning::` でスキップされる。
@@ -161,7 +196,7 @@ SDK 版（ローカル実行方式）のトラブルシューティングは [sd
 
 **対処法**:
 1. `qa/` フォルダーに質問票ファイルが存在するか確認する
-2. 質問票が存在する場合は `qa-knowledge-management` ワークフローを実行する（[09-qa-knowledge-management.md](./09-qa-knowledge-management.md) 参照）
+2. 質問票が存在する場合は `knowledge-management` ワークフローを実行する（[km-guide.md](./km-guide.md) 参照）
 3. `knowledge/business-requirement-document-status.md` で D01〜D21 のカバレッジを確認する
 
 ### knowledge/ ファイルが期待通り参照されない

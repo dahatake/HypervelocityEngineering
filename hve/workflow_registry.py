@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-7 個のオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AQKM/ADOC) のステップ DAG
+8 個のオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AKM/AQOD/ADOC) のステップ DAG
 定義をデータとして保持する。状態遷移ロジックはデータドリブンに実装する。
 
 依存パターン:
@@ -58,7 +58,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "aqkm", "aodi", "adoc"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -279,38 +279,38 @@ ABDV = WorkflowDef(
     ],
 )
 
-# --- AQKM: QA Knowledge Management ---
-AQKM = WorkflowDef(
-    id="aqkm",
-    name="QA Knowledge Management",
-    label_prefix="aqkm",
-    state_labels=_make_state_labels("aqkm"),
-    params=["scope", "target_files", "force_refresh"],
+# --- AKM: Knowledge Management ---
+AKM = WorkflowDef(
+    id="akm",
+    name="Knowledge Management",
+    label_prefix="akm",
+    state_labels=_make_state_labels("akm"),
+    params=["sources", "target_files", "force_refresh", "custom_source_dir"],
     steps=[
         StepDef(
             id="1",
-            title="QA Knowledge ドキュメント生成・管理",
-            custom_agent="QA-KnowledgeManager",
+            title="knowledge/ ドキュメント生成・管理",
+            custom_agent="KnowledgeManager",
             depends_on=[],
-            body_template_path="templates/aqkm/step-1.md",
+            body_template_path="templates/akm/step-1.md",
         ),
     ],
 )
 
-# --- AODI: Original Docs Import ---
-AODI = WorkflowDef(
-    id="aodi",
-    name="Original Docs Import",
-    label_prefix="aodi",
-    state_labels=_make_state_labels("aodi"),
-    params=["scope", "target_files", "force_refresh"],
+# --- AQOD: QA Original Docs Review ---
+AQOD = WorkflowDef(
+    id="aqod",
+    name="QA Original Docs Review",
+    label_prefix="aqod",
+    state_labels=_make_state_labels("aqod"),
+    params=["target_scope", "depth", "focus_areas"],
     steps=[
         StepDef(
             id="1",
-            title="original-docs/ 取り込み・整合性チェック",
-            custom_agent="QA-OriginalDocsImporter",
+            title="original-docs 質問票生成",
+            custom_agent="QA-DocConsistency",
             depends_on=[],
-            body_template_path="templates/aodi/step-1.md",
+            body_template_path="templates/aqod/step-1.md",
         ),
     ],
 )
@@ -362,7 +362,7 @@ ADOC = WorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AQKM, AODI, ADOC]
+    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AKM, AQOD, ADOC]
 }
 
 

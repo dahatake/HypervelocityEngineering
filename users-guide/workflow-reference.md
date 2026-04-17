@@ -8,6 +8,7 @@
 
 - [ワークフロー一覧](#ワークフロー一覧)
 - [ワークフロートリガー系ラベル](#ワークフロートリガー系ラベル)
+- [モデル選択ルール](#モデル選択ルール)
 - [Custom Agent 一覧](#custom-agent-一覧)
 - [Issue テンプレート一覧](#issue-テンプレート一覧)
 
@@ -24,14 +25,19 @@
 | `auto-app-dev-microservice-azure.yml` | マイクロサービス実装（ASDW）オーケストレーター | `auto-app-dev-microservice` ラベル付き Issue |
 | `auto-batch-design.yml` | バッチ設計（ABD）オーケストレーター | `auto-batch-design` ラベル付き Issue |
 | `auto-batch-dev.yml` | バッチ実装（ABDV）オーケストレーター | `auto-batch-dev` ラベル付き Issue |
-| `auto-qa-knowledge-management.yml` | QA Knowledge ドキュメント管理（AQKM）オーケストレーター | `qa-knowledge-management` ラベル付き Issue |
-| `auto-qa-original-docs-import.yml` | original-docs 取り込み（AODI）オーケストレーター | `qa-original-docs-import` ラベル付き Issue |
+| `auto-app-documentation.yml` | Source Codeからのドキュメント作成（ADOC）オーケストレーター | `auto-app-documentation` ラベル付き Issue |
+| `auto-knowledge-management.yml` | Knowledge Management（AKM）オーケストレーター（qa / original-docs / both） | `knowledge-management` ラベル付き Issue |
+| `auto-aqod.yml` | AQOD 原本ドキュメント質問票生成（AQOD）オーケストレーター | `qa-original-docs` ラベル付き Issue |
 | `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
 | `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
 | `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
 | `copilot-auto-review.yml` | Copilot に敵対的レビューを自動依頼 | `auto-context-review` ラベル付き PR |
 | `copilot-auto-qa.yml` | Copilot に質問票作成を自動依頼 | `auto-qa` ラベル付き PR |
+| `post-qa-to-pr-comment.yml` | QA 結果を PR コメントに投稿 | PR プッシュ（`pull_request_target.synchronize`）かつ `auto-qa` ラベル付き PR 等の条件 |
 | `auto-qa-to-review-transition.yml` | `auto-qa` 完了後に `auto-context-review` へ自動遷移 | PR コメント |
+| `auto-review-to-approve-transition.yml` | レビュー完了検知 → `auto-approve-ready` 自動付与 | PR 更新（synchronize）/ PR コメント（Copilot レビュー回答検知） |
+| `auto-draft-to-ready.yml` | Copilot PR の Draft → Ready 自動遷移 | `auto-approve-ready` ラベル付き draft PR でデバウンス完了時 |
+| `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `auto-approve-ready` ラベル付き PR（非 draft, 非 split-mode） |
 | `sync-issue-labels-to-pr.yml` | 親 Issue のラベルを PR に同期 | Issue ラベル変更 |
 | `label-split-mode.yml` | `[WIP]` タイトルの PR に `split-mode` ラベルを付与 | PR オープン / 編集 |
 | `check-split-mode.yml` | `split-mode` PR での実装ファイル変更を検知・警告 | PR プッシュ |
@@ -39,9 +45,12 @@
 | `audit-plans.yml` | plan.md の監査（全 plan.md のメタデータ違反スキャン／Skill `task-dag-planning` 準拠チェック） | 毎週月曜 3:00 UTC / 手動 |
 | `validate-knowledge.yml` | knowledge ドキュメントの検証 | `knowledge/D??-*.md` の PR / push / 手動 |
 | `setup-labels.yml` | ラベル初期セットアップ（`.github/labels.json` から一括作成・更新） | `setup-labels` ラベル付き Issue / `workflow_dispatch` |
+| `auto-self-improve-close.yml` | Self-Improve Issue 自動クローズ（PR マージ時に `self-improve` ラベル付き Issue を対象に、`auto-merge` 有効かつ Sub Issue 全完了チェックなどの条件を満たす場合にクローズ） | PR マージ |
 | `sync-azure-skills.yml` | microsoft/skills から Azure Skills を定期同期 | 毎週月曜 9:00 UTC / 手動 |
 | `copilot-setup-steps.yml` | Copilot cloud agent の実行前セットアップ | Copilot cloud agent 起動時 |
 | `test-cli-scripts.yml` | `.github/scripts/` の CLI スクリプトをテスト | PR プッシュ |
+| `validate-agents.yml` | Agent ファイルの検証 | `push` / `pull_request` |
+| `validate-skills.yml` | Skills ファイルの検証 | `pull_request` |
 
 ### SDK 版ワークフロー ID（逆引き）
 
@@ -52,10 +61,11 @@
 | `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure.yml` |
 | `abd` | Batch Design | `auto-batch-design.yml` |
 | `abdv` | Batch Dev | `auto-batch-dev.yml` |
-| `aqkm` | QA Knowledge Management | `auto-qa-knowledge-management.yml` |
-| `aodi` | Original Docs Import | `auto-qa-original-docs-import.yml` |
+| `akm` | Knowledge Management（QA + original-docs） | `auto-knowledge-management.yml` |
+| `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation.yml` |
+| `aqod` | QA Original Docs | `auto-aqod.yml` |
 
-> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `aqkm` / `aodi` を使用してください。
+> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `akm` / `adoc` / `aqod` を使用してください。
 
 ---
 
@@ -67,18 +77,20 @@
 |---------|------|
 | `auto-app-selection` | **アプリケーションアーキテクチャ設計ワークフロー（AAS）の起動トリガー**。Issue にこのラベルが付与されると、AAS オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-design` | **アプリケーション設計ワークフロー（AAD）の起動トリガー**。Issue にこのラベルが付与されると、AAD オーケストレーターが起動し、Step.1〜7.3 の Sub Issue を自動生成して Copilot にアサインする |
-| `auto-software-design` | **[過去互換/未使用] 設計ワークフロー用ラベル**。現在、このラベルに対応する ASD ワークフローや Issue テンプレートは `.github/workflows/` / `.github/ISSUE_TEMPLATE/` に存在しないため、付与してもオーケストレーターは起動しません |
 | `auto-app-dev-microservice` | **マイクロサービス開発ワークフローの起動トリガー**。Issue にこのラベルが付与されると、ASDW オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
-| `qa-knowledge-management` | **QA Knowledge ドキュメント管理ワークフロー（AQKM）の起動トリガー**。Issue にこのラベルが付与されると、AQKM オーケストレーターが起動し、`[AQKM] Step.1: QA Knowledge ドキュメント生成・管理` Sub Issue を自動生成して `QA-KnowledgeManager` Agent で Copilot にアサインする。**Setup Labels ワークフローで自動作成できます。** |
-| `qa-original-docs-import` | **original-docs 取り込みワークフロー（AODI）の起動トリガー**。Issue にこのラベルが付与されると、AODI オーケストレーターが起動し、`[AODI] Step.1: original-docs/ 取り込み・整合性チェック` Sub Issue を自動生成して `QA-OriginalDocsImporter` Agent で Copilot にアサインする。 |
+| `auto-app-documentation` | **Source Codeからのドキュメント作成ワークフロー（ADOC）の起動トリガー**。Issue にこのラベルが付与されると、ADOC オーケストレーターが起動し、Step.1〜6 の Sub Issue を自動生成して Copilot にアサインする |
+| `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/original-docs/both）は Issue Template で選択する。 |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
 | `split-mode` | **分割モード PR の識別ラベル**。`label-split-mode.yml` が `work/**/plan.md` に `SPLIT_REQUIRED` を検知した場合に PR に自動付与する。`check-split-mode.yml` がこのラベル付き PR の実装ファイル混入を検知・警告する。 |
 | `plan-only` | **plan.md のみの PR 識別ラベル**。`label-split-mode.yml` が `split-mode` と同時に付与する。plan.md + subissues.md のみを含む PR であることを示す。 |
 | `auto-context-review` | **Copilot 敵対的レビューのトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に敵対的レビュー指示コメントを自動投稿する |
 | `auto-qa` | **Copilot 質問票作成のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に選択式の質問票作成指示コメントを自動投稿する |
+| `auto-approve-ready` | **PR 自動 Approve & Auto-merge のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft, 非 split-mode）になると、`auto-approve-and-merge.yml` が自動発火し、PR の Approve と squash merge を実行する。各オーケストレーターが `auto-merge: true` 設定時に自動付与する |
+| `qa-original-docs` | **AQOD ワークフロー（原本ドキュメント質問票生成）の起動トリガー**。Issue にこのラベルが付与されると、AQOD オーケストレーターが起動し、`original-docs/` の原本ドキュメントに対する質問票を自動生成します。 |
+| `self-improve` | **自己改善ループの識別ラベル**。Issue テンプレートから Copilot を直接アサインして使用します。`auto-self-improve-close.yml` は、PR マージ時にこのラベルを持つ Issue を検知し、auto-merge 有効判定や Sub Issue 完了確認などの条件を満たした場合に自動クローズします（条件未達時はスキップされることがあります）。 |
 
 > [!IMPORTANT]
 > GitHub の Issue Template の `labels:` フィールドは、**リポジトリに既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合、Issue 作成時にラベルの自動付与はサイレントにスキップされます。各ワークフローを使用する前に、必要なラベルを事前に作成してください。
@@ -90,9 +102,47 @@
 
 ---
 
+### ステートラベル（各オーケストレーターが自動管理）
+
+以下のラベルは各オーケストレーターワークフローが自己 bootstrap（初回自動作成）し、状態遷移を管理します。
+`labels.json`（Setup Labels）の管理対象外です。
+
+| プレフィックス | ワークフロー | bootstrap 箇所 |
+|-------------|------------|---------------|
+| `aas:*` | `auto-app-selection.yml` | ワークフロー内 bootstrap ステップ |
+| `aad:*` | `auto-app-design.yml` | ワークフロー内 bootstrap ステップ |
+| `asdw:*` | `auto-app-dev-microservice-azure.yml` | ワークフロー内 bootstrap ステップ |
+| `abd:*` | `auto-batch-design.yml` | ワークフロー内 bootstrap ステップ |
+| `abdv:*` | `auto-batch-dev.yml` | ワークフロー内 bootstrap ステップ |
+| `adoc:*` | `auto-app-documentation.yml` | ワークフロー内 bootstrap ステップ |
+| `akm:*` | `auto-knowledge-management.yml` | ワークフロー内 bootstrap ステップ |
+| `aqod:*` | `auto-aqod.yml` | ワークフロー内 bootstrap ステップ |
+
+各プレフィックスには以下の 5 状態があります:
+
+| サフィックス | 意味 |
+|------------|------|
+| `:initialized` | 初期化開始済み（重複実行防止。Sub Issue 生成前に付与される場合あり） |
+| `:ready` | 実行待ち（依存解決済み、Copilot アサイン前） |
+| `:running` | Copilot 実行中 |
+| `:done` | Step 完了（次 Step の起動トリガー） |
+| `:blocked` | 依存先未完了でブロック中 |
+
+---
+
+## モデル選択ルール
+
+- 選択肢: `Auto` / `claude-opus-4-7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `gpt-5.4` / `gpt-5.3-codex` / `gemini-2.5-pro`
+- `Auto` または空文字は `claude-opus-4-7` として解決
+- 指定モデルが API 未対応の場合は `Auto`（既定）に戻して再実行
+- Sub-Issue には `model/*` ラベルでモデル指定を伝播
+- 命名規則の設計差分: 新規追加モデルは公式表記に合わせてハイフン区切り（例: `claude-opus-4-7`）、既存モデルは後方互換のため従来のドット区切り（例: `claude-opus-4.6`）を維持
+
+---
+
 ## Custom Agent 一覧
 
-`.github/agents/` 配下の全 48 Custom Agent を以下に列挙します。
+`.github/agents/` 配下の **65** Custom Agent を、以下にカテゴリ別で整理します。
 
 ### ビジネス分析・要求定義
 
@@ -189,6 +239,30 @@
 | `Dev-Batch-ServiceCoding` | バッチジョブ詳細仕様書と TDD テスト仕様書に基づき Azure Functions 実装で TDD GREEN を完了 |
 | `Dev-Batch-Deploy` | バッチサービスを Azure にデプロイし GitHub Actions CI/CD を構築、AC 検証まで実施 |
 
+### ドキュメント生成（Doc-*）
+
+| Agent 名 | 用途 |
+|---------|------|
+| `Doc-APISpec` | API 仕様書を生成 |
+| `Doc-ArchOverview` | アーキテクチャ概要図を生成 |
+| `Doc-CICDSummary` | CI/CD ワークフロー定義ファイルを要約 |
+| `Doc-ComponentDesign` | モジュール単位のコンポーネント設計書を作成 |
+| `Doc-ComponentIndex` | レイヤー2成果物の要約インデックスを生成 |
+| `Doc-ConfigSummary` | 設定・IaC ファイルの構成と依存を要約 |
+| `Doc-DataModel` | データモデル定義書を生成 |
+| `Doc-DependencyMap` | 依存関係マップを作成し循環依存を検出 |
+| `Doc-FileInventory` | 対象ファイルの列挙・言語判定・分割計画を作成 |
+| `Doc-FileSummary` | プロダクションコード1ファイルの責務・公開API・依存を要約 |
+| `Doc-InfraDeps` | インフラ依存とベンダーロックイン度を分析 |
+| `Doc-LargeFileSummary` | 大規模ファイルを分割要約し統合サマリーを作成 |
+| `Doc-Migration` | 移行アセスメントを生成 |
+| `Doc-NFRAnalysis` | 非機能要件の現状分析を作成 |
+| `Doc-Onboarding` | 新規参画者向けオンボーディングガイドを生成 |
+| `Doc-Refactoring` | リファクタリングガイドを生成 |
+| `Doc-TechDebt` | 技術的負債を集約・分類・優先度付け |
+| `Doc-TestSpecSummary` | テスト仕様サマリーを集約 |
+| `Doc-TestSummary` | テストコード1ファイルの対象・ケース・モックを要約 |
+
 ### QA / レビュー
 
 | Agent 名 | 用途 |
@@ -198,15 +272,14 @@
 | `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
 | `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
 | `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。Skill: harness-verification-loop Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
-| `QA-KnowledgeManager` | `qa/` フォルダーの質問ファイルを読み取り、template/business-requirement-document-master-list.md の D01〜D21 に分類し、knowledge/business-requirement-document-status.md を生成 |
-| `QA-OriginalDocsImporter` | `original-docs/` の原本ドキュメントを D01〜D21 に分類し、矛盾検出と status/knowledge 更新を実行 |
+| `KnowledgeManager` | AKM ワークフロー（`akm`）で参照される Agent。`qa/` / `original-docs/` / `custom_source_dir` を D01〜D21 に分類し、status/knowledge 更新を行う（`.github/agents/KnowledgeManager.agent.md`）。 |
 
 ---
 
 
 ## knowledge/ ディレクトリとの関係
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21 の文書クラスのうち、マッピングが存在するもの）が格納されます。これらは `QA-KnowledgeManager` Agent（`qa-knowledge-management` ワークフロー）と `QA-OriginalDocsImporter` Agent（`qa-original-docs-import` ワークフロー）によって生成・更新されます。
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21 の文書クラスのうち、マッピングが存在するもの）が格納されます。これらは `KnowledgeManager` Agent（`knowledge-management` ワークフロー）によって生成・更新されます。
 
 設計・開発の全 Custom Agent（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。
 
@@ -229,13 +302,13 @@
 
 | ファイル名 | 用途 | トリガーラベル |
 |-----------|------|-------------|
-| `app-selection.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` |
+| `app-architecture-design.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` |
 | `app-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-design` |
 | `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
 | `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
-| `qa-knowledge-management.yml` | knowledge ドキュメント管理 | `qa-knowledge-management` |
-| `qa-original-docs-import.yml` | original-docs 取り込みワークフロー起動 | `qa-original-docs-import` |
+| `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成ワークフロー起動 | `auto-app-documentation` |
+| `knowledge-management.yml` | knowledge ドキュメント管理（qa/original-docs/both） | `knowledge-management` |
 | `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
 | `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |
 
@@ -261,7 +334,7 @@
 | Skill 名 | パス | 主な利用 Agent |
 |---------|------|-------------|
 | `architecture-questionnaire` | `.github/skills/planning/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer` |
-| `knowledge-management` | `.github/skills/planning/knowledge-management/` | `QA-KnowledgeManager` |
+| `knowledge-management` | `.github/skills/planning/knowledge-management/` | `KnowledgeManager` |
 | `mcp-server-design` | `.github/skills/planning/mcp-server-design/` | MCP Server 設計時 |
 | `batch-design-guide` | `.github/skills/planning/batch-design-guide/` | `Arch-Batch-*`, `Dev-Batch-*` |
 | `microservice-design-guide` | `.github/skills/planning/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*` |

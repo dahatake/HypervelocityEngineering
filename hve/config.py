@@ -7,6 +7,16 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+DEFAULT_MODEL: str = "claude-opus-4-7"
+MODEL_CHOICES: tuple[str, ...] = (
+    "claude-opus-4-7",
+    "claude-opus-4.6",
+    "claude-sonnet-4.6",
+    "gpt-5.4",
+    "gpt-5.3-codex",
+    "gemini-2.5-pro",
+)
+
 
 def generate_run_id() -> str:
     """ワークフロー実行ごとのユニークID。
@@ -22,7 +32,7 @@ def generate_run_id() -> str:
 @dataclass
 class SDKConfig:
     # --- 基本設定 ---
-    model: str = "claude-opus-4.6"          # デフォルトモデル
+    model: str = DEFAULT_MODEL              # デフォルトモデル
     review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
     qa_model: Optional[str] = None          # QA 専用モデル（未指定時は model）
     timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
@@ -124,6 +134,7 @@ class SDKConfig:
         """環境変数から SDKConfig を構築する。"""
         import os
         return cls(
+            model=os.environ.get("MODEL", DEFAULT_MODEL),
             github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
             repo=os.environ.get("REPO", ""),
             cli_path=os.environ.get("COPILOT_CLI_PATH"),

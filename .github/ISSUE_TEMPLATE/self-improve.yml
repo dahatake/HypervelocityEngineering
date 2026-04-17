@@ -23,7 +23,8 @@ body:
         - quality_score ≥ 80
 
         ### 競合制御
-        - `work/self-improve/.self-improve-lock` ファイルで排他制御
+        - `work/self-improve/run-{run_id}/.self-improve-lock` ファイルで排他制御
+        - 確認コマンド例: `find work/self-improve -type f -name '.self-improve-lock'`
         - Issue open = 実行中 / closed = 完了
 
         ### 使用 Custom Agents
@@ -43,7 +44,6 @@ body:
       label: "改善対象スコープ"
       description: "改善するディレクトリ・ファイルのパスを指定します。空の場合はリポジトリ全体が対象になります。"
       placeholder: "例: hve/ または src/api/ または（空 = 全体）"
-      value: ""
     validations:
       required: false
 
@@ -102,11 +102,43 @@ body:
       required: false
 
   - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: checkboxes
     id: confirmation
     attributes:
       label: "実行前確認"
       options:
-        - label: "ロックファイル `work/.self-improve-lock` が存在しないことを確認しました（既存のループが実行中でないことを確認）"
+        - label: "`work/self-improve/run-*` 配下に `.self-improve-lock` が存在しないことを確認しました（既存のループが実行中でないことを確認）"
           required: true
         - label: "この Issue の実行が完了したら Issue を close することを理解しました"
           required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      description: |
+        Copilot cloud agent が使用する AI モデルを選択してください。
+        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4-7）が使用されます。
+        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+      options:
+        - "Auto"
+        - "claude-opus-4-7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false
+
