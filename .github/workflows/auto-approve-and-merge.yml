@@ -28,6 +28,51 @@ permissions:
   issues: write
 
 jobs:
+  notify-split-mode-skip:
+    if: >
+      (
+        (github.event.action == 'labeled' && github.event.label.name == 'auto-approve-ready')
+        || (github.event.action == 'ready_for_review' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
+      )
+      && contains(github.event.pull_request.labels.*.name, 'split-mode')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: 冪等チェック
+        id: guard
+        run: |
+          set -euo pipefail
+          marker='<!-- auto-approve-and-merge-skipped-split-mode -->'
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${marker}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing=0
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "posted=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "posted=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: スキップ通知コメント投稿
+        if: steps.guard.outputs.posted != 'true'
+        run: |
+          set -euo pipefail
+          comment_body=$(printf '%s\n\n%s\n\n%s\n%s' \
+            '<!-- auto-approve-and-merge-skipped-split-mode -->' \
+            '## ℹ️ split-mode のため auto-approve/auto-merge をスキップしました' \
+            'この PR は `split-mode` のため `auto-approve-and-merge.yml` 対象外です。' \
+            '後続で `auto-create-subissues-transition.yml` が完了判定を行い、`create-subissues` ラベルを自動付与します。')
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${comment_body}"
+
   approve-and-merge:
     # labeled イベント: auto-approve-ready ラベルが付与された時
     # ready_for_review イベント: draft → ready 遷移後に auto-approve-ready ラベルがある場合

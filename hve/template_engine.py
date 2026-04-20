@@ -43,7 +43,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "abdv": "Batch Dev",
     "akm": "Knowledge Management",
     "aqod": "QA Original Docs Review",
-    "adoc": "App Documentation",
+    "adoc": "Source Codeからのドキュメント作成",
 }
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
@@ -126,8 +126,13 @@ def _prompt_steps(wf: WorkflowDef) -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-def collect_params(wf: WorkflowDef) -> dict:
+def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
     """ワークフロー固有パラメータを対話的に収集する。
+
+    Args:
+        wf: 対象ワークフロー定義。
+        will_create_pr: GitHub Issue または PR を作成する場合 True。
+            False のときは `enable_auto_merge` プロンプトを表示せず False を採用する。
 
     Returns:
         dict with keys:
@@ -191,6 +196,13 @@ def collect_params(wf: WorkflowDef) -> dict:
         params["custom_source_dir"] = _prompt(
             "custom_source_dir（スペース区切り・任意）", default="", required=False
         )
+    if "enable_auto_merge" in wf.params:
+        if will_create_pr:
+            params["enable_auto_merge"] = _prompt_yes_no(
+                "PR の自動 Approve & Auto-merge を有効にする？", default=False
+            )
+        else:
+            params["enable_auto_merge"] = False
 
     # AQOD 固有パラメータ
     if wf.id == "aqod":
@@ -309,6 +321,7 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     auto_review = str(not params.get("skip_review", False)).lower()
     auto_context_review = "true"
     auto_qa = str(not params.get("skip_qa", False)).lower()
+    auto_merge = str(bool(params.get("enable_auto_merge", False))).lower()
 
     parts = [
         f"<!-- root-issue: #{root_issue_num} -->",
@@ -329,6 +342,7 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     parts.append(f"<!-- auto-review: {auto_review} -->")
     parts.append(f"<!-- auto-context-review: {auto_context_review} -->")
     parts.append(f"<!-- auto-qa: {auto_qa} -->")
+    parts.append(f"<!-- auto-merge: {auto_merge} -->")
 
     return "\n".join(parts)
 
@@ -505,6 +519,7 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     auto_review = str(not params.get("skip_review", False)).lower()
     auto_context_review = "true"
     auto_qa = str(not params.get("skip_qa", False)).lower()
+    auto_merge = str(bool(params.get("enable_auto_merge", False))).lower()
 
     lines: List[str] = []
     lines.append(f"# [{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}\n")
@@ -521,6 +536,7 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     lines.append(f"<!-- auto-review: {auto_review} -->")
     lines.append(f"<!-- auto-context-review: {auto_context_review} -->")
     lines.append(f"<!-- auto-qa: {auto_qa} -->")
+    lines.append(f"<!-- auto-merge: {auto_merge} -->")
     lines.append("")
     lines.append(f"ワークフロー: **{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}**")
     lines.append(f"ブランチ: `{branch}`")

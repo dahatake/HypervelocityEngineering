@@ -30,7 +30,7 @@
 | GitHub Copilot CLI | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
 
-> Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: `claude-opus-4-7`）または任意モデルを選択できます。
+> Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: `claude-opus-4.7`）または任意モデルを選択できます。
 
 ---
 
@@ -348,6 +348,18 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
 | `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
+**モデル選択系（7 個）**
+
+| ラベル名 | 色 | 用途 |
+|---------|-----|------|
+| `model/claude-opus-4-7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4-7（deprecated: `model/claude-opus-4.7` を推奨） |
+| `model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.7 |
+| `model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.6 |
+| `model/claude-sonnet-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-sonnet-4.6 |
+| `model/gpt-5.4` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.4 |
+| `model/gpt-5.3-codex` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.3-codex |
+| `model/gemini-2.5-pro` | `#6f42c1` | Copilot cloud agent モデル指定: gemini-2.5-pro |
+
 **セットアップ系（1 個）**
 
 | ラベル名 | 色 | 用途 |
@@ -430,6 +442,7 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 セットアップが完了したら、まず全体像を把握してから方式を選んでください。
 
 - **全体像の把握**: まず [overview.md](./overview.md) で全体像と 3 つの使い方を把握してください
+- **Custom Agent エコシステム図**: [agent-ecosystem-overview.svg](./images/agent-ecosystem-overview.svg)
 - **方式1（個別 Issue + Custom Agent 手動実行）**: [web-ui-guide.md](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
 - **方式2（ワークフローオーケストレーション Web）**: [web-ui-guide.md](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
 - **方式3（ローカル: GitHub Copilot CLI SDK 版）**: [sdk-guide.md](./sdk-guide.md)

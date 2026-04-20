@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import SDKConfig
 from console import Console
-from runner import StepRunner, _is_review_fail
+from runner import StepRunner, _is_review_fail, _truncate_context
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
 # Used in test_returns_false_when_sdk_missing to correctly restore sys.modules after the test.
@@ -46,7 +46,7 @@ class TestStepRunnerDryRun(unittest.TestCase):
     """dry_run=True の場合、SDK 呼び出しをスキップして True を返す。"""
 
     def _make_runner(self, verbose: bool = True, **cfg_kwargs) -> StepRunner:
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4-7", **cfg_kwargs)
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7", **cfg_kwargs)
         console = Console(verbose=verbose, quiet=False)
         return StepRunner(config=cfg, console=console)
 
@@ -97,7 +97,7 @@ class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
     """dry_run=False で SDK 未インストール時に False を返す。"""
 
     def test_returns_false_when_sdk_missing(self) -> None:
-        cfg = SDKConfig(dry_run=False, model="claude-opus-4-7")
+        cfg = SDKConfig(dry_run=False, model="claude-opus-4.7")
         console = Console(verbose=False, quiet=True)
         runner = StepRunner(config=cfg, console=console)
 
@@ -322,6 +322,22 @@ class TestIsReviewFail(unittest.TestCase):
         self.assertTrue(_is_review_fail(content))
 
 
+class TestTruncateContext(unittest.TestCase):
+    """_truncate_context() のテスト。"""
+
+    def test_returns_original_when_short(self) -> None:
+        text = "abc"
+        self.assertEqual(_truncate_context(text, 10), text)
+
+    def test_truncates_with_head_and_tail(self) -> None:
+        text = "A" * 100 + "B" * 100
+        result = _truncate_context(text, 120)
+        self.assertIn("... (中略: 全体 200 文字) ...", result)
+        self.assertTrue(result.startswith("A"))
+        self.assertTrue(result.endswith("B"))
+        self.assertLessEqual(len(result), 120)
+
+
 # -----------------------------------------------------------------------
 # run_step Phase 2: qa_prompt 呼び出し有無テスト
 # -----------------------------------------------------------------------
@@ -425,7 +441,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
     def _make_runner(self, qa_content: str) -> "tuple[StepRunner, Console, list, list]":
         cfg = SDKConfig(
             dry_run=False,
-            model="claude-opus-4-7",
+            model="claude-opus-4.7",
             auto_qa=True,
             auto_contents_review=False,
             auto_self_improve=False,
@@ -439,7 +455,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
         呼び出し回数を返す。"""
         cfg = SDKConfig(
             dry_run=False,
-            model="claude-opus-4-7",
+            model="claude-opus-4.7",
             auto_qa=True,
             auto_contents_review=False,
             auto_self_improve=False,

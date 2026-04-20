@@ -14,7 +14,7 @@
     # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
-    # 基本実行 (デフォルト: claude-opus-4-7, 並列15, compact, Issue/PR作成なし)
+    # 基本実行 (デフォルト: claude-opus-4.7, 並列15, compact, Issue/PR作成なし)
     python -m hve orchestrate --workflow aad
 
     # QA + Review 有効
@@ -91,9 +91,27 @@ _MODEL_AUTO_RESOLVED = DEFAULT_MODEL
 # AKM デフォルト値
 _AKM_DEFAULT_SOURCES = "qa"
 _AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+_AKM_SOURCES_OPTIONS = [
+    "qa のみ",
+    "original-docs のみ",
+    "両方",
+]
+_AKM_SOURCES_MAP = {
+    "qa のみ": "qa",
+    "original-docs のみ": "original-docs",
+    "両方": "both",
+}
 _AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
 _AQOD_DEFAULT_DEPTH = "standard"
+_AQOD_DEPTH_CHOICES = ("standard", "lightweight")
+_AQOD_DEPTH_MENU_OPTIONS = (
+    "standard     — 全カテゴリ",
+    "lightweight  — 不明瞭/矛盾のみ",
+)
 _ADOC_DOC_PURPOSE_CHOICES = ("all", "onboarding", "refactoring", "migration")
+_ADOC_DEFAULT_DOC_PURPOSE = "all"
+_ADOC_MAX_FILE_LINES_CHOICES = (300, 500, 1000)
+_ADOC_DEFAULT_MAX_FILE_LINES = 500
 
 
 def _default_akm_target_files(sources: str) -> str:
@@ -106,23 +124,100 @@ def _default_akm_target_files(sources: str) -> str:
 
 
 def _prompt_valid_doc_purpose(con) -> str:
-    """ADOC の doc_purpose を許容値で入力させる。"""
-    while True:
-        val = (con.prompt_input("doc_purpose", default="all", required=False).strip() or "all")
-        if val in _ADOC_DOC_PURPOSE_CHOICES:
-            return val
-        con.warning("doc_purpose は all / onboarding / refactoring / migration のいずれかを指定してください。")
+    """ADOC の doc_purpose をメニュー選択させる。"""
+    default_idx = _ADOC_DOC_PURPOSE_CHOICES.index(_ADOC_DEFAULT_DOC_PURPOSE)
+    selected_idx = con.menu_select(
+        "ドキュメントの主目的を選択してください",
+        list(_ADOC_DOC_PURPOSE_CHOICES),
+        allow_empty=True,
+    )
+    return _ADOC_DOC_PURPOSE_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
 
 def _prompt_valid_aqod_depth(con) -> str:
-    """AQOD の depth を許容値で入力させる。"""
-    valid_depths = {"standard", "lightweight"}
-    while True:
-        depth_input = con.prompt_input("depth", default=_AQOD_DEFAULT_DEPTH)
-        depth = (depth_input or _AQOD_DEFAULT_DEPTH).strip().lower()
-        if depth in valid_depths:
-            return depth
-        con.warning("depth は standard / lightweight のいずれかを指定してください。")
+    """AQOD の depth をメニュー選択させる。"""
+    default_idx = _AQOD_DEPTH_CHOICES.index(_AQOD_DEFAULT_DEPTH)
+    selected_idx = con.menu_select(
+        "分析の深さを選択してください",
+        list(_AQOD_DEPTH_MENU_OPTIONS),
+        allow_empty=True,
+    )
+    return _AQOD_DEPTH_CHOICES[default_idx if selected_idx == -1 else selected_idx]
+
+
+def _prompt_valid_max_file_lines(con) -> int:
+    """ADOC の max_file_lines をメニュー選択させる。"""
+    default_idx = _ADOC_MAX_FILE_LINES_CHOICES.index(_ADOC_DEFAULT_MAX_FILE_LINES)
+    menu_options = [str(v) for v in _ADOC_MAX_FILE_LINES_CHOICES]
+    selected_idx = con.menu_select(
+        "大規模ファイル分割閾値を選択してください",
+        menu_options,
+        allow_empty=True,
+    )
+    return _ADOC_MAX_FILE_LINES_CHOICES[default_idx if selected_idx == -1 else selected_idx]
+
+
+def _prompt_akm_params(
+    con,
+    is_quick_auto: bool,
+    *,
+    will_create_pr: bool = False,
+) -> dict:
+    """AKM ワークフローのパラメータを収集する。
+
+    Args:
+        con: Console インスタンス。
+        is_quick_auto: クイック全自動モードの場合 True。
+        will_create_pr: GitHub Issue または PR を作成する場合 True。
+            False のときは `enable_auto_merge` プロンプトを表示せず False を採用する。
+    """
+    params: dict = {}
+
+    if is_quick_auto:
+        params["sources"] = _AKM_DEFAULT_SOURCES
+        params["target_files"] = _default_akm_target_files(params["sources"])
+        params["force_refresh"] = True
+        params["custom_source_dir"] = ""
+        params["additional_comment"] = ""
+        params["enable_auto_merge"] = False
+        return params
+
+    sources_idx = con.menu_select(
+        "取り込みソースを選択してください",
+        _AKM_SOURCES_OPTIONS,
+    )
+    sources_display = _AKM_SOURCES_OPTIONS[sources_idx]
+    params["sources"] = _AKM_SOURCES_MAP[sources_display]
+
+    default_target = _default_akm_target_files(params["sources"])
+    target_input = con.prompt_input(
+        "対象ファイルパス（スペース区切り、省略時: デフォルト）",
+        default=default_target,
+    )
+    target_input_strip = (target_input or "").strip()
+    params["target_files"] = target_input_strip if target_input_strip else default_target
+
+    params["force_refresh"] = con.prompt_yes_no(
+        "既存 knowledge/ 出力を完全に再生成する？（force_refresh）",
+        default=True,
+    )
+    params["custom_source_dir"] = con.prompt_input(
+        "custom_source_dir（スペース区切り・任意）",
+        default="",
+    )
+    params["additional_comment"] = con.prompt_input(
+        "追加コメント（任意）",
+        default="",
+    )
+    if will_create_pr:
+        params["enable_auto_merge"] = con.prompt_yes_no(
+            "PR の自動 Approve & Auto-merge を有効にする？",
+            default=False,
+        )
+    else:
+        params["enable_auto_merge"] = False
+
+    return params
 
 
 def _resolve_model(model: str) -> tuple:
@@ -178,7 +273,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "abdv(Batch Dev) / "
             "akm(Knowledge Management) / "
             "aqod(QA Original Docs Review) / "
-            "adoc(App Documentation)"
+            "adoc(Source Codeからのドキュメント作成)"
         ),
     )
 
@@ -436,6 +531,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="AKM: custom_source_dir 追加入力（複数指定可）",
     )
     orch.add_argument(
+        "--enable-auto-merge",
+        action="store_true",
+        default=False,
+        help="AKM: PR の自動 Approve & Auto-merge を有効にする (デフォルト: 無効)",
+    )
+    orch.add_argument(
         "--target-scope",
         default=None,
         metavar="PATH",
@@ -606,9 +707,17 @@ def _build_config(args: argparse.Namespace):
         sys.path.insert(0, str(_sdk_dir))
 
     try:
-        from .config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig
+        from .config import DEFAULT_MODEL, SDKConfig, normalize_model
     except ImportError:
-        from config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
+        from config import DEFAULT_MODEL, SDKConfig, normalize_model  # type: ignore[no-redef]
+
+    def _normalize_model_with_warning(model_name: Optional[str]) -> Optional[str]:
+        if model_name is None:
+            return None
+        normalized = normalize_model(model_name)
+        if normalized != model_name:
+            print(f"WARNING: '{model_name}' is deprecated; use '{normalized}'", file=sys.stderr)
+        return normalized
 
     # 環境変数から base 設定を読み込み
     cfg = SDKConfig.from_env()
@@ -625,16 +734,21 @@ def _build_config(args: argparse.Namespace):
         cfg.model = DEFAULT_MODEL
     # Auto モデル解決
     cfg.model, _ = _resolve_model(cfg.model)
+    cfg.model = _normalize_model_with_warning(cfg.model) or DEFAULT_MODEL
     _raw_review_model = getattr(args, "review_model", None)
     if _raw_review_model:
         cfg.review_model, _ = _resolve_model(_raw_review_model)
+        cfg.review_model = _normalize_model_with_warning(cfg.review_model)
     elif getattr(cfg, "review_model", None):
         cfg.review_model, _ = _resolve_model(cfg.review_model)
+        cfg.review_model = _normalize_model_with_warning(cfg.review_model)
     _raw_qa_model = getattr(args, "qa_model", None)
     if _raw_qa_model:
         cfg.qa_model, _ = _resolve_model(_raw_qa_model)
+        cfg.qa_model = _normalize_model_with_warning(cfg.qa_model)
     elif getattr(cfg, "qa_model", None):
         cfg.qa_model, _ = _resolve_model(cfg.qa_model)
+        cfg.qa_model = _normalize_model_with_warning(cfg.qa_model)
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
     cfg.force_interactive = getattr(args, "force_interactive", False)
@@ -734,6 +848,7 @@ def _build_params(args: argparse.Namespace) -> dict:
         # AKM では、フラグ未指定(None)の場合はデフォルトで True とする
         force_refresh = getattr(args, "force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
+        params["enable_auto_merge"] = getattr(args, "enable_auto_merge", False)
     elif getattr(args, "workflow", None) == "aqod":
         params["target_scope"] = getattr(args, "target_scope", None) or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = getattr(args, "depth", None) or _AQOD_DEFAULT_DEPTH
@@ -752,8 +867,8 @@ def _build_params(args: argparse.Namespace) -> dict:
     if getattr(args, "workflow", None) == "adoc":
         params["target_dirs"] = getattr(args, "target_dirs", None) or ""
         params["exclude_patterns"] = getattr(args, "exclude_patterns", None) or "node_modules/,vendor/,dist/,*.lock,__pycache__/"
-        params["doc_purpose"] = getattr(args, "doc_purpose", None) or "all"
-        params["max_file_lines"] = getattr(args, "max_file_lines", None) or 500
+        params["doc_purpose"] = getattr(args, "doc_purpose", None) or _ADOC_DEFAULT_DOC_PURPOSE
+        params["max_file_lines"] = getattr(args, "max_file_lines", None) or _ADOC_DEFAULT_MAX_FILE_LINES
 
     # Issue タイトル上書き
     if args.issue_title:
@@ -913,7 +1028,7 @@ def _cmd_run_interactive() -> int:
         verbosity_value = 2  # normal（クイック全自動は長時間実行が前提のため、compact より情報量の多い normal を採用）
         timeout_val = 86400.0  # 24時間
         auto_qa = False
-        qa_answer_mode = None
+        qa_answer_mode = "all"
         force_interactive = False
         auto_review = False
         create_issues = False
@@ -926,9 +1041,7 @@ def _cmd_run_interactive() -> int:
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
-            params_extra["sources"] = _AKM_DEFAULT_SOURCES
-            params_extra["target_files"] = _default_akm_target_files(params_extra["sources"])
-            params_extra["force_refresh"] = True
+            params_extra.update(_prompt_akm_params(con, is_quick_auto=True))
         elif is_aqod:
             params_extra["target_scope"] = _AQOD_DEFAULT_TARGET_SCOPE
             params_extra["depth"] = _AQOD_DEFAULT_DEPTH
@@ -938,6 +1051,8 @@ def _cmd_run_interactive() -> int:
             for param_name in wf.params:
                 if param_name == "doc_purpose":
                     val = _prompt_valid_doc_purpose(con)
+                elif param_name == "max_file_lines":
+                    val = _prompt_valid_max_file_lines(con)
                 else:
                     val = con.prompt_input(f"{param_name}", required=True)
                 params_extra[param_name] = val
@@ -1037,10 +1152,13 @@ def _cmd_run_interactive() -> int:
         # ── ワークフロー固有パラメータ ────────────────────────
         params_extra: dict = {}
         if is_akm:
-            # AKM の固有パラメータはデフォルト値で自動設定
-            params_extra["sources"] = _AKM_DEFAULT_SOURCES
-            params_extra["target_files"] = _default_akm_target_files(params_extra["sources"])
-            params_extra["force_refresh"] = True
+            params_extra.update(
+                _prompt_akm_params(
+                    con,
+                    is_quick_auto=False,
+                    will_create_pr=(create_issues or create_pr),
+                )
+            )
         elif is_aqod:
             params_extra["target_scope"] = con.prompt_input(
                 "target_scope", default=_AQOD_DEFAULT_TARGET_SCOPE
@@ -1051,6 +1169,8 @@ def _cmd_run_interactive() -> int:
             for param_name in wf.params:
                 if param_name == "doc_purpose":
                     val = _prompt_valid_doc_purpose(con)
+                elif param_name == "max_file_lines":
+                    val = _prompt_valid_max_file_lines(con)
                 else:
                     val = con.prompt_input(f"{param_name}", required=True)
                 params_extra[param_name] = val
@@ -1100,7 +1220,11 @@ def _cmd_run_interactive() -> int:
         f"ドライラン   : {'ON' if dry_run else 'OFF'}",
     ]
     for k, v in params_extra.items():
-        summary_lines.append(f"{k:<13}: {v}")
+        if isinstance(v, bool):
+            display_v = "ON" if v else "OFF"
+        else:
+            display_v = v if v else "(なし)"
+        summary_lines.append(f"{k:<18}: {display_v}")
     if additional_prompt:
         summary_lines.append(f"追加プロンプト: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
 

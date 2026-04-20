@@ -66,6 +66,7 @@ class TestBuildRootRef:
         assert "<!-- auto-review: true -->" in ref
         assert "<!-- auto-context-review: true -->" in ref
         assert "<!-- auto-qa: true -->" in ref
+        assert "<!-- auto-merge: false -->" in ref
 
     def test_with_params(self):
         ref = _build_root_ref(
@@ -74,6 +75,7 @@ class TestBuildRootRef:
                 "branch": "develop",
                 "skip_review": True,
                 "skip_qa": True,
+                "enable_auto_merge": True,
                 "resource_group": "rg-test",
                 "app_ids": ["APP-01", "APP-02"],
                 "batch_job_id": "JOB-1,JOB-2",
@@ -82,6 +84,7 @@ class TestBuildRootRef:
         assert "<!-- branch: develop -->" in ref
         assert "<!-- auto-review: false -->" in ref
         assert "<!-- auto-qa: false -->" in ref
+        assert "<!-- auto-merge: true -->" in ref
         assert "<!-- resource-group: rg-test -->" in ref
         assert "<!-- app-ids: APP-01, APP-02 -->" in ref
         assert "<!-- batch-job-ids: JOB-1,JOB-2 -->" in ref
@@ -328,6 +331,43 @@ class TestCollectParams:
             params = collect_params(wf)
         assert params["max_file_lines"] == 300
 
+    def test_akm_collect_params_skips_auto_merge_prompt_when_no_pr(self):
+        wf = get_workflow("akm")
+        inputs = iter([
+            "main",  # branch
+            "1",     # sources -> qa
+            "",      # target_files (default)
+            "n",     # force_refresh
+            "",      # custom_source_dir
+            "",      # selected_steps = all
+            "n",     # skip_review
+            "n",     # skip_qa
+            "",      # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf, will_create_pr=False)
+        assert params["sources"] == "qa"
+        assert params["enable_auto_merge"] is False
+
+    def test_akm_collect_params_asks_auto_merge_prompt_when_pr(self):
+        wf = get_workflow("akm")
+        inputs = iter([
+            "main",  # branch
+            "1",     # sources -> qa
+            "",      # target_files (default)
+            "n",     # force_refresh
+            "",      # custom_source_dir
+            "y",     # enable_auto_merge
+            "",      # selected_steps = all
+            "n",     # skip_review
+            "n",     # skip_qa
+            "",      # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf, will_create_pr=True)
+        assert params["sources"] == "qa"
+        assert params["enable_auto_merge"] is True
+
 
 # ---------------------------------------------------------------------------
 # resolve_selected_steps
@@ -394,10 +434,12 @@ class TestBuildRootIssueBody:
             "branch": "feature/x",
             "app_ids": ["APP-05"],
             "app_id": "APP-05",
+            "enable_auto_merge": True,
             "resource_group": "rg-prod",
             "usecase_id": "UC-42",
         })
         assert "# [ASDW]" in body
+        assert "<!-- auto-merge: true -->" in body
         assert "<!-- app-ids: APP-05 -->" in body
         assert "<!-- resource-group: rg-prod -->" in body
         assert "APP-ID: `APP-05`" in body
@@ -434,7 +476,7 @@ class TestBuildRootIssueBody:
     def test_adoc_title_prefix(self):
         wf = get_workflow("adoc")
         body = build_root_issue_body(wf, {"branch": "main"})
-        assert "# [ADOC] App Documentation" in body
+        assert "# [ADOC] Source Codeからのドキュメント作成" in body
 
 
 # ---------------------------------------------------------------------------

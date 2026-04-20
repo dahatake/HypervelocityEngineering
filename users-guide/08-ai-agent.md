@@ -98,6 +98,14 @@ Prompt:
 
 ````
 
+
+## AAD / ASDW 連携チェーン図
+
+AI Agent 関連ステップ（AAD: 8.1〜8.3、ASDW: 2.6〜2.8）は以下のチェーン図で確認できます。
+
+- [AAD チェーン図（AI Agent 設計を含む）](./images/chain-aad.svg)
+- [ASDW チェーン図（AI Agent 実装/Deploy を含む）](./images/chain-asdw.svg)
+
 ---
 
 # Step 2. Agent 粒度設計とアーキテクチャ骨格（Agent Catalog + Components）

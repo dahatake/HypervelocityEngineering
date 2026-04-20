@@ -2,20 +2,46 @@
 
 from __future__ import annotations
 
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-DEFAULT_MODEL: str = "claude-opus-4-7"
+DEFAULT_MODEL: str = "claude-opus-4.7"
+LEGACY_MODEL_ID: str = "claude-opus-4-7"
 MODEL_CHOICES: tuple[str, ...] = (
-    "claude-opus-4-7",
+    "claude-opus-4.7",
     "claude-opus-4.6",
     "claude-sonnet-4.6",
     "gpt-5.4",
     "gpt-5.3-codex",
     "gemini-2.5-pro",
 )
+_MODEL_ALIASES = {
+    LEGACY_MODEL_ID: "claude-opus-4.7",
+}
+_DEPRECATED_MODEL_WARNED: set[str] = set()
+
+
+def normalize_model(name: str) -> str:
+    """旧ハイフン区切りのモデル ID をドット区切りへ正規化する。
+    Copilot CLI の /model 実機出力に合わせた後方互換レイヤ。
+    """
+    if not name:
+        return name
+    return _MODEL_ALIASES.get(name, name)
+
+
+def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
+    """モデル名を正規化し、旧表記を 1 回だけ警告出力する。"""
+    if name is None:
+        return None
+    normalized = normalize_model(name)
+    if normalized != name and name not in _DEPRECATED_MODEL_WARNED:
+        print(f"WARNING: '{name}' is deprecated; use '{normalized}'", file=sys.stderr)
+        _DEPRECATED_MODEL_WARNED.add(name)
+    return normalized
 
 
 def generate_run_id() -> str:
@@ -129,17 +155,22 @@ class SDKConfig:
     # --- その他 ---
     dry_run: bool = False                   # ドライラン
 
+    def __post_init__(self) -> None:
+        self.model = _normalize_model_with_warning(self.model) or DEFAULT_MODEL
+        self.review_model = _normalize_model_with_warning(self.review_model)
+        self.qa_model = _normalize_model_with_warning(self.qa_model)
+
     @classmethod
     def from_env(cls) -> "SDKConfig":
         """環境変数から SDKConfig を構築する。"""
         import os
         return cls(
-            model=os.environ.get("MODEL", DEFAULT_MODEL),
+            model=_normalize_model_with_warning(os.environ.get("MODEL", DEFAULT_MODEL)) or DEFAULT_MODEL,
             github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
             repo=os.environ.get("REPO", ""),
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
-            review_model=os.environ.get("REVIEW_MODEL") or None,
-            qa_model=os.environ.get("QA_MODEL") or None,
+            review_model=_normalize_model_with_warning(os.environ.get("REVIEW_MODEL") or None),
+            qa_model=_normalize_model_with_warning(os.environ.get("QA_MODEL") or None),
         )
 
     def get_review_model(self) -> str:

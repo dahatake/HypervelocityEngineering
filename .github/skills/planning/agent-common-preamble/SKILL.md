@@ -33,6 +33,7 @@ metadata:
 - `harness-error-recovery`：エラー発生時の3要素出力
 - `docs-output-format`：`docs/` 成果物フォーマットの共通原則
 - `knowledge-management`：knowledge/ の分類・状態判定・更新手順
+- `knowledge-lookup`：タスク実行中に業務要件が不明瞭な場合の knowledge/ 条件付き参照ルール
 
 ## 分割ルール
 
@@ -63,6 +64,11 @@ bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
 3. 不一致がある場合は「stale」と判定し、knowledge ファイルの再生成を優先する
 4. 再生成時は work-artifacts-layout §4.1（削除→新規作成）に従い、メタブロックも最新 SHA で再作成する
 
+## knowledge/ 条件付き参照（タスク実行中）
+
+タスク実行中に業務要件・仕様・用語が不明瞭な場合は、Skill `knowledge-lookup` を参照すること。
+Agent 固有の `### knowledge/ 参照` セクションで指定された D 番号はそちらを優先する。
+
 ## 入力ファイル確認
 
 → Skill `input-file-validation` を参照。Agent 固有の必読ファイルリストは Agent 側で定義する。
@@ -89,5 +95,6 @@ bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
 | `harness-error-recovery` | 参照 | エラー発生時の3要素出力 |
 | `docs-output-format` | 参照 | `docs/` 成果物フォーマットの共通原則 |
 | `knowledge-management` | 参照 | knowledge/ 分類・状態判定・ステータス管理 |
+| `knowledge-lookup` | 参照 | タスク実行中の knowledge/ 条件付き参照ルール |
 | `input-file-validation` | 参照 | 入力ファイル確認・欠損時処理 |
 | `app-scope-resolution` | 参照 | APP-ID スコープ解決 |

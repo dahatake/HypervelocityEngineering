@@ -100,6 +100,15 @@ jobs:
             echo "posted=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Checkout helper scripts
+        if: >
+          steps.detect-qa.outputs.found == 'true'
+          && steps.guard.outputs.posted != 'true'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts
+
       - name: 質問票ファイルの内容を GitHub API 経由で取得し PR コメントとして投稿
         if: >
           steps.detect-qa.outputs.found == 'true'
@@ -108,6 +117,7 @@ jobs:
           QA_FILE: ${{ steps.detect-qa.outputs.qa_file }}
         run: |
           set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/yaml-safe-helpers.sh"
 
           # GitHub コメントの上限は 65536 文字。余裕を持って 60000 文字で切り詰める
           # CONTENT_MAX_CHARS: 切り詰め判定の閾値
@@ -115,7 +125,7 @@ jobs:
           CONTENT_MAX_CHARS=60000
           CONTENT_TRUNCATE_AT=58000
 
-          # ファイル内容を GitHub API 経由で取得（untrusted code execution を避けるため checkout しない）
+          # 質問票本文は GitHub API 経由で取得（PR由来コードの実行を避けるため。checkout は helper scripts 取得用途のみ）
           file_content_b64=$(gh api \
             "/repos/${REPO}/contents/${QA_FILE}?ref=${HEAD_SHA}" \
             --jq '.content' 2>&1) || {
@@ -133,19 +143,11 @@ jobs:
           encoded_path=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe='/'))" "${QA_FILE}")
 
           # 文字数チェックと切り詰めを Python で統一（日本語等マルチバイト文字を文字単位で扱う）
-          char_count=$(QA_CONTENT="${qa_content}" python3 - <<'PY'
-import os
-print(len(os.environ["QA_CONTENT"]))
-PY
-          )
+          char_count=$(QA_CONTENT="${qa_content}" wh_char_count)
           truncated_note=""
           if [ "${char_count}" -gt "${CONTENT_MAX_CHARS}" ]; then
             echo "::warning::ファイルが大きいため（約${char_count}文字）、先頭 ${CONTENT_TRUNCATE_AT} 文字のみ投稿します。"
-            qa_content=$(QA_CONTENT="${qa_content}" CONTENT_TRUNCATE_AT="${CONTENT_TRUNCATE_AT}" python3 - <<'PY'
-import os
-print(os.environ["QA_CONTENT"][:int(os.environ["CONTENT_TRUNCATE_AT"])], end="")
-PY
-            )
+            qa_content=$(QA_CONTENT="${qa_content}" CONTENT_TRUNCATE_AT="${CONTENT_TRUNCATE_AT}" wh_truncate)
             truncated_note="
 
 ---

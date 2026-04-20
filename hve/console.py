@@ -26,6 +26,25 @@ def timestamp_prefix() -> str:
     return f"[{datetime.now().strftime('%H:%M:%S')}]"
 
 
+def _format_elapsed_ja(seconds: float) -> str:
+    """秒数を日本語の経過時間表記に変換する。
+
+    入力値は `int(seconds)` で整数秒へ切り捨てる。
+    表示では 0 の時間・分は省略し、秒は常に表示する。
+    例: 59.9 -> 「59秒」、61 -> 「1分1秒」、3600 -> 「1時間0秒」。
+    """
+    total = int(seconds)
+    h, remainder = divmod(total, 3600)
+    m, s = divmod(remainder, 60)
+    parts: List[str] = []
+    if h:
+        parts.append(f"{h}時間")
+    if m:
+        parts.append(f"{m}分")
+    parts.append(f"{s}秒")
+    return "".join(parts)
+
+
 # ------------------------------------------------------------------
 # 定数
 # ------------------------------------------------------------------
@@ -1346,7 +1365,7 @@ class Console:
             f"{s.GREEN}✅ 成功{s.RESET}      : {success}",
             f"{s.RED}❌ 失敗{s.RESET}      : {failed}",
             f"{s.YELLOW}⏭️  スキップ{s.RESET}  : {skipped}",
-            f"⏱️  合計時間  : {elapsed:.1f}s",
+            f"⏱️  合計時間  : {_format_elapsed_ja(elapsed)}",
         ], ts=True)
 
     # ------------------------------------------------------------------
@@ -1492,4 +1511,3 @@ class Console:
     def error(self, msg: str) -> None:
         """エラー表示。常に表示（quiet でも表示）。"""
         print(f"{timestamp_prefix()} ❌ ERROR: {msg}", file=sys.stderr, flush=True)
-

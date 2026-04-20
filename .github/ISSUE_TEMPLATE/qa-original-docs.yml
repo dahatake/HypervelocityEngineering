@@ -1,4 +1,4 @@
-name: "QA Original Docs Review（AQOD）"
+name: "QA Original Docs Review"
 description: "original-docs/ を横断分析し、不明瞭点・矛盾点の質問票を自動生成する"
 title: "[AQOD-ROOT] original-docs 質問票生成"
 labels:
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        ## AQOD: QA Original Docs Review
+        ## QA Original Docs Review
 
         `original-docs/` 配下を横断分析し、質問票 (`qa/QA-DocConsistency-Issue-<N>.md`) を生成します。
 
@@ -57,7 +57,7 @@ body:
       label: "使用するモデル"
       options:
         - "Auto"
-        - "claude-opus-4-7"
+        - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"
         - "gpt-5.4"

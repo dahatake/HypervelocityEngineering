@@ -2,6 +2,10 @@
 
 このページは `sourcecode-documentation.md` へ移行しました。
 
+`adoc`（`src/`→`docs-generated/`）は、`akm`/`aqod` で精緻化される `knowledge/` と並行して参照し、要件と実装の差分確認に利用します。
+
+![src から docs-generated を生成し、knowledge と並行参照する関係を示す図](./images/knowledge-interface-flow.svg)
+
 - 最新版: [sourcecode-documentation.md](./sourcecode-documentation.md)
 - 分類一覧: [overview.md](./overview.md#フェーズ一覧)
 

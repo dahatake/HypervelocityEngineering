@@ -288,6 +288,11 @@ class QAMerger:
         return choices
 
     @staticmethod
+    def _normalize_structured_question_markers(content: str) -> str:
+        """[Q01] 見出しの Markdown 装飾ゆらぎを正規化する。"""
+        return re.sub(r"\*{1,3}(\[Q\d+\])\*{1,3}", r"\1", content)
+
+    @staticmethod
     def _parse_structured_questions(content: str) -> List[QAQuestion]:
         """新形式の構造化質問票（[Q01]形式）をパースする。
 
@@ -295,6 +300,7 @@ class QAMerger:
         選択肢ラベルは英字（A/B/C...）を維持する。
         数字ラベル（1./2./3.）の場合は英字に変換する。
         """
+        content = QAMerger._normalize_structured_question_markers(content)
         questions: List[QAQuestion] = []
         blocks = re.split(r"^\[Q(\d+)\]\s*$", content, flags=re.MULTILINE)
         for i in range(1, len(blocks), 2):
@@ -693,4 +699,3 @@ def _split_table_row(line: str) -> List[str]:
     """
     stripped = line.strip().lstrip("|").rstrip("|")
     return [cell.strip() for cell in stripped.split("|")]
-

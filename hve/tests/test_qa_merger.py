@@ -623,6 +623,19 @@ _STRUCTURED_NUMERIC_LABELS = """\
 - 未回答のまま進めた場合の影響: なし
 """
 
+_STRUCTURED_MARKDOWN_DECORATED_TEMPLATE = """\
+{marker}
+- 分類項目: フォーマット
+- 重要度: 高
+- 質問文: 装飾付きQ見出しがパースできるか
+- 選択肢:
+  A. はい
+  B. いいえ
+- 未回答時の既定値候補: A. はい
+- 既定値候補の理由: 回帰防止
+- 未回答のまま進めた場合の影響: パース失敗でフォールバック
+"""
+
 
 class TestLegacyFormatBackwardCompatibility(unittest.TestCase):
     """旧形式（デフォルトの回答案 / 選択理由）テーブルの後方互換テスト"""
@@ -721,6 +734,29 @@ class TestStructuredNumericLabelConversion(unittest.TestCase):
         self.assertEqual(self.q.choices[0].text, "選択肢A")
         self.assertEqual(self.q.choices[1].text, "選択肢B")
         self.assertEqual(self.q.choices[2].text, "選択肢C")
+
+
+class TestStructuredQuestionMarkerDecoration(unittest.TestCase):
+    """[Q01] 見出しの Markdown 装飾ゆらぎを許容する。"""
+
+    def _assert_single_question_parsed(self, marker: str) -> None:
+        content = _STRUCTURED_MARKDOWN_DECORATED_TEMPLATE.format(marker=marker)
+        doc = QAMerger.parse_qa_content(content)
+        self.assertEqual(len(doc.questions), 1)
+        self.assertEqual(doc.questions[0].no, 1)
+        self.assertIn("装飾付きQ見出し", doc.questions[0].question)
+
+    def test_marker_without_decoration(self):
+        self._assert_single_question_parsed("[Q01]")
+
+    def test_marker_with_bold(self):
+        self._assert_single_question_parsed("**[Q01]**")
+
+    def test_marker_with_bold_italic(self):
+        self._assert_single_question_parsed("***[Q01]***")
+
+    def test_marker_with_italic(self):
+        self._assert_single_question_parsed("*[Q01]*")
 
 
 class TestQAQuestionNewFields(unittest.TestCase):

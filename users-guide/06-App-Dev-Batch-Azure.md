@@ -43,9 +43,66 @@
 | `docs/batch/batch-test-strategy.md` | Step.4.5: `Arch-Batch-TestStrategy` | Step.5.3 の入力 |
 
 > ❗ 上記ファイルがまだ存在しない場合は、先に「設計フェーズ」チュートリアルを完了してください。  
-> → 参照: [`users-guide/04-AppDesign-Batch.md`](./04-AppDesign-Batch.md)
+> → 参照: [`users-guide/04-app-design-batch.md`](./04-app-design-batch.md)
 
 ---
+
+## Agent チェーン図（ABDV）
+
+以下の図は、このワークフローで使用される Custom Agent がファイルの入出力を介してどのように連鎖するかを示します。
+
+```mermaid
+flowchart TD
+  s1_1["Dev-Batch-Deploy [1.1]"]
+  s1_2["Dev-Batch-Deploy [1.2]"]
+  s2_1["Dev-Batch-TestCoding [2.1]"]
+  s2_2["Dev-Batch-ServiceCoding [2.2]"]
+  s3["Dev-Batch-Deploy [3]"]
+  s4_1{{"QA-AzureArchitectureReview [4.1]"}}
+  s4_2{{"QA-AzureDependencyReview [4.2]"}}
+  s1_1 -->|"docs/batch/batch-service-catalog.md"| s1_2
+  s1_2 -->|"docs/batch/batch-service-catalog.md"| s2_1
+  s2_1 -->|"docs/test-specs/{jobId}-test-spec.md"| s2_2
+  s2_2 -->|"docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md"| s3
+  s3 -->|"docs/batch/batch-service-catalog.md"| s4_1
+  s3 -->|"docs/batch/batch-service-catalog.md"| s4_2
+  s1_1 -. "knowledge/ 参照" .-> kn
+  s1_2 -. "knowledge/ 参照" .-> kn
+  s2_1 -. "knowledge/ 参照" .-> kn
+  s2_2 -. "knowledge/ 参照" .-> kn
+  s3 -. "knowledge/ 参照" .-> kn
+  s4_1 -. "knowledge/ 参照" .-> kn
+  s4_2 -. "knowledge/ 参照" .-> kn
+  kn[/"knowledge/"/]
+  classDef arch fill:#4A90D9,stroke:#1f3a5a,color:#fff;
+  classDef dev fill:#50C878,stroke:#1b5e20,color:#111;
+  classDef doc fill:#9B59B6,stroke:#4a235a,color:#fff;
+  classDef qa fill:#E67E22,stroke:#7e3d00,color:#111;
+  classDef km fill:#F39C12,stroke:#7a4f00,color:#111,stroke-width:3px;
+  classDef file fill:#95A5A6,stroke:#5d6d73,color:#111;
+  class s1_1 dev;
+  class s1_2 dev;
+  class s2_1 dev;
+  class s2_2 dev;
+  class s3 dev;
+  class s4_1 qa;
+  class s4_2 qa;
+  class kn file;
+  style s1_1 stroke-width:3px
+  style s1_2 stroke-width:3px
+  style s3 stroke-width:3px
+  subgraph LEG["凡例"]
+    la(["Arch-*（青）: 設計"]):::arch
+    ld["Dev-*（緑）: 実装"]:::dev
+    lc{"Doc-*（紫）: 文書生成"}:::doc
+    lq{{"QA-*（橙）: 品質確認"}}:::qa
+    lk[["KnowledgeManager（金）"]]:::km
+    lf[/"ファイル/ディレクトリ（灰）"/]:::file
+  end
+```
+
+![ABDV: Dev-Batch-Deploy → QA-AzureDependencyReview の7ステップチェーン（並列1箇所含む）](./images/chain-abdv.svg)
+
 
 ## 全体フロー概観
 
@@ -154,7 +211,7 @@ Sub Issue の状態:
 | step-4.5 | [`Arch-Batch-TestStrategy`](../.github/agents/Arch-Batch-TestStrategy.agent.md) | `batch-service-catalog.md`, `batch-data-model.md` | `docs/batch/batch-test-strategy.md` |
 | step-5.1 | [`Arch-Batch-JobSpec`](../.github/agents/Arch-Batch-JobSpec.agent.md) | `batch-service-catalog.md`, `batch-job-catalog.md`, `batch-data-model.md` | `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md` |
 | step-5.2 | [`Arch-Batch-MonitoringDesign`](../.github/agents/Arch-Batch-MonitoringDesign.agent.md) | `batch-service-catalog.md`, `batch-job-catalog.md` | `docs/batch/batch-monitoring-design.md` |
-| step-5.3 | [`Arch-Batch-TDDTestSpec`](../.github/agents/Arch-Batch-TDDTestSpec.agent.md) | `batch-test-strategy.md`, `jobs/*-spec.md`, `batch-monitoring-design.md` | `docs/test-specs/{jobId}-test-spec.md` |
+| step-5.3 | [`Arch-Batch-TDD-TestSpec`](../.github/agents/Arch-Batch-TDD-TestSpec.agent.md) | `batch-test-strategy.md`, `jobs/*-spec.md`, `batch-monitoring-design.md` | `docs/test-specs/{jobId}-test-spec.md` |
 
 ### Custom Agent を手動でアサインする場合
 
@@ -277,7 +334,7 @@ docs/
 
 | Workflow | トリガー | 用途 |
 |---|---|---|
-| [`deploy-api-functions.yml`](../.github/workflows/deploy-api-functions.yml) | `workflow_dispatch` + push（main） | Azure Functions サービスのデプロイ |
+| [`auto-batch-dev.yml`](../.github/workflows/auto-batch-dev.yml) | `issues`（ラベル駆動） | バッチ実装（ABDV）オーケストレーション |
 
 ---
 
@@ -384,7 +441,7 @@ docs/
 | [`.github/workflows/advance-subissues.yml`](../.github/workflows/advance-subissues.yml) | Sub Issue 完了後に次 Sub Issue を自動アドバンス |
 | [`.github/workflows/check-split-mode.yml`](../.github/workflows/check-split-mode.yml) | 分割モード違反の検知 |
 | [`.github/workflows/validate-plan.yml`](../.github/workflows/validate-plan.yml) | `plan.md` 分割判定の検証 |
-| [`.github/workflows/deploy-api-functions.yml`](../.github/workflows/deploy-api-functions.yml) | Azure Functions デプロイ |
+| [`.github/workflows/auto-batch-dev.yml`](../.github/workflows/auto-batch-dev.yml) | バッチ実装（ABDV）オーケストレーター |
 
 ### Custom Agents（Arch-Batch-* 設計系）
 
@@ -398,7 +455,7 @@ docs/
 | [`.github/agents/Arch-Batch-TestStrategy.agent.md`](../.github/agents/Arch-Batch-TestStrategy.agent.md) | step-4.5 | `docs/batch/batch-test-strategy.md` |
 | [`.github/agents/Arch-Batch-JobSpec.agent.md`](../.github/agents/Arch-Batch-JobSpec.agent.md) | step-5.1 | `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md` |
 | [`.github/agents/Arch-Batch-MonitoringDesign.agent.md`](../.github/agents/Arch-Batch-MonitoringDesign.agent.md) | step-5.2 | `docs/batch/batch-monitoring-design.md` |
-| [`.github/agents/Arch-Batch-TDDTestSpec.agent.md`](../.github/agents/Arch-Batch-TDDTestSpec.agent.md) | step-5.3 | `docs/test-specs/{jobId}-test-spec.md` |
+| [`.github/agents/Arch-Batch-TDD-TestSpec.agent.md`](../.github/agents/Arch-Batch-TDD-TestSpec.agent.md) | step-5.3 | `docs/test-specs/{jobId}-test-spec.md` |
 
 ### Custom Agents（Dev-Microservice-Azure-* 実装系）
 
@@ -413,7 +470,7 @@ docs/
 
 | ファイル | 説明 |
 |---|---|
-| [`users-guide/04-AppDesign-Batch.md`](./04-AppDesign-Batch.md) | ABD ワークフロー詳細運用ドキュメント |
-| [`docs/batch/batch-agent-common-patterns.md`](../batch/batch-agent-common-patterns.md) | Batch Agent 共通パターン集 |
+| [`users-guide/04-app-design-batch.md`](./04-app-design-batch.md) | ABD ワークフロー詳細運用ドキュメント |
+| [`users-guide/workflow-reference.md`](./workflow-reference.md) | Batch Agent を含む全 Agent 一覧・最新ワークフロー定義 |
 | [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) | リポジトリ全体の Copilot Agent 運用ルール |
-| [`work/Issue-20260306-batch-implementation-workflow-plan/contracts/asset-inventory.md`](../work/Issue-20260306-batch-implementation-workflow-plan/contracts/asset-inventory.md) | GitHub 運用資産 棚卸し & 命名規約 |
+| [`work/docs-update/findings.md`](../work/docs-update/findings.md) | ドキュメント整合更新の実測 Findings（本改修） |

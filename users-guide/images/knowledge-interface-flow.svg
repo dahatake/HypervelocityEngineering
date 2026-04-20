@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img"
+     aria-labelledby="svg-title svg-desc"
+     font-family="'Segoe UI','Hiragino Kaku Gothic ProN','Meiryo',sans-serif">
+  <title id="svg-title">knowledge/ を介した要求定義の一元管理フロー</title>
+  <desc id="svg-desc">3つの情報源（original-docs/, qa/, src/）から、aqod / akm / adoc の3ワークフローを経由して knowledge/ と docs-generated/ を生成。設計・開発ワークフローが knowledge/ を業務コンテキストとして自動参照し、反復により精緻化される。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+    </marker>
+    <style><![CDATA[
+      .title{font-size:22px;font-weight:700;fill:#222}
+      .group-title{font-size:14px;font-weight:700;fill:#444}
+      .node-title{font-size:14px;font-weight:700}
+      .node-sub{font-size:11px}
+      .edge-label{font-size:11px;fill:#333;font-weight:600}
+      .iter-label{font-size:12px;fill:#b71c1c;font-weight:700;font-style:italic}
+      .legend{font-size:11px;fill:#555}
+      .input-box{fill:#e3f2fd;stroke:#1976d2;stroke-width:1.5}
+      .wf-box{fill:#fff3e0;stroke:#f57c00;stroke-width:1.5}
+      .output-box{fill:#e8f5e9;stroke:#388e3c;stroke-width:2}
+      .consumer-box{fill:#fce4ec;stroke:#c2185b;stroke-width:1.5}
+      .group-frame{fill:none;stroke:#bbb;stroke-width:1;stroke-dasharray:4 3}
+      .edge{stroke:#555;stroke-width:1.8;fill:none}
+      .edge-iter{stroke:#b71c1c;stroke-width:1.8;fill:none;stroke-dasharray:6 4}
+    ]]></style>
+  </defs>
+  <text x="600" y="34" text-anchor="middle" class="title">knowledge/ を介した要求定義の一元管理フロー</text>
+  <text x="600" y="54" text-anchor="middle" class="legend">3つの情報源 → 3つのワークフロー → knowledge/ (D01〜D21) → 設計・開発ワークフローが自動参照し反復精緻化</text>
+  <rect x="40" y="90" width="240" height="410" rx="8" class="group-frame"/>
+  <text x="160" y="112" text-anchor="middle" class="group-title">① 情報源（入力）</text>
+  <rect x="60" y="140" width="200" height="80" rx="6" class="input-box"/>
+  <text x="160" y="170" text-anchor="middle" class="node-title" fill="#0d47a1">original-docs/</text>
+  <text x="160" y="190" text-anchor="middle" class="node-sub" fill="#0d47a1">既存ビジネス分析</text>
+  <text x="160" y="206" text-anchor="middle" class="node-sub" fill="#0d47a1">ドキュメント（読み取り専用）</text>
+  <rect x="60" y="260" width="200" height="80" rx="6" class="input-box"/>
+  <text x="160" y="290" text-anchor="middle" class="node-title" fill="#0d47a1">qa/</text>
+  <text x="160" y="310" text-anchor="middle" class="node-sub" fill="#0d47a1">開発中に生じる</text>
+  <text x="160" y="326" text-anchor="middle" class="node-sub" fill="#0d47a1">質問票</text>
+  <rect x="60" y="380" width="200" height="80" rx="6" class="input-box"/>
+  <text x="160" y="410" text-anchor="middle" class="node-title" fill="#0d47a1">src/</text>
+  <text x="160" y="430" text-anchor="middle" class="node-sub" fill="#0d47a1">既存ソースコード</text>
+  <text x="160" y="446" text-anchor="middle" class="node-sub" fill="#0d47a1">（資産活用）</text>
+  <rect x="350" y="90" width="260" height="410" rx="8" class="group-frame"/>
+  <text x="480" y="112" text-anchor="middle" class="group-title">② ワークフロー</text>
+  <rect x="370" y="140" width="220" height="80" rx="6" class="wf-box"/>
+  <text x="480" y="166" text-anchor="middle" class="node-title" fill="#e65100">aqod</text>
+  <text x="480" y="184" text-anchor="middle" class="node-sub" fill="#e65100">auto-aqod.yml</text>
+  <text x="480" y="200" text-anchor="middle" class="node-sub" fill="#e65100">原本 → 質問票生成</text>
+  <rect x="370" y="260" width="220" height="80" rx="6" class="wf-box"/>
+  <text x="480" y="286" text-anchor="middle" class="node-title" fill="#e65100">akm</text>
+  <text x="480" y="304" text-anchor="middle" class="node-sub" fill="#e65100">auto-knowledge-management.yml</text>
+  <text x="480" y="320" text-anchor="middle" class="node-sub" fill="#e65100">KnowledgeManager Agent</text>
+  <rect x="370" y="380" width="220" height="80" rx="6" class="wf-box"/>
+  <text x="480" y="406" text-anchor="middle" class="node-title" fill="#e65100">adoc</text>
+  <text x="480" y="424" text-anchor="middle" class="node-sub" fill="#e65100">auto-app-documentation.yml</text>
+  <text x="480" y="440" text-anchor="middle" class="node-sub" fill="#e65100">Doc-* Agents 19種</text>
+  <rect x="680" y="90" width="240" height="410" rx="8" class="group-frame"/>
+  <text x="800" y="112" text-anchor="middle" class="group-title">③ 成果物</text>
+  <rect x="700" y="210" width="200" height="110" rx="6" class="output-box"/>
+  <text x="800" y="238" text-anchor="middle" class="node-title" fill="#1b5e20">knowledge/</text>
+  <text x="800" y="260" text-anchor="middle" class="node-sub" fill="#1b5e20">D01〜D21</text>
+  <text x="800" y="278" text-anchor="middle" class="node-sub" fill="#1b5e20">要求定義書</text>
+  <text x="800" y="300" text-anchor="middle" class="node-sub" fill="#1b5e20" font-weight="700">（本リポジトリの中核）</text>
+  <rect x="700" y="360" width="200" height="80" rx="6" class="output-box"/>
+  <text x="800" y="388" text-anchor="middle" class="node-title" fill="#1b5e20">docs-generated/</text>
+  <text x="800" y="408" text-anchor="middle" class="node-sub" fill="#1b5e20">技術ドキュメント</text>
+  <rect x="970" y="90" width="210" height="410" rx="8" class="group-frame"/>
+  <text x="1075" y="112" text-anchor="middle" class="group-title">④ 参照する設計・開発WF</text>
+  <rect x="985" y="140" width="180" height="50" rx="6" class="consumer-box"/>
+  <text x="1075" y="170" text-anchor="middle" class="node-title" fill="#880e4f">aas (アーキ設計)</text>
+  <rect x="985" y="200" width="180" height="50" rx="6" class="consumer-box"/>
+  <text x="1075" y="230" text-anchor="middle" class="node-title" fill="#880e4f">aad (アプリ設計)</text>
+  <rect x="985" y="260" width="180" height="50" rx="6" class="consumer-box"/>
+  <text x="1075" y="290" text-anchor="middle" class="node-title" fill="#880e4f">asdw (MS 実装)</text>
+  <rect x="985" y="320" width="180" height="50" rx="6" class="consumer-box"/>
+  <text x="1075" y="350" text-anchor="middle" class="node-title" fill="#880e4f">abd (Batch 設計)</text>
+  <rect x="985" y="380" width="180" height="50" rx="6" class="consumer-box"/>
+  <text x="1075" y="410" text-anchor="middle" class="node-title" fill="#880e4f">abdv (Batch 実装)</text>
+  <path d="M 260 170 Q 310 170 370 175" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 260 200 Q 315 240 370 285" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 260 300 Q 315 300 370 300" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 260 420 Q 315 420 370 420" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 370 200 Q 300 230 260 280" class="edge-iter" marker-end="url(#arrow)"/>
+  <text x="295" y="248" class="edge-label" fill="#b71c1c">質問票を生成</text>
+  <path d="M 590 300 Q 640 280 700 265" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 590 420 Q 640 410 700 400" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 900 250 Q 940 200 985 165" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 900 260 Q 940 245 985 225" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 900 275 Q 940 275 985 285" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 900 290 Q 940 315 985 345" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 900 305 Q 940 355 985 405" class="edge" marker-end="url(#arrow)"/>
+  <text x="945" y="275" text-anchor="middle" class="edge-label">
+    <tspan x="945" dy="0">業務コンテキスト</tspan>
+    <tspan x="945" dy="12">として自動参照</tspan>
+  </text>
+  <path d="M 985 195 Q 700 560 260 320" class="edge-iter" marker-end="url(#arrow)"/>
+  <text x="600" y="600" text-anchor="middle" class="iter-label">🔄 開発中に生じた疑問を qa/ に追記 → akm 再実行で knowledge/ を精緻化（反復ループ）</text>
+  <text x="1160" y="710" text-anchor="end" class="legend" font-style="italic">検証基点: main@b987c08 / 実装根拠: auto-knowledge-management.yml, auto-aqod.yml, auto-app-documentation.yml</text>
+</svg>

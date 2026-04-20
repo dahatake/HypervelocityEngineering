@@ -252,7 +252,7 @@ class TestAKMWorkflow:
     def test_akm_params(self):
         wf = get_workflow("akm")
         assert wf is not None
-        assert wf.params == ["sources", "target_files", "force_refresh", "custom_source_dir"]
+        assert wf.params == ["sources", "target_files", "force_refresh", "custom_source_dir", "enable_auto_merge"]
 
     @pytest.mark.parametrize("sources", ["qa", "original-docs", "both"])
     def test_akm_sources_values_documented(self, sources: str):

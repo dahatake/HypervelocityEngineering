@@ -97,10 +97,10 @@
 
 **対処**:
 - Issue Template のモデルを `Auto` に戻す
-- SDK 実行時は `MODEL=claude-opus-4.6` などで一時固定して再実行する
+- SDK 実行時は `MODEL=claude-opus-4.6` などで一時固定して再実行する（最新 Opus が未ロールアウトの環境での一時回避）
 - workflow 実行ログを確認し、必要に応じて `Auto`（既定）に戻して再実行する
 
-> 命名規則メモ: 新規追加モデル（`claude-opus-4-7`）は公式表記のハイフン区切り、既存モデル（`claude-opus-4.6` など）は従来通りドット区切りです。これは意図した設計差分です。
+> **モデル ID の命名規則**: Copilot CLI が受理するモデル ID はすべてドット区切りです（例: `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `claude-haiku-4.5` / `gpt-5.4` / `gpt-5.3-codex`）。`copilot` コマンドで `/model` を実行すると利用可能な正確な ID が確認できます。旧表記 `claude-opus-4-7`（ハイフン区切り）を環境変数や `--model` で指定した場合、SDK 側で自動的に `claude-opus-4.7` に正規化されます（WARNING ログあり）。ワークフロー YAML 側でも同様に正規化されます。
 
 **確認事項**:
 

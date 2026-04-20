@@ -148,6 +148,7 @@ jobs:
           qa_complete="false"
           direct_approve="false"
           reason=""
+          echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
           # 条件 3: 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
           # （pull_request_target / issue_comment の両経路で共通して実施）
@@ -155,7 +156,15 @@ jobs:
           has_issue_review_label="false"
           has_issue_auto_merge="false"
           if [ -n "${ISSUE_NUMBER}" ]; then
-            issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data='{}'
+            issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq 'select(.pull_request == null)' 2>/dev/null) || issue_data=''
+            if [ -z "${issue_data}" ]; then
+              reason="紐づく #${ISSUE_NUMBER} は Issue として検証できません。QA 完了判定をスキップします。"
+              echo "${reason}"
+              echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
             issue_labels=$(echo "${issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
             has_issue_review_label=$(echo "${issue_labels}" \
               | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
@@ -166,12 +175,50 @@ jobs:
             echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
             echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
           else
-            reason="Issue 番号が特定できませんでした。QA 完了判定をスキップします。"
-            echo "${reason}"
-            echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
-            echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
-            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
-            exit 0
+            # --- フォールバック: Issue 未特定時、sync-issue-labels コメントから復元 ---
+            echo "⚠️ find_issue_number() で Issue を特定できませんでした。"
+            echo "=== フォールバック: sync-issue-labels コメントから Issue 番号を復元 ==="
+            FALLBACK_ISSUE=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              --paginate \
+              --jq '.[]' 2>/dev/null \
+              | jq -rs '[.[]
+                  | select(.user.type == "Bot")
+                  | select((.user.login == "github-actions[bot]") or (.user.login == "copilot-swe-agent[bot]"))
+                  | select(.body | contains("<!-- sync-issue-labels-done -->"))
+                  | select(.body | contains("sync-issue-labels-to-pr.yml"))
+                  | .body] | .[0] // ""' \
+              | grep -oP 'Issue #\K[0-9]+' \
+              | head -1) || FALLBACK_ISSUE=""
+            if [ -n "${FALLBACK_ISSUE}" ]; then
+              echo "✅ フォールバック成功: Issue #${FALLBACK_ISSUE}"
+              ISSUE_NUMBER="${FALLBACK_ISSUE}"
+              echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+              issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq 'select(.pull_request == null)' 2>/dev/null) || issue_data=''
+              if [ -z "${issue_data}" ]; then
+                reason="フォールバックで復元した #${ISSUE_NUMBER} は Issue として検証できません。QA 完了判定をスキップします。"
+                echo "${reason}"
+                echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+                echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
+                echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+              issue_labels=$(echo "${issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
+              has_issue_review_label=$(echo "${issue_labels}" \
+                | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
+              issue_body=$(echo "${issue_data}" | jq -r '.body // ""')
+              if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+                has_issue_auto_merge="true"
+              fi
+              echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
+              echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
+            else
+              reason="Issue 番号が特定できませんでした。QA 完了判定をスキップします。（sync-issue-labels コメントも未検出）"
+              echo "${reason}"
+              echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
           fi
 
           # PR コメント一覧を取得（以降の条件チェックで使用）
@@ -200,8 +247,8 @@ jobs:
             | jq -r '[.[] | select(.body | startswith("<!-- copilot-auto-qa-posted -->"))] | .[-1].created_at')
           echo "QA 指示日時: ${qa_posted_at}"
 
-          # 条件 5: QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在するか
-          # （ユーザーが回答を投稿した証拠）
+          # 条件 5: QA 指示後の回答検知
+          # パターン 1: ユーザー（bot 以外）の @copilot メンションコメント
           user_reply_count=$(echo "${pr_comments}" \
             | jq --arg qa_at "${qa_posted_at}" \
               '[.[] |
@@ -209,9 +256,17 @@ jobs:
                 select(.user.type != "Bot") |
                 select(.body | ascii_downcase | contains("@copilot"))
               ] | length')
-          echo "QA 指示後のユーザー @copilot メンション数: ${user_reply_count}"
+          # パターン 2: ワークフロー自動回答マーカー
+          auto_answered_count=$(echo "${pr_comments}" \
+            | jq --arg qa_at "${qa_posted_at}" \
+              '[.[] |
+                select(.created_at > $qa_at) |
+                select(.body | contains("<!-- auto-qa-default-answered -->"))
+              ] | length')
+          total_reply_count=$((user_reply_count + auto_answered_count))
+          echo "ユーザー回答数: ${user_reply_count}, 自動デフォルト回答数: ${auto_answered_count}"
 
-          if [ "${user_reply_count:-0}" -eq 0 ]; then
+          if [ "${total_reply_count:-0}" -eq 0 ]; then
             # 「質問なし」パターンの検知:
             # QA 指示後の Copilot Bot コメントが存在し、チェックボックス（- [ ]）を含まない場合は
             # 質問票なし = QA 完了（質問なし）と判定する
@@ -246,15 +301,17 @@ jobs:
             exit 0
           fi
 
-          # ユーザーの最初の回答日時を取得
-          user_replied_at=$(echo "${pr_comments}" \
+          # 最初の回答日時（ユーザー回答 or 自動デフォルト回答）を取得
+          reply_at=$(echo "${pr_comments}" \
             | jq -r --arg qa_at "${qa_posted_at}" \
               '[.[] |
                 select(.created_at > $qa_at) |
-                select(.user.type != "Bot") |
-                select(.body | ascii_downcase | contains("@copilot"))
+                select(
+                  ((.user.type != "Bot") and (.body | ascii_downcase | contains("@copilot")))
+                  or (.body | contains("<!-- auto-qa-default-answered -->"))
+                )
               ] | .[0].created_at')
-          echo "ユーザー回答日時: ${user_replied_at}"
+          echo "回答日時: ${reply_at}"
 
           # 条件 6: synchronize イベント（Copilot がコミットを push した）は
           # pull_request_target 経路ではジョブの if 条件（event_name == pull_request_target）で保証済み。
@@ -271,7 +328,7 @@ jobs:
             --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
           echo "最新コミット日時: ${latest_commit_at}"
 
-          if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${user_replied_at}" +%s 2>/dev/null || echo 0)" ]; then
+          if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${reply_at}" +%s 2>/dev/null || echo 0)" ]; then
             echo "✅ ユーザー回答後にコミットが存在します。QA 完了と判定します。"
             qa_complete="true"
             reason="QA 完了: ユーザーの @copilot 回答投稿後に Copilot がコミットを push しました。"
@@ -308,7 +365,7 @@ jobs:
           && steps.check-qa-complete.outputs.qa_complete == 'true'
           && steps.check-qa-complete.outputs.has_issue_review_label == 'true'
         env:
-          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          ISSUE_NUMBER: ${{ steps.check-qa-complete.outputs.issue_number }}
           REASON: ${{ steps.check-qa-complete.outputs.reason }}
         run: |
           set -euo pipefail
@@ -341,10 +398,10 @@ jobs:
         if: >
           steps.pr-info.outputs.skip != 'true'
           && steps.check-qa-complete.outputs.qa_complete == 'true'
-          && steps.find-issue.outputs.issue_number != ''
+          && steps.check-qa-complete.outputs.issue_number != ''
           && steps.check-qa-complete.outputs.direct_approve == 'true'
         env:
-          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          ISSUE_NUMBER: ${{ steps.check-qa-complete.outputs.issue_number }}
         run: |
           set -euo pipefail
           # 紐づく Issue に auto-context-review ラベルがなく、auto-merge 有効の場合のみ直接遷移

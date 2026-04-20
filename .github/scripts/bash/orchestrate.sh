@@ -39,6 +39,7 @@ declare -A _WORKFLOW_DISPLAY_NAMES=(
   [asdw]="App Dev Microservice Azure"
   [abd]="Batch Design"
   [abdv]="Batch Dev"
+  [adoc]="Source Codeからのドキュメント作成"
 )
 
 declare -A _TRIGGER_LABELS=(
@@ -47,6 +48,7 @@ declare -A _TRIGGER_LABELS=(
   [asdw]="auto-app-dev-microservice"
   [abd]="auto-batch-design"
   [abdv]="auto-batch-dev"
+  [adoc]="auto-app-documentation"
 )
 
 declare -A _WORKFLOW_PREFIX=(
@@ -55,6 +57,7 @@ declare -A _WORKFLOW_PREFIX=(
   [asdw]="ASDW"
   [abd]="ABD"
   [abdv]="ABDV"
+  [adoc]="ADOC"
 )
 
 # ---------------------------------------------------------------------------
@@ -132,6 +135,10 @@ render_template() {
   local additional_comment="${8:-}"
   local auto_review="${9:-true}"
   local auto_qa="${10:-true}"
+  local target_dirs="${11:-}"
+  local exclude_patterns="${12:-node_modules/,vendor/,dist/,*.lock,__pycache__/}"
+  local doc_purpose="${13:-all}"
+  local max_file_lines="${14:-500}"
 
   local body
   body=$(_load_template "${template_path}") || return 1
@@ -157,6 +164,10 @@ render_template() {
   body="${body//\{job_section\}/${job_section}}"
   body="${body//\{s7_subtasks\}/Step.7.1, Step.7.2, Step.7.3}"
   body="${body//\{s5_subtasks\}/Step.5.1, Step.5.2, Step.5.3}"
+  body="${body//\{target_dirs\}/${target_dirs}}"
+  body="${body//\{exclude_patterns\}/${exclude_patterns}}"
+  body="${body//\{doc_purpose\}/${doc_purpose}}"
+  body="${body//\{max_file_lines\}/${max_file_lines}}"
 
   echo "${body}"
 }
@@ -175,6 +186,10 @@ _build_root_issue_body() {
   local additional_comment="${7:-}"
   local skip_review="${8:-false}"
   local skip_qa="${9:-false}"
+  local target_dirs="${10:-}"
+  local exclude_patterns="${11:-}"
+  local doc_purpose="${12:-}"
+  local max_file_lines="${13:-}"
 
   local prefix="${_WORKFLOW_PREFIX[${workflow_id}]:-}"
   local display_name="${_WORKFLOW_DISPLAY_NAMES[${workflow_id}]:-}"
@@ -202,6 +217,12 @@ _build_root_issue_body() {
   [[ -n "${resource_group}" ]] && lines+=("リソースグループ: \`${resource_group}\`")
   [[ -n "${usecase_id}" ]]     && lines+=("ユースケースID: \`${usecase_id}\`")
   [[ -n "${batch_job_id}" ]]   && lines+=("バッチジョブ ID: \`${batch_job_id}\`")
+  if [[ "${workflow_id}" == "adoc" ]]; then
+    [[ -n "${target_dirs}" ]]      && lines+=("target_dirs: \`${target_dirs}\`")
+    [[ -n "${exclude_patterns}" ]] && lines+=("exclude_patterns: \`${exclude_patterns}\`")
+    [[ -n "${doc_purpose}" ]]      && lines+=("doc_purpose: \`${doc_purpose}\`")
+    [[ -n "${max_file_lines}" ]]   && lines+=("max_file_lines: \`${max_file_lines}\`")
+  fi
 
   if [[ -n "${additional_comment}" ]]; then
     lines+=("")
@@ -252,6 +273,10 @@ orchestrate() {
   local skip_review="${9:-false}"
   local skip_qa="${10:-false}"
   local model="${11:-${MODEL:-}}"
+  local target_dirs="${12:-}"
+  local exclude_patterns="${13:-node_modules/,vendor/,dist/,*.lock,__pycache__/}"
+  local doc_purpose="${14:-all}"
+  local max_file_lines="${15:-500}"
   local repo="${REPO:-}"
   local dry_run="${DRY_RUN:-0}"
 
@@ -439,7 +464,7 @@ orchestrate() {
   echo ""
   echo "📝 Root Issue 作成..."
   local root_body
-  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}")
+  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}")
   local root_title="[${prefix}] ${display_name}"
   local initialized_label
   initialized_label=$(echo "${wf_json}" | jq -r '.state_labels.initialized // ""')
@@ -504,7 +529,7 @@ orchestrate() {
     local issue_body=""
 
     if [[ -n "${template_path}" ]]; then
-      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${auto_review}" "${auto_qa}") || true
+      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${auto_review}" "${auto_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}") || true
     fi
     if [[ -z "${issue_body}" ]]; then
       local root_ref
@@ -681,26 +706,31 @@ Usage:
   orchestrate.sh --workflow <id> [options]
 
 Options:
-  --workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv (required)
-  --branch <name>         Target branch (default: main)
-  --steps <csv>           Comma-separated step IDs (default: all)
-  --app-id <id>           ASDW: Application ID
-  --resource-group <name> ASDW/ABDV: Resource group name
-  --usecase-id <id>       ASDW: Usecase ID
-  --batch-job-id <ids>    ABDV: Batch job IDs (comma-separated)
-  --comment <text>        Additional comment
-  --skip-review           Skip self-review
-  --skip-qa               Skip QA questionnaire
-  --repo <owner/repo>     Repository (env: REPO)
-  --model <name>          Copilot model（省略時は workflow 側で既定モデル claude-opus-4-7 に解決。claude-opus-4-7 などを指定可能）
-  --dry-run               Preview without API calls
-  -h, --help              Show this help
+  --workflow, -w <id>      Workflow ID: aas|aad|asdw|abd|abdv|adoc (required)
+  --branch <name>          Target branch (default: main)
+  --steps <csv>            Comma-separated step IDs (default: all)
+  --app-id <id>            ASDW: Application ID
+  --resource-group <name>  ASDW/ABDV: Resource group name
+  --usecase-id <id>        ASDW: Usecase ID
+  --batch-job-id <ids>     ABDV: Batch job IDs (comma-separated)
+  --comment <text>         Additional comment
+  --skip-review            Skip self-review
+  --skip-qa                Skip QA questionnaire
+  --repo <owner/repo>      Repository (env: REPO)
+  --model <name>           Copilot model（省略時は workflow 側で既定モデル claude-opus-4.7 に解決。claude-opus-4.7 などを指定可能）
+  --target-dirs <dirs>     ADOC: Target directories (comma-separated)
+  --exclude-patterns <p>   ADOC: Exclude patterns (comma-separated, default: node_modules/,vendor/,dist/,*.lock,__pycache__/)
+  --doc-purpose <value>    ADOC: all|onboarding|refactoring|migration (default: all)
+  --max-file-lines <n>     ADOC: Large file split threshold (default: 500)
+  --dry-run                Preview without API calls
+  -h, --help               Show this help
 EOF
 }
 
 main() {
   local workflow="" branch="main" steps="" app_id="" resource_group="" usecase_id="" model=""
   local batch_job_id="" comment="" skip_review="false" skip_qa="false"
+  local target_dirs="" exclude_patterns="node_modules/,vendor/,dist/,*.lock,__pycache__/" doc_purpose="all" max_file_lines="500"
 
   while (( $# > 0 )); do
     case "$1" in
@@ -716,6 +746,10 @@ main() {
       --skip-qa)         skip_qa="true"; shift ;;
       --repo)            export REPO="${2:?--repo requires an argument}"; shift 2 ;;
       --model)           model="${2:?--model requires an argument}"; shift 2 ;;
+      --target-dirs)     target_dirs="${2:?--target-dirs requires an argument}"; shift 2 ;;
+      --exclude-patterns) exclude_patterns="${2:?--exclude-patterns requires an argument}"; shift 2 ;;
+      --doc-purpose)     doc_purpose="${2:?--doc-purpose requires an argument}"; shift 2 ;;
+      --max-file-lines)  max_file_lines="${2:?--max-file-lines requires an argument}"; shift 2 ;;
       --dry-run)         export DRY_RUN=1; shift ;;
       -h|--help)         usage; exit 0 ;;
       *)                 echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -728,8 +762,26 @@ main() {
     exit 1
   fi
 
+  if [[ "${workflow}" == "adoc" ]]; then
+    case "${doc_purpose}" in
+      all|onboarding|refactoring|migration) ;;
+      *)
+        echo "Error: --doc-purpose must be one of: all|onboarding|refactoring|migration" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+
+    if ! [[ "${max_file_lines}" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Error: --max-file-lines must be a positive integer" >&2
+      usage >&2
+      exit 1
+    fi
+  fi
+
   orchestrate "${workflow}" "${branch}" "${steps}" "${resource_group}" "${app_id}" \
-    "${batch_job_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}"
+    "${batch_job_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}" \
+    "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}"
 }
 
 main "$@"

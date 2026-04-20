@@ -148,6 +148,7 @@ def _collect_params_non_interactive(
         params["custom_source_dir"] = args.get("custom_source_dir") or ""
         force_refresh = args.get("force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
+        params["enable_auto_merge"] = args.get("enable_auto_merge", False)
     elif wf.id == "aqod":
         params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
@@ -677,7 +678,10 @@ async def run_workflow(
         effective_params = _collect_params_non_interactive(wf, params)
     else:
         try:
-            effective_params = cli_collect_params(wf)
+            effective_params = cli_collect_params(
+                wf,
+                will_create_pr=(config.create_issues or config.create_pr),
+            )
         except (KeyboardInterrupt, EOFError):
             console.warning("入力がキャンセルされました。")
             return {

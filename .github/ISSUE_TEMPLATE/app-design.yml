@@ -75,11 +75,11 @@ body:
       label: "使用するモデル"
       description: |
         Copilot cloud agent が使用する AI モデルを選択してください。
-        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4-7）が使用されます。
+        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4.7）が使用されます。
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"
-        - "claude-opus-4-7"
+        - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"
         - "gpt-5.4"

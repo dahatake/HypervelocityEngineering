@@ -4,7 +4,7 @@
 # Migrated from:
 #   - .github/cli/lib/workflow_registry.py
 #
-# 5 workflows (AAS/AAD/ASDW/ABD/ABDV) with step DAG definitions stored
+# 6 workflows (AAS/AAD/ASDW/ABD/ABDV/ADOC) with step DAG definitions stored
 # as JSON and queried with jq.
 #
 # Prerequisites:
@@ -188,6 +188,48 @@ _WORKFLOW_REGISTRY[abdv]=$(cat <<'JSONEOF'
 JSONEOF
 )
 
+_WORKFLOW_REGISTRY[adoc]=$(cat <<'JSONEOF'
+{
+  "id": "adoc",
+  "name": "Source Codeからのドキュメント作成",
+  "label_prefix": "adoc",
+  "state_labels": {
+    "initialized": "adoc:initialized",
+    "ready": "adoc:ready",
+    "running": "adoc:running",
+    "done": "adoc:done",
+    "blocked": "adoc:blocked"
+  },
+  "params": ["target_dirs", "exclude_patterns", "doc_purpose", "max_file_lines"],
+  "steps": [
+    {"id":"2","title":"ファイルサマリー（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"3","title":"コンポーネント分析（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"5","title":"アーキテクチャ横断分析（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"6","title":"目的特化ドキュメント（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"1","title":"ファイルインベントリ","custom_agent":"Doc-FileInventory","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-1.md"},
+    {"id":"2.1","title":"ファイルサマリー（プロダクションコード）","custom_agent":"Doc-FileSummary","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-2.1.md"},
+    {"id":"2.2","title":"ファイルサマリー（テストコード）","custom_agent":"Doc-TestSummary","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-2.2.md"},
+    {"id":"2.3","title":"ファイルサマリー（設定・IaC）","custom_agent":"Doc-ConfigSummary","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-2.3.md"},
+    {"id":"2.4","title":"ファイルサマリー（CI/CD）","custom_agent":"Doc-CICDSummary","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-2.4.md"},
+    {"id":"2.5","title":"ファイルサマリー（大規模ファイル分割）","custom_agent":"Doc-LargeFileSummary","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-2.5.md"},
+    {"id":"3.1","title":"コンポーネント設計書","custom_agent":"Doc-ComponentDesign","depends_on":["2.1","2.2","2.3","2.4","2.5"],"is_container":false,"skip_fallback_deps":["2.1"],"block_unless":[],"body_template_path":"templates/adoc/step-3.1.md"},
+    {"id":"3.2","title":"API 仕様書","custom_agent":"Doc-APISpec","depends_on":["2.1","2.2","2.3","2.4","2.5"],"is_container":false,"skip_fallback_deps":["2.1"],"block_unless":[],"body_template_path":"templates/adoc/step-3.2.md"},
+    {"id":"3.3","title":"データモデル定義書","custom_agent":"Doc-DataModel","depends_on":["2.1","2.2","2.3","2.4","2.5"],"is_container":false,"skip_fallback_deps":["2.1"],"block_unless":[],"body_template_path":"templates/adoc/step-3.3.md"},
+    {"id":"3.4","title":"テスト仕様サマリー","custom_agent":"Doc-TestSpecSummary","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-3.4.md"},
+    {"id":"3.5","title":"技術的負債一覧","custom_agent":"Doc-TechDebt","depends_on":["2.1","2.2","2.3","2.4","2.5"],"is_container":false,"skip_fallback_deps":["2.1"],"block_unless":[],"body_template_path":"templates/adoc/step-3.5.md"},
+    {"id":"4","title":"コンポーネントインデックス","custom_agent":"Doc-ComponentIndex","depends_on":["3.1","3.2","3.3","3.4","3.5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-4.md"},
+    {"id":"5.1","title":"アーキテクチャ概要","custom_agent":"Doc-ArchOverview","depends_on":["4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-5.1.md"},
+    {"id":"5.2","title":"依存関係マップ","custom_agent":"Doc-DependencyMap","depends_on":["4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-5.2.md"},
+    {"id":"5.3","title":"インフラ依存分析","custom_agent":"Doc-InfraDeps","depends_on":["4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-5.3.md"},
+    {"id":"5.4","title":"非機能要件現状分析","custom_agent":"Doc-NFRAnalysis","depends_on":["4","3.4","3.5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-5.4.md"},
+    {"id":"6.1","title":"オンボーディングガイド","custom_agent":"Doc-Onboarding","depends_on":["5.1","5.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-6.1.md"},
+    {"id":"6.2","title":"リファクタリングガイド","custom_agent":"Doc-Refactoring","depends_on":["5.2","5.4","3.5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-6.2.md"},
+    {"id":"6.3","title":"移行アセスメント","custom_agent":"Doc-Migration","depends_on":["5.1","5.3","5.4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adoc/step-6.3.md"}
+  ]
+}
+JSONEOF
+)
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -197,7 +239,7 @@ JSONEOF
 # Retrieve full workflow definition as JSON.
 #
 # Args:
-#   WORKFLOW_ID — Workflow identifier (aas, aad, asdw, abd, abdv)
+#   WORKFLOW_ID — Workflow identifier (aas, aad, asdw, abd, abdv, adoc)
 #
 # Output:
 #   Workflow JSON on stdout.

@@ -92,8 +92,11 @@ jobs:
           PY
               )
               if [[ "${has_done}" == "true" ]]; then
-                echo "既に aad:done ラベル済み。closed イベントをスキップ。"
-                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                # aad:done labeled 時は Issue 未クローズのため自動クローズ判定が失敗する。
+                # closed イベントで再度コンテナ自動クローズ判定のみ実行する。
+                echo "aad:done ラベル済み + closed イベント: コンテナ自動クローズ判定のみ実行。"
+                echo "mode=container_close_check" >> "$GITHUB_OUTPUT"
+                echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
               echo "mode=state_transition" >> "$GITHUB_OUTPUT"
@@ -1513,3 +1516,66 @@ jobs:
             echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
             auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
           fi
+
+      # ----------------------------------------------------------------
+      # 4.5. closed イベント時のコンテナ/Root 自動クローズ判定
+      # ----------------------------------------------------------------
+      - name: コンテナ自動クローズ判定（closed イベント）
+        if: steps.gate.outputs.mode == 'container_close_check'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/aad-common.sh"
+
+          # ── 完了した Issue の情報取得 ──
+          DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null || echo '{}')
+          DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+
+          # ── Root Issue 番号の抽出 ──
+          ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*root-issue:\s*#(\d+)\s*-->', b)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" || ! "${ROOT_ISSUE}" =~ ^[0-9]+$ ]]; then
+            echo "Root Issue を特定できないためスキップ。"
+            exit 0
+          fi
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ── auto-close.sh の読み込み ──
+          if [[ ! -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            echo "auto-close.sh が見つかりません。スキップ。"
+            exit 0
+          fi
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+          # ── コンテナ Issue の自動クローズ判定 ──
+          _AC_CONTAINER_NUM=""
+          if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAD\]\ Step\.[0-9]+\.[0-9] ]]; then
+            _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+              | grep -oP '\[AAD\]\s*Step\.\K\d+' | head -1)
+            if [[ -n "${_AC_PARENT_STEP}" ]]; then
+              _AC_CONTAINER_NUM=$(gh api --paginate \
+                "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                --jq ".[] | select(.title | test(\"\\\\[AAD\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+            fi
+          fi
+
+          if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+            echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+            auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+          else
+            echo "コンテナ Issue が特定できないためスキップ。"
+          fi
+
+          # ── Root Issue の自動クローズ判定 ──
+          echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+          auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true

@@ -285,7 +285,7 @@ AKM = WorkflowDef(
     name="Knowledge Management",
     label_prefix="akm",
     state_labels=_make_state_labels("akm"),
-    params=["sources", "target_files", "force_refresh", "custom_source_dir"],
+    params=["sources", "target_files", "force_refresh", "custom_source_dir", "enable_auto_merge"],
     steps=[
         StepDef(
             id="1",
@@ -315,10 +315,10 @@ AQOD = WorkflowDef(
     ],
 )
 
-# --- ADOC: App Documentation ---
+# --- ADOC: Source Codeからのドキュメント作成 ---
 ADOC = WorkflowDef(
     id="adoc",
-    name="App Documentation",
+    name="Source Codeからのドキュメント作成",
     label_prefix="adoc",
     state_labels=_make_state_labels("adoc"),
     params=["target_dirs", "exclude_patterns", "doc_purpose", "max_file_lines"],

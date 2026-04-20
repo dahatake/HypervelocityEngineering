@@ -5,6 +5,13 @@
 
 > 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、AI Agent 設計で業務コンテキスト（ユースケース: `D05`、業務ルール: `D06`、権限・認可: `D12`、Promptガバナンス: `D18`）として自動参照されます。
 
+## AAD / ASDW 連携チェーン図
+
+AI Agent 関連ステップ（AAD: 8.1〜8.3、ASDW: 2.6〜2.8）は以下のチェーン図で確認できます。
+
+- [AAD チェーン図（AI Agent 設計を含む）](./images/chain-aad.svg)
+- [ASDW チェーン図（AI Agent 実装/Deploy を含む）](./images/chain-asdw.svg)
+
 # ツール
 
 AI Agentの実装は、Microsoft 365 CopilotのChatでの、Agent Builderや、Microsoft Copilot Studio。あるいは、Microsoft Foundryでなどがお勧めです。

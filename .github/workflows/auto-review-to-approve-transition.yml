@@ -70,6 +70,7 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
       EVENT_NAME: ${{ github.event_name }}
       PR_BODY: ${{ github.event.pull_request.body || '' }}
+      RECHECK_MAX_ATTEMPTS: "2"
 
     steps:
       - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
@@ -134,9 +135,18 @@ jobs:
           review_complete="false"
           issue_auto_merge="false"
           reason=""
+          echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
           if [ -n "${ISSUE_NUMBER}" ]; then
-            issue_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || echo "")
+            issue_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq 'select(.pull_request == null) | .body // ""' 2>/dev/null || echo "")
+            if [ -z "${issue_body}" ]; then
+              reason="紐づく #${ISSUE_NUMBER} は Issue として検証できないため auto-merge 判定ができません。"
+              echo "${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
             if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
               issue_auto_merge="true"
             else
@@ -148,12 +158,50 @@ jobs:
               exit 0
             fi
           else
-            reason="紐づく Issue を特定できないため auto-merge 判定ができません。"
-            echo "${reason}"
-            echo "review_complete=false" >> "${GITHUB_OUTPUT}"
-            echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
-            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
-            exit 0
+            # --- フォールバック: Issue 未特定時、sync-issue-labels コメントから復元 ---
+            echo "⚠️ find_issue_number() で Issue を特定できませんでした。"
+            echo "=== フォールバック: sync-issue-labels コメントから Issue 番号を復元 ==="
+            FALLBACK_ISSUE=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              --paginate \
+              --jq '.[]' 2>/dev/null \
+              | jq -rs '[.[]
+                  | select(.user.type == "Bot")
+                  | select((.user.login == "github-actions[bot]") or (.user.login == "copilot-swe-agent[bot]"))
+                  | select(.body | contains("<!-- sync-issue-labels-done -->"))
+                  | select(.body | contains("sync-issue-labels-to-pr.yml"))
+                  | .body] | .[0] // ""' \
+              | grep -oP 'Issue #\K[0-9]+' \
+              | head -1) || FALLBACK_ISSUE=""
+            if [ -n "${FALLBACK_ISSUE}" ]; then
+              echo "✅ フォールバック成功: Issue #${FALLBACK_ISSUE}"
+              ISSUE_NUMBER="${FALLBACK_ISSUE}"
+              echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+              issue_body=$(gh api "/repos/${REPO}/issues/${FALLBACK_ISSUE}" --jq 'select(.pull_request == null) | .body // ""' 2>/dev/null || echo "")
+              if [ -z "${issue_body}" ]; then
+                reason="フォールバックで復元した #${FALLBACK_ISSUE} は Issue として検証できないため auto-merge 判定ができません。"
+                echo "${reason}"
+                echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+                echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+                echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+                exit 0
+              elif printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+                issue_auto_merge="true"
+              else
+                reason="フォールバック Issue #${FALLBACK_ISSUE} に <!-- auto-merge: true --> がありません。"
+                echo "${reason}"
+                echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+                echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+                echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+            else
+              reason="紐づく Issue を特定できないため auto-merge 判定ができません。（sync-issue-labels コメントも未検出）"
+              echo "${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
           fi
 
           # PR コメント一覧を取得（以降の条件チェックで使用）
@@ -161,23 +209,29 @@ jobs:
             --paginate \
             --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
 
-          # 条件 4: <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在するか
+          # 条件 4: レビュー指示コメント（初回 or 再レビュー）が存在するか
           review_posted_count=$(echo "${pr_comments}" \
-            | jq '[.[] | select(.body | contains("<!-- copilot-auto-review-posted -->"))] | length')
+            | jq '[.[] | select(
+                (.body | contains("<!-- copilot-auto-review-posted -->"))
+                or (.body | contains("<!-- copilot-auto-recheck-posted -->"))
+              )] | length')
           echo "レビュー指示コメント数: ${review_posted_count}"
 
           if [ "${review_posted_count:-0}" -eq 0 ]; then
-            reason="レビュー指示コメント（<!-- copilot-auto-review-posted -->）が見つかりません。レビュー未開始です。"
+            reason="レビュー指示コメント（初回/再レビュー）が見つかりません。レビュー未開始です。"
             echo "${reason}"
             echo "review_complete=false" >> "${GITHUB_OUTPUT}"
             echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          # レビュー指示コメントの投稿日時を取得（最新のものを使用）
-          review_posted_at=$(echo "${pr_comments}" \
-            | jq -r '[.[] | select(.body | contains("<!-- copilot-auto-review-posted -->"))] | .[-1].created_at')
-          echo "レビュー指示日時: ${review_posted_at}"
+          # レビュー指示コメントの投稿日時を取得（初回/再レビューの最新を使用）
+          review_instruction_at=$(echo "${pr_comments}" \
+            | jq -r '[.[] | select(
+                (.body | contains("<!-- copilot-auto-review-posted -->"))
+                or (.body | contains("<!-- copilot-auto-recheck-posted -->"))
+              )] | .[-1].created_at')
+          echo "レビュー指示日時: ${review_instruction_at}"
 
           # 条件 5: レビュー指示後の Copilot コメントの review-verdict マーカーを確認
           # copilot-auto-review.yml の指示で Copilot は結果末尾に以下のいずれかを出力する:
@@ -186,7 +240,7 @@ jobs:
           # 最新の verdict マーカーが FAIL なら修正完了待ちでブロック
           # PASS なら条件 6 に進む。マーカーなし（旧形式）はフォールバック判定を使用。
           bot_comments_after_review=$(echo "${pr_comments}" \
-            | jq --arg review_at "${review_posted_at}" \
+            | jq --arg review_at "${review_instruction_at}" \
               '[.[] | select(
                 .created_at > $review_at
                 and (.user.type == "Bot")
@@ -209,11 +263,53 @@ jobs:
             ')
           echo "最新の review-verdict: ${latest_verdict}"
 
+          # review-verdict マーカーがない旧形式コメント向けフォールバック判定
+          if [ "${latest_verdict}" = "none" ]; then
+            bot_comment_count=$(echo "${bot_comments_after_review}" | jq 'length')
+            fallback_verdict="none"
+            if [ "${bot_comment_count}" -gt 0 ] 2>/dev/null; then
+              for i in $(seq $((bot_comment_count - 1)) -1 0); do
+                body=$(echo "${bot_comments_after_review}" | jq -r ".[$i].body")
+                if echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "✅" && echo "${body}" | grep -qi "PASS"; then
+                  fallback_verdict="PASS"
+                  break
+                elif echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "❌" && echo "${body}" | grep -qi "FAIL"; then
+                  fallback_verdict="FAIL"
+                  break
+                fi
+              done
+            fi
+            if [ "${fallback_verdict}" != "none" ]; then
+              latest_verdict="${fallback_verdict}"
+              echo "フォールバック判定の review-verdict: ${latest_verdict}"
+            fi
+          fi
+
           if [ "${latest_verdict}" = "FAIL" ]; then
-            reason="review-verdict: FAIL マーカーを検知しました。Copilot の修正完了を待っています。"
-            echo "${reason}"
-            echo "review_complete=false" >> "${GITHUB_OUTPUT}"
-            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            fail_comment_at=$(echo "${bot_comments_after_review}" \
+              | jq -r '[ .[] | select(.body | contains("<!-- review-verdict: FAIL -->")) ] | .[-1].created_at')
+            if [ -z "${fail_comment_at}" ] || [ "${fail_comment_at}" = "null" ]; then
+              fail_comment_at=$(echo "${bot_comments_after_review}" | jq -r '.[-1].created_at // ""')
+            fi
+            latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
+              --paginate \
+              --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
+
+            if [ -n "${latest_commit_at}" ] && [ -n "${fail_comment_at}" ] \
+              && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" \
+                -gt "$(date -d "${fail_comment_at}" +%s 2>/dev/null || echo 0)" ]; then
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=true" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=FAIL 後に修正コミットを検知。再レビューを実行します。" >> "${GITHUB_OUTPUT}"
+            else
+              reason="review-verdict: FAIL。Copilot の修正完了を待っています。"
+              echo "${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            fi
             exit 0
           fi
 
@@ -221,6 +317,7 @@ jobs:
           if [ "${latest_verdict}" = "PASS" ]; then
             echo "✅ review-verdict: PASS マーカーを検知しました。レビュー完了と判定します。"
             echo "review_complete=true" >> "${GITHUB_OUTPUT}"
+            echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
             echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
             echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました。" >> "${GITHUB_OUTPUT}"
             exit 0
@@ -234,7 +331,7 @@ jobs:
               --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
             echo "最新コミット日時: ${latest_commit_at}"
 
-            if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${review_posted_at}" +%s 2>/dev/null || echo 0)" ]; then
+            if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${review_instruction_at}" +%s 2>/dev/null || echo 0)" ]; then
               echo "✅ レビュー指示後にコミットが存在します。レビュー完了と判定します。"
               review_complete="true"
               reason="レビュー完了: レビュー指示後に Copilot がコミットを push しました（verdict マーカーなしフォールバック）。"
@@ -256,8 +353,59 @@ jobs:
           fi
 
           echo "review_complete=${review_complete}" >> "${GITHUB_OUTPUT}"
+          echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
           echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
           echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+
+      - name: 再レビュー指示を PR に投稿
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-review-complete.outputs.needs_recheck == 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.check-review-complete.outputs.issue_number }}
+          LIMIT_NOTICE_BODY: |
+            ## ⚠️ 自動再レビュー上限に到達しました
+
+            <!-- copilot-auto-recheck-limit-reached -->
+            再レビューは上限（2回）に到達しました。以降は手動で確認してください。
+          COMMENT_BODY: |
+            <!-- copilot-auto-recheck-posted -->
+            @copilot
+
+            ## 再レビュー実行指示
+
+            前回レビューで `review-verdict: FAIL` が検出されましたが、その後に修正コミットを検知しました。
+            最新コミットを対象に再レビューを実行してください。
+
+            ### 要件
+            1. 5軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
+            2. 最終サマリーの合格判定直後に、必ず次のいずれかを出力すること。
+               - `<!-- review-verdict: PASS -->`（残存 Critical = 0）
+               - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
+            3. 捏造は絶対に禁止です。
+        run: |
+          set -euo pipefail
+
+          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
+          recheck_count=$(echo "${pr_comments}" \
+            | jq '[.[] | select(.body | contains("<!-- copilot-auto-recheck-posted -->"))] | length')
+
+          # recheck_count は「再レビュー指示（copilot-auto-recheck-posted）」件数のみを数える。
+          # 初回レビュー1回 + 再レビュー2回（recheck_count=2）で打ち切る。
+          if [ "${recheck_count:-0}" -ge "${RECHECK_MAX_ATTEMPTS}" ] 2>/dev/null; then
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${LIMIT_NOTICE_BODY}"
+            echo "再レビュー上限に到達したため手動対応通知を投稿しました。"
+            exit 0
+          fi
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT_BODY}"
+          echo "✅ 再レビュー指示を投稿しました。"
 
       - name: auto-approve-ready ラベルを PR に付与
         if: >
@@ -275,7 +423,7 @@ jobs:
       - name: サマリーコメントを PR に投稿（遷移完了）
         if: steps.pr-info.outputs.skip != 'true' && steps.check-review-complete.outputs.review_complete == 'true'
         env:
-          ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          ISSUE_NUMBER: ${{ steps.check-review-complete.outputs.issue_number }}
           REASON: ${{ steps.check-review-complete.outputs.reason }}
         run: |
           set -euo pipefail

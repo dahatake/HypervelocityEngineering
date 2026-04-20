@@ -6,7 +6,7 @@
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   .\orchestrate.ps1 -Workflow aad -Branch main -Steps "1.1,1.2" -Model claude-opus-4-7 -DryRun
+#   .\orchestrate.ps1 -Workflow aad -Branch main -Steps "1.1,1.2" -Model claude-opus-4.7 -DryRun
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format

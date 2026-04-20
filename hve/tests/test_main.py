@@ -25,7 +25,10 @@ _build_config = _main_mod._build_config
 _load_mcp_config = _main_mod._load_mcp_config
 _validate_auto_coding_agent_review = _main_mod._validate_auto_coding_agent_review
 _resolve_model = _main_mod._resolve_model
+_prompt_valid_doc_purpose = _main_mod._prompt_valid_doc_purpose
 _prompt_valid_aqod_depth = _main_mod._prompt_valid_aqod_depth
+_prompt_valid_max_file_lines = _main_mod._prompt_valid_max_file_lines
+_prompt_akm_params = _main_mod._prompt_akm_params
 main = _main_mod.main
 
 
@@ -71,6 +74,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertEqual(args.sources, "qa")
         self.assertIsNone(args.target_files)
         self.assertIsNone(args.force_refresh)
+        self.assertFalse(args.enable_auto_merge)
         self.assertIsNone(args.target_scope)
         self.assertIsNone(args.depth)
         self.assertIsNone(args.focus_areas)
@@ -335,6 +339,18 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertFalse(params["force_refresh"])
 
+    def test_akm_enable_auto_merge_default(self) -> None:
+        """AKM enable_auto_merge が未指定時に False になることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm"])
+        params = _build_params(args)
+        self.assertFalse(params["enable_auto_merge"])
+
+    def test_akm_enable_auto_merge_enabled(self) -> None:
+        """AKM --enable-auto-merge 指定時に True になることを確認。"""
+        args = _parse(["orchestrate", "-w", "akm", "--enable-auto-merge"])
+        params = _build_params(args)
+        self.assertTrue(params["enable_auto_merge"])
+
     def test_akm_sources_default_when_not_specified(self) -> None:
         """AKM sources が未指定時に 'qa' になることを確認。"""
         args = _parse(["orchestrate", "-w", "akm"])
@@ -429,10 +445,10 @@ class TestBuildParams(unittest.TestCase):
 
 
     def test_model_auto_resolved_in_config(self) -> None:
-        """--model Auto が claude-opus-4-7 に解決されることを確認。"""
+        """--model Auto が claude-opus-4.7 に解決されることを確認。"""
         args = _parse(["orchestrate", "-w", "aas", "--model", "Auto"])
         config = _build_config(args)
-        self.assertEqual(config.model, "claude-opus-4-7")
+        self.assertEqual(config.model, "claude-opus-4.7")
 
     def test_model_4_6_still_selectable(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4.6"])
@@ -449,13 +465,51 @@ class TestBuildParams(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.model, "claude-opus-4-7")
+            self.assertEqual(config.model, "claude-opus-4.7")
 
     def test_cli_explicit_default_model_overrides_env_model(self) -> None:
         with mock.patch.dict(os.environ, {"MODEL": "claude-opus-4.6"}, clear=False):
-            args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4-7"])
+            args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4.7"])
             config = _build_config(args)
-            self.assertEqual(config.model, "claude-opus-4-7")
+            self.assertEqual(config.model, "claude-opus-4.7")
+
+
+class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
+    """_prompt_akm_params: PR 作成有無で enable_auto_merge 質問が切り替わる。"""
+
+    _AUTO_MERGE_LABEL = "PR の自動 Approve & Auto-merge を有効にする？"
+
+    def _make_con(self):
+        con = mock.MagicMock()
+        con.menu_select.return_value = 0
+        con.prompt_input.return_value = ""
+        con.prompt_yes_no.return_value = False
+        return con
+
+    def _called_labels(self, con) -> list[str]:
+        return [call.args[0] for call in con.prompt_yes_no.call_args_list]
+
+    def test_skips_auto_merge_when_no_pr(self) -> None:
+        """will_create_pr=False のとき auto_merge 質問をスキップし False 固定。"""
+        con = self._make_con()
+        params = _prompt_akm_params(con, is_quick_auto=False, will_create_pr=False)
+        self.assertFalse(params["enable_auto_merge"])
+        self.assertNotIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
+
+    def test_asks_auto_merge_when_pr(self) -> None:
+        """will_create_pr=True のとき auto_merge 質問を表示する。"""
+        con = self._make_con()
+        _prompt_akm_params(con, is_quick_auto=False, will_create_pr=True)
+        self.assertIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
+
+    def test_quick_auto_unaffected(self) -> None:
+        """is_quick_auto=True は will_create_pr に依らず False 固定。"""
+        con = self._make_con()
+        params_no_pr = _prompt_akm_params(con, is_quick_auto=True, will_create_pr=False)
+        params_with_pr = _prompt_akm_params(con, is_quick_auto=True, will_create_pr=True)
+        self.assertFalse(params_no_pr["enable_auto_merge"])
+        self.assertFalse(params_with_pr["enable_auto_merge"])
+        self.assertEqual(con.prompt_yes_no.call_count, 0)
 
 
 class TestReviewModelCLI(unittest.TestCase):
@@ -480,7 +534,7 @@ class TestReviewModelCLI(unittest.TestCase):
     def test_review_model_auto_resolved_in_config(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--review-model", "Auto"])
         config = _build_config(args)
-        self.assertEqual(config.review_model, "claude-opus-4-7")
+        self.assertEqual(config.review_model, "claude-opus-4.7")
 
     def test_review_model_auto_resolved_from_env_when_cli_missing(self) -> None:
         env_backup = os.environ.copy()
@@ -488,7 +542,7 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["REVIEW_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.review_model, "claude-opus-4-7")
+            self.assertEqual(config.review_model, "claude-opus-4.7")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -499,19 +553,19 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["QA_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.qa_model, "claude-opus-4-7")
+            self.assertEqual(config.qa_model, "claude-opus-4.7")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
     def test_qa_merge_default_model_is_opus_4_7(self) -> None:
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md"])
-        self.assertEqual(args.model, "claude-opus-4-7")
+        self.assertEqual(args.model, "claude-opus-4.7")
 
     def test_qa_merge_auto_resolved_to_opus_4_7(self) -> None:
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md", "--model", "Auto"])
         model, _ = _resolve_model(args.model)
-        self.assertEqual(model, "claude-opus-4-7")
+        self.assertEqual(model, "claude-opus-4.7")
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -1124,6 +1178,12 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertFalse(cfg.force_interactive)
 
+    def test_quick_auto_sets_qa_answer_mode_all(self) -> None:
+        """クイック全自動: qa_answer_mode='all' が設定される。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.qa_answer_mode, "all")
+
     def test_custom_auto_sets_unattended_true(self) -> None:
         """カスタム全自動: cfg.unattended=True が設定される。"""
         cfg = self._run_interactive_auto_mode(exec_mode=1)
@@ -1144,8 +1204,8 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         self.assertTrue(cfg.auto_coding_agent_review_auto_approval)
 
 
-class TestInteractiveDocPurposeValidation(unittest.TestCase):
-    def _run_with_doc_purpose_inputs(self, *, exec_mode: int, answers: list[str]) -> dict:
+class TestInteractiveAdocParamsValidation(unittest.TestCase):
+    def _run_with_adoc_params_inputs(self, *, exec_mode: int) -> dict:
         import unittest.mock as mock
 
         captured = {}
@@ -1155,7 +1215,7 @@ class TestInteractiveDocPurposeValidation(unittest.TestCase):
             return {"completed": [], "failed": [], "skipped": []}
 
         mock_step = mock.MagicMock(id="1", title="Step1", is_container=False, depends_on=[], params=[])
-        mock_wf = mock.MagicMock(id="adoc", steps=[mock_step], params=["doc_purpose"])
+        mock_wf = mock.MagicMock(id="adoc", steps=[mock_step], params=["doc_purpose", "max_file_lines"])
         mock_display_names = {"adoc": "ADOC"}
 
         MockConsole = mock.MagicMock()
@@ -1164,13 +1224,15 @@ class TestInteractiveDocPurposeValidation(unittest.TestCase):
         con.prompt_multi_select.return_value = []
 
         if exec_mode == 0:
-            con.menu_select.side_effect = [0, 0, 0]  # workflow, model, exec_mode
+            # workflow, model, exec_mode, doc_purpose(migration=3, 0-indexed), max_file_lines(1000=2, 0-indexed)
+            con.menu_select.side_effect = [0, 0, 0, 3, 2]
             con.prompt_yes_no.side_effect = [False, True]  # use_different_models, confirmation
-            con.prompt_input.side_effect = answers
         else:
-            con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(manual), verbosity
+            # workflow, model, exec_mode, verbosity, doc_purpose(onboarding=1, 0-indexed), max_file_lines(300=0, 0-indexed)
+            con.menu_select.side_effect = [0, 0, 2, 1, 1, 0]
             con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
-            con.prompt_input.side_effect = answers
+            # branch, max_parallel, timeout, additional_prompt（doc_purpose/max_file_linesはmenu_selectで入力）
+            con.prompt_input.side_effect = ["main", "15", "7200", ""]
 
         mock_console_mod = mock.MagicMock()
         mock_console_mod.Console = MockConsole
@@ -1198,37 +1260,68 @@ class TestInteractiveDocPurposeValidation(unittest.TestCase):
         return captured
 
     def test_doc_purpose_validation_in_quick_auto(self) -> None:
-        captured = self._run_with_doc_purpose_inputs(exec_mode=0, answers=["invalid", "migration"])
+        captured = self._run_with_adoc_params_inputs(exec_mode=0)
         self.assertEqual(captured["params"]["doc_purpose"], "migration")
-        self.assertGreater(captured["warning_called"], 0)
+        self.assertEqual(captured["params"]["max_file_lines"], 1000)
+        self.assertEqual(captured["warning_called"], 0)
 
     def test_doc_purpose_validation_in_manual(self) -> None:
-        captured = self._run_with_doc_purpose_inputs(
-            exec_mode=2,
-            answers=["main", "15", "7200", "wrong", "all", "", ""],
-        )
-        self.assertEqual(captured["params"]["doc_purpose"], "all")
-        self.assertGreater(captured["warning_called"], 0)
+        captured = self._run_with_adoc_params_inputs(exec_mode=2)
+        self.assertEqual(captured["params"]["doc_purpose"], "onboarding")
+        self.assertEqual(captured["params"]["max_file_lines"], 300)
+        self.assertEqual(captured["warning_called"], 0)
+
+
+class TestDocPurposePrompt(unittest.TestCase):
+    def test_doc_purpose_selected_value(self) -> None:
+        con = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = 2
+        val = _prompt_valid_doc_purpose(con)
+        self.assertEqual(val, "refactoring")
+
+    def test_doc_purpose_default_on_empty(self) -> None:
+        con = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = -1
+        val = _prompt_valid_doc_purpose(con)
+        self.assertEqual(val, "all")
 
 
 class TestAqodDepthPrompt(unittest.TestCase):
-    """AQOD depth 対話入力のバリデーション。"""
+    """AQOD depth メニュー選択のバリデーション。"""
 
-    def test_accepts_valid_depth_lowercased(self) -> None:
+    def test_select_lightweight(self) -> None:
         con = mock.MagicMock()
-        con.prompt_input = mock.MagicMock(side_effect=["LIGHTWEIGHT"])
-        con.warning = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = 1
         depth = _prompt_valid_aqod_depth(con)
         self.assertEqual(depth, "lightweight")
-        con.warning.assert_not_called()
 
-    def test_reprompts_on_invalid_depth(self) -> None:
+    def test_default_standard_on_empty(self) -> None:
         con = mock.MagicMock()
-        con.prompt_input = mock.MagicMock(side_effect=["invalid", "standard"])
-        con.warning = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = -1
         depth = _prompt_valid_aqod_depth(con)
         self.assertEqual(depth, "standard")
-        self.assertEqual(con.warning.call_count, 1)
+
+
+class TestMaxFileLinesPrompt(unittest.TestCase):
+    def test_select_1000(self) -> None:
+        con = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = 2
+        val = _prompt_valid_max_file_lines(con)
+        self.assertEqual(val, 1000)
+        self.assertIsInstance(val, int)
+
+    def test_default_500_on_empty(self) -> None:
+        con = mock.MagicMock()
+        con.s = mock.MagicMock(DIM="", RESET="")
+        con.menu_select.return_value = -1
+        val = _prompt_valid_max_file_lines(con)
+        self.assertEqual(val, 500)
+        self.assertIsInstance(val, int)
 
 
 class TestInteractiveMode(unittest.TestCase):

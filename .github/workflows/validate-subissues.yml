@@ -1,0 +1,158 @@
+name: Validate subissues.md format
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+    steps:
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Detect subissues.md files
+        id: find-files
+        run: |
+          set -euo pipefail
+          echo "=== PR #${PR_NUMBER} の変更ファイルから subissues.md を検索 ==="
+
+          pr_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --paginate \
+            --jq '.[] | select(.filename | test("^work/.*subissues\\.md$")) | select(.status == "added" or .status == "modified") | .filename' \
+            2>/dev/null || true)
+          files=$(printf '%s' "${pr_files}" | grep -v '^[[:space:]]*$' | sort || true)
+
+          if [ -z "${files}" ]; then
+            allow_fallback=$(echo "${PR_LABELS_JSON}" | jq -r '(. // []) | if index("split-mode") or index("create-subissues") then "true" else "false" end')
+            if [ "${allow_fallback}" = "true" ]; then
+              echo "[FALLBACK] split-mode/create-subissues PR のため work/**/subissues.md を直接検索します。"
+              files=$(find work -type f -name 'subissues.md' | sort || true)
+            else
+              echo "PR差分に subissues.md がなく、対象ラベル（split-mode/create-subissues）もないため検証をスキップします。"
+            fi
+          fi
+
+          if [ -z "${files}" ]; then
+            echo "subissues.md が見つからないため検証をスキップします。"
+            echo "found=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          {
+            echo "found=true"
+            echo "files<<EOF"
+            printf '%s\n' "${files}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: "Validate <!-- title: ... --> in each subissue block"
+        id: validate
+        if: steps.find-files.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+
+          HAS_ERROR=false
+          ERROR_DETAILS=""
+
+          while IFS= read -r file; do
+            [ -z "${file}" ] && continue
+            [ -f "${file}" ] || continue
+
+            rm -f /tmp/validate_subissue_block_*.txt
+            awk '
+              /^<!-- subissue -->/ {
+                blocknum++
+                outfile = "/tmp/validate_subissue_block_" blocknum ".txt"
+                next
+              }
+              blocknum > 0 {
+                print > outfile
+              }
+            ' "${file}"
+
+            shopt -s nullglob
+            block_files=(/tmp/validate_subissue_block_*.txt)
+            block_count=${#block_files[@]}
+            shopt -u nullglob
+            [ "${block_count}" -eq 0 ] && continue
+
+            missing_blocks=""
+            empty_title_blocks=""
+            while IFS= read -r block_file; do
+              [ -f "${block_file}" ] || continue
+              block_idx=$(basename "${block_file}" .txt | grep -oE '[0-9]+$')
+              title_line=$(grep -m1 -E '<!--[[:space:]]*title:[[:space:]]*.*-->' "${block_file}" || true)
+              if [ -z "${title_line}" ]; then
+                missing_blocks="${missing_blocks}${missing_blocks:+,}${block_idx}"
+                continue
+              fi
+              title_value=$(printf '%s' "${title_line}" \
+                | sed -n 's/.*<!--[[:space:]]*title:[[:space:]]*\(.*\)[[:space:]]*-->.*/\1/p' \
+                | xargs 2>/dev/null || true)
+              if [ -z "${title_value}" ]; then
+                empty_title_blocks="${empty_title_blocks}${empty_title_blocks:+,}${block_idx}"
+              fi
+            done < <(printf '%s\n' "${block_files[@]}" | sort -V)
+
+            if [ -n "${missing_blocks}" ] || [ -n "${empty_title_blocks}" ]; then
+              HAS_ERROR=true
+              [ -n "${missing_blocks}" ] && ERROR_DETAILS="${ERROR_DETAILS}\n- ${file}: <!-- title: ... --> 欠落ブロック = [${missing_blocks}]"
+              [ -n "${empty_title_blocks}" ] && ERROR_DETAILS="${ERROR_DETAILS}\n- ${file}: <!-- title: ... --> 空値ブロック = [${empty_title_blocks}]"
+            fi
+          done <<< "${{ steps.find-files.outputs.files }}"
+
+          if [ "${HAS_ERROR}" = true ]; then
+            {
+              echo "has_error=true"
+              echo "details<<EOF"
+              printf '%b\n' "${ERROR_DETAILS}"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+            exit 1
+          fi
+
+          echo "has_error=false" >> "${GITHUB_OUTPUT}"
+          echo "✅ subissues.md フォーマット検証に成功しました。"
+
+      - name: Comment fix guidance on PR
+        if: failure() && steps.validate.outputs.has_error == 'true'
+        run: |
+          set -euo pipefail
+
+          marker='<!-- validate-subissues-failed -->'
+          details="${{ steps.validate.outputs.details }}"
+
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${marker}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing=0
+
+          if [ "${existing:-0}" -gt 0 ]; then
+            echo "修正指示コメントは既に投稿済みです。"
+            exit 0
+          fi
+
+          comment_body=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n%s\n' \
+            "${marker}" \
+            "## ❌ subissues.md のフォーマット検証に失敗しました" \
+            "各 \`<!-- subissue -->\` ブロックには \`<!-- title: ... -->\` が必須です。" \
+            "以下を修正してください:${details}" \
+            "### 修正ガイド" \
+            "- 各 \`<!-- subissue -->\` 直後に \`<!-- title: ... -->\` を追加" \
+            "- \`<!-- title: ... -->\` の値を空にしない")
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${comment_body}"

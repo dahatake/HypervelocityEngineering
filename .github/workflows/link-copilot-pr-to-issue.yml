@@ -12,11 +12,13 @@ name: Copilot PR ↔ Issue リンク自動設定
 #      Method 1  : GraphQL closingIssuesReferences
 #      Method 2  : PR body の Closes/Fixes/Resolves #N（既にリンクあり → body 追記スキップ）
 #      Method 2.5: PR body の <!-- parent-issue: #N -->
+#      Method 2.6: PR コメントの <!-- sync-issue-labels-done --> マーカー
 #      Method 2.7: PR body の Issue-NNN パスパターン（存在確認付き）
 #      Method 3  : Copilot がアサインされた Open Issue のタイトル逆引き
 #      特定できない場合は PR に警告コメントを投稿
 #   4. Issue が特定できた場合:
-#      - PR body に既に Closes/Fixes/Resolves がない場合: PR body に Closes #N を追記
+#      - PR body に既に Closes/Fixes/Resolves がない場合: PR body 先頭に
+#        <!-- parent-issue: #N --> を補完し、Closes #N を追記
 #      - Issue に「Copilot が PR を作成しました」コメントを投稿
 #
 # 注意:
@@ -120,7 +122,7 @@ jobs:
           fi
           echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
-      - name: PR body に Closes #N を追記
+      - name: PR body に Closes #N と parent-issue マーカーを追記
         if: >
           steps.check-copilot.outputs.is_copilot == 'true' &&
           steps.guard.outputs.done != 'true' &&
@@ -131,11 +133,17 @@ jobs:
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
         run: |
           set -euo pipefail
-          # 全体末尾の空白・改行を除去してから Closes #N を追記
+          # 全体末尾の空白・改行を除去してから parent-issue マーカー + Closes #N を追記
           TRIMMED_BODY=$(printf '%s' "${PR_BODY}" | perl -0pe 's/\s*\z//')
-          NEW_BODY=$(printf '%s\n\nCloses #%s' "${TRIMMED_BODY}" "${ISSUE_NUMBER}")
+          PARENT_MARKER="<!-- parent-issue: #${ISSUE_NUMBER} -->"
+          PARENT_MARKER_REGEX="<!--[[:space:]]*parent-issue:[[:space:]]*#${ISSUE_NUMBER}[[:space:]]*-->"
+          if ! printf '%s' "${TRIMMED_BODY}" | grep -Eq "${PARENT_MARKER_REGEX}"; then
+            NEW_BODY=$(printf '%s\n%s\n\nCloses #%s' "${PARENT_MARKER}" "${TRIMMED_BODY}" "${ISSUE_NUMBER}")
+          else
+            NEW_BODY=$(printf '%s\n\nCloses #%s' "${TRIMMED_BODY}" "${ISSUE_NUMBER}")
+          fi
           gh pr edit "${PR_NUMBER}" --repo "${REPO}" --body "${NEW_BODY}"
-          echo "✅ PR body に Closes #${ISSUE_NUMBER} を追記しました。"
+          echo "✅ PR body に parent-issue マーカーと Closes #${ISSUE_NUMBER} を追記しました。"
 
       - name: Issue に PR リンクコメントを投稿（冪等化マーカーも PR に付与）
         if: >

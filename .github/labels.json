@@ -72,7 +72,12 @@
   {
     "name": "model/claude-opus-4-7",
     "color": "6f42c1",
-    "description": "Copilot cloud agent モデル指定: claude-opus-4-7"
+    "description": "Copilot cloud agent モデル指定: claude-opus-4-7 (deprecated: model/claude-opus-4.7 を使用してください)"
+  },
+  {
+    "name": "model/claude-opus-4.7",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: claude-opus-4.7"
   },
   {
     "name": "model/claude-opus-4.6",

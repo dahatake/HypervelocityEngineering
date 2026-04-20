@@ -10,7 +10,7 @@ import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from console import Console
+from console import Console, _format_elapsed_ja
 
 
 class _CaptureOutput:
@@ -86,13 +86,26 @@ class TestConsoleVerbose(unittest.TestCase):
         with _CaptureOutput() as cap:
             c.summary({"success": 3, "failed": 1, "skipped": 0, "total_elapsed": 10.0})
         self.assertIn("3", cap.stdout)
-        self.assertIn("10.0", cap.stdout)
+        self.assertIn("10秒", cap.stdout)
 
     def test_error_always_shown(self) -> None:
         c = self._make()
         with _CaptureOutput() as cap:
             c.error("致命的エラー")
         self.assertIn("致命的エラー", cap.stderr)
+
+
+class TestFormatElapsedJa(unittest.TestCase):
+    """_format_elapsed_ja のテスト。"""
+
+    def test_minutes_seconds(self) -> None:
+        self.assertEqual(_format_elapsed_ja(2784.0), "46分24秒")
+
+    def test_hours_minutes_seconds(self) -> None:
+        self.assertEqual(_format_elapsed_ja(3661.5), "1時間1分1秒")
+
+    def test_seconds_only(self) -> None:
+        self.assertEqual(_format_elapsed_ja(45.0), "45秒")
 
 
 class TestConsoleNonVerbose(unittest.TestCase):
@@ -336,9 +349,9 @@ class TestConsolePanel(unittest.TestCase):
     def test_panel_shows_title_and_lines(self) -> None:
         c = Console(verbose=True, quiet=False)
         with _CaptureOutput() as cap:
-            c.panel("設定確認", ["モデル: claude-opus-4-7", "並列: 15"])
+            c.panel("設定確認", ["モデル: claude-opus-4.7", "並列: 15"])
         self.assertIn("設定確認", cap.stdout)
-        self.assertIn("claude-opus-4-7", cap.stdout)
+        self.assertIn("claude-opus-4.7", cap.stdout)
 
     def test_panel_suppressed_when_quiet(self) -> None:
         c = Console(verbose=True, quiet=True)

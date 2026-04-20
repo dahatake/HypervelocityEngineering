@@ -75,6 +75,34 @@ find_issue_number() {
     fi
   fi
 
+  # --- Method 2.6: PR コメントの sync-issue-labels マーカーから Issue 番号を復元 ---
+  if [ -z "${ISSUE_NUMBER}" ]; then
+    echo "=== Method 2.6: PR コメントの sync-issue-labels コメントから Issue 番号を復元 ==="
+    COMMENT_ISSUE=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+      --paginate \
+      --jq '.[]' 2>/dev/null \
+      | jq -rs '[.[] 
+          | select(.user.type == "Bot")
+          | select((.user.login == "github-actions[bot]") or (.user.login == "copilot-swe-agent[bot]"))
+          | select(.body | contains("<!-- sync-issue-labels-done -->"))
+          | select(.body | contains("sync-issue-labels-to-pr.yml"))
+          | .body] | .[0] // ""' \
+      | grep -oP 'Issue #\K[0-9]+' \
+      | head -1) || COMMENT_ISSUE=""
+    if [ -n "${COMMENT_ISSUE}" ]; then
+      ISSUE_STATE=$(gh api "/repos/${REPO}/issues/${COMMENT_ISSUE}" \
+        --jq 'select(.pull_request == null) | .state' 2>/dev/null) || ISSUE_STATE=""
+      if [ -n "${ISSUE_STATE}" ]; then
+        ISSUE_NUMBER="${COMMENT_ISSUE}"
+        echo "✅ Method 2.6 成功: sync-issue-labels コメントから Issue #${ISSUE_NUMBER}（state: ${ISSUE_STATE}）"
+      else
+        echo "⚠️ Method 2.6: Issue #${COMMENT_ISSUE} は存在しないか PR です。"
+      fi
+    else
+      echo "Method 2.6 失敗: sync-issue-labels コメントが見つかりませんでした。"
+    fi
+  fi
+
   # --- Method 2.7: PR body の Issue-NNN パスパターンから Issue 番号を推定 ---
   if [ -z "${ISSUE_NUMBER}" ]; then
     echo "=== Method 2.7: PR body の Issue-NNN パスパターンを確認 ==="

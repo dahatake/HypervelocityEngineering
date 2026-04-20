@@ -30,6 +30,99 @@ Sub-issue として自動生成され、Copilot が依存関係に従って順�
 > 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図・スコープ・業務プロセス・ユースケース・データモデル・セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に [km-guide.md](./km-guide.md) のワークフローを実行して `knowledge/` を充実させることを推奨します。
 
 
+## Agent チェーン図（AAD）
+
+以下の図は、このワークフローで使用される Custom Agent がファイルの入出力を介してどのように連鎖するかを示します。
+
+```mermaid
+flowchart TD
+  s1_1(["Arch-Microservice-DomainAnalytics [1.1]"])
+  s1_2(["Arch-Microservice-ServiceIdentify [1.2]"])
+  s2(["Arch-DataModeling [2]"])
+  s3(["Arch-DataCatalog [3]"])
+  s4(["Arch-UI-List [4]"])
+  s5(["Arch-Microservice-ServiceCatalog [5]"])
+  s6(["Arch-TDD-TestStrategy [6]"])
+  s7_1(["Arch-UI-Detail [7.1]"])
+  s7_2(["Arch-Microservice-ServiceDetail [7.2]"])
+  s7_3(["Arch-TDD-TestSpec [7.3]"])
+  s8_1(["Arch-AIAgentDesign [8.1]"])
+  s8_2(["Arch-AIAgentDesign [8.2]"])
+  s8_3(["Arch-AIAgentDesign [8.3]"])
+  s1_1 -->|"docs/catalog/use-case-catalog.md"| s1_2
+  s1_2 -->|"docs/catalog/service-catalog.md"| s2
+  s2 -->|"docs/catalog/data-model.md"| s3
+  s2 -. "docs/catalog/data-model.md（代替依存）" .-> s3
+  s3 -->|"docs/catalog/data-catalog.md"| s4
+  s3 -. "docs/catalog/data-catalog.md（代替依存）" .-> s4
+  s4 -->|"docs/catalog/screen-catalog.md"| s5
+  s4 -. "docs/catalog/screen-catalog.md（代替依存）" .-> s5
+  s5 -->|"docs/catalog/service-catalog-matrix.md"| s6
+  s5 -. "docs/catalog/service-catalog-matrix.md（代替依存）" .-> s6
+  s6 -->|"{WORK}"| s7_1
+  s5 -. "docs/catalog/service-catalog-matrix.md（代替依存）" .-> s7_1
+  s6 -->|"{WORK}"| s7_2
+  s5 -. "docs/catalog/service-catalog-matrix.md（代替依存）" .-> s7_2
+  s6 -->|"{WORK}"| s7_3
+  s7_1 -->|"{WORK}"| s7_3
+  s7_2 -->|"{WORK}"| s7_3
+  s7_3 -->|"{WORK}"| s8_1
+  s7_1 -. "{WORK}（代替依存）" .-> s8_1
+  s7_2 -. "{WORK}（代替依存）" .-> s8_1
+  s8_1 -->|"docs/agent/agent-application-definition.md"| s8_2
+  s7_3 -. "{WORK}（代替依存）" .-> s8_2
+  s8_2 -->|"docs/agent/agent-application-definition.md"| s8_3
+  s8_1 -. "docs/agent/agent-application-definition.md（代替依存）" .-> s8_3
+  s1_1 -. "knowledge/ 参照" .-> kn
+  s1_2 -. "knowledge/ 参照" .-> kn
+  s2 -. "knowledge/ 参照" .-> kn
+  s3 -. "knowledge/ 参照" .-> kn
+  s4 -. "knowledge/ 参照" .-> kn
+  s5 -. "knowledge/ 参照" .-> kn
+  s6 -. "knowledge/ 参照" .-> kn
+  s7_1 -. "knowledge/ 参照" .-> kn
+  s7_2 -. "knowledge/ 参照" .-> kn
+  s7_3 -. "knowledge/ 参照" .-> kn
+  s8_1 -. "knowledge/ 参照" .-> kn
+  s8_2 -. "knowledge/ 参照" .-> kn
+  s8_3 -. "knowledge/ 参照" .-> kn
+  kn[/"knowledge/"/]
+  classDef arch fill:#4A90D9,stroke:#1f3a5a,color:#fff;
+  classDef dev fill:#50C878,stroke:#1b5e20,color:#111;
+  classDef doc fill:#9B59B6,stroke:#4a235a,color:#fff;
+  classDef qa fill:#E67E22,stroke:#7e3d00,color:#111;
+  classDef km fill:#F39C12,stroke:#7a4f00,color:#111,stroke-width:3px;
+  classDef file fill:#95A5A6,stroke:#5d6d73,color:#111;
+  class s1_1 arch;
+  class s1_2 arch;
+  class s2 arch;
+  class s3 arch;
+  class s4 arch;
+  class s5 arch;
+  class s6 arch;
+  class s7_1 arch;
+  class s7_2 arch;
+  class s7_3 arch;
+  class s8_1 arch;
+  class s8_2 arch;
+  class s8_3 arch;
+  class kn file;
+  style s8_1 stroke-width:3px
+  style s8_2 stroke-width:3px
+  style s8_3 stroke-width:3px
+  subgraph LEG["凡例"]
+    la(["Arch-*（青）: 設計"]):::arch
+    ld["Dev-*（緑）: 実装"]:::dev
+    lc{"Doc-*（紫）: 文書生成"}:::doc
+    lq{{"QA-*（橙）: 品質確認"}}:::qa
+    lk[["KnowledgeManager（金）"]]:::km
+    lf[/"ファイル/ディレクトリ（灰）"/]:::file
+  end
+```
+
+![AAD: Arch-Microservice-DomainAnalytics → Arch-AIAgentDesign の13ステップチェーン（並列2箇所含む）](./images/chain-aad.svg)
+
+
 ### アーキテクチャ図
 
 ```

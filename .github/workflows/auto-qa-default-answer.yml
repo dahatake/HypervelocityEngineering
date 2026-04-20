@@ -1,0 +1,170 @@
+name: QA 質問票デフォルト回答の自動投稿
+
+# Copilot が QA 質問票を投稿した後に、全質問で既定値候補を採用する旨を
+# @copilot メンション付きで自動投稿する。
+#
+# 注意:
+#   - 質問票本文は LLM 出力で非決定的なため、個別質問の既定値抽出は行わない
+#   - 「全問既定値採用」の汎用指示を投稿し、Copilot 側で適用させる
+#   - opt-out は紐づく Issue body の <!-- auto-qa: false --> で制御する
+#   - ${{ }} 式をシェルに直接展開せず env 経由で扱う（スクリプトインジェクション対策）
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: auto-qa-default-answer-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  auto-qa-default-answer:
+    if: >
+      github.event.issue.pull_request
+      && github.event.sender.type == 'Bot'
+      && (startsWith(github.event.sender.login, 'copilot-swe-agent')
+          || github.event.sender.login == 'Copilot')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      TRIGGER_COMMENT_BODY: ${{ github.event.comment.body }}
+
+    steps:
+      - name: PR ラベル確認（auto-qa あり / auto-approve-ready なし）
+        id: labels
+        run: |
+          set -euo pipefail
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>/dev/null) || pr_data='{}'
+          has_auto_qa=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | if contains(["auto-qa"]) then "true" else "false" end')
+          has_auto_approve_ready=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | if contains(["auto-approve-ready"]) then "true" else "false" end')
+          if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_approve_ready}" = "true" ]; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+
+      - name: 冪等性ガード（既に自動回答済みならスキップ）
+        id: guard
+        if: steps.labels.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          answered_count=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '[.[] | select(.body | contains("<!-- auto-qa-default-answered -->"))] | length' \
+            2>/dev/null) || answered_count="0"
+          if [ "${answered_count:-0}" -gt 0 ] 2>/dev/null; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+
+      - name: QA 指示済み確認（copilot-auto-qa-posted）
+        id: qa-posted
+        if: steps.labels.outputs.skip != 'true' && steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          qa_posted_count=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '[.[] | select(.body | contains("<!-- copilot-auto-qa-posted -->"))] | length' \
+            2>/dev/null) || qa_posted_count="0"
+          if [ "${qa_posted_count:-0}" -eq 0 ] 2>/dev/null; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
+
+      - name: トリガーコメントが質問票か検証
+        id: detect-questionnaire
+        if: steps.labels.outputs.skip != 'true' && steps.guard.outputs.skip != 'true' && steps.qa-posted.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # 質問票検知パターン（3種）:
+          #   A: [Q- を含む構造化形式
+          #   B: 既定値候補 を含むテーブル形式
+          #   C: - [ ] を含むチェックボックス形式
+          is_questionnaire="false"
+          if printf '%s' "${TRIGGER_COMMENT_BODY}" | grep -q '\[Q-'; then
+            is_questionnaire="true"
+          elif printf '%s' "${TRIGGER_COMMENT_BODY}" | grep -q '既定値候補'; then
+            is_questionnaire="true"
+          elif printf '%s' "${TRIGGER_COMMENT_BODY}" | grep -q -- '- \[ \]'; then
+            is_questionnaire="true"
+          fi
+          echo "is_questionnaire=${is_questionnaire}" >> "${GITHUB_OUTPUT}"
+
+      - name: リポジトリをチェックアウト（Issue 判定用共通スクリプト読み込み）
+        if: >
+          steps.labels.outputs.skip != 'true'
+          && steps.guard.outputs.skip != 'true'
+          && steps.qa-posted.outputs.skip != 'true'
+          && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
+        uses: actions/checkout@v4
+
+      - name: 紐づく Issue body の opt-out 確認
+        id: optout
+        if: >
+          steps.labels.outputs.skip != 'true'
+          && steps.guard.outputs.skip != 'true'
+          && steps.qa-posted.outputs.skip != 'true'
+          && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""' 2>/dev/null || echo "")
+          EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+          {
+            echo "PR_BODY<<${EOF_MARKER}"
+            echo "${pr_body}"
+            echo "${EOF_MARKER}"
+          } >> "${GITHUB_ENV}"
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/pr-common.sh"
+          find_issue_number
+          if [ -z "${ISSUE_NUMBER:-}" ]; then
+            echo "opted_out=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          issue_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || echo "")
+          if printf '%s' "${issue_body}" | grep -qF '<!-- auto-qa: false -->'; then
+            echo "opted_out=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "opted_out=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: デフォルト全回答コメントを投稿
+        if: >
+          steps.labels.outputs.skip != 'true'
+          && steps.guard.outputs.skip != 'true'
+          && steps.qa-posted.outputs.skip != 'true'
+          && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
+          && steps.optout.outputs.opted_out != 'true'
+        env:
+          COMMENT_BODY: |
+            <!-- auto-qa-default-answered -->
+            @copilot
+
+            ## QA 質問票への回答（全問デフォルト値採用）
+
+            質問票の全質問に対して、各質問に記載された「未回答時の既定値候補」をそのまま採用します。
+
+            ### 指示
+            1. 各質問の「未回答時の既定値候補」（または「デフォルトの回答案」）を回答として適用してください。
+            2. 「未回答のまま進めた場合の影響」セクションに記載された注意点に留意してください。
+            3. 回答を反映した上で、元のタスクの実行を続行してください。
+
+            > ℹ️ このコメントは `auto-qa-default-answer.yml` によって自動投稿されました。
+        run: |
+          set -euo pipefail
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT_BODY}"

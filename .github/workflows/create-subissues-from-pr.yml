@@ -53,6 +53,7 @@ jobs:
         if: steps.idempotency.outputs.skip == 'false'
         id: find_files
         run: |
+          set -euo pipefail
           echo "=== PR #${PR_NUMBER} の変更ファイルから subissues.md を検索 ==="
 
           # GitHub API で PR の変更ファイル一覧を取得（指数バックオフ付きリトライ）
@@ -99,6 +100,10 @@ jobs:
 
           files=$(printf '%s' "$pr_files" | grep -v '^[[:space:]]*$' | sort || true)
           if [ -z "$files" ]; then
+            echo "[FALLBACK] PR 差分が空のため、チェックアウト済み PR ブランチから subissues.md を直接検索します。"
+            files=$(find work -type f -name 'subissues.md' | sort || true)
+          fi
+          if [ -z "$files" ]; then
             echo "PR の変更ファイル内に subissues.md が見つかりませんでした。Nothing to do."
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
@@ -116,14 +121,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ── detect parent issue (3-stage fallback) ───────────────────────
+          # ── detect parent issue (explicit metadata > auto-detect fallback) ───────────────────────
+          mapfile -t _DETECT_FILES < <(printf '%s' "$FILES_B64" | base64 -d)
+          PARENT_ISSUE=""
+
+          # Method 0: Explicit metadata in changed subissues.md files
+          #   Supports: <!-- parent_issue: 1865 --> / <!-- parent_issue: #1865 -->
+          #             <!-- parent-issue: 1865 --> / <!-- parent-issue: #1865 -->
+          _REPO_ROOT=$(pwd)
+          for _f in "${_DETECT_FILES[@]}"; do
+            _abs_f=$(realpath -m "$_f" 2>/dev/null || true)
+            case "$_abs_f" in
+              "$_REPO_ROOT"/work/*subissues.md) ;;
+              *)
+                echo "Skip parent_issue metadata scan for unexpected path: $_f" >&2
+                continue
+                ;;
+            esac
+            [ -f "$_abs_f" ] || continue
+            _meta_parent=$(grep -iE '<!--[[:space:]]*parent[-_]issue:[[:space:]]*#?[0-9]+[[:space:]]*-->' "$_abs_f" \
+              | sed -nE 's/.*parent[-_]issue:[[:space:]]*#?([0-9]+).*/\1/p' | head -1 || true)
+            if [ -n "$_meta_parent" ]; then
+              PARENT_ISSUE="$_meta_parent"
+              echo "Parent issue detected from ${_f}: #${PARENT_ISSUE}"
+              break
+            fi
+          done
+
           PR_BODY=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""')
 
           # Method 1: closing issues references via gh pr view (most reliable)
-          PARENT_ISSUE=$(gh pr view "$PR_NUMBER" --repo "$REPO" \
-            --json closingIssuesReferences \
-            --jq '.closingIssuesReferences[0].number | tostring' 2>/dev/null \
-            | grep -E '^[0-9]+$' | head -1 || true)
+          if [ -z "$PARENT_ISSUE" ]; then
+            PARENT_ISSUE=$(gh pr view "$PR_NUMBER" --repo "$REPO" \
+              --json closingIssuesReferences \
+              --jq '.closingIssuesReferences[0].number | tostring' 2>/dev/null \
+              | grep -E '^[0-9]+$' | head -1 || true)
+          fi
 
           # Method 2: Closing reference in PR body (Fixes/Closes/Resolves [:]#NNN or owner/repo#NNN)
           if [ -z "$PARENT_ISSUE" ]; then
@@ -132,11 +165,12 @@ jobs:
               | grep -oE '#[0-9]+' | head -1 | tr -d '#' || true)
           fi
 
-          # Method 3: Legacy HTML comment <!-- parent-issue: #NNN -->
+          # Method 3: Legacy HTML comment in PR body
+          #   Supports both `parent-issue` and `parent_issue`
           if [ -z "$PARENT_ISSUE" ]; then
             PARENT_ISSUE=$(printf '%s' "$PR_BODY" \
-              | grep -i '<!--.*parent-issue:.*#[0-9]' \
-              | sed 's/.*parent-issue:[[:space:]]*#\([0-9][0-9]*\).*/\1/' | head -1 || true)
+              | grep -iE '<!--.*parent[-_]issue:[[:space:]]*#?[0-9]+' \
+              | sed -E 's/.*parent[-_]issue:[[:space:]]*#?([0-9]+).*/\1/' | head -1 || true)
           fi
 
           if [ -n "$PARENT_ISSUE" ]; then
@@ -211,26 +245,19 @@ jobs:
           # ── helper: assign Copilot via GraphQL (ported from auto-software-design.yml) ──
           extract_model() {
             local body="$1"
-            echo "${body}" | python3 /dev/fd/3 3<<'PY'
-            import sys, re
-            body = sys.stdin.read()
-            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
-            if not m:
-                print("")
-                raise SystemExit(0)
-            val = m.group(1).strip()
-            allowed = {"Auto", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
-            print(val if val in allowed else "")
-            PY
+            echo "${body}" | python3 -c "import re,sys; body=sys.stdin.read(); m=re.search(r'###\\s*使用するモデル\\s*\\n+([^\\n#]+)', body); val=(m.group(1).strip() if m else ''); allowed={'Auto','claude-opus-4.7','claude-opus-4-7','claude-opus-4.6','claude-sonnet-4.6','gpt-5.4','gpt-5.3-codex','gemini-2.5-pro'}; val=('claude-opus-4.7' if val=='claude-opus-4-7' else val); print(val if val in allowed else '')"
           }
 
           resolve_model() {
             local raw="$1"
             if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
-              echo "claude-opus-4-7"
-            else
-              echo "${raw}"
+              echo "claude-opus-4.7"; return
             fi
+            if [[ "${raw}" == "claude-opus-4-7" ]]; then
+              echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
+              echo "claude-opus-4.7"; return
+            fi
+            echo "${raw}"
           }
 
           assign_copilot() {
@@ -240,11 +267,7 @@ jobs:
             local custom_instructions="${4:-}"
             local model_raw="${5:-}"
             local selected_model
-            if [[ -z "${model_raw}" || "${model_raw}" == "Auto" ]]; then
-              selected_model="claude-opus-4-7"
-            else
-              selected_model="${model_raw}"
-            fi
+            selected_model="$(resolve_model "${model_raw}")"
 
             echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
             echo "  custom_agent: ${custom_agent}"
@@ -861,3 +884,103 @@ jobs:
               exit 1
             fi
           fi
+
+      - name: split-mode PR の ready化 / Approve / Auto-merge
+        id: auto-approve-merge
+        if: steps.idempotency.outputs.skip == 'false' && steps.find_files.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          has_auto_approve_ready=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" \
+            --json labels \
+            --jq 'if [.labels[].name] | index("auto-approve-ready") then "true" else "false" end' 2>/dev/null || echo "false")
+          if [ "${has_auto_approve_ready}" != "true" ]; then
+            echo "auto-approve-ready ラベルがないため、自動 ready/approve/merge をスキップします。"
+            echo "triggered=false" >> "${GITHUB_OUTPUT}"
+            echo "ready_state=skipped" >> "${GITHUB_OUTPUT}"
+            echo "approve_state=skipped" >> "${GITHUB_OUTPUT}"
+            echo "merge_state=skipped" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "triggered=true" >> "${GITHUB_OUTPUT}"
+          ready_state="not-needed"
+          approve_state="not-attempted"
+          merge_state="not-attempted"
+
+          is_draft=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json isDraft --jq '.isDraft' 2>/dev/null || echo "false")
+          if [ "${is_draft}" = "true" ]; then
+            if gh pr ready "${PR_NUMBER}" --repo "${REPO}"; then
+              ready_state="success"
+            else
+              ready_state="failed"
+            fi
+          fi
+
+          approve_err_file=$(mktemp)
+          if gh pr review "${PR_NUMBER}" --repo "${REPO}" --approve --body "✅ 自動 Approve（create-subissues-from-pr.yml）" 2>"${approve_err_file}"; then
+            approve_state="success"
+          else
+            approve_state="failed"
+            echo "::warning::Approve 失敗: $(head -n 5 "${approve_err_file}" 2>/dev/null || echo 'unknown error')"
+          fi
+          rm -f "${approve_err_file}"
+
+          merge_err_file=$(mktemp)
+          if gh pr merge "${PR_NUMBER}" --repo "${REPO}" --auto --squash 2>"${merge_err_file}"; then
+            merge_state="success"
+          else
+            merge_state="failed"
+            echo "::warning::Auto-merge 失敗: $(head -n 5 "${merge_err_file}" 2>/dev/null || echo 'unknown error')"
+          fi
+          rm -f "${merge_err_file}"
+
+          echo "ready_state=${ready_state}" >> "${GITHUB_OUTPUT}"
+          echo "approve_state=${approve_state}" >> "${GITHUB_OUTPUT}"
+          echo "merge_state=${merge_state}" >> "${GITHUB_OUTPUT}"
+
+      - name: サマリーコメントに auto-merge 結果を追記
+        if: steps.idempotency.outputs.skip == 'false' && steps.find_files.outputs.found == 'true'
+        env:
+          TRIGGERED: ${{ steps.auto-approve-merge.outputs.triggered }}
+          READY_STATE: ${{ steps.auto-approve-merge.outputs.ready_state }}
+          APPROVE_STATE: ${{ steps.auto-approve-merge.outputs.approve_state }}
+          MERGE_STATE: ${{ steps.auto-approve-merge.outputs.merge_state }}
+        run: |
+          set -euo pipefail
+
+          comment_id=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[] | select(.body | contains("<!-- subissues-created -->")) | .id' \
+            2>/dev/null | tail -1 || true)
+          if [ -z "${comment_id}" ]; then
+            echo "subissues-created コメントが見つからないため追記をスキップします。"
+            exit 0
+          fi
+
+          current_body=$(gh api "/repos/${REPO}/issues/comments/${comment_id}" --jq '.body // ""' 2>/dev/null || echo "")
+          if printf '%s' "${current_body}" | grep -q '<!-- subissues-auto-merge-result -->'; then
+            echo "auto-merge 結果は既に追記済みです。"
+            exit 0
+          fi
+
+          if [ "${TRIGGERED}" = "true" ]; then
+            summary=$(printf '%s\n%s\n%s' \
+              "- ready化: ${READY_STATE}" \
+              "- Approve: ${APPROVE_STATE}" \
+              "- Auto-merge(squash): ${MERGE_STATE}")
+          else
+            summary="- auto-approve-ready ラベルがないためスキップ"
+          fi
+
+          {
+            printf '%s\n' "${current_body}"
+            printf '\n<!-- subissues-auto-merge-result -->\n'
+            printf '### 🔀 split-mode 自動マージ処理結果\n\n'
+            printf '%s\n' "${summary}"
+          } > /tmp/pr_comment_with_merge_status.md
+
+          gh api --method PATCH "/repos/${REPO}/issues/comments/${comment_id}" \
+            -f body="$(cat /tmp/pr_comment_with_merge_status.md)" >/dev/null

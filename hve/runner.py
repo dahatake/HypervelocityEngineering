@@ -73,6 +73,18 @@ _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
 _MAX_CONTEXT_INJECTION_LENGTH: int = 50_000
 
 
+def _truncate_context(text: str, max_length: int) -> str:
+    """コンテキストを先頭 + 末尾で切り詰める。"""
+    if len(text) <= max_length:
+        return text
+    head_size = max_length * 3 // 4
+    omit_msg = f"\n\n... (中略: 全体 {len(text):,} 文字) ...\n\n"
+    tail_size = max_length - head_size - len(omit_msg)
+    if tail_size <= 0:
+        return text[:max_length]
+    return text[:head_size] + omit_msg + text[-tail_size:]
+
+
 def _is_review_fail(content: str) -> bool:
     """合格判定行のトークンから FAIL 判定かどうかを判定する。
 
@@ -446,7 +458,7 @@ class StepRunner:
                     if _use_qa_sub_session:
                         _qa_session = await client.create_session(**self._build_sub_session_opts(_qa_model))
                         _qa_session.on(self._handle_session_event)
-                        _qa_context = (main_output or "")[:_MAX_CONTEXT_INJECTION_LENGTH]
+                        _qa_context = _truncate_context(main_output or "", _MAX_CONTEXT_INJECTION_LENGTH)
                         _effective_qa_prompt = (
                             "以下は同一ステップのメインタスク出力です。"
                             "この内容を前提として QA 質問票を作成してください。\n\n"
@@ -580,7 +592,7 @@ class StepRunner:
                             **self._build_sub_session_opts(_review_model)
                         )
                         _review_session.on(self._handle_session_event)
-                        _review_context = (main_output or "")[:_MAX_CONTEXT_INJECTION_LENGTH]
+                        _review_context = _truncate_context(main_output or "", _MAX_CONTEXT_INJECTION_LENGTH)
                         _effective_review_prompt = (
                             "以下は同一ステップのメインタスク出力です。"
                             "この内容を前提としてレビューしてください。\n\n"

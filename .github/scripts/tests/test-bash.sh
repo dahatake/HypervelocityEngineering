@@ -200,6 +200,38 @@ else
 fi
 
 # ===========================================================================
+# 7. yaml-safe-helpers.sh — YAML安全ヘルパー判定テスト
+# ===========================================================================
+echo ""
+echo "=== yaml-safe-helpers.sh ==="
+
+output=$(bash -c '
+  set -euo pipefail
+  export GITHUB_WORKSPACE="'"$(cd "${SCRIPT_DIR}/../../.." && pwd)"'"
+  source "'"${BASH_DIR}"'/lib/yaml-safe-helpers.sh"
+  json="{\"labels\":[],\"body\":\"### PR完全自動化設定\n- [x] PR の自動 Approve & Auto-merge を有効にする\"}"
+  echo "${json}" | wh_check_auto_merge
+' 2>&1) || true
+if echo "${output}" | grep -q "true"; then
+  pass "yaml-safe-helpers: checkbox-based auto-merge detection"
+else
+  fail "yaml-safe-helpers: checkbox-based auto-merge detection — got: ${output}"
+fi
+
+output=$(bash -c '
+  set -euo pipefail
+  export GITHUB_WORKSPACE="'"$(cd "${SCRIPT_DIR}/../../.." && pwd)"'"
+  source "'"${BASH_DIR}"'/lib/yaml-safe-helpers.sh"
+  body="Fixes #12\nCloses owner/repo#34\nresolves #12"
+  printf "%s" "${body}" | wh_parse_closing_issues
+' 2>&1) || true
+if [[ "${output}" == $'12\n34' ]]; then
+  pass "yaml-safe-helpers: parse closing issues unique order"
+else
+  fail "yaml-safe-helpers: parse closing issues unique order — got: ${output}"
+fi
+
+# ===========================================================================
 # Summary
 # ===========================================================================
 echo ""

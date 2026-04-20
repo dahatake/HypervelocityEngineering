@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import MODEL_CHOICES, SDKConfig
+from config import DEFAULT_MODEL, LEGACY_MODEL_ID, MODEL_CHOICES, SDKConfig, normalize_model
 
 
 class TestSDKConfigDefaults(unittest.TestCase):
@@ -18,14 +18,27 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.cfg = SDKConfig()
 
     def test_model_default(self) -> None:
-        self.assertEqual(self.cfg.model, "claude-opus-4-7")
+        self.assertEqual(self.cfg.model, "claude-opus-4.7")
 
     def test_default_model_is_opus_4_7(self) -> None:
-        self.assertEqual(SDKConfig().model, "claude-opus-4-7")
+        self.assertEqual(SDKConfig().model, "claude-opus-4.7")
 
     def test_model_choices_contains_both_46_and_47(self) -> None:
-        self.assertIn("claude-opus-4-7", MODEL_CHOICES)
+        self.assertNotIn(LEGACY_MODEL_ID, MODEL_CHOICES)
+        self.assertIn("claude-opus-4.7", MODEL_CHOICES)
         self.assertIn("claude-opus-4.6", MODEL_CHOICES)
+
+    def test_default_model_constant(self) -> None:
+        self.assertEqual(DEFAULT_MODEL, "claude-opus-4.7")
+
+    def test_normalize_model_legacy(self) -> None:
+        self.assertEqual(normalize_model(LEGACY_MODEL_ID), "claude-opus-4.7")
+
+    def test_normalize_model_current(self) -> None:
+        self.assertEqual(normalize_model("claude-opus-4.7"), "claude-opus-4.7")
+
+    def test_normalize_model_passthrough(self) -> None:
+        self.assertEqual(normalize_model("gpt-5.4"), "gpt-5.4")
 
     def test_timeout_default(self) -> None:
         self.assertEqual(self.cfg.timeout_seconds, 21600.0)

@@ -67,17 +67,8 @@ jobs:
 
           if [[ "${EVENT_ACTION}" == "closed" ]]; then
             if [[ "${ISSUE_TITLE}" =~ ^\[ADOC\] ]]; then
-              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
-              import sys, json
-              labels = json.load(sys.stdin)
-              print('true' if 'adoc:done' in labels else 'false')
-              PY
-              )
-              if [[ "${has_done}" == "true" ]]; then
-                echo "mode=skip" >> "$GITHUB_OUTPUT"
-              else
-                echo "mode=skip" >> "$GITHUB_OUTPUT"
-              fi
+              # adoc:done の有無に関わらず closed 時は skip
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             echo "mode=skip" >> "$GITHUB_OUTPUT"
@@ -89,25 +80,14 @@ jobs:
             exit 0
           fi
 
-          has_adoc=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          labels = json.load(sys.stdin)
-          print('true' if 'auto-app-documentation' in labels else 'false')
-          PY
-          )
+          has_adoc=$(echo "${ISSUE_LABELS}" | python3 -c "import sys, json; labels = json.load(sys.stdin); print('true' if 'auto-app-documentation' in labels else 'false')")
 
           if [[ "${has_adoc}" != "true" ]]; then
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          labels = json.load(sys.stdin)
-          skip_labels = {'adoc:initialized', 'adoc:ready', 'adoc:running', 'adoc:done', 'adoc:blocked'}
-          print('true' if any(l in skip_labels for l in labels) else 'false')
-          PY
-          )
+          has_init=$(echo "${ISSUE_LABELS}" | python3 -c "import sys, json; labels = json.load(sys.stdin); skip_labels = {'adoc:initialized', 'adoc:ready', 'adoc:running', 'adoc:done', 'adoc:blocked'}; print('true' if any(l in skip_labels for l in labels) else 'false')")
 
           if [[ "${has_init}" == "true" ]]; then
             echo "mode=skip" >> "$GITHUB_OUTPUT"
@@ -236,12 +216,12 @@ jobs:
             local labels_json="$3"
             local data
             data=$(python3 - "${title}" "${body}" "${labels_json}" <<'PY'
-            import json, sys
-            title = sys.argv[1]
-            body  = sys.argv[2]
-            labels = json.loads(sys.argv[3])
-            print(json.dumps({'title': title, 'body': body, 'labels': labels}))
-            PY
+          import json, sys
+          title = sys.argv[1]
+          body  = sys.argv[2]
+          labels = json.loads(sys.argv[3])
+          print(json.dumps({'title': title, 'body': body, 'labels': labels}))
+          PY
             )
             api_call POST "https://api.github.com/repos/${REPO}/issues" "${data}"
           }
@@ -272,11 +252,7 @@ jobs:
             local custom_instructions="${4:-}"
             local model_raw="${5:-}"
             local selected_model
-            if [[ -z "${model_raw}" || "${model_raw}" == "Auto" ]]; then
-              selected_model="claude-opus-4-7"
-            else
-              selected_model="${model_raw}"
-            fi
+            selected_model="$(resolve_model "${model_raw}")"
 
             if [[ -z "${COPILOT_PAT:-}" ]]; then
               echo "WARNING: COPILOT_PAT が未設定のため assign をスキップ"
@@ -306,20 +282,20 @@ jobs:
               2>/dev/null || true)
 
             IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
-            import sys, json
-            try:
-                d = json.load(sys.stdin)
-                repo = d.get('data', {}).get('repository', {})
-                bot = ''
-                for a in repo.get('suggestedActors', {}).get('nodes', []):
-                    if a.get('login') == 'copilot-swe-agent':
-                        bot = a.get('id', '')
-                        break
-                issue = repo.get('issue', {}).get('id', '')
-                print(bot + '\t' + issue + '\t' + repo.get('id', ''))
-            except Exception:
-                print('\t\t')
-            PY
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              repo = d.get('data', {}).get('repository', {})
+              bot = ''
+              for a in repo.get('suggestedActors', {}).get('nodes', []):
+                  if a.get('login') == 'copilot-swe-agent':
+                      bot = a.get('id', '')
+                      break
+              issue = repo.get('issue', {}).get('id', '')
+              print(bot + '\t' + issue + '\t' + repo.get('id', ''))
+          except Exception:
+              print('\t\t')
+          PY
             ) || true
 
             if [[ -z "${bot_id}" ]] || [[ -z "${issue_node_id}" ]] || [[ -z "${repo_node_id}" ]]; then
@@ -338,7 +314,7 @@ jobs:
                 baseRef: \$baseRef,
                 customInstructions: \$customInstructions,
                 customAgent: \$customAgent,
-                model: \"\"
+                model: \$model
               }
             }) {
               assignable {
@@ -359,14 +335,14 @@ jobs:
               2>/dev/null || true)
 
             is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
-            import sys, json
-            try:
-                d = json.load(sys.stdin)
-                nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
-                print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
-            except Exception:
-                print('false')
-            PY
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
+              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
+          except Exception:
+              print('false')
+          PY
             ) || true
 
             [[ "${is_assigned}" == "true" ]]
@@ -386,35 +362,40 @@ jobs:
           extract_custom_agent() {
             local body="$1"
             echo "${body}" | python3 /dev/fd/3 3<<'PY'
-            import sys, re
-            body = sys.stdin.read()
-            m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
-            print(m.group(1) if m else '')
-            PY
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
           }
 
           extract_model() {
             local body="$1"
             echo "${body}" | python3 /dev/fd/3 3<<'PY'
-            import sys, re
-            body = sys.stdin.read()
-            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
-            if not m:
-                print("")
-                raise SystemExit(0)
-            val = m.group(1).strip()
-            allowed = {"Auto", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
-            print(val if val in allowed else "")
-            PY
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
+          if not m:
+              print("")
+              raise SystemExit(0)
+          val = m.group(1).strip()
+          allowed = {"Auto", "claude-opus-4.7", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
+          if val == "claude-opus-4-7":
+              val = "claude-opus-4.7"
+          print(val if val in allowed else "")
+          PY
           }
 
           resolve_model() {
             local raw="$1"
             if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
-              echo "claude-opus-4-7"
-            else
-              echo "${raw}"
+              echo "claude-opus-4.7"; return
             fi
+            if [[ "${raw}" == "claude-opus-4-7" ]]; then
+              echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
+              echo "claude-opus-4.7"; return
+            fi
+            echo "${raw}"
           }
 
           PARSED=$(python3 - <<'PYEOF'
