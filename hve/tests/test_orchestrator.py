@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import types
 import unittest
 import unittest.mock
 from unittest.mock import patch
@@ -17,6 +18,59 @@ from orchestrator import run_workflow
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+class TestPrefetchWorkIQ(unittest.TestCase):
+    def test_returns_empty_when_copilot_sdk_missing(self) -> None:
+        from orchestrator import _prefetch_workiq
+
+        cfg = SDKConfig(dry_run=True)
+        console = unittest.mock.Mock()
+        with patch.dict(sys.modules, {"copilot": None}):
+            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
+        self.assertEqual(result, "")
+        console.warning.assert_called_once()
+
+    def test_returns_query_result_when_successful(self) -> None:
+        from orchestrator import _prefetch_workiq
+
+        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
+        console = unittest.mock.Mock()
+
+        class _FakeSession:
+            async def disconnect(self):
+                return None
+
+        class _FakeClient:
+            async def start(self):
+                return None
+
+            async def stop(self):
+                return None
+
+            async def create_session(self, **kwargs):
+                return _FakeSession()
+
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
+        fake_copilot.SubprocessConfig = lambda **kwargs: object()
+        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
+                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}), \
+                patch("workiq.query_workiq", new=unittest.mock.AsyncMock(return_value="m365 context")):
+            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
+
+        self.assertEqual(result, "m365 context")
 
 
 class TestRunWorkflowDryRun(unittest.TestCase):

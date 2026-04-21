@@ -93,6 +93,14 @@ class TestStepRunnerDryRun(unittest.TestCase):
             result = _run(runner.run_step("1.1", "テストステップ", "テストプロンプト"))
         self.assertTrue(result)
 
+    def test_dry_run_resets_workiq_tool_called_flag(self) -> None:
+        runner = self._make_runner()
+        runner._workiq_tool_called = True
+        with _CaptureOutput():
+            result = _run(runner.run_step("1.1", "テストステップ", "テストプロンプト"))
+        self.assertTrue(result)
+        self.assertFalse(runner._workiq_tool_called)
+
 
 class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
     """dry_run=False で SDK 未インストール時に False を返す。"""
@@ -228,6 +236,15 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
         with _CaptureOutput() as cap:
             runner._handle_session_event(event)
         self.assertIn("grep", cap.stdout)
+
+    def test_workiq_tool_event_sets_called_flag(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        self.assertFalse(runner._workiq_tool_called)
+        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="search_messages"))
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("Work IQ ツール 'search_messages' が呼び出されました", cap.stdout)
+        self.assertTrue(runner._workiq_tool_called)
 
     def test_tool_execution_complete_success(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)

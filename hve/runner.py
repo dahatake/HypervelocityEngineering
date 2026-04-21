@@ -279,6 +279,12 @@ _SKIP_TOOLS: frozenset = frozenset({
     "glob", "search", "grep", "rg",
 })
 
+# Work IQ ツール名
+_WORKIQ_TOOL_NAMES: frozenset = frozenset({
+    "search_emails", "search_messages", "search_meetings",
+    "search_files", "search_people", "get_calendar", "ask",
+})
+
 class StepRunner:
     """1 ステップを CopilotSession で実行する。
 
@@ -324,6 +330,7 @@ class StepRunner:
     def __init__(self, config: SDKConfig, console: Console) -> None:
         self.config = config
         self.console = console
+        self._workiq_tool_called = False
 
     def _build_sub_session_opts(self, model: str) -> Dict[str, Any]:
         """レビュー/QA 用の別セッション構築オプションを生成する。
@@ -512,6 +519,7 @@ class StepRunner:
             True: 成功, False: 失敗
         """
         start = time.time()
+        self._workiq_tool_called = False
 
         # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）
         self.config.run_id = _safe_run_id(self.config.run_id)
@@ -591,6 +599,10 @@ class StepRunner:
                             _existing_mcp[_wiq_key] = _workiq_mcp[_wiq_key]
                     session_opts["mcp_servers"] = _existing_mcp
                     _workiq_mcp_enabled = "_hve_workiq" in _existing_mcp
+                    if _workiq_mcp_enabled:
+                        self.console.status(
+                            "✅ Work IQ MCP サーバーをセッションに追加しました"
+                        )
                 else:
                     self.console.warning(
                         "Work IQ が検出できません。Work IQ 連携をスキップします。"
@@ -663,6 +675,11 @@ class StepRunner:
                 step_id, current_phase, total_phases, "メインタスク",
                 elapsed=time.time() - phase1_start,
             )
+            if self.config.workiq_enabled and _workiq_mcp_enabled and not self._workiq_tool_called:
+                self.console.warning(
+                    "⚠️ Work IQ MCP ツールが1度も呼び出されませんでした。"
+                    "エージェントが Work IQ 指示を実行しなかった可能性があります。"
+                )
 
             # Phase 2: QA（auto_qa=True の場合）
             if self.config.auto_qa:
@@ -1166,6 +1183,11 @@ class StepRunner:
                         break
                 # 追加: ファイル I/O 追跡
                 self._track_tool_files(step_id, tool_name, args)
+            if tool_name in _WORKIQ_TOOL_NAMES and not self._workiq_tool_called:
+                self._workiq_tool_called = True
+                self.console.status(
+                    f"🔍 Work IQ ツール '{tool_name}' が呼び出されました"
+                )
             self.console.tool(tool_name, step_id=step_id, args_summary=args_summary)
             return
 

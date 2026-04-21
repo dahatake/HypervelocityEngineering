@@ -578,6 +578,66 @@ def _build_reuse_context(existing_artifacts: dict) -> str:
     return "\n".join(lines)
 
 
+async def _prefetch_workiq(
+    config: SDKConfig,
+    query: str,
+    console: Console,
+    timeout: float = 120.0,
+) -> str:
+    """Work IQ を別セッションで事前呼び出しし、結果テキストを返す。
+
+    orchestrator が DAG 実行前に Work IQ データを取得し、
+    結果をプロンプトに注入するために使用する。
+    エージェントにツール呼び出しを委譲する方式では
+    エージェントが指示を無視する可能性があるため、
+    この事前フェッチ方式で確実性を担保する。
+    """
+    try:
+        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
+        from copilot.session import PermissionHandler
+    except ImportError:
+        console.warning(
+            "Copilot SDK が利用できないため Work IQ 事前取得をスキップします。"
+        )
+        return ""
+
+    try:
+        from .workiq import build_workiq_mcp_config, query_workiq
+    except ImportError:
+        from workiq import build_workiq_mcp_config, query_workiq  # type: ignore[no-redef]
+
+    if config.cli_url:
+        sdk_cfg = ExternalServerConfig(url=config.cli_url)
+    else:
+        sdk_cfg = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level="error",
+        )
+
+    client = CopilotClient(config=sdk_cfg)
+    await client.start()
+
+    try:
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        session = await client.create_session(
+            model=config.model,
+            on_permission_request=PermissionHandler.approve_all,
+            streaming=True,
+            mcp_servers=_mcp,
+        )
+        try:
+            result = await query_workiq(session, query, timeout=timeout)
+            return result
+        finally:
+            await session.disconnect()
+    except Exception as exc:
+        console.warning(f"Work IQ 事前取得に失敗しました: {exc}")
+        return ""
+    finally:
+        await client.stop()
+
+
 # -----------------------------------------------------------------------
 # メインオーケストレーション
 # -----------------------------------------------------------------------
@@ -828,15 +888,17 @@ async def run_workflow(
         )
         step_prompt = step_prompts[step.id]
 
-        # Work IQ: KM / AQOD ワークフロー用のコンテキスト事前注入
+        # Work IQ: KM / AQOD ワークフロー用 — 事前フェッチ方式
         if config.workiq_enabled and workflow_id in ("akm", "aqod"):
             try:
                 from .workiq import (
                     is_workiq_available, get_workiq_prompt_template,
+                    enrich_prompt_with_workiq, save_workiq_result,
                 )
             except ImportError:
                 from workiq import (  # type: ignore[no-redef]
                     is_workiq_available, get_workiq_prompt_template,
+                    enrich_prompt_with_workiq, save_workiq_result,
                 )
 
             if is_workiq_available():
@@ -848,18 +910,41 @@ async def run_workflow(
                 _topic_raw = step_prompt[:500]
                 _last_period = max(_topic_raw.rfind("。"), _topic_raw.rfind("\n"))
                 _topic_summary = _topic_raw[:_last_period + 1] if _last_period > 100 else _topic_raw
-
                 _wiq_query = _wiq_template.format(target_content=_topic_summary)
 
-                _workiq_instruction = (
-                    "まず最初に、以下の Work IQ 問い合わせを実行してください。\n"
-                    "結果をこのタスクの参考情報として使用し、関連情報がある場合は"
-                    "「理由」欄に情報ソースとともに記載してください。\n\n"
-                    f"--- Work IQ 問い合わせ ---\n{_wiq_query}\n--- Work IQ 問い合わせ終了 ---\n\n"
-                    "上記の問い合わせ完了後、以下のメインタスクを実行してください:\n\n"
+                # 事前フェッチ: 別セッションで Work IQ を呼び出す
+                console.status(
+                    f"🔍 Work IQ: Step.{step.id} の M365 関連情報を事前取得中..."
                 )
-                step_prompt = _workiq_instruction + step_prompt
+                console.spinner_start("Work IQ 問い合わせ中...")
+                _wiq_context = await _prefetch_workiq(
+                    config=config,
+                    query=_wiq_query,
+                    console=console,
+                    timeout=getattr(config, "workiq_query_timeout_seconds", 120.0),
+                )
+                console.spinner_stop()
+
+                if _wiq_context:
+                    console.status(
+                        f"✅ Work IQ: Step.{step.id} の関連情報を取得しました"
+                    )
+                    save_workiq_result(
+                        config.run_id, step.id, _wiq_mode, _wiq_context,
+                    )
+                    step_prompt = enrich_prompt_with_workiq(
+                        _wiq_context, step_prompt,
+                        context_type="M365 参考情報",
+                    )
+                else:
+                    console.status(
+                        f"ℹ️ Work IQ: Step.{step.id} の関連情報は見つかりませんでした"
+                    )
                 step_prompts[step.id] = step_prompt
+            else:
+                console.warning(
+                    "Work IQ が検出できません。Work IQ 連携をスキップします。"
+                )
 
     # --- 6-7. DAGExecutor 実行 ---
     async def run_step_fn(
