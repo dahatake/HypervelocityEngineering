@@ -1,13 +1,13 @@
-name: "App Design"
+name: "App Detail Design"
 description: "Issue からアプリケーション設計ワークフロー (Step.1〜Step.8) を自動起動します"
-title: "[App Design] アプリケーション設計"
+title: "[App Detail Design] アプリケーション詳細設計"
 labels:
-  - "auto-app-design"
+  - "auto-app-detail-design"
 body:
   - type: markdown
     attributes:
       value: |
-        ## App Design
+        ## App Detail Design
         このフォームから Issue を作成すると、自動で Step.1〜Step.8 の設計タスクが
         Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
 
@@ -35,10 +35,11 @@ body:
   - type: input
     id: app_ids
     attributes:
-      label: "対象アプリケーション (APP-ID) メモ — 複数指定可（任意）"
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
       description: |
-        関連する APP-ID をメモとして記載できます（カンマ区切り）。
-        現状、この項目は自動ワークフローの対象絞り込みには使用されません。
+        対象とする APP-ID をカンマ区切りで指定してください。
+        指定した場合: 各 Step の Copilot Agent は指定された APP-ID（および共有リソース）のみを対象に設計を実行することが期待されます。部分的な設計となるため、別ブランチでの実行を推奨します。
+        未指定の場合: 各 Step の Copilot Agent が `docs/catalog/app-catalog.md` を参照し、全アプリケーションを対象に設計を実行します。
       placeholder: "例: APP-01, APP-02"
     validations:
       required: false

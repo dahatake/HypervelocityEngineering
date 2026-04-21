@@ -1,0 +1,230 @@
+name: Issue Orchestrator Dispatcher
+
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.detect.outputs.target }}
+      mode: ${{ steps.detect.outputs.mode }}
+      issue_number: ${{ steps.detect.outputs.issue_number }}
+      event_action: ${{ steps.detect.outputs.event_action }}
+      label_name: ${{ steps.detect.outputs.label_name }}
+      issue_labels: ${{ steps.detect.outputs.issue_labels }}
+    steps:
+      - name: Detect target orchestrator
+        id: detect
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+        run: |
+          python3 <<'PY'
+          import json, os
+
+          labels = json.loads(os.environ.get('ISSUE_LABELS', '[]') or '[]')
+          title = os.environ.get('ISSUE_TITLE', '')
+          action = os.environ.get('EVENT_ACTION', '')
+          label_name = os.environ.get('LABEL_NAME', '')
+          author_association = os.environ.get('AUTHOR_ASSOCIATION', '')
+          allowed_associations = {'OWNER', 'MEMBER', 'COLLABORATOR'}
+
+          trigger_map = [
+              ('auto-app-detail-design', 'AAD'),
+              ('auto-app-dev-microservice', 'ASDW'),
+              ('auto-app-documentation', 'ADOC'),
+              ('auto-app-selection', 'AAS'),
+              ('auto-batch-design', 'ABD'),
+              ('auto-batch-dev', 'ABDV'),
+              ('knowledge-management', 'AKM'),
+          ]
+          done_map = {
+              'aad:done': 'AAD',
+              'asdw:done': 'ASDW',
+              'adoc:done': 'ADOC',
+              'aas:done': 'AAS',
+              'abd:done': 'ABD',
+              'abdv:done': 'ABDV',
+              'akm:done': 'AKM',
+          }
+          closed_prefix_map = [
+              ('[AAD]', 'AAD'),
+              ('[ASDW]', 'ASDW'),
+              ('[ADOC]', 'ADOC'),
+              ('[AAS]', 'AAS'),
+              ('[ABD]', 'ABD'),
+              ('[ABDV]', 'ABDV'),
+              ('[AKM]', 'AKM'),
+          ]
+
+          target = 'none'
+          mode = 'skip'
+
+          if action == 'opened':
+            if author_association in allowed_associations:
+              if 'setup-labels' in labels:
+                target = 'SETUP_LABELS'
+                mode = 'initialize'
+              elif 'original-docs-review' in labels:
+                target = 'AQOD'
+                mode = 'initialize'
+              else:
+                for label, cand in trigger_map:
+                  if label in labels:
+                    target = cand
+                    mode = 'initialize'
+                    break
+          elif action == 'labeled':
+            if label_name == 'setup-labels':
+              target = 'SETUP_LABELS'
+              mode = 'initialize'
+            elif label_name == 'original-docs-review':
+              target = 'AQOD'
+              mode = 'initialize'
+            elif label_name in done_map:
+              target = done_map[label_name]
+              mode = 'state_transition'
+            else:
+              for trigger_label, cand in trigger_map:
+                if label_name == trigger_label:
+                  target = cand
+                  mode = 'initialize'
+                  break
+          elif action == 'closed':
+            for prefix, cand in closed_prefix_map:
+              if title.startswith(prefix):
+                target = cand
+                mode = 'closed'
+                break
+            if target == 'none':
+              for label, cand in trigger_map:
+                if label in labels:
+                  target = cand
+                  mode = 'closed'
+                  break
+
+          out = os.environ['GITHUB_OUTPUT']
+          with open(out, 'a', encoding='utf-8') as f:
+            f.write(f'target={target}\n')
+            f.write(f'mode={mode}\n')
+            f.write(f'issue_number={os.environ.get("ISSUE_NUMBER", "")}\n')
+            f.write(f'event_action={action}\n')
+            f.write(f'label_name={label_name}\n')
+            f.write('issue_labels=' + json.dumps(labels) + '\n')
+          PY
+
+  aad:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAD'
+    uses: ./.github/workflows/auto-app-detail-design-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  asdw:
+    needs: detect
+    if: needs.detect.outputs.target == 'ASDW'
+    uses: ./.github/workflows/auto-app-dev-microservice-azure-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  adoc:
+    needs: detect
+    if: needs.detect.outputs.target == 'ADOC'
+    uses: ./.github/workflows/auto-app-documentation-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  aas:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAS'
+    uses: ./.github/workflows/auto-app-selection-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  abd:
+    needs: detect
+    if: needs.detect.outputs.target == 'ABD'
+    uses: ./.github/workflows/auto-batch-design-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  abdv:
+    needs: detect
+    if: needs.detect.outputs.target == 'ABDV'
+    uses: ./.github/workflows/auto-batch-dev-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  akm:
+    needs: detect
+    if: needs.detect.outputs.target == 'AKM'
+    uses: ./.github/workflows/auto-knowledge-management-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  setup_labels:
+    needs: detect
+    if: needs.detect.outputs.target == 'SETUP_LABELS'
+    uses: ./.github/workflows/setup-labels.yml
+    with:
+      trigger_source: issues
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+    secrets: inherit
+
+  aqod:
+    needs: detect
+    if: needs.detect.outputs.target == 'AQOD'
+    uses: ./.github/workflows/auto-aqod.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit

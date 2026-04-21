@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+  <title id="title">README用アーキテクチャ概要</title>
+  <desc id="desc">original-docsとqaを起点にAQOD/AKMを経由してknowledgeを中核に設計・実装へ分岐する全体像。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #1f2937; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 14px; fill: #475569; }
+      .h { font-size: 16px; font-weight: 700; }
+      .t { font-size: 13px; }
+      .node { stroke-width: 1.4; rx: 10; }
+      .file { fill: #95A5A6; stroke: #5d6d73; }
+      .qa { fill: #E67E22; stroke: #7e3d00; }
+      .km { fill: #F39C12; stroke: #7a4f00; stroke-width: 2.5; }
+      .arch { fill: #4A90D9; stroke: #1f3a5a; }
+      .dev { fill: #50C878; stroke: #1b5e20; }
+      .doc { fill: #9B59B6; stroke: #4a235a; }
+      .link { stroke: #334155; stroke-width: 2.1; fill: none; marker-end: url(#arrow); }
+      .link-dash { stroke: #1d4ed8; stroke-width: 2; stroke-dasharray: 8 5; fill: none; marker-end: url(#arrow); }
+      .light { fill: #ffffff; }
+      .light-text { fill: #ffffff; font-size: 13px; font-weight: 700; }
+      .dark-text { fill: #111827; font-size: 13px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="900" fill="transparent"/>
+  <text x="40" y="50" class="title">アーキテクチャ概要（README）</text>
+  <text x="40" y="78" class="subtitle">入力 → knowledge/ 中核化 → 設計/実装フロー → 出力の全体像</text>
+
+  <!-- Top row -->
+  <rect x="60" y="120" width="200" height="80" class="node file"/>
+  <text x="80" y="155" class="h">original-docs/</text>
+  <text x="80" y="178" class="t">既存文書</text>
+
+  <rect x="300" y="120" width="200" height="80" class="node file"/>
+  <text x="320" y="155" class="h">qa/</text>
+  <text x="320" y="178" class="t">質問票</text>
+
+  <rect x="560" y="120" width="220" height="80" class="node qa"/>
+  <text x="580" y="155" class="dark-text">AQOD</text>
+  <text x="580" y="178" class="t">original-docs → qa</text>
+
+  <rect x="820" y="120" width="220" height="80" class="node km"/>
+  <text x="840" y="155" class="dark-text">AKM</text>
+  <text x="840" y="178" class="t">qa/original-docs → knowledge</text>
+
+  <rect x="1080" y="104" width="260" height="112" class="node km"/>
+  <text x="1100" y="150" class="h">knowledge/</text>
+  <text x="1100" y="174" class="t">D01〜D21 業務要件</text>
+  <text x="1100" y="196" class="t">全フェーズ参照の中核</text>
+
+  <!-- Middle stage -->
+  <rect x="80" y="300" width="340" height="90" class="node arch"/>
+  <text x="100" y="338" class="light-text">01 要求定義（ユースケース作成・事業分析）</text>
+
+  <rect x="470" y="300" width="340" height="90" class="node arch"/>
+  <text x="490" y="338" class="light-text">02 アプリケーションアーキテクチャ設計</text>
+
+  <rect x="120" y="470" width="340" height="90" class="node dev"/>
+  <text x="140" y="506" class="dark-text">03/05 Microservice 設計→実装</text>
+
+  <rect x="520" y="470" width="340" height="90" class="node dev"/>
+  <text x="540" y="506" class="dark-text">04/06 Batch 設計→実装</text>
+
+  <rect x="920" y="470" width="340" height="90" class="node doc"/>
+  <text x="940" y="506" class="light-text">07/08 AI Agent 設計→実装</text>
+
+  <!-- Bottom output -->
+  <rect x="180" y="700" width="220" height="90" class="node file"/>
+  <text x="200" y="738" class="h">docs/</text>
+  <text x="200" y="761" class="t">設計成果物</text>
+
+  <rect x="460" y="700" width="220" height="90" class="node file"/>
+  <text x="480" y="738" class="h">src/</text>
+  <text x="480" y="761" class="t">実装成果物</text>
+
+  <rect x="740" y="700" width="280" height="90" class="node file"/>
+  <text x="760" y="738" class="h">docs-generated/</text>
+  <text x="760" y="761" class="t">ソース解析ドキュメント</text>
+
+  <!-- Links -->
+  <path d="M 260 160 C 380 160, 430 160, 560 160" class="link"/>
+  <path d="M 500 160 C 640 160, 670 160, 820 160" class="link"/>
+  <path d="M 780 160 C 910 160, 940 160, 1080 160" class="link"/>
+
+  <path d="M 1170 216 C 1170 260, 250 260, 250 300" class="link-dash"/>
+  <path d="M 1170 216 C 1170 260, 640 260, 640 300" class="link-dash"/>
+  <path d="M 1170 216 C 1170 350, 290 350, 290 470" class="link-dash"/>
+  <path d="M 1170 216 C 1170 350, 690 350, 690 470" class="link-dash"/>
+  <path d="M 1170 216 C 1170 350, 1090 350, 1090 470" class="link-dash"/>
+
+  <path d="M 420 345 C 445 345, 445 345, 470 345" class="link"/>
+  <path d="M 640 390 C 640 430, 290 430, 290 470" class="link"/>
+  <path d="M 640 390 C 640 430, 690 430, 690 470" class="link"/>
+  <path d="M 640 390 C 640 430, 1090 430, 1090 470" class="link"/>
+
+  <path d="M 290 560 C 290 630, 290 630, 290 700" class="link"/>
+  <path d="M 690 560 C 690 630, 570 630, 570 700" class="link"/>
+  <path d="M 1090 560 C 1090 630, 880 630, 880 700" class="link"/>
+
+  <text x="1020" y="305" class="t" fill="#1d4ed8">knowledge/ 参照（破線）</text>
+</svg>

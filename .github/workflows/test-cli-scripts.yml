@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/bash/**'
+      - '.github/scripts/bash/lib/*.py'
       - '.github/scripts/powershell/**'
       - '.github/scripts/tests/**'
       - '.github/workflows/test-cli-scripts.yml'
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/bash/**'
+      - '.github/scripts/bash/lib/*.py'
       - '.github/scripts/powershell/**'
       - '.github/scripts/tests/**'
       - '.github/workflows/test-cli-scripts.yml'
@@ -40,9 +42,13 @@ jobs:
         run: |
           shellcheck -S warning .github/scripts/bash/*.sh .github/scripts/bash/lib/*.sh
           shellcheck -S warning .github/scripts/tests/test-bash.sh
+          shellcheck -S warning .github/scripts/tests/test-assign-copilot.sh
 
       - name: Run Bash dry-run tests
         run: bash .github/scripts/tests/test-bash.sh
+
+      - name: Run assign-copilot helper tests
+        run: bash .github/scripts/tests/test-assign-copilot.sh
 
   # ===========================================================================
   # PowerShell テスト (windows-latest)

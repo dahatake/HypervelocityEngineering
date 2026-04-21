@@ -59,7 +59,7 @@ JSONEOF
 _WORKFLOW_REGISTRY[aad]=$(cat <<'JSONEOF'
 {
   "id": "aad",
-  "name": "App Design",
+  "name": "App Detail Design",
   "label_prefix": "aad",
   "state_labels": {
     "initialized": "aad:initialized",

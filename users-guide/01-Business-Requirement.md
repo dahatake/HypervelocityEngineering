@@ -31,7 +31,7 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 ---
 
-> 💡 **knowledge/ との関連**: Step.4（`KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続のアプリケーション設計・開発ワークフロー（App Architecture Design / App Design / App Dev）で業務コンテキストとして自動参照されます。詳細は [km-guide.md](./km-guide.md) を参照してください。
+> 💡 **knowledge/ との関連**: Step.4（`KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続のアプリケーション設計・開発ワークフロー（App Architecture Design / App Detail Design / App Dev）で業務コンテキストとして自動参照されます。詳細は [km-guide.md](./km-guide.md) を参照してください。
 
 
 ## ツール

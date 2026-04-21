@@ -35,7 +35,7 @@ _TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
 
 declare -A _WORKFLOW_DISPLAY_NAMES=(
   [aas]="App Architecture Design"
-  [aad]="App Design"
+  [aad]="App Detail Design"
   [asdw]="App Dev Microservice Azure"
   [abd]="Batch Design"
   [abdv]="Batch Dev"
@@ -44,7 +44,7 @@ declare -A _WORKFLOW_DISPLAY_NAMES=(
 
 declare -A _TRIGGER_LABELS=(
   [aas]="auto-app-selection"
-  [aad]="auto-app-design"
+  [aad]="auto-app-detail-design"
   [asdw]="auto-app-dev-microservice"
   [abd]="auto-batch-design"
   [abdv]="auto-batch-dev"

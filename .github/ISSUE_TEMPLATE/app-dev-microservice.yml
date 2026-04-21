@@ -15,7 +15,7 @@ body:
 
         ### 前提条件
         - `users-guide/08-ai-agent.md` がリポジトリ内に存在していること（Step.2.6 で使用）
-        - アプリケーション設計ワークフロー（App Design / AAD）が完了し、以下のドキュメントが存在していること:
+        - アプリケーション設計ワークフロー（App Detail Design / AAD）が完了し、以下のドキュメントが存在していること:
           - `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`
           - `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`
           - `docs/catalog/use-case-catalog.md`

@@ -131,7 +131,15 @@ Sub Issue 間は `---`（水平線）で区切る。
 
 subissues.md を作成した後、以下のチェックを **必ず** 実行すること（CI でも自動検証される）：
 
-1. 各 `<!-- subissue -->` ブロックの直後に `<!-- title: ... -->` が存在すること（**必須** — 欠落すると Issue 作成がスキップされる）
+```bash
+bash .github/scripts/bash/validate-subissues.sh --path work/<Agent>/<Issue>/subissues.md
+```
+
+```powershell
+pwsh .github/scripts/powershell/validate-subissues.ps1 -Path work/<Agent>/<Issue>/subissues.md
+```
+
+1. 各 `<!-- subissue -->` ブロック内に `<!-- title: ... -->` が存在すること（**必須** — 欠落すると Issue 作成がスキップされる）
 2. `<!-- title: ... -->` の値が空でないこと
 3. `<!-- subissue -->` ブロック数が `plan.md` の `subissues_count` メタデータと一致すること
 4. `<!-- depends_on: ... -->` の参照先ブロック番号が実在すること（存在しない番号を参照していないこと）

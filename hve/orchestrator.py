@@ -826,6 +826,40 @@ async def run_workflow(
             wf=wf,
             additional_prompt=effective_additional_prompt,
         )
+        step_prompt = step_prompts[step.id]
+
+        # Work IQ: KM / AQOD ワークフロー用のコンテキスト事前注入
+        if config.workiq_enabled and workflow_id in ("akm", "aqod"):
+            try:
+                from .workiq import (
+                    is_workiq_available, get_workiq_prompt_template,
+                )
+            except ImportError:
+                from workiq import (  # type: ignore[no-redef]
+                    is_workiq_available, get_workiq_prompt_template,
+                )
+
+            if is_workiq_available():
+                _wiq_mode = "km" if workflow_id == "akm" else "review"
+                _wiq_template = get_workiq_prompt_template(
+                    _wiq_mode,
+                    config.workiq_prompt_km if _wiq_mode == "km" else config.workiq_prompt_review,
+                )
+                _topic_raw = step_prompt[:500]
+                _last_period = max(_topic_raw.rfind("。"), _topic_raw.rfind("\n"))
+                _topic_summary = _topic_raw[:_last_period + 1] if _last_period > 100 else _topic_raw
+
+                _wiq_query = _wiq_template.format(target_content=_topic_summary)
+
+                _workiq_instruction = (
+                    "まず最初に、以下の Work IQ 問い合わせを実行してください。\n"
+                    "結果をこのタスクの参考情報として使用し、関連情報がある場合は"
+                    "「理由」欄に情報ソースとともに記載してください。\n\n"
+                    f"--- Work IQ 問い合わせ ---\n{_wiq_query}\n--- Work IQ 問い合わせ終了 ---\n\n"
+                    "上記の問い合わせ完了後、以下のメインタスクを実行してください:\n\n"
+                )
+                step_prompt = _workiq_instruction + step_prompt
+                step_prompts[step.id] = step_prompt
 
     # --- 6-7. DAGExecutor 実行 ---
     async def run_step_fn(

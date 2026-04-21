@@ -60,6 +60,8 @@ jobs:
       - name: "Validate <!-- title: ... --> in each subissue block"
         id: validate
         if: steps.find-files.outputs.found == 'true'
+        env:
+          FILES_LIST: ${{ steps.find-files.outputs.files }}
         run: |
           set -euo pipefail
 
@@ -69,49 +71,21 @@ jobs:
           while IFS= read -r file; do
             [ -z "${file}" ] && continue
             [ -f "${file}" ] || continue
-
-            rm -f /tmp/validate_subissue_block_*.txt
-            awk '
-              /^<!-- subissue -->/ {
-                blocknum++
-                outfile = "/tmp/validate_subissue_block_" blocknum ".txt"
-                next
-              }
-              blocknum > 0 {
-                print > outfile
-              }
-            ' "${file}"
-
-            shopt -s nullglob
-            block_files=(/tmp/validate_subissue_block_*.txt)
-            block_count=${#block_files[@]}
-            shopt -u nullglob
-            [ "${block_count}" -eq 0 ] && continue
-
-            missing_blocks=""
-            empty_title_blocks=""
-            while IFS= read -r block_file; do
-              [ -f "${block_file}" ] || continue
-              block_idx=$(basename "${block_file}" .txt | grep -oE '[0-9]+$')
-              title_line=$(grep -m1 -E '<!--[[:space:]]*title:[[:space:]]*.*-->' "${block_file}" || true)
-              if [ -z "${title_line}" ]; then
-                missing_blocks="${missing_blocks}${missing_blocks:+,}${block_idx}"
-                continue
-              fi
-              title_value=$(printf '%s' "${title_line}" \
-                | sed -n 's/.*<!--[[:space:]]*title:[[:space:]]*\(.*\)[[:space:]]*-->.*/\1/p' \
-                | xargs 2>/dev/null || true)
-              if [ -z "${title_value}" ]; then
-                empty_title_blocks="${empty_title_blocks}${empty_title_blocks:+,}${block_idx}"
-              fi
-            done < <(printf '%s\n' "${block_files[@]}" | sort -V)
-
-            if [ -n "${missing_blocks}" ] || [ -n "${empty_title_blocks}" ]; then
+            if ! output=$(bash .github/scripts/bash/validate-subissues.sh --path "${file}" 2>&1); then
               HAS_ERROR=true
-              [ -n "${missing_blocks}" ] && ERROR_DETAILS="${ERROR_DETAILS}\n- ${file}: <!-- title: ... --> 欠落ブロック = [${missing_blocks}]"
-              [ -n "${empty_title_blocks}" ] && ERROR_DETAILS="${ERROR_DETAILS}\n- ${file}: <!-- title: ... --> 空値ブロック = [${empty_title_blocks}]"
+              details=$(printf '%s\n' "${output}" | sed -n 's/^::error:://p')
+              if [ -n "${details}" ]; then
+                while IFS= read -r line; do
+                  [ -z "${line}" ] && continue
+                  ERROR_DETAILS="${ERROR_DETAILS}\n- ${line}"
+                done <<< "${details}"
+              else
+                ERROR_DETAILS="${ERROR_DETAILS}\n- ${file}: validation failed (${output})"
+              fi
+            else
+              echo "${output}"
             fi
-          done <<< "${{ steps.find-files.outputs.files }}"
+          done <<< "${FILES_LIST}"
 
           if [ "${HAS_ERROR}" = true ]; then
             {

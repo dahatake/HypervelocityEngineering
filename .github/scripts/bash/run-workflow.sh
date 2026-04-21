@@ -20,6 +20,9 @@
 #   # Plan 検証
 #   ./run-workflow.sh validate-plan --path work/Issue-123/plan.md
 #
+#   # Subissues 検証
+#   ./run-workflow.sh validate-subissues --path work/Issue-123/subissues.md
+#
 #   # Copilot CLI プロンプト駆動
 #   REPO=owner/repo ./run-workflow.sh copilot "仕様を整理して"
 #
@@ -84,6 +87,7 @@ Subcommands:
   advance           Mark issue done and activate next steps
   create-subissues  Parse subissues.md and create GitHub Issues
   validate-plan     Validate plan.md metadata consistency
+  validate-subissues Validate subissues.md metadata consistency
   copilot           Copilot CLI prompt (standalone → gh copilot fallback)
   help              Show this help
 
@@ -148,6 +152,11 @@ main() {
     validate-plan)
       shift
       exec "${_SCRIPT_DIR}/validate-plan.sh" "$@"
+      ;;
+
+    validate-subissues)
+      shift
+      exec "${_SCRIPT_DIR}/validate-subissues.sh" "$@"
       ;;
 
     copilot)

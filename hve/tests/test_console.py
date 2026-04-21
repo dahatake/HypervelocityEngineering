@@ -42,6 +42,14 @@ class TestConsoleVerbose(unittest.TestCase):
             c.header("テストヘッダー")
         self.assertIn("テストヘッダー", cap.stdout)
 
+    def test_header_lines_always_timestamp_prefixed(self) -> None:
+        c = self._make()
+        with _CaptureOutput() as cap:
+            c.header("テストヘッダー")
+        non_empty_lines = [line for line in cap.stdout.splitlines() if line.strip()]
+        self.assertTrue(non_empty_lines)
+        self.assertTrue(all(line.startswith("[") for line in non_empty_lines))
+
     def test_step_start_shown(self) -> None:
         c = self._make()
         with _CaptureOutput() as cap:
@@ -328,6 +336,23 @@ class TestStyleTTY(unittest.TestCase):
 
 class TestConsoleBanner(unittest.TestCase):
     """banner() の表示テスト。"""
+    _BANNER_WIDTH = 58
+    _LEFT_SPACE_OFFSET = 1
+
+    def _visible_col(self, console: Console, line: str, marker: str) -> int:
+        marker_index = line.rfind(marker)
+        self.assertNotEqual(marker_index, -1)
+        normalized = (
+            line[: marker_index + 1]
+            .replace("│", "|")
+            .replace("╮", "|")
+            .replace("╯", "|")
+            .replace("╭", "+")
+            .replace("╰", "+")
+            .replace("─", "-")
+        )
+        # 文字数（1-based）を右端の0-based列位置へ変換する。
+        return console._visible_len(normalized) - 1
 
     def test_banner_shows_title(self) -> None:
         c = Console(verbose=True, quiet=False)
@@ -341,6 +366,82 @@ class TestConsoleBanner(unittest.TestCase):
         with _CaptureOutput() as cap:
             c.banner("タイトル")
         self.assertEqual(cap.stdout, "")
+
+    def test_banner_right_border_aligned(self) -> None:
+        with unittest.mock.patch("sys.stdout", new=io.StringIO()) as stdout:
+            c = Console(verbosity=3)
+            with unittest.mock.patch.object(c, "_is_tty", False):
+                c.banner("実行計画", "サブタイトル")
+
+        lines = [line for line in stdout.getvalue().splitlines() if line]
+        content_lines = [line for line in lines if "│" in line]
+        visible_widths = [c._visible_len(line) for line in content_lines]
+        self.assertTrue(all(w == visible_widths[0] for w in visible_widths))
+
+        top = next((line for line in lines if "╮" in line), None)
+        bottom = next((line for line in lines if "╯" in line), None)
+        if top is None or bottom is None:
+            self.fail("バナーの上下罫線が出力されていません")
+
+        right_border_col = self._visible_col(c, top, "╮")
+        self.assertEqual(self._visible_col(c, bottom, "╯"), right_border_col)
+        self.assertTrue(all(self._visible_col(c, line, "│") == right_border_col for line in content_lines))
+
+    def test_banner_padding_uses_single_left_space_offset(self) -> None:
+        title = "Execution Plan"
+        with unittest.mock.patch("sys.stdout", new=io.StringIO()) as stdout:
+            c = Console(verbosity=3)
+            with unittest.mock.patch.object(c, "_is_tty", False):
+                c.banner(title, "subtitle")
+
+        lines = [line for line in stdout.getvalue().splitlines() if line]
+        title_line = next((line for line in lines if title in line), None)
+        self.assertIsNotNone(title_line)
+        assert title_line is not None
+        left = "  │ "
+        self.assertTrue(title_line.startswith(left + title))
+        right_border_index = title_line.rfind("│")
+        padding = title_line[len(left + title):right_border_index]
+        self.assertEqual(
+            len(padding),
+            self._BANNER_WIDTH - self._LEFT_SPACE_OFFSET - len(title),
+        )
+
+    def test_banner_right_border_aligned_with_ambiguous_char_on_windows(self) -> None:
+        title = "HVE — GitHub Copilot SDK Workflow Orchestrator"
+        subtitle = "ワークフローをインタラクティブに実行します"
+
+        with unittest.mock.patch.object(sys, "platform", "win32"):
+            with unittest.mock.patch("sys.stdout", new=io.StringIO()) as stdout:
+                c = Console(verbosity=3)
+                with unittest.mock.patch.object(c, "_is_tty", False):
+                    c.banner(title, subtitle)
+
+            lines = [line for line in stdout.getvalue().splitlines() if line]
+            content_lines = [line for line in lines if "│" in line]
+            self.assertGreaterEqual(len(content_lines), 2)
+
+            top = next((line for line in lines if "╮" in line), None)
+            self.assertIsNotNone(top)
+            right_border_col = self._visible_col(c, top, "╮")
+            self.assertTrue(
+                all(self._visible_col(c, line, "│") == right_border_col for line in content_lines),
+                msg=f"Expected all right borders at column {right_border_col}",
+            )
+
+
+class TestConsoleCharWidth(unittest.TestCase):
+    """_char_width() の表示幅判定テスト。"""
+
+    def test_ambiguous_is_1_on_windows(self) -> None:
+        with unittest.mock.patch.object(sys, "platform", "win32"):
+            self.assertEqual(Console._char_width("—"), 1)
+            self.assertEqual(Console._char_width("…"), 1)
+
+    def test_ambiguous_is_2_on_non_windows(self) -> None:
+        with unittest.mock.patch.object(sys, "platform", "linux"):
+            self.assertEqual(Console._char_width("—"), 2)
+            self.assertEqual(Console._char_width("…"), 2)
 
 
 class TestConsolePanel(unittest.TestCase):
@@ -358,6 +459,17 @@ class TestConsolePanel(unittest.TestCase):
         with _CaptureOutput() as cap:
             c.panel("タイトル", ["行1"])
         self.assertEqual(cap.stdout, "")
+
+    def test_panel_cjk_and_ansi_right_border_aligned(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        lines = ["Wave 1: Step.1 original-docs 質問票生成", "\033[1m合計: 1 ステップ / 1 Wave\033[0m"]
+        with _CaptureOutput() as cap:
+            c.panel("実行計画 (DAG)", lines)
+
+        output_lines = [line for line in cap.stdout.splitlines() if line]
+        content_lines = [line for line in output_lines if "│" in line]
+        visible_widths = [c._visible_len(line) for line in content_lines]
+        self.assertTrue(all(w == visible_widths[0] for w in visible_widths))
 
 
 # -----------------------------------------------------------------------
@@ -693,6 +805,146 @@ class TestConsoleCliLog(unittest.TestCase):
             con.cli_log("1", "○ List directory qa")
             mock_emit.assert_not_called()
             mock_spinner.assert_called_once()
+
+
+class TestStepIOSummary(unittest.TestCase):
+    """step_io_summary と track_file のテスト。"""
+
+    def test_track_file_read_write(self) -> None:
+        """read + write を蓄積し、step_io_summary で表示される。"""
+        c = Console(verbose=True, quiet=False)
+        c.track_file("1", "docs/input.md", "read")
+        c.track_file("1", "docs/input2.md", "read")
+        c.track_file("1", "docs/output.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertIn("2 read", cap.stdout)
+        self.assertIn("1 written", cap.stdout)
+        self.assertIn("docs/input.md", cap.stdout)
+        self.assertIn("docs/output.md", cap.stdout)
+
+    def test_track_file_empty(self) -> None:
+        """ファイルなしの場合、何も出力されない。"""
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertEqual(cap.stdout.strip(), "")
+
+    def test_track_file_no_tracked_files(self) -> None:
+        """step_id は存在するがファイルが空の場合も出力なし。"""
+        c = Console(verbose=True, quiet=False)
+        c._step_files["1"] = {"read": [], "write": []}
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertEqual(cap.stdout.strip(), "")
+
+    def test_quiet_no_output(self) -> None:
+        """quiet=True で非表示。"""
+        c = Console(verbose=False, quiet=True)
+        c.track_file("1", "docs/file.md", "read")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertEqual(cap.stdout.strip(), "")
+
+    def test_verbosity_1_write_shows_summary_only(self) -> None:
+        """verbosity=1 で write がある場合は件数サマリーのみ確定行表示する。"""
+        c = Console(verbosity=1)
+        c.track_file("1", "docs/file.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertIn("Files:", cap.stdout)
+        self.assertNotIn("docs/file.md", cap.stdout)
+
+    def test_verbosity_1_read_only_updates_spinner(self) -> None:
+        """verbosity=1 で write がない場合はスピナー更新のみ。"""
+        c = Console(verbosity=1)
+        c.track_file("1", "docs/input.md", "read")
+        with unittest.mock.patch.object(c, "_print") as mock_print, \
+                unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.step_io_summary("1")
+        mock_print.assert_not_called()
+        mock_spinner.assert_called_once()
+
+    def test_verbosity_2_write_shown(self) -> None:
+        """verbosity=2 で write ファイルが確定行表示される。"""
+        c = Console(verbosity=2)
+        c.track_file("1", "docs/input.md", "read")
+        c.track_file("1", "docs/output.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertIn("1 read", cap.stdout)
+        self.assertIn("1 written", cap.stdout)
+        self.assertIn("docs/output.md", cap.stdout)
+        self.assertNotIn("docs/input.md", cap.stdout)
+
+    def test_verbosity_3_all_shown(self) -> None:
+        """verbosity=3 で read + write 全ファイルが表示される。"""
+        c = Console(verbosity=3)
+        c.track_file("1", "docs/input.md", "read")
+        c.track_file("1", "docs/output.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertIn("docs/input.md", cap.stdout)
+        self.assertIn("docs/output.md", cap.stdout)
+
+    def test_max_display_truncation(self) -> None:
+        """max_display を超えるファイルは省略される。"""
+        c = Console(verbose=True, quiet=False)
+        for i in range(20):
+            c.track_file("1", f"docs/file-{i:02d}.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1", max_display=5)
+        self.assertIn("20 written", cap.stdout)
+        self.assertIn("docs/file-00.md", cap.stdout)
+        self.assertIn("docs/file-04.md", cap.stdout)
+        self.assertNotIn("docs/file-05.md", cap.stdout)
+
+    def test_track_file_dedup(self) -> None:
+        """同一パスを2回追加しても1件のみ蓄積される。"""
+        c = Console(verbose=True, quiet=False)
+        c.track_file("1", "docs/file.md", "read")
+        c.track_file("1", "docs/file.md", "read")
+        self.assertEqual(len(c._step_files["1"]["read"]), 1)
+
+    def test_track_file_normalized_dedup(self) -> None:
+        """正規化後に同一パスなら1件のみ蓄積される。"""
+        c = Console(verbose=True, quiet=False)
+        c.track_file("1", "./docs/file.md", "read")
+        c.track_file("1", "docs/file.md", "read")
+        self.assertEqual(len(c._step_files["1"]["read"]), 1)
+
+    def test_step_end_cleans_files(self) -> None:
+        """step_end 呼び出し後に _step_files からエントリが削除される。"""
+        c = Console(verbose=True, quiet=False)
+        c.track_file("1", "docs/file.md", "read")
+        self.assertIn("1", c._step_files)
+        with _CaptureOutput():
+            c.step_end("1", "success", elapsed=1.0)
+        self.assertNotIn("1", c._step_files)
+
+
+class TestFileIO(unittest.TestCase):
+    """file_io の表示制御テスト。"""
+
+    def test_verbosity_0_no_output(self) -> None:
+        c = Console(verbosity=0)
+        with _CaptureOutput() as cap:
+            c.file_io("1", "docs/file.md", "read")
+        self.assertEqual(cap.stdout.strip(), "")
+
+    def test_verbosity_1_updates_spinner(self) -> None:
+        c = Console(verbosity=1)
+        with unittest.mock.patch.object(c, "_print") as mock_print, \
+                unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.file_io("1", "docs/file.md", "write")
+        mock_print.assert_not_called()
+        mock_spinner.assert_called_once()
+
+    def test_verbosity_2_prints_fixed_line(self) -> None:
+        c = Console(verbosity=2)
+        with _CaptureOutput() as cap:
+            c.file_io("1", "docs/file.md", "read")
+        self.assertIn("← [1] docs/file.md", cap.stdout)
 
 
 if __name__ == "__main__":

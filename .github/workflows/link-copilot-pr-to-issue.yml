@@ -122,7 +122,7 @@ jobs:
           fi
           echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
-      - name: PR body に Closes #N と parent-issue マーカーを追記
+      - name: "PR body に Closes #N と parent-issue マーカーを追記"
         if: >
           steps.check-copilot.outputs.is_copilot == 'true' &&
           steps.guard.outputs.done != 'true' &&

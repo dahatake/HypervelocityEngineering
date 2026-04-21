@@ -4,7 +4,7 @@
 
 > [!NOTE]
 > フェーズ1（Step.1〜Step.2）はすべての設計で共通のステップです。
-> フェーズ2（アプリケーション設計: Step.1〜7.3）は以下を参照してください。
+> フェーズ2（アプリケーション設計: Step.1〜8.3）は以下を参照してください。
 > - マイクロサービス設計: [マイクロサービス設計ガイド](./03-app-design-microservice-azure.md)
 > - バッチ設計: [バッチ設計ガイド](./04-app-design-batch.md)
 
@@ -17,7 +17,7 @@
 Issue Form から親 Issue を作成するだけで、Step.1〜Step.2 のアプリケーションアーキテクチャ設計タスクが
 Sub-issue として自動生成され、Copilot が依存関係に従って順次実行するワークフローです。
 
-フェーズ2（アプリケーション設計: Step.1〜7.3）は **App Design** を使用してください。
+フェーズ2（アプリケーション設計: Step.1〜8.3）は **App Detail Design** を使用してください。
 
 ### PR 完全自動化オプション（Issue Template）
 
@@ -487,7 +487,7 @@ Prompt:
 - フェーズ1完了後、以下の成果物が作成されます:
   - `docs/catalog/app-catalog.md` — アプリケーションリスト
   - `docs/catalog/app-arch-catalog.md` — アーキテクチャ選定結果
-- フェーズ2（設計: Step.1〜7.3）を実行するには、**App Design** Issue を別途作成してください
+- フェーズ2（設計: Step.1〜8.3）を実行するには、**App Detail Design** Issue を別途作成してください
 
 ### セットアップ・トラブルシューティング
 
@@ -508,4 +508,4 @@ Prompt:
 9. step-1 の Issue を close し、`auto-app-selection.yml` の状態遷移ジョブが起動することを確認する
 10. step-2 に `aas:ready` + `aas:running` が付与され Copilot が assign されることを確認する
 11. step-2 を close し、Root Issue に `aas:done` が付与され完了通知コメントが投稿されることを確認する
-12. フェーズ2（**App Design**）Issue を作成し、連携を確認する
+12. フェーズ2（**App Detail Design**）Issue を作成し、連携を確認する

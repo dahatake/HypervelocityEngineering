@@ -1,0 +1,157 @@
+name: PR Transition Dispatcher
+
+on:
+  pull_request_target:
+    types: [synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.detect.outputs.target }}
+      pr_number: ${{ steps.detect.outputs.pr_number }}
+      event_name: ${{ steps.detect.outputs.event_name }}
+      pr_body: ${{ steps.detect.outputs.pr_body }}
+      pr_labels: ${{ steps.detect.outputs.pr_labels }}
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      PR_NUMBER_FROM_PR: ${{ github.event.pull_request.number || '' }}
+      PR_NUMBER_FROM_ISSUE: ${{ github.event.issue.number || '' }}
+      ISSUE_IS_PR: ${{ github.event.issue.pull_request.url || '' }}
+      SENDER_TYPE: ${{ github.event.sender.type || '' }}
+      SENDER_LOGIN: ${{ github.event.sender.login || '' }}
+      COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association || '' }}
+      COMMENT_BODY: ${{ github.event.comment.body || '' }}
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Detect target transition
+        id: detect
+        run: |
+          set -euo pipefail
+
+          target=none
+          pr_number=""
+
+          if [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
+            pr_number="${PR_NUMBER_FROM_PR}"
+          elif [[ "${EVENT_NAME}" == "issue_comment" ]]; then
+            if [[ -n "${ISSUE_IS_PR}" ]]; then
+              pr_number="${PR_NUMBER_FROM_ISSUE}"
+            else
+              echo "target=${target}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          fi
+
+          if [[ -z "${pr_number}" ]]; then
+            echo "target=${target}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          pr_data=$(gh api "/repos/${REPO}/pulls/${pr_number}")
+          pr_labels=$(echo "${pr_data}" | jq -c '[.labels[].name] // []')
+          pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+          is_draft=$(echo "${pr_data}" | jq -r '.draft // false')
+
+          has_auto_qa=$(echo "${pr_labels}" | jq -r 'if index("auto-qa") == null then "false" else "true" end')
+          has_auto_context_review=$(echo "${pr_labels}" | jq -r 'if index("auto-context-review") == null then "false" else "true" end')
+          has_auto_approve_ready=$(echo "${pr_labels}" | jq -r 'if index("auto-approve-ready") == null then "false" else "true" end')
+          has_create_subissues=$(echo "${pr_labels}" | jq -r 'if index("create-subissues") == null then "false" else "true" end')
+          has_split_mode=$(echo "${pr_labels}" | jq -r 'if index("split-mode") == null then "false" else "true" end')
+
+          is_copilot_bot=false
+          if [[ "${SENDER_TYPE}" == "Bot" ]] && ([[ "${SENDER_LOGIN}" == Copilot ]] || [[ "${SENDER_LOGIN}" == copilot-swe-agent* ]]); then
+            is_copilot_bot=true
+          fi
+
+          is_default_answer_comment=false
+          if ([[ "${COMMENT_AUTHOR_ASSOCIATION}" == "OWNER" ]] || [[ "${COMMENT_AUTHOR_ASSOCIATION}" == "MEMBER" ]] || [[ "${COMMENT_AUTHOR_ASSOCIATION}" == "COLLABORATOR" ]]) \
+             && [[ "${COMMENT_BODY}" == *"<!-- auto-qa-default-answered -->"* ]]; then
+            is_default_answer_comment=true
+          fi
+
+          if [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
+            if [[ "${has_split_mode}" == "true" ]] \
+               && [[ "${has_auto_approve_ready}" == "true" ]] \
+               && [[ "${has_create_subissues}" != "true" ]]; then
+              target=create_subissues
+            elif [[ "${has_auto_qa}" == "true" ]] \
+                 && [[ "${has_auto_context_review}" != "true" ]] \
+                 && [[ "${has_auto_approve_ready}" != "true" ]]; then
+              target=qa_to_review
+            elif [[ "${has_auto_context_review}" == "true" ]] && [[ "${has_auto_approve_ready}" != "true" ]] && [[ "${is_draft}" != "true" ]]; then
+              target=review_to_approve
+            elif [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then
+              target=create_subissues
+            fi
+          else
+            if [[ "${has_split_mode}" == "true" ]] \
+               && [[ "${has_auto_approve_ready}" == "true" ]] \
+               && [[ "${has_create_subissues}" != "true" ]] \
+               && [[ "${is_copilot_bot}" == "true" ]]; then
+              target=create_subissues
+            elif ([[ "${is_copilot_bot}" == "true" ]] || [[ "${is_default_answer_comment}" == "true" ]]) \
+               && [[ "${has_auto_qa}" == "true" ]] \
+               && [[ "${has_auto_context_review}" != "true" ]] \
+               && [[ "${has_auto_approve_ready}" != "true" ]]; then
+              target=qa_to_review
+            elif [[ "${is_copilot_bot}" == "true" ]] \
+                 && [[ "${has_auto_context_review}" == "true" ]] && [[ "${has_auto_approve_ready}" != "true" ]]; then
+              target=review_to_approve
+            elif [[ "${is_copilot_bot}" == "true" ]] \
+                 && [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then
+              target=create_subissues
+            fi
+          fi
+
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          echo "event_name=${EVENT_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "pr_labels=${pr_labels}" >> "${GITHUB_OUTPUT}"
+          eof_marker=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+          {
+            echo "pr_body<<${eof_marker}"
+            echo "${pr_body}"
+            echo "${eof_marker}"
+          } >> "${GITHUB_OUTPUT}"
+
+  qa_to_review:
+    needs: detect
+    if: needs.detect.outputs.target == 'qa_to_review'
+    uses: ./.github/workflows/auto-qa-to-review-transition.yml
+    with:
+      event_name: ${{ needs.detect.outputs.event_name }}
+      pr_number: ${{ needs.detect.outputs.pr_number }}
+      pr_body: ${{ needs.detect.outputs.pr_body }}
+      pr_labels: ${{ needs.detect.outputs.pr_labels }}
+    secrets: inherit
+
+  review_to_approve:
+    needs: detect
+    if: needs.detect.outputs.target == 'review_to_approve'
+    uses: ./.github/workflows/auto-review-to-approve-transition.yml
+    with:
+      event_name: ${{ needs.detect.outputs.event_name }}
+      pr_number: ${{ needs.detect.outputs.pr_number }}
+      pr_body: ${{ needs.detect.outputs.pr_body }}
+      pr_labels: ${{ needs.detect.outputs.pr_labels }}
+    secrets: inherit
+
+  create_subissues:
+    needs: detect
+    if: needs.detect.outputs.target == 'create_subissues'
+    uses: ./.github/workflows/auto-create-subissues-transition.yml
+    with:
+      event_name: ${{ needs.detect.outputs.event_name }}
+      pr_number: ${{ needs.detect.outputs.pr_number }}
+      pr_body: ${{ needs.detect.outputs.pr_body }}
+      pr_labels: ${{ needs.detect.outputs.pr_labels }}
+    secrets: inherit

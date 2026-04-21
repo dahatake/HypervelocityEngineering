@@ -26,7 +26,7 @@ _build_params = _main_mod._build_params
 def test_aqod_workflow_registered():
     wf = get_workflow("aqod")
     assert wf is not None
-    assert wf.name == "QA Original Docs Review"
+    assert wf.name == "Original Docs Review"
     assert wf.steps[0].custom_agent == "QA-DocConsistency"
 
 

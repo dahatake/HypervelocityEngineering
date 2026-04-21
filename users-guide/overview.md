@@ -15,7 +15,7 @@
   - [hve/ パッケージの内部構造](#hve-パッケージの内部構造)
   - [Custom Agent のカテゴリ](#custom-agent-のカテゴリ)
   - [Skills の概要](#skills-の概要)
-  - [knowledge/ と qa/ の関係](#knowledge-と-qa-の関係)
+  - [knowledge/ と qa/ と original-docs/ の関係](#knowledge-と-qa-と-original-docs-の関係)
 - [3 つの使い方](#3-つの使い方)
   - [共通点](#共通点)
   - [3 方式の実行フロー比較図](#3-方式の実行フロー比較図)
@@ -49,10 +49,10 @@
 
 | # | 情報源 | 生成先 | ワークフロー ID | ワークフローファイル | Issue テンプレート |
 |---|-------|--------|:---:|-------------------|-------------------|
-| 1 | 既存のビジネス分析ドキュメント（`original-docs/`） | `knowledge/D01〜D21` | `akm` | [`auto-knowledge-management.yml`](../.github/workflows/auto-knowledge-management.yml) | [`knowledge-management.yml`](../.github/ISSUE_TEMPLATE/knowledge-management.yml) |
+| 1 | 既存のビジネス分析ドキュメント（`original-docs/`） | `knowledge/D01〜D21` | `akm` | [`auto-knowledge-management-reusable.yml`](../.github/workflows/auto-knowledge-management-reusable.yml) | [`knowledge-management.yml`](../.github/ISSUE_TEMPLATE/knowledge-management.yml) |
 | 2-a | 開発中に生じる質問票（`qa/`） | `knowledge/D01〜D21` | `akm` | 同上 | 同上（モード: `qa` または `both`） |
-| 2-b | 原本から自動生成する質問票 | `qa/` | `aqod` | [`auto-aqod.yml`](../.github/workflows/auto-aqod.yml) | [`qa-original-docs.yml`](../.github/ISSUE_TEMPLATE/qa-original-docs.yml) |
-| 3 | 既存ソースコード（`src/` 等） | `docs-generated/`（技術文書群） | `adoc` | [`auto-app-documentation.yml`](../.github/workflows/auto-app-documentation.yml) | [`sourcecode-to-documentation.yml`](../.github/ISSUE_TEMPLATE/sourcecode-to-documentation.yml) |
+| 2-b | 原本から自動生成する質問票 | `qa/` | `aqod` | [`auto-aqod.yml`](../.github/workflows/auto-aqod.yml) | [`original-docs-review.yml`](../.github/ISSUE_TEMPLATE/original-docs-review.yml) |
+| 3 | 既存ソースコード（`src/` 等） | `docs-generated/`（技術文書群） | `adoc` | [`auto-app-documentation-reusable.yml`](../.github/workflows/auto-app-documentation-reusable.yml) | [`sourcecode-to-documentation.yml`](../.github/ISSUE_TEMPLATE/sourcecode-to-documentation.yml) |
 
 ### 担当 Custom Agent
 
@@ -74,51 +74,8 @@
 > [!NOTE]
 > 設計・開発の全 Custom Agent（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。参照マッピングは [workflow-reference.md §knowledge/ ディレクトリとの関係](./workflow-reference.md#knowledge-ディレクトリとの関係) を参照してください。
 
-```mermaid
-flowchart LR
-    subgraph INPUT["① 情報源（入力）"]
-        direction TB
-        OD["original-docs/<br>既存ビジネス分析<br>（読み取り専用）"]
-        QA["qa/<br>開発中の質問票"]
-        SRC["src/<br>既存ソースコード"]
-    end
-    subgraph WF["② ワークフロー"]
-        direction TB
-        AQOD["aqod<br>auto-aqod.yml<br>原本→質問票生成"]
-        AKM["akm<br>auto-knowledge-management.yml<br>KnowledgeManager Agent"]
-        ADOC["adoc<br>auto-app-documentation.yml<br>Doc-* Agents 19種"]
-    end
-    subgraph OUTPUT["③ 成果物"]
-        direction TB
-        KN["knowledge/<br>D01〜D21<br>要求定義書（本リポジトリの中核）"]
-        DOCS["docs-generated/<br>技術ドキュメント"]
-    end
-    subgraph CONSUMER["④ 参照する設計・開発ワークフロー"]
-        direction TB
-        AAS["aas: アーキ設計"]
-        AAD["aad: アプリ設計"]
-        ASDW["asdw: Microservice実装"]
-        ABD["abd: Batch設計"]
-        ABDV["abdv: Batch実装"]
-    end
-    OD -->|"入力"| AKM
-    QA -->|"入力"| AKM
-    OD -->|"入力"| AQOD
-    AQOD -.->|"質問票生成"| QA
-    SRC -->|"入力"| ADOC
-    AKM --> KN
-    ADOC --> DOCS
-    KN -->|"業務コンテキストとして自動参照"| AAS
-    KN --> AAD
-    KN --> ASDW
-    KN --> ABD
-    KN --> ABDV
-    AAS -.->|"開発中の疑問を追記（反復ループ）"| QA
-    AAD -.-> QA
-    ASDW -.-> QA
-```
-
 ![knowledge/ を中核とした要求定義の一元管理フロー](./images/knowledge-interface-flow.svg)
+![反復精緻化サイクル](./images/iterative-refinement-cycle.svg)
 
 ---
 
@@ -141,118 +98,12 @@ flowchart LR
 
 ### 全体コンポーネント関係図
 
-```mermaid
-graph TB
-    subgraph "ユーザー操作"
-        U1["方式1: 個別 Issue + Custom Agent 手動割当"]
-        U2["方式2: Issue Template → Bootstrap Workflow"]
-        U3["方式3: python -m hve（ローカル）"]
-    end
+![全体コンポーネント関係図](./images/component-architecture.svg)
 
-    subgraph "オーケストレーション層"
-        IT[".github/ISSUE_TEMPLATE/<br>Issue テンプレート"]
-        GHA[".github/workflows/<br>GitHub Actions (32 本・実測)"]
-        SCR[".github/scripts/<br>CLI スクリプト"]
-        HVE["hve/<br>SDK オーケストレーター"]
-    end
-
-    subgraph "AI 実行層"
-        CI[".github/copilot-instructions.md<br>Agent 行動規約"]
-        CA[".github/agents/<br>Custom Agent (65 個)"]
-        SK[".github/skills/<br>Skills（技術手順）"]
-    end
-
-    subgraph "データ層"
-        OD["original-docs/<br>ユーザー原本"]
-        QA["qa/<br>質問票"]
-        KN["knowledge/<br>業務要件 D01-D21"]
-        DOCS["docs/<br>設計ドキュメント"]
-        SRC["src/<br>ソースコード"]
-        WK["work/<br>計画・作業ファイル"]
-        TM["template/<br>テンプレート"]
-    end
-
-    U1 -->|"Issue 作成 + @copilot アサイン"| CA
-    U2 --> IT --> GHA -->|"Sub Issue 生成 + 自動アサイン"| CA
-    U3 --> HVE -->|"Copilot CLI SDK 経由"| CA
-
-    CA -->|"参照"| CI
-    CA -->|"参照"| SK
-    CA -->|"参照"| KN
-    CA -->|"生成"| DOCS
-    CA -->|"生成"| SRC
-    CA -->|"生成"| WK
-    GHA --> SCR
-
-    OD -->|"KnowledgeManager"| KN
-    QA -->|"KnowledgeManager"| KN
-```
+> [!NOTE]
+> `docs/` は設計ワークフロー（`aas`, `aad`, `abd`）が生成する設計ドキュメント。`docs-generated/` は `adoc` ワークフローがソースコードから生成する技術ドキュメント。両者は独立しています。
 
 ### Custom Agent エコシステム俯瞰図
-
-```mermaid
-flowchart LR
-  subgraph WF["ワークフロー"]
-    aas["AAS"]
-    aad["AAD"]
-    asdw["ASDW"]
-    abd["ABD"]
-    abdv["ABDV"]
-    akm["AKM"]
-    aqod["AQOD"]
-    adoc["ADOC"]
-    si["Self-Improve"]
-  end
-  subgraph ARCH["設計エージェント群（Arch-*）"]
-    a1(["設計エージェント"])
-  end
-  subgraph DEV["実装エージェント群（Dev-*）"]
-    d1["実装エージェント"]
-  end
-  subgraph DOC["文書生成エージェント群（Doc-*）"]
-    c1{"文書生成エージェント"}
-  end
-  subgraph QA["品質確認エージェント群（QA-*）"]
-    q1{{"品質確認エージェント"}}
-  end
-  km[["KnowledgeManager"]]
-  f1[/"original-docs/"/]
-  f2[/"qa/"/]
-  f3[/"knowledge/"/]
-  f4[/"docs/catalog/, docs/batch/, docs/azure/"/]
-  f5[/"src/, test/, infra/, .github/workflows/"/]
-  f1 --> akm
-  f2 --> akm
-  akm --> km --> f3
-  f3 -.-> aas
-  f3 -.-> aad
-  f3 -.-> asdw
-  f3 -.-> abd
-  f3 -.-> abdv
-  aas --> a1
-  aad --> a1
-  abd --> a1
-  asdw --> d1
-  abdv --> d1
-  adoc --> c1
-  aqod --> q1
-  asdw --> q1
-  abdv --> q1
-  si --> q1
-  si --> a1
-  si --> d1
-  a1 --> f4
-  d1 --> f5
-  c1 --> f4
-  q1 --> f4
-  classDef arch fill:#4A90D9,stroke:#1f3a5a,color:#fff;
-  classDef dev fill:#50C878,stroke:#1b5e20,color:#111;
-  classDef doc fill:#9B59B6,stroke:#4a235a,color:#fff;
-  classDef qa fill:#E67E22,stroke:#7e3d00,color:#111;
-  classDef km fill:#F39C12,stroke:#7a4f00,color:#111,stroke-width:3px;
-  classDef file fill:#95A5A6,stroke:#5d6d73,color:#111;
-  class a1 arch; class d1 dev; class c1 doc; class q1 qa; class km km; class f1,f2,f3,f4,f5 file;
-```
 
 ![全Custom Agentと8ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
 
@@ -304,6 +155,8 @@ Agent の行動ルールは `.github/copilot-instructions.md` と `.github/skill
 Custom Agent の完全な一覧は [workflow-reference.md](./workflow-reference.md) および [web-ui-guide.md](./web-ui-guide.md) を参照してください。
 
 ![8ワークフローとSelf-ImproveのファイルI/O連携図](./images/workflow-interconnection.svg)
+![8ワークフロー×主要ディレクトリのRead/Write関係図](./images/orchestration-data-flow.svg)
+![フェーズ別ガイドで使う Custom Agent の主要ファイルI/O（R/W）関係図](./images/orchestration-phase-agent-file-io.svg)
 
 ### Skills の概要
 
@@ -337,7 +190,7 @@ original-docs/ 原本 + qa/ 質問票
 
 さらに、`aqod`（`original-docs/` → `qa/`）と `akm`（`qa/` / `original-docs/` → `knowledge/`）を反復することで、設計・実装中に生じた疑問を継続的に業務要件へ還元できます。
 
-詳細は [km-guide.md](./km-guide.md) および [qa-original-docs.md](./qa-original-docs.md) を参照してください。
+詳細は [km-guide.md](./km-guide.md) および [original-docs-review.md](./original-docs-review.md) を参照してください。
 
 ---
 
@@ -357,31 +210,7 @@ original-docs/ 原本 + qa/ 質問票
 
 ### 3 方式の実行フロー比較図
 
-```mermaid
-flowchart LR
-    subgraph M1["方式1: Copilot cloud agent 手動実行"]
-        direction TB
-        A1["Issue を手動作成"] --> B1["Custom Agent を選択"]
-        B1 --> C1["@copilot をアサイン"]
-        C1 --> D1["GitHub Actions で実行"]
-        D1 --> E1["PR 作成"]
-    end
-
-    subgraph M2["方式2: ワークフローオーケストレーション（Web）"]
-        direction TB
-        A2["Issue Template から<br>親 Issue を作成"] --> B2["Bootstrap Workflow 起動<br>（GitHub Actions）"]
-        B2 --> C2["Sub Issue を一括生成<br>（DAG 順）"]
-        C2 --> D2["Copilot が各 Sub Issue に<br>自動アサイン"]
-        D2 --> E2["PR 作成 → 次 Step 自動起動"]
-    end
-
-    subgraph M3["方式3: ワークフローオーケストレーション（ローカル）"]
-        direction TB
-        A3["python -m hve<br>（wizard / CLI）"] --> B3["hve が DAG を解決"]
-        B3 --> C3["Copilot CLI SDK 経由で<br>各ステップを実行"]
-        C3 --> D3["PR 作成（オプション）"]
-    end
-```
+![3方式の実行パス比較図](./images/3-methods-overview.svg)
 
 ### 方式比較表
 
@@ -445,6 +274,7 @@ python -m hve（wizard または CLI）
 ```
 
 詳細な手順は [sdk-guide.md](./sdk-guide.md) を参照してください。
+> オプション機能の Work IQ 連携（M365 データ参照）については [sdk-guide.md](./sdk-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
 ---
 
@@ -463,7 +293,7 @@ python -m hve（wizard または CLI）
 | AI Agent を簡易設計したい | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
 | AI Agent を本格設計したい | [08-ai-agent.md](./08-ai-agent.md) | — |
 | 業務知識を整理・管理したい（qa/original-docs） | [km-guide.md](./km-guide.md) | `akm` |
-| original-docs から質問票を生成したい | [qa-original-docs.md](./qa-original-docs.md) | `aqod` |
+| original-docs から質問票を生成したい | [original-docs-review.md](./original-docs-review.md) | `aqod` |
 | ソースコードから技術文書を自動生成したい | [sourcecode-documentation.md](./sourcecode-documentation.md) | `adoc` |
 | コード品質を改善したい | [web-ui-guide.md](./web-ui-guide.md)（QA Agent セクション） | — |
 | トラブルが発生した | [troubleshooting.md](./troubleshooting.md) | — |
@@ -494,7 +324,7 @@ python -m hve（wizard または CLI）
 | フェーズ | ガイド | ワークフロー ID |
 |---------|--------|:---:|
 | **AKM: Knowledge Management（qa/original-docs）** | [km-guide.md](./km-guide.md) | `akm` |
-| **AQOD: Original Docs 質問票生成** | [qa-original-docs.md](./qa-original-docs.md) | `aqod` |
+| **AQOD: Original Docs Review 質問票生成** | [original-docs-review.md](./original-docs-review.md) | `aqod` |
 
 #### Source Codeからの Documentation
 

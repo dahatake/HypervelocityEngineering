@@ -17,6 +17,7 @@ try:
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
     )
+    from .workiq import is_workiq_available, build_workiq_mcp_config
     from .runner import StepRunner
     from .qa_merger import QAMerger, QADocument, QAQuestion, Choice
 except ImportError:
@@ -27,6 +28,7 @@ except ImportError:
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
     )
+    from workiq import is_workiq_available, build_workiq_mcp_config  # type: ignore[no-redef]
     from runner import StepRunner  # type: ignore[no-redef]
     from qa_merger import QAMerger, QADocument, QAQuestion, Choice  # type: ignore[no-redef]
 
@@ -43,6 +45,8 @@ __all__ = [
     "QA_PROMPT_V2",
     "QA_MERGE_SAVE_PROMPT",
     "QA_CONSOLIDATE_PROMPT",
+    "is_workiq_available",
+    "build_workiq_mcp_config",
     "StepRunner",
     "QAMerger",
     "QADocument",

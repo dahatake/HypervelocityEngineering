@@ -17,7 +17,7 @@ Describe 'workflow-registry.ps1' {
         It 'retrieves AAD workflow' {
             $wf = Get-Workflow -WorkflowId 'aad'
             $wf.id | Should -Be 'aad'
-            $wf.name | Should -Be 'App Design'
+            $wf.name | Should -Be 'App Detail Design'
             $wf.steps.Count | Should -Be 16
         }
 

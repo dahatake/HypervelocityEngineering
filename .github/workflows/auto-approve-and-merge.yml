@@ -64,11 +64,12 @@ jobs:
         if: steps.guard.outputs.posted != 'true'
         run: |
           set -euo pipefail
-          comment_body=$(printf '%s\n\n%s\n\n%s\n%s' \
+          comment_body=$(printf '%s\n\n%s\n\n%s\n%s\n%s' \
             '<!-- auto-approve-and-merge-skipped-split-mode -->' \
             '## ℹ️ split-mode のため auto-approve/auto-merge をスキップしました' \
             'この PR は `split-mode` のため `auto-approve-and-merge.yml` 対象外です。' \
-            '後続で `auto-create-subissues-transition.yml` が完了判定を行い、`create-subissues` ラベルを自動付与します。')
+            '後続で `auto-create-subissues-transition.yml` が完了判定を行い、`create-subissues` ラベルを自動付与します。' \
+            '> ⚠️ **フォールバック**: 5分経過しても `create-subissues` ラベルが付与されない場合は、手動で `create-subissues` ラベルを付与してください。')
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "${comment_body}"

@@ -98,12 +98,40 @@ else
 fi
 
 # ===========================================================================
-# 3. orchestrate.sh — dry-run テスト
+# 3. validate-subissues.sh — dry-run テスト
+# ===========================================================================
+echo ""
+echo "=== validate-subissues.sh ==="
+
+# 3a. Valid subissues fixture
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${FIXTURES}/sample-subissues.md" 2>&1) || true
+if echo "${output}" | grep -q "PASS"; then
+  pass "validate-subissues: valid fixture"
+else
+  fail "validate-subissues: valid fixture — expected PASS, got: ${output}"
+fi
+
+# 3b. Missing title metadata
+cat > "${tmpdir}/subissues-missing-title.md" <<'SUBS'
+<!-- subissue -->
+## Sub-001
+- Title: Missing metadata
+SUBS
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-missing-title.md" 2>&1) || true
+if echo "${output}" | grep -q "欠落ブロック"; then
+  pass "validate-subissues: detects missing title metadata"
+else
+  fail "validate-subissues: detects missing title metadata — got: ${output}"
+fi
+
+# ===========================================================================
+# 4. orchestrate.sh — dry-run テスト
 # ===========================================================================
 echo ""
 echo "=== orchestrate.sh ==="
 
-# 3a. AAS workflow dry-run
+# 4a. AAS workflow dry-run
 output=$(bash "${BASH_DIR}/orchestrate.sh" --workflow aas --dry-run 2>&1) || true
 if echo "${output}" | grep -q "AAS" && echo "${output}" | grep -q "ドライラン"; then
   pass "orchestrate: AAS dry-run"
@@ -111,7 +139,7 @@ else
   fail "orchestrate: AAS dry-run — got: ${output}"
 fi
 
-# 3b. Unknown workflow — must show user-facing error message
+# 4b. Unknown workflow — must show user-facing error message
 output=$(bash "${BASH_DIR}/orchestrate.sh" --workflow invalid_wf --dry-run 2>&1) || true
 if echo "${output}" | grep -q "不明なワークフロー"; then
   pass "orchestrate: rejects unknown workflow"
@@ -119,7 +147,7 @@ else
   fail "orchestrate: rejects unknown workflow — expected '不明なワークフロー', got: ${output}"
 fi
 
-# 3c. --model option help
+# 4c. --model option help
 output=$(bash "${BASH_DIR}/orchestrate.sh" --help 2>&1) || true
 if echo "${output}" | grep -q -- "--model"; then
   pass "orchestrate: supports --model option"
@@ -128,7 +156,7 @@ else
 fi
 
 # ===========================================================================
-# 4. create-subissues.sh — dry-run テスト
+# 5. create-subissues.sh — dry-run テスト
 # ===========================================================================
 echo ""
 echo "=== create-subissues.sh ==="
@@ -157,20 +185,26 @@ else
 fi
 
 # ===========================================================================
-# 5. run-workflow.sh — ヘルプテスト
+# 6. run-workflow.sh — ヘルプテスト
 # ===========================================================================
 echo ""
 echo "=== run-workflow.sh ==="
 
 output=$(bash "${BASH_DIR}/run-workflow.sh" help 2>&1) || true
-if echo "${output}" | grep -q "orchestrate\|advance\|create-subissues\|validate-plan"; then
+missing_cmds=()
+for cmd in "Orchestrate a workflow" advance create-subissues validate-plan validate-subissues; do
+  if ! echo "${output}" | grep -q "${cmd}"; then
+    missing_cmds+=("${cmd}")
+  fi
+done
+if (( ${#missing_cmds[@]} == 0 )); then
   pass "run-workflow: help shows subcommands"
 else
-  fail "run-workflow: help shows subcommands — got: ${output}"
+  fail "run-workflow: help missing subcommands [$(printf '%s, ' "${missing_cmds[@]}" | sed 's/, $//')] — got: ${output}"
 fi
 
 # ===========================================================================
-# 6. auto-close.sh — 判定ロジックテスト
+# 7. auto-close.sh — 判定ロジックテスト
 # ===========================================================================
 echo ""
 echo "=== auto-close.sh ==="
@@ -200,7 +234,7 @@ else
 fi
 
 # ===========================================================================
-# 7. yaml-safe-helpers.sh — YAML安全ヘルパー判定テスト
+# 8. yaml-safe-helpers.sh — YAML安全ヘルパー判定テスト
 # ===========================================================================
 echo ""
 echo "=== yaml-safe-helpers.sh ==="

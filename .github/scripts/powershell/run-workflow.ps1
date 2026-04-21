@@ -20,6 +20,9 @@
 #   # Plan 検証
 #   .\run-workflow.ps1 -Action validate-plan -Path work/Issue-123/plan.md
 #
+#   # Subissues 検証
+#   .\run-workflow.ps1 -Action validate-subissues -Path work/Issue-123/subissues.md
+#
 #   # Copilot CLI プロンプト駆動
 #   .\run-workflow.ps1 -Action copilot -Prompt "仕様を整理して"
 #
@@ -32,7 +35,7 @@
 [CmdletBinding()]
 param(
     # Subcommand (default = orchestrate)
-    [ValidateSet('', 'advance', 'create-subissues', 'validate-plan', 'copilot', 'help')]
+    [ValidateSet('', 'advance', 'create-subissues', 'validate-plan', 'validate-subissues', 'copilot', 'help')]
     [string]$Action = '',
 
     # Orchestrate parameters
@@ -114,6 +117,7 @@ Actions:
   advance           Mark issue done and activate next steps
   create-subissues  Parse subissues.md and create GitHub Issues
   validate-plan     Validate plan.md metadata consistency
+  validate-subissues Validate subissues.md metadata consistency
   copilot           Copilot CLI prompt (standalone → gh copilot fallback)
   help              Show this help
 
@@ -132,6 +136,10 @@ Create-subissues Parameters:
 Validate-plan Parameters:
   -Path <path>          Validate a single plan.md
   -Directory <dir>      Recursively validate all plan.md files
+
+Validate-subissues Parameters:
+  -Path <path>          Validate a single subissues.md
+  -Directory <dir>      Recursively validate all subissues.md files
 
 Copilot Parameters:
   -Prompt <text>        Copilot prompt string
@@ -209,6 +217,18 @@ switch ($Action) {
         if ($Path) { $vpArgs['Path'] = $Path }
         if ($Directory) { $vpArgs['Directory'] = $Directory }
         & "$ScriptDir/validate-plan.ps1" @vpArgs
+    }
+
+    'validate-subissues' {
+        if (-not $Path -and -not $Directory) {
+            Write-Warning 'Error: -Path or -Directory is required for validate-subissues action'
+            ShowUsage
+            exit 1
+        }
+        $vsArgs = @{}
+        if ($Path) { $vsArgs['Path'] = $Path }
+        if ($Directory) { $vsArgs['Directory'] = $Directory }
+        & "$ScriptDir/validate-subissues.ps1" @vsArgs
     }
 
     'copilot' {

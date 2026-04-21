@@ -8,6 +8,7 @@ import os
 import sys
 import unittest
 import unittest.mock
+from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -538,6 +539,61 @@ class TestStepRunnerModelSwitchDryRun(unittest.TestCase):
         cfg = SDKConfig(dry_run=True, model="gpt-5.4")
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
         self.assertTrue(hasattr(runner, "_build_sub_session_opts"))
+
+
+class TestTrackToolFiles(unittest.TestCase):
+    """_track_tool_files / _track_bash_files のテスト。"""
+
+    def _make_runner(self, **kwargs: Any) -> StepRunner:
+        config = SDKConfig(**kwargs) if kwargs else SDKConfig()
+        console = Console(verbose=True, quiet=False)
+        runner = StepRunner(config=config, console=console)
+        return runner
+
+    def test_edit_file_tracked_as_read_and_write(self) -> None:
+        runner = self._make_runner()
+        runner._track_tool_files("1", "edit_file", {"path": "src/main.py"})
+        files = runner.console._step_files.get("1", {})
+        self.assertIn("src/main.py", files.get("read", []))
+        self.assertIn("src/main.py", files.get("write", []))
+
+    def test_bash_redirect_tracked_as_write(self) -> None:
+        import os
+        runner = self._make_runner()
+        runner._track_bash_files("1", "echo hello > output/result.txt")
+        files = runner.console._step_files.get("1", {})
+        self.assertIn(os.path.normpath("output/result.txt"), files.get("write", []))
+
+    def test_bash_redirect_no_space_and_fd_tracked_as_write(self) -> None:
+        import os
+        runner = self._make_runner()
+        runner._track_bash_files("1", "echo hi>out.txt; echo ng 2>err.log; tee -a tee.log")
+        files = runner.console._step_files.get("1", {})
+        self.assertIn(os.path.normpath("out.txt"), files.get("write", []))
+        self.assertIn(os.path.normpath("err.log"), files.get("write", []))
+        self.assertIn(os.path.normpath("tee.log"), files.get("write", []))
+
+    def test_skip_tools_not_tracked(self) -> None:
+        runner = self._make_runner()
+        runner._track_tool_files("1", "grep", {"pattern": "TODO", "path": "src/"})
+        files = runner.console._step_files.get("1", {})
+        self.assertEqual(len(files.get("read", [])), 0)
+        self.assertEqual(len(files.get("write", [])), 0)
+
+    def test_rg_is_skipped(self) -> None:
+        runner = self._make_runner()
+        runner._track_tool_files("1", "rg", {"pattern": "TODO", "path": "src/"})
+        files = runner.console._step_files.get("1", {})
+        self.assertEqual(len(files.get("read", [])), 0)
+        self.assertEqual(len(files.get("write", [])), 0)
+
+    def test_powershell_dispatches_to_powershell(self) -> None:
+        runner = self._make_runner()
+        with unittest.mock.patch.object(runner, "_track_bash_files") as mock_bash, \
+                unittest.mock.patch.object(runner, "_track_powershell_files") as mock_ps:
+            runner._track_tool_files("1", "powershell", {"command": "Get-ChildItem -Path docs"})
+        mock_ps.assert_called_once_with("1", "Get-ChildItem -Path docs")
+        mock_bash.assert_not_called()
 
 
 if __name__ == "__main__":

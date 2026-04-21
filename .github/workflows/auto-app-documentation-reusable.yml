@@ -2,8 +2,27 @@ name: ADOC Orchestrator
 
 # auto-app-documentation ラベル付き Issue の opened/labeled/closed イベントで起動
 on:
-  issues:
-    types: [opened, labeled, closed]
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
 
 permissions:
   issues: write
@@ -13,14 +32,8 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    if: >
-      github.event.action != 'opened'
-      || (
-        contains(github.event.issue.labels.*.name, 'auto-app-documentation')
-        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-      )
     concurrency:
-      group: adoc-orchestrator-${{ github.event.issue.number }}
+      group: adoc-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,9 +44,9 @@ jobs:
       - name: 実行ゲートチェック
         id: gate
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
-          LABEL_NAME: "${{ github.event.label.name || '' }}"
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
         run: |
           set -euo pipefail
 
@@ -101,10 +114,9 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         run: |
           set -euo pipefail
+          # ラベル作成関数（インライン定義: checkout 前でも動作可能にするため）
           create_label() {
-            local name="$1"
-            local color="$2"
-            local desc="$3"
+            local name="$1" color="$2" desc="${3:-}"
             local http_code
             http_code=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST \
@@ -113,9 +125,11 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${REPO}/labels" \
               -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
-            if [[ "${http_code}" != "201" ]] && [[ "${http_code}" != "422" ]]; then
-              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
-            fi
+            case "${http_code}" in
+              201) echo "ラベル作成: ${name}" ;;
+              422) echo "ラベル既存（スキップ）: ${name}" ;;
+              *)   echo "ラベル作成エラー: ${name} HTTP ${http_code}" ;;
+            esac
             sleep 1
           }
 
@@ -245,108 +259,7 @@ jobs:
             sleep 1
           }
 
-          assign_copilot() {
-            local issue_num="$1"
-            local custom_agent="${2:-}"
-            local base_branch="${3:-main}"
-            local custom_instructions="${4:-}"
-            local model_raw="${5:-}"
-            local selected_model
-            selected_model="$(resolve_model "${model_raw}")"
-
-            if [[ -z "${COPILOT_PAT:-}" ]]; then
-              echo "WARNING: COPILOT_PAT が未設定のため assign をスキップ"
-              return 1
-            fi
-
-            local OWNER="${REPO%/*}"
-            local REPO_NAME="${REPO#*/}"
-            local query_result bot_id issue_node_id repo_node_id result is_assigned
-
-            query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
-              -f query="
-          query(\$issueNumber: Int!) {
-            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
-              id
-              issue(number: \$issueNumber) { id }
-              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
-                nodes {
-                  login
-                  ... on Bot { id databaseId }
-                }
-              }
-            }
-          }
-              " \
-              -F issueNumber="${issue_num}" \
-              2>/dev/null || true)
-
-            IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              repo = d.get('data', {}).get('repository', {})
-              bot = ''
-              for a in repo.get('suggestedActors', {}).get('nodes', []):
-                  if a.get('login') == 'copilot-swe-agent':
-                      bot = a.get('id', '')
-                      break
-              issue = repo.get('issue', {}).get('id', '')
-              print(bot + '\t' + issue + '\t' + repo.get('id', ''))
-          except Exception:
-              print('\t\t')
-          PY
-            ) || true
-
-            if [[ -z "${bot_id}" ]] || [[ -z "${issue_node_id}" ]] || [[ -z "${repo_node_id}" ]]; then
-              return 1
-            fi
-
-            result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
-              -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
-              -f query="
-          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
-            addAssigneesToAssignable(input: {
-              assignableId: \$assignableId,
-              assigneeIds: [\$botId],
-              agentAssignment: {
-                targetRepositoryId: \$targetRepositoryId,
-                baseRef: \$baseRef,
-                customInstructions: \$customInstructions,
-                customAgent: \$customAgent,
-                model: \$model
-              }
-            }) {
-              assignable {
-                ... on Issue {
-                  assignees(first: 10) { nodes { login } }
-                }
-              }
-            }
-          }
-              " \
-              -f assignableId="${issue_node_id}" \
-              -f botId="${bot_id}" \
-              -f targetRepositoryId="${repo_node_id}" \
-              -f baseRef="${base_branch}" \
-              -f customInstructions="${custom_instructions}" \
-              -f customAgent="${custom_agent}" \
-              -f model="${selected_model}" \
-              2>/dev/null || true)
-
-            is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
-              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
-          except Exception:
-              print('false')
-          PY
-            ) || true
-
-            [[ "${is_assigned}" == "true" ]]
-          }
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
 
           post_comment() {
             local issue_num="$1"
@@ -369,46 +282,17 @@ jobs:
           PY
           }
 
-          extract_model() {
-            local body="$1"
-            echo "${body}" | python3 /dev/fd/3 3<<'PY'
-          import sys, re
-          body = sys.stdin.read()
-          m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
-          if not m:
-              print("")
-              raise SystemExit(0)
-          val = m.group(1).strip()
-          allowed = {"Auto", "claude-opus-4.7", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
-          if val == "claude-opus-4-7":
-              val = "claude-opus-4.7"
-          print(val if val in allowed else "")
-          PY
-          }
-
-          resolve_model() {
-            local raw="$1"
-            if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
-              echo "claude-opus-4.7"; return
-            fi
-            if [[ "${raw}" == "claude-opus-4-7" ]]; then
-              echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
-              echo "claude-opus-4.7"; return
-            fi
-            echo "${raw}"
-          }
-
           PARSED=$(python3 - <<'PYEOF'
           import os, re, json
           body = os.environ.get("ISSUE_BODY", "")
-          
+
           branch = "main"
           m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
           if m:
               val = m.group(1).strip()
               if val and val != "_No response_":
                   branch = val
-          
+
           skip_steps = set()
           exec_section = re.search(r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
           if exec_section:
@@ -420,15 +304,15 @@ jobs:
               skip_steps = all_steps - checked_steps
               if not checked_steps and all_steps:
                   skip_steps = set()
-          
+
           additional_comment = ""
           m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               val = m.group(1).strip()
               if val != "_No response_":
                   additional_comment = val
-          
-          
+
+
           def parse_checkbox(title):
               sec = re.search(rf"###\s*{re.escape(title)}\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
               if not sec:
@@ -437,11 +321,11 @@ jobs:
               if re.search(r"スキップする", txt):
                   return not bool(re.search(r"-\s*\[[xX]\]", txt))
               return bool(re.search(r"-\s*\[[xX]\]", txt))
-          
+
           auto_context_review = parse_checkbox("レビュー設定")
           auto_qa = parse_checkbox("質問票設定")
           auto_merge = parse_checkbox("PR完全自動化設定")
-          
+
           def parse_field(title, default=""):
               m = re.search(rf"###\s*{re.escape(title)}[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
               if not m:
@@ -450,12 +334,12 @@ jobs:
               if not value or value == "_No response_":
                   return default
               return value
-          
+
           target_dirs = parse_field("対象ディレクトリ（任意）", "")
           exclude_patterns = parse_field("除外パターン（任意）", "node_modules/,vendor/,dist/,*.lock,__pycache__/")
           doc_purpose = parse_field("ドキュメントの主目的", "all")
           max_file_lines = parse_field("大規模ファイル分割閾値", "500")
-          
+
           result = {
               "branch": branch,
               "skip_steps": sorted(list(skip_steps)),

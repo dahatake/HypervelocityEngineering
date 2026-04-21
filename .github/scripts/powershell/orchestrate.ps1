@@ -59,7 +59,7 @@ $TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
 
 $script:WorkflowDisplayNames = @{
     aas  = 'App Architecture Design'
-    aad  = 'App Design'
+    aad  = 'App Detail Design'
     asdw = 'App Dev Microservice Azure'
     abd  = 'Batch Design'
     abdv = 'Batch Dev'
@@ -67,7 +67,7 @@ $script:WorkflowDisplayNames = @{
 
 $script:TriggerLabels = @{
     aas  = 'auto-app-selection'
-    aad  = 'auto-app-design'
+    aad  = 'auto-app-detail-design'
     asdw = 'auto-app-dev-microservice'
     abd  = 'auto-batch-design'
     abdv = 'auto-batch-dev'

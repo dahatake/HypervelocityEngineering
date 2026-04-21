@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import os
 import re
 import sys
 import time
@@ -51,6 +52,11 @@ try:
         ImprovementRecord, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
     )
+    from .workiq import (
+        is_workiq_available, build_workiq_mcp_config,
+        query_workiq, enrich_prompt_with_workiq,
+        get_workiq_prompt_template, save_workiq_result,
+    )
 except ImportError:
     from config import SDKConfig, generate_run_id  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
@@ -64,6 +70,11 @@ except ImportError:
         scan_codebase, record_learning, get_learning_summary,
         ImprovementRecord, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
+    )
+    from workiq import (  # type: ignore[no-redef]
+        is_workiq_available, build_workiq_mcp_config,
+        query_workiq, enrich_prompt_with_workiq,
+        get_workiq_prompt_template, save_workiq_result,
     )
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
@@ -135,6 +146,10 @@ async def _collect_qa_answers(
     非 TTY 時:
         questionnaire_table() のみ表示し、既定値候補を全採用する。
 
+    qa_auto_defaults 時:
+        questionnaire_table() のみ表示し、全問既定値候補を自動採用する。
+        ウィザードモードの auto_qa=y で設定される。
+
     Args:
         console: Console インスタンス。
         doc: パース済み QADocument（questions > 0 が前提）。
@@ -165,6 +180,15 @@ async def _collect_qa_answers(
                 " または wizard モードの「強制インタラクティブ」設定を有効にしてください。"
             )
         console.status("全問既定値候補を採用しました。")
+        return "", True
+
+    # QA 全問デフォルト自動採用モード（wizard の auto_qa=y で設定）
+    # Issue Template Workflow (auto-qa-default-answer.yml) と同等の動作:
+    # 質問票テーブルを表示した後、全問既定値候補を自動採用してステップを先に進める。
+    if config.qa_auto_defaults:
+        console.status(
+            "QA 自動投入モード: 全問既定値候補を自動採用します。"
+        )
         return "", True
 
     # TTY: フルインタラクティブフロー
@@ -229,6 +253,32 @@ async def _collect_qa_answers(
     return user_answers_raw, skip_input
 
 
+# ------------------------------------------------------------------
+# ファイル I/O 追跡 — ツール分類定数
+# ------------------------------------------------------------------
+
+# ツール引数からファイルパスを取得するキー（表示用の summary キーとは分離）
+_FILE_PATH_KEYS: tuple = ("path", "filePath", "file_path")
+
+# write 操作を行うツール名
+_WRITE_TOOLS: frozenset = frozenset({
+    "edit_file", "editFile",
+    "write_file", "writeFile",
+    "create_file", "createFile",
+    "patch", "replace",
+})
+
+# read + write の両方を行うツール名（既存ファイルを読んでから書く）
+_READ_WRITE_TOOLS: frozenset = frozenset({
+    "edit_file", "editFile",
+    "patch",
+})
+
+# ファイル追跡をスキップするツール名
+_SKIP_TOOLS: frozenset = frozenset({
+    "glob", "search", "grep", "rg",
+})
+
 class StepRunner:
     """1 ステップを CopilotSession で実行する。
 
@@ -287,9 +337,157 @@ class StepRunner:
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
         }
-        if self.config.mcp_servers:
-            opts["mcp_servers"] = self.config.mcp_servers
+        _mcp = dict(self.config.mcp_servers or {})
+
+        # Work IQ MCP Server をサブセッションにも追加
+        if self.config.workiq_enabled and is_workiq_available():
+            _workiq_mcp = build_workiq_mcp_config(
+                tenant_id=self.config.workiq_tenant_id,
+            )
+            for _k, _v in _workiq_mcp.items():
+                if _k not in _mcp:
+                    _mcp[_k] = _v
+
+        if _mcp:
+            opts["mcp_servers"] = _mcp
         return opts
+
+    # ------------------------------------------------------------------
+    # ファイル I/O 追跡ヘルパー
+    # ------------------------------------------------------------------
+
+    def _track_tool_files(self, step_id: str, tool_name: str, args: dict) -> None:
+        """ツール実行イベントからファイルパスを抽出し Console に記録・表示する。"""
+        import os
+
+        if tool_name in _SKIP_TOOLS:
+            return
+
+        # シェル系ツール: command キーからファイル操作を簡易抽出
+        if tool_name == "bash":
+            command = args.get("command", "")
+            if isinstance(command, str) and command:
+                self._track_bash_files(step_id, command)
+            return
+
+        if tool_name == "powershell":
+            command = args.get("command", "")
+            if isinstance(command, str) and command:
+                self._track_powershell_files(step_id, command)
+            return
+
+        # ファイル操作ツール: 引数キーからパスを抽出
+        for key in _FILE_PATH_KEYS:
+            val = args.get(key)
+            if val and isinstance(val, str):
+                normalized = os.path.normpath(val)
+                if tool_name in _READ_WRITE_TOOLS:
+                    self.console.track_file(step_id, normalized, "read")
+                    self.console.track_file(step_id, normalized, "write")
+                    self.console.file_io(step_id, normalized, "read")
+                    self.console.file_io(step_id, normalized, "write")
+                elif tool_name in _WRITE_TOOLS:
+                    self.console.track_file(step_id, normalized, "write")
+                    self.console.file_io(step_id, normalized, "write")
+                else:
+                    self.console.track_file(step_id, normalized, "read")
+                    self.console.file_io(step_id, normalized, "read")
+                break
+
+    def _track_bash_files(self, step_id: str, command: str) -> None:
+        """bash コマンド文字列からファイル操作を簡易抽出する。"""
+        import os
+        import re
+
+        for m in re.finditer(r'tee(?:\s+-a)?\s+([^\s;|&]+)', command):
+            path = m.group(1).strip("'\"")
+            if path and not path.startswith("-"):
+                self.console.track_file(step_id, os.path.normpath(path), "write")
+                self.console.file_io(step_id, os.path.normpath(path), "write")
+
+        for m in re.finditer(r'(?:\d+>>?|>>?)\s*([^\s;|&]+)', command):
+            path = m.group(1).strip("'\"")
+            if path and not path.startswith("-"):
+                self.console.track_file(step_id, os.path.normpath(path), "write")
+                self.console.file_io(step_id, os.path.normpath(path), "write")
+
+        for m in re.finditer(
+            r'\b(?:cp|mv)\s+(?:-\w+\s+)*([^\s;|&]+)\s+([^\s;|&]+)', command
+        ):
+            dest = m.group(2).strip("'\"")
+            if dest and not dest.startswith("-"):
+                self.console.track_file(step_id, os.path.normpath(dest), "write")
+                self.console.file_io(step_id, os.path.normpath(dest), "write")
+
+        for m in re.finditer(
+            r'\b(?:cat|head|tail|less|more)\s+(?:-\w+\s+)*([^\s;|&>]+)', command
+        ):
+            path = m.group(1).strip("'\"")
+            if path and not path.startswith("-"):
+                self.console.track_file(step_id, os.path.normpath(path), "read")
+                self.console.file_io(step_id, os.path.normpath(path), "read")
+
+    def _track_powershell_files(self, step_id: str, command: str) -> None:
+        """PowerShell コマンド文字列からファイル操作を簡易抽出する（best-effort）。
+
+        設計方針:
+        - -Path / -FilePath / -LiteralPath 明示パラメータからのキャプチャを最優先
+        - パイプライン/複文ごとに cmdlet を判定して read/write を決める
+        - PowerShell のパラメータ構文の完全な網羅は目的としない
+        - 未検出ケースがあっても step_io_summary が空になるだけで動作に影響しない
+        """
+        import os
+        import re
+
+        path_write_cmdlets = {"set-content", "add-content", "new-item"}
+        file_path_write_cmdlets = {"out-file"}
+
+        # パイプラインや複文ごとに判定（例: Get-Content ... | Out-File ...）
+        for segment in re.split(r"[|;]", command):
+            seg = segment.strip()
+            if not seg:
+                continue
+
+            cmdlet_match = re.search(r"\b([A-Za-z]+-[A-Za-z][A-Za-z0-9]*)\b", seg)
+            cmdlet = cmdlet_match.group(1).lower() if cmdlet_match else ""
+
+            # -Path / -LiteralPath
+            for m in re.finditer(
+                r'-(?:Path|LiteralPath)\s+([^\s;|&]+)', seg, re.IGNORECASE
+            ):
+                path = m.group(1).strip("'\"")
+                if path and not path.startswith("-"):
+                    # 既知 write cmdlet 以外は read 扱い（best-effort）
+                    mode = "write" if cmdlet in path_write_cmdlets else "read"
+                    normalized = os.path.normpath(path)
+                    self.console.track_file(step_id, normalized, mode)
+                    self.console.file_io(step_id, normalized, mode)
+
+            # -FilePath
+            for m in re.finditer(r'-FilePath\s+([^\s;|&]+)', seg, re.IGNORECASE):
+                path = m.group(1).strip("'\"")
+                if path and not path.startswith("-"):
+                    # 既知 write cmdlet 以外は read 扱い（best-effort）
+                    mode = "write" if cmdlet in file_path_write_cmdlets else "read"
+                    normalized = os.path.normpath(path)
+                    self.console.track_file(step_id, normalized, mode)
+                    self.console.file_io(step_id, normalized, mode)
+
+            # -Destination（copy/move の出力先）
+            for m in re.finditer(r'-Destination\s+([^\s;|&]+)', seg, re.IGNORECASE):
+                path = m.group(1).strip("'\"")
+                if path and not path.startswith("-"):
+                    normalized = os.path.normpath(path)
+                    self.console.track_file(step_id, normalized, "write")
+                    self.console.file_io(step_id, normalized, "write")
+
+        # PowerShell リダイレクト演算子 (>, >>)
+        for m in re.finditer(r'(?:\d+)?>>?\s*([^\s;|&]+)', command):
+            path = m.group(1).strip("'\"")
+            if path and not path.startswith("-"):
+                normalized = os.path.normpath(path)
+                self.console.track_file(step_id, normalized, "write")
+                self.console.file_io(step_id, normalized, "write")
 
     # ------------------------------------------------------------------
     # 公開 API
@@ -373,7 +571,30 @@ class StepRunner:
 
             # MCP Servers
             if self.config.mcp_servers:
-                session_opts["mcp_servers"] = self.config.mcp_servers
+                session_opts["mcp_servers"] = copy.deepcopy(self.config.mcp_servers)
+
+            # Work IQ MCP Server 自動追加
+            _workiq_mcp_enabled = False
+            if self.config.workiq_enabled:
+                if is_workiq_available():
+                    _workiq_mcp = build_workiq_mcp_config(
+                        tenant_id=self.config.workiq_tenant_id,
+                    )
+                    _existing_mcp = session_opts.get("mcp_servers") or {}
+                    for _wiq_key in _workiq_mcp:
+                        if _wiq_key in _existing_mcp:
+                            self.console.warning(
+                                f"MCP サーバー設定のキー '{_wiq_key}' が重複しています。"
+                                " ユーザー設定を優先し、Work IQ の自動設定をスキップします。"
+                            )
+                        else:
+                            _existing_mcp[_wiq_key] = _workiq_mcp[_wiq_key]
+                    session_opts["mcp_servers"] = _existing_mcp
+                    _workiq_mcp_enabled = "_hve_workiq" in _existing_mcp
+                else:
+                    self.console.warning(
+                        "Work IQ が検出できません。Work IQ 連携をスキップします。"
+                    )
 
             # Custom Agents (グローバル定義)
             custom_agents: List[Dict[str, Any]] = copy.deepcopy(
@@ -498,6 +719,42 @@ class StepRunner:
                             self.console, parsed_qa_preview, step_id, self.config
                         )
 
+                    # Work IQ による補助情報取得（QA 質問票のデフォルト回答補強）
+                    _workiq_qa_context = ""
+                    if (
+                        self.config.workiq_enabled
+                        and _workiq_mcp_enabled
+                        and _parse_succeeded
+                        and parsed_qa_preview.questions
+                    ):
+                        self.console.status("🔍 Work IQ: M365 データから関連情報を調査中...")
+                        self.console.spinner_start("Work IQ 問い合わせ中...")
+
+                        _questions_summary = "\n".join(
+                            f"- Q{q.no}: {q.question[:100]}"
+                            for q in parsed_qa_preview.questions[:30]
+                        )
+                        _wiq_template = get_workiq_prompt_template(
+                            "qa", self.config.workiq_prompt_qa
+                        )
+                        _wiq_query = _wiq_template.format(target_content=_questions_summary)
+                        _workiq_qa_context = await query_workiq(
+                            _effective_qa_session,
+                            _wiq_query,
+                            timeout=self.config.workiq_query_timeout_seconds,
+                        )
+
+                        self.console.spinner_stop()
+
+                        if _workiq_qa_context:
+                            self.console.status("✅ Work IQ: 関連情報を取得しました")
+                            save_workiq_result(
+                                self.config.run_id, step_id, "qa",
+                                _workiq_qa_context,
+                            )
+                        else:
+                            self.console.status("ℹ️ Work IQ: 関連情報は見つかりませんでした")
+
                     # Phase 2c: QA 回答マージ + qa/ ファイル永続化
                     # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
                     merge_succeeded = False
@@ -526,6 +783,13 @@ class StepRunner:
                                 merged_content=merged_content,
                                 qa_file_path=f"qa/{self.config.run_id}-{step_id}-qa-merged.md",
                             )
+                            # Work IQ 結果をマージ保存プロンプトに注入
+                            if _workiq_qa_context:
+                                save_prompt = enrich_prompt_with_workiq(
+                                    _workiq_qa_context,
+                                    save_prompt,
+                                    context_type="QA デフォルト回答の補強情報",
+                                )
                             save_response = await _effective_qa_session.send_and_wait(
                                 save_prompt, timeout=self.config.timeout_seconds
                             )
@@ -817,6 +1081,7 @@ class StepRunner:
 
         except Exception as exc:
             self.console.error(f"Step.{step_id} 実行中にエラーが発生しました: {exc}")
+            self.console.step_io_summary(step_id)
             elapsed = time.time() - start
             self.console.step_end(step_id, "failed", elapsed=elapsed)
             return False
@@ -833,6 +1098,7 @@ class StepRunner:
                     self.console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
 
         elapsed = time.time() - start
+        self.console.step_io_summary(step_id)
         self.console.step_end(step_id, "success", elapsed=elapsed)
         return True
 
@@ -898,6 +1164,8 @@ class StepRunner:
                         val_str = str(val)
                         args_summary = val_str[:80] + "..." if len(val_str) > 80 else val_str
                         break
+                # 追加: ファイル I/O 追跡
+                self._track_tool_files(step_id, tool_name, args)
             self.console.tool(tool_name, step_id=step_id, args_summary=args_summary)
             return
 

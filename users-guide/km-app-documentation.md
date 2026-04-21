@@ -10,3 +10,5 @@
 - 分類一覧: [overview.md](./overview.md#フェーズ一覧)
 
 > この互換ページは既存リンク互換のために維持しています。将来のメジャー更新で削除する可能性があります。
+
+> **削除予定**: この互換ページは 2026-10 に削除予定です。外部からリンクしている場合は [sourcecode-documentation.md](./sourcecode-documentation.md) に更新してください。

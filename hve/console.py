@@ -7,6 +7,7 @@ ANSI カラー・ボックス描画・スピナー・インタラクティブメ
 from __future__ import annotations
 
 import re
+import os
 import shutil
 import sys
 import threading
@@ -187,6 +188,10 @@ class Console:
         # --- Usage 累計 ---
         self._step_usage: Dict[str, Dict[str, int]] = {}
         self._step_tool_count: Dict[str, int] = {}
+        # ステップ単位のファイル I/O 追跡
+        # 構造: {step_id: {"read": [path, ...], "write": [path, ...]}}
+        # list で挿入順（処理順）を保持し、重複は track_file 内で排除する
+        self._step_files: Dict[str, Dict[str, List[str]]] = {}
 
     # ------------------------------------------------------------------
     # 内部ヘルパー
@@ -254,15 +259,25 @@ class Console:
 
     @staticmethod
     def _char_width(c: str) -> int:
-        """1文字の表示幅を返す。全角系(W/F/A)は2、半角系は1。"""
+        """1文字の表示幅を返す。
+
+        W（Wide）・F（Fullwidth）は常に幅2。
+        A（Ambiguous）は環境依存で、Windows では幅1・それ以外では幅2として扱う。
+        その他（Na/H/N）は幅1。
+        """
         eaw = unicodedata.east_asian_width(c)
-        return 2 if eaw in ("W", "F", "A") else 1
+        if eaw in ("W", "F"):
+            return 2
+        if eaw == "A":
+            return 1 if sys.platform == "win32" else 2
+        return 1
 
     @staticmethod
     def _visible_len(text: str) -> int:
         """ANSI エスケープを除去した上で、表示上の文字幅を返す。
 
-        全角文字（Wide/Fullwidth）および Ambiguous（日本語ロケール前提）を幅2として計算する。
+        全角文字（Wide/Fullwidth）は幅2として計算する。
+        Ambiguous は環境依存で、Windows は幅1・それ以外は幅2として計算する。
 
         Args:
             text: 幅を計算する文字列（ANSI エスケープを含んでもよい）。
@@ -383,7 +398,7 @@ class Console:
         width = 58
         top = f"  {s.CYAN}╭{'─' * width}╮{s.RESET}"
         bot = f"  {s.CYAN}╰{'─' * width}╯{s.RESET}"
-        pad = lambda t: f"  {s.CYAN}│{s.RESET} {t}{' ' * (width - 2 - len(t))}{s.CYAN}│{s.RESET}"
+        pad = lambda t: f"  {s.CYAN}│{s.RESET} {t}{' ' * max(0, width - 1 - self._visible_len(t))}{s.CYAN}│{s.RESET}"
         self._print(top, ts=False)
         self._print(pad(f"{s.BOLD}{s.CYAN}{title}{s.RESET}"), ts=False)
         if subtitle:
@@ -396,14 +411,14 @@ class Console:
         if self.quiet:
             return
         s = self.s
-        max_len = max((len(line) for line in lines), default=0)
-        max_len = max(max_len, len(title)) + 2
+        max_len = max((self._visible_len(line) for line in lines), default=0)
+        max_len = max(max_len, self._visible_len(title)) + 2
         width = max(max_len, 40)
         self._print(f"  {s.GRAY}┌{'─' * (width + 2)}┐{s.RESET}", ts=ts)
-        self._print(f"  {s.GRAY}│{s.RESET} {s.BOLD}{title}{s.RESET}{' ' * (width - len(title) + 1)}{s.GRAY}│{s.RESET}", ts=ts)
+        self._print(f"  {s.GRAY}│{s.RESET} {s.BOLD}{title}{s.RESET}{' ' * (width - self._visible_len(title) + 1)}{s.GRAY}│{s.RESET}", ts=ts)
         self._print(f"  {s.GRAY}├{'─' * (width + 2)}┤{s.RESET}", ts=ts)
         for line in lines:
-            self._print(f"  {s.GRAY}│{s.RESET} {line}{' ' * (width - len(line) + 1)}{s.GRAY}│{s.RESET}", ts=ts)
+            self._print(f"  {s.GRAY}│{s.RESET} {line}{' ' * (width - self._visible_len(line) + 1)}{s.GRAY}│{s.RESET}", ts=ts)
         self._print(f"  {s.GRAY}└{'─' * (width + 2)}┘{s.RESET}", ts=ts)
         self._print("", ts=ts)
 
@@ -581,9 +596,11 @@ class Console:
         """ヘッダー表示。quiet 以外で表示。"""
         s = self.s
         bar = f"{s.CYAN}{'━' * 60}{s.RESET}"
-        self._print(f"\n{bar}")
+        self._print("")
+        self._print(bar)
         self._print(f"  {s.BOLD}{msg}{s.RESET}")
-        self._print(f"{bar}\n")
+        self._print(bar)
+        self._print("")
 
     def status(self, msg: str) -> None:
         """重要ステータス。quiet 以外で常に確定行として表示。"""
@@ -618,6 +635,87 @@ class Console:
         # クリーンアップ
         self._step_usage.pop(step_id, None)
         self._step_tool_count.pop(step_id, None)
+        self._step_files.pop(step_id, None)
+
+    def track_file(self, step_id: str, path: str, mode: str = "read") -> None:
+        """ステップのファイル I/O を記録する。
+
+        ツール実行イベントから抽出されたファイルパスを、ステップ単位で蓄積する。
+        重複パスは無視し、挿入順（処理順）を保持する。
+
+        Args:
+            step_id: ステップ ID。
+            path: ファイルパス。
+            mode: "read" または "write"。
+        """
+        if not step_id or not path:
+            return
+        normalized = os.path.normpath(path)
+        if step_id not in self._step_files:
+            self._step_files[step_id] = {"read": [], "write": []}
+        file_list = self._step_files[step_id].get(mode)
+        if file_list is None:
+            return
+        if normalized not in file_list:
+            if len(file_list) < 500:
+                file_list.append(normalized)
+
+    def step_io_summary(self, step_id: str, max_display: int = 15) -> None:
+        """ステップ完了時に入出力ファイル一覧を表示する。
+
+        verbosity に応じた制御:
+          0 (quiet)  : 非表示
+          1 (compact): write がある場合は確定行表示、ない場合は件数のみスピナー更新
+          2 (normal) : 件数サマリー + write ファイルを確定行表示
+          3 (verbose): 件数サマリー + read・write 全ファイルを確定行表示
+
+        Args:
+            step_id: ステップ ID。
+            max_display: 各カテゴリ（read / write）の最大表示件数。
+        """
+        if self._verbosity == 0:
+            return
+        files = self._step_files.get(step_id)
+        if not files:
+            return
+        read_files = files.get("read", [])
+        write_files = files.get("write", [])
+        if not read_files and not write_files:
+            return
+
+        s = self.s
+        read_count = len(read_files)
+        write_count = len(write_files)
+        summary_msg = f"📂 [{step_id}] Files: {read_count} read, {write_count} written"
+
+        if self._verbosity == 1:
+            # compact: write がある場合は件数サマリーを確定行で表示
+            if write_count > 0:
+                self._print(f"  {s.DIM}┊{s.RESET} {summary_msg}")
+            else:
+                self._update_spinner_msg(summary_msg)
+            return
+
+        # Level 2+: 確定行で表示
+        self._print(f"  {s.DIM}┊{s.RESET} {summary_msg}")
+
+        # Level 3: read ファイルも表示
+        if self._verbosity >= 3 and read_files:
+            for f in read_files[:max_display]:
+                self._print(f"  {s.DIM}┊  ← {f}{s.RESET}")
+            if read_count > max_display:
+                self._print(
+                    f"  {s.DIM}┊  ... 他 {read_count - max_display} 件{s.RESET}"
+                )
+
+        # Level 2+: write ファイルは常に表示
+        if write_files:
+            for f in write_files[:max_display]:
+                self._print(f"  {s.DIM}┊  → {f}{s.RESET}")
+            if write_count > max_display:
+                self._print(
+                    f"  {s.DIM}┊  ... 他 {write_count - max_display} 件{s.RESET}"
+                )
 
     def event(self, msg: str) -> None:
         """イベント詳細。Level 3 (verbose) で確定行、Level 1-2 でスピナー更新。"""
@@ -653,6 +751,31 @@ class Console:
         msg = f"🔧 {prefix}{tool_name}{count_str}{suffix}"
         if self._verbosity >= 3:
             self._print(f"  {msg}")
+        else:
+            self._update_spinner_msg(msg)
+
+    def file_io(self, step_id: str, path: str, mode: str = "read") -> None:
+        """ファイル I/O をリアルタイムで確定行表示する。
+
+        verbosity に応じた制御:
+          0 (quiet)  : 非表示
+          1 (compact): スピナー更新のみ
+          2 (normal) : 確定行で表示
+          3 (verbose): 確定行で表示
+
+        Args:
+            step_id: ステップ ID。
+            path: ファイルパス。
+            mode: "read" または "write"。
+        """
+        if self._verbosity == 0:
+            return
+        prefix = f"[{step_id}] " if step_id else ""
+        arrow = "←" if mode == "read" else "→"
+        s = self.s
+        msg = f"{arrow} {prefix}{path}"
+        if self._verbosity >= 2:
+            self._print(f"  {s.DIM}┊  {msg}{s.RESET}")
         else:
             self._update_spinner_msg(msg)
 

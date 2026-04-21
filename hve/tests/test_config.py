@@ -100,6 +100,12 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_log_level_default(self) -> None:
         self.assertEqual(self.cfg.log_level, "error")
 
+    def test_workiq_default_disabled(self) -> None:
+        self.assertFalse(self.cfg.workiq_enabled)
+
+    def test_workiq_default_timeout(self) -> None:
+        self.assertEqual(self.cfg.workiq_query_timeout_seconds, 120.0)
+
 
 class TestSDKConfigFromEnv(unittest.TestCase):
     """from_env() の動作を検証する。"""
@@ -142,6 +148,24 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["COPILOT_CLI_PATH"] = "/usr/local/bin/copilot"
             cfg = SDKConfig.from_env()
             self.assertEqual(cfg.cli_path, "/usr/local/bin/copilot")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_reads_workiq_options(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["WORKIQ_ENABLED"] = "true"
+            os.environ["WORKIQ_TENANT_ID"] = "tenant-001"
+            os.environ["WORKIQ_PROMPT_QA"] = "qa"
+            os.environ["WORKIQ_PROMPT_KM"] = "km"
+            os.environ["WORKIQ_PROMPT_REVIEW"] = "review"
+            cfg = SDKConfig.from_env()
+            self.assertTrue(cfg.workiq_enabled)
+            self.assertEqual(cfg.workiq_tenant_id, "tenant-001")
+            self.assertEqual(cfg.workiq_prompt_qa, "qa")
+            self.assertEqual(cfg.workiq_prompt_km, "km")
+            self.assertEqual(cfg.workiq_prompt_review, "review")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)

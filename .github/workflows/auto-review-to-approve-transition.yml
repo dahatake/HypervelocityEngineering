@@ -26,13 +26,25 @@ name: レビュー完了 → auto-approve-ready 自動遷移
 #   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
 
 on:
-  pull_request_target:
-    types: [synchronize]
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      event_name:
+        required: true
+        type: string
+      pr_number:
+        required: true
+        type: string
+      pr_body:
+        required: false
+        type: string
+        default: ''
+      pr_labels:
+        required: false
+        type: string
+        default: '[]'
 
 concurrency:
-  group: auto-review-to-approve-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: auto-review-to-approve-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 permissions:
@@ -50,26 +62,13 @@ jobs:
     #   - PR へのコメントである（issue.pull_request が存在する）
     #   - Copilot Bot のコメントである（copilot-swe-agent または Copilot ログインで限定）
     #   - draft 判定は行わない（issue_comment 経路は draft PR でも遷移判定を継続）
-    if: >
-      (
-        github.event_name == 'pull_request_target'
-        && contains(github.event.pull_request.labels.*.name, 'auto-context-review')
-        && !contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
-        && !github.event.pull_request.draft
-      )
-      || (
-        github.event_name == 'issue_comment'
-        && github.event.issue.pull_request
-        && github.event.sender.type == 'Bot'
-        && (startsWith(github.event.sender.login, 'copilot-swe-agent') || github.event.sender.login == 'Copilot')
-      )
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-      EVENT_NAME: ${{ github.event_name }}
-      PR_BODY: ${{ github.event.pull_request.body || '' }}
+      PR_NUMBER: ${{ inputs.pr_number }}
+      EVENT_NAME: ${{ inputs.event_name }}
+      PR_BODY: ${{ inputs.pr_body }}
       RECHECK_MAX_ATTEMPTS: "2"
 
     steps:

@@ -11,7 +11,9 @@ name: QA 完了 → auto-context-review 自動遷移
 #      - ラベルあり → auto-context-review ラベルを PR に付与してレビューへ遷移
 #      - ラベルなし → auto-approve-ready ラベルを PR に直接付与（レビューなしパス）
 #   4. <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在する（QA 指示済み）
-#   5. QA 指示後にユーザー（bot 以外）の @copilot メンションコメントが存在する（回答投稿済み）
+#   5. QA 指示後に以下いずれかの回答シグナルが存在する
+#      - ユーザー（bot 以外）の @copilot メンションコメント
+#      - <!-- auto-qa-default-answered --> マーカーコメント（auto-qa-default-answer.yml）
 #      ※「質問なし」パターン: user_reply_count == 0 かつ QA 指示後の Bot コメントにチェックボックス（- [ ]）がない場合も QA 完了と判定
 #   6. synchronize イベントで発火している（Copilot がコミットを push した = タスク実行完了）
 #      ※ issue_comment トリガー経由の場合は条件6を省略
@@ -27,6 +29,8 @@ name: QA 完了 → auto-context-review 自動遷移
 #   copilot-auto-qa.yml → QA 指示コメント投稿 (<!-- copilot-auto-qa-posted -->)
 #     ↓ Copilot が質問票作成、またはコメントのみで「質問なし」と回答
 #   [質問ありの場合] ユーザーが @copilot で回答投稿
+#   [質問ありの場合] auto-qa-default-answer.yml が既定値回答コメント投稿 (<!-- auto-qa-default-answered -->)
+#     ↓ issue_comment イベント（このワークフロー発火 ← 既定値回答フォールバックパス）
 #     ↓
 #   Copilot がタスク実行・コミット push
 #     ↓ synchronize イベント（このワークフロー発火）
@@ -43,13 +47,25 @@ name: QA 完了 → auto-context-review 自動遷移
 #   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
 
 on:
-  pull_request_target:
-    types: [synchronize]
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      event_name:
+        required: true
+        type: string
+      pr_number:
+        required: true
+        type: string
+      pr_body:
+        required: false
+        type: string
+        default: ''
+      pr_labels:
+        required: false
+        type: string
+        default: '[]'
 
 concurrency:
-  group: auto-qa-to-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: auto-qa-to-review-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 permissions:
@@ -64,26 +80,15 @@ jobs:
     #   - PR に auto-context-review ラベルがまだ付いていない
     # 事前フィルタ（issue_comment の場合）:
     #   - PR へのコメントである（issue.pull_request が存在する）
-    #   - Copilot Bot のコメントである（copilot-swe-agent のログインで限定）
-    if: >
-      (
-        github.event_name == 'pull_request_target'
-        && contains(github.event.pull_request.labels.*.name, 'auto-qa')
-        && !contains(github.event.pull_request.labels.*.name, 'auto-context-review')
-      )
-      || (
-        github.event_name == 'issue_comment'
-        && github.event.issue.pull_request
-        && github.event.sender.type == 'Bot'
-        && startsWith(github.event.sender.login, 'copilot-swe-agent')
-      )
+    #   - Copilot Bot のコメント（copilot-swe-agent または Copilot）である
+    #   - または <!-- auto-qa-default-answered --> マーカー付きコメントであり、投稿者が OWNER/MEMBER/COLLABORATOR
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-      PR_BODY: ${{ github.event.pull_request.body || '' }}
-      EVENT_NAME: ${{ github.event_name }}
+      PR_NUMBER: ${{ inputs.pr_number }}
+      PR_BODY: ${{ inputs.pr_body }}
+      EVENT_NAME: ${{ inputs.event_name }}
 
     steps:
       - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
@@ -404,10 +409,24 @@ jobs:
           ISSUE_NUMBER: ${{ steps.check-qa-complete.outputs.issue_number }}
         run: |
           set -euo pipefail
+          # 冪等チェック: 既に直接遷移済みならスキップ
+          MARKER='<!-- qa-to-approve-direct-done -->'
+          existing_direct=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing_direct=0
+
+          if [ "${existing_direct:-0}" -gt 0 ]; then
+            echo "既に direct-approve 遷移済みです。スキップします。"
+            exit 0
+          fi
+
           # 紐づく Issue に auto-context-review ラベルがなく、auto-merge 有効の場合のみ直接遷移
           echo "Issue に auto-context-review ラベルがなく、auto-merge が有効なため直接 auto-approve-ready に遷移します。"
           gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-approve-ready"
           COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s' \
+            '<!-- qa-to-approve-direct-done -->' \
             '## 🔄 QA → Approve 直接遷移（レビューなしパス）' \
             'QA 完了を検知しました。Issue にレビュー設定がなく、`auto-merge: true` のため `auto-approve-ready` ラベルを直接 PR に付与しました。' \
             "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \

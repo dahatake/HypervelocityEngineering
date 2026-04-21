@@ -37,12 +37,12 @@ def _get_default_akm_target_files(sources: str) -> str:
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "aas": "App Architecture Design",
-    "aad": "App Design",
+    "aad": "App Detail Design",
     "asdw": "App Dev Microservice Azure",
     "abd": "Batch Design",
     "abdv": "Batch Dev",
     "akm": "Knowledge Management",
-    "aqod": "QA Original Docs Review",
+    "aqod": "Original Docs Review",
     "adoc": "Source Codeからのドキュメント作成",
 }
 

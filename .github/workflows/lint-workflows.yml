@@ -1,0 +1,38 @@
+name: Lint Workflow Files
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  yamllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: pip install yamllint
+      - name: Detect dangerous JSON fallback patterns
+        run: |
+          set -euo pipefail
+          # Detects `$(gh api|api_call ... || echo '{}'|'[]')` style JSON fallback patterns.
+          # Matches examples:
+          #   $(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null || echo '{}')
+          #   $(api_call GET "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUM}" || echo '[]')
+          DANGEROUS=$(grep -rEn --exclude='lint-workflows.yml' '\$\((gh api|api_call)[^)]*\|\|[[:space:]]*echo[[:space:]]+' .github/workflows/ \
+            | grep -E 'echo[[:space:]]+["'\''](\{\}|\[\])["'\'']' || true)
+          if [ -n "$DANGEROUS" ]; then
+            echo "::warning::Dangerous JSON fallback pattern detected. Use 'if !' pattern or safe_gh_api() helper instead:"
+            echo "$DANGEROUS"
+          fi
+      - name: Lint workflow files
+        run: |
+          yamllint -d '{extends: default, rules: {document-start: disable, line-length: disable, truthy: disable, comments: {min-spaces-from-content: 1}}}' \
+            .github/workflows/*.yml

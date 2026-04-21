@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1080" role="img" aria-labelledby="title desc">
+  <title id="title">全体コンポーネント関係図</title>
+  <desc id="desc">ユーザー操作層、オーケストレーション層、AI実行層、データ層の4層アーキテクチャと主要な依存関係。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #1f2937; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #475569; }
+      .layer { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; rx: 12; }
+      .h { font-size: 18px; font-weight: 700; }
+      .t { font-size: 13px; }
+      .node { stroke-width: 1.4; rx: 10; }
+      .arch { fill: #4A90D9; stroke: #1f3a5a; }
+      .dev { fill: #50C878; stroke: #1b5e20; }
+      .doc { fill: #9B59B6; stroke: #4a235a; }
+      .qa { fill: #E67E22; stroke: #7e3d00; }
+      .km { fill: #F39C12; stroke: #7a4f00; stroke-width: 2.4; }
+      .file { fill: #95A5A6; stroke: #5d6d73; }
+      .light { fill: #ffffff; stroke: #94a3b8; }
+      .dark-text { fill: #111827; font-size: 13px; font-weight: 700; }
+      .light-text { fill: #ffffff; font-size: 13px; font-weight: 700; }
+      .link { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .link-dash { stroke: #1d4ed8; stroke-width: 2; stroke-dasharray: 8 5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1700" height="1080" fill="transparent"/>
+  <text x="40" y="52" class="title">全体コンポーネント関係図</text>
+  <text x="40" y="80" class="subtitle">方式1/2/3の入口から、オーケストレーション・AI実行・データ層までの関係を1枚で俯瞰。</text>
+
+  <!-- Layers -->
+  <rect x="30" y="110" width="1640" height="170" class="layer"/>
+  <text x="50" y="142" class="h">1. ユーザー操作層</text>
+
+  <rect x="50" y="160" width="500" height="90" class="node light"/>
+  <text x="70" y="195" class="dark-text">方式1: 個別Issue + Custom Agent手動割当</text>
+  <text x="70" y="218" class="t">Issue作成 + @copilotアサイン</text>
+
+  <rect x="600" y="160" width="500" height="90" class="node light"/>
+  <text x="620" y="195" class="dark-text">方式2: Issue Template → Bootstrap Workflow</text>
+  <text x="620" y="218" class="t">Sub Issue 自動生成 + 自動アサイン</text>
+
+  <rect x="1150" y="160" width="500" height="90" class="node light"/>
+  <text x="1170" y="195" class="dark-text">方式3: python -m hve（ローカル）</text>
+  <text x="1170" y="218" class="t">Copilot CLI SDK 経由実行</text>
+
+  <rect x="30" y="300" width="1640" height="220" class="layer"/>
+  <text x="50" y="332" class="h">2. オーケストレーション層</text>
+
+  <rect x="50" y="352" width="280" height="90" class="node light"/>
+  <text x="70" y="388" class="dark-text">.github/ISSUE_TEMPLATE/</text>
+  <text x="70" y="412" class="t">Issue Template（10個）</text>
+
+  <rect x="360" y="352" width="280" height="90" class="node light"/>
+  <text x="380" y="388" class="dark-text">.github/workflows/</text>
+  <text x="380" y="412" class="t">GitHub Actions（35本）</text>
+
+  <rect x="670" y="352" width="280" height="90" class="node light"/>
+  <text x="690" y="388" class="dark-text">.github/scripts/</text>
+  <text x="690" y="412" class="t">CLIスクリプト</text>
+
+  <rect x="980" y="352" width="280" height="90" class="node light"/>
+  <text x="1000" y="388" class="dark-text">hve/</text>
+  <text x="1000" y="412" class="t">SDKオーケストレーター</text>
+
+  <rect x="1290" y="352" width="360" height="90" class="node doc"/>
+  <text x="1310" y="388" class="light-text">adoc ワークフロー（Doc-*）</text>
+  <text x="1310" y="412" class="light-text">sourcecode documentation</text>
+
+  <rect x="30" y="540" width="1640" height="180" class="layer"/>
+  <text x="50" y="572" class="h">3. AI実行層</text>
+
+  <rect x="50" y="592" width="500" height="96" class="node light"/>
+  <text x="70" y="630" class="dark-text">.github/copilot-instructions.md</text>
+  <text x="70" y="654" class="t">Agent 行動規約</text>
+
+  <rect x="600" y="592" width="500" height="96" class="node arch"/>
+  <text x="620" y="630" class="light-text">.github/agents/</text>
+  <text x="620" y="654" class="light-text">Custom Agent（65個）</text>
+
+  <rect x="1150" y="592" width="500" height="96" class="node light"/>
+  <text x="1170" y="630" class="dark-text">.github/skills/</text>
+  <text x="1170" y="654" class="t">技術手順リファレンス</text>
+
+  <rect x="30" y="740" width="1640" height="300" class="layer"/>
+  <text x="50" y="772" class="h">4. データ層</text>
+
+  <rect x="50" y="800" width="230" height="86" class="node file"/>
+  <text x="70" y="835" class="dark-text">original-docs/</text>
+  <text x="70" y="858" class="t">ユーザー原本</text>
+
+  <rect x="300" y="800" width="230" height="86" class="node file"/>
+  <text x="320" y="835" class="dark-text">qa/</text>
+  <text x="320" y="858" class="t">質問票</text>
+
+  <rect x="550" y="800" width="260" height="96" class="node km"/>
+  <text x="570" y="838" class="dark-text">knowledge/</text>
+  <text x="570" y="862" class="t">業務要件 D01〜D21</text>
+
+  <rect x="840" y="800" width="230" height="86" class="node file"/>
+  <text x="860" y="835" class="dark-text">docs/</text>
+  <text x="860" y="858" class="t">設計ドキュメント</text>
+
+  <rect x="1090" y="800" width="260" height="86" class="node file"/>
+  <text x="1110" y="835" class="dark-text">docs-generated/</text>
+  <text x="1110" y="858" class="t">技術ドキュメント</text>
+
+  <rect x="1370" y="800" width="130" height="86" class="node file"/>
+  <text x="1390" y="835" class="dark-text">src/</text>
+  <text x="1390" y="858" class="t">コード</text>
+
+  <rect x="1520" y="800" width="130" height="86" class="node file"/>
+  <text x="1540" y="835" class="dark-text">work/</text>
+  <text x="1540" y="858" class="t">作業記録</text>
+
+  <!-- Inter-layer links -->
+  <path d="M 300 250 C 300 300, 190 300, 190 352" class="link"/>
+  <path d="M 850 250 C 850 300, 500 300, 500 352" class="link"/>
+  <path d="M 1400 250 C 1400 300, 1120 300, 1120 352" class="link"/>
+
+  <path d="M 330 397 C 345 397, 345 397, 360 397" class="link"/>
+  <path d="M 640 397 C 655 397, 655 397, 670 397" class="link"/>
+  <path d="M 640 397 C 945 397, 955 397, 980 397" class="link"/>
+  <path d="M 640 397 C 1265 397, 1275 397, 1290 397" class="link"/>
+
+  <path d="M 500 442 C 500 510, 850 510, 850 592" class="link"/>
+  <path d="M 1120 442 C 1120 510, 850 510, 850 592" class="link"/>
+  <path d="M 1470 442 C 1470 510, 850 510, 850 592" class="link"/>
+
+  <path d="M 850 688 C 850 742, 680 742, 680 800" class="link-dash"/>
+  <path d="M 850 688 C 850 742, 955 742, 955 800" class="link"/>
+  <path d="M 850 688 C 850 742, 1220 742, 1220 800" class="link"/>
+  <path d="M 850 688 C 850 742, 1435 742, 1435 800" class="link"/>
+  <path d="M 850 688 C 850 742, 1585 742, 1585 800" class="link"/>
+
+  <path d="M 165 886 C 165 930, 680 930, 680 896" class="link"/>
+  <path d="M 415 886 C 415 930, 680 930, 680 896" class="link"/>
+
+  <text x="920" y="764" class="t" fill="#1d4ed8">Custom Agent → knowledge/ は参照（破線）</text>
+  <text x="920" y="786" class="t">Custom Agent → docs/, docs-generated/, src/, work/ は生成（実線）</text>
+</svg>

@@ -5,9 +5,9 @@
     "description": "run app architecture design workflow (usecase to app list and architecture recommendation)"
   },
   {
-    "name": "auto-app-design",
+    "name": "auto-app-detail-design",
     "color": "0E8A16",
-    "description": "run app design workflow (microservice architecture design document generation)"
+    "description": "run app detail design workflow (application detail design document generation)"
   },
   {
     "name": "auto-app-dev-microservice",
@@ -60,9 +60,9 @@
     "description": "run source code documentation workflow (multi-layer doc generation from codebase)"
   },
   {
-    "name": "qa-original-docs",
+    "name": "original-docs-review",
     "color": "0E8A16",
-    "description": "run AQOD original docs review workflow (cross-analysis questionnaire generation)"
+    "description": "run original docs review workflow (cross-analysis questionnaire generation)"
   },
   {
     "name": "auto-approve-ready",

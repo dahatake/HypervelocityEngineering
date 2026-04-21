@@ -148,10 +148,8 @@ jobs:
           if [ "${char_count}" -gt "${CONTENT_MAX_CHARS}" ]; then
             echo "::warning::ファイルが大きいため（約${char_count}文字）、先頭 ${CONTENT_TRUNCATE_AT} 文字のみ投稿します。"
             qa_content=$(QA_CONTENT="${qa_content}" CONTENT_TRUNCATE_AT="${CONTENT_TRUNCATE_AT}" wh_truncate)
-            truncated_note="
-
----
-> ⚠️ ファイルサイズが大きいため、一部省略されています。全文は [\`${QA_FILE}\`](https://github.com/${REPO}/blob/${HEAD_SHA}/${encoded_path}) を参照してください。"
+            truncated_note=$(printf '\n\n---\n> ⚠️ ファイルサイズが大きいため、先頭 %s 文字のみ投稿します。全文は [`%s`](https://github.com/%s/blob/%s/%s) を参照してください。' \
+              "${CONTENT_TRUNCATE_AT}" "${QA_FILE}" "${REPO}" "${HEAD_SHA}" "${encoded_path}")
           fi
 
           # コメント本文を一時ファイルに書き込み（シェル特殊文字を安全に扱う）

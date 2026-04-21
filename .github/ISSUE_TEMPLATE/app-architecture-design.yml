@@ -14,8 +14,8 @@ body:
         ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
         - `docs/catalog/use-case-catalog.md` — ユースケース文書（Step.1 の入力）
 
-        App Design（Step.1 以降）のアプリケーション設計は、このワークフロー完了後に
-        **App Design** Issue を別途作成してください。
+        App Detail Design（Step.1 以降）のアプリケーション設計は、このワークフロー完了後に
+        **App Detail Design** Issue を別途作成してください。
 
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。

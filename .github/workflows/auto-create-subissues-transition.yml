@@ -1,13 +1,25 @@
 name: タスク完了 → create-subissues 自動付与（split-mode 専用）
 
 on:
-  pull_request_target:
-    types: [synchronize]
-  issue_comment:
-    types: [created]
+  workflow_call:
+    inputs:
+      event_name:
+        required: true
+        type: string
+      pr_number:
+        required: true
+        type: string
+      pr_body:
+        required: false
+        type: string
+        default: ''
+      pr_labels:
+        required: false
+        type: string
+        default: '[]'
 
 concurrency:
-  group: auto-create-subissues-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: auto-create-subissues-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 permissions:
@@ -17,23 +29,13 @@ permissions:
 
 jobs:
   transition:
-    if: >
-      (
-        github.event_name == 'pull_request_target'
-      )
-      || (
-        github.event_name == 'issue_comment'
-        && github.event.issue.pull_request
-        && github.event.sender.type == 'Bot'
-        && (startsWith(github.event.sender.login, 'copilot-swe-agent') || github.event.sender.login == 'Copilot')
-      )
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       HAS_COPILOT_PAT: ${{ secrets.COPILOT_PAT != '' }}
       REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
-      EVENT_NAME: ${{ github.event_name }}
+      PR_NUMBER: ${{ inputs.pr_number }}
+      EVENT_NAME: ${{ inputs.event_name }}
 
     steps:
       - name: Checkout
@@ -42,8 +44,8 @@ jobs:
       - name: PR 情報取得（issue_comment 対応）
         id: pr-info
         env:
-          EVENT_PR_BODY: ${{ github.event.pull_request.body || '' }}
-          EVENT_PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          EVENT_PR_BODY: ${{ inputs.pr_body }}
+          EVENT_PR_LABELS: ${{ inputs.pr_labels }}
         run: |
           set -euo pipefail
 
@@ -131,12 +133,8 @@ jobs:
 
           files=$(printf '%s' "${pr_files}" | grep -v '^[[:space:]]*$' | sort || true)
           if [ -z "${files}" ]; then
-            echo "[FALLBACK] PR 差分が空のため、PR ブランチをチェックアウトして subissues.md を直接検索します。"
-            if gh pr checkout "${PR_NUMBER}" --repo "${REPO}" >/dev/null 2>&1; then
-              files=$(find work -type f -name 'subissues.md' | sort || true)
-            else
-              echo "::warning::gh pr checkout に失敗したためフォールバック検索をスキップします。"
-            fi
+            echo "::warning::PR 差分から subissues.md を検出できませんでした。"
+            echo "::warning::pull_request_target / issue_comment 経路では安全上の理由で PR ブランチ checkout を行いません。"
           fi
           if [ -z "${files}" ]; then
             echo "subissues.md は未検出です（コミット前の可能性）。この実行では何もしません。"

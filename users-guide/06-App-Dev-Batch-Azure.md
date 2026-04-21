@@ -250,8 +250,7 @@ PR 作成時に以下のワークフローが自動実行されます。
 
 | Workflow | 確認内容 |
 |---|---|
-| [`check-split-mode.yml`](../.github/workflows/check-split-mode.yml) | 分割モード違反（実装ファイルの混入）を検知 |
-| [`validate-plan.yml`](../.github/workflows/validate-plan.yml) | `plan.md` の見積・分割判定・実装ファイル有無を検証 |
+| [`plan-validation-and-labeling.yml`](../.github/workflows/plan-validation-and-labeling.yml) | `plan.md` の検証（split判定/実装ファイル混入チェック）と split-mode ラベル付与を実行 |
 
 > ⚠️ これらの自動チェックが失敗している PR はマージしないでください。
 
@@ -436,12 +435,11 @@ docs/
 
 | ファイル | 用途 |
 |---|---|
-| [`.github/workflows/auto-batch-design.yml`](../.github/workflows/auto-batch-design.yml) | ABD Orchestrator（Step.1.1〜5.3 の自動起動・状態遷移） |
+| [`.github/workflows/auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml) | Issueディスパッチャー（ABD含む各オーケストレーターへ振り分け） |
 | [`.github/workflows/create-subissues-from-pr.yml`](../.github/workflows/create-subissues-from-pr.yml) | `subissues.md` から GitHub Issue を自動作成 |
 | [`.github/workflows/advance-subissues.yml`](../.github/workflows/advance-subissues.yml) | Sub Issue 完了後に次 Sub Issue を自動アドバンス |
-| [`.github/workflows/check-split-mode.yml`](../.github/workflows/check-split-mode.yml) | 分割モード違反の検知 |
-| [`.github/workflows/validate-plan.yml`](../.github/workflows/validate-plan.yml) | `plan.md` 分割判定の検証 |
-| [`.github/workflows/auto-batch-dev.yml`](../.github/workflows/auto-batch-dev.yml) | バッチ実装（ABDV）オーケストレーター |
+| [`.github/workflows/plan-validation-and-labeling.yml`](../.github/workflows/plan-validation-and-labeling.yml) | `plan.md` 分割判定の検証・違反検知・ラベル付与 |
+| [`.github/workflows/auto-batch-dev-reusable.yml`](../.github/workflows/auto-batch-dev-reusable.yml) | バッチ実装（ABDV）reusable オーケストレーター本体 |
 
 ### Custom Agents（Arch-Batch-* 設計系）
 

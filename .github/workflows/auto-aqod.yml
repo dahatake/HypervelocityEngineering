@@ -1,8 +1,27 @@
-name: AQOD Orchestrator
+name: Original Docs Review Orchestrator
 
 on:
-  issues:
-    types: [opened, labeled]
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
 
 permissions:
   issues: write
@@ -11,33 +30,22 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    if: >
-      (
-        github.event.action == 'opened'
-        && contains(github.event.issue.labels.*.name, 'qa-original-docs')
-        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-      )
-      || (
-        github.event.action == 'labeled'
-        && github.event.label.name == 'qa-original-docs'
-        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-      )
     concurrency:
-      group: aqod-orchestrator-${{ github.event.issue.number }}
+      group: aqod-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
       REPO: ${{ github.repository }}
-      LABEL_QA_ORIGINAL_DOCS: qa-original-docs
+      LABEL_ORIGINAL_DOCS_REVIEW: original-docs-review
 
     steps:
       - name: 実行ゲートチェック
         id: gate
         env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
-          LABEL_NAME: "${{ github.event.label.name || '' }}"
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
         run: |
           set -euo pipefail
 
@@ -51,7 +59,7 @@ jobs:
           ISSUE_LABELS=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
           export ISSUE_TITLE
 
-          if [[ "${EVENT_ACTION}" == "labeled" ]] && [[ "${LABEL_NAME}" != "${LABEL_QA_ORIGINAL_DOCS}" ]]; then
+          if [[ "${EVENT_ACTION}" == "labeled" ]] && [[ "${LABEL_NAME}" != "${LABEL_ORIGINAL_DOCS_REVIEW}" ]]; then
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -60,7 +68,7 @@ jobs:
           import sys, json
           labels = json.load(sys.stdin)
           import os
-          trigger_label = os.environ.get('LABEL_QA_ORIGINAL_DOCS', 'qa-original-docs')
+          trigger_label = os.environ.get('LABEL_ORIGINAL_DOCS_REVIEW', 'original-docs-review')
           print('true' if trigger_label in labels else 'false')
           PY
           )
@@ -100,7 +108,7 @@ jobs:
               "https://api.github.com/repos/${REPO}/labels" \
               -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}" >/dev/null || true
           }
-          create_label "${LABEL_QA_ORIGINAL_DOCS}" "0E8A16" "run AQOD original docs questionnaire workflow"
+          create_label "${LABEL_ORIGINAL_DOCS_REVIEW}" "0E8A16" "run original docs review workflow (cross-analysis questionnaire generation)"
           create_label "aqod:initialized" "C5DEF5" ""
           create_label "aqod:ready" "0075CA" ""
           create_label "aqod:running" "E4E669" ""

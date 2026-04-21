@@ -1,13 +1,13 @@
-name: "QA Original Docs Review"
+name: "Original Docs Review"
 description: "original-docs/ を横断分析し、不明瞭点・矛盾点の質問票を自動生成する"
 title: "[AQOD-ROOT] original-docs 質問票生成"
 labels:
-  - "qa-original-docs"
+  - "original-docs-review"
 body:
   - type: markdown
     attributes:
       value: |
-        ## QA Original Docs Review
+        ## Original Docs Review
 
         `original-docs/` 配下を横断分析し、質問票 (`qa/QA-DocConsistency-Issue-<N>.md`) を生成します。
 

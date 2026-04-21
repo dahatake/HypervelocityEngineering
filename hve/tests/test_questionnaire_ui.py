@@ -372,6 +372,69 @@ class TestCollectQaAnswersForceInteractive(unittest.TestCase):
         self.assertFalse(skip, "force_interactive=True 時は skip=False のはず")
 
 
+class TestCollectQaAnswersAutoDefaults(unittest.TestCase):
+    """qa_auto_defaults=True 時の _collect_qa_answers() 動作を検証する。"""
+
+    def _make_doc(self) -> QADocument:
+        doc = QADocument(title="テスト質問票")
+        doc.questions = [_make_question(no=1), _make_question(no=2)]
+        return doc
+
+    def test_qa_auto_defaults_skips_input_even_on_tty(self) -> None:
+        """qa_auto_defaults=True 時: TTY でも prompt_answer_mode を呼ばず skip=True。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7", qa_auto_defaults=True)
+
+        table_called = []
+        mode_called = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table", side_effect=lambda *a, **kw: table_called.append(True)
+        ), unittest.mock.patch.object(
+            c, "status"
+        ), unittest.mock.patch.object(
+            c, "prompt_answer_mode", side_effect=lambda: mode_called.append(True) or "all"
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(table_called, "questionnaire_table は呼ばれるべき")
+        self.assertFalse(mode_called, "qa_auto_defaults=True 時は prompt_answer_mode を呼ばないべき")
+        self.assertTrue(skip, "qa_auto_defaults=True 時は skip_input=True のはず")
+        self.assertEqual(raw, "", "qa_auto_defaults=True 時は user_answers_raw は空のはず")
+
+    def test_qa_auto_defaults_does_not_override_unattended_warning_flow(self) -> None:
+        """qa_auto_defaults=True でも unattended=True では既存の全自動警告フローを優先する。"""
+        c = _make_console()
+        doc = self._make_doc()
+        cfg = SDKConfig(
+            dry_run=True,
+            model="claude-opus-4.7",
+            unattended=True,
+            qa_auto_defaults=True,
+        )
+
+        warning_messages: list[str] = []
+        status_messages: list[str] = []
+
+        with unittest.mock.patch.object(
+            c, "questionnaire_table"
+        ), unittest.mock.patch.object(
+            c, "warning", side_effect=lambda msg: warning_messages.append(msg)
+        ), unittest.mock.patch.object(
+            c, "status", side_effect=lambda msg: status_messages.append(msg)
+        ), unittest.mock.patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            raw, skip = asyncio.run(_collect_qa_answers(c, doc, "1.1", cfg))
+
+        self.assertTrue(skip)
+        self.assertEqual(raw, "")
+        self.assertTrue(warning_messages, "unattended=True 時の警告フローが維持されるべき")
+        self.assertIn("全自動", "\n".join(warning_messages))
+        self.assertIn("全問既定値候補を採用しました。", status_messages)
+
+
 class TestCollectQaAnswersUnattended(unittest.TestCase):
     """`unattended=True` 時の _collect_qa_answers() 動作を検証する。
 

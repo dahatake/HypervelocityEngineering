@@ -1,6 +1,6 @@
 name: AAD Orchestrator
 
-# auto-app-design ラベル付き Issue の opened/labeled/closed イベントで起動
+# auto-app-detail-design ラベル付き Issue の opened/labeled/closed イベントで起動
 #
 # 設計メモ:
 #   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
@@ -9,8 +9,27 @@ name: AAD Orchestrator
 #   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
 #   - 既存の冪等化ガード（aad:initialized チェック）により、opened + labeled が同時発火しても安全。
 on:
-  issues:
-    types: [opened, labeled, closed]
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
 
 permissions:
   issues: write
@@ -20,14 +39,8 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    if: >
-      github.event.action != 'opened'
-      || (
-        contains(github.event.issue.labels.*.name, 'auto-app-design')
-        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-      )
     concurrency:
-      group: aad-orchestrator-${{ github.event.issue.number }}
+      group: aad-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -36,15 +49,15 @@ jobs:
 
     steps:
       # ----------------------------------------------------------------
-      # 1. 実行ゲート: auto-app-design ラベルあり + aad:initialized なし
+      # 1. 実行ゲート: auto-app-detail-design ラベルあり + aad:initialized なし
       # ----------------------------------------------------------------
       - name: 実行ゲートチェック
         id: gate
         env:
-          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
-          LABEL_NAME: "${{ github.event.label.name || '' }}"
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
         run: |
           set -euo pipefail
 
@@ -74,10 +87,10 @@ jobs:
                 echo "mode=skip" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            elif [[ "${LABEL_NAME}" == "auto-app-design" ]]; then
-              echo "auto-app-design labeled イベント: initialize ゲートチェックへ進みます。"
+            elif [[ "${LABEL_NAME}" == "auto-app-detail-design" ]]; then
+              echo "auto-app-detail-design labeled イベント: initialize ゲートチェックへ進みます。"
             else
-              echo "aad:done / auto-app-design 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "aad:done / auto-app-detail-design 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
               echo "mode=skip" >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -118,12 +131,12 @@ jobs:
           has_aad=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          print('true' if 'auto-app-design' in labels else 'false')
+          print('true' if 'auto-app-detail-design' in labels else 'false')
           PY
           )
 
           if [[ "${has_aad}" != "true" ]]; then
-            echo "auto-app-design ラベルなし。スキップ。"
+            echo "auto-app-detail-design ラベルなし。スキップ。"
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -149,8 +162,8 @@ jobs:
         if: always()
         env:
           GATE_MODE: ${{ steps.gate.outputs.mode }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
         run: |
           echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
           if [[ "${GATE_MODE}" == "skip" ]]; then
@@ -165,10 +178,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          # ラベル作成関数（インライン定義: checkout 前でも動作可能にするため）
           create_label() {
-            local name="$1"
-            local color="$2"
-            local desc="$3"
+            local name="$1" color="$2" desc="${3:-}"
             local http_code
             http_code=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST \
@@ -177,17 +189,15 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${REPO}/labels" \
               -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
-            if [[ "${http_code}" == "201" ]]; then
-              echo "ラベル作成: ${name}"
-            elif [[ "${http_code}" == "422" ]]; then
-              echo "ラベル既存（スキップ）: ${name}"
-            else
-              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
-            fi
+            case "${http_code}" in
+              201) echo "ラベル作成: ${name}" ;;
+              422) echo "ラベル既存（スキップ）: ${name}" ;;
+              *)   echo "ラベル作成エラー: ${name} HTTP ${http_code}" ;;
+            esac
             sleep 1
           }
 
-          create_label "auto-app-design"   "0E8A16" "run app design workflow (microservice architecture design document generation)"
+          create_label "auto-app-detail-design"   "0E8A16" "run app detail design workflow (application detail design document generation)"
           create_label "aad:initialized"   "C5DEF5" ""
           create_label "aad:ready"         "0075CA" ""
           create_label "aad:running"       "E4E669" ""
@@ -394,7 +404,26 @@ jobs:
               section_text = merge_section.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge}
+          # APP-ID 抽出（カンマ区切りで分割・正規化）
+          # regex は「対象アプリケーション」で始まるセクションヘッダにマッチ
+          # 後方互換: 旧ラベル「メモ」付きヘッダ（「対象アプリケーション (APP-ID) メモ」）にもマッチする
+          app_ids_raw = ""
+          m = re.search(r"###\s*対象アプリケーション[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              app_ids_raw = m.group(1).strip()
+              if app_ids_raw == "_No response_":
+                  app_ids_raw = ""
+
+          # カンマ/改行/空白で分割し、許容形式の APP-ID のみ採用
+          app_ids_list = []
+          if app_ids_raw:
+              for token in re.split(r"[\s,]+", app_ids_raw):
+                  normalized = token.strip().upper()
+                  if normalized and re.fullmatch(r"APP-\d{2,}", normalized):
+                      if normalized not in app_ids_list:
+                          app_ids_list.append(normalized)
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list}
           print(json.dumps(result))
           PYEOF
           )
@@ -405,12 +434,14 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+          echo "対象 APP-IDs: ${APP_IDS:-（未指定 = 全アプリケーション対象）}"
 
           if [[ -n "${SKIP_STEPS}" ]]; then
             echo "Root Issue body から未チェックのステップを除去します..."
@@ -540,7 +571,14 @@ jobs:
           S82_NUM="" S82_ID=""
           S83_NUM="" S83_ID=""
 
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          # app-ids は branch の直後に配置（HVE _build_root_ref() と同じ順序）
+          APP_IDS_TAG=""
+          if [[ -n "${APP_IDS}" ]]; then
+            APP_IDS_TAG=$(printf '\n<!-- app-ids: %s -->' "${APP_IDS}")
+          fi
+
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->%s\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
@@ -548,16 +586,38 @@ jobs:
             ADDITIONAL_SECTION=""
           fi
 
+          if [[ -n "${APP_IDS}" ]]; then
+            FORMATTED_APP_IDS=$(printf '%s' "${APP_IDS}" | sed -E 's/[[:space:]]*,[[:space:]]*/,/g; s/^ *//; s/ *$//' | sed 's/,/`, `/g; s/^/`/; s/$/`/')
+          else
+            FORMATTED_APP_IDS=""
+          fi
+
+          # ---- APP-ID スコープセクション ----
+          # ASDW _build_app_id_section() と同等の文言
+          # コンテナ Issue には追加しない（Agent 不使用のため）
+          if [[ -n "${APP_IDS}" ]]; then
+            APP_ID_SECTION=$(printf '\n\n## 対象アプリケーション\n- APP-ID: %s\n- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする\n- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む' "${FORMATTED_APP_IDS}")
+          else
+            APP_ID_SECTION=""
+          fi
+
+          # Step.1.1 専用: ドメイン分析は全ドメイン横断のため「重点スコープ」として扱う
+          if [[ -n "${APP_IDS}" ]]; then
+            APP_ID_SECTION_S11=$(printf '\n\n## 参考: 重点アプリケーション\n- APP-ID: %s\n- ドメイン分析は全ドメインを対象とするが、上記 APP-ID に関連するドメインを重点的に分析すること\n- `docs/catalog/app-catalog.md` を参照し、全体構造を把握した上で重点 APP-ID のドメインを詳細化すること' "${FORMATTED_APP_IDS}")
+          else
+            APP_ID_SECTION_S11=""
+          fi
+
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
 
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-design","auto-context-review","auto-qa"]'
+            STEP_LABELS='["auto-app-detail-design","auto-context-review","auto-qa"]'
           elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS='["auto-app-design","auto-context-review"]'
+            STEP_LABELS='["auto-app-detail-design","auto-context-review"]'
           elif [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-design","auto-qa"]'
+            STEP_LABELS='["auto-app-detail-design","auto-qa"]'
           else
-            STEP_LABELS='["auto-app-design"]'
+            STEP_LABELS='["auto-app-detail-design"]'
           fi
 
           if [[ "${AUTO_MERGE}" == "true" ]]; then
@@ -582,8 +642,8 @@ jobs:
             fi
 
             # Step.1.1
-            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION_S11}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.1.1: ドメイン分析" \
               "${BODY_S11}" \
@@ -598,8 +658,8 @@ jobs:
             fi
 
             # Step.1.2
-            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.1.2: サービス一覧抽出" \
               "${BODY_S12}" \
@@ -616,8 +676,8 @@ jobs:
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/data-model.md`\n- `src/data/sample-data.json`\n\n## Custom Agent\n`Arch-DataModeling` を使用\n\n## 依存\n- Step.1.2（サービス一覧抽出）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity Catalog の各エンティティに「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-model.md` と `src/data/sample-data.json` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/data-model.md`\n- `src/data/sample-data.json`\n\n## Custom Agent\n`Arch-DataModeling` を使用\n\n## 依存\n- Step.1.2（サービス一覧抽出）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity Catalog の各エンティティに「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-model.md` と `src/data/sample-data.json` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.2: データモデル" \
               "${BODY_S2}" \
@@ -634,8 +694,8 @@ jobs:
 
           # ---- Step.3 ----
           if ! skip_step "3" && ! skip_step "2"; then
-            BODY_S3=$(printf '%s\n## 目的\nデータモデルとドメイン分析を根拠に、概念エンティティ × 物理テーブル/列のマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`（必須）\n- `docs/catalog/domain-analytics.md`（必須）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/service-catalog.md`（存在すれば参照）\n- `docs/catalog/service-catalog-matrix.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog` を使用\n\n## 依存\n- Step.2（データモデル作成）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity-Table Mapping および Ownership Matrix に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S3=$(printf '%s\n## 目的\nデータモデルとドメイン分析を根拠に、概念エンティティ × 物理テーブル/列のマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`（必須）\n- `docs/catalog/domain-analytics.md`（必須）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/service-catalog.md`（存在すれば参照）\n- `docs/catalog/service-catalog-matrix.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog` を使用\n\n## 依存\n- Step.2（データモデル作成）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity-Table Mapping および Ownership Matrix に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.3: データカタログ作成" \
               "${BODY_S3}" \
@@ -652,8 +712,8 @@ jobs:
 
           # ---- Step.4 ----
           if ! skip_step "4"; then
-            BODY_S4=$(printf '%s\n## 目的\nドメイン分析結果、サービス一覧、データモデルを根拠に画面一覧を設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/screen-catalog.md`\n\n## Custom Agent\n`Arch-UI-List` を使用\n\n## 依存\n- Step.3（データカタログ）が `aad:done` であること（Step.3 がスキップ時は Step.2（データモデル）が `aad:done` であること）\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各画面に「所属APP」（1:1）を記載すること。\n\n## 完了条件\n- `docs/catalog/screen-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S4=$(printf '%s\n## 目的\nドメイン分析結果、サービス一覧、データモデルを根拠に画面一覧を設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/screen-catalog.md`\n\n## Custom Agent\n`Arch-UI-List` を使用\n\n## 依存\n- Step.3（データカタログ）が `aad:done` であること（Step.3 がスキップ時は Step.2（データモデル）が `aad:done` であること）\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各画面に「所属APP」（1:1）を記載すること。\n\n## 完了条件\n- `docs/catalog/screen-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.4: 画面一覧と遷移図" \
               "${BODY_S4}" \
@@ -670,8 +730,8 @@ jobs:
 
           # ---- Step.5 ----
           if ! skip_step "5"; then
-            BODY_S5=$(printf '%s\n## 目的\nサービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog` を使用\n\n## 依存\n- Step.4（画面一覧と遷移図）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S5=$(printf '%s\n## 目的\nサービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog` を使用\n\n## 依存\n- Step.4（画面一覧と遷移図）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.5: サービスカタログ" \
               "${BODY_S5}" \
@@ -688,8 +748,8 @@ jobs:
 
           # ---- Step.6 ----
           if ! skip_step "6" && ! skip_step "5"; then
-            BODY_S6=$(printf '%s\n## 目的\nサービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、TDDのためのプロジェクト全体テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/data-catalog.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy` を使用\n\n## 依存\n- Step.5（サービスカタログ）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            BODY_S6=$(printf '%s\n## 目的\nサービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、TDDのためのプロジェクト全体テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/data-catalog.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy` を使用\n\n## 依存\n- Step.5（サービスカタログ）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.6: テスト戦略書" \
               "${BODY_S6}" \
@@ -735,8 +795,8 @@ jobs:
             fi
 
             # Step.7.1
-            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${_S71_DEP}" "${ADDITIONAL_SECTION}")
+            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${_S71_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.7.1: 画面定義書" \
               "${BODY_S71}" \
@@ -751,8 +811,8 @@ jobs:
             fi
 
             # Step.7.2
-            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${_S72_DEP}" "${ADDITIONAL_SECTION}")
+            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${_S72_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD] Step.7.2: マイクロサービス定義書" \
               "${BODY_S72}" \
@@ -768,8 +828,8 @@ jobs:
 
             # Step.7.3
             if ! skip_step "7.3"; then
-              BODY_S73=$(printf '%s\n## 目的\nテスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。\nこのステップの成果物（`docs/test-specs/{serviceId}-test-spec.md` と `docs/test-specs/{screenId}-test-spec.md`）は、Dev ワークフロー（ASDW Step.2.3TC・Step.3.0TC）の前提条件として参照される。\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/screen/{screenId}-{screenNameSlug}-description.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービスごとに1ファイル）\n- `docs/test-specs/{screenId}-test-spec.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.6（テスト戦略書）が `aad:done` であること（Step.6 がスキップされた場合は Step.5 が `aad:done` であること）\n- Step.7.1（画面定義書）が `aad:done` であること\n- Step.7.2（マイクロサービス定義書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+              BODY_S73=$(printf '%s\n## 目的\nテスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。\nこのステップの成果物（`docs/test-specs/{serviceId}-test-spec.md` と `docs/test-specs/{screenId}-test-spec.md`）は、Dev ワークフロー（ASDW Step.2.3TC・Step.3.0TC）の前提条件として参照される。\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/screen/{screenId}-{screenNameSlug}-description.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービスごとに1ファイル）\n- `docs/test-specs/{screenId}-test-spec.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.6（テスト戦略書）が `aad:done` であること（Step.6 がスキップされた場合は Step.5 が `aad:done` であること）\n- Step.7.1（画面定義書）が `aad:done` であること\n- Step.7.2（マイクロサービス定義書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD] Step.7.3: TDDテスト仕様書" \
                 "${BODY_S73}" \
@@ -804,8 +864,8 @@ jobs:
 
             # Step.8.1
             if ! skip_step "8.1"; then
-              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD] Step.8.1: AI Agent アプリケーション定義" \
                 "${BODY_S81}" \
@@ -822,8 +882,8 @@ jobs:
 
             # Step.8.2
             if ! skip_step "8.2"; then
-              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD] Step.8.2: AI Agent 粒度設計" \
                 "${BODY_S82}" \
@@ -840,8 +900,8 @@ jobs:
 
             # Step.8.3
             if ! skip_step "8.3"; then
-              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD] Step.8.3: AI Agent 詳細設計" \
                 "${BODY_S83}" \
@@ -1530,9 +1590,12 @@ jobs:
           source "${GITHUB_WORKSPACE}/.github/scripts/aad-common.sh"
 
           # ── 完了した Issue の情報取得 ──
-          DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null || echo '{}')
-          DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
-          DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+          if ! DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null); then
+            echo "::warning::Issue #${DONE_ISSUE_NUMBER} の取得に失敗しました（削除済みまたはアクセス不可）。"
+            DONE_ISSUE_JSON='{}'
+          fi
+          DONE_ISSUE_TITLE=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
 
           # ── Root Issue 番号の抽出 ──
           ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'

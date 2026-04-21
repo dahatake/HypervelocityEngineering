@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">反復精緻化サイクル</title>
+  <desc id="desc">original-docsとqa、aqod/akm、設計開発ワークフローを循環させてknowledgeを精緻化する4段階サイクル。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, sans-serif; fill: #1f2937; }
+      .title { font-size: 28px; font-weight: 700; }
+      .subtitle { font-size: 14px; fill: #475569; }
+      .node { stroke-width: 1.5; rx: 12; }
+      .file { fill: #95A5A6; stroke: #5d6d73; }
+      .qa { fill: #E67E22; stroke: #7e3d00; }
+      .km { fill: #F39C12; stroke: #7a4f00; stroke-width: 2.4; }
+      .arch { fill: #4A90D9; stroke: #1f3a5a; }
+      .dev { fill: #50C878; stroke: #1b5e20; }
+      .h { font-size: 16px; font-weight: 700; }
+      .t { font-size: 13px; }
+      .light { fill: #ffffff; font-size: 13px; font-weight: 700; }
+      .dark { fill: #111827; font-size: 13px; font-weight: 700; }
+      .arrow { stroke: #334155; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .loop { stroke: #1d4ed8; stroke-width: 2.4; stroke-dasharray: 9 6; fill: none; marker-end: url(#arrow); }
+      .note { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1; rx: 10; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="900" fill="transparent"/>
+  <text x="40" y="52" class="title">反復精緻化サイクル（knowledge/）</text>
+  <text x="40" y="80" class="subtitle">AQOD と AKM を繰り返し、設計・開発中の新しい疑問を業務要件に還流する。</text>
+
+  <!-- Circular nodes -->
+  <rect x="120" y="170" width="260" height="110" class="node file"/>
+  <text x="140" y="214" class="h">① original-docs/</text>
+  <text x="140" y="238" class="t">既存ビジネス文書（入力）</text>
+
+  <rect x="430" y="90" width="320" height="110" class="node qa"/>
+  <text x="450" y="132" class="dark">② AQOD（QA-DocConsistency）</text>
+  <text x="450" y="156" class="t">original-docs/ を横断分析</text>
+  <text x="450" y="178" class="t">質問票を qa/ へ自動生成</text>
+
+  <rect x="820" y="170" width="260" height="110" class="node file"/>
+  <text x="840" y="214" class="h">qa/</text>
+  <text x="840" y="238" class="t">質問票（人が追記）</text>
+
+  <rect x="820" y="340" width="300" height="120" class="node km"/>
+  <text x="840" y="384" class="dark">③ AKM（KnowledgeManager）</text>
+  <text x="840" y="408" class="t">qa/ + original-docs/ を統合</text>
+  <text x="840" y="430" class="t">knowledge/D01〜D21 を更新</text>
+
+  <rect x="430" y="500" width="340" height="130" class="node arch"/>
+  <text x="450" y="546" class="light">④ 設計・開発ワークフロー</text>
+  <text x="450" y="570" class="light">AAS / AAD / ASDW / ABD / ABDV</text>
+  <text x="450" y="592" class="light">knowledge/ を業務コンテキストとして参照</text>
+
+  <rect x="120" y="360" width="260" height="120" class="node km"/>
+  <text x="140" y="404" class="h">knowledge/</text>
+  <text x="140" y="428" class="t">D01〜D21 業務要件</text>
+  <text x="140" y="450" class="t">中核コンテキスト</text>
+
+  <!-- Cycle arrows clockwise -->
+  <path d="M 380 225 C 405 225, 410 178, 430 146" class="arrow"/>
+  <path d="M 750 146 C 780 146, 790 212, 820 225" class="arrow"/>
+  <path d="M 950 280 C 950 315, 960 320, 960 340" class="arrow"/>
+  <path d="M 820 430 C 700 500, 650 515, 600 500" class="arrow"/>
+  <path d="M 430 560 C 360 560, 300 525, 250 480" class="arrow"/>
+  <path d="M 250 360 C 250 320, 220 300, 190 280" class="arrow"/>
+
+  <!-- Return loop -->
+  <path d="M 430 620 C 380 700, 220 700, 150 520 C 90 365, 90 230, 120 220" class="loop"/>
+  <text x="80" y="742" class="t" fill="#1d4ed8">④ 反復: 開発中の疑問を qa/ に追記 → ② AKM に戻す</text>
+
+  <!-- Stage notes -->
+  <rect x="60" y="780" width="1080" height="96" class="note"/>
+  <text x="80" y="812" class="t">① 初回: 原本から質問票を自動生成</text>
+  <text x="360" y="812" class="t">② 補完: 質問票＋原本を knowledge/ に統合</text>
+  <text x="710" y="812" class="t">③ 設計・開発: knowledge/ をコンテキストとして参照</text>
+  <text x="80" y="842" class="t">④ 反復: 新たな疑問を qa/ に追記し、AKM 再実行で継続的に精緻化</text>
+</svg>

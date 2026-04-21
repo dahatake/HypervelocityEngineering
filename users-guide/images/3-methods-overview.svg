@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1640 920" role="img" aria-labelledby="title desc">
+  <title id="title">3つの実行方式の比較</title>
+  <desc id="desc">方式1/方式2/方式3の実行パスと共通基盤を示す概要図</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #1f2937; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 14px; fill: #475569; }
+    .h { font-size: 17px; font-weight: 700; }
+    .t { font-size: 13px; }
+    .card { rx: 10; stroke-width: 1.2; }
+    .m1 { fill: #eef6ff; stroke: #4A90D9; }
+    .m2 { fill: #effaf2; stroke: #50C878; }
+    .m3 { fill: #f7efff; stroke: #9B59B6; }
+    .common { fill: #fff7ed; stroke: #E67E22; }
+    .core { fill: #f8fafc; stroke: #94a3b8; }
+  </style>
+
+  <rect x="0" y="0" width="1640" height="920" fill="transparent"/>
+  <text x="40" y="54" class="title">3つの使い方（実行パス比較）</text>
+  <text x="40" y="82" class="subtitle">方式1: 手動 / 方式2: Webオーケストレーション / 方式3: ローカルSDK</text>
+
+  <!-- Column containers -->
+  <rect x="36" y="112" width="500" height="530" class="card m1"/>
+  <rect x="570" y="112" width="500" height="530" class="card m2"/>
+  <rect x="1104" y="112" width="500" height="530" class="card m3"/>
+
+  <text x="58" y="146" class="h">方式1: Copilot cloud agent 手動実行</text>
+  <text x="592" y="146" class="h">方式2: ワークフローオーケストレーション（Web）</text>
+  <text x="1126" y="146" class="h">方式3: ワークフローオーケストレーション（ローカル）</text>
+
+  <!-- Method 1 flow -->
+  <g class="t">
+    <rect x="76" y="178" width="420" height="58" class="card core"/><text x="96" y="212">Issue を手動作成</text>
+    <rect x="76" y="264" width="420" height="58" class="card core"/><text x="96" y="298">Custom Agent を選択</text>
+    <rect x="76" y="350" width="420" height="58" class="card core"/><text x="96" y="384">@copilot をアサイン</text>
+    <rect x="76" y="436" width="420" height="58" class="card core"/><text x="96" y="470">GitHub Actions で実行</text>
+    <rect x="76" y="522" width="420" height="58" class="card core"/><text x="96" y="556">PR 作成</text>
+    <line x1="286" y1="236" x2="286" y2="264" stroke="#4A90D9" stroke-width="2"/>
+    <line x1="286" y1="322" x2="286" y2="350" stroke="#4A90D9" stroke-width="2"/>
+    <line x1="286" y1="408" x2="286" y2="436" stroke="#4A90D9" stroke-width="2"/>
+    <line x1="286" y1="494" x2="286" y2="522" stroke="#4A90D9" stroke-width="2"/>
+  </g>
+
+  <!-- Method 2 flow -->
+  <g class="t">
+    <rect x="610" y="178" width="420" height="58" class="card core"/><text x="630" y="205">Issue Template から親 Issue を作成</text>
+    <rect x="610" y="264" width="420" height="58" class="card core"/><text x="630" y="291">Bootstrap Workflow 起動（GitHub Actions）</text>
+    <rect x="610" y="350" width="420" height="58" class="card core"/><text x="630" y="377">Sub Issue を一括生成（DAG 順）</text>
+    <rect x="610" y="436" width="420" height="58" class="card core"/><text x="630" y="463">Copilot が各 Sub Issue に自動アサイン</text>
+    <rect x="610" y="522" width="420" height="58" class="card core"/><text x="630" y="549">PR 作成 → 次 Step 自動起動</text>
+    <line x1="820" y1="236" x2="820" y2="264" stroke="#50C878" stroke-width="2"/>
+    <line x1="820" y1="322" x2="820" y2="350" stroke="#50C878" stroke-width="2"/>
+    <line x1="820" y1="408" x2="820" y2="436" stroke="#50C878" stroke-width="2"/>
+    <line x1="820" y1="494" x2="820" y2="522" stroke="#50C878" stroke-width="2"/>
+  </g>
+
+  <!-- Method 3 flow -->
+  <g class="t">
+    <rect x="1144" y="178" width="420" height="76" class="card core"/><text x="1164" y="208">python -m hve</text><text x="1164" y="228">（wizard / CLI）</text>
+    <rect x="1144" y="282" width="420" height="76" class="card core"/><text x="1164" y="312">hve が DAG を解決</text>
+    <rect x="1144" y="386" width="420" height="76" class="card core"/><text x="1164" y="416">Copilot CLI SDK 経由で</text><text x="1164" y="436">各ステップを実行</text>
+    <rect x="1144" y="490" width="420" height="76" class="card core"/><text x="1164" y="520">PR 作成（オプション）</text>
+    <line x1="1354" y1="254" x2="1354" y2="282" stroke="#9B59B6" stroke-width="2"/>
+    <line x1="1354" y1="358" x2="1354" y2="386" stroke="#9B59B6" stroke-width="2"/>
+    <line x1="1354" y1="462" x2="1354" y2="490" stroke="#9B59B6" stroke-width="2"/>
+  </g>
+
+  <!-- Common layer -->
+  <rect x="36" y="676" width="1568" height="208" class="card common"/>
+  <text x="58" y="712" class="h">共通層（3方式で共通）</text>
+
+  <rect x="76" y="736" width="460" height="120" class="card core"/>
+  <text x="96" y="770" class="h">Custom Agent</text>
+  <text x="96" y="798" class="t">.github/agents/ に定義</text>
+  <text x="96" y="826" class="t">合計 65 個（Arch / Dev / Doc / QA / KnowledgeManager）</text>
+
+  <rect x="590" y="736" width="460" height="120" class="card core"/>
+  <text x="610" y="770" class="h">Skills</text>
+  <text x="610" y="798" class="t">.github/skills/ の技術手順を参照</text>
+  <text x="610" y="826" class="t">planning / output / harness / azure-platform / cicd / testing</text>
+
+  <rect x="1104" y="736" width="460" height="120" class="card core"/>
+  <text x="1124" y="770" class="h">knowledge/</text>
+  <text x="1124" y="798" class="t">D01〜D21 業務要件ドキュメント</text>
+  <text x="1124" y="826" class="t">各ワークフローが業務コンテキストとして参照</text>
+</svg>

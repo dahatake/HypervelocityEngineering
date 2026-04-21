@@ -267,12 +267,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "ワークフロー ID: "
             "aas(App Architecture Design) / "
-            "aad(App Design) / "
+            "aad(App Detail Design) / "
             "asdw(App Dev Microservice Azure) / "
             "abd(Batch Design) / "
             "abdv(Batch Dev) / "
             "akm(Knowledge Management) / "
-            "aqod(QA Original Docs Review) / "
+            "aqod(Original Docs Review) / "
             "adoc(Source Codeからのドキュメント作成)"
         ),
     )
@@ -346,6 +346,39 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)",
+    )
+    orch.add_argument(
+        "--workiq",
+        action="store_true",
+        default=False,
+        help=(
+            "Work IQ 経由で M365 データ（メール・チャット・会議・ファイル）を参照する "
+            "(デフォルト: 無効。@microsoft/workiq のインストールが必要)"
+        ),
+    )
+    orch.add_argument(
+        "--workiq-tenant-id",
+        default=None,
+        metavar="TENANT_ID",
+        help="Work IQ の Entra テナント ID（省略時: common）",
+    )
+    orch.add_argument(
+        "--workiq-prompt-qa",
+        default=None,
+        metavar="PROMPT",
+        help="Work IQ の QA 用プロンプトを上書きする（{target_content} プレースホルダ使用可。省略時: デフォルトプロンプト）",
+    )
+    orch.add_argument(
+        "--workiq-prompt-km",
+        default=None,
+        metavar="PROMPT",
+        help="Work IQ の KM 用プロンプトを上書きする（省略時: デフォルトプロンプト）",
+    )
+    orch.add_argument(
+        "--workiq-prompt-review",
+        default=None,
+        metavar="PROMPT",
+        help="Work IQ の Original Docs レビュー用プロンプトを上書きする（省略時: デフォルトプロンプト）",
     )
 
     # Issue/PR 作成
@@ -797,6 +830,14 @@ def _build_config(args: argparse.Namespace):
     if mcp:
         cfg.mcp_servers = mcp
 
+    # Work IQ
+    if getattr(args, "workiq", False):
+        cfg.workiq_enabled = True
+    cfg.workiq_tenant_id = getattr(args, "workiq_tenant_id", None)
+    cfg.workiq_prompt_qa = getattr(args, "workiq_prompt_qa", None)
+    cfg.workiq_prompt_km = getattr(args, "workiq_prompt_km", None)
+    cfg.workiq_prompt_review = getattr(args, "workiq_prompt_review", None)
+
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
         cfg.ignore_paths = args.ignore_paths
@@ -939,12 +980,14 @@ def _cmd_run_interactive() -> int:
         from .workflow_registry import list_workflows, get_workflow
         from .template_engine import _WORKFLOW_DISPLAY_NAMES
         from .orchestrator import run_workflow
+        from .workiq import is_workiq_available, workiq_login
     except ImportError:
         from console import Console  # type: ignore[no-redef]
         from config import SDKConfig  # type: ignore[no-redef]
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
         from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
+        from workiq import is_workiq_available, workiq_login  # type: ignore[no-redef]
 
     con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
 
@@ -991,21 +1034,6 @@ def _cmd_run_interactive() -> int:
     review_model_display = None
     qa_model = None
     qa_model_display = None
-    use_different_models = con.prompt_yes_no(
-        "レビュー/QA にメインモデルとは別のモデルを使う？", default=False
-    )
-    if use_different_models:
-        _sub_model_options = model_options
-        review_model_idx = con.menu_select("レビュー用モデルを選択", _sub_model_options)
-        review_model, review_model_display = _resolve_model(_sub_model_options[review_model_idx])
-        if review_model == model:
-            review_model = None
-            review_model_display = None
-        qa_model_idx = con.menu_select("QA 用モデルを選択", _sub_model_options)
-        qa_model, qa_model_display = _resolve_model(_sub_model_options[qa_model_idx])
-        if qa_model == model:
-            qa_model = None
-            qa_model_display = None
 
     # ── 実行モード選択 ────────────────────────────────────
     _exec_mode_options = [
@@ -1038,6 +1066,7 @@ def _cmd_run_interactive() -> int:
         review_timeout = 7200.0
         repo_input = os.environ.get("REPO", "")
         dry_run = False
+        workiq_enabled = False
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
@@ -1107,15 +1136,64 @@ def _cmd_run_interactive() -> int:
         else:
             auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
             if auto_qa:
-                qa_answer_mode = con.prompt_answer_mode()
-                force_interactive = con.prompt_yes_no(
-                    "インタラクティブ入力を強制する（IDE 等で stdin が非 TTY 扱いになる場合）？",
+                # QA 自動投入 ON 時は全問デフォルト値を自動採用する一択。
+                # Issue Template Workflow (auto-qa-default-answer.yml) と同じ動作。
+                # prompt_answer_mode() / force_interactive プロンプトは不要。
+                qa_answer_mode = "all"
+                force_interactive = False
+                use_different_qa_model = con.prompt_yes_no(
+                    "QA にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 QA_MODEL を使用）",
                     default=False,
                 )
+                if use_different_qa_model:
+                    _sub_model_options = model_options
+                    qa_model_idx = con.menu_select("QA 用モデルを選択", _sub_model_options)
+                    qa_model, qa_model_display = _resolve_model(_sub_model_options[qa_model_idx])
+                    if qa_model == model:
+                        qa_model = None
+                        qa_model_display = None
             else:
                 qa_answer_mode = None
                 force_interactive = False
             auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
+            if auto_review:
+                use_different_review_model = con.prompt_yes_no(
+                    "Review にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 REVIEW_MODEL を使用）",
+                    default=False,
+                )
+                if use_different_review_model:
+                    _sub_model_options = model_options
+                    review_model_idx = con.menu_select("レビュー用モデルを選択", _sub_model_options)
+                    review_model, review_model_display = _resolve_model(_sub_model_options[review_model_idx])
+                    if review_model == model:
+                        review_model = None
+                        review_model_display = None
+
+        # ── Work IQ 連携 ──────────────────────────────────────
+        workiq_enabled = False
+        _show_workiq_option = (
+            auto_qa
+            or is_akm
+            or is_aqod
+        )
+
+        if _show_workiq_option and is_workiq_available():
+            workiq_enabled = con.prompt_yes_no(
+                "Work IQ 経由で情報を確認する",
+                default=False,
+            )
+            if workiq_enabled:
+                con.spinner_start("Work IQ へのログイン中...")
+                login_ok = workiq_login(con)
+                con.spinner_stop()
+                if not login_ok:
+                    con.warning(
+                        "Work IQ へのログインに失敗しました。Work IQ 連携を無効にします。"
+                    )
+                    workiq_enabled = False
+                else:
+                    con.status("✅ Work IQ へのログインが完了しました")
+
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
 
@@ -1199,11 +1277,11 @@ def _cmd_run_interactive() -> int:
         f"タイムアウト  : {timeout_val:.0f} 秒",
         f"QA 自動      : {'ON' if auto_qa else 'OFF'}",
     ]
-    if auto_qa and qa_answer_mode:
-        _qa_mode_display = "全問一括" if qa_answer_mode == "all" else "1問ずつ" if qa_answer_mode == "one" else qa_answer_mode
-        summary_lines.append(f"QA 回答モード : {_qa_mode_display}")
-    if auto_qa and force_interactive:
-        summary_lines.append(f"強制インタラクティブ: ON")
+    if auto_qa:
+        summary_lines.append(f"QA 回答モード : 全問デフォルト自動採用")
+        # force_interactive は auto_qa=True 時は常に False のため表示不要
+    if workiq_enabled:
+        summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
     summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
@@ -1247,6 +1325,7 @@ def _cmd_run_interactive() -> int:
         cfg.qa_model = qa_model
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
+    cfg.workiq_enabled = workiq_enabled
     cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
     cfg.qa_answer_mode = qa_answer_mode
@@ -1279,6 +1358,13 @@ def _cmd_run_interactive() -> int:
             cfg.qa_answer_mode = "all"  # 全自動モード時は QA 全問デフォルト値を一括採用（非TTY扱い）
         if cfg.auto_coding_agent_review:
             cfg.auto_coding_agent_review_auto_approval = True  # 自動承認を強制
+
+    # ── 手動モード + QA 自動投入: QA 回答フェーズのみ非対話化 ─────
+    # auto_qa=True のとき、QA Phase 2b での回答収集をスキップし
+    # 全問デフォルト値を自動採用する（auto-qa-default-answer.yml と同等の動作）。
+    # unattended=False のままにすることで、他のプロンプト（Review 等）は対話を維持する。
+    if not is_any_auto and cfg.auto_qa:
+        cfg.qa_auto_defaults = True
 
     # params dict 構築
     params: dict = {

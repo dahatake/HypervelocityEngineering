@@ -127,7 +127,7 @@ flowchart TD
 
 ```
 [Issue作成]
-    │ label: auto-app-design
+    │ label: auto-app-detail-design
     ▼
 [Bootstrap Workflow]
     ├─ ラベル自動作成
@@ -139,12 +139,12 @@ flowchart TD
          step-8, step-8.1, step-8.2, step-8.3
 
 [Step Issue aad:done ラベル付与または close]
-    └─ [auto-app-design.yml 状態遷移] → 依存関係チェック → 次 Step を aad:ready + aad:running + Copilot assign
+    └─ [auto-app-detail-design.yml 状態遷移] → 依存関係チェック → 次 Step を aad:ready + aad:running + Copilot assign
 
 [全 Step 完了] → 親 Issue に aad:done + 完了通知コメント（成果物リスト付き）
 ```
 
-> 💡 **複数回実行**: App Architecture Design の成果物（`docs/catalog/app-catalog.md`）が存在していれば、App Design は何度でも実行できます。別ブランチを指定することで、異なる設計方針を並行比較することも可能です。
+> 💡 **複数回実行**: App Architecture Design の成果物（`docs/catalog/app-catalog.md`）が存在していれば、App Detail Design は何度でも実行できます。別ブランチを指定することで、異なる設計方針を並行比較することも可能です。
 
 ---
 
@@ -540,7 +540,7 @@ I/O Contract・Guardrails 等）を作成し、Agent 一覧を更新する。
 
 | ラベル | 意味 |
 |-------|------|
-| `auto-app-design` | このワークフローのトリガーラベル（Issue Template で自動付与） |
+| `auto-app-detail-design` | このワークフローのトリガーラベル（Issue Template で自動付与） |
 | `aad:initialized` | Bootstrap ワークフロー実行済み（二重実行防止） |
 | `aad:ready` | 依存 Step が完了し、Copilot assign 可能な状態 |
 | `aad:running` | Copilot assign 完了（実行中） |
@@ -555,12 +555,12 @@ I/O Contract・Guardrails 等）を作成し、Agent 一覧を更新する。
 ### 使い方（Issue 作成手順）
 
 1. リポジトリの **Issues** タブ → **New Issue**
-2. テンプレート **"App Design"** を選択
+2. テンプレート **"App Detail Design"** を選択
 3. 以下を入力:
    - **対象ブランチ**: 設計ドキュメントをコミットするブランチ名 (例: `main`)
    - **実行するステップ**: 実行したい Step にチェック（全て未選択の場合は全 Step 実行）
    - **追加コメント**: 補足・制約があれば記載
-4. Issue を Submit → `auto-app-design` ラベルが自動付与される
+4. Issue を Submit → `auto-app-detail-design` ラベルが自動付与される
 
 完了後、親 Issue にサマリコメントと Step Issue 一覧が投稿され、`step-1.1` の Step Issue に Copilot が assign されます。
 
@@ -582,9 +582,9 @@ I/O Contract・Guardrails 等）を作成し、Agent 一覧を更新する。
 1. リポジトリで Actions の Workflow permissions を **Read and write** に設定する
 2. `docs/catalog/app-catalog.md` が存在することを確認する（App Architecture Design の成果物）
 3. `docs/catalog/use-case-catalog.md` が存在することを確認する
-4. `.github/workflows/auto-app-design.yml` がリポジトリに存在することを確認する
-5. `.github/ISSUE_TEMPLATE/app-design.yml` がリポジトリに存在することを確認する
-6. Issues タブ → New Issue → **App Design** テンプレートを選択する
+4. `.github/workflows/auto-app-detail-design.yml` がリポジトリに存在することを確認する
+5. `.github/ISSUE_TEMPLATE/app-detail-design.yml` がリポジトリに存在することを確認する
+6. Issues タブ → New Issue → **App Detail Design** テンプレートを選択する
 7. 対象ブランチに `main` を入力し、Step.1 のみチェックして Issue を作成する
 8. Actions タブで `AAD Orchestrator` の Bootstrap ジョブが起動したことを確認する
 9. Bootstrap 完了後、Step.1.1 の Issue が作成され `aad:running` ラベルが付き Copilot が assign されることを確認する

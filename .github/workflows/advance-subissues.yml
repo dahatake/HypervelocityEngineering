@@ -65,279 +65,7 @@ jobs:
 
           # ── assign_copilot() ─────────────────────────────────────────────
           # auto-app-dev-microservice-azure.yml / create-subissues-from-pr.yml と同じパターン
-          extract_model() {
-            local body="$1"
-            echo "${body}" | python3 /dev/fd/3 3<<'PY'
-            import sys, re
-            body = sys.stdin.read()
-            m = re.search(r'###\s*使用するモデル\s*\n+([^\n#]+)', body)
-            if not m:
-                print("")
-                raise SystemExit(0)
-            val = m.group(1).strip()
-            allowed = {"Auto", "claude-opus-4.7", "claude-opus-4-7", "claude-opus-4.6", "claude-sonnet-4.6", "gpt-5.4", "gpt-5.3-codex", "gemini-2.5-pro"}
-            if val == "claude-opus-4-7":
-                val = "claude-opus-4.7"
-            print(val if val in allowed else "")
-            PY
-          }
-
-          resolve_model() {
-            local raw="$1"
-            if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
-              echo "claude-opus-4.7"; return
-            fi
-            if [[ "${raw}" == "claude-opus-4-7" ]]; then
-              echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
-              echo "claude-opus-4.7"; return
-            fi
-            echo "${raw}"
-          }
-
-          assign_copilot() {
-            local issue_num="$1"
-            local custom_agent="${2:-}"
-            local base_branch="${3:-main}"
-            local custom_instructions="${4:-}"
-            local model_raw="${5:-}"
-            local selected_model
-            selected_model="$(resolve_model "${model_raw}")"
-
-            echo "=== Copilot アサイン開始: Issue #${issue_num} ==="
-            echo "  custom_agent: ${custom_agent}"
-            echo "  base_branch: ${base_branch}"
-
-            # 冪等化ガード: 既に copilot-swe-agent がアサインされている場合はスキップ
-            local current_assignees
-            current_assignees=$(curl -s \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
-              | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              if not isinstance(d, dict):
-                  print('false')
-                  sys.exit(0)
-              assignees = [a.get('login', '') for a in d.get('assignees', [])]
-              print('true' if 'copilot-swe-agent' in assignees or 'Copilot' in assignees else 'false')
-          except Exception:
-              print('false')
-          PY
-            ) || true
-
-            if [[ "${current_assignees}" == "true" ]]; then
-              echo "  copilot-swe-agent は既にアサイン済みです。スキップします。"
-              return 0
-            fi
-
-            # 冪等化ガード: 対象 Issue に紐づく Open な PR が既に存在する場合はスキップ
-            local existing_prs
-            existing_prs=$(curl -s \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${REPO}/issues/${issue_num}/timeline?per_page=100" \
-              | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              events = json.load(sys.stdin)
-              if not isinstance(events, list):
-                  print('false')
-                  sys.exit(0)
-          except Exception:
-              print('false')
-              sys.exit(0)
-          for e in events:
-              if e.get('event') == 'cross-referenced':
-                  source = e.get('source', {}).get('issue', {})
-                  pr = source.get('pull_request', {})
-                  if pr and source.get('state') == 'open':
-                      print('true')
-                      sys.exit(0)
-          print('false')
-          PY
-            ) || true
-
-            if [[ "${existing_prs}" == "true" ]]; then
-              echo "  Issue #${issue_num} に紐づく Open な PR が既に存在します。スキップします。"
-              return 0
-            fi
-
-            if [[ -z "${COPILOT_PAT:-}" ]]; then
-              echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインをスキップします。" >&2
-              return 2  # 2 = skipped (not failure)
-            fi
-
-            local max_assign_retry=3
-            local assign_wait=5
-            local assign_success=false
-
-            for assign_attempt in $(seq 1 "${max_assign_retry}"); do
-              echo "  アサイン試行 ${assign_attempt}/${max_assign_retry}..."
-
-              # 1回のクエリで bot_id / issue_node_id / repo_node_id をまとめて取得
-              local query_result
-              query_result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
-                -f query="
-          query(\$issueNumber: Int!) {
-            repository(owner: \"${OWNER}\", name: \"${REPO_NAME}\") {
-              id
-              issue(number: \$issueNumber) { id }
-              suggestedActors(capabilities: [CAN_BE_ASSIGNED], first: 100) {
-                nodes {
-                  login
-                  ... on Bot { id databaseId }
-                }
-              }
-            }
-          }
-                " \
-                -F issueNumber="${issue_num}" \
-                2>&1) || true
-
-              if [[ -z "${query_result}" ]]; then
-                echo "WARNING: GraphQL クエリの実行に失敗しました。試行 ${assign_attempt}/${max_assign_retry}" >&2
-                sleep "${assign_wait}"
-                assign_wait=$((assign_wait * 2))
-                continue
-              fi
-
-              local bot_id issue_node_id repo_node_id
-              IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              repo = d.get('data', {}).get('repository', {})
-              bot = ''
-              for a in repo.get('suggestedActors', {}).get('nodes', []):
-                  if a.get('login') == 'copilot-swe-agent':
-                      bot = a.get('id', '')
-                      break
-              issue = repo.get('issue', {}).get('id', '')
-              print(bot + '\t' + issue + '\t' + repo.get('id', ''))
-          except Exception as e:
-              print(f'Python parse error: {e}', file=sys.stderr)
-              print('\t\t')
-          PY
-              ) || true
-
-              if [[ -z "${bot_id}" ]]; then
-                echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
-                sleep "${assign_wait}"
-                assign_wait=$((assign_wait * 2))
-                continue
-              fi
-              if [[ -z "${issue_node_id}" ]]; then
-                echo "WARNING: Issue #${issue_num} の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
-                sleep "${assign_wait}"
-                assign_wait=$((assign_wait * 2))
-                continue
-              fi
-              if [[ -z "${repo_node_id}" ]]; then
-                echo "WARNING: Repository の Node ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
-                sleep "${assign_wait}"
-                assign_wait=$((assign_wait * 2))
-                continue
-              fi
-              echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
-
-              # addAssigneesToAssignable mutation（全変数を -f フラグで渡す・インジェクション防止）
-              local result
-              result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
-                -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
-                -f query="
-          mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
-            addAssigneesToAssignable(input: {
-              assignableId: \$assignableId,
-              assigneeIds: [\$botId],
-              agentAssignment: {
-                targetRepositoryId: \$targetRepositoryId,
-                baseRef: \$baseRef,
-                customInstructions: \$customInstructions,
-                customAgent: \$customAgent,
-                model: \"\"
-              }
-            }) {
-              assignable {
-                ... on Issue {
-                  id
-                  title
-                  assignees(first: 10) {
-                    nodes { login }
-                  }
-                }
-              }
-            }
-          }
-                " \
-                -f assignableId="${issue_node_id}" \
-                -f botId="${bot_id}" \
-                -f targetRepositoryId="${repo_node_id}" \
-                -f baseRef="${base_branch}" \
-                -f customInstructions="${custom_instructions}" \
-                -f customAgent="${custom_agent}" \
-                -f model="${selected_model}" \
-                2>&1) || true
-
-              echo "  GraphQL mutation レスポンス: ${result}"
-
-              # mutation レスポンスのエラーチェック
-              local has_errors
-              has_errors=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              print('true' if d.get('errors') else 'false')
-          except Exception:
-              print('true')
-          PY
-              ) || true
-
-              if [[ "${has_errors}" == "true" ]]; then
-                echo "WARNING: GraphQL mutation にエラーが含まれています。試行 ${assign_attempt}/${max_assign_retry}" >&2
-                sleep "${assign_wait}"
-                assign_wait=$((assign_wait * 2))
-                continue
-              fi
-
-              # copilot-swe-agent が assignees に含まれるか検証
-              local is_assigned
-              is_assigned=$(echo "${result}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              nodes = d.get('data', {}).get('addAssigneesToAssignable', {}).get('assignable', {}).get('assignees', {}).get('nodes', [])
-              print('true' if any(a.get('login') in ('copilot-swe-agent', 'Copilot') for a in nodes) else 'false')
-          except Exception:
-              print('false')
-          PY
-              ) || true
-
-              if [[ "${is_assigned}" == "true" ]]; then
-                echo "  copilot-swe-agent のアサインを確認しました。"
-                assign_success=true
-                break
-              fi
-
-              echo "WARNING: copilot-swe-agent が assignees に含まれていません。試行 ${assign_attempt}/${max_assign_retry}" >&2
-              sleep "${assign_wait}"
-              assign_wait=$((assign_wait * 2))
-            done
-
-            if [[ "${assign_success}" != "true" ]]; then
-              local fail_msg
-              fail_msg=$(printf '⚠️ Copilot cloud agent (copilot-swe-agent) を Issue #%s にアサインできませんでした。\n\n手動でアサインする手順:\n1. Issue #%s を開く\n2. 右サイドバーの「Assignees」から `copilot-swe-agent` を選択する\n\n失敗原因として考えられるもの:\n- `COPILOT_PAT` の権限不足または失効\n- Copilot cloud agent が有効化されていない\n- GraphQL API の一時的な障害' "${issue_num}" "${issue_num}")
-              gh issue comment "${issue_num}" --body "${fail_msg}" --repo "$REPO" 2>&1 || true
-              echo "WARNING: Issue #${issue_num} へのアサイン失敗通知を投稿しました。" >&2
-              return 1
-            fi
-
-            echo "=== Copilot アサイン完了: Issue #${issue_num} ==="
-            sleep 2
-          }
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
 
           # ── find_parent_issue() ──────────────────────────────────────────
           # 優先度順の4段階フォールバックで親 Issue 番号を解決する。
@@ -512,13 +240,16 @@ jobs:
             echo "=== Closing issue #${ISSUE_NUM} ==="
 
             # Issue の title と body を API 経由で取得
-            ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null || echo '{}')
-            ISSUE_TITLE=$(echo "${ISSUE_JSON}" | python3 -c \
+            if ! ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null); then
+              echo "::warning::Issue #${ISSUE_NUM} の取得に失敗しました（削除済みまたはアクセス不可）。空扱いで続行します。"
+              ISSUE_JSON='{}'
+            fi
+            ISSUE_TITLE=$(printf '%s' "${ISSUE_JSON}" | python3 -c \
               "import sys,json; print(json.load(sys.stdin).get('title',''))" 2>/dev/null || true)
-            ISSUE_BODY=$(echo "${ISSUE_JSON}" | python3 -c \
+            ISSUE_BODY=$(printf '%s' "${ISSUE_JSON}" | python3 -c \
               "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')" 2>/dev/null || true)
 
-            # [ASD]/[ASDW]/[AAS]/[AAD] Issue は AAS/AAD 系ワークフロー（auto-app-selection.yml / auto-app-design.yml / auto-app-dev-microservice-azure.yml 等）が処理する
+            # [ASD]/[ASDW]/[AAS]/[AAD] Issue は AAS/AAD 系ワークフロー（auto-app-selection.yml / auto-app-detail-design.yml / auto-app-dev-microservice-azure.yml 等）が処理する
             if [[ "${ISSUE_TITLE}" =~ ^\[ASD\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[ASDW\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]]; then
               echo "  Skipping [ASD]/[ASDW]/[AAS]/[AAD] issue: ${ISSUE_TITLE}"
               continue
@@ -701,7 +432,10 @@ jobs:
             local page=1
             while true; do
               local comments_json
-              comments_json=$(gh api "/repos/${REPO}/issues/${issue_num}/comments?per_page=100&page=${page}" 2>/dev/null || echo '[]')
+              if ! comments_json=$(gh api "/repos/${REPO}/issues/${issue_num}/comments?per_page=100&page=${page}" 2>/dev/null); then
+                echo "::warning::Issue #${issue_num} のコメント取得に失敗しました。空配列として続行します。"
+                comments_json='[]'
+              fi
               local has_marker
               has_marker=$(echo "${comments_json}" | wh_has_marker)
               has_marker="${has_marker:-false}"
@@ -747,8 +481,11 @@ jobs:
             [[ "${PARENT_NUM}" =~ ^[0-9]+$ ]] || continue
             echo "=== Parent #${PARENT_NUM} 自動クローズ判定 ==="
 
-            PARENT_JSON=$(gh api "/repos/${REPO}/issues/${PARENT_NUM}" 2>/dev/null || echo '{}')
-            PARENT_STATE=$(echo "${PARENT_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
+            if ! PARENT_JSON=$(gh api "/repos/${REPO}/issues/${PARENT_NUM}" 2>/dev/null); then
+              echo "::warning::Parent #${PARENT_NUM} の取得に失敗しました（削除済みまたはアクセス不可）。"
+              PARENT_JSON='{}'
+            fi
+            PARENT_STATE=$(printf '%s' "${PARENT_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
             if [[ "${PARENT_STATE}" != "open" ]]; then
               echo "  Parent #${PARENT_NUM} は open ではありません（state=${PARENT_STATE:-unknown}）。スキップ。"
               continue
@@ -797,10 +534,13 @@ jobs:
 
           source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
 
-          DONE_ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" || echo '{}')
-          DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
-          DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
-          SELECTED_MODEL_RAW=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); labels=[l.get('name','') for l in d.get('labels',[]) if isinstance(l,dict)]; vals=[x.split('/',1)[1] for x in labels if x.startswith('model/')]; print(vals[0] if vals else '')")
+          if ! DONE_ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}"); then
+            echo "::warning::Issue #${DONE_ISSUE_NUMBER} の取得に失敗しました（削除済みまたはアクセス不可）。"
+            DONE_ISSUE_JSON='{}'
+          fi
+          DONE_ISSUE_TITLE=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+          SELECTED_MODEL_RAW=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); labels=[l.get('name','') for l in d.get('labels',[]) if isinstance(l,dict)]; vals=[x.split('/',1)[1] for x in labels if x.startswith('model/')]; print(vals[0] if vals else '')")
           SELECTED_MODEL=$(resolve_model "${SELECTED_MODEL_RAW}")
 
           if [[ ! "${DONE_ISSUE_TITLE}" =~ ^\[ADOC\] ]]; then
@@ -879,7 +619,10 @@ jobs:
           PY
           )
 
-          SUB_ISSUES_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" || echo '[]')
+          if ! SUB_ISSUES_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100"); then
+            echo "::warning::Root #${ROOT_ISSUE} の Sub Issues 取得に失敗しました。空配列として続行します。"
+            SUB_ISSUES_JSON='[]'
+          fi
           export SUB_ISSUES_JSON
 
           ANALYSIS=$(python3 - <<'PY'

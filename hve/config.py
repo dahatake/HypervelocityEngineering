@@ -75,6 +75,7 @@ class SDKConfig:
     auto_qa: bool = False                   # QA 自動投入（デフォルト: 無効）
     auto_contents_review: bool = False      # Review 自動投入（デフォルト: 無効）
     qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, None = 実行時に選択
+    qa_auto_defaults: bool = False          # True: QA Phase 2b で全問デフォルト値を自動採用（設定元: __main__.py wizard / 消費先: runner.py _collect_qa_answers）
 
     force_interactive: bool = False         # True のとき sys.stdin.isatty() 判定をバイパスしてインタラクティブモードを強制する（--force-interactive）
     qa_input_timeout_seconds: float = 300.0  # QA 回答入力専用タイムアウト秒数（デフォルト: 300 秒）
@@ -138,6 +139,14 @@ class SDKConfig:
     # --- 追加プロンプト ---
     additional_prompt: Optional[str] = None  # 全 Custom Agent の prompt 末尾に追記する文字列
 
+    # --- Work IQ (Microsoft 365 データ参照) ---
+    workiq_enabled: bool = False                          # Work IQ 連携の有効/無効
+    workiq_tenant_id: Optional[str] = None                # Entra テナント ID（任意）
+    workiq_prompt_qa: Optional[str] = None                # QA 用カスタムプロンプト（None = デフォルト）
+    workiq_prompt_km: Optional[str] = None                # KM 用カスタムプロンプト（None = デフォルト）
+    workiq_prompt_review: Optional[str] = None            # Review 用カスタムプロンプト（None = デフォルト）
+    workiq_query_timeout_seconds: float = 120.0           # Work IQ クエリタイムアウト秒数
+
     # --- Self-Improve ---
     auto_self_improve: bool = True              # 自己改善ループ（デフォルト: 有効）
     self_improve_max_iterations: int = 3        # 最大イテレーション数
@@ -171,6 +180,11 @@ class SDKConfig:
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
             review_model=_normalize_model_with_warning(os.environ.get("REVIEW_MODEL") or None),
             qa_model=_normalize_model_with_warning(os.environ.get("QA_MODEL") or None),
+            workiq_enabled=os.environ.get("WORKIQ_ENABLED", "").lower() in ("true", "1", "yes"),
+            workiq_tenant_id=os.environ.get("WORKIQ_TENANT_ID") or None,
+            workiq_prompt_qa=os.environ.get("WORKIQ_PROMPT_QA") or None,
+            workiq_prompt_km=os.environ.get("WORKIQ_PROMPT_KM") or None,
+            workiq_prompt_review=os.environ.get("WORKIQ_PROMPT_REVIEW") or None,
         )
 
     def get_review_model(self) -> str:

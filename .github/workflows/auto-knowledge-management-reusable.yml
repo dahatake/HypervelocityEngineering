@@ -9,8 +9,27 @@ name: AKM Orchestrator
 #   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
 #   - 既存の冪等化ガード（akm:initialized チェック）により、opened + labeled が同時発火しても安全。
 on:
-  issues:
-    types: [opened, labeled, closed]
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
 
 permissions:
   issues: write
@@ -20,14 +39,8 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
-    if: >
-      github.event.action != 'opened'
-      || (
-        contains(github.event.issue.labels.*.name, 'knowledge-management')
-        && contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
-      )
     concurrency:
-      group: akm-orchestrator-${{ github.event.issue.number }}
+      group: akm-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,10 +54,10 @@ jobs:
       - name: 実行ゲートチェック
         id: gate
         env:
-          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
-          LABEL_NAME: "${{ github.event.label.name || '' }}"
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
         run: |
           set -euo pipefail
           AKM_STEP_RE='^\[AKM\] Step\.'
@@ -164,8 +177,8 @@ jobs:
         if: always()
         env:
           GATE_MODE: ${{ steps.gate.outputs.mode }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          EVENT_ACTION: ${{ github.event.action }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
         run: |
           echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
           if [[ "${GATE_MODE}" == "skip" ]]; then
@@ -180,11 +193,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ラベルを作成する関数（422 = 既存の場合は無視）
+          # ラベル作成関数（インライン定義: checkout 前でも動作可能にするため）
           create_label() {
-            local name="$1"
-            local color="$2"
-            local desc="$3"
+            local name="$1" color="$2" desc="${3:-}"
             local http_code
             http_code=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST \
@@ -193,13 +204,11 @@ jobs:
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${REPO}/labels" \
               -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
-            if [[ "${http_code}" == "201" ]]; then
-              echo "ラベル作成: ${name}"
-            elif [[ "${http_code}" == "422" ]]; then
-              echo "ラベル既存（スキップ）: ${name}"
-            else
-              echo "ラベル作成エラー: ${name} HTTP ${http_code}"
-            fi
+            case "${http_code}" in
+              201) echo "ラベル作成: ${name}" ;;
+              422) echo "ラベル既存（スキップ）: ${name}" ;;
+              *)   echo "ラベル作成エラー: ${name} HTTP ${http_code}" ;;
+            esac
             sleep 1
           }
 
@@ -278,7 +287,7 @@ jobs:
           # ---- ユーティリティ関数 ----
           source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
 
-          # ERR トラップを関数にも継承させる（auto-app-design.yml と同様）
+          # ERR トラップを関数にも継承させる（auto-app-detail-design.yml と同様）
           set -E
           trap 'set +e; trap - ERR; post_comment "${ROOT_ISSUE}" "⚠️ ワークフローエラー: Step 処理中に予期しないエラーが発生しました (exit code: $?)" || true' ERR
 
@@ -606,9 +615,12 @@ jobs:
           source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
 
           # ── 完了した Issue の情報取得 ──
-          DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null || echo '{}')
-          DONE_ISSUE_TITLE=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
-          DONE_ISSUE_BODY=$(echo "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+          if ! DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null); then
+            echo "::warning::Issue #${DONE_ISSUE_NUMBER} の取得に失敗しました（削除済みまたはアクセス不可）。"
+            DONE_ISSUE_JSON='{}'
+          fi
+          DONE_ISSUE_TITLE=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
 
           # ── Root Issue 番号の抽出 ──
           ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'

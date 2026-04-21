@@ -123,6 +123,20 @@ class TestParserBasic(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--auto-coding-agent-review-auto-approval"])
         self.assertTrue(args.auto_coding_agent_review_auto_approval)
 
+    def test_workiq_flags(self) -> None:
+        args = _parse([
+            "orchestrate", "-w", "aas", "--workiq",
+            "--workiq-tenant-id", "tenant-x",
+            "--workiq-prompt-qa", "qa",
+            "--workiq-prompt-km", "km",
+            "--workiq-prompt-review", "review",
+        ])
+        self.assertTrue(args.workiq)
+        self.assertEqual(args.workiq_tenant_id, "tenant-x")
+        self.assertEqual(args.workiq_prompt_qa, "qa")
+        self.assertEqual(args.workiq_prompt_km, "km")
+        self.assertEqual(args.workiq_prompt_review, "review")
+
     def test_create_issues_flag(self) -> None:
         """--create-issues フラグのテスト。"""
         args = _parse(["orchestrate", "-w", "aas", "--create-issues"])
@@ -472,6 +486,21 @@ class TestBuildParams(unittest.TestCase):
             args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4.7"])
             config = _build_config(args)
             self.assertEqual(config.model, "claude-opus-4.7")
+
+    def test_build_config_workiq(self) -> None:
+        args = _parse([
+            "orchestrate", "-w", "aas", "--workiq",
+            "--workiq-tenant-id", "tenant-x",
+            "--workiq-prompt-qa", "qa",
+            "--workiq-prompt-km", "km",
+            "--workiq-prompt-review", "review",
+        ])
+        cfg = _build_config(args)
+        self.assertTrue(cfg.workiq_enabled)
+        self.assertEqual(cfg.workiq_tenant_id, "tenant-x")
+        self.assertEqual(cfg.workiq_prompt_qa, "qa")
+        self.assertEqual(cfg.workiq_prompt_km, "km")
+        self.assertEqual(cfg.workiq_prompt_review, "review")
 
 
 class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
@@ -907,6 +936,10 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         review_timeout: str = "7200",
         create_pr: bool = False,
         create_issues: bool = False,
+        auto_qa: bool = False,
+        use_different_qa_model: bool = False,
+        auto_review: bool = False,
+        use_different_review_model: bool = False,
     ) -> "SDKConfig":
         """Console メソッドをモックして _cmd_run_interactive を実行し、
         構築された SDKConfig を返す。
@@ -923,16 +956,23 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             return {"completed": [], "failed": [], "skipped": []}
 
         # prompt_yes_no の回答順序:
-        # 1. レビュー/QA サブモデル利用確認 → False
-        # 2. QA 自動 → False
-        # 3. Review 自動 → False
-        # 4. Issue 作成 → create_issues
-        # 5. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる)
-        # 6. Code Review Agent → code_review
-        # 7. 自動承認 → auto_approval (code_review=True 時のみ)
-        # 8. ドライラン → False
-        # 9. 実行確認 → True
-        yes_no_answers = [False, False, False, create_issues]
+        # 1. QA 自動 → auto_qa
+        # 2. QA サブモデル利用確認 → use_different_qa_model (auto_qa=True 時のみ)
+        # 3. Review 自動 → auto_review
+        # 4. Review サブモデル利用確認 → use_different_review_model (auto_review=True 時のみ)
+        # 5. Issue 作成 → create_issues
+        # 6. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる)
+        # 7. Code Review Agent → code_review
+        # 8. 自動承認 → auto_approval (code_review=True 時のみ)
+        # 9. ドライラン → False
+        # 10. 実行確認 → True
+        yes_no_answers = [auto_qa]
+        if auto_qa:
+            yes_no_answers.append(use_different_qa_model)
+        yes_no_answers.append(auto_review)
+        if auto_review:
+            yes_no_answers.append(use_different_review_model)
+        yes_no_answers.append(create_issues)
         if not create_issues:
             yes_no_answers.append(create_pr)
         yes_no_answers.append(code_review)
@@ -964,7 +1004,13 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         con.s = mock.MagicMock(
             CYAN="", RESET="", DIM="", GREEN="", YELLOW="",
         )
-        con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(手動=2), verbosity
+        menu_answers = [0, 0, 2, 1]  # workflow, model, exec_mode(手動=2), verbosity
+        model_options_for_test = [_main_mod.MODEL_AUTO, *_main_mod.MODEL_CHOICES]
+        if auto_qa and use_different_qa_model:
+            menu_answers.append(model_options_for_test.index("gpt-5.4"))
+        if auto_review and use_different_review_model:
+            menu_answers.append(model_options_for_test.index("claude-sonnet-4.6"))
+        con.menu_select.side_effect = menu_answers
         con.prompt_multi_select.return_value = []  # 全ステップ
         con.prompt_yes_no.side_effect = lambda *a, **kw: next(yes_no_iter)
         con.prompt_input.side_effect = lambda *a, **kw: next(input_iter)
@@ -999,6 +1045,9 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
 
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -1006,6 +1055,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             "workflow_registry": mock_wr_mod,
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
         }):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
@@ -1054,7 +1104,11 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         env_backup = os.environ.copy()
         try:
             os.environ["REVIEW_MODEL"] = "claude-sonnet-4.6"
-            cfg = self._run_interactive_with_inputs(code_review=False)
+            cfg = self._run_interactive_with_inputs(
+                code_review=False,
+                auto_review=True,
+                use_different_review_model=False,
+            )
             self.assertIsNotNone(cfg)
             self.assertEqual(cfg.review_model, "claude-sonnet-4.6")
         finally:
@@ -1065,12 +1119,34 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         env_backup = os.environ.copy()
         try:
             os.environ["QA_MODEL"] = "gpt-5.4"
-            cfg = self._run_interactive_with_inputs(code_review=False)
+            cfg = self._run_interactive_with_inputs(
+                code_review=False,
+                auto_qa=True,
+                use_different_qa_model=False,
+            )
             self.assertIsNotNone(cfg)
             self.assertEqual(cfg.qa_model, "gpt-5.4")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
+
+    def test_interactive_selects_qa_model_only_when_auto_qa_enabled(self) -> None:
+        cfg = self._run_interactive_with_inputs(
+            auto_qa=True,
+            use_different_qa_model=True,
+            auto_review=False,
+        )
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.qa_model, "gpt-5.4")
+
+    def test_interactive_selects_review_model_only_when_auto_review_enabled(self) -> None:
+        cfg = self._run_interactive_with_inputs(
+            auto_qa=False,
+            auto_review=True,
+            use_different_review_model=True,
+        )
+        self.assertIsNotNone(cfg)
+        self.assertEqual(cfg.review_model, "claude-sonnet-4.6")
 
 
 class TestInteractiveModeAutoExecModes(unittest.TestCase):
@@ -1108,14 +1184,14 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         if exec_mode == 0:
             # クイック全自動: workflow, model, exec_mode(0) のみ
             con.menu_select.side_effect = [0, 0, 0]
-            # use_different_models, 実行確認
-            con.prompt_yes_no.side_effect = [False, True]
+            # 実行確認
+            con.prompt_yes_no.side_effect = [True]
         else:
             # カスタム全自動: workflow, model, exec_mode(1), verbosity
             con.menu_select.side_effect = [0, 0, 1, 1]
-            # use_different_models→False, QA自動→False, Review自動→False, Issue→False, PR→False,
+            # QA自動→False, Review自動→False, Issue→False, PR→False,
             # Code Review→auto_coding_agent_review, (自動承認→False), ドライラン→False, 実行確認→True
-            yes_no_answers = [False, False, False, False, False, auto_coding_agent_review]
+            yes_no_answers = [False, False, False, False, auto_coding_agent_review]
             if auto_coding_agent_review:
                 yes_no_answers.append(False)  # 自動承認
             yes_no_answers += [False, True]  # dry_run, 実行確認
@@ -1141,6 +1217,9 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -1148,6 +1227,7 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             "workflow_registry": mock_wr_mod,
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
         }):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
@@ -1204,6 +1284,69 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         self.assertTrue(cfg.auto_coding_agent_review_auto_approval)
 
 
+class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
+    def test_manual_mode_auto_qa_enables_qa_auto_defaults_without_extra_prompts(self) -> None:
+        """手動モード + auto_qa=True: prompt_answer_mode を呼ばず qa_auto_defaults=True を設定する。"""
+        import unittest.mock as mock
+
+        captured_config = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured_config["cfg"] = config
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(
+            id="s1", title="Step1", is_container=False, depends_on=[], params=[],
+        )
+        mock_wf = mock.MagicMock(id="aas", steps=[mock_step], params=[])
+        mock_display_names = {"aas": "AAS"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(手動), verbosity
+        # auto_qa=True, QAサブモデル利用確認=False, auto_review=False, issue=False, pr=False,
+        # code_review=False, dry_run=False, 実行確認=True
+        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, True]
+        con.prompt_input.side_effect = ["main", "15", "21600", ""]  # branch, parallel, timeout, addl prompt
+        con.prompt_multi_select.return_value = []
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
+        }):
+            _cmd_run_interactive = _main_mod._cmd_run_interactive
+            _cmd_run_interactive()
+
+        cfg = captured_config.get("cfg")
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_qa)
+        self.assertEqual(cfg.qa_answer_mode, "all")
+        self.assertFalse(cfg.force_interactive)
+        self.assertTrue(cfg.qa_auto_defaults)
+        con.prompt_answer_mode.assert_not_called()
+
+
 class TestInteractiveAdocParamsValidation(unittest.TestCase):
     def _run_with_adoc_params_inputs(self, *, exec_mode: int) -> dict:
         import unittest.mock as mock
@@ -1226,11 +1369,11 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         if exec_mode == 0:
             # workflow, model, exec_mode, doc_purpose(migration=3, 0-indexed), max_file_lines(1000=2, 0-indexed)
             con.menu_select.side_effect = [0, 0, 0, 3, 2]
-            con.prompt_yes_no.side_effect = [False, True]  # use_different_models, confirmation
+            con.prompt_yes_no.side_effect = [True]  # confirmation
         else:
             # workflow, model, exec_mode, verbosity, doc_purpose(onboarding=1, 0-indexed), max_file_lines(300=0, 0-indexed)
             con.menu_select.side_effect = [0, 0, 2, 1, 1, 0]
-            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, True]
             # branch, max_parallel, timeout, additional_prompt（doc_purpose/max_file_linesはmenu_selectで入力）
             con.prompt_input.side_effect = ["main", "15", "7200", ""]
 
@@ -1246,6 +1389,9 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -1253,6 +1399,7 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             "workflow_registry": mock_wr_mod,
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
         }):
             _main_mod._cmd_run_interactive()
 

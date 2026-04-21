@@ -1,45 +1,8 @@
-name: Copilot PR 質問票作成指示
-
-# auto-qa ラベルが PR に付与されている場合に、
-# 自動的に質問票作成指示コメントを PR に投稿する。
-# （draft PR でも動作する。最終的な Approve/Merge は Ready 化後に別ワークフローで実施）
-# （Copilot が依頼内容を分析し、目的達成に必要な確認事項を分類・重要度判定した
-#  優先順位付き質問票を作成して提示する。各質問は選択式で、既定値候補・理由・
-#  未回答時の影響を含む）
-#
-# トリガー条件:
-#   - labeled: PR にラベルが付与された時（ジョブ if で auto-qa をチェック）
-#   - ready_for_review: PR が draft → ready に変更された時（ジョブ if でラベルをチェック）
-#   → どちらの操作順序でも動作する（ラベル→ready / ready→ラベル）
-#   → draft PR でも labeled イベントで動作する
-#
-# ジョブ実行条件:
-#   - PR に auto-qa ラベルが付与されていること
-#   - すべてを満たす場合のみジョブが実行される
-#
-# opt-out チェック（ステップレベル）:
-#   - PR body の <!-- START COPILOT ORIGINAL PROMPT --> より前の部分のみを対象に
-#     <!-- auto-qa: false --> の有無をチェックする
-#   - Copilot が元 Issue body を PR body に引用している場合でも誤マッチしない
-#   - opt-out マーカーが検出された場合、後続ステップ（guard, post comment）をスキップする
-#
-# 冪等化:
-#   - 同一 PR に対する重複コメントを防止（<!-- copilot-auto-qa-posted --> マーカーで判定）
-#   - 再質問したい場合は、既存コメントを削除してから auto-qa ラベルを削除→再付与
-#
-# 注意:
-#   - pull_request_target を使用（ベースブランチのワークフロー定義で実行されるため、
-#     Copilot が作成した PR でも自動的に発火する）
-#   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
-#   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
+name: Copilot Auto Feedback
 
 on:
   pull_request_target:
     types: [labeled, ready_for_review]
-
-concurrency:
-  group: copilot-auto-qa-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
 
 permissions:
   pull-requests: write
@@ -47,6 +10,9 @@ permissions:
 
 jobs:
   auto-qa:
+    concurrency:
+      group: copilot-auto-qa-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     if: >
       contains(github.event.pull_request.labels.*.name, 'auto-qa')
     runs-on: ubuntu-latest
@@ -215,6 +181,134 @@ jobs:
             --repo "${REPO}" \
             --body "${COMMENT_BODY}"; then
             echo "✅ 優先順位付き質問票作成指示コメントを PR #${PR_NUMBER} に投稿しました。"
+          else
+            echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
+            exit 1
+          fi
+
+  auto-review:
+    concurrency:
+      group: copilot-auto-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    if: >
+      contains(github.event.pull_request.labels.*.name, 'auto-context-review')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+
+    steps:
+      - name: Check opt-out marker in PR body (excluding quoted sections)
+        id: optout
+        run: |
+          set -euo pipefail
+          # <!-- START COPILOT ORIGINAL PROMPT --> 以降（Copilot による元 Issue 引用部分）を除外し、
+          # PR 本文のみを対象に opt-out マーカーをチェックする
+          PR_BODY_HEAD=$(printf '%s' "${PR_BODY}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- auto-context-review: false -->'; then
+            echo "PR body の先頭部分に opt-out マーカーが含まれています。後続ステップをスキップします。"
+            echo "opted_out=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "opted_out=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check for existing review comment
+        id: guard
+        if: steps.optout.outputs.opted_out != 'true'
+        run: |
+          set -euo pipefail
+          MARKER="<!-- copilot-auto-review-posted -->"
+          existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq "[.[] | select(.body | contains(\"${MARKER}\"))] | length" \
+            2>&1) || existing="0"
+          if [ "${existing:-0}" -gt 0 ] 2>/dev/null; then
+            echo "レビュー指示コメントは既に投稿済みです。スキップします。"
+            echo "posted=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "posted=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Post auto review instruction to Copilot
+        if: steps.optout.outputs.opted_out != 'true' && steps.guard.outputs.posted != 'true'
+        env:
+          COMMENT_BODY: |
+            <!-- copilot-auto-review-posted -->
+            @copilot
+
+            ## 敵対的レビュー指示（Adversarial Review）
+
+            あなたは今から **敵対的レビュアー** として振る舞ってください。
+            あなたはこの PR の成果物の作成者 **ではありません**。
+            作成者の意図に共感せず、問題の発見に集中してください。
+
+            ### 指示
+
+            1. この PR の変更内容と、紐づく Issue の目的・受け入れ条件（AC）を確認してください。
+            2. 以下の **5つの検証軸** で問題を網羅的に検出してください:
+
+            | 軸 | 検証内容 |
+            |----|---------|
+            | **要件充足性** | Issue の目的・AC を満たしているか。欠落している要件はないか |
+            | **技術的正確性** | ロジック・データモデル・API設計・構文に誤りがないか |
+            | **整合性** | 他ステップの成果物・既存ドキュメント・用語との矛盾がないか |
+            | **非機能品質** | パフォーマンス・セキュリティ・保守性・テスト可能性 |
+            | **捏造検出** | TBD/不明と書くべき箇所が根拠なく具体的な値で埋められていないか |
+
+            3. 各問題に **Critical / Major / Minor** の重大度を付けてください:
+               - **Critical**: 要件未達・データ破損リスク・セキュリティ脆弱性（修正必須）
+               - **Major**: 設計上の懸念・整合性問題・テスト漏れ（修正推奨）
+               - **Minor**: 表記揺れ・改善提案・スタイル（任意修正）
+
+            4. 問題を **15〜50個** リストアップしてください。
+            5. **捏造は絶対に禁止です**。存在しない問題を指摘してはいけません。全ての指摘に根拠を明記してください。
+
+            ### 出力フォーマット（必須）
+
+            以下の構造化フォーマットで出力してください:
+
+            | No. | 軸 | 重大度 | 指摘箇所 | 問題の説明 | 修正案 |
+            |-----|-----|--------|---------|-----------|--------|
+            | 1 | [軸名] | [Critical/Major/Minor] | [ファイルパスまたはセクション] | [具体的な問題] | [具体的な修正案] |
+
+            ### 実行手順（厳守）
+
+            以下の手順を **この順番で** 実行してください。
+
+            #### ステップ 1: レビュー（指摘リスト作成）
+            5 つの検証軸で成果物を検証し、指摘事項を Critical / Major / Minor に分類して一覧化してください。
+
+            #### ステップ 2: 修正実行
+            - **Critical の指摘は全て修正**してください。
+            - **Major の指摘は修正を検討**し、修正しない場合は理由を記載してください。
+            - Minor は任意ですが、修正可能なものは修正してください。
+            - 修正完了後、修正内容の概要を箇条書きで報告してください。
+
+            #### ステップ 3: 修正後の残存 Critical カウント
+            ステップ 2 の修正実行後に、**まだ未解決の Critical が何件残っているか**を再カウントしてください。
+
+            #### ステップ 4: 最終サマリー + 合格判定
+            **修正後**の残存件数に基づいて、以下の形式で出力してください:
+
+            ### サマリー（修正後）
+            - Critical（残存）: X件
+            - Major（残存）: Y件
+            - Minor（残存）: Z件
+            - **合格判定**: ✅ PASS（残存 Critical = 0 の場合）/ ❌ FAIL（残存 Critical > 0 の場合）
+
+            **重要**: 合格判定の直後に、以下のいずれかの HTML コメントマーカーを **必ず** 出力:
+            - 残存 Critical = 0: `<!-- review-verdict: PASS -->`
+            - 残存 Critical > 0: `<!-- review-verdict: FAIL -->`
+
+            捏造は絶対に禁止です。
+        run: |
+          set -euo pipefail
+          if gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT_BODY}"; then
+            echo "✅ 敵対的レビュー指示コメントを PR #${PR_NUMBER} に投稿しました。"
           else
             echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
             exit 1

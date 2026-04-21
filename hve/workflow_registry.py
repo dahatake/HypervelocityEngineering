@@ -175,10 +175,10 @@ AAS = WorkflowDef(
     ],
 )
 
-# --- AAD: App Design ---
+# --- AAD: App Detail Design ---
 AAD = WorkflowDef(
     id="aad",
-    name="App Design",
+    name="App Detail Design",
     label_prefix="aad",
     state_labels=_make_state_labels("aad"),
     params=[],
@@ -297,10 +297,10 @@ AKM = WorkflowDef(
     ],
 )
 
-# --- AQOD: QA Original Docs Review ---
+# --- AQOD: Original Docs Review ---
 AQOD = WorkflowDef(
     id="aqod",
-    name="QA Original Docs Review",
+    name="Original Docs Review",
     label_prefix="aqod",
     state_labels=_make_state_labels("aqod"),
     params=["target_scope", "depth", "focus_areas"],

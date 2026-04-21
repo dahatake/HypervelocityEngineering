@@ -90,14 +90,17 @@ jobs:
 
           for ISSUE_NUM in ${CLOSING_ISSUES}; do
             [[ "${ISSUE_NUM}" =~ ^[0-9]+$ ]] || continue
-            ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null || echo '{}')
+            if ! ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null); then
+              echo "::warning::Issue #${ISSUE_NUM} の取得に失敗しました（削除済みまたはアクセス不可）。"
+              ISSUE_JSON='{}'
+            fi
 
             IS_SELF_IMPROVE=$(echo "${ISSUE_JSON}" | wh_has_label "self-improve") || IS_SELF_IMPROVE="false"
             if [[ "${IS_SELF_IMPROVE}" != "true" ]]; then
               continue
             fi
 
-            STATE=$(echo "${ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
+            STATE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
             if [[ "${STATE}" != "open" ]]; then
               continue
             fi

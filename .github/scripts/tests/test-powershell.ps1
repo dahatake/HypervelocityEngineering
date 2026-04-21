@@ -21,6 +21,17 @@ Describe 'validate-plan with fixtures' {
 }
 
 # ===========================================================================
+# validate-subissues.ps1 — fixture ベースのテスト
+# ===========================================================================
+Describe 'validate-subissues with fixtures' {
+    It 'passes for sample-subissues.md fixture' {
+        $ScriptPath = "$ScriptRoot/validate-subissues.ps1"
+        $output = & $ScriptPath -Path "$FixturesDir/sample-subissues.md" *>&1 | Out-String
+        $output | Should -Match 'PASS'
+    }
+}
+
+# ===========================================================================
 # create-subissues.ps1 — fixture ベースのテスト
 # ===========================================================================
 Describe 'create-subissues with fixtures' {
@@ -75,11 +86,18 @@ Describe 'run-workflow dispatch' {
         $output | Should -Match 'advance'
         $output | Should -Match 'create-subissues'
         $output | Should -Match 'validate-plan'
+        $output | Should -Match 'validate-subissues'
     }
 
     It 'dispatches validate-plan with fixture' {
         $ScriptPath = "$ScriptRoot/run-workflow.ps1"
         $output = & $ScriptPath -Action validate-plan -Path "$FixturesDir/sample-plan.md" *>&1 | Out-String
+        $output | Should -Match 'PASS'
+    }
+
+    It 'dispatches validate-subissues with fixture' {
+        $ScriptPath = "$ScriptRoot/run-workflow.ps1"
+        $output = & $ScriptPath -Action validate-subissues -Path "$FixturesDir/sample-subissues.md" *>&1 | Out-String
         $output | Should -Match 'PASS'
     }
 }

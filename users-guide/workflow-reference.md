@@ -20,29 +20,26 @@
 
 | ファイル名 | 用途 | トリガー |
 |-----------|------|---------|
-| `auto-app-selection.yml` | アプリケーションアーキテクチャ設計（AAS）オーケストレーター | `auto-app-selection` ラベル付き Issue |
-| `auto-app-design.yml` | アプリケーション設計（AAD）オーケストレーター | `auto-app-design` ラベル付き Issue |
-| `auto-app-dev-microservice-azure.yml` | マイクロサービス実装（ASDW）オーケストレーター | `auto-app-dev-microservice` ラベル付き Issue |
-| `auto-batch-design.yml` | バッチ設計（ABD）オーケストレーター | `auto-batch-design` ラベル付き Issue |
-| `auto-batch-dev.yml` | バッチ実装（ABDV）オーケストレーター | `auto-batch-dev` ラベル付き Issue |
-| `auto-app-documentation.yml` | Source Codeからのドキュメント作成（ADOC）オーケストレーター | `auto-app-documentation` ラベル付き Issue |
-| `auto-knowledge-management.yml` | Knowledge Management（AKM）オーケストレーター（qa / original-docs / both） | `knowledge-management` ラベル付き Issue |
-| `auto-aqod.yml` | AQOD 原本ドキュメント質問票生成（AQOD）オーケストレーター | `qa-original-docs` ラベル付き Issue |
+| `auto-orchestrator-dispatcher.yml` | Issueイベント統合ディスパッチャー（AAS/AAD/ASDW/ABD/ABDV/ADOC/AKM/AQOD/setup-labels） | `issues: [opened, labeled, closed]` |
+| `auto-app-selection-reusable.yml` | アプリケーションアーキテクチャ設計（AAS）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-app-detail-design-reusable.yml` | アプリケーション詳細設計（AAD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-app-dev-microservice-azure-reusable.yml` | マイクロサービス実装（ASDW）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-batch-design-reusable.yml` | バッチ設計（ABD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-batch-dev-reusable.yml` | バッチ実装（ABDV）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-app-documentation-reusable.yml` | Source Codeからのドキュメント作成（ADOC）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-knowledge-management-reusable.yml` | Knowledge Management（AKM）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-aqod.yml` | Original Docs Review 原本ドキュメント質問票生成（AQOD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
 | `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
 | `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
-| `copilot-auto-review.yml` | Copilot に敵対的レビューを自動依頼 | `auto-context-review` ラベル付き PR |
-| `copilot-auto-qa.yml` | Copilot に質問票作成を自動依頼 | `auto-qa` ラベル付き PR |
+| `copilot-auto-feedback.yml` | Copilot QA/レビュー指示を自動投稿（`auto-qa` / `auto-context-review`） | `pull_request_target: [labeled, ready_for_review]` |
+| `auto-pr-transition-dispatcher.yml` | PR遷移ディスパッチャー（QA→Review→Approve/ create-subissues） | `pull_request_target: [synchronize]` / `issue_comment: [created]` |
 | `auto-qa-default-answer.yml` | QA 質問票への既定値回答を自動投稿 | Copilot 質問票コメント作成後（`issue_comment.created`） |
 | `post-qa-to-pr-comment.yml` | QA 結果を PR コメントに投稿 | PR プッシュ（`pull_request_target.synchronize`）かつ `auto-qa` ラベル付き PR 等の条件 |
-| `auto-qa-to-review-transition.yml` | `auto-qa` 完了後に `auto-context-review` へ自動遷移 | PR コメント |
-| `auto-review-to-approve-transition.yml` | レビュー完了検知 → `auto-approve-ready` 自動付与 | PR 更新（synchronize）/ PR コメント（Copilot レビュー回答検知） |
 | `auto-draft-to-ready.yml` | Copilot PR の Draft → Ready 自動遷移 | `auto-approve-ready` ラベル付き draft PR でデバウンス完了時 |
 | `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `auto-approve-ready` ラベル付き PR（非 draft, 非 split-mode） |
 | `sync-issue-labels-to-pr.yml` | 親 Issue のラベルを PR に同期 | Issue ラベル変更 |
-| `label-split-mode.yml` | `[WIP]` タイトルの PR に `split-mode` ラベルを付与 | PR オープン / 編集 |
-| `check-split-mode.yml` | `split-mode` PR での実装ファイル変更を検知・警告 | PR プッシュ |
-| `validate-plan.yml` | `plan.md` のフォーマット・分割判定を検証 | PR プッシュ |
+| `plan-validation-and-labeling.yml` | `plan.md` の検証（validate/check）と split-mode/plan-only ラベル付与を統合実行 | `pull_request`（`paths: work/**/plan.md`） |
 | `audit-plans.yml` | plan.md の監査（全 plan.md のメタデータ違反スキャン／Skill `task-dag-planning` 準拠チェック） | 毎週月曜 3:00 UTC / 手動 |
 | `validate-knowledge.yml` | knowledge ドキュメントの検証 | `knowledge/D??-*.md` の PR / push / 手動 |
 | `setup-labels.yml` | ラベル初期セットアップ（`.github/labels.json` から一括作成・更新） | `setup-labels` ラベル付き Issue / `workflow_dispatch` |
@@ -52,23 +49,34 @@
 | `test-cli-scripts.yml` | `.github/scripts/` の CLI スクリプトをテスト | PR プッシュ |
 | `validate-agents.yml` | Agent ファイルの検証 | `push` / `pull_request` |
 | `validate-skills.yml` | Skills ファイルの検証 | `pull_request` |
-
+| `auto-qa-to-review-transition.yml` | reusable: QA完了判定→`auto-context-review` 付与（dispatcher から呼び出し） | `workflow_call` |
+| `auto-review-to-approve-transition.yml` | reusable: レビュー完了判定→`auto-approve-ready` 付与（dispatcher から呼び出し） | `workflow_call` |
+| `auto-create-subissues-transition.yml` | reusable: split-mode 完了判定→`create-subissues` 付与（dispatcher から呼び出し） | `workflow_call` |
+| `validate-subissues.yml` | `subissues.md` の `<!-- title: ... -->` 必須チェック（フォーマット検証） | 全 PR の `pull_request: [opened, synchronize, reopened]` で起動し、ジョブ内で `work/**/subissues.md` の変更有無を判定 |
 ### SDK 版ワークフロー ID（逆引き）
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
-| `aas` | App Architecture Design | `auto-app-selection.yml` |
-| `aad` | App Design | `auto-app-design.yml` |
-| `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure.yml` |
-| `abd` | Batch Design | `auto-batch-design.yml` |
-| `abdv` | Batch Dev | `auto-batch-dev.yml` |
-| `akm` | Knowledge Management（QA + original-docs） | `auto-knowledge-management.yml` |
-| `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation.yml` |
-| `aqod` | QA Original Docs | `auto-aqod.yml` |
+| `aas` | App Architecture Design | `auto-app-selection-reusable.yml` |
+| `aad` | App Detail Design | `auto-app-detail-design-reusable.yml` |
+| `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure-reusable.yml` |
+| `abd` | Batch Design | `auto-batch-design-reusable.yml` |
+| `abdv` | Batch Dev | `auto-batch-dev-reusable.yml` |
+| `akm` | Knowledge Management（QA + original-docs） | `auto-knowledge-management-reusable.yml` |
+| `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
+| `aqod` | Original Docs Review | `auto-aqod.yml` |
 
 > **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `akm` / `adoc` / `aqod` を使用してください。
 >
 > `akm` / `aqod` / `adoc` は本リポジトリの中核的特徴（`knowledge/` を介した要求定義一元管理）を担うワークフローです。
+
+### Work IQ 連携（オプション）
+
+`--workiq` 有効時、以下のワークフローで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。
+
+- **QA（`--auto-qa`）**: 質問票から要約した問いを Work IQ へ問い合わせ、デフォルト回答補強に利用
+- **AKM（`akm`）**: Step 実行前に Work IQ 問い合わせを実施し、整合性確認の根拠として理由欄へ反映
+- **AQOD（`aqod`）**: Step 実行前に Work IQ 問い合わせを実施し、原本ドキュメントとの整合性確認に利用
 
 ---
 
@@ -79,7 +87,7 @@
 | ラベル名 | 役割 |
 |---------|------|
 | `auto-app-selection` | **アプリケーションアーキテクチャ設計ワークフロー（AAS）の起動トリガー**。Issue にこのラベルが付与されると、AAS オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする |
-| `auto-app-design` | **アプリケーション設計ワークフロー（AAD）の起動トリガー**。Issue にこのラベルが付与されると、AAD オーケストレーターが起動し、Step.1〜7.3 の Sub Issue を自動生成して Copilot にアサインする |
+| `auto-app-detail-design` | **アプリケーション設計ワークフロー（AAD）の起動トリガー**。Issue にこのラベルが付与されると、AAD オーケストレーターが起動し、Step.1〜8.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-dev-microservice` | **マイクロサービス開発ワークフローの起動トリガー**。Issue にこのラベルが付与されると、ASDW オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
@@ -92,7 +100,7 @@
 | `auto-context-review` | **Copilot 敵対的レビューのトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に敵対的レビュー指示コメントを自動投稿する |
 | `auto-qa` | **Copilot 質問票作成のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に選択式の質問票作成指示コメントを自動投稿する |
 | `auto-approve-ready` | **PR 自動 Approve & Auto-merge のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft, 非 split-mode）になると、`auto-approve-and-merge.yml` が自動発火し、PR の Approve と squash merge を実行する。各オーケストレーターが `auto-merge: true` 設定時に自動付与する |
-| `qa-original-docs` | **AQOD ワークフロー（原本ドキュメント質問票生成）の起動トリガー**。Issue にこのラベルが付与されると、AQOD オーケストレーターが起動し、`original-docs/` の原本ドキュメントに対する質問票を自動生成します。 |
+| `original-docs-review` | **Original Docs Review ワークフロー（原本ドキュメント質問票生成）の起動トリガー**。Issue にこのラベルが付与されると、AQOD オーケストレーターが起動し、`original-docs/` の原本ドキュメントに対する質問票を自動生成します。 |
 | `self-improve` | **自己改善ループの識別ラベル**。Issue テンプレートから Copilot を直接アサインして使用します。`auto-self-improve-close.yml` は、PR マージ時にこのラベルを持つ Issue を検知し、auto-merge 有効判定や Sub Issue 完了確認などの条件を満たした場合に自動クローズします（条件未達時はスキップされることがあります）。 |
 
 > [!IMPORTANT]
@@ -112,13 +120,13 @@
 
 | プレフィックス | ワークフロー | bootstrap 箇所 |
 |-------------|------------|---------------|
-| `aas:*` | `auto-app-selection.yml` | ワークフロー内 bootstrap ステップ |
-| `aad:*` | `auto-app-design.yml` | ワークフロー内 bootstrap ステップ |
-| `asdw:*` | `auto-app-dev-microservice-azure.yml` | ワークフロー内 bootstrap ステップ |
-| `abd:*` | `auto-batch-design.yml` | ワークフロー内 bootstrap ステップ |
-| `abdv:*` | `auto-batch-dev.yml` | ワークフロー内 bootstrap ステップ |
-| `adoc:*` | `auto-app-documentation.yml` | ワークフロー内 bootstrap ステップ |
-| `akm:*` | `auto-knowledge-management.yml` | ワークフロー内 bootstrap ステップ |
+| `aas:*` | `auto-app-selection-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `aad:*` | `auto-app-detail-design-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `asdw:*` | `auto-app-dev-microservice-azure-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `abd:*` | `auto-batch-design-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `abdv:*` | `auto-batch-dev-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `adoc:*` | `auto-app-documentation-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `akm:*` | `auto-knowledge-management-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `aqod:*` | `auto-aqod.yml` | ワークフロー内 bootstrap ステップ |
 
 各プレフィックスには以下の 5 状態があります:
@@ -130,6 +138,8 @@
 | `:running` | Copilot 実行中 |
 | `:done` | Step 完了（次 Step の起動トリガー） |
 | `:blocked` | 依存先未完了でブロック中 |
+
+![各ワークフロー共通のステートラベル遷移（initialized→ready→running→done / blocked）](./images/orchestration-state-label-lifecycle.svg)
 
 ---
 
@@ -409,13 +419,13 @@
 | ファイル名 | 用途 | トリガーラベル |
 |-----------|------|-------------|
 | `app-architecture-design.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` |
-| `app-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-design` |
+| `app-detail-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-detail-design` |
 | `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
 | `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
 | `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
 | `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成ワークフロー起動 | `auto-app-documentation` |
 | `knowledge-management.yml` | knowledge ドキュメント管理（qa/original-docs/both） | `knowledge-management` |
-| `qa-original-docs.yml` | AQOD 原本質問票生成ワークフロー起動 | `qa-original-docs` |
+| `original-docs-review.yml` | AQOD 原本質問票生成ワークフロー起動 | `original-docs-review` |
 | `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
 | `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |
 

@@ -205,6 +205,58 @@ Describe 'validate-plan.ps1' {
     }
 }
 
+Describe 'validate-subissues.ps1' {
+    BeforeAll {
+        $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "ps-test-sub-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
+        $ScriptPath = "$PSScriptRoot/../validate-subissues.ps1"
+    }
+
+    AfterAll {
+        if (Test-Path $TmpDir) { Remove-Item $TmpDir -Recurse -Force }
+    }
+
+    It 'passes when all blocks have title metadata' {
+        $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+Body 1
+
+<!-- subissue -->
+<!-- title: Sub 2 -->
+Body 2
+"@
+        $subPath = Join-Path $TmpDir 'subissues-valid.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match 'PASS'
+    }
+
+    It 'fails when title metadata is missing' {
+        $subContent = @"
+<!-- subissue -->
+## Sub-001
+- Title: Sub 1
+"@
+        $subPath = Join-Path $TmpDir 'subissues-missing-title.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match '欠落ブロック'
+    }
+
+    It 'fails when title metadata is empty' {
+        $subContent = @"
+<!-- subissue -->
+<!-- title:    -->
+Body
+"@
+        $subPath = Join-Path $TmpDir 'subissues-empty-title.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match '空値ブロック'
+    }
+}
+
 Describe 'orchestrate.ps1' {
     It 'shows execution plan for AAS in dry-run' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
@@ -219,7 +271,7 @@ Describe 'orchestrate.ps1' {
     It 'shows execution plan for AAD with step filter' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $output = & $ScriptPath -Workflow aad -Steps '1.1,1.2' -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAD.*App Design'
+        $output | Should -Match 'AAD.*App Detail Design'
         $output | Should -Match 'Step\.1\.1:.*ドメイン分析'
         $output | Should -Match 'Step\.1\.2:.*サービス一覧抽出'
         $output | Should -Match 'コンテナ Issue'
@@ -321,6 +373,7 @@ Describe 'run-workflow.ps1' {
         $output | Should -Match 'advance'
         $output | Should -Match 'create-subissues'
         $output | Should -Match 'validate-plan'
+        $output | Should -Match 'validate-subissues'
         $output | Should -Match 'copilot'
     }
 
@@ -350,6 +403,24 @@ Describe 'run-workflow.ps1' {
         }
         finally {
             if (Test-Path $TmpPlan) { Remove-Item $TmpPlan -Force }
+        }
+    }
+
+    It 'dispatches validate-subissues action' {
+        $tmpSub = [System.IO.Path]::GetTempFileName()
+        try {
+            $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+Body
+"@
+            Set-Content -Path $tmpSub -Value $subContent
+            $ScriptPath = "$PSScriptRoot/../run-workflow.ps1"
+            $output = & $ScriptPath -Action validate-subissues -Path $tmpSub *>&1 | Out-String
+            $output | Should -Match 'PASS'
+        }
+        finally {
+            if (Test-Path $tmpSub) { Remove-Item $tmpSub -Force }
         }
     }
 

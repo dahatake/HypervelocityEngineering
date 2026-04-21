@@ -29,8 +29,11 @@
 | Python 3.9+ | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
 | GitHub Copilot CLI | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
+| Microsoft Work IQ（`@microsoft/workiq`） | オプション | SDK 版で M365 補助情報を参照する場合（[詳細](./sdk-guide.md#work-iq-mcp-連携オプション)） |
 
 > Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: `claude-opus-4.7`）または任意モデルを選択できます。
+
+> Work IQ のセットアップ手順は [sdk-guide.md — Work IQ MCP 連携](./sdk-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
 ---
 
@@ -209,11 +212,11 @@ MCP と PAT の設定が完了すると、Repository には以下のように se
 ### 3. Azure Static Web Apps デプロイ用 Secrets（SWA デプロイ時）
 
 > [!NOTE]
-> このステップは **Step.3.2（Web App デプロイ）** を実行する場合の確認です。
+> このステップは **Web App デプロイ** を実行する場合の確認です。
 
 SWA デプロイは OIDC 認証（`azure/login@v2`）+ `shibayan/swa-deploy@v1` の `app-name` モードを使用するため、**`AZURE_STATIC_WEB_APPS_API_TOKEN` や `GITHUB_PAT` の設定は不要**です。
 
-以下の 3 つの Secrets は Functions deploy（Step.2.8）でも使用するものと共通です。すでに設定済みであれば追加作業は不要です。
+以下の 3 つの Secrets は Functions deploy でも使用するものと共通です。すでに設定済みであれば追加作業は不要です。
 
 | Secret 名 | 説明 |
 |-----------|------|
@@ -249,7 +252,7 @@ bash infra/azure/create-azure-webui-resources.sh
 > [!WARNING]
 > **このステップは、他のワークフローを使い始める前に必ず完了してください。**
 >
-> ラベルが未設定の状態では、**すべての Issue テンプレート経由のワークフロー起動が動作しません**。これは `setup-labels` だけでなく、`auto-app-selection`・`auto-app-design`・`knowledge-management` など**全ワークフロートリガー系ラベル**に影響します。
+> ラベルが未設定の状態では、**すべての Issue テンプレート経由のワークフロー起動が動作しません**。これは `setup-labels` だけでなく、`auto-app-selection`・`auto-app-detail-design`・`knowledge-management` など**全ワークフロートリガー系ラベル**に影響します。
 >
 > GitHub の Issue Template の `labels:` フィールドは、リポジトリに**既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合は Issue 作成時にラベルの付与がサイレントにスキップされ、**ラベル付与を前提とした対象ジョブや処理は実行されません（ジョブがスキップされます）**。
 
@@ -287,7 +290,7 @@ bash infra/azure/create-azure-webui-resources.sh
 #### 実行後の確認手順
 
 1. Actions タブでワークフローの実行結果が **✅ 成功**（緑チェック）になっていることを確認する
-2. **Settings → Labels** を開き、`auto-app-selection`・`auto-app-design`・`setup-labels` などのラベルが作成されていることを目視確認する
+2. **Settings → Labels** を開き、`auto-app-selection`・`auto-app-detail-design`・`setup-labels` などのラベルが作成されていることを目視確認する
 3. （オプション）Issues タブ → **New issue** → **Setup Labels: ラベル初期セットアップ** テンプレートを選択し、Issue を作成したときに `setup-labels` ラベルが自動付与されることを確認する（2回目以降の動作確認）
 
 #### 2回目以降（Issue テンプレートから実行）
@@ -328,14 +331,14 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
-| `auto-app-design` | `#0E8A16` | AAD ワークフロートリガー |
+| `auto-app-detail-design` | `#0E8A16` | AAD ワークフロートリガー |
 | `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー |
 | `auto-batch-design` | `#0E8A16` | ABD ワークフロートリガー |
 | `auto-batch-dev` | `#0E8A16` | ABDV ワークフロートリガー |
 | `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
 | `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
 | `self-improve` | `#0E8A16` | 自己改善ループトリガー |
-| `qa-original-docs` | `#0E8A16` | AQOD ワークフロートリガー |
+| `original-docs-review` | `#0E8A16` | AQOD ワークフロートリガー |
 
 **PR 制御系（6 個）**
 
@@ -446,4 +449,4 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 - **方式1（個別 Issue + Custom Agent 手動実行）**: [web-ui-guide.md](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
 - **方式2（ワークフローオーケストレーション Web）**: [web-ui-guide.md](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
 - **方式3（ローカル: GitHub Copilot CLI SDK 版）**: [sdk-guide.md](./sdk-guide.md)
-- **フェーズ別ガイド**: [README](../README.md)
+- **フェーズ別ガイド**: [overview.md](./overview.md#フェーズ別ガイドナビゲーション)
