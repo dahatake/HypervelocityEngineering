@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -24,6 +25,8 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
+_APP_CATALOG_PATH = Path("docs/catalog/app-catalog.md")
+_APP_ID_PATTERN = re.compile(r"^\|\s*(APP-\d+)\s*\|", re.MULTILINE)
 
 
 def _get_default_akm_target_files(sources: str) -> str:
@@ -159,8 +162,16 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
             params["app_ids"] = [s.strip() for s in raw.split(",") if s.strip()]
             if len(params["app_ids"]) == 1:
                 params["app_id"] = params["app_ids"][0]
+        else:
+            all_ids = resolve_all_app_ids()
+            if all_ids:
+                params["app_ids"] = all_ids
+                params["app_ids_auto_resolved"] = True
+                print(f"  ℹ️ docs/catalog/app-catalog.md から {len(all_ids)} 件の APP-ID を検出: {', '.join(all_ids)}")
+                if len(all_ids) == 1:
+                    params["app_id"] = all_ids[0]
     if "resource_group" in wf.params:
-        params["resource_group"] = _prompt("リソースグループ名", default="", required=False)
+        params["resource_group"] = _prompt("リソースグループ名", default="", required=True)
     if "usecase_id" in wf.params:
         params["usecase_id"] = _prompt("ユースケースID", default="", required=False)
     if "batch_job_id" in wf.params:
@@ -313,6 +324,25 @@ def _resolve_app_ids(params: dict) -> list:
     return [single] if single else []
 
 
+def resolve_all_app_ids(catalog_path: Optional[Path] = None) -> List[str]:
+    """docs/catalog/app-catalog.md から全 APP-ID を抽出する。"""
+    path = catalog_path or _APP_CATALOG_PATH
+    if not path.exists():
+        return []
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    seen: Set[str] = set()
+    result: List[str] = []
+    for match in _APP_ID_PATTERN.finditer(content):
+        app_id = match.group(1)
+        if app_id not in seen:
+            seen.add(app_id)
+            result.append(app_id)
+    return result
+
+
 def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     """テンプレートの ``{root_ref}`` を展開する。
 
@@ -359,7 +389,7 @@ def _build_additional_section(params: dict) -> str:
     return ""
 
 
-def _build_app_id_section(app_id) -> str:
+def _build_app_id_section(app_id, *, is_all_apps: bool = False) -> str:
     """ASDW テンプレートの ``{app_id_section}`` を展開する。
 
     Args:
@@ -370,11 +400,15 @@ def _build_app_id_section(app_id) -> str:
     else:
         ids = [app_id] if app_id else []
     if not ids:
-        # APP-ID 未指定 = 全アプリケーション対象。
-        # スコープセクションを挿入しないことで、Copilot Agent は
-        # docs/catalog/app-catalog.md の全 APP-ID を対象として動作する。
         return ""
     id_list = ", ".join(f"`{aid}`" for aid in ids)
+    if is_all_apps:
+        return (
+            f"\n\n## 対象アプリケーション（全APP）\n"
+            f"- APP-ID: {id_list}\n"
+            f"- `docs/catalog/app-catalog.md` の全アプリケーションを対象とする\n"
+            f"- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
+        )
     return (
         f"\n\n## 対象アプリケーション\n"
         f"- APP-ID: {id_list}\n"
@@ -428,7 +462,14 @@ def render_template(
 
     # ASDW 固有プレースホルダ
     app_ids = _resolve_app_ids(params)
-    body = body.replace("{app_id_section}", _build_app_id_section(app_ids if app_ids else params.get("app_id", "")))
+    is_all_apps = bool(params.get("app_ids_auto_resolved", False))
+    body = body.replace(
+        "{app_id_section}",
+        _build_app_id_section(
+            app_ids if app_ids else params.get("app_id", ""),
+            is_all_apps=is_all_apps,
+        ),
+    )
     body = body.replace("{resource_group}", params.get("resource_group", ""))
     body = body.replace("{usecase_id}", params.get("usecase_id", ""))
 

@@ -218,6 +218,8 @@ jobs:
           create_label "akm:running"      "E4E669" ""
           create_label "akm:done"         "0E8A16" ""
           create_label "akm:blocked"      "D73A4A" ""
+          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa" "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
@@ -334,6 +336,18 @@ jobs:
               section_text = m.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          review_enabled = False
+          m = re.search(r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              review_enabled = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          qa_enabled = False
+          m = re.search(r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              qa_enabled = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
           # 追加コメント抽出
           additional_comment = ""
           m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
@@ -341,11 +355,23 @@ jobs:
               val = m.group(1).strip()
               if val and val != "_No response_":
                   additional_comment = val
+
           custom_source_dir = []
+          m = re.search(r"###\s*カスタムソースディレクトリ（任意）\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              val = m.group(1).strip()
+              if val and val != "_No response_":
+                  for item in val.split():
+                      if item not in custom_source_dir:
+                          custom_source_dir.append(item)
+
+          # 旧 additional_comment 内 custom_source_dir: 指定との後方互換
           for line in additional_comment.splitlines():
               mm = re.match(r"^custom_source_dir:\s*(.+?)\s*$", line.strip())
               if mm:
-                  custom_source_dir.append(mm.group(1))
+                  for item in mm.group(1).split():
+                      if item not in custom_source_dir:
+                          custom_source_dir.append(item)
 
           result = {
               "branch": branch,
@@ -354,6 +380,8 @@ jobs:
               "custom_source_dir": " ".join(custom_source_dir),
               "force_refresh": force_refresh,
               "auto_merge": auto_merge,
+              "review_enabled": review_enabled,
+              "qa_enabled": qa_enabled,
               "additional_comment": additional_comment,
           }
           print(json.dumps(result))
@@ -366,6 +394,8 @@ jobs:
           CUSTOM_SOURCE_DIR=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('custom_source_dir',''))")
           FORCE_REFRESH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('force_refresh') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          REVIEW_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('review_enabled') else 'false')")
+          QA_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('qa_enabled') else 'false')")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
 
           echo "対象ブランチ: ${BRANCH}"
@@ -375,22 +405,30 @@ jobs:
           echo "force_refresh: ${FORCE_REFRESH}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
-          # ---- Root Issue body に auto-merge タグを埋め込み ----
+          # ---- Root Issue body に自動化タグを埋め込み ----
           MERGE_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_MERGE}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          python3 - "${AUTO_MERGE}" "${REVIEW_ENABLED}" "${QA_ENABLED}" "${MERGE_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_merge = sys.argv[1]
-          output_file = sys.argv[2]
+          review_enabled = sys.argv[2]
+          qa_enabled = sys.argv[3]
+          output_file = sys.argv[4]
 
-          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
-          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
-
-          if merge_pat.search(body):
-              body = merge_pat.sub(merge_tag, body)
-          else:
-              body = body.rstrip() + "\n" + merge_tag + "\n"
+          tags = [
+              ("auto-merge", auto_merge),
+              ("auto-review", review_enabled),
+              ("auto-context-review", review_enabled),
+              ("auto-qa", qa_enabled),
+          ]
+          for key, value in tags:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf'<!--\s*{re.escape(key)}:\s*(true|false)\s*-->')
+              if pat.search(body):
+                  body = pat.sub(tag, body)
+              else:
+                  body = body.rstrip() + "\n" + tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
@@ -399,8 +437,8 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-merge タグを埋め込みました（auto-merge: ${AUTO_MERGE}）。" \
-            || echo "WARNING: Root Issue body の auto-merge タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に自動化タグを埋め込みました（auto-merge: ${AUTO_MERGE}, auto-context-review: ${REVIEW_ENABLED}, auto-qa: ${QA_ENABLED}）。" \
+            || echo "WARNING: Root Issue body の自動化タグ埋め込みに失敗しました。" >&2
 
           rm -f "${MERGE_TAG_FILE}"
 
@@ -408,13 +446,23 @@ jobs:
           add_label "${ROOT_ISSUE}" "akm:initialized"
           echo "akm:initialized を付与しました。"
 
+          if [[ "${REVIEW_ENABLED}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${QA_ENABLED}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-approve-ready"
             echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
           fi
 
           # ---- Step Issue の body に埋め込む共通メタ情報 ----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-review: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${REVIEW_ENABLED}" "${REVIEW_ENABLED}" "${QA_ENABLED}" "${AUTO_MERGE}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
@@ -426,6 +474,12 @@ jobs:
           # Step Issue に付与するラベルセット
           STEP_LABELS='["knowledge-management"]'
 
+          if [[ "${REVIEW_ENABLED}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-context-review"]')
+          fi
+          if [[ "${QA_ENABLED}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-qa"]')
+          fi
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi

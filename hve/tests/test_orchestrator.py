@@ -158,14 +158,27 @@ class TestRunWorkflowDryRun(unittest.TestCase):
         cfg = self._make_config()
         valid_ids = ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod"]
         for wf_id in valid_ids:
+            params = {"branch": "main", "selected_steps": []}
+            if wf_id in ("asdw", "abdv"):
+                params["resource_group"] = "rg-test"
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
                     workflow_id=wf_id,
-                    params={"branch": "main", "selected_steps": []},
+                    params=params,
                     config=cfg,
                 ))
                 self.assertEqual(result["workflow_id"], wf_id, f"{wf_id} の workflow_id が不正")
                 self.assertNotIn("error", result, f"{wf_id} でエラーが発生: {result.get('error')}")
+
+    def test_run_workflow_resource_group_required(self) -> None:
+        cfg = self._make_config()
+        result = _run(run_workflow(
+            workflow_id="asdw",
+            params={"branch": "main", "resource_group": "", "selected_steps": []},
+            config=cfg,
+        ))
+        self.assertIn("error", result)
+        self.assertEqual(result["error"], "resource_group is required for ASDW/ABDV workflows.")
 
     def test_aqod_is_excluded_from_workiq_prefetch_on_normal_path(self) -> None:
         """通常経路で AQOD は事前フェッチ対象外、AKM は対象であることを確認。"""
@@ -1146,6 +1159,27 @@ class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
         params = _collect_params_non_interactive(wf, cli_args)
         self.assertEqual(params["app_ids"], ["APP-05"])
         self.assertEqual(params["app_id"], "APP-05")
+
+    def test_collect_params_non_interactive_enable_auto_merge_non_akm(self) -> None:
+        from orchestrator import _collect_params_non_interactive
+        from unittest.mock import MagicMock
+        wf = MagicMock()
+        wf.id = "aad"
+        params = _collect_params_non_interactive(
+            wf,
+            {"branch": "main", "enable_auto_merge": True},
+        )
+        self.assertTrue(params.get("enable_auto_merge"))
+
+    def test_collect_params_non_interactive_auto_resolve_app_ids(self) -> None:
+        from orchestrator import _collect_params_non_interactive
+        from unittest.mock import MagicMock, patch
+        wf = MagicMock()
+        wf.id = "aad"
+        with patch("orchestrator.resolve_all_app_ids", return_value=["APP-01", "APP-02"]):
+            params = _collect_params_non_interactive(wf, {"branch": "main"})
+        self.assertEqual(params["app_ids"], ["APP-01", "APP-02"])
+        self.assertTrue(params.get("app_ids_auto_resolved"))
 
 
 class TestCollectParamsNonInteractiveAkmDefaults(unittest.TestCase):

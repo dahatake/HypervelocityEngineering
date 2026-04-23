@@ -56,6 +56,7 @@ from hve.template_engine import (
     resolve_selected_steps,
     build_root_issue_body,
     collect_params as cli_collect_params,
+    resolve_all_app_ids,
     _WORKFLOW_DISPLAY_NAMES,
     _WORKFLOW_PREFIX,
 )
@@ -136,6 +137,13 @@ def _collect_params_non_interactive(
     elif args.get("app_id"):
         params["app_ids"] = [args["app_id"]]
         params["app_id"] = args["app_id"]
+    elif wf.id in ("aad", "asdw"):
+        all_ids = resolve_all_app_ids()
+        if all_ids:
+            params["app_ids"] = all_ids
+            params["app_ids_auto_resolved"] = True
+            if len(all_ids) == 1:
+                params["app_id"] = all_ids[0]
     if args.get("resource_group"):
         params["resource_group"] = args["resource_group"]
     if args.get("usecase_id"):
@@ -155,6 +163,8 @@ def _collect_params_non_interactive(
         params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
         params["focus_areas"] = args.get("focus_areas") or ""
+        if args.get("enable_auto_merge") is not None:
+            params["enable_auto_merge"] = args["enable_auto_merge"]
     else:
         if args.get("sources"):
             params["sources"] = args["sources"]
@@ -171,6 +181,8 @@ def _collect_params_non_interactive(
         # 非 AKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         if "force_refresh" in args:
             params["force_refresh"] = args["force_refresh"]
+        if args.get("enable_auto_merge") is not None:
+            params["enable_auto_merge"] = args["enable_auto_merge"]
 
     # Issue タイトル上書き
     if args.get("issue_title"):
@@ -764,6 +776,17 @@ async def run_workflow(
     # dry_run を params に反映
     if config.dry_run:
         effective_params["dry_run"] = True
+
+    if wf.id in ("asdw", "abdv") and not effective_params.get("resource_group"):
+        console.error("resource_group は ASDW/ABDV ワークフローの必須パラメーターです。--resource-group を指定してください。")
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "elapsed_total": time.time() - start_total,
+            "error": "resource_group is required for ASDW/ABDV workflows.",
+        }
 
     console.phase_end(p, _total_phases, "パラメータ収集", time.time() - phase_start)
 

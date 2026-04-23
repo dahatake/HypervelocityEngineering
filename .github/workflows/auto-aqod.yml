@@ -175,12 +175,18 @@ jobs:
           model = first_line("使用するモデル", "Auto")
           sec = section("PR完全自動化設定")
           auto_merge = bool(re.search(r"-\s*\[[xX]\]", sec))
+          review_sec = section("レビュー設定")
+          review_enabled = bool(re.search(r"-\s*\[[xX]\]", review_sec))
+          qa_sec = section("質問票設定")
+          qa_enabled = bool(re.search(r"-\s*\[[xX]\]", qa_sec))
           print(json.dumps({
               "target_scope": target_scope or "original-docs/",
               "depth": depth if depth in ("standard", "lightweight") else "standard",
               "focus_areas": focus_areas,
               "model": model or "Auto",
-              "auto_merge": auto_merge
+              "auto_merge": auto_merge,
+              "review_enabled": review_enabled,
+              "qa_enabled": qa_enabled
           }, ensure_ascii=False))
           PYEOF
           )
@@ -190,7 +196,9 @@ jobs:
           FOCUS_AREAS=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['focus_areas'])")
           MODEL=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_merge'] else 'false')")
-          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL AUTO_MERGE
+          REVIEW_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('review_enabled') else 'false')")
+          QA_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('qa_enabled') else 'false')")
+          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL AUTO_MERGE REVIEW_ENABLED QA_ENABLED
 
           STEP_TITLE="[AQOD] original-docs 質問票生成"
           STEP_BODY=$(python3 - <<'PYEOF'
@@ -202,13 +210,15 @@ jobs:
           focus_areas = os.environ["FOCUS_AREAS"]
           model = os.environ["MODEL"]
           auto_merge = os.environ["AUTO_MERGE"]
+          review_enabled = os.environ["REVIEW_ENABLED"]
+          qa_enabled = os.environ["QA_ENABLED"]
           template = Path(".github/scripts/templates/aqod/step-1.md").read_text(encoding="utf-8")
           root_ref = "\n".join([
               f"<!-- root-issue: #{issue_num} -->",
               "<!-- branch: main -->",
-              "<!-- auto-review: true -->",
-              "<!-- auto-context-review: true -->",
-              "<!-- auto-qa: true -->",
+              f"<!-- auto-review: {review_enabled} -->",
+              f"<!-- auto-context-review: {review_enabled} -->",
+              f"<!-- auto-qa: {qa_enabled} -->",
               "<!-- mode: original-docs-questionnaire -->",
           ])
           additional = f"\n\n## 追加コメント\n- model: {model}\n- auto-merge: {auto_merge}"
@@ -223,9 +233,15 @@ jobs:
           PYEOF
           )
 
-          LABELS='["aqod:ready","auto-context-review","auto-qa"]'
+          LABELS='["aqod:ready"]'
+          if [[ "${REVIEW_ENABLED}" == "true" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-context-review"]')
+          fi
+          if [[ "${QA_ENABLED}" == "true" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-qa"]')
+          fi
           if [[ "${AUTO_MERGE}" == "true" ]]; then
-            LABELS='["aqod:ready","auto-context-review","auto-qa","auto-approve-ready"]'
+            LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi
 
           STEP_RESPONSE=$(create_issue "${STEP_TITLE}" "${STEP_BODY}" "${LABELS}")

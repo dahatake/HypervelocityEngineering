@@ -998,14 +998,14 @@ def _cmd_run_interactive() -> int:
         from .console import Console
         from .config import SDKConfig
         from .workflow_registry import list_workflows, get_workflow
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES, resolve_all_app_ids
         from .orchestrator import run_workflow
         from .workiq import is_workiq_available, workiq_login
     except ImportError:
         from console import Console  # type: ignore[no-redef]
         from config import SDKConfig  # type: ignore[no-redef]
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
-        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES, resolve_all_app_ids  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
         from workiq import is_workiq_available, workiq_login  # type: ignore[no-redef]
 
@@ -1415,6 +1415,14 @@ def _cmd_run_interactive() -> int:
         "steps": selected_step_ids,
         "qa_answer_mode": qa_answer_mode,
     }
+    if wf.id in ("aad", "asdw") and not params_extra.get("app_ids") and not params_extra.get("app_id"):
+        all_ids = resolve_all_app_ids()
+        if all_ids:
+            params_extra["app_ids"] = all_ids
+            params_extra["app_ids_auto_resolved"] = True
+            if len(all_ids) == 1:
+                params_extra["app_id"] = all_ids[0]
+            con.status(f"ℹ️ docs/catalog/app-catalog.md から {len(all_ids)} 件の APP-ID を自動検出: {', '.join(all_ids)}")
     params.update(params_extra)
 
     # ── バリデーション ────────────────────────────────────
