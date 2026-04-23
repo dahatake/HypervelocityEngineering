@@ -132,40 +132,106 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Add split mode label
+      - name: Add or remove split mode labels based on PR diff
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
 
-            function findPlanFiles(dir) {
-              const results = [];
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) results.push(...findPlanFiles(full));
-                else if (entry.name === 'plan.md') results.push(full);
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
               }
-              return results;
+            );
+
+            const changedPlans = files
+              .filter(f => /^work\/.*\/plan\.md$/.test(f.filename));
+
+            core.info(`PR diff に含まれる plan.md: ${changedPlans.length} 件`);
+            for (const p of changedPlans) {
+              core.info(`  - ${p.filename} (${p.status})`);
             }
 
-            const workDir = path.join(process.env.GITHUB_WORKSPACE, 'work');
-            if (!fs.existsSync(workDir)) { core.info('No work/ directory found'); return; }
+            if (changedPlans.length === 0) {
+              core.info('PR 差分に plan.md がないため、ラベル操作をスキップします。');
+              return;
+            }
 
-            const plans = findPlanFiles(workDir);
-            for (const plan of plans) {
-              const content = fs.readFileSync(plan, 'utf8');
-              const match = content.match(/<!-- split_decision: (\w+) -->/);
-              if (match && match[1] === 'SPLIT_REQUIRED') {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  labels: ['split-mode', 'plan-only']
-                });
-                core.info('Added split-mode label');
+            let hasSplitRequired = false;
+            let splitRequiredFile = '';
+
+            for (const plan of changedPlans) {
+              const planPath = plan.filename;
+
+              if (!(plan.status === 'added' || plan.status === 'modified')) {
+                core.info(`${planPath} は ${plan.status} のため split_decision 読み取りをスキップします。`);
+                continue;
               }
+
+              if (!fs.existsSync(planPath)) {
+                core.info(`${planPath} はディスク上に存在しません（削除/renamed?）。スキップします。`);
+                continue;
+              }
+
+              const content = fs.readFileSync(planPath, 'utf8');
+              const match = content.match(/<!-- split_decision: (\w+) -->/);
+              const decision = match ? match[1] : 'MISSING';
+              core.info(`${planPath} → split_decision: ${decision}`);
+
+              if (decision === 'SPLIT_REQUIRED') {
+                hasSplitRequired = true;
+                splitRequiredFile = planPath;
+                break;
+              }
+            }
+
+            const prNumber = context.issue.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            if (hasSplitRequired) {
+              core.info(`SPLIT_REQUIRED を検出: ${splitRequiredFile}`);
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: prNumber,
+                labels: ['split-mode', 'plan-only']
+              });
+              core.info('✅ split-mode / plan-only ラベルを付与しました。');
+            } else {
+              core.info('PR 差分の plan.md に SPLIT_REQUIRED はありません。');
+
+              const currentLabels = await github.paginate(
+                github.rest.issues.listLabelsOnIssue,
+                {
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  per_page: 100,
+                }
+              );
+              const labelNames = currentLabels.map(l => l.name);
+
+              for (const label of ['split-mode', 'plan-only']) {
+                if (!labelNames.includes(label)) continue;
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: prNumber,
+                    name: label,
+                  });
+                  core.info(`🏷️ ${label} ラベルを除去しました。`);
+                } catch (e) {
+                  if (e.status !== 404) throw e;
+                }
+              }
+              core.info('✅ ラベル除去チェック完了。');
             }

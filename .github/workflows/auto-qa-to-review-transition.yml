@@ -318,6 +318,39 @@ jobs:
               ] | .[0].created_at')
           echo "回答日時: ${reply_at}"
 
+          # auto-qa-default-answered の有無を判定
+          has_default_answer=$(echo "${pr_comments}" \
+            | jq --arg qa_at "${qa_posted_at}" \
+              '[.[] | select(.created_at > $qa_at) | select(.body | contains("<!-- auto-qa-default-answered -->"))] | length')
+
+          # default-answer 経由の場合: Copilot の反映完了コメントを要求
+          copilot_acknowledged_default="false"
+          if [ "${has_default_answer:-0}" -gt 0 ]; then
+            copilot_ack_count=$(echo "${pr_comments}" \
+              | jq --arg reply_at "${reply_at}" \
+                '[.[] |
+                  select(.created_at > $reply_at) |
+                  select(
+                    (.user.type == "Bot")
+                    and (
+                      (.user.login | startswith("copilot-swe-agent"))
+                      or .user.login == "Copilot"
+                    )
+                  ) |
+                  select(
+                    (.body | contains("auto-qa-default-answered"))
+                    or (.body | contains("既定値"))
+                    or (.body | contains("デフォルト"))
+                    or (.body | contains("反映しました"))
+                    or (.body | contains("適用しました"))
+                  )
+                ] | length')
+            if [ "${copilot_ack_count:-0}" -gt 0 ]; then
+              copilot_acknowledged_default="true"
+            fi
+            echo "default-answer Copilot 反映確認: ${copilot_acknowledged_default} (count=${copilot_ack_count})"
+          fi
+
           # 条件 6: synchronize イベント（Copilot がコミットを push した）は
           # pull_request_target 経路ではジョブの if 条件（event_name == pull_request_target）で保証済み。
           # issue_comment 経路では条件6を適用しない（ヘッダー記載どおり）。
@@ -334,11 +367,17 @@ jobs:
           echo "最新コミット日時: ${latest_commit_at}"
 
           if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${reply_at}" +%s 2>/dev/null || echo 0)" ]; then
-            echo "✅ ユーザー回答後にコミットが存在します。QA 完了と判定します。"
-            qa_complete="true"
-            reason="QA 完了: ユーザーの @copilot 回答投稿後に Copilot がコミットを push しました。"
-            if [ "${has_issue_review_label}" != "true" ] && [ "${has_issue_auto_merge}" = "true" ]; then
-              direct_approve="true"
+            # default-answer 経由の場合: Copilot の反映コメントも必要
+            if [ "${has_default_answer:-0}" -gt 0 ] && [ "${copilot_acknowledged_default}" != "true" ]; then
+              reason="auto-qa-default-answered 後にコミットは存在しますが、Copilot の反映完了コメントが未検出です。反映作業の完了待ちです。"
+              echo "${reason}"
+            else
+              echo "✅ ユーザー回答後にコミットが存在し、Copilot の反映も確認済みです。QA 完了と判定します。"
+              qa_complete="true"
+              reason="QA 完了: ユーザーの @copilot 回答投稿後に Copilot がコミットを push し、反映完了を確認しました。"
+              if [ "${has_issue_review_label}" != "true" ] && [ "${has_issue_auto_merge}" = "true" ]; then
+                direct_approve="true"
+              fi
             fi
           else
             reason="ユーザーの回答後にコミットがまだありません。Copilot のタスク実行待ちです。"

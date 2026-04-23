@@ -112,11 +112,58 @@ jobs:
             echo "proceed=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: Copilot の直近活動を確認（デバウンス後の二重確認）
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.guard.outputs.done != 'true'
+          && steps.recheck.outputs.proceed == 'true'
+        id: activity-check
+        run: |
+          set -euo pipefail
+          CUTOFF_EPOCH=$(( $(date +%s) - ${DEBOUNCE_SECONDS} ))
+          CUTOFF_ISO=""
+          if CUTOFF_ISO=$(date -u -d "@${CUTOFF_EPOCH}" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null); then
+            echo "GNU date 形式でカットオフ時刻を算出しました: ${CUTOFF_ISO}"
+          elif CUTOFF_ISO=$(date -u -r "${CUTOFF_EPOCH}" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null); then
+            echo "BSD date 形式でカットオフ時刻を算出しました: ${CUTOFF_ISO}"
+          fi
+          if [ -z "${CUTOFF_ISO}" ]; then
+            echo "::warning::カットオフ時刻の算出に失敗したため、安全側に倒して Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          recent_bot_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg cutoff "${CUTOFF_ISO}" \
+              '[.[] |
+                select(.created_at > $cutoff) |
+                select(
+                  (.user.type == "Bot")
+                  and (
+                    (.user.login | startswith("copilot-swe-agent"))
+                    or .user.login == "Copilot"
+                  )
+                )
+              ] | length' 2>/dev/null) || recent_bot_comments=0
+
+          echo "デバウンス期間中の Copilot コメント数: ${recent_bot_comments}"
+
+          if [ "${recent_bot_comments:-0}" -gt 0 ]; then
+            echo "⏳ Copilot がデバウンス期間中にコメントを投稿しています。作業継続中の可能性があるため Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "✅ デバウンス期間中に Copilot の活動はありません。Ready 化を続行します。"
+            echo "proceed=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Draft → Ready 遷移
         if: >
           steps.check-copilot.outputs.is_copilot == 'true'
           && steps.guard.outputs.done != 'true'
           && steps.recheck.outputs.proceed == 'true'
+          && steps.activity-check.outputs.proceed == 'true'
         id: mark-ready
         run: |
           set -euo pipefail
@@ -134,6 +181,7 @@ jobs:
           steps.check-copilot.outputs.is_copilot == 'true'
           && steps.guard.outputs.done != 'true'
           && steps.recheck.outputs.proceed == 'true'
+          && steps.activity-check.outputs.proceed == 'true'
         env:
           READY_SUCCESS: ${{ steps.mark-ready.outputs.ready_success }}
         run: |

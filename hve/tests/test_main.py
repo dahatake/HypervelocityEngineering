@@ -126,12 +126,16 @@ class TestParserBasic(unittest.TestCase):
     def test_workiq_flags(self) -> None:
         args = _parse([
             "orchestrate", "-w", "aas", "--workiq",
+            "--workiq-draft",
+            "--workiq-draft-output-dir", "qa-drafts",
             "--workiq-tenant-id", "tenant-x",
             "--workiq-prompt-qa", "qa",
             "--workiq-prompt-km", "km",
             "--workiq-prompt-review", "review",
         ])
         self.assertTrue(args.workiq)
+        self.assertTrue(args.workiq_draft)
+        self.assertEqual(args.workiq_draft_output_dir, "qa-drafts")
         self.assertEqual(args.workiq_tenant_id, "tenant-x")
         self.assertEqual(args.workiq_prompt_qa, "qa")
         self.assertEqual(args.workiq_prompt_km, "km")
@@ -458,11 +462,11 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(params["focus_areas"], "データ整合性")
 
 
-    def test_model_auto_resolved_in_config(self) -> None:
-        """--model Auto が claude-opus-4.7 に解決されることを確認。"""
+    def test_model_auto_kept_in_config(self) -> None:
+        """--model Auto が固定モデルへ解決されず保持されることを確認。"""
         args = _parse(["orchestrate", "-w", "aas", "--model", "Auto"])
         config = _build_config(args)
-        self.assertEqual(config.model, "claude-opus-4.7")
+        self.assertEqual(config.model, "Auto")
 
     def test_model_4_6_still_selectable(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--model", "claude-opus-4.6"])
@@ -475,11 +479,11 @@ class TestBuildParams(unittest.TestCase):
             config = _build_config(args)
             self.assertEqual(config.model, "claude-opus-4.6")
 
-    def test_default_model_used_when_cli_and_env_missing(self) -> None:
+    def test_default_model_auto_used_when_cli_and_env_missing(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.model, "claude-opus-4.7")
+            self.assertEqual(config.model, "Auto")
 
     def test_cli_explicit_default_model_overrides_env_model(self) -> None:
         with mock.patch.dict(os.environ, {"MODEL": "claude-opus-4.6"}, clear=False):
@@ -490,6 +494,8 @@ class TestBuildParams(unittest.TestCase):
     def test_build_config_workiq(self) -> None:
         args = _parse([
             "orchestrate", "-w", "aas", "--workiq",
+            "--workiq-draft",
+            "--workiq-draft-output-dir", "qa-drafts",
             "--workiq-tenant-id", "tenant-x",
             "--workiq-prompt-qa", "qa",
             "--workiq-prompt-km", "km",
@@ -501,6 +507,19 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(cfg.workiq_prompt_qa, "qa")
         self.assertEqual(cfg.workiq_prompt_km, "km")
         self.assertEqual(cfg.workiq_prompt_review, "review")
+        self.assertTrue(cfg.workiq_draft_mode)
+        self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
+
+    def test_build_config_workiq_draft_output_dir_not_overridden_when_cli_omitted(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["WORKIQ_DRAFT_OUTPUT_DIR"] = "env-drafts"
+            args = _parse(["orchestrate", "-w", "aas", "--workiq-draft"])
+            cfg = _build_config(args)
+            self.assertEqual(cfg.workiq_draft_output_dir, "env-drafts")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
 
 
 class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
@@ -560,10 +579,10 @@ class TestReviewModelCLI(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas"])
         self.assertIsNone(args.qa_model)
 
-    def test_review_model_auto_resolved_in_config(self) -> None:
+    def test_review_model_auto_kept_in_config(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--review-model", "Auto"])
         config = _build_config(args)
-        self.assertEqual(config.review_model, "claude-opus-4.7")
+        self.assertEqual(config.review_model, "Auto")
 
     def test_review_model_auto_resolved_from_env_when_cli_missing(self) -> None:
         env_backup = os.environ.copy()
@@ -571,7 +590,7 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["REVIEW_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.review_model, "claude-opus-4.7")
+            self.assertEqual(config.review_model, "Auto")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -582,7 +601,7 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ["QA_MODEL"] = "Auto"
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.qa_model, "claude-opus-4.7")
+            self.assertEqual(config.qa_model, "Auto")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -591,10 +610,15 @@ class TestReviewModelCLI(unittest.TestCase):
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md"])
         self.assertEqual(args.model, "claude-opus-4.7")
 
-    def test_qa_merge_auto_resolved_to_opus_4_7(self) -> None:
+    def test_qa_merge_auto_not_resolved_to_fixed_model(self) -> None:
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md", "--model", "Auto"])
         model, _ = _resolve_model(args.model)
-        self.assertEqual(model, "claude-opus-4.7")
+        self.assertEqual(model, "Auto")
+
+    def test_resolve_model_empty_string_treated_as_auto(self) -> None:
+        model, display = _resolve_model("")
+        self.assertEqual(model, "Auto")
+        self.assertEqual(display, "Auto")
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -919,6 +943,13 @@ class TestCreateIssuesNewFlow(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--ignore-paths", "tmp", "build"])
         config = _build_config(args)
         self.assertEqual(config.ignore_paths, ["tmp", "build"])
+
+    def test_ignore_paths_auto_remove_qa_when_workiq_draft_and_create_pr(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--workiq-draft", "--create-pr"])
+        config = _build_config(args)
+        self.assertTrue(config.create_pr)
+        self.assertTrue(config.workiq_draft_mode)
+        self.assertNotIn("qa", config.ignore_paths)
 
 
 class TestInteractiveModeCodeReview(unittest.TestCase):
@@ -1345,6 +1376,73 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         self.assertFalse(cfg.force_interactive)
         self.assertTrue(cfg.qa_auto_defaults)
         con.prompt_answer_mode.assert_not_called()
+
+
+class TestInteractiveModeAqodQaFlow(unittest.TestCase):
+    def test_manual_mode_aqod_auto_qa_enables_workiq_draft_mode(self) -> None:
+        import unittest.mock as mock
+
+        captured = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured["cfg"] = config
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(
+            id="1", title="Step1", is_container=False, depends_on=[], params=[],
+        )
+        mock_wf = mock.MagicMock(id="aqod", steps=[mock_step], params=[])
+        mock_display_names = {"aqod": "AQOD"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        # workflow(aqod), model, exec_mode(手動), verbosity, aqod depth(default)
+        con.menu_select.side_effect = [0, 0, 2, 1, -1]
+        # prompt_yes_no の順序:
+        # 1) AQOD後QA実施 2) Work IQ利用 3) Issue作成 4) PR作成
+        # 5) Code Review有効化 6) dry_run 7) 実行確認
+        # （AQOD + auto_qa=True のため Work IQドラフト確認プロンプトは表示されない）
+        # side_effect = [QA, WorkIQ, Issue, PR, CodeReview, dry_run, confirm]
+        con.prompt_yes_no.side_effect = [True, True, False, False, False, False, True]
+        # branch, timeout, target_scope, focus_areas, additional_prompt
+        con.prompt_input.side_effect = ["main", "21600", "original-docs/", "", ""]
+        con.prompt_multi_select.return_value = []
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=True)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=True)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
+        }):
+            _main_mod._cmd_run_interactive()
+
+        cfg = captured.get("cfg")
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.auto_qa)
+        self.assertTrue(cfg.workiq_enabled)
+        self.assertEqual(cfg.qa_answer_mode, "all")
+        self.assertTrue(cfg.workiq_draft_mode)
+        prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
+        self.assertNotIn("Work IQ で回答ドラフトを自動生成する？", prompts)
 
 
 class TestInteractiveAdocParamsValidation(unittest.TestCase):

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" width="1400" height="560" role="img" aria-labelledby="title desc">
+  <title id="title">要求定義ステップ依存フロー</title>
+  <desc id="desc">Step.1からStep.3の直列フローと、Step.4がStep.1以降に独立して並行実施可能な依存関係</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style><![CDATA[
+      text { font-family: system-ui, -apple-system, sans-serif; }
+      .doc { fill:#9B59B6; stroke:#4a235a; }
+      .file { fill:#95A5A6; stroke:#5d6d73; }
+      .km { fill:#F39C12; stroke:#7a4f00; }
+      .node { rx:8; ry:8; stroke-width:2; }
+      .line { stroke:#333; stroke-width:2.5; fill:none; marker-end:url(#arrow); }
+      .label { fill:#111; font-size:14px; }
+      .white { fill:#fff; }
+      .dark { fill:#111; }
+    ]]></style>
+  </defs>
+  <rect x="0" y="0" width="1400" height="560" fill="#FFFFFF"/>
+
+  <rect class="node doc" x="60" y="90" width="280" height="130"/>
+  <text class="white" x="200" y="135" text-anchor="middle" font-size="22" font-weight="700">Step.1</text>
+  <text class="white" x="200" y="170" text-anchor="middle" font-size="18">事業分析</text>
+
+  <rect class="node doc" x="430" y="90" width="280" height="130"/>
+  <text class="white" x="570" y="135" text-anchor="middle" font-size="22" font-weight="700">Step.2</text>
+  <text class="white" x="570" y="170" text-anchor="middle" font-size="18">ビジネスドキュメント</text>
+
+  <rect class="node doc" x="800" y="90" width="280" height="130"/>
+  <text class="white" x="940" y="135" text-anchor="middle" font-size="22" font-weight="700">Step.3</text>
+  <text class="white" x="940" y="170" text-anchor="middle" font-size="18">ユースケース</text>
+
+  <rect class="node km" x="520" y="340" width="460" height="150"/>
+  <text class="dark" x="750" y="390" text-anchor="middle" font-size="24" font-weight="700">Step.4</text>
+  <text class="dark" x="750" y="425" text-anchor="middle" font-size="19">KnowledgeManager</text>
+  <text class="dark" x="750" y="455" text-anchor="middle" font-size="16">（Step.1 以降に並行実施可能）</text>
+
+  <line class="line" x1="340" y1="155" x2="430" y2="155"/>
+  <line class="line" x1="710" y1="155" x2="800" y2="155"/>
+  <line class="line" x1="200" y1="220" x2="610" y2="340"/>
+
+  <text class="label" x="385" y="136" text-anchor="middle">docs/business-requirement.md</text>
+  <text class="label" x="755" y="136" text-anchor="middle">docs/catalog/use-case-catalog.md</text>
+  <text class="label" x="420" y="262" text-anchor="middle">qa/* 質問票ファイル</text>
+</svg>

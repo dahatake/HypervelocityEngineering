@@ -4,11 +4,25 @@
 
 ---
 
+## 目次
+
+- [概要（4層構造）](#概要4層構造)
+- [Agent チェーン図（ADOC）](#agent-チェーン図adoc)
+- [前提条件](#前提条件)
+- [方式1: Copilot cloud agent 手動実行](#方式1-copilot-cloud-agent-手動実行)
+- [方式2: ワークフローオーケストレーション（Web）](#方式2-ワークフローオーケストレーションweb)
+- [方式3: ワークフローオーケストレーション（ローカル hve）](#方式3-ワークフローオーケストレーションローカル-hve)
+- [成果物出力先](#成果物出力先)
+- [DAG 実行の Wave 計画](#dag-実行の-wave-計画)
+
+---
 ## 概要（4層構造）
 
 `adoc` ワークフローは、Context Window を小さく保つために、前段の要約のみを後段へ渡す 4 層構造で実行します。`src/` 相当の既存コードを入力に技術文書（`docs-generated/`）を生成し、`knowledge/` との整合確認を進める際の補助資料として活用できます。
 
 ![3つの情報源をもとに3つのワークフローが連携し、レイヤー1のファイルインベントリとファイル単位サマリーから、レイヤー2のコンポーネント分析、レイヤー2.5のインデックス、レイヤー3から4の横断分析と目的特化ドキュメント生成へ段階的に進む adoc の4層構造図](./images/knowledge-interface-flow.svg)
+
+![ADOC アーキテクチャ。src の既存コードを入力として auto-app-documentation ワークフローを実行し、Wave 1〜6 の4層スイムレーンで Doc-FileInventory から Doc-Migration までの Doc-* Agent が並列/合流しながら段階的に処理して、docs-generated 配下の inventory/files/components/architecture/guides を生成する。](./images/infographic-adoc.svg)
 
 - レイヤー1（Step.1〜2.x）: ファイルインベントリ + ファイル単位サマリー
 - レイヤー2（Step.3.x）: コンポーネント/モジュール分析

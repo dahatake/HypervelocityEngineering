@@ -1,5 +1,20 @@
 # 要求定義ガイド
 
+← [README](../README.md)
+
+---
+
+## 目次
+
+- [概要](#概要)
+- [ツール](#ツール)
+- [ステップ概要](#ステップ概要)
+- [Step.1 事業分析ドキュメントの作成](#step1-事業分析ドキュメントの作成)
+- [Step.2 ビジネスドキュメントの一覧の作成](#step2-ビジネスドキュメントの一覧の作成)
+- [Step.3 ユースケースの作成](#step3-ユースケースの作成)
+- [Step.4 qa/ フォルダーを使った質問票ベースの要求定義プロセス](#step4-qa-フォルダーを使った質問票ベースの要求定義プロセス)
+
+---
 事業のアイディア、議事録、プロジェクトプランなどから、要求定義のドキュメントを作成します。
 
 GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilot cloud agent について](https://docs.github.com/ja/enterprise-cloud@latest/copilot/using-github-copilot/coding-agent/about-assigning-tasks-to-copilot)
@@ -19,7 +34,7 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 - Microsoft 365 Copilot（または同等の LLM ツール）へのアクセス（Step.1〜Step.3 で使用）
 - GitHub Copilot が有効になっていること（Step.4 で使用）
-- セットアップ・トラブルシューティングは → [README.md 共通セットアップ手順](../README.md#共通セットアップ手順)
+- セットアップ・トラブルシューティングは → [初期セットアップ](./getting-started.md)
 
 ### 完了条件
 
@@ -65,11 +80,7 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 ### 依存グラフ
 
-```
-Step.1 ──► Step.2 ──► Step.3
-
-Step.4 は独立して実行可能（Step.1 以降に並行実施推奨）
-```
+![要求定義ステップ依存フロー](./images/business-requirement-dependency-flow.svg)
 
 ### 各ステップの入出力
 

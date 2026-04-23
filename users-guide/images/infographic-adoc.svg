@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 700" role="img" aria-labelledby="title desc">
+  <title id="title">ADOC インフォグラフィック</title>
+  <desc id="desc">ADOC の src 入力から4層スイムレーン（Wave1〜6）で Doc-* Agent が連鎖し docs-generated へ出力する構成図。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
+    .inputZone { fill: #f8fafc; } .processZone { fill: #eff6ff; } .outputZone { fill: #f0fdf4; }
+    .lane1 { fill: #eef2ff; } .lane2 { fill: #eff6ff; } .lane3 { fill: #f5f3ff; } .lane4 { fill: #ecfeff; }
+    .zoneTitle { font-size: 18px; font-weight: 700; }
+    .laneTitle { font-size: 12px; font-weight: 700; fill: #334155; }
+    .file { fill: #fff; stroke: #64748b; stroke-width: 1.5; rx: 8; ry: 8; }
+    .workflow { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
+    .step { fill: #e0ecff; stroke: #1d4ed8; stroke-width: 1.2; rx: 8; ry: 8; }
+    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.1; rx: 10; ry: 10; }
+    .node { font-size: 10px; font-weight: 600; }
+    .tiny { font-size: 9px; fill: #475569; }
+    .arrow { stroke: #334155; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    .join { fill: #334155; }
+    .label { rx: 12; ry: 12; }
+    .labelText { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+
+  <rect x="20" y="20" width="250" height="660" class="zone inputZone"/>
+  <rect x="290" y="20" width="1240" height="660" class="zone processZone"/>
+  <rect x="1550" y="20" width="230" height="660" class="zone outputZone"/>
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT</text>
+  <text x="310" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="1570" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
+
+  <rect x="320" y="90" width="1180" height="125" class="lane1"/><text x="330" y="110" class="laneTitle">Layer 1 / Wave 1-2: Inventory + File Summaries</text>
+  <rect x="320" y="225" width="1180" height="125" class="lane2"/><text x="330" y="245" class="laneTitle">Layer 2 / Wave 3: Component Analyses</text>
+  <rect x="320" y="360" width="1180" height="125" class="lane3"/><text x="330" y="380" class="laneTitle">Layer 2.5-3 / Wave 4-5: Index + Cross Analyses</text>
+  <rect x="320" y="495" width="1180" height="125" class="lane4"/><text x="330" y="515" class="laneTitle">Layer 4 / Wave 6: Purpose-driven Docs</text>
+
+  <g id="input-zone">
+    <rect x="40" y="110" width="210" height="86" class="file"/><text x="52" y="142" class="node">src/</text><text x="52" y="162" class="tiny">既存ソースコード群</text>
+  </g>
+
+  <g id="process-zone">
+    <rect x="340" y="95" width="1140" height="520" class="workflow"/>
+    <text x="362" y="122" class="node" fill="#1d4ed8">Workflow: auto-app-documentation.yml</text>
+
+    <!-- Wave1 -->
+    <rect x="360" y="135" width="120" height="70" class="step"/><text x="368" y="153" class="node">step-1</text><rect x="368" y="160" width="104" height="20" class="agent"/><text x="371" y="173" class="tiny">Doc-FileInventory</text>
+
+    <!-- Wave2 parallel 2.1-2.5 -->
+    <rect x="510" y="135" width="120" height="70" class="step"/><text x="518" y="153" class="node">2.1</text><rect x="518" y="160" width="104" height="20" class="agent"/><text x="521" y="173" class="tiny">Doc-FileSummary</text>
+    <rect x="640" y="135" width="120" height="70" class="step"/><text x="648" y="153" class="node">2.2</text><rect x="648" y="160" width="104" height="20" class="agent"/><text x="651" y="173" class="tiny">Doc-TestSummary</text>
+    <rect x="770" y="135" width="120" height="70" class="step"/><text x="778" y="153" class="node">2.3</text><rect x="778" y="160" width="104" height="20" class="agent"/><text x="781" y="173" class="tiny">Doc-ConfigSummary</text>
+    <rect x="900" y="135" width="120" height="70" class="step"/><text x="908" y="153" class="node">2.4</text><rect x="908" y="160" width="104" height="20" class="agent"/><text x="911" y="173" class="tiny">Doc-CICDSummary</text>
+    <rect x="1030" y="135" width="120" height="70" class="step"/><text x="1038" y="153" class="node">2.5</text><rect x="1038" y="160" width="104" height="20" class="agent"/><text x="1041" y="173" class="tiny">Doc-LargeFileSummary</text>
+
+    <!-- Wave3 parallel 3.1-3.5 -->
+    <rect x="510" y="270" width="120" height="70" class="step"/><text x="518" y="288" class="node">3.1</text><rect x="518" y="295" width="104" height="20" class="agent"/><text x="521" y="308" class="tiny">Doc-ComponentDesign</text>
+    <rect x="640" y="270" width="120" height="70" class="step"/><text x="648" y="288" class="node">3.2</text><rect x="648" y="295" width="104" height="20" class="agent"/><text x="651" y="308" class="tiny">Doc-APISpec</text>
+    <rect x="770" y="270" width="120" height="70" class="step"/><text x="778" y="288" class="node">3.3</text><rect x="778" y="295" width="104" height="20" class="agent"/><text x="781" y="308" class="tiny">Doc-DataModel</text>
+    <rect x="900" y="270" width="120" height="70" class="step"/><text x="908" y="288" class="node">3.4</text><rect x="908" y="295" width="104" height="20" class="agent"/><text x="911" y="308" class="tiny">Doc-TestSpecSummary</text>
+    <rect x="1030" y="270" width="120" height="70" class="step"/><text x="1038" y="288" class="node">3.5</text><rect x="1038" y="295" width="104" height="20" class="agent"/><text x="1041" y="308" class="tiny">Doc-TechDebt</text>
+
+    <!-- Wave4 -->
+    <rect x="1180" y="390" width="130" height="74" class="step"/><text x="1188" y="409" class="node">step-4</text><rect x="1188" y="417" width="114" height="20" class="agent"/><text x="1191" y="430" class="tiny">Doc-ComponentIndex</text>
+
+    <!-- Wave5 parallel -->
+    <rect x="520" y="390" width="130" height="74" class="step"/><text x="528" y="409" class="node">5.1</text><rect x="528" y="417" width="114" height="20" class="agent"/><text x="531" y="430" class="tiny">Doc-ArchOverview</text>
+    <rect x="670" y="390" width="130" height="74" class="step"/><text x="678" y="409" class="node">5.2</text><rect x="678" y="417" width="114" height="20" class="agent"/><text x="681" y="430" class="tiny">Doc-DependencyMap</text>
+    <rect x="820" y="390" width="130" height="74" class="step"/><text x="828" y="409" class="node">5.3</text><rect x="828" y="417" width="114" height="20" class="agent"/><text x="831" y="430" class="tiny">Doc-InfraDeps</text>
+    <rect x="970" y="390" width="130" height="74" class="step"/><text x="978" y="409" class="node">5.4</text><rect x="978" y="417" width="114" height="20" class="agent"/><text x="981" y="430" class="tiny">Doc-NFRAnalysis</text>
+
+    <!-- Wave6 parallel -->
+    <rect x="700" y="525" width="140" height="80" class="step"/><text x="708" y="545" class="node">6.1</text><rect x="708" y="553" width="124" height="22" class="agent"/><text x="711" y="568" class="tiny">Doc-Onboarding</text>
+    <rect x="880" y="525" width="140" height="80" class="step"/><text x="888" y="545" class="node">6.2</text><rect x="888" y="553" width="124" height="22" class="agent"/><text x="891" y="568" class="tiny">Doc-Refactoring</text>
+    <rect x="1060" y="525" width="140" height="80" class="step"/><text x="1068" y="545" class="node">6.3</text><rect x="1068" y="553" width="124" height="22" class="agent"/><text x="1071" y="568" class="tiny">Doc-Migration</text>
+
+    <rect x="360" y="640" width="104" height="24" fill="#64748b" class="label"/><text x="412" y="652" class="labelText">adoc:ready</text>
+    <rect x="476" y="640" width="118" height="24" fill="#1d4ed8" class="label"/><text x="535" y="652" class="labelText">adoc:running</text>
+    <rect x="606" y="640" width="104" height="24" fill="#15803d" class="label"/><text x="658" y="652" class="labelText">adoc:done</text>
+  </g>
+
+  <g id="output-zone">
+    <rect x="1570" y="130" width="190" height="80" class="file"/><text x="1582" y="160" class="node">docs-generated/inventory.md</text>
+    <rect x="1570" y="225" width="190" height="80" class="file"/><text x="1582" y="255" class="node">docs-generated/files/</text>
+    <rect x="1570" y="320" width="190" height="80" class="file"/><text x="1582" y="350" class="node">docs-generated/components/</text>
+    <rect x="1570" y="415" width="190" height="80" class="file"/><text x="1582" y="445" class="node">docs-generated/architecture/</text>
+    <rect x="1570" y="510" width="190" height="80" class="file"/><text x="1582" y="540" class="node">docs-generated/guides/</text>
+  </g>
+
+  <g id="connections">
+    <path d="M250 153 C290 153, 320 170, 360 170" class="arrow"/>
+    <path d="M480 170 L510 170" class="arrow"/>
+    <path d="M480 170 C500 170, 620 170, 640 170" class="arrow"/>
+    <path d="M480 170 C500 170, 750 170, 770 170" class="arrow"/>
+    <path d="M480 170 C500 170, 880 170, 900 170" class="arrow"/>
+    <path d="M480 170 C500 170, 1010 170, 1030 170" class="arrow"/>
+
+    <circle cx="1165" cy="260" r="5" class="join"/>
+    <path d="M630 205 C740 205, 980 205, 1160 260" class="arrow"/>
+    <path d="M760 205 C820 205, 1010 205, 1160 260" class="arrow"/>
+    <path d="M890 205 C900 205, 1040 205, 1160 260" class="arrow"/>
+    <path d="M1020 205 C1030 205, 1080 205, 1160 260" class="arrow"/>
+    <path d="M1150 205 C1160 205, 1160 230, 1160 260" class="arrow"/>
+
+    <path d="M1165 260 L510 305" class="arrow"/>
+    <path d="M1165 260 L640 305" class="arrow"/>
+    <path d="M1165 260 L770 305" class="arrow"/>
+    <path d="M1165 260 L900 305" class="arrow"/>
+    <path d="M1165 260 L1030 305" class="arrow"/>
+
+    <circle cx="1165" cy="430" r="5" class="join"/>
+    <path d="M630 305 C740 305, 980 305, 1165 430" class="arrow"/>
+    <path d="M760 305 C820 305, 1010 305, 1165 430" class="arrow"/>
+    <path d="M890 305 C900 305, 1040 305, 1165 430" class="arrow"/>
+    <path d="M1020 305 C1030 305, 1080 305, 1165 430" class="arrow"/>
+    <path d="M1150 305 C1160 305, 1165 360, 1165 430" class="arrow"/>
+
+    <path d="M1240 430 L1100 430" class="arrow"/>
+    <path d="M1240 430 L950 430" class="arrow"/>
+    <path d="M1240 430 L800 430" class="arrow"/>
+    <path d="M1240 430 L650 430" class="arrow"/>
+
+    <path d="M735 464 C735 500, 770 500, 770 525" class="arrow"/>
+    <path d="M735 464 C735 500, 950 500, 950 525" class="arrow"/>
+    <path d="M885 464 C885 500, 950 500, 950 525" class="arrow"/>
+    <path d="M950 464 C950 500, 1130 500, 1130 525" class="arrow"/>
+    <path d="M1100 464 C1100 500, 1130 500, 1130 525" class="arrow"/>
+
+    <path d="M1200 565 C1490 565, 1530 540, 1570 540" class="arrow"/>
+    <path d="M1200 565 C1490 565, 1530 445, 1570 445" class="arrow"/>
+    <path d="M1200 565 C1490 565, 1530 350, 1570 350" class="arrow"/>
+    <path d="M1200 565 C1490 565, 1530 255, 1570 255" class="arrow"/>
+    <path d="M1200 565 C1490 565, 1530 160, 1570 160" class="arrow"/>
+    <text x="1172" y="256" class="tiny">AND</text>
+    <text x="1172" y="426" class="tiny">AND</text>
+  </g>
+</svg>

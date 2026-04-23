@@ -717,7 +717,7 @@ Options:
   --skip-review            Skip self-review
   --skip-qa                Skip QA questionnaire
   --repo <owner/repo>      Repository (env: REPO)
-  --model <name>           Copilot model（省略時は workflow 側で既定モデル claude-opus-4.7 に解決。claude-opus-4.7 などを指定可能）
+  --model <name>           Copilot model（省略時は Auto。GitHub が最適モデルを動的選択）
   --target-dirs <dirs>     ADOC: Target directories (comma-separated)
   --exclude-patterns <p>   ADOC: Exclude patterns (comma-separated, default: node_modules/,vendor/,dist/,*.lock,__pycache__/)
   --doc-purpose <value>    ADOC: all|onboarding|refactoring|migration (default: all)

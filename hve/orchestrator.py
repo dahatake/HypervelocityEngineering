@@ -127,6 +127,8 @@ def _collect_params_non_interactive(
     }
 
     # ワークフロー固有パラメータ
+    # app_ids/app_id は AAD・ASDW で使用。未指定時はスコープセクションなし = 全APP対象。
+    # Cloud 側 Issue Template と同一のポリシー（任意、未指定=全対象）。
     if args.get("app_ids"):
         params["app_ids"] = args["app_ids"]  # リストとしてそのまま渡す
         if len(args["app_ids"]) == 1:
@@ -875,6 +877,7 @@ async def run_workflow(
 
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
+    workiq_report_paths: Set[str] = set()
     for step in wf.steps:
         if step.is_container or step.id not in active_steps:
             continue
@@ -888,21 +891,22 @@ async def run_workflow(
         )
         step_prompt = step_prompts[step.id]
 
-        # Work IQ: KM / AQOD ワークフロー用 — 事前フェッチ方式
-        if config.workiq_enabled and workflow_id in ("akm", "aqod"):
+        # Work IQ 事前フェッチは AKM のみ（AQOD は Phase 2 QA で利用）
+        if config.workiq_enabled and workflow_id == "akm":
             try:
                 from .workiq import (
                     is_workiq_available, get_workiq_prompt_template,
-                    enrich_prompt_with_workiq, save_workiq_result,
+                    enrich_prompt_with_workiq, save_workiq_result, is_workiq_error_response,
                 )
             except ImportError:
                 from workiq import (  # type: ignore[no-redef]
                     is_workiq_available, get_workiq_prompt_template,
-                    enrich_prompt_with_workiq, save_workiq_result,
+                    enrich_prompt_with_workiq, save_workiq_result, is_workiq_error_response,
                 )
 
             if is_workiq_available():
-                _wiq_mode = "km" if workflow_id == "akm" else "review"
+                _akm_sources = str(effective_params.get("sources") or "qa")
+                _wiq_mode = "review" if _akm_sources == "original-docs" else "km"
                 _wiq_template = get_workiq_prompt_template(
                     _wiq_mode,
                     config.workiq_prompt_km if _wiq_mode == "km" else config.workiq_prompt_review,
@@ -925,16 +929,41 @@ async def run_workflow(
                 )
                 console.spinner_stop()
 
-                if _wiq_context:
+                if _wiq_context and not is_workiq_error_response(_wiq_context):
                     console.status(
                         f"✅ Work IQ: Step.{step.id} の関連情報を取得しました"
                     )
-                    save_workiq_result(
+                    _saved_wiq = save_workiq_result(
                         config.run_id, step.id, _wiq_mode, _wiq_context,
                     )
+                    if _saved_wiq:
+                        workiq_report_paths.add(_saved_wiq.as_posix())
+                    # ここは外側条件（workflow_id == "akm"）内のため AKM 専用レポートを生成する。
+                    _akm_report_path = Path("knowledge") / f"workiq-consistency-report-{config.run_id}.md"
+                    _akm_report_path.parent.mkdir(parents=True, exist_ok=True)
+                    _header = (
+                        "# Work IQ レビュー補助レポート\n\n"
+                        f"- **run_id**: {config.run_id}\n"
+                        f"- **workflow**: {workflow_id}\n"
+                        f"- **step**: {step.id}\n"
+                        f"- **timestamp**: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n\n"
+                        "> ⚠️ 人間レビューが必要です。このレポートを鵜呑みにせず、原文・証跡を確認してください。\n\n"
+                        "---\n\n"
+                    )
+                    _akm_report_path.write_text(_header + _wiq_context, encoding="utf-8")
+                    workiq_report_paths.add(_akm_report_path.as_posix())
                     step_prompt = enrich_prompt_with_workiq(
                         _wiq_context, step_prompt,
                         context_type="M365 参考情報",
+                    )
+                elif _wiq_context:
+                    console.warning(
+                        f"⚠️ Work IQ: Step.{step.id} の事前取得でエラー応答を検出したため、"
+                        "プロンプト注入をスキップします"
+                    )
+                    save_workiq_result(
+                        config.run_id, step.id, _wiq_mode, _wiq_context,
+                        is_error=True,
                     )
                 else:
                     console.status(
@@ -986,6 +1015,16 @@ async def run_workflow(
         p = _next_phase()
         phase_start_post = time.time()
         console.phase_start(p, _total_phases, "後処理 (git push + PR)")
+        _ignore_paths_for_commit = list(config.ignore_paths or [])
+        if (
+            config.create_pr
+            and config.auto_qa
+            and workflow_id == "aqod"
+            and "qa" in _ignore_paths_for_commit
+        ):
+            # AQOD の Phase 2 QA で生成される qa/ 成果物を
+            # PR 作成時にコミット対象へ含めるため、qa を除外対象から外す。
+            _ignore_paths_for_commit = [p for p in _ignore_paths_for_commit if p != "qa"]
 
         prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
         display_name_for_commit = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
@@ -993,7 +1032,7 @@ async def run_workflow(
             branch=working_branch,
             commit_message=f"[{prefix}] {display_name_for_commit} — SDK ローカル実行の成果物",
             console=console,
-            ignore_paths=config.ignore_paths,
+            ignore_paths=_ignore_paths_for_commit,
         )
         if pushed:
             pr_number = _create_pr_if_needed(
@@ -1003,6 +1042,7 @@ async def run_workflow(
                 config=config,
                 console=console,
                 root_issue_num=root_issue_num,
+                workiq_report_paths=sorted(workiq_report_paths),
             )
             if pr_number is None:
                 pr_error = "PR 作成に失敗しました。ログを確認してください。"
@@ -1352,6 +1392,7 @@ def _create_pr_if_needed(
     config: SDKConfig,
     console: Console,
     root_issue_num: Optional[int] = None,
+    workiq_report_paths: Optional[List[str]] = None,
 ) -> Optional[int]:
     """PR を作成する。
 
@@ -1379,6 +1420,37 @@ def _create_pr_if_needed(
         "",
         f"ブランチ: `{head_branch}` → `{base_branch}`",
     ]
+    if config.workiq_enabled:
+        discovered_paths: Set[str] = set(workiq_report_paths or [])
+        run_id = config.run_id
+        draft_output_dir = (config.workiq_draft_output_dir or "").strip() or "qa"
+        if run_id:
+            draft_glob = str(Path(draft_output_dir) / f"{run_id}-*-workiq-draft.md")
+            for path in sorted(_glob.glob(draft_glob)):
+                discovered_paths.add(path)
+            akm_report = f"knowledge/workiq-consistency-report-{run_id}.md"
+            if os.path.exists(akm_report):
+                discovered_paths.add(akm_report)
+        ignore_roots = tuple((p or "").strip().strip("/\\") for p in (config.ignore_paths or []))
+        filtered_paths = []
+        for p in sorted(discovered_paths):
+            normalized = Path(p).as_posix().lstrip("./")
+            if normalized.startswith("work/"):
+                # work/ は中間成果物（既定で ignore）で PR 本文の参照対象外とする。
+                continue
+            if any(
+                root and (normalized == root or normalized.startswith(f"{root}/"))
+                for root in ignore_roots
+            ):
+                continue
+            filtered_paths.append(normalized)
+        if filtered_paths:
+            body_lines.extend([
+                "",
+                "## Work IQ レポート",
+                "以下の補助レポートを参照してレビューしてください:",
+            ])
+            body_lines.extend([f"- `{p}`" for p in filtered_paths])
     if root_issue_num:
         body_lines.append("")
         body_lines.append(f"Closes #{root_issue_num}")

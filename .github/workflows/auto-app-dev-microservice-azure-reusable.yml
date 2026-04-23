@@ -542,14 +542,19 @@ jobs:
           echo "リソースグループ名: ${RESOURCE_GROUP}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "ユースケースID: ${USECASE_ID}"
-          echo "対象アプリケーション: ${APP_IDS}"
+          echo "対象 APP-IDs: ${APP_IDS:-（未指定 = 全アプリケーション対象）}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
           # ---- ROOT_REF（リソースグループメタコメント含む）----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
-            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}")
+          if [[ -n "${APP_IDS}" ]]; then
+            ROOT_REF+=$(printf '\n<!-- app-ids: %s -->' "${APP_IDS}")
+          fi
+          ROOT_REF+=$(printf '\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
+            "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 550" role="img" aria-labelledby="title desc">
+  <title id="title">ABDV インフォグラフィック</title>
+  <desc id="desc">ABDV の入力から auto-batch-dev-reusable.yml の7ステップ、step-4.1/4.2 並列、出力成果物を示す図。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
+    .inputZone { fill: #f8fafc; } .processZone { fill: #eff6ff; } .outputZone { fill: #f0fdf4; }
+    .zoneTitle { font-size: 18px; font-weight: 700; }
+    .file { fill: #fff; stroke: #64748b; stroke-width: 1.5; rx: 8; ry: 8; }
+    .workflow { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
+    .step { fill: #e0ecff; stroke: #1d4ed8; stroke-width: 1.5; rx: 8; ry: 8; }
+    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.2; rx: 10; ry: 10; }
+    .node { font-size: 11px; font-weight: 600; }
+    .tiny { font-size: 10px; fill: #475569; }
+    .arrow { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .label { rx: 12; ry: 12; }
+    .labelText { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+
+  <rect x="20" y="20" width="300" height="510" class="zone inputZone"/>
+  <rect x="340" y="20" width="930" height="510" class="zone processZone"/>
+  <rect x="1290" y="20" width="190" height="510" class="zone outputZone"/>
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT</text>
+  <text x="360" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="1310" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
+
+  <g id="input-zone">
+    <rect x="50" y="110" width="240" height="86" class="file"/>
+    <text x="62" y="142" class="node">docs/batch/ (ABD 成果物)</text>
+    <text x="62" y="162" class="tiny">job/service/test strategy</text>
+  </g>
+
+  <g id="process-zone">
+    <rect x="370" y="80" width="870" height="410" class="workflow"/>
+    <text x="392" y="108" class="node" fill="#1d4ed8">Workflow: auto-batch-dev-reusable.yml</text>
+
+    <rect x="390" y="150" width="120" height="82" class="step"/><text x="398" y="170" class="node">step-1.1</text><rect x="398" y="177" width="104" height="22" class="agent"/><text x="402" y="192" class="tiny">Dev-Batch-Deploy</text>
+    <rect x="520" y="150" width="120" height="82" class="step"/><text x="528" y="170" class="node">step-1.2</text><rect x="528" y="177" width="104" height="22" class="agent"/><text x="532" y="192" class="tiny">Dev-Batch-Deploy</text>
+    <rect x="650" y="150" width="120" height="82" class="step"/><text x="658" y="170" class="node">step-2.1</text><rect x="658" y="177" width="104" height="22" class="agent"/><text x="662" y="192" class="tiny">Dev-Batch-TestCoding</text>
+    <rect x="780" y="150" width="120" height="82" class="step"/><text x="788" y="170" class="node">step-2.2</text><rect x="788" y="177" width="104" height="22" class="agent"/><text x="792" y="192" class="tiny">Dev-Batch-ServiceCoding</text>
+    <rect x="910" y="150" width="120" height="82" class="step"/><text x="918" y="170" class="node">step-3</text><rect x="918" y="177" width="104" height="22" class="agent"/><text x="922" y="192" class="tiny">Dev-Batch-Deploy</text>
+
+    <rect x="860" y="310" width="150" height="86" class="step"/><text x="868" y="330" class="node">step-4.1</text><rect x="868" y="338" width="134" height="22" class="agent"/><text x="872" y="353" class="tiny">QA-AzureArchitectureReview</text>
+    <rect x="1040" y="310" width="150" height="86" class="step"/><text x="1048" y="330" class="node">step-4.2</text><rect x="1048" y="338" width="134" height="22" class="agent"/><text x="1052" y="353" class="tiny">QA-AzureDependencyReview</text>
+
+    <path d="M510 191 L520 191" class="arrow"/>
+    <path d="M640 191 L650 191" class="arrow"/>
+    <path d="M770 191 L780 191" class="arrow"/>
+    <path d="M900 191 L910 191" class="arrow"/>
+    <path d="M970 232 C970 270, 935 270, 935 310" class="arrow"/>
+    <path d="M970 232 C970 270, 1115 270, 1115 310" class="arrow"/>
+
+    <rect x="390" y="450" width="104" height="24" fill="#64748b" class="label"/><text x="442" y="462" class="labelText">abdv:ready</text>
+    <rect x="506" y="450" width="118" height="24" fill="#1d4ed8" class="label"/><text x="565" y="462" class="labelText">abdv:running</text>
+    <rect x="636" y="450" width="104" height="24" fill="#15803d" class="label"/><text x="688" y="462" class="labelText">abdv:done</text>
+  </g>
+
+  <g id="output-zone">
+    <rect x="1310" y="120" width="150" height="74" class="file"/><text x="1320" y="148" class="node">infra/azure/</text>
+    <rect x="1310" y="210" width="150" height="74" class="file"/><text x="1320" y="238" class="node">test/batch/</text>
+    <rect x="1310" y="300" width="150" height="74" class="file"/><text x="1320" y="328" class="node">src/batch/</text>
+    <rect x="1310" y="390" width="150" height="74" class="file"/><text x="1320" y="418" class="node">docs/azure/</text>
+  </g>
+
+  <g id="connections">
+    <path d="M290 153 C340 153, 350 191, 390 191" class="arrow"/>
+    <path d="M1190 353 C1250 353, 1270 238, 1310 238" class="arrow"/>
+    <path d="M1190 353 C1250 353, 1270 148, 1310 148" class="arrow"/>
+    <path d="M1190 353 C1250 353, 1270 328, 1310 328" class="arrow"/>
+    <path d="M1190 353 C1250 353, 1270 418, 1310 418" class="arrow"/>
+    <text x="1020" y="285" class="tiny">並列</text>
+  </g>
+</svg>

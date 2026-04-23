@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" role="img" aria-labelledby="title desc">
+  <title id="title">README 3段構造フロー図</title>
+  <desc id="desc">01要求定義から02アーキテクチャ設計へ進み、03/05 Microservice、04/06 Batch、07/08 AI Agentへ分岐するフロー</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style><![CDATA[
+      text { font-family: system-ui, -apple-system, sans-serif; }
+      .arch { fill:#4A90D9; stroke:#1f3a5a; }
+      .dev { fill:#50C878; stroke:#1b5e20; }
+      .km { fill:#F39C12; stroke:#7a4f00; }
+      .node { rx:8; ry:8; stroke-width:2; }
+      .line { stroke:#333; stroke-width:2.5; fill:none; marker-end:url(#arrow); }
+      .white { fill:#fff; }
+      .dark { fill:#111; }
+    ]]></style>
+  </defs>
+  <rect x="0" y="0" width="1200" height="760" fill="#FFFFFF"/>
+
+  <rect class="node km" x="380" y="60" width="440" height="110"/>
+  <text class="dark" x="600" y="102" font-size="24" text-anchor="middle" font-weight="700">01 要求定義</text>
+  <text class="dark" x="600" y="136" font-size="17" text-anchor="middle">ユースケース作成・事業分析</text>
+
+  <rect class="node arch" x="370" y="250" width="460" height="110"/>
+  <text class="white" x="600" y="292" font-size="24" text-anchor="middle" font-weight="700">02 アプリケーションアーキテクチャ設計</text>
+  <text class="white" x="600" y="326" font-size="17" text-anchor="middle">アプリ一覧作成・候補アーキテクチャ選定</text>
+
+  <rect class="node dev" x="70" y="500" width="320" height="170"/>
+  <text class="dark" x="230" y="545" font-size="22" text-anchor="middle" font-weight="700">03 / 05</text>
+  <text class="dark" x="230" y="580" font-size="20" text-anchor="middle" font-weight="700">Microservice</text>
+  <text class="dark" x="230" y="615" font-size="17" text-anchor="middle">設計 → 実装</text>
+
+  <rect class="node dev" x="440" y="500" width="320" height="170"/>
+  <text class="dark" x="600" y="545" font-size="22" text-anchor="middle" font-weight="700">04 / 06</text>
+  <text class="dark" x="600" y="580" font-size="20" text-anchor="middle" font-weight="700">Batch</text>
+  <text class="dark" x="600" y="615" font-size="17" text-anchor="middle">設計 → 実装</text>
+
+  <rect class="node dev" x="810" y="500" width="320" height="170"/>
+  <text class="dark" x="970" y="545" font-size="22" text-anchor="middle" font-weight="700">07 / 08</text>
+  <text class="dark" x="970" y="580" font-size="20" text-anchor="middle" font-weight="700">AI Agent</text>
+  <text class="dark" x="970" y="615" font-size="17" text-anchor="middle">設計 → 実装</text>
+
+  <line class="line" x1="600" y1="170" x2="600" y2="250"/>
+  <line class="line" x1="600" y1="360" x2="230" y2="500"/>
+  <line class="line" x1="600" y1="360" x2="600" y2="500"/>
+  <line class="line" x1="600" y1="360" x2="970" y2="500"/>
+</svg>

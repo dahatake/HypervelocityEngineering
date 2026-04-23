@@ -274,6 +274,22 @@ class TestRenderTemplate:
 
 
 class TestCollectParams:
+    def test_aad_collect_params_with_multiple_app_ids(self):
+        wf = get_workflow("aad")
+        inputs = iter([
+            "main",                  # branch
+            "APP-01, APP-02",        # app_ids
+            "",                      # selected_steps = all
+            "n",                     # skip_review
+            "n",                     # skip_qa
+            "",                      # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf)
+        assert params["branch"] == "main"
+        assert params["app_ids"] == ["APP-01", "APP-02"]
+        assert "app_id" not in params
+
     def test_adoc_collect_params(self):
         wf = get_workflow("adoc")
         inputs = iter([

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" role="img" aria-labelledby="title desc">
+  <title id="title">ABD インフォグラフィック</title>
+  <desc id="desc">ABD の入力、auto-batch-design.yml の9ステップ、2つの並列実行と2つのAND合流、出力成果物を示す図。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
+    .inputZone { fill: #f8fafc; } .processZone { fill: #eff6ff; } .outputZone { fill: #f0fdf4; }
+    .zoneTitle { font-size: 18px; font-weight: 700; }
+    .file { fill: #fff; stroke: #64748b; stroke-width: 1.5; rx: 8; ry: 8; }
+    .workflow { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
+    .step { fill: #e0ecff; stroke: #1d4ed8; stroke-width: 1.5; rx: 8; ry: 8; }
+    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.2; rx: 10; ry: 10; }
+    .node { font-size: 11px; font-weight: 600; }
+    .tiny { font-size: 10px; fill: #475569; }
+    .arrow { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .join { fill: #334155; }
+    .label { rx: 12; ry: 12; }
+    .labelText { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+  <rect x="20" y="20" width="300" height="560" class="zone inputZone"/>
+  <rect x="340" y="20" width="980" height="560" class="zone processZone"/>
+  <rect x="1340" y="20" width="240" height="560" class="zone outputZone"/>
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT</text>
+  <text x="360" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="1360" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
+
+  <g id="input-zone">
+    <rect x="50" y="100" width="240" height="80" class="file"/><text x="62" y="132" class="node">docs/catalog/use-case-catalog.md</text><text x="62" y="152" class="tiny">必須入力</text>
+    <rect x="50" y="200" width="240" height="80" class="file"/><text x="62" y="232" class="node">docs/catalog/data-model.md</text><text x="62" y="252" class="tiny">任意入力</text>
+  </g>
+
+  <g id="process-zone">
+    <rect x="370" y="80" width="920" height="460" class="workflow"/>
+    <text x="392" y="108" class="node" fill="#1d4ed8">Workflow: auto-batch-design.yml</text>
+
+    <rect x="390" y="140" width="140" height="78" class="step"/><text x="398" y="158" class="node">step-1.1</text><rect x="398" y="164" width="124" height="22" class="agent"/><text x="402" y="179" class="tiny">Arch-Batch-DomainAnalytics</text>
+    <rect x="390" y="250" width="140" height="78" class="step"/><text x="398" y="268" class="node">step-1.2</text><rect x="398" y="274" width="124" height="22" class="agent"/><text x="402" y="289" class="tiny">Arch-Batch-DataSourceAnalysis</text>
+
+    <circle cx="560" cy="235" r="5" class="join"/>
+    <rect x="590" y="196" width="145" height="78" class="step"/><text x="598" y="214" class="node">step-2</text><rect x="598" y="220" width="129" height="22" class="agent"/><text x="602" y="235" class="tiny">Arch-Batch-DataModel</text>
+    <rect x="760" y="196" width="145" height="78" class="step"/><text x="768" y="214" class="node">step-3</text><rect x="768" y="220" width="129" height="22" class="agent"/><text x="772" y="235" class="tiny">Arch-Batch-JobCatalog</text>
+    <rect x="930" y="196" width="145" height="78" class="step"/><text x="938" y="214" class="node">step-4</text><rect x="938" y="220" width="129" height="22" class="agent"/><text x="942" y="235" class="tiny">Arch-Batch-ServiceCatalog</text>
+    <rect x="1100" y="196" width="145" height="78" class="step"/><text x="1108" y="214" class="node">step-5</text><rect x="1108" y="220" width="129" height="22" class="agent"/><text x="1112" y="235" class="tiny">Arch-Batch-TestStrategy</text>
+
+    <rect x="980" y="340" width="145" height="78" class="step"/><text x="988" y="358" class="node">step-6.1</text><rect x="988" y="364" width="129" height="22" class="agent"/><text x="992" y="379" class="tiny">Arch-Batch-JobSpec</text>
+    <rect x="1150" y="340" width="145" height="78" class="step"/><text x="1158" y="358" class="node">step-6.2</text><rect x="1158" y="364" width="129" height="22" class="agent"/><text x="1162" y="379" class="tiny">Arch-Batch-MonitoringDesign</text>
+    <circle cx="1230" cy="445" r="5" class="join"/>
+    <rect x="1085" y="460" width="145" height="68" class="step"/><text x="1093" y="478" class="node">step-6.3</text><rect x="1093" y="484" width="129" height="22" class="agent"/><text x="1097" y="499" class="tiny">Arch-Batch-TDD-TestSpec</text>
+
+    <rect x="390" y="500" width="96" height="24" fill="#64748b" class="label"/><text x="438" y="512" class="labelText">abd:ready</text>
+    <rect x="500" y="500" width="112" height="24" fill="#1d4ed8" class="label"/><text x="556" y="512" class="labelText">abd:running</text>
+    <rect x="626" y="500" width="96" height="24" fill="#15803d" class="label"/><text x="674" y="512" class="labelText">abd:done</text>
+  </g>
+
+  <g id="output-zone">
+    <rect x="1360" y="120" width="200" height="84" class="file"/><text x="1372" y="152" class="node">docs/batch/</text><text x="1372" y="172" class="tiny">domain/data/job/service/monitoring</text>
+    <rect x="1360" y="230" width="200" height="84" class="file"/><text x="1372" y="262" class="node">docs/batch/jobs/</text><text x="1372" y="282" class="tiny">job spec ファイル群</text>
+    <rect x="1360" y="340" width="200" height="84" class="file"/><text x="1372" y="372" class="node">docs/test-specs/</text><text x="1372" y="392" class="tiny">{jobId}-test-spec.md</text>
+  </g>
+
+  <g id="connections">
+    <path d="M290 140 C340 140, 350 180, 390 180" class="arrow"/>
+    <path d="M290 240 C340 240, 350 290, 390 290" class="arrow"/>
+    <path d="M530 179 L560 230" class="arrow"/>
+    <path d="M530 289 L560 240" class="arrow"/>
+    <path d="M560 235 L590 235" class="arrow"/>
+    <path d="M735 235 L760 235" class="arrow"/>
+    <path d="M905 235 L930 235" class="arrow"/>
+    <path d="M1075 235 L1100 235" class="arrow"/>
+    <path d="M1172 274 C1172 310, 1050 310, 1050 340" class="arrow"/>
+    <path d="M1172 274 C1172 310, 1222 310, 1222 340" class="arrow"/>
+    <path d="M1050 418 L1230 445" class="arrow"/>
+    <path d="M1222 418 L1230 445" class="arrow"/>
+    <path d="M1230 445 L1230 494" class="arrow"/>
+    <path d="M1230 494 C1290 494, 1320 380, 1360 380" class="arrow"/>
+    <path d="M1230 494 C1290 494, 1320 160, 1360 160" class="arrow"/>
+    <path d="M1230 494 C1290 494, 1320 270, 1360 270" class="arrow"/>
+    <text x="566" y="228" class="tiny">AND</text>
+    <text x="1238" y="443" class="tiny">AND</text>
+  </g>
+</svg>

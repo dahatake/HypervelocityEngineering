@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" role="img" aria-labelledby="title desc">
+  <title id="title">AKM インフォグラフィック</title>
+  <desc id="desc">AKM の sources 分岐、auto-knowledge-management.yml の KnowledgeManager 実行、knowledge 出力と反復精緻化ループを示す図。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
+    .inputZone { fill: #f8fafc; } .processZone { fill: #eff6ff; } .outputZone { fill: #f0fdf4; }
+    .zoneTitle { font-size: 18px; font-weight: 700; }
+    .file { fill: #fff; stroke: #64748b; stroke-width: 1.5; rx: 8; ry: 8; }
+    .workflow { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
+    .step { fill: #e0ecff; stroke: #1d4ed8; stroke-width: 1.5; rx: 8; ry: 8; }
+    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.4; rx: 12; ry: 12; }
+    .node { font-size: 12px; font-weight: 600; }
+    .tiny { font-size: 11px; fill: #475569; }
+    .arrow { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    .loop { fill: none; stroke: #7c3aed; stroke-width: 2; stroke-dasharray: 6 4; marker-end: url(#arrow); }
+    .label { rx: 12; ry: 12; }
+    .labelText { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+
+  <rect x="20" y="20" width="260" height="460" class="zone inputZone"/>
+  <rect x="300" y="20" width="620" height="460" class="zone processZone"/>
+  <rect x="940" y="20" width="240" height="460" class="zone outputZone"/>
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT</text>
+  <text x="320" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="960" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
+
+  <g id="input-zone">
+    <rect x="40" y="100" width="220" height="72" class="file"/><text x="52" y="128" class="node">sources: qa</text><text x="52" y="148" class="tiny">qa/</text>
+    <rect x="40" y="190" width="220" height="72" class="file"/><text x="52" y="218" class="node">sources: original-docs</text><text x="52" y="238" class="tiny">original-docs/</text>
+    <rect x="40" y="280" width="220" height="72" class="file"/><text x="52" y="308" class="node">sources: both</text><text x="52" y="328" class="tiny">qa/ + original-docs/</text>
+  </g>
+
+  <g id="process-zone">
+    <rect x="330" y="90" width="560" height="300" class="workflow"/>
+    <text x="352" y="120" class="node" fill="#1d4ed8">Workflow: auto-knowledge-management.yml</text>
+    <rect x="430" y="170" width="360" height="160" class="step"/>
+    <text x="450" y="200" class="node">step-1</text>
+    <rect x="450" y="220" width="320" height="42" class="agent"/>
+    <text x="470" y="246" class="node">KnowledgeManager</text>
+    <text x="450" y="286" class="tiny">D01〜D21 更新 / 状態集計 / 矛盾検知</text>
+
+    <rect x="330" y="420" width="96" height="24" fill="#64748b" class="label"/><text x="378" y="432" class="labelText">akm:ready</text>
+    <rect x="440" y="420" width="112" height="24" fill="#1d4ed8" class="label"/><text x="496" y="432" class="labelText">akm:running</text>
+    <rect x="566" y="420" width="96" height="24" fill="#15803d" class="label"/><text x="614" y="432" class="labelText">akm:done</text>
+  </g>
+
+  <g id="output-zone">
+    <rect x="960" y="120" width="200" height="82" class="file"/><text x="972" y="152" class="node">knowledge/D01〜D21-*.md</text>
+    <rect x="960" y="220" width="200" height="82" class="file"/><text x="972" y="252" class="node">knowledge/business-requirement-</text><text x="972" y="270" class="tiny">document-status.md</text>
+  </g>
+
+  <g id="connections">
+    <path d="M260 136 C300 136, 330 190, 430 190" class="arrow"/>
+    <path d="M260 226 C300 226, 330 210, 430 210" class="arrow"/>
+    <path d="M260 316 C300 316, 330 230, 430 230" class="arrow"/>
+    <path d="M790 240 C860 240, 900 160, 960 160" class="arrow"/>
+    <path d="M790 250 C860 250, 900 260, 960 260" class="arrow"/>
+    <path d="M1060 302 C1060 390, 500 390, 500 330" class="loop"/>
+    <text x="1068" y="350" class="tiny">反復精緻化ループ</text>
+  </g>
+</svg>

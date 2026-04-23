@@ -14,7 +14,7 @@
     # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
-    # 基本実行 (デフォルト: claude-opus-4.7, 並列15, compact, Issue/PR作成なし)
+    # 基本実行 (デフォルト: Auto, 並列15, compact, Issue/PR作成なし)
     python -m hve orchestrate --workflow aad
 
     # QA + Review 有効
@@ -71,9 +71,9 @@ from pathlib import Path
 from typing import List, Optional
 
 try:
-    from .config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig
+    from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
 except ImportError:
-    from config import DEFAULT_MODEL, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
+    from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
 
 
 def _ts() -> str:
@@ -85,8 +85,7 @@ def _ts() -> str:
 # Auto モデル定数
 # -----------------------------------------------------------------------
 
-MODEL_AUTO = "Auto"
-_MODEL_AUTO_RESOLVED = DEFAULT_MODEL
+MODEL_AUTO = MODEL_AUTO_VALUE
 
 # AKM デフォルト値
 _AKM_DEFAULT_SOURCES = "qa"
@@ -224,13 +223,13 @@ def _resolve_model(model: str) -> tuple:
     """モデル名を解決する。
 
     Args:
-        model: 入力モデル名。MODEL_AUTO の場合は _MODEL_AUTO_RESOLVED に解決する。
+        model: 入力モデル名。空文字または MODEL_AUTO の場合は Auto を返す。
 
     Returns:
         (resolved_model, display_name) のタプル。
     """
-    if model == MODEL_AUTO:
-        return _MODEL_AUTO_RESOLVED, MODEL_AUTO
+    if model in ("", MODEL_AUTO):
+        return MODEL_AUTO_VALUE, MODEL_AUTO
     return model, model
 
 
@@ -282,7 +281,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model", "-m",
         default=None,
         metavar="MODEL",
-        help=f"使用するモデル名 (デフォルト: {DEFAULT_MODEL})。Auto を指定するとデフォルトモデルが自動選択されます",
+        help="使用するモデル名 (デフォルト: Auto)。Auto を指定すると GitHub が最適モデルを自動選択します",
     )
     orch.add_argument(
         "--review-model",
@@ -355,6 +354,18 @@ def _build_parser() -> argparse.ArgumentParser:
             "Work IQ 経由で M365 データ（メール・チャット・会議・ファイル）を参照する "
             "(デフォルト: 無効。@microsoft/workiq のインストールが必要)"
         ),
+    )
+    orch.add_argument(
+        "--workiq-draft",
+        action="store_true",
+        default=False,
+        help="QA 質問ごとに Work IQ 回答ドラフトを生成する（デフォルト: 無効）",
+    )
+    orch.add_argument(
+        "--workiq-draft-output-dir",
+        default=None,
+        metavar="DIR",
+        help="Work IQ 回答ドラフトの出力先ディレクトリ（未指定時: 設定/環境変数、最終既定値 qa）",
     )
     orch.add_argument(
         "--workiq-tenant-id",
@@ -764,10 +775,11 @@ def _build_config(args: argparse.Namespace):
     elif env_model:
         cfg.model = env_model
     else:
-        cfg.model = DEFAULT_MODEL
+        cfg.model = MODEL_AUTO_VALUE
     # Auto モデル解決
     cfg.model, _ = _resolve_model(cfg.model)
-    cfg.model = _normalize_model_with_warning(cfg.model) or DEFAULT_MODEL
+    if cfg.model != MODEL_AUTO_VALUE:
+        cfg.model = _normalize_model_with_warning(cfg.model) or DEFAULT_MODEL
     _raw_review_model = getattr(args, "review_model", None)
     if _raw_review_model:
         cfg.review_model, _ = _resolve_model(_raw_review_model)
@@ -833,6 +845,12 @@ def _build_config(args: argparse.Namespace):
     # Work IQ
     if getattr(args, "workiq", False):
         cfg.workiq_enabled = True
+    if getattr(args, "workiq_draft", False):
+        cfg.workiq_enabled = True
+        cfg.workiq_draft_mode = True
+    workiq_draft_output_dir = getattr(args, "workiq_draft_output_dir", None)
+    if workiq_draft_output_dir is not None:
+        cfg.workiq_draft_output_dir = workiq_draft_output_dir
     cfg.workiq_tenant_id = getattr(args, "workiq_tenant_id", None)
     cfg.workiq_prompt_qa = getattr(args, "workiq_prompt_qa", None)
     cfg.workiq_prompt_km = getattr(args, "workiq_prompt_km", None)
@@ -841,6 +859,8 @@ def _build_config(args: argparse.Namespace):
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
         cfg.ignore_paths = args.ignore_paths
+    if cfg.create_pr and cfg.workiq_draft_mode and "qa" in cfg.ignore_paths:
+        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
 
     return cfg
 
@@ -1067,6 +1087,7 @@ def _cmd_run_interactive() -> int:
         repo_input = os.environ.get("REPO", "")
         dry_run = False
         workiq_enabled = False
+        workiq_draft_mode = False
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
@@ -1129,10 +1150,18 @@ def _cmd_run_interactive() -> int:
             timeout_val = _timeout_fallback
 
         if is_single_step_workflow:
-            auto_qa = False
-            auto_review = False
             qa_answer_mode = None
             force_interactive = False
+            auto_review = False
+            if is_aqod:
+                auto_qa = con.prompt_yes_no(
+                    "AQOD 完了後に QA（質問票生成・回答）を実施する？",
+                    default=False,
+                )
+                if auto_qa:
+                    qa_answer_mode = "all"
+            else:
+                auto_qa = False
         else:
             auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
             if auto_qa:
@@ -1171,10 +1200,10 @@ def _cmd_run_interactive() -> int:
 
         # ── Work IQ 連携 ──────────────────────────────────────
         workiq_enabled = False
+        workiq_draft_mode = False
         _show_workiq_option = (
             auto_qa
             or is_akm
-            or is_aqod
         )
 
         if _show_workiq_option and is_workiq_available():
@@ -1193,6 +1222,13 @@ def _cmd_run_interactive() -> int:
                     workiq_enabled = False
                 else:
                     con.status("✅ Work IQ へのログインが完了しました")
+                    if is_aqod and auto_qa:
+                        workiq_draft_mode = True
+                    elif auto_qa:
+                        workiq_draft_mode = con.prompt_yes_no(
+                            "Work IQ で回答ドラフトを自動生成する？",
+                            default=False,
+                        )
 
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
@@ -1282,6 +1318,7 @@ def _cmd_run_interactive() -> int:
         # force_interactive は auto_qa=True 時は常に False のため表示不要
     if workiq_enabled:
         summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
+        summary_lines.append(f"Work IQ Draft: {'ON' if workiq_draft_mode else 'OFF'}")
     summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
@@ -1326,11 +1363,15 @@ def _cmd_run_interactive() -> int:
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
     cfg.workiq_enabled = workiq_enabled
+    cfg.workiq_draft_mode = workiq_draft_mode
+    cfg.workiq_draft_output_dir = "qa"
     cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
     cfg.qa_answer_mode = qa_answer_mode
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
+    if cfg.create_pr and cfg.workiq_draft_mode and "qa" in cfg.ignore_paths:
+        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
     cfg.verbosity = verbosity_value
     cfg.verbose = verbosity_value >= 3
     cfg.quiet = verbosity_value == 0
@@ -1500,10 +1541,10 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
     consolidated_path = QAMerger.generate_consolidated_path(qa_path)
 
     try:
-        from .config import SDKConfig
+        from .config import SDKConfig, normalize_model
         from .console import Console
     except ImportError:
-        from config import SDKConfig  # type: ignore[no-redef]
+        from config import SDKConfig, normalize_model  # type: ignore[no-redef]
         from console import Console  # type: ignore[no-redef]
 
     try:
@@ -1524,6 +1565,13 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
                 return 0
 
         model, _ = _resolve_model(args.model)  # _ = display name (unused here)
+        if model != MODEL_AUTO_VALUE:
+            normalized_model = normalize_model(model)
+            if normalized_model != model:
+                print(
+                    f"{_ts()} ⚠️  '{model}' は旧表記です。'{normalized_model}' を使用します。"
+                )
+                model = normalized_model
         cfg = SDKConfig.from_env()
         cfg.model = model
 
@@ -1536,10 +1584,11 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
 
         async def _generate_consolidated() -> int:
             await client.start()
-            async with CopilotSession(
-                client=client,
-                model=model,
-            ) as session:
+            _session_kwargs = {"client": client}
+            # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+            if model != MODEL_AUTO_VALUE:
+                _session_kwargs["model"] = model
+            async with CopilotSession(**_session_kwargs) as session:
                 consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
                     merged_qa_content=merged_content,
                 )

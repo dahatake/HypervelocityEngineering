@@ -222,7 +222,7 @@ original-docs/ 原本 + qa/ 質問票
 | **GitHub Actions 依存** | あり | あり | なし |
 | **Copilot アサイン** | 手動 | 自動（`COPILOT_PAT` 必要） | しない（ローカル直接実行） |
 | **MCP Server** | GitHub 管理の MCP 設定 | GitHub 管理の MCP 設定 | `--mcp-config` で任意設定可 |
-| **モデル選択** | Issue の「使用するモデル」で選択可（既定: Auto=`claude-opus-4.7`） | Issue の「使用するモデル」で選択可（既定: Auto=`claude-opus-4.7`） | `--model` / `--review-model` / `--qa-model` で指定可（既定: `claude-opus-4.7`） |
+| **モデル選択** | Issue の「使用するモデル」で選択可（既定: Auto（GitHub が最適モデルを動的選択）） | Issue の「使用するモデル」で選択可（既定: Auto（GitHub が最適モデルを動的選択）） | `--model` / `--review-model` / `--qa-model` で指定可（既定: `Auto`） |
 | **認証** | 不要（Copilot アサイン時のみ `COPILOT_PAT`） | `COPILOT_PAT`（自動アサイン時に必要） | `gh auth login`（Copilot CLI） |
 | **課金** | GitHub Actions 分 | GitHub Actions 分 | Copilot ライセンスのみ |
 | **並列実行** | なし（逐次手動） | GitHub Actions 並列ジョブ | asyncio 並列（デフォルト上限: 15） |

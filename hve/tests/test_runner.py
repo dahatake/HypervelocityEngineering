@@ -248,10 +248,53 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
 
     def test_tool_execution_complete_success(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
-        event = _FakeEvent("tool.execution_complete", _FakeEventData(success=True))
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(success=True, result_summary="12 files found"),
+        )
         with _CaptureOutput() as cap:
             runner._handle_session_event(event)
-        self.assertIn("✓", cap.stdout)
+        self.assertIn("12 files found", cap.stdout)
+
+    def test_assistant_intent_calls_thinking(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent("assistant.intent", _FakeEventData(intent="I'm looking into this"))
+        with unittest.mock.patch.object(runner.console, "thinking") as mock_thinking:
+            runner._handle_session_event(event)
+        mock_thinking.assert_called_once_with("1.1", "I'm looking into this")
+
+    def test_tool_execution_start_read_file_formats_action_name(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(tool_name="read_file", arguments={"path": "hve/workiq.py"}),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("Read workiq.py", cap.stdout)
+        self.assertIn("hve/workiq.py", cap.stdout)
+
+    def test_tool_execution_start_grep_detail_is_truncated(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        long_pattern = "x" * 200
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(tool_name="grep", arguments={"pattern": long_pattern, "path": "hve"}),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("...", cap.stdout)
+
+    def test_tool_execution_start_shell_detail_is_truncated(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        long_command = "echo " + ("a" * 220)
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(tool_name="bash", arguments={"command": long_command}),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("...", cap.stdout)
 
     def test_session_error_shown(self) -> None:
         """session.error は常に表示される。"""
@@ -535,6 +578,87 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
         qa_calls, table_calls = self._run_with_fake_sdk(self._LEGACY_QA_CONTENT)
         self.assertFalse(qa_calls, "旧形式でもパース成功時は qa_prompt() を呼ばないべき")
         self.assertTrue(table_calls, "旧形式でもパース成功時は questionnaire_table() が呼ばれるべき")
+
+
+class TestRunStepWorkIqMcpHealthCheck(unittest.TestCase):
+    def test_uses_session_rpc_mcp_list_for_health_check(self) -> None:
+        import types
+
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            workiq_enabled=True,
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        mcp_list = unittest.mock.AsyncMock(
+            return_value=types.SimpleNamespace(
+                servers=[
+                    types.SimpleNamespace(
+                        name="_hve_workiq",
+                        status=types.SimpleNamespace(value="connected"),
+                        error=None,
+                    )
+                ]
+            )
+        )
+
+        class _FakeSession:
+            def __init__(self) -> None:
+                self.rpc = types.SimpleNamespace(
+                    mcp=types.SimpleNamespace(list=mcp_list)
+                )
+
+            async def send_and_wait(self, *args, **kwargs):
+                return None
+
+            async def disconnect(self):
+                return None
+
+            def on(self, handler):
+                return None
+
+        class _FakeClient:
+            async def start(self):
+                return None
+
+            async def stop(self):
+                return None
+
+            async def create_session(self, **kwargs):
+                return _FakeSession()
+
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
+        fake_copilot.SubprocessConfig = lambda **kwargs: object()
+        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ), unittest.mock.patch(
+            "runner.is_workiq_available", return_value=True
+        ), unittest.mock.patch(
+            "runner.build_workiq_mcp_config", return_value={"_hve_workiq": {}}
+        ):
+            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
+
+        self.assertTrue(result)
+        mcp_list.assert_awaited_once()
+        self.assertFalse(runner._workiq_mcp_connection_failed)
 
 
 class TestStepRunnerModelSwitchDryRun(unittest.TestCase):

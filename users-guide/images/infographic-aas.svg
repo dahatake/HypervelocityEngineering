@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 500" role="img" aria-labelledby="title desc">
+  <title id="title">AAS インフォグラフィック</title>
+  <desc id="desc">AAS の入力ファイル、auto-app-selection.yml の2ステップ処理、出力ファイルを3ゾーンで示すアーキテクチャ図。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <pattern id="workflowPattern" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#bfdbfe" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
+    .inputZone { fill: #f8fafc; }
+    .processZone { fill: #eff6ff; }
+    .outputZone { fill: #f0fdf4; }
+    .zoneTitle { font-size: 18px; font-weight: 700; }
+    .workflow { fill: url(#workflowPattern); stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
+    .file { fill: #ffffff; stroke: #64748b; stroke-width: 1.6; rx: 8; ry: 8; }
+    .step { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 1.8; rx: 9; ry: 9; }
+    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.5; rx: 12; ry: 12; }
+    .skill { fill: #f5f3ff; stroke: #7c3aed; stroke-dasharray: 4 3; stroke-width: 1.2; rx: 10; ry: 10; }
+    .label { rx: 12; ry: 12; }
+    .labelText { font-size: 12px; font-weight: 700; fill: #ffffff; text-anchor: middle; dominant-baseline: middle; }
+    .caption { font-size: 12px; fill: #334155; }
+    .name { font-size: 13px; font-weight: 600; }
+    .tiny { font-size: 11px; fill: #475569; }
+    .arrow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+  </style>
+
+  <rect x="20" y="20" width="320" height="460" class="zone inputZone"/>
+  <rect x="360" y="20" width="710" height="460" class="zone processZone"/>
+  <rect x="1090" y="20" width="290" height="460" class="zone outputZone"/>
+
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT</text>
+  <text x="380" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="1110" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
+
+  <g id="input-zone">
+    <path d="M60 95 h240 v82 h-240 z M268 95 v20 h32" class="file"/>
+    <text x="80" y="126" class="name">docs/catalog/use-case-catalog.md</text>
+    <text x="80" y="146" class="tiny">Step.1 入力</text>
+
+    <path d="M60 205 h240 v82 h-240 z M268 205 v20 h32" class="file"/>
+    <text x="80" y="236" class="name">docs/architectural-requirements-app-xx.md</text>
+    <text x="80" y="256" class="tiny">Step.2 追加入力</text>
+  </g>
+
+  <g id="process-zone">
+    <rect x="390" y="80" width="650" height="360" class="workflow"/>
+    <text x="420" y="110" class="name" fill="#1d4ed8">Workflow: auto-app-selection.yml</text>
+
+    <rect x="420" y="140" width="280" height="120" class="step"/>
+    <text x="438" y="165" class="name">step-1</text>
+    <rect x="438" y="178" width="244" height="28" class="agent"/>
+    <text x="450" y="197" class="name">Arch-ApplicationAnalytics</text>
+    <rect x="438" y="214" width="244" height="24" class="skill"/>
+    <text x="450" y="230" class="tiny">Skill: task-dag-planning / app-scope-resolution</text>
+
+    <rect x="730" y="140" width="280" height="120" class="step"/>
+    <text x="748" y="165" class="name">step-2</text>
+    <rect x="748" y="178" width="244" height="28" class="agent"/>
+    <text x="760" y="197" class="name">Arch-ArchitectureCandidateAnalyzer</text>
+    <rect x="748" y="214" width="244" height="24" class="skill"/>
+    <text x="760" y="230" class="tiny">Skill: architecture-questionnaire</text>
+
+    <rect x="430" y="320" width="94" height="24" fill="#64748b" class="label"/>
+    <text x="477" y="332" class="labelText">aas:ready</text>
+    <rect x="536" y="320" width="108" height="24" fill="#1d4ed8" class="label"/>
+    <text x="590" y="332" class="labelText">aas:running</text>
+    <rect x="656" y="320" width="94" height="24" fill="#15803d" class="label"/>
+    <text x="703" y="332" class="labelText">aas:done</text>
+  </g>
+
+  <g id="output-zone">
+    <path d="M1120 120 h230 v82 h-230 z M1318 120 v20 h32" class="file"/>
+    <text x="1140" y="151" class="name">docs/catalog/app-catalog.md</text>
+    <text x="1140" y="171" class="tiny">step-1 出力</text>
+
+    <path d="M1120 240 h230 v82 h-230 z M1318 240 v20 h32" class="file"/>
+    <text x="1140" y="271" class="name">docs/catalog/app-arch-catalog.md</text>
+    <text x="1140" y="291" class="tiny">step-2 出力</text>
+  </g>
+
+  <g id="connections">
+    <path d="M300 136 C340 136, 360 165, 420 165" class="arrow"/>
+    <path d="M300 246 C360 246, 650 246, 730 246" class="arrow"/>
+    <path d="M700 200 L730 200" class="arrow"/>
+    <path d="M1010 188 C1060 188, 1080 151, 1120 151" class="arrow"/>
+    <path d="M1010 236 C1060 236, 1080 271, 1120 271" class="arrow"/>
+    <text x="708" y="188" class="caption">直列依存</text>
+  </g>
+</svg>

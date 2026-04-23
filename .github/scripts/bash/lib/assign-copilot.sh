@@ -21,7 +21,7 @@ extract_model() {
 resolve_model() {
   local raw="$1"
   if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
-    echo "claude-opus-4.7"; return
+    echo "Auto"; return
   fi
   if [[ "${raw}" == "claude-opus-4-7" ]]; then
     echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
@@ -136,9 +136,20 @@ query(\$issueNumber: Int!) {
     echo "  Bot ID: ${bot_id}, Issue Node ID: ${issue_node_id}, Repo Node ID: ${repo_node_id}"
 
     local result
-    result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql \
-      -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection' \
-      -f query="
+    # resolve_model() により selected_model は空文字にならず "Auto" または実モデル名になる。
+    # Auto 選択時は model 変数を渡さず GitHub 側の自動選択に委譲する。
+    local query
+    local -a gh_args=(
+      -H 'GraphQL-Features: issues_copilot_assignment_api_support,coding_agent_model_selection'
+      -f "assignableId=${issue_node_id}"
+      -f "botId=${bot_id}"
+      -f "targetRepositoryId=${repo_node_id}"
+      -f "baseRef=${base_branch}"
+      -f "customInstructions=${custom_instructions}"
+      -f "customAgent=${custom_agent}"
+    )
+    if [[ "${selected_model}" != "Auto" ]]; then
+      query="
 mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!, \$model: String!) {
   addAssigneesToAssignable(input: {
     assignableId: \$assignableId,
@@ -162,15 +173,36 @@ mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef
     }
   }
 }
-      " \
-      -f assignableId="${issue_node_id}" \
-      -f botId="${bot_id}" \
-      -f targetRepositoryId="${repo_node_id}" \
-      -f baseRef="${base_branch}" \
-      -f customInstructions="${custom_instructions}" \
-      -f customAgent="${custom_agent}" \
-      -f model="${selected_model}" \
-      2>&1) || true
+      "
+      gh_args+=(-f "model=${selected_model}")
+    else
+      query="
+mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef: String!, \$customInstructions: String!, \$customAgent: String!) {
+  addAssigneesToAssignable(input: {
+    assignableId: \$assignableId,
+    assigneeIds: [\$botId],
+    agentAssignment: {
+      targetRepositoryId: \$targetRepositoryId,
+      baseRef: \$baseRef,
+      customInstructions: \$customInstructions,
+      customAgent: \$customAgent
+    }
+  }) {
+    assignable {
+      ... on Issue {
+        id
+        title
+        assignees(first: 10) {
+          nodes { login }
+        }
+      }
+    }
+  }
+}
+      "
+    fi
+    gh_args+=(-f "query=${query}")
+    result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql "${gh_args[@]}" 2>&1) || true
 
     echo "  GraphQL mutation レスポンス: ${result}"
 

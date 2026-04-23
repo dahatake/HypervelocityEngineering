@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 DEFAULT_MODEL: str = "claude-opus-4.7"
+MODEL_AUTO_VALUE: str = "Auto"
 LEGACY_MODEL_ID: str = "claude-opus-4-7"
 MODEL_CHOICES: tuple[str, ...] = (
     "claude-opus-4.7",
@@ -146,6 +147,10 @@ class SDKConfig:
     workiq_prompt_km: Optional[str] = None                # KM 用カスタムプロンプト（None = デフォルト）
     workiq_prompt_review: Optional[str] = None            # Review 用カスタムプロンプト（None = デフォルト）
     workiq_query_timeout_seconds: float = 120.0           # Work IQ クエリタイムアウト秒数
+    workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
+    workiq_draft_output_dir: str = "qa"                   # QA: 回答ドラフト出力先ディレクトリ
+    workiq_per_question_timeout: float = 60.0             # QA: 質問ごとの Work IQ クエリタイムアウト秒数
+    workiq_max_draft_questions: int = 30                  # QA: ドラフト生成対象の最大質問数
 
     # --- Self-Improve ---
     auto_self_improve: bool = True              # 自己改善ループ（デフォルト: 有効）
@@ -165,16 +170,42 @@ class SDKConfig:
     dry_run: bool = False                   # ドライラン
 
     def __post_init__(self) -> None:
-        self.model = _normalize_model_with_warning(self.model) or DEFAULT_MODEL
-        self.review_model = _normalize_model_with_warning(self.review_model)
-        self.qa_model = _normalize_model_with_warning(self.qa_model)
+        # SDKConfig は from_env() 以外（直接コンストラクタ呼び出し）でも利用されるため、
+        # 空文字モデルはここでも Auto に寄せて挙動を統一する。
+        if not self.model:
+            self.model = MODEL_AUTO_VALUE
+        # "Auto" は GitHub 側の Auto Model Selection に委譲するため固定モデルへ解決しない。
+        # 正規化後に空文字になった場合も DEFAULT_MODEL へ固定せず Auto にフォールバックする。
+        if self.model != MODEL_AUTO_VALUE:
+            self.model = _normalize_model_with_warning(self.model) or MODEL_AUTO_VALUE
+        if self.review_model != MODEL_AUTO_VALUE:
+            self.review_model = _normalize_model_with_warning(self.review_model)
+        if self.qa_model != MODEL_AUTO_VALUE:
+            self.qa_model = _normalize_model_with_warning(self.qa_model)
 
     @classmethod
     def from_env(cls) -> "SDKConfig":
         """環境変数から SDKConfig を構築する。"""
         import os
+        raw_model = os.environ.get("MODEL")
+        if raw_model is None or raw_model.strip() == "":
+            env_model = MODEL_AUTO_VALUE
+        else:
+            env_model = _normalize_model_with_warning(raw_model) or MODEL_AUTO_VALUE
+        try:
+            env_workiq_per_question_timeout = float(
+                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "60.0")
+            )
+        except (TypeError, ValueError):
+            env_workiq_per_question_timeout = 60.0
+        try:
+            env_workiq_max_draft_questions = int(
+                os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "30")
+            )
+        except (TypeError, ValueError):
+            env_workiq_max_draft_questions = 30
         return cls(
-            model=_normalize_model_with_warning(os.environ.get("MODEL", DEFAULT_MODEL)) or DEFAULT_MODEL,
+            model=env_model,
             github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
             repo=os.environ.get("REPO", ""),
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
@@ -185,6 +216,10 @@ class SDKConfig:
             workiq_prompt_qa=os.environ.get("WORKIQ_PROMPT_QA") or None,
             workiq_prompt_km=os.environ.get("WORKIQ_PROMPT_KM") or None,
             workiq_prompt_review=os.environ.get("WORKIQ_PROMPT_REVIEW") or None,
+            workiq_draft_mode=os.environ.get("WORKIQ_DRAFT_MODE", "").lower() in ("true", "1", "yes"),
+            workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
+            workiq_per_question_timeout=env_workiq_per_question_timeout,
+            workiq_max_draft_questions=env_workiq_max_draft_questions,
         )
 
     def get_review_model(self) -> str:

@@ -99,6 +99,10 @@
 - Issue Template のモデルを `Auto` に戻す
 - SDK 実行時は `MODEL=claude-opus-4.6` などで一時固定して再実行する（最新 Opus が未ロールアウトの環境での一時回避）
 - workflow 実行ログを確認し、必要に応じて `Auto`（既定）に戻して再実行する
+- `Auto` は GitHub が最適モデルを動的選択するため、モデル可用性・レート制限・レイテンシの影響を受けにくくなります
+- `Auto` はプラン/管理者ポリシー準拠のモデルのみを候補とし、プレミアム乗数 1x 超のモデルは対象外です
+- `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）です
+- 公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
 > **モデル ID の命名規則**: Copilot CLI が受理するモデル ID はすべてドット区切りです（例: `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `claude-haiku-4.5` / `gpt-5.4` / `gpt-5.3-codex`）。`copilot` コマンドで `/model` を実行すると利用可能な正確な ID が確認できます。旧表記 `claude-opus-4-7`（ハイフン区切り）を環境変数や `--model` で指定した場合、SDK 側で自動的に `claude-opus-4.7` に正規化されます（WARNING ログあり）。ワークフロー YAML 側でも同様に正規化されます。
 
@@ -159,15 +163,7 @@
 
 **対応策**: 以下のプロンプトを PR コメントで Copilot に送信してください。
 
-```text
-@copilot ジョブの途中でコマンド文字列を生成できずに、ジョブを実行しようとして{エラーメッセージ}が表示されています。原因を究明して、対応策を検討して、問題を修正してください。
-対応策が、うまくいかない場合は、`段階的アプローチ - 各セクションを個別のコミットで追加`を試してみてください。
-
-### エラーメッセージ
-Run Bash command
-$ undefined
-No command provided. Please supply a valid command to execute.
-```
+> 詳細なプロンプトは [prompt-examples.md — Copilot cloud agent エラー対応](./prompt-examples.md#copilot-cloud-agent-エラー対応) を参照してください。
 
 その他の便利なプロンプトは [prompt-examples.md](./prompt-examples.md) を参照してください。
 

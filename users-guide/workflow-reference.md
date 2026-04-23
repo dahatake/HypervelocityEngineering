@@ -74,9 +74,20 @@
 
 `--workiq` 有効時、以下のワークフローで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。
 
-- **QA（`--auto-qa`）**: 質問票から要約した問いを Work IQ へ問い合わせ、デフォルト回答補強に利用
-- **AKM（`akm`）**: Step 実行前に Work IQ 問い合わせを実施し、整合性確認の根拠として理由欄へ反映
-- **AQOD（`aqod`）**: Step 実行前に Work IQ 問い合わせを実施し、原本ドキュメントとの整合性確認に利用
+- **QA（`--auto-qa`）**:  
+  - 通常モード: 質問票から要約した問いを一括で問い合わせ、デフォルト回答補強に利用  
+  - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-*-workiq-draft.md` を生成
+- **AKM（`akm`）**: Step 実行前に Work IQ 問い合わせを実施し、整合性確認の根拠として反映。`knowledge/workiq-consistency-report-{run_id}.md` にも出力
+- **AQOD（`aqod`）**: Step 実行前に Work IQ 問い合わせを実施し、原本ドキュメントとの整合性確認に利用。`qa/workiq-doc-review-{run_id}.md` にも出力
+
+利用ツール（読み取り専用・7種）:
+- `search_emails`
+- `search_messages`
+- `search_meetings`
+- `search_files`
+- `search_people`
+- `get_calendar`
+- `ask`
 
 ---
 
@@ -146,10 +157,14 @@
 ## モデル選択ルール
 
 - 選択肢: `Auto` / `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `gpt-5.4` / `gpt-5.3-codex` / `gemini-2.5-pro`
-- `Auto` または空文字は `claude-opus-4.7` として解決
+- `Auto` は GitHub が最適モデルを動的に選択（可用性・レイテンシ・レート制限・プラン/ポリシーを考慮）
+- `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）
+- プレミアム乗数 1x 超のモデルは `Auto` 対象外
+- 空文字の場合は `Auto` として扱う
 - 指定モデルが API 未対応の場合は `Auto`（既定）に戻して再実行
 - Sub-Issue には `model/*` ラベルでモデル指定を伝播
 - モデル ID は Copilot CLI の `/model` 表示に合わせてドット区切りを使用（例: `claude-opus-4.7`, `claude-opus-4.6`）
+- 公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
 ---
 

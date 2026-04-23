@@ -57,6 +57,8 @@ body:
     id: model
     attributes:
       label: "使用するモデル"
+      description: |
+        「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
       options:
         - "Auto"
         - "claude-opus-4.7"

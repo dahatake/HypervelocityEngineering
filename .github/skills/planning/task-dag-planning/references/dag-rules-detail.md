@@ -105,8 +105,23 @@ else:  # 見積合計 ≤ 15 かつ 不確実性 == "低"
 
 ### `subissues.md` のフォーマット（必須 — 自動 Issue 作成に必要）
 
+#### ファイルレベルメタデータ（最初の `<!-- subissue -->` より前に記載）
+
+```
+<!-- parent_issue: NNN -->
+```
+
+- `<!-- parent_issue: NNN -->` は **運用上必須**。作業対象Issueの番号（数値のみ、`#` なし）を記載する。
+  - 取得元: PR の起点となった Issue 番号（`Fixes #N` で指定した Issue と同一）
+  - **推論・捏造禁止**: 不明な場合は `TBD` と記載し作業を停止すること
+  - ワークフロー互換: `<!-- parent-issue: #NNN -->`（ハイフン形式・`#` 付き）も受け付けるが、`<!-- parent_issue: NNN -->` を推奨
+  - **現状の自動検証範囲**: `validate-subissues.yml` が自動検証するのは title のみであり、`parent_issue` の有無や値整合はこのワークフローでは未検証
+  - **後続ワークフローでの利用**: `create-subissues-from-pr.yml` は **subissues.md のメタデータを最優先** で使用する。PR body の `Fixes #N` はフォールバック。両者は同じ Issue 番号を指すこと。
+
+#### ブロックレベルメタデータ（各 Sub Issue の定義）
+
 各 Sub Issue を以下の HTML コメント形式のメタデータヘッダーで開始する。
-Sub Issue 間は `---`（水平線）で区切る。
+`<!-- subissue -->` が各ブロックの開始マーカー（**必須区切り**）。`---`（水平線）は可読性向上のための**オプション**であり、ワークフローは `<!-- subissue -->` のみで分割する。
 
 ```
 <!-- subissue -->
@@ -121,10 +136,12 @@ Sub Issue 間は `---`（水平線）で区切る。
 ```
 
 - `<!-- subissue -->` が各ブロックの開始マーカー（必須）
-- `<!-- title: ... -->` が Issue タイトル（必須）
+- `<!-- title: ... -->` が Issue タイトル（**必須**。空値禁止。`REPLACE_ME` 等のプレースホルダーも空値扱い）
 - `<!-- labels: ... -->` がラベル（カンマ区切り。省略可）
-- `<!-- custom_agent: ... -->` が Copilot アサイン時の Custom Agent 名（省略可）
-- `<!-- depends_on: ... -->` が依存先 Sub のブロック番号（カンマ区切り。省略可。省略時＝依存なし＝ルートノード）。plan.md の DAG と一致させること。依存先 Sub が完了するまで Copilot はアサインされない（`create-subissues-from-pr.yml` が制御）。
+- `<!-- custom_agent: ... -->` が Copilot アサイン時の Custom Agent 名。**省略すると Copilot がアサインされない（split-mode では事実上の致命的欠落）。** 親Issueの `## Custom Agent` セクションに記載されている Agent 名を記載すること。
+- `<!-- depends_on: ... -->` が依存先 Sub のブロック番号（カンマ区切り）。**ブロック番号 = subissues.md 内の `<!-- subissue -->` マーカーの出現順（1始まり）。** `## [Sub-N]` の N ではなくマーカー順である点に注意。
+  - **省略 = 依存なし = ルートノード = Copilot 即時アサイン。** 省略は「意図的な並行実行」を意味する。plan.md の DAG で依存がある場合は**必ず記載すること**。省略すると前提未完了で作業が開始される。
+  - **plan.md DAG との対応**: plan.md で `S1→S2` の依存がある場合、subissues.md のブロック2（2番目の `<!-- subissue -->`）に `<!-- depends_on: 1 -->` を記載する。
 - メタデータの後の Markdown テキストが Issue 本文になる
 
 ### subissues.md セルフチェック（生成後に必ず実行）
@@ -140,7 +157,7 @@ pwsh .github/scripts/powershell/validate-subissues.ps1 -Path work/<Agent>/<Issue
 ```
 
 1. 各 `<!-- subissue -->` ブロック内に `<!-- title: ... -->` が存在すること（**必須** — 欠落すると Issue 作成がスキップされる）
-2. `<!-- title: ... -->` の値が空でないこと
+2. `<!-- title: ... -->` の値が空でないこと（`REPLACE_ME` などのプレースホルダーも実質的に空値扱いとして運用上禁止）
 3. `<!-- subissue -->` ブロック数が `plan.md` の `subissues_count` メタデータと一致すること
 4. `<!-- depends_on: ... -->` の参照先ブロック番号が実在すること（存在しない番号を参照していないこと）
 5. Markdown 見出し（`## [Sub-N] タイトル`）と `<!-- title: ... -->` の内容が一致していること

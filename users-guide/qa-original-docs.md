@@ -1,5 +1,10 @@
 # QA Original Docs（AQOD）ガイド（互換ページ）
 
+← [README](../README.md)
+
+---
+
+
 このガイドは移行されました。
 
 - 新しいページ: [original-docs-review.md](./original-docs-review.md)

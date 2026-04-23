@@ -2,7 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/../../scripts/bash/lib" && pwd)"
-export GITHUB_WORKSPACE="$(cd "$(dirname "$0")/../../.." && pwd)"
+GITHUB_WORKSPACE="$(cd "$(dirname "$0")/../../.." && pwd)"
+export GITHUB_WORKSPACE
 export _SCRIPT_DIR="${SCRIPT_DIR}"
 
 # テストヘルパー
@@ -21,8 +22,8 @@ assert_eq() {
 
 echo "=== resolve_model tests ==="
 source "${SCRIPT_DIR}/assign-copilot.sh"
-assert_eq "$(resolve_model '')" "claude-opus-4.7" "empty → default"
-assert_eq "$(resolve_model 'Auto')" "claude-opus-4.7" "Auto → default"
+assert_eq "$(resolve_model '')" "Auto" "empty → Auto"
+assert_eq "$(resolve_model 'Auto')" "Auto" "Auto passthrough"
 assert_eq "$(resolve_model 'claude-opus-4-7')" "claude-opus-4.7" "old format → new"
 assert_eq "$(resolve_model 'gpt-5.4')" "gpt-5.4" "passthrough"
 assert_eq "$(resolve_model 'claude-opus-4.6')" "claude-opus-4.6" "passthrough 4.6"

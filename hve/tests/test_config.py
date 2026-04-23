@@ -8,7 +8,14 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import DEFAULT_MODEL, LEGACY_MODEL_ID, MODEL_CHOICES, SDKConfig, normalize_model
+from config import (
+    DEFAULT_MODEL,
+    LEGACY_MODEL_ID,
+    MODEL_AUTO_VALUE,
+    MODEL_CHOICES,
+    SDKConfig,
+    normalize_model,
+)
 
 
 class TestSDKConfigDefaults(unittest.TestCase):
@@ -106,6 +113,12 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_workiq_default_timeout(self) -> None:
         self.assertEqual(self.cfg.workiq_query_timeout_seconds, 120.0)
 
+    def test_workiq_draft_defaults(self) -> None:
+        self.assertFalse(self.cfg.workiq_draft_mode)
+        self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
+        self.assertEqual(self.cfg.workiq_per_question_timeout, 60.0)
+        self.assertEqual(self.cfg.workiq_max_draft_questions, 30)
+
 
 class TestSDKConfigFromEnv(unittest.TestCase):
     """from_env() の動作を検証する。"""
@@ -160,12 +173,40 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["WORKIQ_PROMPT_QA"] = "qa"
             os.environ["WORKIQ_PROMPT_KM"] = "km"
             os.environ["WORKIQ_PROMPT_REVIEW"] = "review"
+            os.environ["WORKIQ_DRAFT_MODE"] = "true"
+            os.environ["WORKIQ_DRAFT_OUTPUT_DIR"] = "qa-drafts"
+            os.environ["WORKIQ_PER_QUESTION_TIMEOUT"] = "45"
+            os.environ["WORKIQ_MAX_DRAFT_QUESTIONS"] = "12"
             cfg = SDKConfig.from_env()
             self.assertTrue(cfg.workiq_enabled)
             self.assertEqual(cfg.workiq_tenant_id, "tenant-001")
             self.assertEqual(cfg.workiq_prompt_qa, "qa")
             self.assertEqual(cfg.workiq_prompt_km, "km")
             self.assertEqual(cfg.workiq_prompt_review, "review")
+            self.assertTrue(cfg.workiq_draft_mode)
+            self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
+            self.assertEqual(cfg.workiq_per_question_timeout, 45.0)
+            self.assertEqual(cfg.workiq_max_draft_questions, 12)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_uses_auto_when_model_unset(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ.pop("MODEL", None)
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_uses_auto_when_model_empty(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["MODEL"] = ""
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)

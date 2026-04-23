@@ -1,5 +1,10 @@
 # Source Codeからのドキュメント作成（移行済み）
 
+← [README](../README.md)
+
+---
+
+
 このページは `sourcecode-documentation.md` へ移行しました。
 
 `adoc`（`src/`→`docs-generated/`）は、`akm`/`aqod` で精緻化される `knowledge/` と並行して参照し、要件と実装の差分確認に利用します。

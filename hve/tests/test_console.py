@@ -10,7 +10,7 @@ import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from console import Console, _format_elapsed_ja
+from console import Console, _ACTION_DISPLAY, _format_elapsed_ja
 
 
 class _CaptureOutput:
@@ -592,6 +592,46 @@ class TestConsoleSpinner(unittest.TestCase):
         c = Console(verbose=True, quiet=True)
         c.spinner_start("テスト中...")
         self.assertIsNone(c._spinner_thread)
+
+
+class TestCopilotStyleOutput(unittest.TestCase):
+    """Copilot CLI 風の thinking/action 表示テスト。"""
+
+    def test_action_display_mapping_contains_search(self) -> None:
+        self.assertEqual(_ACTION_DISPLAY["grep"], "Search (grep)")
+
+    def test_thinking_verbosity_2_emits_no_timestamp(self) -> None:
+        c = Console(verbosity=2)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.thinking("1", "I'm looking into this.")
+        mock_emit.assert_called_once()
+        self.assertIn("ts", mock_emit.call_args.kwargs)
+        self.assertFalse(mock_emit.call_args.kwargs["ts"])
+
+    def test_thinking_verbosity_1_updates_spinner(self) -> None:
+        c = Console(verbosity=1)
+        with unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.thinking("1", "I'm looking into this.")
+        mock_spinner.assert_called_once()
+
+    def test_action_start_verbosity_2_prints_tree(self) -> None:
+        c = Console(verbosity=2)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.action_start("1", "Search (grep)", '"pattern" (hve)')
+        self.assertEqual(mock_emit.call_count, 2)
+        first_msg = mock_emit.call_args_list[0].args[0]
+        second_msg = mock_emit.call_args_list[1].args[0]
+        self.assertIn("[1]", first_msg)
+        self.assertIn("Search (grep)", first_msg)
+        self.assertIn("│", second_msg)
+
+    def test_action_result_verbosity_2_prints_tree_leaf(self) -> None:
+        c = Console(verbosity=2)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.action_result("1", "12 files found")
+        mock_emit.assert_called_once()
+        self.assertIn("[1]", mock_emit.call_args.args[0])
+        self.assertIn("└", mock_emit.call_args.args[0])
 
 
 # -----------------------------------------------------------------------

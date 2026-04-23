@@ -4,7 +4,7 @@ name: PR 自動 Approve & Auto-merge
 #
 # 安全装置:
 #   - split-mode ラベル付き PR はジョブ条件で除外
-#   - 冪等化マーカー <!-- auto-approve-and-merge-done --> で重複実行防止
+#   - 冪等化マーカー（done/partial/failed）で重複実行防止とリトライ制御
 #   - 既存 Approve レビューの API 直接確認（dismiss 考慮）
 #   - Approve/Merge 失敗時のグレースフルフォールバック（手動対応を促すコメント）
 #
@@ -16,7 +16,7 @@ name: PR 自動 Approve & Auto-merge
 
 on:
   pull_request_target:
-    types: [labeled, ready_for_review]
+    types: [labeled, ready_for_review, synchronize]
 
 concurrency:
   group: auto-approve-merge-${{ github.event.pull_request.number }}
@@ -33,6 +33,7 @@ jobs:
       (
         (github.event.action == 'labeled' && github.event.label.name == 'auto-approve-ready')
         || (github.event.action == 'ready_for_review' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
+        || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
       )
       && contains(github.event.pull_request.labels.*.name, 'split-mode')
     runs-on: ubuntu-latest
@@ -40,7 +41,7 @@ jobs:
       pull-requests: write
       issues: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
@@ -68,11 +69,89 @@ jobs:
             '<!-- auto-approve-and-merge-skipped-split-mode -->' \
             '## ℹ️ split-mode のため auto-approve/auto-merge をスキップしました' \
             'この PR は `split-mode` のため `auto-approve-and-merge.yml` 対象外です。' \
-            '後続で `auto-create-subissues-transition.yml` が完了判定を行い、`create-subissues` ラベルを自動付与します。' \
-            '> ⚠️ **フォールバック**: 5分経過しても `create-subissues` ラベルが付与されない場合は、手動で `create-subissues` ラベルを付与してください。')
+            'このジョブで PR 差分に `subissues.md` を検出した場合、`create-subissues` ラベルを自動付与します。' \
+            '> ⚠️ **フォールバック**: PR 差分に `subissues.md` がない場合は、手動で `create-subissues` ラベルを付与してください。')
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "${comment_body}"
+
+      - name: split-mode 用 create-subissues ラベル付与
+        run: |
+          set -euo pipefail
+
+          gh_api_with_retry() {
+            local attempt=1
+            local max_attempts=5
+            local delay=2
+            while true; do
+              if gh api "$@"; then
+                return 0
+              fi
+              if [ "${attempt}" -ge "${max_attempts}" ]; then
+                return 1
+              fi
+              echo "::warning::gh api failed (attempt ${attempt}/${max_attempts}); retrying in ${delay}s: $*"
+              sleep "${delay}"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          post_fallback_comment_once() {
+            local reason="$1"
+            local marker='<!-- auto-approve-and-merge-subissues-missing -->'
+            local existing=0
+            if ! existing=$(gh_api_with_retry "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              --paginate \
+              --jq '.[]' 2>/dev/null \
+              | jq -s --arg marker "${marker}" '[.[] | select(.body | contains($marker))] | length' \
+              2>/dev/null); then
+              echo "::warning::フォールバックコメント一覧の取得またはフィルタリングに失敗したため、コメント投稿をスキップします。"
+              return 0
+            fi
+            if [ "${existing:-0}" -gt 0 ]; then
+              echo "フォールバック案内コメントは投稿済みです。"
+              return 0
+            fi
+
+            fallback_comment=$(printf '%s\n\n%s\n\n%s\n%s' \
+              "${marker}" \
+              '## ⚠️ `create-subissues` を自動付与できませんでした' \
+              "${reason}" \
+              '`subissues.md` を確認し、必要に応じて手動で `create-subissues` ラベルを付与してください。')
+            if ! gh_api_with_retry --method POST "/repos/${REPO}/issues/${PR_NUMBER}/comments" -f body="${fallback_comment}" >/dev/null; then
+              echo "::warning::フォールバック案内コメントの投稿に失敗しました。"
+            fi
+          }
+
+          if ! labels_json=$(gh_api_with_retry "/repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | jq -R -s -c 'split("\n")[:-1]'); then
+            echo "::warning::PR ラベル取得に失敗したため、create-subissues ラベル自動付与をスキップします。"
+            post_fallback_comment_once 'PR ラベル取得で GitHub API エラーが発生しました。'
+            exit 0
+          fi
+          has_create_subissues=$(printf '%s' "${labels_json}" | jq -r 'if index("create-subissues") then "true" else "false" end')
+          if [ "${has_create_subissues}" = "true" ]; then
+            echo "create-subissues ラベルは既に付与済みです。"
+            exit 0
+          fi
+
+          if ! subissues_files=$(gh_api_with_retry "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --paginate \
+            --jq '.[] | select(.filename | test("(^|/)subissues\\.md$")) | select(.status == "added" or .status == "modified") | .filename'); then
+            echo "::warning::PR 差分ファイル取得に失敗したため、create-subissues ラベル自動付与をスキップします。"
+            post_fallback_comment_once 'PR 差分ファイル取得で GitHub API エラーが発生しました。'
+            exit 0
+          fi
+          if [ -n "${subissues_files}" ]; then
+            echo "PR 差分に subissues.md を検出したため create-subissues ラベルを付与します。"
+            if ! gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label create-subissues; then
+              echo "::warning::create-subissues ラベル付与に失敗しました。手動対応を案内します。"
+              post_fallback_comment_once 'PR ラベル付与（`gh pr edit --add-label create-subissues`）に失敗しました。'
+            fi
+            exit 0
+          fi
+
+          post_fallback_comment_once '`subissues.md` が PR 差分に見つかりませんでした。'
 
   approve-and-merge:
     # labeled イベント: auto-approve-ready ラベルが付与された時
@@ -88,6 +167,10 @@ jobs:
           github.event.action == 'ready_for_review'
           && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
         )
+        || (
+          github.event.action == 'synchronize'
+          && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
+        )
       )
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'split-mode')
@@ -96,6 +179,7 @@ jobs:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
       - name: 冪等化チェック（既に完了・Approve 済みかどうか確認）
@@ -103,22 +187,60 @@ jobs:
         run: |
           set -euo pipefail
 
-          # <!-- auto-approve-and-merge-done --> マーカーの存在確認（このワークフローが完了済みの証拠）
-          MARKER="<!-- auto-approve-and-merge-done -->"
-          existing_marker=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+          # <!-- auto-approve-and-merge-done --> は完全成功済み（再実行不要）
+          MARKER_DONE="<!-- auto-approve-and-merge-done -->"
+          existing_done=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate \
             --jq '.[]' 2>/dev/null \
-            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
-            2>/dev/null) || existing_marker=0
-          echo "auto-approved マーカーコメント数: ${existing_marker}"
+            | jq -s --arg marker "${MARKER_DONE}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing_done=0
+          echo "done マーカーコメント数: ${existing_done}"
 
-          if [ "${existing_marker:-0}" -gt 0 ]; then
+          if [ "${existing_done:-0}" -gt 0 ]; then
             echo "auto-approved マーカーが存在します。ワークフロー完了済みです。スキップします。"
             echo "already_done=true" >> "${GITHUB_OUTPUT}"
             echo "already_approved=true" >> "${GITHUB_OUTPUT}"
+            echo "is_retry=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
+
+          # failed マーカーは同一 head SHA での再実行を抑止（コメントスパム防止）
+          MARKER_FAILED="<!-- auto-approve-and-merge-failed -->"
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+          existing_failed_same_sha=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' \
+            | jq -s --arg marker "${MARKER_FAILED}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' \
+              2>/dev/null) || {
+                echo "::warning::failed マーカー判定に失敗しました。API エラーの可能性があるためログを確認してください。"
+                existing_failed_same_sha=0
+              }
+          echo "failed マーカー（同一 SHA）コメント数: ${existing_failed_same_sha}"
+          if [ "${existing_failed_same_sha:-0}" -gt 0 ]; then
+            echo "同一 head SHA で failed マーカーを検出したため、再実行をスキップします。"
+            echo "already_done=true" >> "${GITHUB_OUTPUT}"
+            echo "already_approved=false" >> "${GITHUB_OUTPUT}"
+            echo "is_retry=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # <!-- auto-approve-and-merge-partial --> は Approve 済み・merge 再試行対象
+          MARKER_PARTIAL="<!-- auto-approve-and-merge-partial -->"
+          existing_partial=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER_PARTIAL}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing_partial=0
+          echo "partial マーカーコメント数: ${existing_partial}"
+
           echo "already_done=false" >> "${GITHUB_OUTPUT}"
+          if [ "${existing_partial:-0}" -gt 0 ]; then
+            echo "partial マーカーを検出しました。前回 Approve 済みの可能性があるため、現在の Approve 状態を API で再確認して必要なら再 Approve します。"
+            echo "is_retry=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "is_retry=false" >> "${GITHUB_OUTPUT}"
+          fi
 
           # 既存 Approve レビューの API 直接確認（dismiss 考慮）
           # Approve 済みの場合は Approve ステップのみスキップ（Auto-merge は引き続き実行）
@@ -161,16 +283,26 @@ jobs:
         run: |
           set -euo pipefail
           merge_enabled="true"
+          merge_error=""
+          merge_output_file=$(mktemp)
           if gh pr merge "${PR_NUMBER}" \
             --repo "${REPO}" \
             --auto \
-            --squash; then
+            --squash 2>"${merge_output_file}"; then
             echo "✅ PR #${PR_NUMBER} の Auto-merge（squash）を有効化しました。"
           else
-            echo "::warning::PR #${PR_NUMBER} の Auto-merge 有効化に失敗しました。手動でマージしてください。"
+            merge_error=$(cat "${merge_output_file}" 2>/dev/null || echo "(stderr 取得失敗)")
+            echo "::warning::PR #${PR_NUMBER} の Auto-merge 有効化に失敗しました。エラー: ${merge_error}"
             merge_enabled="false"
           fi
+          rm -f "${merge_output_file}"
           echo "merge_enabled=${merge_enabled}" >> "${GITHUB_OUTPUT}"
+          EOF_MARKER=$(uuidgen 2>/dev/null || printf 'EOF_%s_%s' "$(date +%s%N 2>/dev/null || date +%s)" "$$")
+          {
+            echo "merge_error<<${EOF_MARKER}"
+            echo "${merge_error}"
+            echo "${EOF_MARKER}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
         if: steps.guard.outputs.already_done != 'true'
@@ -178,13 +310,17 @@ jobs:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}
           MERGE_ENABLED: ${{ steps.merge.outputs.merge_enabled }}
+          MERGE_ERROR: ${{ steps.merge.outputs.merge_error }}
         run: |
           set -euo pipefail
 
+          MARKER='<!-- auto-approve-and-merge-failed -->'
           if [ "${APPROVED}" = "true" ] && [ "${MERGE_ENABLED}" = "true" ]; then
+            MARKER='<!-- auto-approve-and-merge-done -->'
             STATUS_ICON="✅"
             STATUS_TEXT="Approve と Auto-merge（squash）の有効化が完了しました。全ての必須チェックが通過次第、自動マージされます。"
           elif [ "${APPROVED}" = "true" ]; then
+            MARKER='<!-- auto-approve-and-merge-partial -->'
             STATUS_ICON="⚠️"
             STATUS_TEXT="Approve は完了しましたが、Auto-merge の有効化に失敗しました。手動でマージしてください。"
           elif [ "${MERGE_ENABLED}" = "true" ]; then
@@ -196,12 +332,21 @@ jobs:
           fi
 
           COMMENT=$(printf '%s\n\n%s %s\n\n%s\n%s\n\n%s' \
-            '<!-- auto-approve-and-merge-done -->' \
+            "${MARKER}" \
             "## ${STATUS_ICON} 自動 Approve & Auto-merge" \
             "${STATUS_TEXT}" \
             "- 🔑 **Approve**: $([ "${APPROVED}" = "true" ] && echo "✅ 完了" || echo "❌ 失敗（手動対応が必要です）")" \
             "- 🔀 **Auto-merge（squash）**: $([ "${MERGE_ENABLED}" = "true" ] && echo "✅ 有効化済み" || echo "❌ 失敗（手動対応が必要です）")" \
             '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。')
+          if [ "${MERGE_ENABLED}" != "true" ] && [ -n "${MERGE_ERROR}" ]; then
+            SAFE_MERGE_ERROR=$(printf '%s' "${MERGE_ERROR}" | sed 's/```/[triple-backtick]/g')
+            COMMENT=$(printf '%s\n\n%s\n%s\n%s' \
+              "${COMMENT}" \
+              '<details><summary>🔍 merge エラー詳細</summary>' \
+              "" \
+              "\`\`\`"$'\n'"${SAFE_MERGE_ERROR}"$'\n'"\`\`\`"$'\n'"</details>")
+          fi
+          COMMENT=$(printf '%s\n%s' "${COMMENT}" "<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->")
 
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \

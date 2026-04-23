@@ -181,7 +181,7 @@ AAD = WorkflowDef(
     name="App Detail Design",
     label_prefix="aad",
     state_labels=_make_state_labels("aad"),
-    params=[],
+    params=["app_ids", "app_id"],
     steps=[
         # コンテナ
         StepDef(id="1", title="ドメイン分析 + サービス一覧抽出（コンテナ）", custom_agent=None, is_container=True),

@@ -110,6 +110,11 @@ class TestWorkflowDef:
         assert "resource_group" in wf.params
         assert "usecase_id" in wf.params
 
+    def test_params_aad(self):
+        wf = get_workflow("aad")
+        assert "app_ids" in wf.params
+        assert "app_id" in wf.params
+
     def test_params_abdv(self):
         wf = get_workflow("abdv")
         assert "resource_group" in wf.params

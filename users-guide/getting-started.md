@@ -31,7 +31,7 @@
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
 | Microsoft Work IQ（`@microsoft/workiq`） | オプション | SDK 版で M365 補助情報を参照する場合（[詳細](./sdk-guide.md#work-iq-mcp-連携オプション)） |
 
-> Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: `claude-opus-4.7`）または任意モデルを選択できます。
+> Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: GitHub が最適モデルを動的選択。0.9x 計上）または任意モデルを選択できます。公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
 > Work IQ のセットアップ手順は [sdk-guide.md — Work IQ MCP 連携](./sdk-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
@@ -351,10 +351,11 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
 | `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
-**モデル選択系（7 個）**
+**モデル選択系（8 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
+| `model/Auto` | `#6f42c1` | Copilot cloud agent モデル指定: Auto（GitHub が最適モデルを動的選択。0.9x 計上、1x 超モデルは対象外） |
 | `model/claude-opus-4-7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4-7（deprecated: `model/claude-opus-4.7` を推奨） |
 | `model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.7 |
 | `model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.6 |

@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import asyncio
 from pathlib import Path
 from unittest import mock
 
@@ -149,6 +150,110 @@ class TestWorkIQSaveAndHeadless(unittest.TestCase):
             (fake_home / ".workiq").mkdir()
             with mock.patch("workiq.Path.home", return_value=fake_home):
                 self.assertTrue(workiq._has_cached_token())
+
+
+class TestWorkIQErrorDetection(unittest.TestCase):
+    def test_detects_error_response(self) -> None:
+        text = "workiq ツールにアクセスできないため、実検索は実行できません。"
+        self.assertTrue(workiq.is_workiq_error_response(text))
+
+    def test_non_error_response_returns_false(self) -> None:
+        text = "関連情報なし"
+        self.assertFalse(workiq.is_workiq_error_response(text))
+
+    def test_empty_string_returns_false(self) -> None:
+        self.assertFalse(workiq.is_workiq_error_response(""))
+
+    def test_error_words_with_data_indicators_returns_false(self) -> None:
+        text = "アクセスできないと表示されたが、メール件名: 定例会議 と送信者: user@example.com"
+        self.assertFalse(workiq.is_workiq_error_response(text))
+
+
+class TestWorkIQDraftFunctions(unittest.TestCase):
+    def test_format_workiq_draft_answers_with_results(self) -> None:
+        questions = [{"no": 1, "question": "要件は？", "default": "A"}]
+        results = {1: "メール件名: 要件確認"}
+        out = workiq.format_workiq_draft_answers(questions, results)
+        self.assertIn("Q1: 要件は？", out)
+        self.assertIn("メール件名: 要件確認", out)
+        self.assertIn("既定値候補: A", out)
+        self.assertIn("人間がレビュー", out)
+
+    def test_format_workiq_draft_answers_without_results(self) -> None:
+        questions = [{"no": 2, "question": "期限は？", "default": "未定"}]
+        out = workiq.format_workiq_draft_answers(questions, {})
+        self.assertIn("Q2: 期限は？", out)
+        self.assertIn("関連情報なし", out)
+        self.assertIn("既定値候補: 未定", out)
+
+    def test_format_workiq_draft_answers_empty_questions(self) -> None:
+        out = workiq.format_workiq_draft_answers([], {})
+        self.assertIn("対象質問", out)
+        self.assertIn("- なし", out)
+
+    def test_query_workiq_per_question_respects_limit_and_skips_failures(self) -> None:
+        async def _run() -> None:
+            with mock.patch.object(workiq, "query_workiq", side_effect=["res1", Exception("x"), "res3"]), \
+                 mock.patch.object(workiq.asyncio, "sleep", new=mock.AsyncMock()):
+                results = await workiq.query_workiq_per_question(
+                    session=mock.Mock(),
+                    questions=[(1, "Q1"), (2, "Q2"), (3, "Q3")],
+                    prompt_template="質問:\n{target_content}",
+                    timeout=1.0,
+                    max_questions=2,
+                )
+            self.assertEqual(results, {1: "res1"})
+
+        asyncio.run(_run())
+
+    def test_query_workiq_per_question_waits_between_questions_even_on_failure(self) -> None:
+        async def _run() -> None:
+            sleep_mock = mock.AsyncMock()
+            with mock.patch.object(workiq, "query_workiq", side_effect=[Exception("x"), "ok"]), \
+                 mock.patch.object(workiq.asyncio, "sleep", new=sleep_mock):
+                results = await workiq.query_workiq_per_question(
+                    session=mock.Mock(),
+                    questions=[(1, "Q1"), (2, "Q2")],
+                    prompt_template="{target_content}",
+                    timeout=1.0,
+                    max_questions=2,
+                )
+            self.assertEqual(results, {2: "ok"})
+            sleep_mock.assert_awaited_once()
+
+        asyncio.run(_run())
+
+
+class TestEnrichPromptGuard(unittest.TestCase):
+    def test_rejects_error_response(self) -> None:
+        original = "main prompt"
+        context = "workiq ツールにアクセスできないため、実検索は実行できません。"
+        self.assertEqual(workiq.enrich_prompt_with_workiq(context, original), original)
+
+    def test_accepts_normal_response(self) -> None:
+        original = "main prompt"
+        context = "メール件名: 進捗報告"
+        enriched = workiq.enrich_prompt_with_workiq(context, original)
+        self.assertNotEqual(enriched, original)
+        self.assertIn("メール件名", enriched)
+
+
+class TestSaveWorkIQResultError(unittest.TestCase):
+    def test_file_name_has_error_suffix_when_is_error_true(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = workiq.save_workiq_result("run-1", "1.1", "qa", "err", is_error=True, base_dir=td)
+            self.assertIsNotNone(path)
+            assert path is not None
+            self.assertTrue(path.name.endswith("-ERROR.md"))
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("⚠️ **STATUS: ERROR**", text)
+
+    def test_file_name_has_no_error_suffix_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = workiq.save_workiq_result("run-1", "1.1", "qa", "ok", base_dir=td)
+            self.assertIsNotNone(path)
+            assert path is not None
+            self.assertFalse(path.name.endswith("-ERROR.md"))
 
 
 class TestWorkIQLogin(unittest.TestCase):

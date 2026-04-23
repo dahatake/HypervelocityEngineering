@@ -39,8 +39,8 @@ def _safe_run_id(run_id: str) -> str:
     return rid or generate_run_id()
 
 try:
-    from .config import SDKConfig, generate_run_id
-    from .console import Console, timestamp_prefix
+    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id
+    from .console import Console, _ACTION_DISPLAY, timestamp_prefix
     from .prompts import (
         QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
@@ -56,10 +56,11 @@ try:
         is_workiq_available, build_workiq_mcp_config,
         query_workiq, enrich_prompt_with_workiq,
         get_workiq_prompt_template, save_workiq_result,
+        query_workiq_per_question, format_workiq_draft_answers,
     )
 except ImportError:
-    from config import SDKConfig, generate_run_id  # type: ignore[no-redef]
-    from console import Console, timestamp_prefix  # type: ignore[no-redef]
+    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id  # type: ignore[no-redef]
+    from console import Console, _ACTION_DISPLAY, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
         QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
@@ -75,6 +76,7 @@ except ImportError:
         is_workiq_available, build_workiq_mcp_config,
         query_workiq, enrich_prompt_with_workiq,
         get_workiq_prompt_template, save_workiq_result,
+        query_workiq_per_question, format_workiq_draft_answers,
     )
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
@@ -82,6 +84,8 @@ _MAX_SCAN_OUTPUT_LENGTH: int = 8000
 _MAX_PLAN_SCAN_LENGTH: int = 4000
 _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
 _MAX_CONTEXT_INJECTION_LENGTH: int = 50_000
+_ACTION_DETAIL_MAX_LENGTH: int = 120
+_ACTION_RESULT_SINGLE_LINE_MAX_LENGTH: int = 100
 
 
 def _truncate_context(text: str, max_length: int) -> str:
@@ -331,6 +335,7 @@ class StepRunner:
         self.config = config
         self.console = console
         self._workiq_tool_called = False
+        self._workiq_mcp_connection_failed = False
 
     def _build_sub_session_opts(self, model: str) -> Dict[str, Any]:
         """レビュー/QA 用の別セッション構築オプションを生成する。
@@ -340,10 +345,12 @@ class StepRunner:
         """
         from copilot.session import PermissionHandler
         opts: Dict[str, Any] = {
-            "model": model,
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
         }
+        # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+        if model and model != MODEL_AUTO_VALUE:
+            opts["model"] = model
         _mcp = dict(self.config.mcp_servers or {})
 
         # Work IQ MCP Server をサブセッションにも追加
@@ -496,6 +503,86 @@ class StepRunner:
                 self.console.track_file(step_id, normalized, "write")
                 self.console.file_io(step_id, normalized, "write")
 
+    @staticmethod
+    def _build_action_display(tool_name: str, args: Any) -> Tuple[str, str]:
+        """ツール名と引数から Copilot CLI 風の action_name/detail を生成する。"""
+        action_name = _ACTION_DISPLAY.get(tool_name, tool_name)
+        detail = ""
+        if not isinstance(args, dict):
+            return action_name, detail
+
+        if tool_name in ("grep", "rg", "search"):
+            pattern = args.get("pattern") or args.get("query") or ""
+            scope = (
+                args.get("scope")
+                or args.get("path")
+                or args.get("paths")
+                or args.get("glob")
+                or args.get("include")
+                or ""
+            )
+            if pattern:
+                detail = f"\"{pattern}\""
+                if scope:
+                    detail = f"{detail} ({scope})"
+            elif scope:
+                detail = str(scope)
+            return action_name, StepRunner._truncate_action_detail(detail)
+
+        if tool_name in ("read_file", "readFile", "cat", "head", "tail"):
+            path = args.get("path") or args.get("filePath") or args.get("file_path") or ""
+            if path:
+                action_name = f"Read {Path(str(path)).name}"
+                detail = str(path)
+            return action_name, StepRunner._truncate_action_detail(detail)
+
+        if tool_name in ("edit_file", "editFile", "write_file", "writeFile", "create_file", "createFile"):
+            path = args.get("path") or args.get("filePath") or args.get("file_path") or ""
+            if path:
+                action_name = f"{_ACTION_DISPLAY.get(tool_name, tool_name)} {Path(str(path)).name}"
+                detail = str(path)
+            return action_name, StepRunner._truncate_action_detail(detail)
+
+        if tool_name in ("bash", "powershell"):
+            command = args.get("command") or ""
+            if command:
+                detail = str(command)
+            return action_name, StepRunner._truncate_action_detail(detail)
+
+        for key in ("command", "path", "filePath", "file_path", "query", "pattern", "url"):
+            val = args.get(key)
+            if val:
+                val_str = str(val)
+                detail = val_str
+                break
+        return action_name, StepRunner._truncate_action_detail(detail)
+
+    @staticmethod
+    def _truncate_action_detail(text: str) -> str:
+        """アクション詳細文字列を表示上限で切り詰める。"""
+        if len(text) > _ACTION_DETAIL_MAX_LENGTH:
+            return text[:_ACTION_DETAIL_MAX_LENGTH] + "..."
+        return text
+
+    @staticmethod
+    def _build_tool_result_text(data: Any) -> str:
+        """tool.execution_complete の data から結果サマリー文字列を生成する。"""
+        get = StepRunner._get
+        result_summary = get(data, "result_summary", "resultSummary", default="")
+        if result_summary:
+            return str(result_summary)
+
+        output = get(data, "output", default="")
+        if isinstance(output, str):
+            stripped = output.strip()
+            if not stripped:
+                return ""
+            lines = stripped.splitlines()
+            if len(lines) == 1:
+                return lines[0][:_ACTION_RESULT_SINGLE_LINE_MAX_LENGTH]
+            return f"{len(lines)} lines"
+        return ""
+
     # ------------------------------------------------------------------
     # 公開 API
     # ------------------------------------------------------------------
@@ -520,6 +607,7 @@ class StepRunner:
         """
         start = time.time()
         self._workiq_tool_called = False
+        self._workiq_mcp_connection_failed = False
 
         # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）
         self.config.run_id = _safe_run_id(self.config.run_id)
@@ -572,10 +660,12 @@ class StepRunner:
 
             # セッション構築オプション
             session_opts: Dict[str, Any] = {
-                "model": self.config.model,
                 "on_permission_request": PermissionHandler.approve_all,
                 "streaming": True,
             }
+            # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+            if self.config.model and self.config.model != MODEL_AUTO_VALUE:
+                session_opts["model"] = self.config.model
 
             # MCP Servers
             if self.config.mcp_servers:
@@ -647,6 +737,30 @@ class StepRunner:
                 session_opts["custom_agents"] = custom_agents
 
             session = await client.create_session(**session_opts)
+            if _workiq_mcp_enabled:
+                try:
+                    _mcp_list = await session.rpc.mcp.list()
+                    for _srv in _mcp_list.servers:
+                        if _srv.name == "_hve_workiq":
+                            _srv_status = _srv.status.value if hasattr(_srv.status, "value") else str(_srv.status)
+                            if _srv_status != "connected":
+                                self.console.warning(
+                                    f"Work IQ MCP サーバー状態: {_srv_status}"
+                                    + (f" — {_srv.error}" if _srv.error else "")
+                                )
+                                _workiq_mcp_enabled = False
+                                self._workiq_mcp_connection_failed = True
+                            break
+                    else:
+                        self.console.warning(
+                            "Work IQ MCP サーバー '_hve_workiq' がサーバー一覧に存在しません"
+                        )
+                        _workiq_mcp_enabled = False
+                        self._workiq_mcp_connection_failed = True
+                except Exception as _mcp_err:
+                    self.console.warning(f"MCP サーバー一覧の取得に失敗: {_mcp_err}")
+                    _workiq_mcp_enabled = False
+                    self._workiq_mcp_connection_failed = True
 
             # イベント購読 (常に購読 — Console 側で出力レベルを制御)
             session.on(self._handle_session_event)
@@ -676,10 +790,19 @@ class StepRunner:
                 elapsed=time.time() - phase1_start,
             )
             if self.config.workiq_enabled and _workiq_mcp_enabled and not self._workiq_tool_called:
-                self.console.warning(
-                    "⚠️ Work IQ MCP ツールが1度も呼び出されませんでした。"
-                    "エージェントが Work IQ 指示を実行しなかった可能性があります。"
-                )
+                if self._workiq_mcp_connection_failed:
+                    self.console.warning(
+                        "❌ Work IQ MCP サーバーの接続に失敗したため、ツールが利用できませんでした。\n"
+                        "   CLI モード (npx -y @microsoft/workiq ask) は正常でも、\n"
+                        "   MCP モード (npx -y @microsoft/workiq mcp) では別のエラーが発生します。\n"
+                        "   対処: 以下を手動実行して MCP サーバーの起動を確認してください:\n"
+                        "     npx -y @microsoft/workiq mcp"
+                    )
+                else:
+                    self.console.warning(
+                        "⚠️ Work IQ MCP ツールが1度も呼び出されませんでした。"
+                        "エージェントが Work IQ 指示を実行しなかった可能性があります。"
+                    )
 
             # Phase 2: QA（auto_qa=True の場合）
             if self.config.auto_qa:
@@ -738,39 +861,98 @@ class StepRunner:
 
                     # Work IQ による補助情報取得（QA 質問票のデフォルト回答補強）
                     _workiq_qa_context = ""
+                    _workiq_draft_path: Optional[Path] = None
                     if (
                         self.config.workiq_enabled
                         and _workiq_mcp_enabled
                         and _parse_succeeded
                         and parsed_qa_preview.questions
                     ):
-                        self.console.status("🔍 Work IQ: M365 データから関連情報を調査中...")
-                        self.console.spinner_start("Work IQ 問い合わせ中...")
-
-                        _questions_summary = "\n".join(
-                            f"- Q{q.no}: {q.question[:100]}"
-                            for q in parsed_qa_preview.questions[:30]
-                        )
-                        _wiq_template = get_workiq_prompt_template(
-                            "qa", self.config.workiq_prompt_qa
-                        )
-                        _wiq_query = _wiq_template.format(target_content=_questions_summary)
-                        _workiq_qa_context = await query_workiq(
-                            _effective_qa_session,
-                            _wiq_query,
-                            timeout=self.config.workiq_query_timeout_seconds,
-                        )
-
-                        self.console.spinner_stop()
-
-                        if _workiq_qa_context:
-                            self.console.status("✅ Work IQ: 関連情報を取得しました")
-                            save_workiq_result(
-                                self.config.run_id, step_id, "qa",
-                                _workiq_qa_context,
+                        async def _query_workiq_bulk_once() -> str:
+                            _questions_summary = "\n".join(
+                                f"- Q{q.no}: {q.question[:100]}"
+                                for q in parsed_qa_preview.questions[:30]
                             )
+                            _wiq_template = get_workiq_prompt_template(
+                                "qa", self.config.workiq_prompt_qa
+                            )
+                            _wiq_query = _wiq_template.format(target_content=_questions_summary)
+                            _bulk_context = await query_workiq(
+                                _effective_qa_session,
+                                _wiq_query,
+                                timeout=self.config.workiq_query_timeout_seconds,
+                            )
+                            if _bulk_context:
+                                save_workiq_result(
+                                    self.config.run_id, step_id, "qa",
+                                    _bulk_context,
+                                )
+                            return _bulk_context
+
+                        if self.config.workiq_draft_mode:
+                            self.console.status("🔍 Work IQ: 質問ごとに回答ドラフトを生成中...")
+                            self.console.spinner_start("Work IQ 問い合わせ中...")
+                            try:
+                                _wiq_template = get_workiq_prompt_template(
+                                    "qa", self.config.workiq_prompt_qa
+                                )
+                                _question_items = [
+                                    (q.no, q.question)
+                                    for q in parsed_qa_preview.questions
+                                ]
+                                _per_question_results = await query_workiq_per_question(
+                                    _effective_qa_session,
+                                    _question_items,
+                                    _wiq_template,
+                                    timeout=self.config.workiq_per_question_timeout,
+                                    max_questions=self.config.workiq_max_draft_questions,
+                                )
+
+                                _raw_lines: List[str] = []
+                                for q in parsed_qa_preview.questions[:self.config.workiq_max_draft_questions]:
+                                    _ctx = _per_question_results.get(q.no, "").strip() or "関連情報なし"
+                                    _raw_lines.extend([
+                                        f"### Q{q.no}: {q.question}",
+                                        _ctx,
+                                        "",
+                                    ])
+                                save_workiq_result(
+                                    self.config.run_id, step_id, "qa-draft",
+                                    "\n".join(_raw_lines).strip(),
+                                )
+
+                                _draft_questions = [
+                                    {"no": q.no, "question": q.question, "default": q.default}
+                                    for q in parsed_qa_preview.questions[:self.config.workiq_max_draft_questions]
+                                ]
+                                _draft_content = format_workiq_draft_answers(
+                                    _draft_questions, _per_question_results
+                                )
+                                _draft_dir = Path(
+                                    self.config.workiq_draft_output_dir or "qa"
+                                )
+                                _draft_dir.mkdir(parents=True, exist_ok=True)
+                                _workiq_draft_path = _draft_dir / f"{self.config.run_id}-{step_id}-workiq-draft.md"
+                                _workiq_draft_path.write_text(_draft_content, encoding="utf-8")
+                                self.console.status(
+                                    f"✅ Work IQ: 回答ドラフトを保存しました ({_workiq_draft_path.as_posix()})"
+                                )
+                            except Exception as draft_exc:
+                                self.console.warning(
+                                    f"Work IQ ドラフト生成に失敗したため、一括問い合わせにフォールバックします: {draft_exc}"
+                                )
+                                _workiq_qa_context = await _query_workiq_bulk_once()
+                            finally:
+                                self.console.spinner_stop()
                         else:
-                            self.console.status("ℹ️ Work IQ: 関連情報は見つかりませんでした")
+                            self.console.status("🔍 Work IQ: M365 データから関連情報を調査中...")
+                            self.console.spinner_start("Work IQ 問い合わせ中...")
+                            _workiq_qa_context = await _query_workiq_bulk_once()
+                            self.console.spinner_stop()
+                            if _workiq_qa_context:
+                                self.console.status("✅ Work IQ: 関連情報を取得しました")
+                            else:
+                                self.console.status("ℹ️ Work IQ: 関連情報は見つかりませんでした")
 
                     # Phase 2c: QA 回答マージ + qa/ ファイル永続化
                     # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
@@ -800,6 +982,12 @@ class StepRunner:
                                 merged_content=merged_content,
                                 qa_file_path=f"qa/{self.config.run_id}-{step_id}-qa-merged.md",
                             )
+                            if _workiq_draft_path:
+                                save_prompt += (
+                                    "\n\n## Work IQ 回答ドラフト（要レビュー）\n"
+                                    f"- 参考ファイル: `{_workiq_draft_path.as_posix()}`\n"
+                                    "- このドラフトを参照しつつ、最終内容は必ず人間レビューで確定してください。\n"
+                                )
                             # Work IQ 結果をマージ保存プロンプトに注入
                             if _workiq_qa_context:
                                 save_prompt = enrich_prompt_with_workiq(
@@ -1172,32 +1360,30 @@ class StepRunner:
         if etype == "tool.execution_start":
             tool_name = _get(data, "tool_name", "toolName", default="unknown")
             args = _get(data, "arguments", default=None)
-            args_summary = ""
+            action_name, detail = self._build_action_display(tool_name, args)
             if args and isinstance(args, dict):
-                # ツールの種類に応じて主要引数を要約表示
-                for key in ("command", "path", "filePath", "file_path", "query", "pattern", "url"):
-                    val = args.get(key)
-                    if val:
-                        val_str = str(val)
-                        args_summary = val_str[:80] + "..." if len(val_str) > 80 else val_str
-                        break
-                # 追加: ファイル I/O 追跡
+                # 既存のファイル I/O 追跡ロジックは維持
                 self._track_tool_files(step_id, tool_name, args)
             if tool_name in _WORKIQ_TOOL_NAMES and not self._workiq_tool_called:
                 self._workiq_tool_called = True
                 self.console.status(
                     f"🔍 Work IQ ツール '{tool_name}' が呼び出されました"
                 )
-            self.console.tool(tool_name, step_id=step_id, args_summary=args_summary)
+            self.console.action_start(step_id, action_name, detail)
             return
 
         if etype == "tool.execution_complete":
             success = _get(data, "success", default=False)
             error = _get(data, "error", default=None)
-            error_msg = ""
-            if error and not success:
-                error_msg = _get(error, "message", default=str(error))
-            self.console.tool_result(step_id, bool(success), error_msg=error_msg)
+            if success:
+                result_text = self._build_tool_result_text(data)
+                if result_text:
+                    self.console.action_result(step_id, result_text)
+            else:
+                error_msg = ""
+                if error:
+                    error_msg = _get(error, "message", default=str(error))
+                self.console.tool_result(step_id, False, error_msg=error_msg)
             return
 
         if etype == "tool.execution_partial_result":
@@ -1216,7 +1402,7 @@ class StepRunner:
         if etype == "assistant.intent":
             intent_text = _get(data, "intent") or ""
             if intent_text:
-                self.console.intent(step_id, intent_text)
+                self.console.thinking(step_id, intent_text)
             return
 
         if etype == "assistant.turn_start":
@@ -1347,6 +1533,37 @@ class StepRunner:
             kind_str = _get(result_obj, "kind", default="") if result_obj else ""
             kind_val = getattr(kind_str, "value", str(kind_str)) if kind_str else ""
             self.console.permission(step_id, "", resolved=True, result=kind_val)
+            return
+
+        if etype == "session.mcp_servers_loaded":
+            servers = _get(data, "servers", default=[])
+            for srv in servers:
+                name = _get(srv, "name", default="?")
+                status_obj = _get(srv, "status", default=None)
+                status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
+                error = _get(srv, "error", default=None)
+                if status == "connected":
+                    self.console.status(f"✅ MCP サーバー '{name}' 接続成功")
+                elif status in ("failed", "needs-auth"):
+                    self.console.warning(
+                        f"❌ MCP サーバー '{name}' 接続失敗 (status={status})"
+                        + (f": {error}" if error else "")
+                    )
+                    if name == "_hve_workiq":
+                        self._workiq_mcp_connection_failed = True
+                else:
+                    self.console.event(f"ℹ️ MCP '{name}' status={status}")
+            return
+
+        if etype == "session.mcp_server_status_changed":
+            server_name = _get(data, "server_name", "serverName", default="?")
+            status_obj = _get(data, "status", default=None)
+            status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
+            if status in ("failed", "needs-auth") and server_name == "_hve_workiq":
+                self._workiq_mcp_connection_failed = True
+                self.console.warning(f"❌ Work IQ MCP サーバー接続状態変更: {status}")
+            else:
+                self.console.event(f"MCP '{server_name}' → {status}")
             return
 
         # --- その他 (既知だが詳細表示不要なイベント) ---

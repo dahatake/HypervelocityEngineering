@@ -38,6 +38,12 @@ def test_aqod_parser_and_params_defaults():
     assert params["focus_areas"] == ""
 
 
+def test_aqod_parser_and_params_auto_qa_enabled():
+    args = _build_parser().parse_args(["orchestrate", "--workflow", "aqod", "--auto-qa"])
+    params = _build_params(args)
+    assert params["auto_qa"] is True
+
+
 def test_aqod_non_interactive_defaults():
     wf = get_workflow("aqod")
     params = _collect_params_non_interactive(wf, {"branch": "main"})

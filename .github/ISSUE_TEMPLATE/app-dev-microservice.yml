@@ -42,13 +42,14 @@ body:
   - type: input
     id: app_ids
     attributes:
-      label: "対象アプリケーション (APP-ID) — 複数指定可"
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
       description: |
         `docs/catalog/app-catalog.md` のアプリ一覧（アーキタイプ）概要セクションから APP-ID を入力してください（カンマ区切りで複数指定可）。
         `docs/catalog/app-catalog.md` が存在しない場合は、アプリケーションの名称をそのまま入力してください（入力した名称が ID として扱われます）。
+        未指定の場合: 各 Step の Copilot Agent が `docs/catalog/app-catalog.md` を参照し、全アプリケーションを対象に実行します。
       placeholder: "例: APP-01 または APP-01, APP-02, APP-03"
     validations:
-      required: true
+      required: false
 
   - type: input
     id: branch
@@ -103,7 +104,7 @@ body:
       label: "使用するモデル"
       description: |
         Copilot cloud agent が使用する AI モデルを選択してください。
-        「Auto」を選んだ場合は、リポジトリの既定モデル（claude-opus-4.7）が使用されます。
+        「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"

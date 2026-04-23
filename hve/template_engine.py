@@ -137,7 +137,7 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
     Returns:
         dict with keys:
           branch, selected_steps, skip_review, skip_qa, additional_comment,
-          + ワークフロー固有パラメータ (app_id, resource_group, usecase_id, batch_job_id)
+          + ワークフロー固有パラメータ (app_ids, app_id, resource_group, usecase_id, batch_job_id)
     """
     print(f"\n{'='*60}")
     print(f" ワークフロー: {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}")
@@ -150,7 +150,11 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
 
     # ワークフロー固有パラメータ
     if "app_ids" in wf.params or "app_id" in wf.params:
-        raw = _prompt("対象アプリケーション (APP-ID) — カンマ区切りで複数指定可", default="", required=False)
+        raw = _prompt(
+            "対象アプリケーション (APP-ID) — カンマ区切りで複数指定可（未指定=全APP対象）",
+            default="",
+            required=False,
+        )
         if raw:
             params["app_ids"] = [s.strip() for s in raw.split(",") if s.strip()]
             if len(params["app_ids"]) == 1:
@@ -366,6 +370,9 @@ def _build_app_id_section(app_id) -> str:
     else:
         ids = [app_id] if app_id else []
     if not ids:
+        # APP-ID 未指定 = 全アプリケーション対象。
+        # スコープセクションを挿入しないことで、Copilot Agent は
+        # docs/catalog/app-catalog.md の全 APP-ID を対象として動作する。
         return ""
     id_list = ", ".join(f"`{aid}`" for aid in ids)
     return (

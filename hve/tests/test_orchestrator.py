@@ -167,6 +167,46 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                 self.assertEqual(result["workflow_id"], wf_id, f"{wf_id} の workflow_id が不正")
                 self.assertNotIn("error", result, f"{wf_id} でエラーが発生: {result.get('error')}")
 
+    def test_aqod_is_excluded_from_workiq_prefetch_on_normal_path(self) -> None:
+        """通常経路で AQOD は事前フェッチ対象外、AKM は対象であることを確認。"""
+        cfg = SDKConfig(dry_run=False, quiet=True, workiq_enabled=True)
+        mock_prefetch = unittest.mock.AsyncMock(return_value="")
+
+        class FakeDAGExecutor:
+            def __init__(self):
+                self.completed = set()
+                self.failed = set()
+                self.skipped = set()
+
+            def compute_waves(self):
+                return []
+
+            async def execute(self):
+                return {"completed": [], "failed": [], "skipped": []}
+
+        with patch("orchestrator._prefetch_workiq", new=mock_prefetch), \
+             patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: FakeDAGExecutor()) as mock_dag_executor, \
+             patch("workiq.is_workiq_available", return_value=True), \
+             patch("workiq.get_workiq_prompt_template", return_value="{target_content}"):
+            _run(run_workflow(
+                workflow_id="aqod",
+                params={"branch": "main", "selected_steps": []},
+                config=cfg,
+            ))
+            mock_prefetch.assert_not_called()
+
+            mock_prefetch.reset_mock()
+
+            _run(run_workflow(
+                workflow_id="akm",
+                params={"branch": "main", "selected_steps": []},
+                config=cfg,
+            ))
+            mock_prefetch.assert_awaited()
+            self.assertEqual(mock_dag_executor.call_count, 2)
+            self.assertEqual(mock_dag_executor.call_args_list[0].kwargs["workflow"].id, "aqod")
+            self.assertEqual(mock_dag_executor.call_args_list[1].kwargs["workflow"].id, "akm")
+
     def test_dry_run_with_auto_coding_agent_review(self) -> None:
         """dry_run=True + auto_coding_agent_review=True で Code Review Agent が呼ばれないことを確認。"""
         cfg = self._make_config(auto_coding_agent_review=True)
@@ -850,6 +890,87 @@ class TestCreatePrIfNeeded(unittest.TestCase):
 
         self.assertEqual(pr_num, 43)
         self.assertNotIn("Related Issue", captured_body.get("body", ""))
+
+    def test_pr_body_includes_workiq_reports_when_enabled(self) -> None:
+        from orchestrator import _create_pr_if_needed
+        from console import Console
+        from unittest.mock import MagicMock, patch as _patch
+
+        cfg = SDKConfig(
+            quiet=True,
+            github_token="ghp_test",
+            repo="owner/repo",
+            workiq_enabled=True,
+            run_id="run-123",
+        )
+        console = Console(quiet=True)
+        captured_body: dict = {}
+
+        def fake_create_pull_request(title, body, head, base, repo, token):
+            captured_body["body"] = body
+            return 44
+
+        wf = MagicMock()
+        wf.id = "akm"
+
+        with _patch("orchestrator.create_pull_request", side_effect=fake_create_pull_request):
+            pr_num = _create_pr_if_needed(
+                wf=wf,
+                head_branch="copilot-sdk/akm-abc12345",
+                base_branch="main",
+                config=cfg,
+                console=console,
+                root_issue_num=None,
+                workiq_report_paths=["knowledge/workiq-consistency-report-run-123.md"],
+            )
+
+        self.assertEqual(pr_num, 44)
+        self.assertIn("## Work IQ レポート", captured_body.get("body", ""))
+        self.assertIn("knowledge/workiq-consistency-report-run-123.md", captured_body.get("body", ""))
+
+    def test_pr_body_uses_draft_output_dir_and_filters_ignored_paths(self) -> None:
+        from orchestrator import _create_pr_if_needed
+        from console import Console
+        from unittest.mock import MagicMock, patch as _patch
+
+        cfg = SDKConfig(
+            quiet=True,
+            github_token="ghp_test",
+            repo="owner/repo",
+            workiq_enabled=True,
+            run_id="run-abc",
+            workiq_draft_output_dir="qa-drafts",
+            ignore_paths=["qa", "work"],
+        )
+        console = Console(quiet=True)
+        captured_body: dict = {}
+
+        def fake_create_pull_request(title, body, head, base, repo, token):
+            captured_body["body"] = body
+            return 45
+
+        wf = MagicMock()
+        wf.id = "aqod"
+
+        with _patch("orchestrator.create_pull_request", side_effect=fake_create_pull_request), \
+             _patch("orchestrator._glob.glob", return_value=["qa-drafts/run-abc-1-workiq-draft.md"]), \
+             _patch("orchestrator.os.path.exists", side_effect=lambda p: p == "knowledge/workiq-consistency-report-run-abc.md"):
+            pr_num = _create_pr_if_needed(
+                wf=wf,
+                head_branch="copilot-sdk/aqod-abc12345",
+                base_branch="main",
+                config=cfg,
+                console=console,
+                root_issue_num=None,
+                workiq_report_paths=["work/run-abc/workiq-1-review.md", "qa/workiq-doc-review-run-abc.md"],
+            )
+
+        self.assertEqual(pr_num, 45)
+        body = captured_body.get("body", "")
+        self.assertIn("qa-drafts/run-abc-1-workiq-draft.md", body)
+        self.assertIn("knowledge/workiq-consistency-report-run-abc.md", body)
+        self.assertNotIn("work/run-abc/workiq-1-review.md", body)
+        self.assertNotIn("qa/workiq-doc-review-run-abc.md", body)
 
 
 class TestDetectExistingArtifacts(unittest.TestCase):
