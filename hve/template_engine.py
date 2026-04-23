@@ -333,7 +333,7 @@ def resolve_all_app_ids(catalog_path: Optional[Path] = None) -> List[str]:
         content = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    seen: set = set()
+    seen: Set[str] = set()
     result: List[str] = []
     for match in _APP_ID_PATTERN.finditer(content):
         app_id = match.group(1)
