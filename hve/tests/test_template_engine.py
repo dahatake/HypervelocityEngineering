@@ -17,6 +17,7 @@ from hve.template_engine import (
     build_root_issue_body,
     collect_params,
     render_template,
+    resolve_all_app_ids,
     resolve_selected_steps,
 )
 from hve.workflow_registry import get_workflow, StepDef, WorkflowDef
@@ -149,6 +150,18 @@ class TestBuildAppIdSection:
         result = _build_app_id_section(["APP-05"])
         assert "APP-05" in result
         assert "docs/catalog/app-catalog.md" in result
+
+    def test_build_app_id_section_is_all_apps_true(self):
+        result = _build_app_id_section(["APP-01", "APP-02"], is_all_apps=True)
+        assert "対象アプリケーション（全APP）" in result
+        assert "APP-01" in result
+        assert "APP-02" in result
+
+    def test_build_app_id_section_is_all_apps_false(self):
+        result = _build_app_id_section(["APP-01"], is_all_apps=False)
+        assert "対象アプリケーション" in result
+        assert "対象アプリケーション（全APP）" not in result
+        assert "APP-01" in result
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +396,82 @@ class TestCollectParams:
             params = collect_params(wf, will_create_pr=True)
         assert params["sources"] == "qa"
         assert params["enable_auto_merge"] is True
+
+    def test_collect_params_auto_resolve(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        wf = get_workflow("aad")
+        catalog = tmp_path / "docs" / "catalog"
+        catalog.mkdir(parents=True)
+        (catalog / "app-catalog.md").write_text(
+            textwrap.dedent(
+                """
+                | APP-ID | アプリ名 |
+                |---|---|
+                | APP-01 | A |
+                | APP-02 | B |
+                """
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+        inputs = iter([
+            "main",  # branch
+            "",      # app_ids 未入力
+            "",      # selected_steps = all
+            "n",     # skip_review
+            "n",     # skip_qa
+            "",      # additional_comment
+        ])
+        with patch("builtins.input", side_effect=lambda _: next(inputs)):
+            params = collect_params(wf)
+        assert params["app_ids"] == ["APP-01", "APP-02"]
+        assert params["app_ids_auto_resolved"] is True
+
+
+class TestResolveAllAppIds:
+    def test_resolve_all_app_ids_normal(self, tmp_path: Path):
+        catalog = tmp_path / "app-catalog.md"
+        catalog.write_text(
+            textwrap.dedent(
+                """
+                | APP-ID | Name |
+                |---|---|
+                | APP-01 | A |
+                | APP-02 | B |
+                | APP-03 | C |
+                | APP-04 | D |
+                | APP-05 | E |
+                | APP-06 | F |
+                | APP-07 | G |
+                | APP-08 | H |
+                | APP-09 | I |
+                """
+            ),
+            encoding="utf-8",
+        )
+        assert resolve_all_app_ids(catalog) == [
+            "APP-01", "APP-02", "APP-03", "APP-04", "APP-05", "APP-06", "APP-07", "APP-08", "APP-09",
+        ]
+
+    def test_resolve_all_app_ids_file_not_found(self, tmp_path: Path):
+        missing = tmp_path / "not-found.md"
+        assert resolve_all_app_ids(missing) == []
+
+    def test_resolve_all_app_ids_dedup(self, tmp_path: Path):
+        catalog = tmp_path / "app-catalog.md"
+        catalog.write_text(
+            textwrap.dedent(
+                """
+                | APP-ID | Name |
+                |---|---|
+                | APP-01 | A |
+                | APP-01 | A2 |
+                | APP-02 | B |
+                | APP-02 | B2 |
+                """
+            ),
+            encoding="utf-8",
+        )
+        assert resolve_all_app_ids(catalog) == ["APP-01", "APP-02"]
 
 
 # ---------------------------------------------------------------------------

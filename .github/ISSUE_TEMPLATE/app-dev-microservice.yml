@@ -57,6 +57,7 @@ body:
       label: "対象ブランチ"
       description: "コード/ドキュメントをコミットするブランチ名を入力してください"
       placeholder: "例: main, develop, feature/dev-v2"
+      value: "main"
     validations:
       required: true
 

@@ -56,7 +56,7 @@ body:
       required: true
 
   - type: input
-    id: batch_job_ids
+    id: batch_job_id
     attributes:
       label: "対象バッチジョブ ID（カンマ区切り）"
       description: "実装対象のバッチジョブ ID を入力してください（例: BJ-001, BJ-002）。`docs/batch/batch-job-catalog.md` に記載されているジョブ ID を使用してください。未入力の場合は全ジョブが対象になります。"

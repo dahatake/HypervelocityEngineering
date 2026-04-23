@@ -42,14 +42,41 @@ body:
       options:
         - label: "PR の自動 Approve & Auto-merge を有効にする"
 
+  - type: input
+    id: custom_source_dir
+    attributes:
+      label: "カスタムソースディレクトリ（任意）"
+      description: "knowledge/ 生成元として追加するディレクトリをスペース区切りで指定"
+      placeholder: "例: docs/specs work/input"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
   - type: textarea
     id: additional_comment
     attributes:
       label: "追加コメント（任意）"
-      description: "`custom_source_dir: <path>` を 1 行ずつ指定できます（複数可）"
-      placeholder: |
-        custom_source_dir: docs/specs
-        custom_source_dir: work/input
+      description: "補足・制約・注意事項があれば記載してください"
+      placeholder: "例: D01〜D05 のみ再生成したい"
     validations:
       required: false
 
