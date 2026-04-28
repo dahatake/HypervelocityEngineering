@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/asdw-web/step-4.1.md に移動しました。 -->
 {root_ref}
 ## 目的
 デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する（APP-ID 指定時はスコープ内のリソースのみ）。
@@ -23,4 +24,4 @@
 
 ## 完了条件
 - `docs/azure/azure-architecture-review-report.md` が作成されている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" role="img" aria-label="AAD-WEB 4ステップチェーン図">
+  <desc>AAD-WEB（Web App Design）: 4ステップ。Step.1 Arch-UI-List → Step.2.1 Arch-UI-Detail（並列）+ Step.2.2 Arch-Microservice-ServiceDetail → Step.2.3 Arch-TDD-TestSpec</desc>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
+    .box  { fill: #4A90D9; stroke: #1f3a5a; stroke-width: 1.5; }
+    .par  { fill: #8B5CF6; stroke: #4a1d96; stroke-width: 1.5; }
+    .out  { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
+    .ln   { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .bt   { fill: white; font-weight: bold; font-size: 10px; }
+    .bs   { fill: white; font-size: 9px; }
+    .ttl  { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
+    .note { font-size: 10px; fill: #666; font-style: italic; }
+  </style>
+  <text x="400" y="28" text-anchor="middle" class="ttl">AAD-WEB — Web App Design（4ステップ、並列1箇所）</text>
+  <!-- Step 1 -->
+  <rect x="40" y="80" width="120" height="58" rx="5" class="box"/>
+  <text x="100" y="100" text-anchor="middle" class="bt">Step.1</text>
+  <text x="100" y="113" text-anchor="middle" class="bs">Arch-UI-List</text>
+  <text x="100" y="126" text-anchor="middle" class="bs">（画面一覧）</text>
+  <!-- Fork to 2.1 and 2.2 -->
+  <line x1="160" y1="109" x2="200" y2="90" class="ln"/>
+  <line x1="160" y1="109" x2="200" y2="145" class="ln"/>
+  <!-- Step 2.1 (parallel) -->
+  <rect x="200" y="62" width="130" height="55" rx="5" class="par"/>
+  <text x="265" y="81" text-anchor="middle" class="bt">Step.2.1（並列）</text>
+  <text x="265" y="94" text-anchor="middle" class="bs">Arch-UI-Detail</text>
+  <text x="265" y="107" text-anchor="middle" class="bs">（画面定義書）</text>
+  <!-- Step 2.2 (parallel) -->
+  <rect x="200" y="122" width="130" height="55" rx="5" class="par"/>
+  <text x="265" y="141" text-anchor="middle" class="bt">Step.2.2（並列）</text>
+  <text x="265" y="154" text-anchor="middle" class="bs">Arch-Microservice</text>
+  <text x="265" y="167" text-anchor="middle" class="bs">ServiceDetail</text>
+  <!-- Join to 2.3 -->
+  <line x1="330" y1="89" x2="370" y2="122" class="ln"/>
+  <line x1="330" y1="149" x2="370" y2="136" class="ln"/>
+  <!-- Step 2.3 -->
+  <rect x="370" y="100" width="130" height="58" rx="5" class="box"/>
+  <text x="435" y="120" text-anchor="middle" class="bt">Step.2.3</text>
+  <text x="435" y="133" text-anchor="middle" class="bs">Arch-TDD-TestSpec</text>
+  <text x="435" y="146" text-anchor="middle" class="bs">（テスト仕様書）</text>
+  <!-- Output -->
+  <line x1="500" y1="129" x2="530" y2="129" class="ln"/>
+  <rect x="530" y="103" width="150" height="52" rx="5" class="out"/>
+  <text x="605" y="123" text-anchor="middle" class="bt" style="fill:white;">成果物</text>
+  <text x="605" y="136" text-anchor="middle" class="bs" style="fill:white;">docs/test-specs/</text>
+  <text x="605" y="149" text-anchor="middle" class="bs" style="fill:white;">{id}-test-spec.md</text>
+  <!-- Parallel note -->
+  <text x="265" y="205" text-anchor="middle" class="note">Step.2.1 と Step.2.2 は並列実行</text>
+  <text x="265" y="220" text-anchor="middle" class="note">両方完了後に Step.2.3 が起動</text>
+  <!-- Legend -->
+  <rect x="40" y="255" width="14" height="14" rx="3" class="box"/>
+  <text x="60" y="266" style="font-size:11px;fill:#333;">直列 Custom Agent</text>
+  <rect x="200" y="255" width="14" height="14" rx="3" class="par"/>
+  <text x="220" y="266" style="font-size:11px;fill:#333;">並列 Custom Agent</text>
+  <rect x="360" y="255" width="14" height="14" rx="3" class="out"/>
+  <text x="380" y="266" style="font-size:11px;fill:#333;">成果物（出力）</text>
+</svg>

@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aas/step-5.md に移動しました。 -->
 {root_ref}
 ## 目的
 データモデルとドメイン分析を根拠に、概念エンティティ × 物理テーブル/列のマッピングを記録するデータカタログを作成する。
@@ -23,4 +24,4 @@
 
 ## 完了条件
 - `docs/catalog/data-catalog.md` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

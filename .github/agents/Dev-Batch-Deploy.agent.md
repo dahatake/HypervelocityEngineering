@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Batch-Deploy
 description: "バッチサービスをAzureにデプロイしGitHub Actions CI/CDを構築、AC検証まで実施"
 tools: ["*"]
@@ -89,7 +89,8 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

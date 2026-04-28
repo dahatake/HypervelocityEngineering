@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -25,8 +24,6 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
-_APP_CATALOG_PATH = Path("docs/catalog/app-catalog.md")
-_APP_ID_PATTERN = re.compile(r"^\|\s*(APP-\d+)\s*\|", re.MULTILINE)
 
 
 def _get_default_akm_target_files(sources: str) -> str:
@@ -39,26 +36,36 @@ def _get_default_akm_target_files(sources: str) -> str:
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
-    "aas": "App Architecture Design",
-    "aad": "App Detail Design",
-    "asdw": "App Dev Microservice Azure",
+    "aas": "Architecture Design",
+    "aad-web": "Web App Design",
+    "asdw-web": "Web App Dev & Deploy",
     "abd": "Batch Design",
-    "abdv": "Batch Dev",
+    "abdv": "Batch Dev & Deploy",
+    "aag": "AI Agent Design",
+    "aagd": "AI Agent Dev & Deploy",
     "akm": "Knowledge Management",
     "aqod": "Original Docs Review",
     "adoc": "Source Codeからのドキュメント作成",
+    # 後方互換エイリアス
+    "aad": "Web App Design",
+    "asdw": "Web App Dev & Deploy",
 }
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
 _WORKFLOW_PREFIX: Dict[str, str] = {
     "aas": "AAS",
-    "aad": "AAD",
-    "asdw": "ASDW",
+    "aad-web": "AAD-WEB",
+    "asdw-web": "ASDW-WEB",
     "abd": "ABD",
     "abdv": "ABDV",
+    "aag": "AAG",
+    "aagd": "AAGD",
     "akm": "AKM",
     "aqod": "AQOD",
     "adoc": "ADOC",
+    # 後方互換エイリアス
+    "aad": "AAD-WEB",
+    "asdw": "ASDW-WEB",
 }
 
 
@@ -153,8 +160,21 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
 
     # ワークフロー固有パラメータ
     if "app_ids" in wf.params or "app_id" in wf.params:
+        _arch_hint = {
+            "aad-web": "Webフロントエンド + クラウド",
+            "asdw-web": "Webフロントエンド + クラウド",
+            "abd": "データバッチ処理 / バッチ",
+            "abdv": "データバッチ処理 / バッチ",
+        }.get(wf.id, "")
+        if _arch_hint:
+            _prompt_label = (
+                f"対象アプリケーション (APP-ID) — カンマ区切りで複数指定可"
+                f"（未指定時は {_arch_hint} の APP-ID を自動選択）"
+            )
+        else:
+            _prompt_label = "対象アプリケーション (APP-ID) — カンマ区切りで複数指定可"
         raw = _prompt(
-            "対象アプリケーション (APP-ID) — カンマ区切りで複数指定可（未指定=全APP対象）",
+            _prompt_label,
             default="",
             required=False,
         )
@@ -162,22 +182,24 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
             params["app_ids"] = [s.strip() for s in raw.split(",") if s.strip()]
             if len(params["app_ids"]) == 1:
                 params["app_id"] = params["app_ids"][0]
-        else:
-            all_ids = resolve_all_app_ids()
-            if all_ids:
-                params["app_ids"] = all_ids
-                params["app_ids_auto_resolved"] = True
-                print(f"  ℹ️ docs/catalog/app-catalog.md から {len(all_ids)} 件の APP-ID を検出: {', '.join(all_ids)}")
-                if len(all_ids) == 1:
-                    params["app_id"] = all_ids[0]
     if "resource_group" in wf.params:
-        params["resource_group"] = _prompt("リソースグループ名", default="", required=True)
+        params["resource_group"] = _prompt("リソースグループ名", default="", required=False)
     if "usecase_id" in wf.params:
         params["usecase_id"] = _prompt("ユースケースID", default="", required=False)
     if "batch_job_id" in wf.params:
         params["batch_job_id"] = _prompt(
             "対象バッチジョブ ID（カンマ区切り）", default="", required=False
         )
+    if "tdd_max_retries" in wf.params:
+        import re as _re
+        raw = _prompt("TDD GREEN リトライ最大回数 (3/5/7/10)", default="5", required=False)
+        m = _re.search(r'\d+', raw or "5")
+        if m:
+            params["tdd_max_retries"] = int(m.group())
+        else:
+            import logging
+            logging.warning(f"tdd_max_retries '{raw}' を整数変換できません。デフォルト 5 を使用します")
+            params["tdd_max_retries"] = 5
 
     # AKM 固有パラメータ
     if "sources" in wf.params:
@@ -292,7 +314,7 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
     params["skip_qa"] = _prompt_yes_no("質問票の作成をスキップする？", default=False)
 
     # 追加コメント
-    params["additional_comment"] = _prompt("追加コメント（任意）", default="")
+    params["additional_comment"] = _prompt("GitHub Issue への追加コメント（任意）", default="")
 
     return params
 
@@ -322,25 +344,6 @@ def _resolve_app_ids(params: dict) -> list:
         return ids
     single = params.get("app_id")
     return [single] if single else []
-
-
-def resolve_all_app_ids(catalog_path: Optional[Path] = None) -> List[str]:
-    """docs/catalog/app-catalog.md から全 APP-ID を抽出する。"""
-    path = catalog_path or _APP_CATALOG_PATH
-    if not path.exists():
-        return []
-    try:
-        content = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return []
-    seen: Set[str] = set()
-    result: List[str] = []
-    for match in _APP_ID_PATTERN.finditer(content):
-        app_id = match.group(1)
-        if app_id not in seen:
-            seen.add(app_id)
-            result.append(app_id)
-    return result
 
 
 def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
@@ -378,6 +381,9 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     parts.append(f"<!-- auto-qa: {auto_qa} -->")
     parts.append(f"<!-- auto-merge: {auto_merge} -->")
 
+    tdd_max_retries = params.get("tdd_max_retries", 5)
+    parts.append(f"<!-- tdd-max-retries: {tdd_max_retries} -->")
+
     return "\n".join(parts)
 
 
@@ -389,7 +395,7 @@ def _build_additional_section(params: dict) -> str:
     return ""
 
 
-def _build_app_id_section(app_id, *, is_all_apps: bool = False) -> str:
+def _build_app_id_section(app_id) -> str:
     """ASDW テンプレートの ``{app_id_section}`` を展開する。
 
     Args:
@@ -400,15 +406,12 @@ def _build_app_id_section(app_id, *, is_all_apps: bool = False) -> str:
     else:
         ids = [app_id] if app_id else []
     if not ids:
+        # APP-ID 未指定時: スコープセクションを挿入しない。
+        # aad-web / asdw-web / abd / abdv では、orchestrator の app-arch filter が
+        # 推薦アーキテクチャに合致する APP-ID を effective_params に設定するため、
+        # 通常このパスには到達しない。
         return ""
     id_list = ", ".join(f"`{aid}`" for aid in ids)
-    if is_all_apps:
-        return (
-            f"\n\n## 対象アプリケーション（全APP）\n"
-            f"- APP-ID: {id_list}\n"
-            f"- `docs/catalog/app-catalog.md` の全アプリケーションを対象とする\n"
-            f"- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
-        )
     return (
         f"\n\n## 対象アプリケーション\n"
         f"- APP-ID: {id_list}\n"
@@ -443,11 +446,23 @@ def _build_target_files_section(target_files: str) -> str:
     return f"\n\n## 対象ファイル\n{lines}"
 
 
+def _build_completion_instruction(label_prefix: str, execution_mode: str) -> str:
+    """実行モードに応じた完了条件を返す。"""
+    done_label = f"{label_prefix}:done"
+    if execution_mode == "github":
+        return f"- 完了時に自身に `{done_label}` ラベルを付与すること"
+    return (
+        "- 上記の出力ファイルが全て正常に生成されていることを確認して完了とすること\n"
+        f"- ※ ローカル実行のため `{done_label}` ラベルの付与は不要です"
+    )
+
+
 def render_template(
     template_path: str,
     root_issue_num: int,
     params: dict,
     wf: WorkflowDef,
+    execution_mode: str = "local",
 ) -> str:
     """テンプレートを読み込み、プレースホルダを展開する。"""
     body = _load_template(template_path)
@@ -459,19 +474,23 @@ def render_template(
 
     body = body.replace("{root_ref}", root_ref)
     body = body.replace("{additional_section}", additional_section)
+    body = body.replace(
+        "{completion_instruction}",
+        _build_completion_instruction(wf.label_prefix, execution_mode),
+    )
 
     # ASDW 固有プレースホルダ
     app_ids = _resolve_app_ids(params)
-    is_all_apps = bool(params.get("app_ids_auto_resolved", False))
-    body = body.replace(
-        "{app_id_section}",
-        _build_app_id_section(
-            app_ids if app_ids else params.get("app_id", ""),
-            is_all_apps=is_all_apps,
-        ),
-    )
+    body = body.replace("{app_id_section}", _build_app_id_section(app_ids if app_ids else params.get("app_id", "")))
     body = body.replace("{resource_group}", params.get("resource_group", ""))
     body = body.replace("{usecase_id}", params.get("usecase_id", ""))
+    body = body.replace("{tdd_max_retries}", str(params.get("tdd_max_retries", 5)))
+
+    # 推薦アーキテクチャ スコープセクション（aad-web / asdw-web / abd / abdv 共通）
+    body = body.replace(
+        "{app_arch_scope_section}",
+        params.get("app_arch_scope_section", ""),
+    )
 
     # ABDV 固有プレースホルダ
     body = body.replace("{rg_section}", _build_rg_section(params.get("resource_group", "")))
@@ -506,6 +525,22 @@ def render_template(
 
     # コンテナ固有プレースホルダ (AAD step-7)
     body = body.replace("{s7_subtasks}", "Step.7.1, Step.7.2, Step.7.3")
+
+    if execution_mode == "local":
+        import re
+
+        body = re.sub(
+            r"- 完了時に自身に `[a-z-]+:done` ラベルを付与すること",
+            "- 上記の出力ファイルが全て正常に生成されていることを確認して完了とすること\n"
+            "- ※ ローカル実行のため done ラベルの付与は不要です",
+            body,
+        )
+        body = re.sub(
+            r"- 完了時に `[a-z-]+:done` を付与すること",
+            "- 上記の出力ファイルが全て正常に生成されていることを確認して完了とすること\n"
+            "- ※ ローカル実行のため done ラベルの付与は不要です",
+            body,
+        )
 
     return body
 
@@ -614,6 +649,8 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"depth: `{params['depth']}`")
     if params.get("focus_areas"):
         lines.append(f"focus_areas: `{params['focus_areas']}`")
+    if params.get("app_arch_scope_section"):
+        lines.append(params["app_arch_scope_section"])
     additional = params.get("additional_comment", "")
     if additional:
         lines.append(f"\n## 追加コメント\n{additional}")

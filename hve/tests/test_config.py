@@ -35,6 +35,12 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertIn("claude-opus-4.7", MODEL_CHOICES)
         self.assertIn("claude-opus-4.6", MODEL_CHOICES)
 
+    def test_model_choices_contains_gpt_5_5(self) -> None:
+        self.assertIn("gpt-5.5", MODEL_CHOICES)
+
+    def test_model_choices_gpt_5_5_before_claude(self) -> None:
+        self.assertLess(MODEL_CHOICES.index("gpt-5.5"), MODEL_CHOICES.index("claude-opus-4.7"))
+
     def test_default_model_constant(self) -> None:
         self.assertEqual(DEFAULT_MODEL, "claude-opus-4.7")
 
@@ -109,15 +115,34 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_workiq_default_disabled(self) -> None:
         self.assertFalse(self.cfg.workiq_enabled)
+        self.assertFalse(self.cfg.is_workiq_qa_enabled())
+        self.assertFalse(self.cfg.is_workiq_akm_review_enabled())
 
-    def test_workiq_default_timeout(self) -> None:
-        self.assertEqual(self.cfg.workiq_query_timeout_seconds, 120.0)
+    def test_workiq_explicit_flags_override_legacy(self) -> None:
+        cfg = SDKConfig(
+            workiq_enabled=True,
+            workiq_qa_enabled=False,
+            workiq_akm_review_enabled=True,
+        )
+        self.assertFalse(cfg.is_workiq_qa_enabled())
+        self.assertTrue(cfg.is_workiq_akm_review_enabled())
+
+    def test_workiq_legacy_flag_enables_both_explicit_scopes_by_default(self) -> None:
+        cfg = SDKConfig(workiq_enabled=True)
+        self.assertTrue(cfg.is_workiq_qa_enabled())
+        self.assertTrue(cfg.is_workiq_akm_review_enabled())
+
+    def test_show_reasoning_default_true(self) -> None:
+        self.assertTrue(self.cfg.show_reasoning)
 
     def test_workiq_draft_defaults(self) -> None:
         self.assertFalse(self.cfg.workiq_draft_mode)
         self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
-        self.assertEqual(self.cfg.workiq_per_question_timeout, 60.0)
+        self.assertEqual(self.cfg.workiq_per_question_timeout, 600.0)
         self.assertEqual(self.cfg.workiq_max_draft_questions, 30)
+
+    def test_auto_self_improve_default_false(self) -> None:
+        self.assertFalse(self.cfg.auto_self_improve)
 
 
 class TestSDKConfigFromEnv(unittest.TestCase):
@@ -169,6 +194,8 @@ class TestSDKConfigFromEnv(unittest.TestCase):
         env_backup = os.environ.copy()
         try:
             os.environ["WORKIQ_ENABLED"] = "true"
+            os.environ["WORKIQ_QA_ENABLED"] = "false"
+            os.environ["WORKIQ_AKM_REVIEW_ENABLED"] = "true"
             os.environ["WORKIQ_TENANT_ID"] = "tenant-001"
             os.environ["WORKIQ_PROMPT_QA"] = "qa"
             os.environ["WORKIQ_PROMPT_KM"] = "km"
@@ -179,6 +206,8 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["WORKIQ_MAX_DRAFT_QUESTIONS"] = "12"
             cfg = SDKConfig.from_env()
             self.assertTrue(cfg.workiq_enabled)
+            self.assertFalse(cfg.is_workiq_qa_enabled())
+            self.assertTrue(cfg.is_workiq_akm_review_enabled())
             self.assertEqual(cfg.workiq_tenant_id, "tenant-001")
             self.assertEqual(cfg.workiq_prompt_qa, "qa")
             self.assertEqual(cfg.workiq_prompt_km, "km")
@@ -207,6 +236,50 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["MODEL"] = ""
             cfg = SDKConfig.from_env()
             self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_auto_self_improve_true(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["HVE_AUTO_SELF_IMPROVE"] = "true"
+            cfg = SDKConfig.from_env()
+            self.assertTrue(cfg.auto_self_improve)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_reads_show_reasoning(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["SHOW_REASONING"] = "false"
+            cfg = SDKConfig.from_env()
+            self.assertFalse(cfg.show_reasoning)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_auto_self_improve_true_variants(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            for value in ("true", "1", "yes"):
+                with self.subTest(value=value):
+                    os.environ["HVE_AUTO_SELF_IMPROVE"] = value
+                    cfg = SDKConfig.from_env()
+                    self.assertTrue(cfg.auto_self_improve)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_auto_self_improve_false_variants(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            for value in ("false", "0", "no", ""):
+                with self.subTest(value=value):
+                    os.environ["HVE_AUTO_SELF_IMPROVE"] = value
+                    cfg = SDKConfig.from_env()
+                    self.assertFalse(cfg.auto_self_improve)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)

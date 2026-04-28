@@ -218,8 +218,7 @@ jobs:
           create_label "akm:running"      "E4E669" ""
           create_label "akm:done"         "0E8A16" ""
           create_label "akm:blocked"      "D73A4A" ""
-          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
-          create_label "auto-qa" "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-qa"          "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
@@ -299,8 +298,13 @@ jobs:
 
           body = os.environ.get("ISSUE_BODY", "")
 
-          # 現行の AKM Issue Template には対象ブランチ項目がないため固定値を使用
+          # ブランチ名抽出（Issue Template の対象ブランチフィールドから取得、なければ "main"）
           branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              if val and val != "_No response_":
+                  branch = val
 
           # sources 抽出
           sources = "qa"
@@ -329,24 +333,19 @@ jobs:
               section_text = m.group(1)
               force_refresh = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          # 質問票設定: チェック [x] → auto-qa 有効
+          auto_qa = False
+          m = re.search(r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
           # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
           auto_merge = False
           m = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               section_text = m.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
-
-          review_enabled = False
-          m = re.search(r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
-          if m:
-              section_text = m.group(1)
-              review_enabled = bool(re.search(r"-\s*\[[xX]\]", section_text))
-
-          qa_enabled = False
-          m = re.search(r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
-          if m:
-              section_text = m.group(1)
-              qa_enabled = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
           # 追加コメント抽出
           additional_comment = ""
@@ -355,23 +354,33 @@ jobs:
               val = m.group(1).strip()
               if val and val != "_No response_":
                   additional_comment = val
-
           custom_source_dir = []
-          m = re.search(r"###\s*カスタムソースディレクトリ（任意）\s*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
-          if m:
-              val = m.group(1).strip()
-              if val and val != "_No response_":
-                  for item in val.split():
-                      if item not in custom_source_dir:
-                          custom_source_dir.append(item)
-
-          # 旧 additional_comment 内 custom_source_dir: 指定との後方互換
           for line in additional_comment.splitlines():
               mm = re.match(r"^custom_source_dir:\s*(.+?)\s*$", line.strip())
               if mm:
-                  for item in mm.group(1).split():
-                      if item not in custom_source_dir:
-                          custom_source_dir.append(item)
+                  custom_source_dir.append(mm.group(1))
+
+          # 自己改善設定
+          enable_self_improve = False
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if si_section:
+              enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          self_improve_max_iterations = "3"
+          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_max_iterations = n.group(1)
+
+          self_improve_quality_threshold = "80"
+          q = re.search(r"###\s*自己改善\s*品質スコア閾値.*?\n+(.+)", body)
+          if q:
+              val = q.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_quality_threshold = n.group(1)
 
           result = {
               "branch": branch,
@@ -379,10 +388,12 @@ jobs:
               "target_files": target_files,
               "custom_source_dir": " ".join(custom_source_dir),
               "force_refresh": force_refresh,
+              "auto_qa": auto_qa,
               "auto_merge": auto_merge,
-              "review_enabled": review_enabled,
-              "qa_enabled": qa_enabled,
               "additional_comment": additional_comment,
+              "enable_self_improve": enable_self_improve,
+              "self_improve_max_iterations": self_improve_max_iterations,
+              "self_improve_quality_threshold": self_improve_quality_threshold,
           }
           print(json.dumps(result))
           PYEOF
@@ -393,40 +404,49 @@ jobs:
           TARGET_FILES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['target_files'])")
           CUSTOM_SOURCE_DIR=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('custom_source_dir',''))")
           FORCE_REFRESH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('force_refresh') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
-          REVIEW_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('review_enabled') else 'false')")
-          QA_ENABLED=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('qa_enabled') else 'false')")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "sources: ${SOURCES}"
           echo "対象ファイル: ${TARGET_FILES}"
           echo "custom_source_dir: ${CUSTOM_SOURCE_DIR}"
           echo "force_refresh: ${FORCE_REFRESH}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
-          # ---- Root Issue body に自動化タグを埋め込み ----
+          # ---- Root Issue body に auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
           MERGE_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_MERGE}" "${REVIEW_ENABLED}" "${QA_ENABLED}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          python3 - "${AUTO_QA}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${MERGE_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
-          auto_merge = sys.argv[1]
-          review_enabled = sys.argv[2]
-          qa_enabled = sys.argv[3]
-          output_file = sys.argv[4]
+          auto_qa = sys.argv[1]
+          auto_merge = sys.argv[2]
+          branch = sys.argv[3]
+          enable_si = sys.argv[4]
+          si_max_iter = sys.argv[5]
+          si_quality_threshold = sys.argv[6]
+          output_file = sys.argv[7]
 
           tags = [
+              ("auto-qa", auto_qa),
               ("auto-merge", auto_merge),
-              ("auto-review", review_enabled),
-              ("auto-context-review", review_enabled),
-              ("auto-qa", qa_enabled),
+              ("branch", branch),
+              ("enable-self-improve", enable_si),
+              ("self-improve-max-iterations", si_max_iter),
+              ("self-improve-quality-threshold", si_quality_threshold),
           ]
+
           for key, value in tags:
               tag = f"<!-- {key}: {value} -->"
-              pat = re.compile(rf'<!--\s*{re.escape(key)}:\s*(true|false)\s*-->')
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
               if pat.search(body):
-                  body = pat.sub(tag, body)
+                  body = pat.sub(tag, body, count=1)
               else:
                   body = body.rstrip() + "\n" + tag + "\n"
 
@@ -437,8 +457,8 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に自動化タグを埋め込みました（auto-merge: ${AUTO_MERGE}, auto-context-review: ${REVIEW_ENABLED}, auto-qa: ${QA_ENABLED}）。" \
-            || echo "WARNING: Root Issue body の自動化タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-qa / auto-merge / branch / self-improve タグを埋め込みました。" \
+            || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${MERGE_TAG_FILE}"
 
@@ -446,12 +466,7 @@ jobs:
           add_label "${ROOT_ISSUE}" "akm:initialized"
           echo "akm:initialized を付与しました。"
 
-          if [[ "${REVIEW_ENABLED}" == "true" ]]; then
-            add_label "${ROOT_ISSUE}" "auto-context-review"
-            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
-          fi
-
-          if [[ "${QA_ENABLED}" == "true" ]]; then
+          if [[ "${AUTO_QA}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-qa"
             echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
           fi
@@ -462,7 +477,7 @@ jobs:
           fi
 
           # ---- Step Issue の body に埋め込む共通メタ情報 ----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-review: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${REVIEW_ENABLED}" "${REVIEW_ENABLED}" "${QA_ENABLED}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コメントが存在する場合のフッター
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
@@ -474,12 +489,10 @@ jobs:
           # Step Issue に付与するラベルセット
           STEP_LABELS='["knowledge-management"]'
 
-          if [[ "${REVIEW_ENABLED}" == "true" ]]; then
-            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-context-review"]')
-          fi
-          if [[ "${QA_ENABLED}" == "true" ]]; then
+          if [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-qa"]')
           fi
+
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi
@@ -721,3 +734,131 @@ jobs:
           # ── Root Issue の自動クローズ判定 ──
           echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
           auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          # HTML コメント形式（workflow init で埋め込まれた場合）を優先
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          # フォールバック: Issue Form Markdown 形式
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf "%s" "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に branch 情報がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+              self_improve_quality_threshold=int(os.environ.get('QUALITY_THRESHOLD', '80')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          branch='${{ steps.parse.outputs.branch }}'
+          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
+            echo "Invalid branch name: ${branch}" >&2
+            exit 1
+          }
+          git push origin "HEAD:refs/heads/${branch}"

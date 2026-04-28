@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/asdw-web/step-2.1.md に移動しました。 -->
 {root_ref}
 ## 目的
 ユースケース内の対象マイクロサービスについて、最適な Azure コンピュート（ホスティング）を選定し、根拠・代替案・前提・未決事項を設計書に記録する（APP-ID 指定時はスコープ内のサービスのみ）。
@@ -21,4 +22,4 @@
 
 ## 完了条件
 - `docs/azure/azure-services-compute.md` が作成されている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

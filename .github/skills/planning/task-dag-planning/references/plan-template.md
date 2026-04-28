@@ -1,4 +1,5 @@
-<!-- estimate_total: XX -->
+<!-- task_scope: single|multi -->
+<!-- context_size: small|medium|large -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
 <!-- implementation_files: true -->
@@ -7,8 +8,9 @@
 >
 > | メタデータ | 値のルール |
 > |-----------|-----------|
-> | `estimate_total` | `XX` → 実際の合計見積分数（整数）に置換。例: `12` |
-> | `split_decision` | 見積 ≤ 15分 かつ 不確実性「低」 → `PROCEED`、それ以外 → `SPLIT_REQUIRED` |
+> | `task_scope` | `single`：独立して検証可能な成果物が 1 つ / `multi`：2 つ以上（分離可能） |
+> | `context_size` | `small`：参照ファイル 1〜3 件 / `medium`：4〜8 件 / `large`：9 件以上または単一ファイル 500 行超 |
+> | `split_decision` | task_scope=single かつ context_size が small または medium → `PROCEED`、それ以外 → `SPLIT_REQUIRED` |
 > | `subissues_count` | PROCEED の場合 `0`。SPLIT_REQUIRED の場合は subissues.md の `<!-- subissue -->` ブロック数と一致させること |
 > | `implementation_files` | `PROCEED` で実装ファイルを変更する場合 `true`、それ以外 `false`。**SPLIT_REQUIRED の場合は必ず `false`**（実装禁止） |
 >
@@ -21,16 +23,15 @@
 
 ## 分割判定（必須）
 
-- 見積合計: XX 分
-- 15分以下か: YES/NO
-- 不確実性: 低/中/高
+- task_scope: single|multi
+- context_size: small|medium|large（参照ファイル数: small=1-3, medium=4-8, large=9以上または 500行超ファイル含む）
 - 判定結果: PROCEED / SPLIT_REQUIRED
 - 判定根拠: （以下のいずれかを記載）
-    - 「見積合計 > 15分」に該当（XX分 > 15分）
-    - 「見積合計 ≤ 15分 かつ 不確実性 中/高」に該当
-    - 上記いずれも非該当 → PROCEED（見積 XX分 ≤ 15分、不確実性: 低）
+    - task_scope=multi に該当（独立成果物が 2 つ以上）
+    - context_size=large に該当（参照ファイル 9 件以上または 500 行超）
+    - 上記いずれも非該当 → PROCEED（task_scope=single、context_size=small または medium）
 - （SPLIT_REQUIRED の場合）subissues.md: 作成済み / 未作成
-- （PROCEED の場合）実装に進む理由: 見積 XX分 ≤ 15分、不確実性: 低
+- （PROCEED の場合）実装に進む理由: task_scope=single、context_size=XX
 
 ---
 

@@ -1,4 +1,4 @@
----
+﻿---
 name: QA-AzureArchitectureReview
 description: デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する。
 tools: ["*"]
@@ -47,7 +47,8 @@ tools: ["*"]
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -57,7 +58,7 @@ tools: ["*"]
 - DAG（依存関係）＋各ノードの概算（分）を付与する。
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
-## 4) 実行（Planが15分以内のときのみ）
+## 4) 実行（task_scope=single かつ context_size ≤ medium のときのみ）
 ### 4.1 ドキュメント読解
 - 参考ドキュメントから以下を抽出して `{WORK}notes.md` に整理：
   - 想定アーキテクチャ（主要サービス/境界）

@@ -33,7 +33,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -364,7 +364,23 @@ jobs:
               section_text = merge_section.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge}
+          # APP-ID 抽出（カンマ区切りで分割・正規化）
+          app_ids_raw = ""
+          m = re.search(r"###\s*対象アプリケーション[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              app_ids_raw = m.group(1).strip()
+              if app_ids_raw == "_No response_":
+                  app_ids_raw = ""
+
+          app_ids_list = []
+          if app_ids_raw:
+              for token in re.split(r"[\s,]+", app_ids_raw):
+                  normalized = token.strip().upper()
+                  if normalized and re.fullmatch(r"APP-\d{2,}", normalized):
+                      if normalized not in app_ids_list:
+                          app_ids_list.append(normalized)
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list}
           print(json.dumps(result))
           PYEOF
           )
@@ -375,12 +391,44 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+          echo "対象 APP-IDs（フィルタ前）: ${APP_IDS:-（未指定 = 推薦アーキテクチャから自動選択）}"
+
+          # ---- 推薦アーキテクチャ APP-ID フィルタ ----
+          FILTER_RESULT=$(python3 -m hve.app_arch_filter \
+            --workflow abd \
+            ${APP_IDS:+--app-ids "${APP_IDS}"} \
+            --catalog docs/catalog/app-arch-catalog.md) || {
+            echo "ERROR: app-arch-catalog.md が見つからないか読み取れません。処理を中止します。" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: \`docs/catalog/app-arch-catalog.md\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
+            exit 1
+          }
+
+          FILTER_ERROR=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null || echo "")
+          if [[ -n "${FILTER_ERROR}" ]]; then
+            echo "ERROR: app-arch filter エラー: ${FILTER_ERROR}" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: app-arch filter: ${FILTER_ERROR}"
+            exit 1
+          fi
+
+          APP_IDS=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('matched_app_ids',[])))")
+          APP_ARCH_SCOPE_SECTION=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('markdown_section',''))")
+
+          echo "対象 APP-IDs（フィルタ後）: ${APP_IDS:-（0件）}"
+
+          if [[ -z "${APP_IDS}" ]]; then
+            echo "推薦アーキテクチャ APP-ID フィルタ: 対象 APP-ID が 0 件です。Step Issue を作成しません。"
+            post_comment "${ROOT_ISSUE}" "ℹ️ 推薦アーキテクチャ \`データバッチ処理\` / \`バッチ\` に該当する APP-ID が見つかりませんでした。\`docs/catalog/app-arch-catalog.md\` の \`A) サマリ表（全APP横断）\` を確認してください。"
+            exit 0
+          fi
+
+          export APP_IDS APP_ARCH_SCOPE_SECTION
 
           # ---- Root Issue body からスキップ対象のステップ行を除去して更新 ----
           if [[ -n "${SKIP_STEPS}" ]]; then
@@ -1308,3 +1356,68 @@ jobs:
           # ── Root Issue の自動クローズ判定 ──
           echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
           auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に <!-- branch: ... --> がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: pip install ruff
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          git push origin HEAD:${{ steps.parse.outputs.branch }}
+

@@ -1,7 +1,13 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-8 個のオーケストレーションワークフロー (AAS/AAD/ASDW/ABD/ABDV/AKM/AQOD/ADOC) のステップ DAG
-定義をデータとして保持する。状態遷移ロジックはデータドリブンに実装する。
+10 個のオーケストレーションワークフロー (AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC) の
+ステップ DAG 定義をデータとして保持する。
+
+Step ID スコープ規則:
+  - Step ID はワークフロー内でのみ一意性が保証される
+  - ワークフロー横断での一意性は保証しない
+  - 将来、複数ワークフローの DAG を結合して単一 DAGExecutor で実行する場合は
+    Step ID にワークフロー接頭辞が必要になる
 
 依存パターン:
   - 順次 (sequential)   : A → B (B の depends_on = ["A"])
@@ -142,6 +148,38 @@ class WorkflowDef:
         return result
 
 
+@dataclass
+class WorkflowDependency:
+    """ワークフロー間の依存定義。
+
+    required_artifacts の glob 解決/検証は本モジュールでは行わず、
+    利用側（依存チェック実装側）で評価する前提。
+    """
+
+    workflow_id: str
+    """依存先ワークフロー ID。"""
+
+    required_artifacts: List[str] = field(default_factory=list)
+    """依存先が生成すべき成果物パス (glob パターン可)。"""
+
+    soft: bool = False
+    """True の場合、依存先未完了でも警告のみで続行可能。"""
+
+
+@dataclass
+class MetaWorkflowDef:
+    """ワークフロー間の依存 DAG 定義。"""
+
+    id: str
+    """メタワークフロー識別子。"""
+
+    workflows: List[str]
+    """含まれるワークフロー ID のリスト。"""
+
+    dependencies: Dict[str, List[WorkflowDependency]]
+    """workflow_id → [依存先] のマッピング。"""
+
+
 # ---------------------------------------------------------------------------
 # ラベル定義ヘルパー
 # ---------------------------------------------------------------------------
@@ -165,52 +203,81 @@ def _make_state_labels(prefix: str) -> Dict[str, str]:
 # --- AAS: App Architecture Design ---
 AAS = WorkflowDef(
     id="aas",
-    name="App Architecture Design",
+    name="Architecture Design",
     label_prefix="aas",
     state_labels=_make_state_labels("aas"),
     params=[],
     steps=[
-        StepDef(id="1", title="アプリケーションリストの作成", custom_agent="Arch-ApplicationAnalytics", depends_on=[], body_template_path="templates/aas/step-1.md"),
-        StepDef(id="2", title="ソフトウェアアーキテクチャの推薦", custom_agent="Arch-ArchitectureCandidateAnalyzer", depends_on=["1"], body_template_path="templates/aas/step-2.md"),
+        StepDef(id="1", title="アプリケーションリストの作成",
+                custom_agent="Arch-ApplicationAnalytics",
+                body_template_path="templates/aas/step-1.md"),
+        StepDef(id="2", title="ソフトウェアアーキテクチャの推薦",
+                custom_agent="Arch-ArchitectureCandidateAnalyzer",
+                depends_on=["1"],
+                body_template_path="templates/aas/step-2.md"),
+        StepDef(id="3.1", title="ドメイン分析",
+                custom_agent="Arch-Microservice-DomainAnalytics",
+                depends_on=["2"],
+                body_template_path="templates/aas/step-3.1.md"),
+        StepDef(id="3.2", title="サービス一覧抽出",
+                custom_agent="Arch-Microservice-ServiceIdentify",
+                depends_on=["3.1"],
+                body_template_path="templates/aas/step-3.2.md"),
+        StepDef(id="4", title="データモデル",
+                custom_agent="Arch-DataModeling",
+                depends_on=["3.2"],
+                body_template_path="templates/aas/step-4.md"),
+        StepDef(id="5", title="データカタログ作成",
+                custom_agent="Arch-DataCatalog",
+                depends_on=["4"],
+                skip_fallback_deps=["4"],
+                body_template_path="templates/aas/step-5.md"),
+        StepDef(id="6", title="サービスカタログ",
+                custom_agent="Arch-Microservice-ServiceCatalog",
+                depends_on=["5"],
+                skip_fallback_deps=["5"],
+                body_template_path="templates/aas/step-6.md"),
+        StepDef(id="7", title="テスト戦略書",
+                custom_agent="Arch-TDD-TestStrategy",
+                depends_on=["6"],
+                skip_fallback_deps=["6"],
+                body_template_path="templates/aas/step-7.md"),
     ],
 )
 
-# --- AAD: App Detail Design ---
-AAD = WorkflowDef(
-    id="aad",
-    name="App Detail Design",
-    label_prefix="aad",
-    state_labels=_make_state_labels("aad"),
+# --- AAD-WEB: Web App Design ---
+AAD_WEB = WorkflowDef(
+    id="aad-web",
+    name="Web App Design",
+    label_prefix="aad-web",
+    state_labels=_make_state_labels("aad-web"),
     params=["app_ids", "app_id"],
     steps=[
-        # コンテナ
-        StepDef(id="1", title="ドメイン分析 + サービス一覧抽出（コンテナ）", custom_agent=None, is_container=True),
-        StepDef(id="7", title="画面定義書 + マイクロサービス定義書（コンテナ）", custom_agent=None, is_container=True),
-        StepDef(id="8", title="AI Agent 設計（コンテナ）", custom_agent=None, is_container=True),
-        # 実ステップ
-        StepDef(id="1.1", title="ドメイン分析", custom_agent="Arch-Microservice-DomainAnalytics", body_template_path="templates/aad/step-1.1.md"),
-        StepDef(id="1.2", title="サービス一覧抽出", custom_agent="Arch-Microservice-ServiceIdentify", depends_on=["1.1"], body_template_path="templates/aad/step-1.2.md"),
-        StepDef(id="2", title="データモデル", custom_agent="Arch-DataModeling", depends_on=["1.2"], body_template_path="templates/aad/step-2.md"),
-        StepDef(id="3", title="データカタログ作成", custom_agent="Arch-DataCatalog", depends_on=["2"], skip_fallback_deps=["2"], body_template_path="templates/aad/step-3.md"),
-        StepDef(id="4", title="画面一覧と遷移図", custom_agent="Arch-UI-List", depends_on=["3"], skip_fallback_deps=["3"], body_template_path="templates/aad/step-4.md"),
-        StepDef(id="5", title="サービスカタログ", custom_agent="Arch-Microservice-ServiceCatalog", depends_on=["4"], skip_fallback_deps=["4"], body_template_path="templates/aad/step-5.md"),
-        StepDef(id="6", title="テスト戦略書", custom_agent="Arch-TDD-TestStrategy", depends_on=["5"], skip_fallback_deps=["5"], body_template_path="templates/aad/step-6.md"),
-        StepDef(id="7.1", title="画面定義書", custom_agent="Arch-UI-Detail", depends_on=["6"], skip_fallback_deps=["5"], body_template_path="templates/aad/step-7.1.md"),
-        StepDef(id="7.2", title="マイクロサービス定義書", custom_agent="Arch-Microservice-ServiceDetail", depends_on=["6"], skip_fallback_deps=["5"], body_template_path="templates/aad/step-7.2.md"),
-        StepDef(id="7.3", title="TDDテスト仕様書", custom_agent="Arch-TDD-TestSpec", depends_on=["6", "7.1", "7.2"], body_template_path="templates/aad/step-7.3.md"),
-        StepDef(id="8.1", title="AI Agent アプリケーション定義", custom_agent="Arch-AIAgentDesign", depends_on=["7.3"], skip_fallback_deps=["7.1", "7.2"], body_template_path="templates/aad/step-8.1.md"),
-        StepDef(id="8.2", title="AI Agent 粒度設計", custom_agent="Arch-AIAgentDesign", depends_on=["8.1"], skip_fallback_deps=["7.3"], body_template_path="templates/aad/step-8.2.md"),
-        StepDef(id="8.3", title="AI Agent 詳細設計", custom_agent="Arch-AIAgentDesign", depends_on=["8.2"], skip_fallback_deps=["8.1"], body_template_path="templates/aad/step-8.3.md"),
+        StepDef(id="1", title="画面一覧と遷移図",
+                custom_agent="Arch-UI-List",
+                body_template_path="templates/aad-web/step-1.md"),
+        StepDef(id="2.1", title="画面定義書",
+                custom_agent="Arch-UI-Detail",
+                depends_on=["1"],
+                body_template_path="templates/aad-web/step-2.1.md"),
+        StepDef(id="2.2", title="マイクロサービス定義書",
+                custom_agent="Arch-Microservice-ServiceDetail",
+                depends_on=["1"],
+                body_template_path="templates/aad-web/step-2.2.md"),
+        StepDef(id="2.3", title="TDDテスト仕様書",
+                custom_agent="Arch-TDD-TestSpec",
+                depends_on=["2.1", "2.2"],
+                body_template_path="templates/aad-web/step-2.3.md"),
     ],
 )
 
-# --- ASDW: App Dev Microservice Azure ---
-ASDW = WorkflowDef(
-    id="asdw",
-    name="App Dev Microservice Azure",
-    label_prefix="asdw",
-    state_labels=_make_state_labels("asdw"),
-    params=["app_ids", "app_id", "resource_group", "usecase_id"],
+# --- ASDW-WEB: Web App Dev & Deploy ---
+ASDW_WEB = WorkflowDef(
+    id="asdw-web",
+    name="Web App Dev & Deploy",
+    label_prefix="asdw-web",
+    state_labels=_make_state_labels("asdw-web"),
+    params=["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"],
     steps=[
         # コンテナ
         StepDef(id="1", title="データ（コンテナ）", custom_agent=None, is_container=True),
@@ -218,26 +285,72 @@ ASDW = WorkflowDef(
         StepDef(id="3", title="UI 作成（コンテナ）", custom_agent=None, is_container=True),
         StepDef(id="4", title="アーキテクチャレビュー（コンテナ）", custom_agent=None, is_container=True),
         # 実ステップ
-        StepDef(id="1.1", title="Azure データストア選定", custom_agent="Dev-Microservice-Azure-DataDesign", body_template_path="templates/asdw/step-1.1.md"),
-        StepDef(id="1.2", title="Azure データサービス Deploy", custom_agent="Dev-Microservice-Azure-DataDeploy", depends_on=["1.1"], body_template_path="templates/asdw/step-1.2.md"),
-        StepDef(id="2.1", title="Azure コンピュート選定", custom_agent="Dev-Microservice-Azure-ComputeDesign", depends_on=["1.2"], body_template_path="templates/asdw/step-2.1.md"),
-        StepDef(id="2.2", title="追加 Azure サービス選定", custom_agent="Dev-Microservice-Azure-AddServiceDesign", depends_on=["2.1"], body_template_path="templates/asdw/step-2.2.md"),
-        StepDef(id="2.3", title="追加 Azure サービス Deploy", custom_agent="Dev-Microservice-Azure-AddServiceDeploy", depends_on=["2.2"], skip_fallback_deps=["2.2"], body_template_path="templates/asdw/step-2.3.md"),
-        StepDef(id="2.3T", title="サービス テスト仕様書 (TDD RED)", custom_agent="Arch-TDD-TestSpec", depends_on=["2.3"], skip_fallback_deps=["2.3"], body_template_path="templates/asdw/step-2.3T.md"),
-        StepDef(id="2.3TC", title="サービス テストコード生成 (TDD RED)", custom_agent="Dev-Microservice-Azure-ServiceTestCoding", depends_on=["2.3T"], skip_fallback_deps=["2.3T"], body_template_path="templates/asdw/step-2.3TC.md"),
-        StepDef(id="2.4", title="サービスコード実装 (Azure Functions)", custom_agent="Dev-Microservice-Azure-ServiceCoding-AzureFunctions", depends_on=["2.3TC"], skip_fallback_deps=["2.3TC"], body_template_path="templates/asdw/step-2.4.md"),
-        StepDef(id="2.5", title="Azure Compute Deploy", custom_agent="Dev-Microservice-Azure-ComputeDeploy-AzureFunctions", depends_on=["2.4"], body_template_path="templates/asdw/step-2.5.md"),
-        StepDef(id="2.6", title="AI Agent 構成設計", custom_agent="Arch-AIAgentDesign", depends_on=["2.5"], skip_fallback_deps=["2.5"], body_template_path="templates/asdw/step-2.6.md"),
-        StepDef(id="2.7T", title="AI Agent テスト仕様書 (TDD RED)", custom_agent="Arch-TDD-TestSpec", depends_on=["2.6"], skip_fallback_deps=["2.6"], body_template_path="templates/asdw/step-2.7T.md"),
-        StepDef(id="2.7TC", title="AI Agent テストコード生成 (TDD RED)", custom_agent="Dev-Microservice-Azure-AgentTestCoding", depends_on=["2.7T"], skip_fallback_deps=["2.7T"], body_template_path="templates/asdw/step-2.7TC.md"),
-        StepDef(id="2.7", title="AI Agent 実装 (TDD GREEN)", custom_agent="Dev-Microservice-Azure-AgentCoding", depends_on=["2.7TC"], skip_fallback_deps=["2.7TC"], body_template_path="templates/asdw/step-2.7.md"),
-        StepDef(id="2.8", title="AI Agent Deploy", custom_agent="Dev-Microservice-Azure-AgentDeploy", depends_on=["2.7"], skip_fallback_deps=["2.7"], body_template_path="templates/asdw/step-2.8.md"),
-        StepDef(id="3.0T", title="UI テスト仕様書 (TDD RED)", custom_agent="Arch-TDD-TestSpec", depends_on=["2.8"], skip_fallback_deps=["2.8"], body_template_path="templates/asdw/step-3.0T.md"),
-        StepDef(id="3.0TC", title="UI テストコード生成 (TDD RED)", custom_agent="Dev-Microservice-Azure-UITestCoding", depends_on=["3.0T"], skip_fallback_deps=["3.0T"], body_template_path="templates/asdw/step-3.0TC.md"),
-        StepDef(id="3.1", title="UI 実装", custom_agent="Dev-Microservice-Azure-UICoding", depends_on=["3.0TC"], skip_fallback_deps=["3.0TC"], body_template_path="templates/asdw/step-3.1.md"),
-        StepDef(id="3.2", title="Web アプリ Deploy (Azure SWA)", custom_agent="Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps", depends_on=["3.1"], body_template_path="templates/asdw/step-3.2.md"),
-        StepDef(id="4.1", title="WAF アーキテクチャレビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3.2"], body_template_path="templates/asdw/step-4.1.md"),
-        StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3.2"], body_template_path="templates/asdw/step-4.2.md"),
+        StepDef(id="1.1", title="Azure データストア選定",
+                custom_agent="Dev-Microservice-Azure-DataDesign",
+                body_template_path="templates/asdw-web/step-1.1.md"),
+        StepDef(id="1.2", title="Azure データサービス Deploy",
+                custom_agent="Dev-Microservice-Azure-DataDeploy",
+                depends_on=["1.1"],
+                body_template_path="templates/asdw-web/step-1.2.md"),
+        StepDef(id="2.1", title="Azure コンピュート選定",
+                custom_agent="Dev-Microservice-Azure-ComputeDesign",
+                depends_on=["1.2"],
+                body_template_path="templates/asdw-web/step-2.1.md"),
+        StepDef(id="2.2", title="追加 Azure サービス選定",
+                custom_agent="Dev-Microservice-Azure-AddServiceDesign",
+                depends_on=["2.1"],
+                body_template_path="templates/asdw-web/step-2.2.md"),
+        StepDef(id="2.3", title="追加 Azure サービス Deploy",
+                custom_agent="Dev-Microservice-Azure-AddServiceDeploy",
+                depends_on=["2.2"],
+                skip_fallback_deps=["2.2"],
+                body_template_path="templates/asdw-web/step-2.3.md"),
+        StepDef(id="2.3T", title="サービス テスト仕様書 (TDD RED)",
+                custom_agent="Arch-TDD-TestSpec",
+                depends_on=["2.3"],
+                skip_fallback_deps=["2.3"],
+                body_template_path="templates/asdw-web/step-2.3T.md"),
+        StepDef(id="2.3TC", title="サービス テストコード生成 (TDD RED)",
+                custom_agent="Dev-Microservice-Azure-ServiceTestCoding",
+                depends_on=["2.3T"],
+                skip_fallback_deps=["2.3T"],
+                body_template_path="templates/asdw-web/step-2.3TC.md"),
+        StepDef(id="2.4", title="サービスコード実装 (TDD GREEN)",
+                custom_agent="Dev-Microservice-Azure-ServiceCoding-AzureFunctions",
+                depends_on=["2.3TC"],
+                skip_fallback_deps=["2.3TC"],
+                body_template_path="templates/asdw-web/step-2.4.md"),
+        StepDef(id="2.5", title="Azure Compute Deploy",
+                custom_agent="Dev-Microservice-Azure-ComputeDeploy-AzureFunctions",
+                depends_on=["2.4"],
+                body_template_path="templates/asdw-web/step-2.5.md"),
+        StepDef(id="3.0T", title="UI テスト仕様書 (TDD RED)",
+                custom_agent="Arch-TDD-TestSpec",
+                depends_on=["2.5"],
+                skip_fallback_deps=["2.5"],
+                body_template_path="templates/asdw-web/step-3.0T.md"),
+        StepDef(id="3.0TC", title="UI テストコード生成 (TDD RED)",
+                custom_agent="Dev-Microservice-Azure-UITestCoding",
+                depends_on=["3.0T"],
+                skip_fallback_deps=["3.0T"],
+                body_template_path="templates/asdw-web/step-3.0TC.md"),
+        StepDef(id="3.1", title="UI 実装 (TDD GREEN)",
+                custom_agent="Dev-Microservice-Azure-UICoding",
+                depends_on=["3.0TC"],
+                skip_fallback_deps=["3.0TC"],
+                body_template_path="templates/asdw-web/step-3.1.md"),
+        StepDef(id="3.2", title="Web アプリ Deploy (Azure SWA)",
+                custom_agent="Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps",
+                depends_on=["3.1"],
+                body_template_path="templates/asdw-web/step-3.2.md"),
+        StepDef(id="4.1", title="WAF アーキテクチャレビュー",
+                custom_agent="QA-AzureArchitectureReview",
+                depends_on=["3.2"],
+                body_template_path="templates/asdw-web/step-4.1.md"),
+        StepDef(id="4.2", title="整合性チェック",
+                custom_agent="QA-AzureDependencyReview",
+                depends_on=["3.2"],
+                body_template_path="templates/asdw-web/step-4.2.md"),
     ],
 )
 
@@ -247,7 +360,7 @@ ABD = WorkflowDef(
     name="Batch Design",
     label_prefix="abd",
     state_labels=_make_state_labels("abd"),
-    params=[],
+    params=["app_ids", "app_id"],
     steps=[
         StepDef(id="1.1", title="バッチドメイン分析", custom_agent="Arch-Batch-DomainAnalytics", body_template_path="templates/abd/step-1.1.md"),
         StepDef(id="1.2", title="データソース/デスティネーション分析", custom_agent="Arch-Batch-DataSourceAnalysis", body_template_path="templates/abd/step-1.2.md"),
@@ -267,7 +380,7 @@ ABDV = WorkflowDef(
     name="Batch Dev",
     label_prefix="abdv",
     state_labels=_make_state_labels("abdv"),
-    params=["resource_group", "batch_job_id"],
+    params=["app_ids", "app_id", "resource_group", "batch_job_id", "tdd_max_retries"],
     steps=[
         StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Batch-Deploy", body_template_path="templates/abdv/step-1.1.md"),
         StepDef(id="1.2", title="Azure データリソース Deploy", custom_agent="Dev-Batch-Deploy", depends_on=["1.1"], body_template_path="templates/abdv/step-1.2.md"),
@@ -276,6 +389,58 @@ ABDV = WorkflowDef(
         StepDef(id="3", title="Azure Functions/コンテナ Deploy", custom_agent="Dev-Batch-Deploy", depends_on=["2.2"], body_template_path="templates/abdv/step-3.md"),
         StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], body_template_path="templates/abdv/step-4.1.md"),
         StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], body_template_path="templates/abdv/step-4.2.md"),
+    ],
+)
+
+# --- AAG: AI Agent Design ---
+AAG = WorkflowDef(
+    id="aag",
+    name="AI Agent Design",
+    label_prefix="aag",
+    state_labels=_make_state_labels("aag"),
+    params=["app_ids", "app_id", "usecase_id"],
+    steps=[
+        StepDef(id="1", title="AI Agent アプリケーション定義",
+                custom_agent="Arch-AIAgentDesign",
+                body_template_path="templates/aag/step-1.md"),
+        StepDef(id="2", title="AI Agent 粒度設計",
+                custom_agent="Arch-AIAgentDesign",
+                depends_on=["1"],
+                body_template_path="templates/aag/step-2.md"),
+        StepDef(id="3", title="AI Agent 詳細設計",
+                custom_agent="Arch-AIAgentDesign",
+                depends_on=["2"],
+                body_template_path="templates/aag/step-3.md"),
+    ],
+)
+
+# --- AAGD: AI Agent Dev & Deploy ---
+AAGD = WorkflowDef(
+    id="aagd",
+    name="AI Agent Dev & Deploy",
+    label_prefix="aagd",
+    state_labels=_make_state_labels("aagd"),
+    params=["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"],
+    steps=[
+        StepDef(id="1", title="AI Agent 構成設計",
+                custom_agent="Arch-AIAgentDesign",
+                body_template_path="templates/aagd/step-1.md"),
+        StepDef(id="2.1", title="AI Agent テスト仕様書 (TDD RED)",
+                custom_agent="Arch-TDD-TestSpec",
+                depends_on=["1"],
+                body_template_path="templates/aagd/step-2.1.md"),
+        StepDef(id="2.2", title="AI Agent テストコード生成 (TDD RED)",
+                custom_agent="Dev-Microservice-Azure-AgentTestCoding",
+                depends_on=["2.1"],
+                body_template_path="templates/aagd/step-2.2.md"),
+        StepDef(id="2.3", title="AI Agent 実装 (TDD GREEN)",
+                custom_agent="Dev-Microservice-Azure-AgentCoding",
+                depends_on=["2.2"],
+                body_template_path="templates/aagd/step-2.3.md"),
+        StepDef(id="3", title="AI Agent Deploy",
+                custom_agent="Dev-Microservice-Azure-AgentDeploy",
+                depends_on=["2.3"],
+                body_template_path="templates/aagd/step-3.md"),
     ],
 )
 
@@ -357,14 +522,105 @@ ADOC = WorkflowDef(
 )
 
 
+FULL_PIPELINE = MetaWorkflowDef(
+    id="full-pipeline",
+    workflows=["aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd"],
+    dependencies={
+        "aas": [],
+        "aad-web": [
+            WorkflowDependency(
+                workflow_id="aas",
+                required_artifacts=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/catalog/domain-analytics.md",
+                    "docs/catalog/service-catalog.md",
+                    "docs/catalog/data-model.md",
+                    "docs/catalog/test-strategy.md",
+                ],
+            ),
+        ],
+        "asdw-web": [
+            WorkflowDependency(
+                workflow_id="aad-web",
+                required_artifacts=[
+                    "docs/screen/*.md",
+                    "docs/services/*.md",
+                    "docs/test-specs/*-test-spec.md",
+                ],
+            ),
+        ],
+        "abd": [
+            WorkflowDependency(
+                workflow_id="aas",
+                required_artifacts=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/catalog/domain-analytics.md",
+                ],
+                soft=True,
+            ),
+        ],
+        "abdv": [
+            WorkflowDependency(
+                workflow_id="abd",
+                required_artifacts=[
+                    "docs/batch/batch-domain-analytics.md",
+                    "docs/batch/batch-data-model.md",
+                    "docs/batch/batch-job-catalog.md",
+                    "docs/batch/batch-service-catalog.md",
+                    "docs/batch/batch-test-strategy.md",
+                    "docs/batch/jobs/*.md",
+                    "docs/test-specs/*-test-spec.md",
+                ],
+            ),
+        ],
+        "aag": [
+            WorkflowDependency(
+                workflow_id="aas",
+                required_artifacts=["docs/catalog/service-catalog.md"],
+            ),
+            WorkflowDependency(
+                workflow_id="aad-web",
+                required_artifacts=[
+                    "docs/screen/*.md",
+                    "docs/services/*.md",
+                    "docs/test-specs/*-test-spec.md",
+                ],
+            ),
+        ],
+        "aagd": [
+            WorkflowDependency(
+                workflow_id="aag",
+                required_artifacts=["docs/agent/*.md"],
+            ),
+            WorkflowDependency(
+                workflow_id="asdw-web",
+                required_artifacts=[],
+                soft=True,
+            ),
+        ],
+    },
+)
+
+
 # ---------------------------------------------------------------------------
 # レジストリ
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD, ASDW, ABD, ABDV, AKM, AQOD, ADOC]
+    wf.id: wf for wf in [AAS, AAD_WEB, ASDW_WEB, ABD, ABDV, AAG, AAGD, AKM, AQOD, ADOC]
 }
 
+_META_REGISTRY: Dict[str, MetaWorkflowDef] = {
+    mwf.id: mwf for mwf in [FULL_PIPELINE]
+}
+
+_ALIASES: Dict[str, str] = {
+    "aad": "aad-web",
+    "asdw": "asdw-web",
+    # snake_case 指定の後方互換入力も許容する。
+    "aad_web": "aad-web",
+    "asdw_web": "asdw-web",
+}
 
 # ---------------------------------------------------------------------------
 # 公開 API
@@ -373,7 +629,22 @@ _REGISTRY: Dict[str, WorkflowDef] = {
 
 def get_workflow(workflow_id: str) -> Optional[WorkflowDef]:
     """ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。"""
-    return _REGISTRY.get(workflow_id.lower())
+    key = workflow_id.lower()
+    resolved = _ALIASES.get(key, key)
+    return _REGISTRY.get(resolved)
+
+
+def get_meta_dependencies(workflow_id: str) -> List[WorkflowDependency]:
+    """指定ワークフローのメタワークフロー依存を返す。
+
+    _META_REGISTRY は小規模運用を前提とし、全走査で依存定義を解決する。
+    """
+    key = workflow_id.lower()
+    resolved = _ALIASES.get(key, key)
+    for mwf in _META_REGISTRY.values():
+        if resolved in mwf.dependencies:
+            return mwf.dependencies[resolved]
+    return []
 
 
 def get_step(workflow_id: str, step_id: str) -> Optional[StepDef]:

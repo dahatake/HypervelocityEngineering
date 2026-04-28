@@ -7,21 +7,26 @@ description: >
   USE FOR: knowledge/ file management, D01-D21 classification,
   domain knowledge organization, business requirements structuring,
   qa/ vs knowledge/ separation, original-docs/ file format rules,
-  folder responsibility matrix, SoT priority resolution.
+  folder responsibility matrix, SoT priority resolution,
+  content synthesis from qa/original-docs into knowledge documents,
+  incremental merge of new information into existing knowledge files.
   DO NOT USE FOR: qa/ file creation (use work-artifacts-layout),
   implementation, deployment, testing.
   WHEN: knowledge/ 配下にファイルを作成・更新する、ドメイン知識を整理する、
-  業務要件を構造化する、qa/ と knowledge/ の使い分けを判断する。
+  業務要件を構造化する、qa/ と knowledge/ の使い分けを判断する、
+  qa/ や original-docs/ の内容を knowledge/ ドキュメントとして合成・構築する。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: "2.0.0"
 ---
 
 # knowledge-management
 
 ## 目的
 
-`knowledge/` 配下のドメイン知識ドキュメントの分類・命名・更新手順を一元管理する。
+`knowledge/` 配下のドメイン知識ドキュメントの分類・**内容合成**・構造化・**マージ管理を行う**。
+
+> **重要**: 本 Skill の主目的は qa/ や original-docs/ の入力を D クラス別の **要求定義書ドラフト** として再構築することである。単なるマッピング表の作成ではない。
 
 ## Non-goals（このスキルの範囲外）
 
@@ -33,7 +38,18 @@ metadata:
 
 | ファイル | 内容 |
 |---------|------|
-| `references/knowledge-management-guide.md` | D01〜D21 完全分類ルール・状態判定・ステータス管理テンプレート |
+| `references/knowledge-management-guide.md` | D01〜D21 完全分類ルール・状態判定・内容合成手順・ステータス管理テンプレート |
+
+## 中核ワークフロー（4段階）
+
+本 Skill に基づく作業は、以下の 4 段階で構成される。**段階 2（内容合成）が最も重要であり、省略してはならない。**
+
+```
+[段階1: 分類] → guide §2, §6, §9
+[段階2: 内容合成] ← 主目的 → guide §11（内容合成プロセス）
+[段階3: マージ] → guide §12（差分マージ戦略）
+[段階4: 整合性検証] → guide §3, §4, §5, §8, §10
+```
 
 ## 概要
 
@@ -52,7 +68,7 @@ metadata:
 | フォルダ | 用途 |
 |---------|------|
 | `qa/` | 質問票・未回答・確認中の項目 |
-| `knowledge/` | 確定済み・承認済みの要件・ナレッジ |
+| `knowledge/` | qa/ + original-docs/ から合成された要求定義書ドラフト（出力） |
 
 ### original-docs/ と qa/ と knowledge/ と docs/catalog/ の責務分担
 
@@ -89,21 +105,41 @@ metadata:
 
 ※ 以下は説明用の架空例です。
 
-### 例1: qa/ → knowledge/ への昇格ケース
+### 例1: qa/ + original-docs/ → knowledge/ への内容合成ケース
 
-**入力**: `qa/UC-01-membership-flow.md` に記載された確定済み業務フローを `knowledge/` に昇格させたい。
+**入力**:
+- `qa/UC-01-membership-flow.md` に会員フロー関連の Confirmed / Tentative / Unknown 回答が存在する
+- `original-docs/membership-spec.md` にフロー仕様の記述がある
 
 **出力**:
 - 対象カテゴリ判定: D05（ユースケース）
-- 作成ファイル: `knowledge/D05-membership-flow.md`
-- 昇格内容: qa/ の確定事項（Confirmed 状態の質問回答）のみを抽出し、TBD 項目（Unknown/Tentative）は除外して knowledge/ に記載
+- 作成ファイル: `knowledge/D05-会員フロー-ユースケースシナリオ集.md`
+- **合成内容（§2 確定事項）の例**:
+  ```
+  ## 2. 確定事項（Confirmed）
 
-### 例2: 新規 knowledge/ ファイル作成ケース
+  ### 2.1 original-docs/ 由来の確定事項
+  membership-spec.md §3 によれば、会員登録フローは「メールアドレス確認→本人確認→ポイント初期付与」の
+  3ステップで構成される。各ステップは同期処理であり、いずれかのステップが失敗した場合は登録全体を
+  ロールバックしなければならない。
 
-**入力**: 新しいポイント還元ルール（業務ルール D06）を knowledge/ に追加したい。
+  > 出典: original-docs/membership-spec.md §3
+
+  ### 2.2 qa/ 由来の確定事項
+  UC-01 の質問 No.12 への回答によれば、既存会員がメールアドレスを変更する場合も同一フローを経由する
+  ことが確定している。変更後 24 時間は旧アドレスと新アドレスの両方でログインできなければならない。
+
+  > 出典: qa/UC-01-membership-flow.md No.12
+  ```
+
+### 例2: 既存 knowledge/ ファイルへの差分マージケース
+
+**入力**: `qa/UC-01-membership-flow.md` に追加回答（No.15: 退会フロー追加）が発生した。
+`knowledge/D05-会員フロー-ユースケースシナリオ集.md` が既に存在する。
 
 **出力**:
-- 対象カテゴリ判定: D06（業務ルール）
-- 作成ファイル: `knowledge/D06-point-royalty-rule.md`
-- 内容: ポイント還元率・上限・期限の確定ルールを記載
-- 命名: スペースを `-` に変換、日本語文字はそのまま保持
+- 差分検出: No.15（退会フロー）は既存ファイルに未記載のため追加対象
+- 影響セクション: §2.2（qa/ 由来の確定事項）と §5（最低内容カバー状況）を更新
+- 散文更新: 「qa/ 由来の確定事項」に退会フローの要件を散文で追記
+- 付録 A: No.15 のマッピング行を追加
+- メタブロック: `generated_at` および `sources` を最新化

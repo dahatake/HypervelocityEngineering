@@ -53,6 +53,8 @@ def _format_elapsed_ja(seconds: float) -> str:
 _SPINNER_UPDATE_THROTTLE_SECONDS: float = 0.1  # スピナーメッセージ更新の最小間隔
 _SPINNER_PAUSE_TIMEOUT_SECONDS: float = 0.2    # スピナー一時停止の同期タイムアウト
 _CONTEXT_WARNING_THRESHOLD_PCT: float = 80.0   # コンテキスト使用率警告閾値
+_PROMPT_DISPLAY_TRUNCATE_NORMAL: int = 800      # normal(2): プロンプト最大表示文字数
+_PROMPT_DISPLAY_TRUNCATE_VERBOSE: int = 10_000  # verbose(3): プロンプト最大表示文字数
 
 # ツール名 → Copilot CLI スタイルのアクション表示名マッピング
 _ACTION_DISPLAY: Dict[str, str] = {
@@ -176,13 +178,16 @@ class Console:
         verbose: bool = True,
         quiet: bool = False,
         show_stream: bool = False,
+        show_reasoning: bool = True,
         verbosity: Optional[int] = None,
     ) -> None:
         self.show_stream = show_stream
+        self.show_reasoning = show_reasoning
         self._start_time = time.time()
         self._is_tty = sys.stdout.isatty()
         self.s = _Style(self._is_tty)
         self._step_start_times: Dict[str, float] = {}
+        self._reasoning_buffer: Dict[str, str] = {}
 
         # --- Verbosity レベル解決 (後方互換) ---
         if verbosity is not None:
@@ -454,22 +459,39 @@ class Console:
         self._print(f"  {s.GRAY}└{'─' * (width + 2)}┘{s.RESET}", ts=ts)
         self._print("", ts=ts)
 
-    def menu_select(self, title: str, options: List[str], allow_empty: bool = False) -> int:
+    def menu_select(
+        self,
+        title: str,
+        options: List[str],
+        allow_empty: bool = False,
+        default_index: Optional[int] = None,
+    ) -> int:
         """インタラクティブな番号選択メニューを表示する。
 
         Args:
             title: メニューのタイトル
             options: 選択肢のリスト
             allow_empty: True の場合、空入力で -1 を返す
+            default_index: Enter 入力時に選択する既定インデックス (0-based)
 
         Returns:
-            選択されたインデックス (0-based)。allow_empty=True で空入力時は -1。
+            選択されたインデックス (0-based)。allow_empty=True かつ default_index 未指定で空入力時は -1。
         """
         s = self.s
+        if default_index is not None and not (0 <= default_index < len(options)):
+            default_index = None
         self._print(f"\n  {s.BOLD}{title}{s.RESET}", ts=False)
+        if default_index is not None:
+            self._print(
+                f"  {s.DIM}Enter = {default_index + 1} ({options[default_index]}){s.RESET}",
+                ts=False,
+            )
+        elif allow_empty:
+            self._print(f"  {s.DIM}Enter = 省略{s.RESET}", ts=False)
         self._print(f"  {s.DIM}{'─' * 50}{s.RESET}", ts=False)
         for i, opt in enumerate(options, 1):
-            self._print(f"  {s.CYAN}{i:>3}{s.RESET})  {opt}", ts=False)
+            suffix = f" {s.DIM}(既定){s.RESET}" if default_index == i - 1 else ""
+            self._print(f"  {s.CYAN}{i:>3}{s.RESET})  {opt}{suffix}", ts=False)
         self._print("", ts=False)
 
         while True:
@@ -477,7 +499,11 @@ class Console:
                 answer = input(f"  {s.GREEN}>{s.RESET} ").strip()
             except (EOFError, KeyboardInterrupt):
                 self._print("", ts=False)
+                if default_index is not None:
+                    return default_index
                 return 0 if not allow_empty else -1
+            if not answer and default_index is not None:
+                return default_index
             if not answer and allow_empty:
                 return -1
             if answer.isdigit():
@@ -683,7 +709,7 @@ class Console:
         """
         if not step_id or not path:
             return
-        normalized = os.path.normpath(path)
+        normalized = os.path.normpath(path).replace("\\", "/")
         if step_id not in self._step_files:
             self._step_files[step_id] = {"read": [], "write": []}
         file_list = self._step_files[step_id].get(mode)
@@ -759,9 +785,79 @@ class Console:
         else:
             self._update_spinner_msg(msg)
 
+    def workiq_prompt(self, prompt: str, label: str = "Work IQ プロンプト") -> None:
+        """Work IQ に投入するプロンプトをターミナルへ出力する。
+
+        verbosity に応じた制御:
+          0 (quiet)  : 非表示
+          1 (compact): スピナー更新のみ（先頭 80 文字）
+          2 (normal) : 先頭 800 文字を確定行表示（超過分は省略記号付き）
+          3 (verbose): 先頭 10,000 文字を確定行表示（超過分は省略記号付き）
+
+        _emit() を 1 回のみ呼び出し、スピナー pause/resume コストを最小化する。
+        """
+        if self._verbosity == 0 or not prompt:
+            return
+        s = self.s
+        if self._verbosity == 1:
+            self._update_spinner_msg(f"{label}: {prompt[:80]}")
+            return
+        # verbosity >= 2: 確定行表示
+        truncate_at = (
+            _PROMPT_DISPLAY_TRUNCATE_VERBOSE if self._verbosity >= 3
+            else _PROMPT_DISPLAY_TRUNCATE_NORMAL
+        )
+        display_text = prompt[:truncate_at]
+        omit_count = len(prompt) - truncate_at
+        lines = [f"  {s.DIM}┊{s.RESET} {s.BOLD}{label}{s.RESET}"]
+        for line in display_text.splitlines():
+            lines.append(f"  {s.DIM}┊  {s.RESET}{line}")
+        if omit_count > 0:
+            lines.append(f"  {s.DIM}┊  {s.RESET}…（以降 {omit_count} 文字省略）")
+        # _emit() を 1 回だけ呼び出してロック取得・スピナー停止を最小化
+        self._emit("\n".join(lines), ts=False)
+
+    def workiq_response(self, response: str, label: str = "Work IQ 応答") -> None:
+        """Work IQ から返された応答テキストをターミナルへ出力する。
+
+        verbosity に応じた制御:
+          0 (quiet)  : 非表示
+          1 (compact): スピナー更新のみ（先頭 80 文字）
+          2 (normal) : 先頭 800 文字を確定行表示（超過分は省略記号付き）
+          3 (verbose): 先頭 10,000 文字を確定行表示（超過分は省略記号付き）
+
+        workiq_prompt() と対称の設計。_emit() を 1 回のみ呼び出す。
+        空文字・空白のみの場合は出力しない。
+        """
+        if self._verbosity == 0 or not response or not response.strip():
+            return
+        s = self.s
+        if self._verbosity == 1:
+            self._update_spinner_msg(f"{label}: {response[:80]}")
+            return
+        # verbosity >= 2: 確定行表示
+        truncate_at = (
+            _PROMPT_DISPLAY_TRUNCATE_VERBOSE if self._verbosity >= 3
+            else _PROMPT_DISPLAY_TRUNCATE_NORMAL
+        )
+        display_text = response[:truncate_at]
+        omit_count = len(response) - truncate_at
+        lines = [f"  {s.DIM}┊{s.RESET} {s.BOLD}{label}{s.RESET}"]
+        for line in display_text.splitlines():
+            lines.append(f"  {s.DIM}┊  {s.RESET}{line}")
+        if omit_count > 0:
+            lines.append(f"  {s.DIM}┊  {s.RESET}…（以降 {omit_count} 文字省略）")
+        self._emit("\n".join(lines), ts=False)
+
     # ------------------------------------------------------------------
     # 公開メソッド — ツール
     # ------------------------------------------------------------------
+
+    def increment_tool_count(self, step_id: str) -> None:
+        """ステップ単位のツール呼び出し数を増やす。"""
+        if not step_id:
+            return
+        self._step_tool_count[step_id] = self._step_tool_count.get(step_id, 0) + 1
 
     def tool(self, tool_name: str, step_id: str = "", args_summary: str = "") -> None:
         """ツール実行開始。Level 3 で確定行、Level 1-2 でスピナー更新。ツールカウンター付き。
@@ -774,7 +870,7 @@ class Console:
         if self._verbosity == 0:
             return
         if step_id:
-            self._step_tool_count[step_id] = self._step_tool_count.get(step_id, 0) + 1
+            self.increment_tool_count(step_id)
             count = self._step_tool_count[step_id]
             count_str = f"({count})"
         else:
@@ -792,7 +888,7 @@ class Console:
         if self._verbosity == 0:
             return
         if step_id:
-            self._step_tool_count[step_id] = self._step_tool_count.get(step_id, 0) + 1
+            self.increment_tool_count(step_id)
         s = self.s
         prefix = f"[{step_id}] " if step_id else ""
         action_line = f"{s.GREEN}●{s.RESET} {prefix}{s.BOLD}{action_name}{s.RESET}"
@@ -884,16 +980,43 @@ class Console:
         else:
             self._update_spinner_msg(msg)
 
-    def thinking(self, step_id: str, text: str) -> None:
-        """Copilot CLI スタイルの Thinking 表示。"""
+    def thinking(self, step_id: str, text: str, ts: bool = False) -> None:
+        """Copilot CLI スタイルの Thinking 表示。quiet 以外は常に確定行として表示。
+
+        Args:
+            step_id: ステップ ID。
+            text: 表示する思考テキスト。
+            ts: True の場合、タイムスタンプ付きで出力する（ログ解析用途）。既定 False。
+        """
         if self._verbosity == 0:
             return
         s = self.s
         msg = f"{s.ITALIC}○ {s.DIM}{text}{s.RESET}"
-        if self._verbosity >= 2:
-            self._emit(msg, ts=False)
-        else:
-            self._update_spinner_msg(text)
+        self._emit(msg, ts=ts)
+
+    def final_message(self, step_id: str, content: str) -> None:
+        """アシスタントの最終応答本文をタイムスタンプ付き確定行で出力する。
+
+        show_final_message=True かつ verbosity > 0 のときのみ表示。
+        端末幅に合わせて折り返し、各行に `📝 [step_id] |` プレフィックスを付ける。
+
+        Args:
+            step_id: ステップ ID。
+            content: 最終応答の本文。
+        """
+        if self._verbosity == 0 or not self.show_final_message or not content:
+            return
+        s = self.s
+        prefix_label = f"📝 [{step_id}]" if step_id else "📝"
+        try:
+            term_width = max(40, (os.get_terminal_size().columns if self._is_tty else 100))
+        except (OSError, ValueError):
+            term_width = 100
+        body_width = max(60, term_width - 20)
+        for raw_line in (content.splitlines() or [""]):
+            wrapped = self._wrap_text(raw_line, body_width)
+            for line in wrapped:
+                self._emit(f"  {prefix_label} {s.DIM}|{s.RESET} {line}")
 
     def turn_start(self, step_id: str, turn_id: str = "") -> None:
         """ターン開始。Level 3 で確定行、Level 1-2 でスピナー更新。"""
@@ -1156,6 +1279,31 @@ class Console:
         if self.quiet or not self.show_stream:
             return
         self._print(f"\n  <<< [Step.{step_id}] ストリーム終了")
+
+    def reasoning_token(self, step_id: str, token: str) -> None:
+        """推論トークンを step 単位で蓄積し、改行単位で thinking として確定表示する。"""
+        if self._verbosity == 0 or not self.show_reasoning:
+            return
+        buf = self._reasoning_buffer.get(step_id, "") + token
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
+            self.thinking(step_id, line)
+        self._reasoning_buffer[step_id] = buf
+
+    def reasoning_flush(self, step_id: str) -> None:
+        """推論バッファに残っている未確定テキストを表示する。"""
+        tail = self._reasoning_buffer.pop(step_id, "")
+        if not tail:
+            return
+        if self._verbosity == 0 or not self.show_reasoning:
+            return
+        self.thinking(step_id, tail)
+
+    def reasoning_complete(self, step_id: str, content: str) -> None:
+        """推論完了時の後処理。バッファを flush し、show_reasoning=True かつ verbosity 3 でサマリー表示する。"""
+        self.reasoning_flush(step_id)
+        if self.show_reasoning and self._verbosity >= 3:
+            self.event(f"💭 [{step_id}] 推論完了 ({len(content)} chars)")
 
     # ------------------------------------------------------------------
     # 公開メソッド — QA / Review / その他
@@ -1660,7 +1808,7 @@ class Console:
         self.panel("実行計画 (DAG)", lines)
 
     def step_elapsed(self, step_id: str) -> None:
-        """実行中ステップの経過時間を表示する。Level 3 で確定行、Level 1-2 でスピナー更新。"""
+        """実行中ステップの経過時間を表示する。Level 2+ で確定行、Level 1 でスピナー更新。"""
         if self._verbosity == 0:
             return
         start = self._step_start_times.get(step_id)
@@ -1670,7 +1818,7 @@ class Console:
         minutes = int(elapsed) // 60
         seconds = int(elapsed) % 60
         msg = f"⏱ [Step.{step_id}] {minutes}m {seconds}s 経過..."
-        if self._verbosity >= 3:
+        if self._verbosity >= 2:
             self._print(f"  {self.s.DIM}{msg}{self.s.RESET}")
         else:
             self._update_spinner_msg(msg)

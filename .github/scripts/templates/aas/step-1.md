@@ -16,4 +16,4 @@
 
 ## 完了条件
 - `docs/catalog/app-catalog.md` が作成されている
-- 完了時に自身に `aas:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

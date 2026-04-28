@@ -564,9 +564,9 @@ class TestSDKConfigSelfImproveDefaults(unittest.TestCase):
     def setUp(self) -> None:
         self.cfg = SDKConfig()
 
-    def test_auto_self_improve_default_true(self) -> None:
-        """auto_self_improve はデフォルトで True。"""
-        self.assertTrue(self.cfg.auto_self_improve)
+    def test_auto_self_improve_default_false(self) -> None:
+        """auto_self_improve はデフォルトで False。"""
+        self.assertFalse(self.cfg.auto_self_improve)
 
     def test_self_improve_max_iterations_default(self) -> None:
         """self_improve_max_iterations のデフォルトは 3。"""
@@ -636,7 +636,7 @@ class TestRunImprovementLoopRunId(unittest.TestCase):
 
     def test_run_id_in_work_dir_path(self) -> None:
         """run_id が設定されている場合、内部解決された work_dir にそれが反映される。"""
-        cfg = SDKConfig(run_id="20260413T120000-test01")
+        cfg = SDKConfig(run_id="20260413T120000-test01", auto_self_improve=True)
         captured_work_dir: dict[str, Path | None] = {"path": None}
 
         def _capture_acquire_lock(work_dir: Path) -> bool:

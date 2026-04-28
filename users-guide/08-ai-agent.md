@@ -111,11 +111,24 @@ Prompt:
 ````
 
 
-## AAD / ASDW 連携チェーン図
+## ワークフロー対応と境界
 
-AI Agent 関連ステップ（AAD: 8.1〜8.3、ASDW: 2.6〜2.8）は以下のチェーン図で確認できます。
+> ⚠️ このドキュメントは **2 つの別ワークフロー** を連続して説明しています。
+>
+> | ドキュメント上の Step | ワークフロー | hve ワークフロー ID | Step ID（コード上） |
+> |---|---|---|---|
+> | Step 1〜3（設計フェーズ） | AI Agent Design | `aag` | 1 / 2 / 3 |
+> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 |
+>
+> hve CLI で実行する場合: `hve orchestrate -w aag` → `hve orchestrate -w aagd`
+> Issue Template から実行する場合: `ai-agent-design.yml`（AAG）→ `ai-agent-dev.yml`（AAGD）
 
-- [AAD チェーン図（AI Agent 設計を含む）](./images/chain-aad.svg)
+## AAG / AAGD / ASDW 連携チェーン図
+
+AI Agent 関連ステップのチェーン図は以下を参照してください。
+
+- [AAG チェーン図（AI Agent 設計）](./images/chain-aag.svg)
+- [AAGD チェーン図（AI Agent 実装/Deploy）](./images/chain-aagd.svg)
 - [ASDW チェーン図（AI Agent 実装/Deploy を含む）](./images/chain-asdw.svg)
 
 ---
@@ -438,6 +451,10 @@ Prompt:
 ---
 
 # Step 4. AI Agent 実装（Microsoft Foundry）
+
+> **ワークフロー**: AAGD（`aagd`） — `ai-agent-dev.yml` Issue Template または `hve orchestrate -w aagd` で実行します。
+> コード上の Step ID は `1`（構成設計）/ `2.1`（テスト仕様書）/ `2.2`（テストコード生成）/ `2.3`（実装）/ `3`（Deploy）です。
+> 以下の「手動実行プロンプト」で使う Step ID（`2.7T`, `2.7TC`, `2.7`, `2.8`）は、このドキュメント固有の通番であり、ワークフロー上の Step ID とは異なります。
 
 ## 目的
 

@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-DataCatalog
 description: "概念データモデルと物理テーブルのマッピングを記録するデータカタログを生成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -45,7 +45,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `{WORK}plan.md`
 - `{WORK}subissues.md`
 
-## 3) 実行フロー（15分超は"実装開始前"に分割）
+## 3) 実行フロー（task_scope=multi または context_size=large は"実装開始前"に分割）
 
 ### 3.0 依存確認（必須・最初に実行）
 - `docs/catalog/data-model.md` と `docs/catalog/domain-analytics.md` の両方を `read` で確認する
@@ -69,7 +69,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

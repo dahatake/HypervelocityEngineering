@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-UI-List
 description: "画面一覧（表）と画面遷移図（Mermaid）を設計し screen-list.md を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -81,7 +81,8 @@ Markdown表（列固定）：
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

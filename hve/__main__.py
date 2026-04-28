@@ -68,7 +68,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
@@ -108,9 +108,146 @@ _AQOD_DEPTH_MENU_OPTIONS = (
     "lightweight  — 不明瞭/矛盾のみ",
 )
 _ADOC_DOC_PURPOSE_CHOICES = ("all", "onboarding", "refactoring", "migration")
+_ADOC_DOC_PURPOSE_MENU_OPTIONS = (
+    "all         — 全用途",
+    "onboarding  — 新規参画者向け",
+    "refactoring — 改善・保守向け",
+    "migration   — 移行計画向け",
+)
 _ADOC_DEFAULT_DOC_PURPOSE = "all"
 _ADOC_MAX_FILE_LINES_CHOICES = (300, 500, 1000)
+_ADOC_MAX_FILE_LINES_MENU_OPTIONS = (
+    "300 行  — 小さめに分割",
+    "500 行  — 既定",
+    "1000 行 — 大きめに分割",
+)
 _ADOC_DEFAULT_MAX_FILE_LINES = 500
+_ADOC_DEFAULT_EXCLUDE_PATTERNS = "node_modules/,vendor/,dist/,*.lock,__pycache__/"
+
+_APP_ID_AUTO_HINTS = {
+    "aad-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
+    "asdw-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
+    "abd": "データバッチ処理 / バッチの APP-ID を自動選択",
+    "abdv": "データバッチ処理 / バッチの APP-ID を自動選択",
+}
+
+_PARAM_PROMPT_LABELS = {
+    "app_ids": "対象 APP-ID",
+    "app_id": "対象 APP-ID（単一）",
+    "resource_group": "Azure リソースグループ名（任意）",
+    "usecase_id": "対象ユースケースID（任意）",
+    "batch_job_id": "対象バッチジョブID（カンマ区切り・任意）",
+    "target_scope": "対象スコープ",
+    "focus_areas": "重点観点（任意）",
+    "target_dirs": "ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）",
+    "exclude_patterns": "除外パターン（カンマ区切り）",
+    "issue_title": "GitHub Issue タイトル（任意）",
+    "additional_comment": "GitHub Issue への追加コメント（任意）",
+    "sources": "取り込みソース",
+    "target_files": "対象ファイルパス",
+    "force_refresh": "knowledge/ 完全再生成",
+    "custom_source_dir": "追加ソースディレクトリ",
+    "enable_auto_merge": "PR 自動 Approve & Auto-merge",
+    "doc_purpose": "ドキュメント主目的",
+    "max_file_lines": "大規模ファイル分割閾値",
+}
+
+_PARAM_DEFAULTS = {
+    "resource_group": "",
+    "usecase_id": "",
+    "batch_job_id": "",
+    "target_scope": _AQOD_DEFAULT_TARGET_SCOPE,
+    "focus_areas": "",
+    "target_dirs": "",
+    "exclude_patterns": _ADOC_DEFAULT_EXCLUDE_PATTERNS,
+}
+
+
+def _split_csv(value: str) -> List[str]:
+    """カンマ区切り文字列を空要素なしのリストに変換する。"""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _prompt_app_ids(con, wf_id: str) -> dict:
+    """APP-ID を 1 回だけ尋ね、単一指定時は app_id も派生させる。"""
+    auto_hint = _APP_ID_AUTO_HINTS.get(wf_id)
+    if auto_hint:
+        label = f"対象アプリケーション (APP-ID、カンマ区切り・任意。未指定時は {auto_hint})"
+    else:
+        label = "対象アプリケーション (APP-ID、カンマ区切り・任意)"
+    raw = con.prompt_input(label, default="", required=False)
+    app_ids = _split_csv(raw or "")
+    if not app_ids:
+        return {}
+    params = {"app_ids": app_ids}
+    if len(app_ids) == 1:
+        params["app_id"] = app_ids[0]
+    return params
+
+
+def _prompt_param_input(con, param_name: str) -> str:
+    """ワークフロー固有パラメータを内部名ではなく表示ラベルで入力させる。"""
+    label = _PARAM_PROMPT_LABELS.get(param_name, param_name)
+    default = _PARAM_DEFAULTS.get(param_name, "")
+    return con.prompt_input(label, default=default, required=False)
+
+
+def _default_param_value(param_name: str):
+    """クイック全自動で使うワークフロー固有パラメータ既定値。"""
+    if param_name == "doc_purpose":
+        return _ADOC_DEFAULT_DOC_PURPOSE
+    if param_name == "max_file_lines":
+        return _ADOC_DEFAULT_MAX_FILE_LINES
+    return _PARAM_DEFAULTS.get(param_name, "")
+
+
+def _format_param_value(value) -> str:
+    """確認パネル用にパラメータ値を読みやすく整形する。"""
+    if isinstance(value, bool):
+        return "ON" if value else "OFF"
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value) if value else "(なし)"
+    return str(value) if value else "(なし)"
+
+
+def _format_param_label(param_name: str) -> str:
+    """確認パネル用の表示名を返す。"""
+    return _PARAM_PROMPT_LABELS.get(param_name, param_name)
+
+
+def _step_options_with_groups(wf) -> tuple:
+    """コンテナステップの見出しを使ってステップ選択肢を整形する。"""
+    container_titles = {s.id: s.title for s in wf.steps if s.is_container}
+    non_container_steps = [s for s in wf.steps if not s.is_container]
+    options = []
+    for step in non_container_steps:
+        parent_id = step.id.split(".", 1)[0] if "." in step.id else ""
+        parent_title = container_titles.get(parent_id)
+        if parent_title:
+            options.append(f"{parent_title} > [{step.id}] {step.title}")
+        else:
+            options.append(f"[{step.id}] {step.title}")
+    return non_container_steps, options
+
+
+def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
+    """AKM/AQOD 以外のワークフロー固有パラメータを収集する。"""
+    params: dict = {}
+    if "app_ids" in wf.params or "app_id" in wf.params:
+        if not is_quick_auto:
+            params.update(_prompt_app_ids(con, wf.id))
+    for param_name in wf.params:
+        if param_name in ("app_ids", "app_id"):
+            continue
+        if is_quick_auto:
+            params[param_name] = _default_param_value(param_name)
+        elif param_name == "doc_purpose":
+            params[param_name] = _prompt_valid_doc_purpose(con)
+        elif param_name == "max_file_lines":
+            params[param_name] = _prompt_valid_max_file_lines(con)
+        else:
+            params[param_name] = _prompt_param_input(con, param_name)
+    return params
 
 
 def _default_akm_target_files(sources: str) -> str:
@@ -127,8 +264,9 @@ def _prompt_valid_doc_purpose(con) -> str:
     default_idx = _ADOC_DOC_PURPOSE_CHOICES.index(_ADOC_DEFAULT_DOC_PURPOSE)
     selected_idx = con.menu_select(
         "ドキュメントの主目的を選択してください",
-        list(_ADOC_DOC_PURPOSE_CHOICES),
+        list(_ADOC_DOC_PURPOSE_MENU_OPTIONS),
         allow_empty=True,
+        default_index=default_idx,
     )
     return _ADOC_DOC_PURPOSE_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
@@ -140,6 +278,7 @@ def _prompt_valid_aqod_depth(con) -> str:
         "分析の深さを選択してください",
         list(_AQOD_DEPTH_MENU_OPTIONS),
         allow_empty=True,
+        default_index=default_idx,
     )
     return _AQOD_DEPTH_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
@@ -147,11 +286,11 @@ def _prompt_valid_aqod_depth(con) -> str:
 def _prompt_valid_max_file_lines(con) -> int:
     """ADOC の max_file_lines をメニュー選択させる。"""
     default_idx = _ADOC_MAX_FILE_LINES_CHOICES.index(_ADOC_DEFAULT_MAX_FILE_LINES)
-    menu_options = [str(v) for v in _ADOC_MAX_FILE_LINES_CHOICES]
     selected_idx = con.menu_select(
         "大規模ファイル分割閾値を選択してください",
-        menu_options,
+        list(_ADOC_MAX_FILE_LINES_MENU_OPTIONS),
         allow_empty=True,
+        default_index=default_idx,
     )
     return _ADOC_MAX_FILE_LINES_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
@@ -177,13 +316,13 @@ def _prompt_akm_params(
         params["target_files"] = _default_akm_target_files(params["sources"])
         params["force_refresh"] = True
         params["custom_source_dir"] = ""
-        params["additional_comment"] = ""
         params["enable_auto_merge"] = False
         return params
 
     sources_idx = con.menu_select(
         "取り込みソースを選択してください",
         _AKM_SOURCES_OPTIONS,
+        default_index=0,
     )
     sources_display = _AKM_SOURCES_OPTIONS[sources_idx]
     params["sources"] = _AKM_SOURCES_MAP[sources_display]
@@ -197,24 +336,14 @@ def _prompt_akm_params(
     params["target_files"] = target_input_strip if target_input_strip else default_target
 
     params["force_refresh"] = con.prompt_yes_no(
-        "既存 knowledge/ 出力を完全に再生成する？（force_refresh）",
+        "既存 knowledge/ 出力を完全に再生成する？",
         default=True,
     )
     params["custom_source_dir"] = con.prompt_input(
-        "custom_source_dir（スペース区切り・任意）",
+        "追加ソースディレクトリ（スペース区切り・任意）",
         default="",
     )
-    params["additional_comment"] = con.prompt_input(
-        "追加コメント（任意）",
-        default="",
-    )
-    if will_create_pr:
-        params["enable_auto_merge"] = con.prompt_yes_no(
-            "PR の自動 Approve & Auto-merge を有効にする？",
-            default=False,
-        )
-    else:
-        params["enable_auto_merge"] = False
+    params["enable_auto_merge"] = False
 
     return params
 
@@ -351,21 +480,28 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help=(
-            "Work IQ 経由で M365 データ（メール・チャット・会議・ファイル）を参照する "
+            "Work IQ 経由の M365 データ（メール・チャット・会議・ファイル）参照を有効にする。"
+            "QA フェーズと、AKM では実行後レビューの後方互換トリガーとしても扱う "
             "(デフォルト: 無効。@microsoft/workiq のインストールが必要)"
         ),
+    )
+    orch.add_argument(
+        "--workiq-akm-review",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="AKM 実行後レビューで Work IQ 検証を有効/無効化する（未指定時は --workiq / WORKIQ_ENABLED を継承）",
     )
     orch.add_argument(
         "--workiq-draft",
         action="store_true",
         default=False,
-        help="QA 質問ごとに Work IQ 回答ドラフトを生成する（デフォルト: 無効）",
+        help="QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する（デフォルト: 無効）",
     )
     orch.add_argument(
         "--workiq-draft-output-dir",
         default=None,
         metavar="DIR",
-        help="Work IQ 回答ドラフトの出力先ディレクトリ（未指定時: 設定/環境変数、最終既定値 qa）",
+        help="Work IQ 補助レポートの出力先ディレクトリ（互換のためオプション名は据え置き。未指定時: 設定/環境変数、最終既定値 qa）",
     )
     orch.add_argument(
         "--workiq-tenant-id",
@@ -383,13 +519,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "--workiq-prompt-km",
         default=None,
         metavar="PROMPT",
-        help="Work IQ の KM 用プロンプトを上書きする（省略時: デフォルトプロンプト）",
+        help="Work IQ の KM 用プロンプトを上書きする（AKM 実行後レビューで使用）",
     )
     orch.add_argument(
         "--workiq-prompt-review",
         default=None,
         metavar="PROMPT",
-        help="Work IQ の Original Docs レビュー用プロンプトを上書きする（省略時: デフォルトプロンプト）",
+        help="Work IQ の Original Docs レビュー用プロンプトを上書きする（互換用）",
+    )
+    orch.add_argument(
+        "--workiq-per-question-timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（デフォルト: 600）",
     )
 
     # Issue/PR 作成
@@ -526,7 +669,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--app-ids",
         default=None,
         metavar="APP_IDS",
-        help="対象アプリケーション (APP-ID) — カンマ区切りで複数指定可 (例: APP-01,APP-02,APP-03)",
+        help=(
+            "対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。\n"
+            "AAD-WEB/ASDW-WEB は Webフロントエンド + クラウド、\n"
+            "ABD/ABDV は データバッチ処理/バッチ の APP-ID のみ採用します。\n"
+            "未指定時は docs/catalog/app-arch-catalog.md から自動選択します。"
+        ),
     )
     orch.add_argument(
         "--resource-group",
@@ -538,7 +686,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--batch-job-id",
         default=None,
         metavar="JOB_ID",
-        help="バッチジョブ ID (ABDV 等で使用、カンマ区切り可)",
+        help=(
+            "バッチジョブ ID (ABDV 等で使用、カンマ区切り可)。"
+            "APP-ID フィルタ後、対象 Batch APP の文脈で実行します。"
+        ),
     )
     orch.add_argument(
         "--usecase-id",
@@ -669,12 +820,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # Self-Improve
     orch.add_argument(
+        "--self-improve",
+        action="store_true",
+        default=False,
+        help=(
+            "自己改善ループ（Phase 4）を有効化する。"
+            " --no-self-improve が同時に指定された場合は --no-self-improve に上書きされます。"
+            " HVE_AUTO_SELF_IMPROVE=true 環境変数でも有効化できる。"
+        ),
+    )
+    orch.add_argument(
         "--no-self-improve",
         action="store_true",
         default=False,
         help=(
-            "自己改善ループ（Phase 4）を無効化する（デフォルト: 有効）。"
-            " auto_self_improve=True がデフォルトであり、このフラグで無効化できる。"
+            "自己改善ループ（Phase 4）を無効化する（--self-improve および HVE_AUTO_SELF_IMPROVE=true より優先）。"
         ),
     )
 
@@ -712,6 +872,81 @@ def _build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MODEL,
         metavar="MODEL",
         help=f"一貫性検証に使用するモデル（デフォルト: {DEFAULT_MODEL}）",
+    )
+
+    # --- workiq-doctor サブコマンド ---
+    workiq_doctor = sub.add_parser(
+        "workiq-doctor",
+        help="Work IQ 連携の診断を実行する (Node.js / npx / @microsoft/workiq / MCP 起動確認)",
+    )
+    workiq_doctor.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="診断結果を JSON 形式で出力する",
+    )
+    workiq_doctor.add_argument(
+        "--skip-mcp-probe",
+        action="store_true",
+        default=False,
+        help="MCP サーバー起動確認をスキップする",
+    )
+    workiq_doctor.add_argument(
+        "--tenant-id",
+        default=None,
+        metavar="TENANT_ID",
+        help="Work IQ MCP 起動確認時に使用する Entra テナント ID",
+    )
+    workiq_doctor.add_argument(
+        "--timeout",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="MCP サーバー起動確認の待ち秒数（デフォルト: 5.0、0より大きい値を指定）",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-probe",
+        action="store_true",
+        default=False,
+        help="Copilot SDK セッション内で _hve_workiq が connected かを追加検証する",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-probe-timeout",
+        type=float,
+        default=30.0,
+        metavar="SECONDS",
+        help="SDK probe の最大待ち秒数（デフォルト: 30.0）",
+    )
+    workiq_doctor.add_argument(
+        "--event-extractor-self-test",
+        action="store_true",
+        default=False,
+        help="SDK tool イベント抽出ロジックの自己診断を追加実行する",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-tool-probe",
+        action="store_true",
+        default=False,
+        help="Copilot SDK セッションで Work IQ MCP tool が実際に呼び出されるか検証する",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-tool-probe-timeout",
+        type=float,
+        default=60.0,
+        metavar="SECONDS",
+        help="SDK tool probe の最大待ち秒数（デフォルト: 60.0）",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-event-trace",
+        action="store_true",
+        default=False,
+        help="SDK tool probe 中に観測したイベントの安全な概要を出力する（本文・arguments は出力しない）",
+    )
+    workiq_doctor.add_argument(
+        "--sdk-tool-probe-tools-all",
+        action="store_true",
+        default=False,
+        help="SDK tool probe の MCP 設定で tools=['*'] を使う（診断・切り分け用途のみ）",
     )
 
     return parser
@@ -823,8 +1058,12 @@ def _build_config(args: argparse.Namespace):
     cfg.dry_run = args.dry_run
     cfg.additional_prompt = args.additional_prompt
 
-    # Self-Improve: --no-self-improve フラグで無効化
-    cfg.self_improve_skip = getattr(args, "no_self_improve", False)
+    # Self-Improve: 優先順位 --no-self-improve > --self-improve > HVE_AUTO_SELF_IMPROVE > デフォルト False
+    if getattr(args, "no_self_improve", False):
+        cfg.self_improve_skip = True
+    elif getattr(args, "self_improve", False):
+        cfg.auto_self_improve = True
+        cfg.self_improve_skip = False
 
     if args.cli_path:
         cfg.cli_path = args.cli_path
@@ -845,9 +1084,16 @@ def _build_config(args: argparse.Namespace):
     # Work IQ
     if getattr(args, "workiq", False):
         cfg.workiq_enabled = True
+        cfg.workiq_qa_enabled = True
     if getattr(args, "workiq_draft", False):
         cfg.workiq_enabled = True
+        cfg.workiq_qa_enabled = True
         cfg.workiq_draft_mode = True
+    if getattr(args, "workiq_akm_review", None) is not None:
+        if args.workiq_akm_review and not cfg.workiq_enabled and cfg.workiq_qa_enabled is None:
+            cfg.workiq_qa_enabled = False
+        cfg.workiq_akm_review_enabled = args.workiq_akm_review
+        cfg.workiq_enabled = cfg.is_workiq_qa_enabled() or cfg.is_workiq_akm_review_enabled()
     workiq_draft_output_dir = getattr(args, "workiq_draft_output_dir", None)
     if workiq_draft_output_dir is not None:
         cfg.workiq_draft_output_dir = workiq_draft_output_dir
@@ -855,12 +1101,17 @@ def _build_config(args: argparse.Namespace):
     cfg.workiq_prompt_qa = getattr(args, "workiq_prompt_qa", None)
     cfg.workiq_prompt_km = getattr(args, "workiq_prompt_km", None)
     cfg.workiq_prompt_review = getattr(args, "workiq_prompt_review", None)
+    _workiq_pq_timeout = getattr(args, "workiq_per_question_timeout", None)
+    if _workiq_pq_timeout is not None and _workiq_pq_timeout > 0:
+        cfg.workiq_per_question_timeout = _workiq_pq_timeout
 
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
         cfg.ignore_paths = args.ignore_paths
-    if cfg.create_pr and cfg.workiq_draft_mode and "qa" in cfg.ignore_paths:
-        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
+    if cfg.create_pr and cfg.workiq_enabled:
+        workiq_output_dir = (cfg.workiq_draft_output_dir or "").strip().strip("/\\") or "qa"
+        if workiq_output_dir in cfg.ignore_paths:
+            cfg.ignore_paths = [p for p in cfg.ignore_paths if p != workiq_output_dir]
 
     return cfg
 
@@ -961,6 +1212,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "qa-merge":
         return _cmd_qa_merge(args)
 
+    if args.command == "workiq-doctor":
+        return _cmd_workiq_doctor(args)
+
     # "run" サブコマンド、または引数なし → インタラクティブモード
     return _cmd_run_interactive()
 
@@ -998,16 +1252,24 @@ def _cmd_run_interactive() -> int:
         from .console import Console
         from .config import SDKConfig
         from .workflow_registry import list_workflows, get_workflow
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES, resolve_all_app_ids
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
         from .orchestrator import run_workflow
-        from .workiq import is_workiq_available, workiq_login
+        from .workiq import (
+            get_workiq_prompt_template,
+            is_workiq_available,
+            workiq_login,
+        )
     except ImportError:
         from console import Console  # type: ignore[no-redef]
         from config import SDKConfig  # type: ignore[no-redef]
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
-        from template_engine import _WORKFLOW_DISPLAY_NAMES, resolve_all_app_ids  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
-        from workiq import is_workiq_available, workiq_login  # type: ignore[no-redef]
+        from workiq import (  # type: ignore[no-redef]
+            get_workiq_prompt_template,
+            is_workiq_available,
+            workiq_login,
+        )
 
     con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
 
@@ -1020,7 +1282,7 @@ def _cmd_run_interactive() -> int:
     # ── ワークフロー選択 ──────────────────────────────────
     workflows = list_workflows()
     wf_options = [
-        f"{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}  {con.s.DIM}({wf.id} — {len(wf.steps)} steps){con.s.RESET}"
+        f"{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}  {con.s.DIM}({wf.id} — {len([s for s in wf.steps if not s.is_container])} 実行ステップ){con.s.RESET}"
         for wf in workflows
     ]
     wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
@@ -1035,8 +1297,7 @@ def _cmd_run_interactive() -> int:
     if is_single_step_workflow:
         selected_step_ids = []  # 空 = 全ステップ
     else:
-        non_container_steps = [s for s in wf.steps if not s.is_container]
-        step_options = [f"[{s.id}] {s.title}" for s in non_container_steps]
+        non_container_steps, step_options = _step_options_with_groups(wf)
         selected_indices = con.prompt_multi_select(
             f"実行するステップを選択（Enter = 全{len(non_container_steps)}ステップ）",
             step_options,
@@ -1048,7 +1309,7 @@ def _cmd_run_interactive() -> int:
 
     # ── モデル選択 ────────────────────────────────────────
     model_options = [MODEL_AUTO, *MODEL_CHOICES]
-    model_idx = con.menu_select("使用するモデルを選択", model_options)
+    model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
     model, model_display = _resolve_model(model_options[model_idx])
     review_model = None
     review_model_display = None
@@ -1061,11 +1322,12 @@ def _cmd_run_interactive() -> int:
         "カスタム全自動  — 全設定を手動入力後に自動実行",
         "手動           — 従来どおり（実行中も対話あり）",
     ]
-    exec_mode_idx = con.menu_select("実行モードを選択", _exec_mode_options)
+    exec_mode_idx = con.menu_select("実行モードを選択", _exec_mode_options, default_index=2)
     is_quick_auto = (exec_mode_idx == 0)
     is_custom_auto = (exec_mode_idx == 1)
     is_manual = (exec_mode_idx == 2)
     is_any_auto = is_quick_auto or is_custom_auto
+    workiq_additional_prompt = ""
 
     # ── オプション設定 ────────────────────────────────────
     if is_quick_auto:
@@ -1087,7 +1349,12 @@ def _cmd_run_interactive() -> int:
         repo_input = os.environ.get("REPO", "")
         dry_run = False
         workiq_enabled = False
+        workiq_qa_enabled = False
+        workiq_akm_review_enabled = False
         workiq_draft_mode = False
+        workiq_per_question_timeout = 600.0
+        issue_title = ""
+        issue_additional_comment = ""
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
@@ -1097,16 +1364,15 @@ def _cmd_run_interactive() -> int:
             params_extra["depth"] = _AQOD_DEFAULT_DEPTH
             params_extra["focus_areas"] = ""
         elif wf.params:
-            # 非AKM かつ必須パラメータあり: 入力を求める（クイック全自動でも例外）
-            for param_name in wf.params:
-                if param_name == "doc_purpose":
-                    val = _prompt_valid_doc_purpose(con)
-                elif param_name == "max_file_lines":
-                    val = _prompt_valid_max_file_lines(con)
-                else:
-                    val = con.prompt_input(f"{param_name}", required=True)
-                params_extra[param_name] = val
+            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=True))
         additional_prompt = None
+        # クイック全自動: 自己改善はデフォルト OFF
+        auto_self_improve = False
+        self_improve_max_iterations = 3
+        self_improve_target_scope = ""
+        self_improve_goal = ""
+        _disc_goal = None
+        _disc_criteria = None
     else:
         # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
         branch = con.prompt_input("ベースブランチ", default="main")
@@ -1124,8 +1390,12 @@ def _cmd_run_interactive() -> int:
         ]
         _verbosity_keys = ["quiet", "compact", "normal", "verbose"]
         _VERBOSITY_DEFAULT = 1  # compact
-        con._print(f"  {con.s.DIM}(Enter = compact){con.s.RESET}", ts=False)
-        _raw_idx = con.menu_select("コンソール出力レベルを選択", _verbosity_options, allow_empty=True)
+        _raw_idx = con.menu_select(
+            "コンソール出力レベルを選択",
+            _verbosity_options,
+            allow_empty=True,
+            default_index=_VERBOSITY_DEFAULT,
+        )
         verbosity_idx = _VERBOSITY_DEFAULT if _raw_idx == -1 else _raw_idx
         verbosity_key = _verbosity_keys[verbosity_idx]
         verbosity_value = verbosity_idx  # quiet=0, compact=1, normal=2, verbose=3
@@ -1153,7 +1423,14 @@ def _cmd_run_interactive() -> int:
             qa_answer_mode = None
             force_interactive = False
             auto_review = False
-            if is_aqod:
+            if is_akm:
+                auto_qa = con.prompt_yes_no(
+                    "AKM 完了後に QA（質問票生成・回答）を実施する？",
+                    default=False,
+                )
+                if auto_qa:
+                    qa_answer_mode = "all"
+            elif is_aqod:
                 auto_qa = con.prompt_yes_no(
                     "AQOD 完了後に QA（質問票生成・回答）を実施する？",
                     default=False,
@@ -1200,17 +1477,29 @@ def _cmd_run_interactive() -> int:
 
         # ── Work IQ 連携 ──────────────────────────────────────
         workiq_enabled = False
+        workiq_qa_enabled = False
+        workiq_akm_review_enabled = False
         workiq_draft_mode = False
-        _show_workiq_option = (
-            auto_qa
-            or is_akm
-        )
+        _show_workiq_option = auto_qa or is_akm
+        workiq_per_question_timeout = 600.0
 
         if _show_workiq_option and is_workiq_available():
-            workiq_enabled = con.prompt_yes_no(
-                "Work IQ 経由で情報を確認する",
-                default=False,
-            )
+            if is_akm:
+                if auto_qa:
+                    workiq_qa_enabled = con.prompt_yes_no(
+                        "QA フェーズで Work IQ 経由の情報確認を有効にする？",
+                        default=False,
+                    )
+                workiq_akm_review_enabled = con.prompt_yes_no(
+                    "AKM 完了後に Work IQ で knowledge/ Dxx ドキュメントの妥当性を検証する？",
+                    default=False,
+                )
+            else:
+                workiq_qa_enabled = con.prompt_yes_no(
+                    "QA フェーズで Work IQ 経由の情報確認を有効にする？",
+                    default=False,
+                )
+            workiq_enabled = workiq_qa_enabled or workiq_akm_review_enabled
             if workiq_enabled:
                 con.spinner_start("Work IQ へのログイン中...")
                 login_ok = workiq_login(con)
@@ -1222,16 +1511,58 @@ def _cmd_run_interactive() -> int:
                     workiq_enabled = False
                 else:
                     con.status("✅ Work IQ へのログインが完了しました")
-                    if is_aqod and auto_qa:
+                    if is_akm and not workiq_qa_enabled:
+                        workiq_draft_mode = False
+                    elif is_aqod and auto_qa:
                         workiq_draft_mode = True
-                    elif auto_qa:
+                    elif auto_qa and workiq_qa_enabled:
                         workiq_draft_mode = con.prompt_yes_no(
                             "Work IQ で回答ドラフトを自動生成する？",
                             default=False,
                         )
+                    workiq_additional_prompt = con.prompt_input(
+                        "Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）",
+                        default="",
+                    )
+                    _wiq_pq_timeout_str = con.prompt_input(
+                        "Work IQ タイムアウト（秒。デフォルト: 600）",
+                        default="600",
+                    )
+                    try:
+                        workiq_per_question_timeout = float(_wiq_pq_timeout_str or "600")
+                    except ValueError:
+                        con.warning("無効な値のため、デフォルトの 600 秒を使用します。")
+                        workiq_per_question_timeout = 600.0
+                    if workiq_per_question_timeout <= 0:
+                        con.warning("0 以下の値は無効なため、デフォルトの 600 秒を使用します。")
+                        workiq_per_question_timeout = 600.0
 
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
+        issue_title = ""
+        issue_additional_comment = ""
+        if create_issues:
+            issue_title = con.prompt_input(
+                _PARAM_PROMPT_LABELS["issue_title"],
+                default="",
+            )
+            issue_additional_comment = con.prompt_input(
+                _PARAM_PROMPT_LABELS["additional_comment"],
+                default="",
+            )
+
+        # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
+        repo_input = ""
+        if create_issues or create_pr:
+            repo_default = os.environ.get("REPO", "")
+            repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
+
+        akm_enable_auto_merge = False
+        if is_akm and (create_issues or create_pr):
+            akm_enable_auto_merge = con.prompt_yes_no(
+                "PR の自動 Approve & Auto-merge を有効にする？",
+                default=False,
+            )
 
         # ── Code Review Agent ─────────────────────────────
         auto_coding_agent_review = con.prompt_yes_no(
@@ -1240,9 +1571,12 @@ def _cmd_run_interactive() -> int:
         auto_coding_agent_review_auto_approval = False
         review_timeout = 7200.0
         if auto_coding_agent_review:
-            auto_coding_agent_review_auto_approval = con.prompt_yes_no(
-                "Code Review Agent の修正提案を自動承認する？", default=False
-            )
+            if is_any_auto:
+                auto_coding_agent_review_auto_approval = True
+            else:
+                auto_coding_agent_review_auto_approval = con.prompt_yes_no(
+                    "Code Review Agent の修正提案を自動承認する？", default=False
+                )
             review_timeout_str = con.prompt_input(
                 "Review タイムアウト（秒。デフォルト: 7200 = 2時間）", default="7200"
             )
@@ -1254,12 +1588,6 @@ def _cmd_run_interactive() -> int:
             if review_timeout <= 0:
                 con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
                 review_timeout = 7200.0
-
-        # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
-        repo_input = ""
-        if create_issues or create_pr:
-            repo_default = os.environ.get("REPO", "")
-            repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
 
         dry_run = con.prompt_yes_no("ドライラン（実際の SDK 呼び出しをしない）？", default=False)
 
@@ -1273,24 +1601,68 @@ def _cmd_run_interactive() -> int:
                     will_create_pr=(create_issues or create_pr),
                 )
             )
+            params_extra["enable_auto_merge"] = akm_enable_auto_merge
         elif is_aqod:
             params_extra["target_scope"] = con.prompt_input(
-                "target_scope", default=_AQOD_DEFAULT_TARGET_SCOPE
+                _PARAM_PROMPT_LABELS["target_scope"], default=_AQOD_DEFAULT_TARGET_SCOPE
             )
             params_extra["depth"] = _prompt_valid_aqod_depth(con)
-            params_extra["focus_areas"] = con.prompt_input("focus_areas", default="")
+            params_extra["focus_areas"] = con.prompt_input(_PARAM_PROMPT_LABELS["focus_areas"], default="")
         else:
-            for param_name in wf.params:
-                if param_name == "doc_purpose":
-                    val = _prompt_valid_doc_purpose(con)
-                elif param_name == "max_file_lines":
-                    val = _prompt_valid_max_file_lines(con)
-                else:
-                    val = con.prompt_input(f"{param_name}", required=True)
-                params_extra[param_name] = val
+            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=False))
+
+        if issue_title:
+            params_extra["issue_title"] = issue_title
+        if issue_additional_comment:
+            params_extra["additional_comment"] = issue_additional_comment
 
         # ── 追加プロンプト ────────────────────────────────────
-        additional_prompt = con.prompt_input("追加プロンプト（省略可）")
+        additional_prompt = con.prompt_input("全てのステップでの Prompt の末尾に追加するプロンプト（省略可）")
+
+        # ── 自己改善ループ ────────────────────────────────────
+        auto_self_improve = con.prompt_yes_no("自己改善ループを有効にする？", default=False)
+        self_improve_max_iterations = 3
+        self_improve_target_scope = ""
+        self_improve_goal = ""
+        _disc_goal = None
+        _disc_criteria = None
+        if auto_self_improve:
+            _si_iter_str = con.prompt_input("自己改善 最大繰り返し回数（例: 3 → 最大3回スキャン→改善→検証を繰り返す）", default="3")
+            try:
+                self_improve_max_iterations = int(_si_iter_str or "3")
+            except ValueError:
+                con.warning("無効な値のため、デフォルトの 3 を使用します。")
+                self_improve_max_iterations = 3
+            self_improve_target_scope = con.prompt_input("自己改善 対象パス（例: src/  hve/  空=リポジトリ全体）", default="")
+            self_improve_goal = con.prompt_input(
+                "自己改善 ゴール説明（省略可 → ワークフロー種別から自動設定）\n"
+                "  例: 'テスト失敗を 0 件にし lint エラーを解消する'\n"
+                "  例: 'knowledge/ D01〜D21 の整合性を確保する'",
+                default="",
+            )
+            if not self_improve_goal:
+                from hve.self_improve import discover_task_goal_with_llm, discover_task_goal_from_docs
+                _env_cfg = SDKConfig.from_env()
+                con.spinner_start("自動ゴール探索中（LLM）...")
+                try:
+                    _disc_result = asyncio.run(discover_task_goal_with_llm(
+                        workflow_id=wf.id,
+                        model=model,
+                        cli_path=_env_cfg.cli_path or "",
+                        github_token=_env_cfg.resolve_token(),
+                        cli_url=_env_cfg.cli_url or "",
+                        target_scope=self_improve_target_scope,
+                    ))
+                except Exception as _disc_err:
+                    con.warning(f"LLM によるゴール探索に失敗しました（{_disc_err}）。静的解析にフォールバックします。")
+                    _disc_result = discover_task_goal_from_docs(
+                        workflow_id=wf.id,
+                        target_scope=self_improve_target_scope,
+                    )
+                finally:
+                    con.spinner_stop()
+                _disc_goal = _disc_result["task_goal"]
+                _disc_criteria = _disc_goal.get("success_criteria") or None
 
 
     # ── 確認パネル ────────────────────────────────────────
@@ -1305,8 +1677,6 @@ def _cmd_run_interactive() -> int:
         f"ワークフロー : {s.CYAN}{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}{s.RESET} ({wf.id})",
         f"ステップ     : {step_display}",
         f"モデル       : {model_display}",
-        f"レビューモデル: {review_model_display or '(メインと同じ)'}",
-        f"QA モデル    : {qa_model_display or '(メインと同じ)'}",
         f"ブランチ     : {branch}",
         f"並列数       : {max_parallel}",
         f"出力レベル   : {verbosity_key}",
@@ -1314,17 +1684,27 @@ def _cmd_run_interactive() -> int:
         f"QA 自動      : {'ON' if auto_qa else 'OFF'}",
     ]
     if auto_qa:
+        summary_lines.append(f"QA モデル    : {qa_model_display or '(メインと同じ)'}")
         summary_lines.append(f"QA 回答モード : 全問デフォルト自動採用")
         # force_interactive は auto_qa=True 時は常に False のため表示不要
     if workiq_enabled:
-        summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
-        summary_lines.append(f"Work IQ Draft: {'ON' if workiq_draft_mode else 'OFF'}")
+        if is_akm:
+            summary_lines.append(f"Work IQ QA   : {'ON' if workiq_qa_enabled else 'OFF'}")
+            summary_lines.append(f"Work IQ 検証 : {'ON' if workiq_akm_review_enabled else 'OFF'}")
+        else:
+            summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
+            summary_lines.append(f"Work IQ Draft: {'ON' if workiq_draft_mode else 'OFF'}")
+        if workiq_additional_prompt:
+            summary_lines.append(f"Work IQ Prompt: {workiq_additional_prompt[:50]}{'...' if len(workiq_additional_prompt) > 50 else ''}")
+        summary_lines.append(f"Work IQ タイムアウト: {workiq_per_question_timeout:.0f} 秒")
     summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
         f"PR  作成     : {'ON' if create_pr else 'OFF'}",
         f"Code Review  : {'ON' if auto_coding_agent_review else 'OFF'}",
     ]
+    if auto_review:
+        summary_lines.append(f"レビューモデル: {review_model_display or '(メインと同じ)'}")
     if auto_coding_agent_review:
         summary_lines += [
             f"自動承認     : {'ON' if auto_coding_agent_review_auto_approval else 'OFF'}",
@@ -1333,15 +1713,25 @@ def _cmd_run_interactive() -> int:
     summary_lines += [
         f"リポジトリ   : {repo_input or '(なし)'}",
         f"ドライラン   : {'ON' if dry_run else 'OFF'}",
+        f"自己改善     : {'ON' if auto_self_improve else 'OFF'}",
     ]
-    for k, v in params_extra.items():
-        if isinstance(v, bool):
-            display_v = "ON" if v else "OFF"
+    if auto_self_improve:
+        summary_lines.append(f"自己改善 繰り返し上限: {self_improve_max_iterations} 回")
+        summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope or '(空) = リポジトリ全体'}")
+        if self_improve_goal:
+            _goal_disp = self_improve_goal[:60] + ("..." if len(self_improve_goal) > 60 else "")
+            summary_lines.append(f"自己改善 ゴール     : {_goal_disp}")
+        elif _disc_goal:
+            _disp = (_disc_goal.get("goal_description", "") or "")[:60] + ("..." if len(_disc_goal.get("goal_description", "")) > 60 else "")
+            summary_lines.append(f"自己改善 ゴール     : (自動検索: {_disp})")
         else:
-            display_v = v if v else "(なし)"
-        summary_lines.append(f"{k:<18}: {display_v}")
+            summary_lines.append(f"自己改善 ゴール     : (自動: ワークフロー '{wf.id}' の標準ゴール)")
+    for k, v in params_extra.items():
+        if k == "app_id" and params_extra.get("app_ids"):
+            continue
+        summary_lines.append(f"{_format_param_label(k)}: {_format_param_value(v)}")
     if additional_prompt:
-        summary_lines.append(f"追加プロンプト: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
+        summary_lines.append(f"追加プロンプト（全Step）: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
 
     con.panel("実行設定", summary_lines)
 
@@ -1363,15 +1753,20 @@ def _cmd_run_interactive() -> int:
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
     cfg.workiq_enabled = workiq_enabled
+    cfg.workiq_qa_enabled = workiq_qa_enabled
+    cfg.workiq_akm_review_enabled = workiq_akm_review_enabled
     cfg.workiq_draft_mode = workiq_draft_mode
     cfg.workiq_draft_output_dir = "qa"
+    cfg.workiq_per_question_timeout = workiq_per_question_timeout
     cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
     cfg.qa_answer_mode = qa_answer_mode
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
-    if cfg.create_pr and cfg.workiq_draft_mode and "qa" in cfg.ignore_paths:
-        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
+    if cfg.create_pr and cfg.workiq_enabled:
+        workiq_output_dir = (cfg.workiq_draft_output_dir or "").strip().strip("/\\") or "qa"
+        if workiq_output_dir in cfg.ignore_paths:
+            cfg.ignore_paths = [p for p in cfg.ignore_paths if p != workiq_output_dir]
     cfg.verbosity = verbosity_value
     cfg.verbose = verbosity_value >= 3
     cfg.quiet = verbosity_value == 0
@@ -1385,11 +1780,30 @@ def _cmd_run_interactive() -> int:
     )
     cfg.timeout_seconds = timeout_val
     cfg.review_timeout_seconds = review_timeout
+    if workiq_additional_prompt:
+        for attr, mode in [
+            ("workiq_prompt_qa", "qa"),
+            ("workiq_prompt_km", "km"),
+            ("workiq_prompt_review", "review"),
+        ]:
+            base_prompt = getattr(cfg, attr, None) or get_workiq_prompt_template(mode)
+            setattr(cfg, attr, base_prompt + "\n\n" + workiq_additional_prompt)
     cfg.additional_prompt = additional_prompt or None
     if repo_input:
         cfg.repo = repo_input
     elif not cfg.repo:
         cfg.repo = os.environ.get("REPO", "")
+
+    # ── 自己改善ループ設定 ─────────────────────────────────
+    if auto_self_improve:
+        cfg.auto_self_improve = True
+        cfg.self_improve_max_iterations = self_improve_max_iterations
+        if self_improve_target_scope:
+            cfg.self_improve_target_scope = self_improve_target_scope
+        if self_improve_goal:
+            cfg.self_improve_goal = self_improve_goal
+        if _disc_criteria:
+            cfg.self_improve_success_criteria = _disc_criteria
 
     # ── 全自動モードフラグを SDKConfig に反映 ─────────────
     cfg.unattended = is_any_auto
@@ -1415,14 +1829,6 @@ def _cmd_run_interactive() -> int:
         "steps": selected_step_ids,
         "qa_answer_mode": qa_answer_mode,
     }
-    if wf.id in ("aad", "asdw") and not params_extra.get("app_ids") and not params_extra.get("app_id"):
-        all_ids = resolve_all_app_ids()
-        if all_ids:
-            params_extra["app_ids"] = all_ids
-            params_extra["app_ids_auto_resolved"] = True
-            if len(all_ids) == 1:
-                params_extra["app_id"] = all_ids[0]
-            con.status(f"ℹ️ docs/catalog/app-catalog.md から {len(all_ids)} 件の APP-ID を自動検出: {', '.join(all_ids)}")
     params.update(params_extra)
 
     # ── バリデーション ────────────────────────────────────
@@ -1635,6 +2041,103 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 0
+
+
+def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
+    """workiq-doctor サブコマンドのハンドラー。"""
+    import dataclasses
+    import json as _json_module
+
+    _sdk_dir = Path(__file__).resolve().parent
+    if str(_sdk_dir) not in sys.path:
+        sys.path.insert(0, str(_sdk_dir))
+
+    try:
+        from .workiq import run_workiq_diagnostics
+    except ImportError:
+        from workiq import run_workiq_diagnostics  # type: ignore[no-redef]
+
+    tenant_id = getattr(args, "tenant_id", None)
+    skip_mcp_probe = getattr(args, "skip_mcp_probe", False)
+    timeout = getattr(args, "timeout", 5.0)
+    if timeout <= 0:
+        print(f"{_ts()} ⚠️  --timeout は 0 より大きい値を指定してください。デフォルト値 5.0 を使用します。", file=sys.stderr)
+        timeout = 5.0
+    as_json = getattr(args, "json", False)
+    sdk_probe = getattr(args, "sdk_probe", False)
+    sdk_probe_timeout = getattr(args, "sdk_probe_timeout", 30.0)
+    if sdk_probe_timeout <= 0:
+        print(f"{_ts()} ⚠️  --sdk-probe-timeout は 0 より大きい値を指定してください。デフォルト値 30.0 を使用します。", file=sys.stderr)
+        sdk_probe_timeout = 30.0
+    event_extractor_self_test = getattr(args, "event_extractor_self_test", False)
+    sdk_tool_probe = getattr(args, "sdk_tool_probe", False)
+    sdk_tool_probe_timeout = getattr(args, "sdk_tool_probe_timeout", 60.0)
+    if sdk_tool_probe_timeout <= 0:
+        print(f"{_ts()} ⚠️  --sdk-tool-probe-timeout は 0 より大きい値を指定してください。デフォルト値 60.0 を使用します。", file=sys.stderr)
+        sdk_tool_probe_timeout = 60.0
+    sdk_event_trace = getattr(args, "sdk_event_trace", False)
+    sdk_tool_probe_tools_all = getattr(args, "sdk_tool_probe_tools_all", False)
+
+    report = run_workiq_diagnostics(
+        tenant_id=tenant_id,
+        skip_mcp_probe=skip_mcp_probe,
+        mcp_probe_timeout=timeout,
+        sdk_probe=sdk_probe,
+        sdk_probe_timeout=sdk_probe_timeout,
+        event_extractor_self_test=event_extractor_self_test,
+        sdk_tool_probe=sdk_tool_probe,
+        sdk_tool_probe_timeout=sdk_tool_probe_timeout,
+        sdk_event_trace=sdk_event_trace,
+        sdk_tool_probe_tools_all=sdk_tool_probe_tools_all,
+    )
+
+    if as_json:
+        print(_json_module.dumps(
+            [dataclasses.asdict(c) for c in report.checks],
+            ensure_ascii=False,
+            indent=2,
+        ))
+        has_fail = any(c.status == "FAIL" for c in report.checks)
+        return 1 if has_fail else 0
+
+    _STATUS_ICONS = {
+        "PASS": "✅",
+        "FAIL": "❌",
+        "WARN": "⚠️",
+        "SKIP": "⏭️",
+    }
+
+    print(f"\n{'=' * 60}")
+    print("  Work IQ 診断レポート (workiq-doctor)")
+    print(f"{'=' * 60}")
+
+    has_fail = False
+    for check in report.checks:
+        icon = _STATUS_ICONS.get(check.status, "?")
+        print(f"\n[{check.status}] {icon} {check.name}")
+        if check.detail:
+            for line in check.detail.splitlines():
+                print(f"       {line}")
+        if check.command:
+            print(f"       コマンド: {check.command}")
+        if check.status == "FAIL":
+            has_fail = True
+
+    print(f"\n{'=' * 60}")
+    if has_fail:
+        print("診断結果: ❌ 失敗があります")
+        print("\nヒント:")
+        print("  Windows PowerShell で npx.ps1 が Execution Policy によりブロックされる場合:")
+        print("    npx.cmd -y @microsoft/workiq mcp")
+        print("  環境変数で npx コマンドを指定する場合:")
+        print("    $env:WORKIQ_NPX_COMMAND='C:\\Program Files\\nodejs\\npx.cmd'  (PowerShell)")
+        print("    set WORKIQ_NPX_COMMAND=C:\\Program Files\\nodejs\\npx.cmd  (cmd)")
+        print("    [Environment]::SetEnvironmentVariable('WORKIQ_NPX_COMMAND', 'C:\\Program Files\\nodejs\\npx.cmd', 'User')")
+    else:
+        print("診断結果: ✅ 全チェック成功")
+    print(f"{'=' * 60}\n")
+
+    return 1 if has_fail else 0
 
 
 def _cmd_orchestrate(args: argparse.Namespace) -> int:

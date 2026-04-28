@@ -53,7 +53,7 @@ class TestParserBasic(unittest.TestCase):
 
     def test_defaults(self) -> None:
         """argparse で --model 未指定時は None になることを確認。"""
-        args = _parse(["orchestrate", "--workflow", "aad"])
+        args = _parse(["orchestrate", "--workflow", "aad-web"])
         self.assertIsNone(args.model)
         self.assertEqual(args.max_parallel, 15)
         self.assertFalse(args.auto_qa)
@@ -85,6 +85,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
         self.assertIsNone(args.mcp_config)
+        self.assertIsNone(args.workiq_akm_review)
         self.assertEqual(args.timeout, 21600.0)
         self.assertEqual(args.log_level, "error")
 
@@ -97,6 +98,11 @@ class TestParserBasic(unittest.TestCase):
         """-m / --model オプションのテスト。"""
         args = _parse(["orchestrate", "-w", "aas", "-m", "gpt-5.4"])
         self.assertEqual(args.model, "gpt-5.4")
+
+    def test_model_option_gpt_5_5(self) -> None:
+        """-m / --model gpt-5.5 オプションのテスト。"""
+        args = _parse(["orchestrate", "-w", "aas", "-m", "gpt-5.5"])
+        self.assertEqual(args.model, "gpt-5.5")
 
     def test_max_parallel_option(self) -> None:
         """--max-parallel オプションのテスト。"""
@@ -132,8 +138,10 @@ class TestParserBasic(unittest.TestCase):
             "--workiq-prompt-qa", "qa",
             "--workiq-prompt-km", "km",
             "--workiq-prompt-review", "review",
+            "--workiq-akm-review",
         ])
         self.assertTrue(args.workiq)
+        self.assertTrue(args.workiq_akm_review)
         self.assertTrue(args.workiq_draft)
         self.assertEqual(args.workiq_draft_output_dir, "qa-drafts")
         self.assertEqual(args.workiq_tenant_id, "tenant-x")
@@ -503,12 +511,22 @@ class TestBuildParams(unittest.TestCase):
         ])
         cfg = _build_config(args)
         self.assertTrue(cfg.workiq_enabled)
+        self.assertTrue(cfg.is_workiq_qa_enabled())
+        self.assertTrue(cfg.is_workiq_akm_review_enabled())
         self.assertEqual(cfg.workiq_tenant_id, "tenant-x")
         self.assertEqual(cfg.workiq_prompt_qa, "qa")
         self.assertEqual(cfg.workiq_prompt_km, "km")
         self.assertEqual(cfg.workiq_prompt_review, "review")
         self.assertTrue(cfg.workiq_draft_mode)
         self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
+
+    def test_build_config_workiq_akm_review_can_be_enabled_without_qa(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = _parse(["orchestrate", "-w", "akm", "--workiq-akm-review"])
+            cfg = _build_config(args)
+        self.assertTrue(cfg.workiq_enabled)
+        self.assertFalse(cfg.is_workiq_qa_enabled())
+        self.assertTrue(cfg.is_workiq_akm_review_enabled())
 
     def test_build_config_workiq_draft_output_dir_not_overridden_when_cli_omitted(self) -> None:
         env_backup = os.environ.copy()
@@ -522,10 +540,49 @@ class TestBuildParams(unittest.TestCase):
             os.environ.update(env_backup)
 
 
+class TestSelfImproveCLI(unittest.TestCase):
+    """--self-improve / --no-self-improve / HVE_AUTO_SELF_IMPROVE のテスト。"""
+
+    def test_self_improve_flag_enables(self) -> None:
+        """--self-improve で cfg.auto_self_improve == True になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aas", "--self-improve"])
+        cfg = _build_config(args)
+        self.assertTrue(cfg.auto_self_improve)
+        self.assertFalse(cfg.self_improve_skip)
+
+    def test_no_self_improve_flag_sets_skip(self) -> None:
+        """--no-self-improve で cfg.self_improve_skip == True になることを確認。"""
+        args = _parse(["orchestrate", "-w", "aas", "--no-self-improve"])
+        cfg = _build_config(args)
+        self.assertTrue(cfg.self_improve_skip)
+
+    def test_no_self_improve_overrides_self_improve(self) -> None:
+        """--no-self-improve が --self-improve より優先されることを確認。"""
+        args = _parse(["orchestrate", "-w", "aas", "--self-improve", "--no-self-improve"])
+        cfg = _build_config(args)
+        self.assertTrue(cfg.self_improve_skip)
+
+    def test_env_var_enables_self_improve(self) -> None:
+        """HVE_AUTO_SELF_IMPROVE=true で有効化されることを確認。"""
+        with mock.patch.dict(os.environ, {"HVE_AUTO_SELF_IMPROVE": "true"}, clear=False):
+            args = _parse(["orchestrate", "-w", "aas"])
+            cfg = _build_config(args)
+            self.assertTrue(cfg.auto_self_improve)
+
+    def test_default_self_improve_is_false(self) -> None:
+        """CLI 未指定・環境変数未指定では auto_self_improve==False になることを確認。"""
+        with mock.patch.dict(os.environ, {k: v for k, v in os.environ.items() if "SELF_IMPROVE" not in k}, clear=True):
+            args = _parse(["orchestrate", "-w", "aas"])
+            cfg = _build_config(args)
+            self.assertFalse(cfg.auto_self_improve)
+            self.assertFalse(cfg.self_improve_skip)
+
+
 class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
-    """_prompt_akm_params: PR 作成有無で enable_auto_merge 質問が切り替わる。"""
+    """_prompt_akm_params: GitHub 系質問は呼び出し元で扱い、AKM 固有値だけ収集する。"""
 
     _AUTO_MERGE_LABEL = "PR の自動 Approve & Auto-merge を有効にする？"
+    _COMMENT_LABEL = "GitHub Issue への追加コメント（任意）"
 
     def _make_con(self):
         con = mock.MagicMock()
@@ -537,18 +594,23 @@ class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
     def _called_labels(self, con) -> list[str]:
         return [call.args[0] for call in con.prompt_yes_no.call_args_list]
 
+    def _called_input_labels(self, con) -> list[str]:
+        return [call.args[0] for call in con.prompt_input.call_args_list]
+
     def test_skips_auto_merge_when_no_pr(self) -> None:
         """will_create_pr=False のとき auto_merge 質問をスキップし False 固定。"""
         con = self._make_con()
         params = _prompt_akm_params(con, is_quick_auto=False, will_create_pr=False)
         self.assertFalse(params["enable_auto_merge"])
         self.assertNotIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
+        self.assertNotIn(self._COMMENT_LABEL, self._called_input_labels(con))
 
-    def test_asks_auto_merge_when_pr(self) -> None:
-        """will_create_pr=True のとき auto_merge 質問を表示する。"""
+    def test_delegates_auto_merge_when_pr(self) -> None:
+        """will_create_pr=True でも auto_merge 質問は呼び出し元に委譲する。"""
         con = self._make_con()
-        _prompt_akm_params(con, is_quick_auto=False, will_create_pr=True)
-        self.assertIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
+        params = _prompt_akm_params(con, is_quick_auto=False, will_create_pr=True)
+        self.assertFalse(params["enable_auto_merge"])
+        self.assertNotIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
 
     def test_quick_auto_unaffected(self) -> None:
         """is_quick_auto=True は will_create_pr に依らず False 固定。"""
@@ -696,7 +758,7 @@ class TestMainDryRun(unittest.TestCase):
 
     def test_main_all_valid_workflows_dry_run(self) -> None:
         """全ての有効なワークフローで dry_run が成功することを確認。"""
-        for wf_id in ["aas", "aad", "asdw", "abd", "abdv", "adoc"]:
+        for wf_id in ["aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd", "akm", "aqod", "adoc"]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
                     "orchestrate",
@@ -996,7 +1058,8 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 7. Code Review Agent → code_review
         # 8. 自動承認 → auto_approval (code_review=True 時のみ)
         # 9. ドライラン → False
-        # 10. 実行確認 → True
+        # 10. 自己改善 → False
+        # 11. 実行確認 → True
         yes_no_answers = [auto_qa]
         if auto_qa:
             yes_no_answers.append(use_different_qa_model)
@@ -1009,7 +1072,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         yes_no_answers.append(code_review)
         if code_review:
             yes_no_answers.append(auto_approval)
-        yes_no_answers += [False, True]  # dry_run, 実行確認
+        yes_no_answers += [False, False, True]  # dry_run, auto_self_improve, 実行確認
 
         yes_no_iter = iter(yes_no_answers)
 
@@ -1017,14 +1080,17 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 1. ブランチ → "main"
         # 2. 並列数 → "15"
         # 3. セッション idle タイムアウト → "7200"
-        # 4. Review タイムアウト (code_review=True 時のみ)
-        # 5. (repo_input — create_issues or create_pr の場合)
-        # 6. 追加プロンプト → ""
+        # 4. Issue タイトル/追加コメント (create_issues=True 時のみ)
+        # 5. repo_input (create_issues or create_pr の場合)
+        # 6. Review タイムアウト (code_review=True 時のみ)
+        # 7. 追加プロンプト → ""
         input_answers = ["main", "15", "7200"]
-        if code_review:
-            input_answers.append(review_timeout)
+        if create_issues:
+            input_answers += ["", ""]
         if create_issues or create_pr:
             input_answers.append("owner/repo")
+        if code_review:
+            input_answers.append(review_timeout)
         input_answers.append("")  # 追加プロンプト
 
         input_iter = iter(input_answers)
@@ -1221,11 +1287,9 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             # カスタム全自動: workflow, model, exec_mode(1), verbosity
             con.menu_select.side_effect = [0, 0, 1, 1]
             # QA自動→False, Review自動→False, Issue→False, PR→False,
-            # Code Review→auto_coding_agent_review, (自動承認→False), ドライラン→False, 実行確認→True
+            # Code Review→auto_coding_agent_review, ドライラン→False, 自己改善→False, 実行確認→True
             yes_no_answers = [False, False, False, False, auto_coding_agent_review]
-            if auto_coding_agent_review:
-                yes_no_answers.append(False)  # 自動承認
-            yes_no_answers += [False, True]  # dry_run, 実行確認
+            yes_no_answers += [False, False, True]  # dry_run, auto_self_improve, 実行確認
             con.prompt_yes_no.side_effect = yes_no_answers
             # ブランチ, 並列数, タイムアウト, (review_timeout), 追加プロンプト
             input_answers = ["main", "15", custom_timeout]
@@ -1337,8 +1401,8 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
         con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(手動), verbosity
         # auto_qa=True, QAサブモデル利用確認=False, auto_review=False, issue=False, pr=False,
-        # code_review=False, dry_run=False, 実行確認=True
-        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, True]
+        # code_review=False, dry_run=False, auto_self_improve=False, 実行確認=True
+        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True]
         con.prompt_input.side_effect = ["main", "15", "21600", ""]  # branch, parallel, timeout, addl prompt
         con.prompt_multi_select.return_value = []
 
@@ -1379,6 +1443,77 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
 
 
 class TestInteractiveModeAqodQaFlow(unittest.TestCase):
+    def test_manual_mode_akm_without_auto_qa_keeps_workiq_disabled(self) -> None:
+        """AKM は QA と実行後レビュー Work IQ を別々に表示し、拒否すれば無効のまま。"""
+        import unittest.mock as mock
+
+        captured = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured["cfg"] = config
+            captured["params"] = params
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(
+            id="1", title="Step1", is_container=False, depends_on=[], params=[]
+        )
+        mock_wf = mock.MagicMock(id="akm", steps=[mock_step], params=[])
+        mock_display_names = {"akm": "AKM"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        # workflow(akm), model, exec_mode(手動), verbosity, AKM sources
+        con.menu_select.side_effect = [0, 0, 2, 1, 0]
+        # AKM QA, WorkIQ review(decline), Issue, PR, CodeReview, dry_run, force_refresh, auto_self_improve, confirm
+        con.prompt_yes_no.side_effect = [False, False, False, False, False, False, True, False, True]
+        con.prompt_input.side_effect = [
+            "main",   # branch
+            "21600",  # timeout
+            "",       # AKM target_files default
+            "",       # custom_source_dir
+            "",       # additional_prompt
+        ]
+        con.prompt_multi_select.return_value = []
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=True)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=True)
+        mock_workiq_mod.get_workiq_prompt_template = mock.MagicMock(side_effect=lambda mode: f"default-{mode}")
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
+        }):
+            _main_mod._cmd_run_interactive()
+
+        cfg = captured.get("cfg")
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.auto_qa)
+        self.assertFalse(cfg.workiq_enabled)
+        self.assertFalse(cfg.is_workiq_qa_enabled())
+        self.assertFalse(cfg.is_workiq_akm_review_enabled())
+        mock_workiq_mod.workiq_login.assert_not_called()
+        prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
+        self.assertTrue(any("AKM 完了後に QA" in str(p) for p in prompts))
+        self.assertTrue(any("Work IQ" in str(p) and "knowledge/" in str(p) for p in prompts))
+
     def test_manual_mode_aqod_auto_qa_enables_workiq_draft_mode(self) -> None:
         import unittest.mock as mock
 
@@ -1401,12 +1536,18 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         con.menu_select.side_effect = [0, 0, 2, 1, -1]
         # prompt_yes_no の順序:
         # 1) AQOD後QA実施 2) Work IQ利用 3) Issue作成 4) PR作成
-        # 5) Code Review有効化 6) dry_run 7) 実行確認
+        # 5) Code Review有効化 6) dry_run 7) auto_self_improve 8) 実行確認
         # （AQOD + auto_qa=True のため Work IQドラフト確認プロンプトは表示されない）
-        # side_effect = [QA, WorkIQ, Issue, PR, CodeReview, dry_run, confirm]
-        con.prompt_yes_no.side_effect = [True, True, False, False, False, False, True]
-        # branch, timeout, target_scope, focus_areas, additional_prompt
-        con.prompt_input.side_effect = ["main", "21600", "original-docs/", "", ""]
+        # side_effect = [QA, WorkIQ, Issue, PR, CodeReview, dry_run, auto_self_improve, confirm]
+        con.prompt_yes_no.side_effect = [True, True, False, False, False, False, False, True]
+        con.prompt_input.side_effect = [
+            "main",               # branch
+            "21600",              # timeout
+            "社内略語は使わない",  # workiq_additional_prompt
+            "original-docs/",     # target_scope
+            "",                   # focus_areas
+            "",                   # additional_prompt
+        ]
         con.prompt_multi_select.return_value = []
 
         mock_console_mod = mock.MagicMock()
@@ -1424,6 +1565,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         mock_workiq_mod = mock.MagicMock()
         mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=True)
         mock_workiq_mod.workiq_login = mock.MagicMock(return_value=True)
+        mock_workiq_mod.get_workiq_prompt_template = mock.MagicMock(side_effect=lambda mode: f"default-{mode}")
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -1441,8 +1583,17 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         self.assertTrue(cfg.workiq_enabled)
         self.assertEqual(cfg.qa_answer_mode, "all")
         self.assertTrue(cfg.workiq_draft_mode)
+        self.assertEqual(cfg.workiq_prompt_qa, "default-qa\n\n社内略語は使わない")
+        self.assertEqual(cfg.workiq_prompt_km, "default-km\n\n社内略語は使わない")
+        self.assertEqual(cfg.workiq_prompt_review, "default-review\n\n社内略語は使わない")
         prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
         self.assertNotIn("Work IQ で回答ドラフトを自動生成する？", prompts)
+        input_prompts = [c.args[0] for c in con.prompt_input.call_args_list if c.args]
+        self.assertIn("Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）", input_prompts)
+        self.assertIn("全てのステップでの Prompt の末尾に追加するプロンプト（省略可）", input_prompts)
+        panel_lines = con.panel.call_args.args[1]
+        self.assertTrue(any(str(line).startswith("Work IQ Prompt: ") for line in panel_lines))
+        self.assertTrue(any("社内略語は使わない" in str(line) for line in panel_lines))
 
 
 class TestInteractiveAdocParamsValidation(unittest.TestCase):
@@ -1465,13 +1616,13 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         con.prompt_multi_select.return_value = []
 
         if exec_mode == 0:
-            # workflow, model, exec_mode, doc_purpose(migration=3, 0-indexed), max_file_lines(1000=2, 0-indexed)
-            con.menu_select.side_effect = [0, 0, 0, 3, 2]
+            # workflow, model, exec_mode（クイック全自動は ADOC パラメータも既定値採用）
+            con.menu_select.side_effect = [0, 0, 0]
             con.prompt_yes_no.side_effect = [True]  # confirmation
         else:
             # workflow, model, exec_mode, verbosity, doc_purpose(onboarding=1, 0-indexed), max_file_lines(300=0, 0-indexed)
             con.menu_select.side_effect = [0, 0, 2, 1, 1, 0]
-            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, True]
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
             # branch, max_parallel, timeout, additional_prompt（doc_purpose/max_file_linesはmenu_selectで入力）
             con.prompt_input.side_effect = ["main", "15", "7200", ""]
 
@@ -1504,10 +1655,10 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         captured["warning_called"] = con.warning.call_count
         return captured
 
-    def test_doc_purpose_validation_in_quick_auto(self) -> None:
+    def test_doc_purpose_defaults_in_quick_auto(self) -> None:
         captured = self._run_with_adoc_params_inputs(exec_mode=0)
-        self.assertEqual(captured["params"]["doc_purpose"], "migration")
-        self.assertEqual(captured["params"]["max_file_lines"], 1000)
+        self.assertEqual(captured["params"]["doc_purpose"], "all")
+        self.assertEqual(captured["params"]["max_file_lines"], 500)
         self.assertEqual(captured["warning_called"], 0)
 
     def test_doc_purpose_validation_in_manual(self) -> None:
@@ -1515,6 +1666,85 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         self.assertEqual(captured["params"]["doc_purpose"], "onboarding")
         self.assertEqual(captured["params"]["max_file_lines"], 300)
         self.assertEqual(captured["warning_called"], 0)
+
+
+class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
+    def _run_with_aad_web_params(self, *, exec_mode: int):
+        import unittest.mock as mock
+
+        captured = {}
+
+        async def _fake_run_workflow(workflow_id, params, config):
+            captured["params"] = params
+            return {"completed": [], "failed": [], "skipped": []}
+
+        mock_step = mock.MagicMock(id="1", title="Step1", is_container=False, depends_on=[], params=[])
+        mock_wf = mock.MagicMock(
+            id="aad-web",
+            steps=[mock_step],
+            params=["app_ids", "app_id", "resource_group"],
+        )
+        mock_display_names = {"aad-web": "AAD-WEB"}
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        con.prompt_multi_select.return_value = []
+
+        if exec_mode == 0:
+            con.menu_select.side_effect = [0, 0, 0]
+            con.prompt_yes_no.side_effect = [True]
+        else:
+            con.menu_select.side_effect = [0, 0, 2, 1]
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
+            con.prompt_input.side_effect = ["main", "15", "21600", "APP-01", "rg-prod", ""]
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
+        }):
+            _main_mod._cmd_run_interactive()
+
+        return captured, con
+
+    def test_manual_mode_prompts_app_ids_once_and_derives_app_id(self) -> None:
+        captured, con = self._run_with_aad_web_params(exec_mode=2)
+        params = captured["params"]
+        self.assertEqual(params["app_ids"], ["APP-01"])
+        self.assertEqual(params["app_id"], "APP-01")
+        self.assertEqual(params["resource_group"], "rg-prod")
+        input_prompts = [c.args[0] for c in con.prompt_input.call_args_list if c.args]
+        app_prompts = [p for p in input_prompts if "APP-ID" in str(p)]
+        self.assertEqual(len(app_prompts), 1)
+        self.assertNotIn("app_id", input_prompts)
+
+    def test_quick_auto_does_not_prompt_optional_workflow_params(self) -> None:
+        captured, con = self._run_with_aad_web_params(exec_mode=0)
+        params = captured["params"]
+        self.assertNotIn("app_ids", params)
+        self.assertNotIn("app_id", params)
+        self.assertEqual(params["resource_group"], "")
+        con.prompt_input.assert_not_called()
 
 
 class TestDocPurposePrompt(unittest.TestCase):
@@ -1569,27 +1799,102 @@ class TestMaxFileLinesPrompt(unittest.TestCase):
         self.assertIsInstance(val, int)
 
 
-class TestInteractiveMode(unittest.TestCase):
-    """インタラクティブモード (run サブコマンド) のテスト。"""
+class TestWorkIQDoctorSdkProbeArgs(unittest.TestCase):
+    """Phase 3: workiq-doctor --sdk-probe の引数パーステスト。"""
 
-    def test_parser_accepts_run_command(self) -> None:
-        """run サブコマンドがパース可能であることを確認。"""
-        args = _parse(["run"])
-        self.assertEqual(args.command, "run")
+    def test_sdk_probe_arg_parsed(self) -> None:
+        args = _parse(["workiq-doctor", "--sdk-probe"])
+        self.assertTrue(args.sdk_probe)
 
-    def test_parser_accepts_empty_args(self) -> None:
-        """引数なしでもパース可能であることを確認（デフォルトで run になる）。"""
-        args = _parse([])
-        self.assertIsNone(args.command)  # subparsers 未選択
+    def test_sdk_probe_default_false(self) -> None:
+        args = _parse(["workiq-doctor"])
+        self.assertFalse(args.sdk_probe)
 
-    def test_main_with_empty_args_calls_interactive(self) -> None:
-        """main([]) が _cmd_run_interactive を呼び出すことを確認。"""
-        # _cmd_run_interactive は Console を使うため、mock が必要
-        import unittest.mock as mock
-        with mock.patch.object(_main_mod, "_cmd_run_interactive", return_value=0) as mock_run:
-            # 空引数で main を呼び出すと、command=None → _cmd_run_interactive が呼ばれる
-            # ただし、argparse の動作確認が必要
-            pass  # 実装確認は完了
+    def test_skip_mcp_probe_and_sdk_probe_combined(self) -> None:
+        args = _parse(["workiq-doctor", "--skip-mcp-probe", "--sdk-probe"])
+        self.assertTrue(args.skip_mcp_probe)
+        self.assertTrue(args.sdk_probe)
+
+    def test_sdk_probe_timeout_default(self) -> None:
+        args = _parse(["workiq-doctor", "--sdk-probe"])
+        self.assertEqual(args.sdk_probe_timeout, 30.0)
+
+    def test_sdk_probe_timeout_custom(self) -> None:
+        args = _parse(["workiq-doctor", "--sdk-probe", "--sdk-probe-timeout", "60.0"])
+        self.assertEqual(args.sdk_probe_timeout, 60.0)
+
+    def test_sdk_tool_probe_args_parsed(self) -> None:
+        args = _parse([
+            "workiq-doctor",
+            "--event-extractor-self-test",
+            "--sdk-tool-probe",
+            "--sdk-tool-probe-timeout", "90.0",
+            "--sdk-event-trace",
+            "--sdk-tool-probe-tools-all",
+        ])
+        self.assertTrue(args.event_extractor_self_test)
+        self.assertTrue(args.sdk_tool_probe)
+        self.assertEqual(args.sdk_tool_probe_timeout, 90.0)
+        self.assertTrue(args.sdk_event_trace)
+        self.assertTrue(args.sdk_tool_probe_tools_all)
+
+    def test_cmd_workiq_doctor_passes_sdk_probe_to_diagnostics(self) -> None:
+        import workiq as _workiq_mod
+        mock_report = _workiq_mod.WorkIQDiagnosticReport(checks=[
+            _workiq_mod.WorkIQDiagnosticCheck(name="os_info", status="PASS", detail="ok"),
+        ])
+        args = mock.Mock()
+        args.tenant_id = None
+        args.skip_mcp_probe = True
+        args.timeout = 5.0
+        args.json = False
+        args.sdk_probe = True
+        args.sdk_probe_timeout = 30.0
+        args.event_extractor_self_test = False
+        args.sdk_tool_probe = False
+        args.sdk_tool_probe_timeout = 60.0
+        args.sdk_event_trace = False
+        args.sdk_tool_probe_tools_all = False
+        with mock.patch.object(_workiq_mod, "run_workiq_diagnostics", return_value=mock_report) as mock_diag:
+            import io
+            from contextlib import redirect_stdout
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                _main_mod._cmd_workiq_doctor(args)
+        self.assertTrue(mock_diag.called)
+        call_kwargs = mock_diag.call_args.kwargs
+        self.assertTrue(call_kwargs.get("sdk_probe"))
+        self.assertEqual(call_kwargs.get("sdk_probe_timeout"), 30.0)
+
+    def test_cmd_workiq_doctor_passes_sdk_tool_probe_options(self) -> None:
+        import workiq as _workiq_mod
+        mock_report = _workiq_mod.WorkIQDiagnosticReport(checks=[
+            _workiq_mod.WorkIQDiagnosticCheck(name="os_info", status="PASS", detail="ok"),
+        ])
+        args = mock.Mock()
+        args.tenant_id = None
+        args.skip_mcp_probe = True
+        args.timeout = 5.0
+        args.json = False
+        args.sdk_probe = False
+        args.sdk_probe_timeout = 30.0
+        args.event_extractor_self_test = True
+        args.sdk_tool_probe = True
+        args.sdk_tool_probe_timeout = 90.0
+        args.sdk_event_trace = True
+        args.sdk_tool_probe_tools_all = True
+        with mock.patch.object(_workiq_mod, "run_workiq_diagnostics", return_value=mock_report) as mock_diag:
+            import io
+            from contextlib import redirect_stdout
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                _main_mod._cmd_workiq_doctor(args)
+        call_kwargs = mock_diag.call_args.kwargs
+        self.assertTrue(call_kwargs.get("event_extractor_self_test"))
+        self.assertTrue(call_kwargs.get("sdk_tool_probe"))
+        self.assertEqual(call_kwargs.get("sdk_tool_probe_timeout"), 90.0)
+        self.assertTrue(call_kwargs.get("sdk_event_trace"))
+        self.assertTrue(call_kwargs.get("sdk_tool_probe_tools_all"))
 
 
 if __name__ == "__main__":

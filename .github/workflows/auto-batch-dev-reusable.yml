@@ -53,7 +53,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -377,15 +377,41 @@ jobs:
               section_text = merge_section.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          # APP-ID 抽出（カンマ区切りで分割・正規化）
+          app_ids_raw = ""
+          m = re.search(r"###\s*対象アプリケーション[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              app_ids_raw = m.group(1).strip()
+              if app_ids_raw == "_No response_":
+                  app_ids_raw = ""
+
+          app_ids_list = []
+          if app_ids_raw:
+              for token in re.split(r"[\s,]+", app_ids_raw):
+                  normalized = token.strip().upper()
+                  if normalized and re.fullmatch(r"APP-\d{2,}", normalized):
+                      if normalized not in app_ids_list:
+                          app_ids_list.append(normalized)
+
+          # TDD GREEN リトライ最大回数
+          tdd_max_retries = "5"
+          m_tdd = re.search(r"###\s*TDD GREEN リトライ最大回数\s*\n+([^\n]+)", body)
+          if m_tdd:
+              raw_tdd = m_tdd.group(1).strip()
+              nm_tdd = re.search(r'\d+', raw_tdd)
+              tdd_max_retries = nm_tdd.group() if nm_tdd else "5"
+
           result = {
               "branch": branch,
               "resource_group": resource_group,
               "batch_job_ids": batch_job_ids,
+              "app_ids": app_ids_list,
               "skip_steps": list(skip_steps),
               "additional_comment": additional_comment,
               "auto_context_review": auto_context_review,
               "auto_qa": auto_qa,
-              "auto_merge": auto_merge
+              "auto_merge": auto_merge,
+              "tdd_max_retries": tdd_max_retries
           }
           print(json.dumps(result))
           PYEOF
@@ -399,6 +425,9 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
+          TDD_MAX_RETRIES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tdd_max_retries','5'))")
+          [[ -z "${TDD_MAX_RETRIES}" ]] && TDD_MAX_RETRIES="5"
 
           echo "対象ブランチ: ${BRANCH}"
           echo "リソースグループ名: ${RESOURCE_GROUP}"
@@ -407,21 +436,55 @@ jobs:
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+          echo "対象 APP-IDs（フィルタ前）: ${APP_IDS:-（未指定 = 推薦アーキテクチャから自動選択）}"
+
+          # ---- 推薦アーキテクチャ APP-ID フィルタ ----
+          FILTER_RESULT=$(python3 -m hve.app_arch_filter \
+            --workflow abdv \
+            ${APP_IDS:+--app-ids "${APP_IDS}"} \
+            --catalog docs/catalog/app-arch-catalog.md) || {
+            echo "ERROR: app-arch-catalog.md が見つからないか読み取れません。処理を中止します。" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: \`docs/catalog/app-arch-catalog.md\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
+            exit 1
+          }
+
+          FILTER_ERROR=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null || echo "")
+          if [[ -n "${FILTER_ERROR}" ]]; then
+            echo "ERROR: app-arch filter エラー: ${FILTER_ERROR}" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: app-arch filter: ${FILTER_ERROR}"
+            exit 1
+          fi
+
+          APP_IDS=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('matched_app_ids',[])))")
+          APP_ARCH_SCOPE_SECTION=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('markdown_section',''))")
+
+          echo "対象 APP-IDs（フィルタ後）: ${APP_IDS:-（0件）}"
+
+          if [[ -z "${APP_IDS}" ]]; then
+            echo "推薦アーキテクチャ APP-ID フィルタ: 対象 APP-ID が 0 件です。Step Issue を作成しません。"
+            post_comment "${ROOT_ISSUE}" "ℹ️ 推薦アーキテクチャ \`データバッチ処理\` / \`バッチ\` に該当する APP-ID が見つかりませんでした。\`docs/catalog/app-arch-catalog.md\` の \`A) サマリ表（全APP横断）\` を確認してください。"
+            exit 0
+          fi
+
+          export APP_IDS APP_ARCH_SCOPE_SECTION
 
           # ---- Root Issue body に auto-context-review / auto-merge タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
           auto_merge = sys.argv[2]
-          output_file = sys.argv[3]
+          tdd_max_retries = sys.argv[3]
+          output_file = sys.argv[4]
 
           context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
           merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          tdd_tag = f"<!-- tdd-max-retries: {tdd_max_retries} -->"
           context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
           merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+          tdd_pat = re.compile(r'<!--\s*tdd-max-retries:\s*\d+\s*-->')
 
           if context_pat.search(body):
               body = context_pat.sub(context_tag, body)
@@ -433,6 +496,11 @@ jobs:
           else:
               body = body.rstrip() + "\n" + merge_tag + "\n"
 
+          if tdd_pat.search(body):
+              body = tdd_pat.sub(tdd_tag, body)
+          else:
+              body = body.rstrip() + "\n" + tdd_tag + "\n"
+
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
           PYREVIEW
@@ -440,7 +508,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}）。" \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}, tdd-max-retries: ${TDD_MAX_RETRIES}）。" \
             || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -571,8 +639,8 @@ jobs:
 
           # ---- Step.2.2: TDD GREEN: 本実装 ----
           if [[ ! " ${SKIP_STEPS} " =~ " 2 " ]]; then
-            BODY_S22=$(printf '%s\n## 目的\nテストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。\n\n## 入力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/`（テストコード）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）\n- `docs/azure/azure-services-data.md`（データストア接続情報）\n\n## 出力\n- `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード\n\n## Custom Agent\n`Dev-Batch-ServiceCoding` を使用\n\n## 依存\n- Step.2.1（TDD RED: テストコード作成）が `abdv:done` であること\n\n## 完了条件\n- `dotnet test` が全テスト PASS（TDD GREEN）になっている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
-              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            BODY_S22=$(printf '%s\n## 目的\nテストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。\n\n## 入力\n- `test/batch/{jobId}-{jobNameSlug}.Tests/`（テストコード）\n- `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: 構造化ログ・アラート要件）\n- `docs/azure/azure-services-data.md`（データストア接続情報）\n\n## 出力\n- `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード\n\n## Custom Agent\n`Dev-Batch-ServiceCoding` を使用\n\n## 依存\n- Step.2.1（TDD RED: テストコード作成）が `abdv:done` であること\n\n## 完了条件\n- `dotnet test` が全テスト PASS（TDD GREEN）になっている\n- 完了時に自身に `abdv:done` ラベルを付与すること\n\n## TDD GREEN リトライルール\n- テストが PASS にならない場合、最大 %s 回まで実装を修正して再試行する\n- %s 回で全 PASS にならない場合: `abdv:blocked` ラベルを付与し、未 PASS テスト一覧と試行回数を報告する\n- テストコード（`test/batch/`）は原則変更禁止%s%s%s' \
+              "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S22_RESP=$(create_issue \
               "[ABDV] Step.2.2: TDD GREEN — バッチジョブ本実装" \
               "${BODY_S22}" \
@@ -1161,3 +1229,68 @@ jobs:
           # ── Root Issue の自動クローズ判定 ──
           echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
           auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に <!-- branch: ... --> がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: pip install ruff
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          git push origin HEAD:${{ steps.parse.outputs.branch }}
+

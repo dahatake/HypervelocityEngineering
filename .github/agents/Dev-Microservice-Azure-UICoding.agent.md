@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-UICoding
 description: 画面定義書に基づき、全ての画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する。
 tools: ["*"]
@@ -47,14 +47,15 @@ tools: ["*"]
 - 画面定義書を読み、以下を抽出してメモ化（短く）：
   - 主要要素 / 画面状態（loading/empty/error）/ 必要API / ペルソナ差分 / 遷移
 
-## 1) 15分判定（必須）
-- 15分を超えそう、または不確実性が高い場合は **実装を開始せず** 分割へ切り替える。
+## 1) 分割判定（必須）
+- task_scope=multi または context_size=large に該当する場合は **実装を開始せず** 分割へ切り替える。
 - `Skill task-dag-planning` に従い `{WORK}plan.md` と `{WORK}subissues.md` を作成して終了。
 - **plan.md 作成時の必須手順（省略禁止）**:
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

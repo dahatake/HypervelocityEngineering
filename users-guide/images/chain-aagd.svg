@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 240" role="img" aria-label="AAGD 5ステップチェーン図">
+  <desc>AAGD（AI Agent Dev and Deploy）: 5ステップ直列チェーン。Step.1 Arch-AIAgentDesign → Step.2.1 Arch-TDD-TestSpec → Step.2.2 Dev-Microservice-Azure-AgentTestCoding → Step.2.3 Dev-Microservice-Azure-AgentCoding → Step.3 Dev-Microservice-Azure-AgentDeploy</desc>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
+    .arch { fill: #4A90D9; stroke: #1a4d80; stroke-width: 1.5; }
+    .dev  { fill: #50C878; stroke: #1b5e20; stroke-width: 1.5; }
+    .out  { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
+    .ln   { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .bt   { fill: white; font-weight: bold; font-size: 10px; }
+    .bs   { fill: white; font-size: 9px; }
+    .ttl  { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
+  </style>
+  <text x="450" y="28" text-anchor="middle" class="ttl">AAGD — AI Agent Dev &amp; Deploy（5ステップ直列）</text>
+  <!-- Step 1 -->
+  <rect x="10" y="55" width="130" height="70" rx="5" class="arch"/>
+  <text x="75" y="73" text-anchor="middle" class="bt">Step.1</text>
+  <text x="75" y="86" text-anchor="middle" class="bs">AI Agent</text>
+  <text x="75" y="99" text-anchor="middle" class="bs">構成設計</text>
+  <text x="75" y="112" text-anchor="middle" class="bs">Arch-AIAgentDesign</text>
+  <line x1="140" y1="90" x2="163" y2="90" class="ln"/>
+  <!-- Step 2.1 -->
+  <rect x="163" y="55" width="130" height="70" rx="5" class="arch"/>
+  <text x="228" y="73" text-anchor="middle" class="bt">Step.2.1</text>
+  <text x="228" y="86" text-anchor="middle" class="bs">テスト仕様書</text>
+  <text x="228" y="99" text-anchor="middle" class="bs">（TDD RED）</text>
+  <text x="228" y="112" text-anchor="middle" class="bs">Arch-TDD-TestSpec</text>
+  <line x1="293" y1="90" x2="316" y2="90" class="ln"/>
+  <!-- Step 2.2 -->
+  <rect x="316" y="55" width="138" height="70" rx="5" class="dev"/>
+  <text x="385" y="73" text-anchor="middle" class="bt">Step.2.2</text>
+  <text x="385" y="86" text-anchor="middle" class="bs">テストコード生成</text>
+  <text x="385" y="99" text-anchor="middle" class="bs">（TDD RED）</text>
+  <text x="385" y="112" text-anchor="middle" class="bs">AgentTestCoding</text>
+  <line x1="454" y1="90" x2="477" y2="90" class="ln"/>
+  <!-- Step 2.3 -->
+  <rect x="477" y="55" width="138" height="70" rx="5" class="dev"/>
+  <text x="546" y="73" text-anchor="middle" class="bt">Step.2.3</text>
+  <text x="546" y="86" text-anchor="middle" class="bs">AI Agent 実装</text>
+  <text x="546" y="99" text-anchor="middle" class="bs">（TDD GREEN）</text>
+  <text x="546" y="112" text-anchor="middle" class="bs">AgentCoding</text>
+  <line x1="615" y1="90" x2="638" y2="90" class="ln"/>
+  <!-- Step 3 -->
+  <rect x="638" y="55" width="120" height="70" rx="5" class="dev"/>
+  <text x="698" y="73" text-anchor="middle" class="bt">Step.3</text>
+  <text x="698" y="86" text-anchor="middle" class="bs">AI Agent</text>
+  <text x="698" y="99" text-anchor="middle" class="bs">Deploy</text>
+  <text x="698" y="112" text-anchor="middle" class="bs">AgentDeploy</text>
+  <line x1="758" y1="90" x2="778" y2="90" class="ln"/>
+  <!-- Output -->
+  <rect x="778" y="68" width="108" height="46" rx="5" class="out"/>
+  <text x="832" y="86" text-anchor="middle" class="bt" style="fill:white;">成果物</text>
+  <text x="832" y="99" text-anchor="middle" class="bs" style="fill:white;">Azure AI Foundry</text>
+  <text x="832" y="112" text-anchor="middle" class="bs" style="fill:white;">Agent</text>
+  <!-- Legend -->
+  <rect x="10" y="175" width="14" height="14" rx="3" class="arch"/>
+  <text x="30" y="186" style="font-size:11px;fill:#333;">Arch Agent（設計）</text>
+  <rect x="160" y="175" width="14" height="14" rx="3" class="dev"/>
+  <text x="180" y="186" style="font-size:11px;fill:#333;">Dev Agent（実装/Deploy）</text>
+  <rect x="360" y="175" width="14" height="14" rx="3" class="out"/>
+  <text x="380" y="186" style="font-size:11px;fill:#333;">成果物（出力）</text>
+</svg>

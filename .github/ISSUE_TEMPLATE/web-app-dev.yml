@@ -1,30 +1,29 @@
-name: "App Dev Microservice"
-description: "Issue からマイクロサービス開発ワークフロー (Step.1〜4) を自動起動します"
-title: "[App Dev Microservice] "
+name: "Web App Dev & Deploy"
+description: "Issue から Web アプリ開発・デプロイワークフロー (Step.1〜4) を自動起動します"
+title: "[Web App Dev] "
 labels:
-  - "auto-app-dev-microservice"
+  - "auto-app-dev-microservice-web"
 body:
   - type: markdown
     attributes:
       value: |
-        ## App Dev Microservice
+        ## Web App Dev & Deploy
         このフォームから Issue を作成すると、自動で以下の開発タスクが
         Sub-issue として生成され、Copilot cloud agent が順次実行します。
 
         **本ワークフローは 1 度の実行で複数のアプリケーション (APP-ID) を対象とできます（カンマ区切り）。**
 
         ### 前提条件
-        - `users-guide/08-ai-agent.md` がリポジトリ内に存在していること（Step.2.6 で使用）
-        - アプリケーション設計ワークフロー（App Detail Design / AAD）が完了し、以下のドキュメントが存在していること:
+        - アプリケーション設計ワークフロー（Web App Design / AAD-WEB）が完了し、以下のドキュメントが存在していること:
           - `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`
           - `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`
           - `docs/catalog/use-case-catalog.md`
           - `docs/screen/`, `docs/services/` 配下の定義書
           - `src/data/sample-data.json`
           - `docs/catalog/test-strategy.md`（設計ワークフローの TDD テスト戦略書生成ステップで作成済み）
-          - `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。サービス別テスト仕様書）
-          - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 の成果物。画面別テスト仕様書）
-          - `docs/catalog/app-catalog.md`（アプリケーション一覧。App Architecture Design の成果物。存在しない場合はアプリケーション名を直接入力可）
+          - `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー Step.2.3 の成果物。サービス別テスト仕様書）
+          - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー Step.2.3 の成果物。画面別テスト仕様書）
+          - `docs/catalog/app-catalog.md`（アプリケーション一覧。Architecture Design の成果物。存在しない場合はアプリケーション名を直接入力可）
         - リポジトリに以下のシークレットが設定されていること:
           - `COPILOT_PAT`
           - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、`AZURE_STATIC_WEB_APPS_API_TOKEN` の GitHub Secret への手動設定は不要
@@ -33,20 +32,22 @@ body:
         | ステップ | 内容 | サブステップ |
         |---------|------|------------|
         | **Step.1** | データ | 1.1 Azure データストア選定 → 1.2 Azure データサービス Deploy |
-        | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → **2.3TC テストコード生成 (TDD RED)** → 2.4 サービスコード実装 (TDD GREEN) → 2.5 Azure Compute Deploy → 2.6 AI Agent 構成設計 → **2.7T AI Agent テスト仕様書 (TDD RED)** → **2.7TC AI Agent テストコード生成 (TDD RED)** → **2.7 AI Agent 実装 (TDD GREEN)** → **2.8 AI Agent Deploy** |
-        | **Step.3** | UI 作成 | **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
+        | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → **2.3T テスト仕様書 (TDD RED)** → **2.3TC テストコード生成 (TDD RED)** → 2.4 サービスコード実装 (TDD GREEN) → 2.5 Azure Compute Deploy |
+        | **Step.3** | UI 作成 | **3.0T UI テスト仕様書 (TDD RED)** → **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
         | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（並列実行） |
 
+        ℹ️ Step.2 のサブステップである Step.2.3T / Step.2.3TC は Dev フェーズで追加生成する TDD RED 成果物です。設計フェーズ（Web App Design Step.2.3）で作成したテスト仕様書を入力として利用します。
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
+
   - type: input
     id: app_ids
     attributes:
       label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
       description: |
         `docs/catalog/app-catalog.md` のアプリ一覧（アーキタイプ）概要セクションから APP-ID を入力してください（カンマ区切りで複数指定可）。
-        `docs/catalog/app-catalog.md` が存在しない場合は、アプリケーションの名称をそのまま入力してください（入力した名称が ID として扱われます）。
-        未指定の場合: 各 Step の Copilot Agent が `docs/catalog/app-catalog.md` を参照し、全アプリケーションを対象に実行します。
+        指定した場合: 指定 APP-ID のうち `Webフロントエンド + クラウド` の推薦アーキテクチャのもののみ対象になります。
+        未指定の場合: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `Webフロントエンド + クラウド` の APP-ID が自動選択されます。
       placeholder: "例: APP-01 または APP-01, APP-02, APP-03"
     validations:
       required: false
@@ -57,7 +58,6 @@ body:
       label: "対象ブランチ"
       description: "コード/ドキュメントをコミットするブランチ名を入力してください"
       placeholder: "例: main, develop, feature/dev-v2"
-      value: "main"
     validations:
       required: true
 
@@ -70,15 +70,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: usecase_id
-    attributes:
-      label: "ユースケースID"
-      description: "AI Agent 設計（Step.2.6）で使用するユースケースIDを入力してください。Agent 設計書は `docs/agent/` 配下に配置されます（設計フェーズ（AAD Step.8）で作成済みの場合は不要）。未入力の場合、Step.2.6 はリポジトリ内のユースケースを自動探索します。"
-      placeholder: "例: UC-001"
-    validations:
-      required: false
-
   - type: checkboxes
     id: steps
     attributes:
@@ -88,15 +79,14 @@ body:
         **未選択の場合は全ステップを実行します。**
         **注意**: 依存関係があるため、後段のステップには前段の成果物が必要です。
         前段をスキップする場合は、対応するドキュメント／リソースが既に存在していることを確認してください。
-        ⚠️ **TDD 警告**: Step.2 をスキップすると、TDD RED フェーズ（テストコード生成）が未実施のままサービス実装（Step.2.4）が開始されます。
-        テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（AAD Step.7.3）で生成済みであることを前提とします。Step.2 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
-        同様に、AI Agent 実装（Step.2.7）をスキップする場合は、`test/agent/` 配下にテストコードが既に存在していることを確認してください。
-        Step.3 をスキップすると、UI テストコード生成（Step.3.0TC）が未実施のまま UI 実装をスキップすることになります。
+        ⚠️ **TDD 警告**: Step.2 をスキップすると、TDD RED フェーズ（テスト仕様書・テストコード生成）が未実施のままサービス実装（Step.2.4）が開始されます。
+        テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（Web App Design Step.2.3）で生成済みであることを前提とします。Step.2 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
+        Step.3 をスキップすると、UI テスト仕様書・テストコード生成（Step.3.0T / Step.3.0TC）が未実施のまま UI 実装をスキップすることになります。
         Step.3 をスキップする場合は、`docs/test-specs/` と `test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
       options:
         - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
-        - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.8 + Step.2.3TC, Step.2.7T, Step.2.7TC)"
-        - label: "Step.3 — UI 作成 (Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy)"
+        - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.5 + Step.2.3T, Step.2.3TC)"
+        - label: "Step.3 — UI 作成 (Step.3.0T, Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy)"
         - label: "Step.4 — アーキテクチャレビュー (Step.4.1 WAF レビュー / Step.4.2 整合性チェック)"
 
   - type: dropdown
@@ -109,6 +99,7 @@ body:
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"
+        - "gpt-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"
@@ -138,6 +129,61 @@ body:
         デフォルト（チェックなし）では質問票は作成されません。
       options:
         - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: tdd_max_retries
+    attributes:
+      label: "TDD GREEN リトライ最大回数"
+      description: |
+        TDD GREEN フェーズでテストが全 PASS にならない場合、
+        実装を修正しながら最大この回数まで再試行します。
+        上限を超えた場合は blocked ラベルを付与して停止します。
+      options:
+        - "3"
+        - "5 (デフォルト)"
+        - "7"
+        - "10"
+      default: 1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
 
   - type: checkboxes
     id: enable_auto_merge

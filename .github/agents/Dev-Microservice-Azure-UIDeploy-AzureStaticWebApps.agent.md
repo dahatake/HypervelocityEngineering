@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps
 description: Azure Static Web Apps へのWebデプロイ（Azure/static-web-apps-deploy@v1（Microsoft 公式）使用）と、GitHub Actionsによる継続的デリバリー（CD）構築を、リポジトリ標準（copilot-instructions.md / skills）に従って実施する。AC 検証による完了判定を含む。
 tools: ["*"]
@@ -61,7 +61,8 @@ tools: ["*"]
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

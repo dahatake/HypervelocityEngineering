@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from dag_executor import DAGExecutor, StepResult
+from dag_planner import build_dag_plan
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +273,30 @@ class TestDAGExecutorFailure(unittest.TestCase):
         # Step.2 は実行されない（Step.1 が failed なので依存解決されない）
         self.assertNotIn("2", executed)
 
+    def test_plan_execution_records_blocked_downstream_reason(self) -> None:
+        """DAGPlan 経路では失敗後続を reason 付き blocked として結果に残す。"""
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+        ])
+        plan = build_dag_plan(wf, {"1", "2"})
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return step_id != "1"
+
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2"},
+            dag_plan=plan,
+        )
+        result = _run(executor.execute())
+
+        self.assertIn("1", executor.failed)
+        self.assertIn("2", executor.blocked)
+        self.assertEqual(result["2"].state, "blocked")
+        self.assertEqual(result["2"].reason, "blocked_by_failed_dependency")
+
     def test_step_result_has_elapsed(self) -> None:
         """StepResult に elapsed が設定されることを確認。"""
         wf = _WorkflowDef([
@@ -408,6 +433,47 @@ class TestDAGExecutorComputeWaves(unittest.TestCase):
         self.assertIn("1", all_ids)
         self.assertIn("3", all_ids)
         self.assertNotIn("2", all_ids)
+
+    def test_compute_waves_uses_dag_plan_snapshot(self) -> None:
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+            _StepDef(id="3", title="Step 3", depends_on=["2"]),
+        ])
+        plan = build_dag_plan(wf, {"1", "3"})
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=lambda *a, **kw: None,
+            active_step_ids={"1", "3"},
+            dag_plan=plan,
+        )
+
+        waves = executor.compute_waves()
+
+        self.assertEqual([[s.id for s in wave] for wave in waves], [["1"], ["3"]])
+
+
+class TestDAGExecutorPlanPrompts(unittest.TestCase):
+    def test_plan_prompt_is_passed_to_runner(self) -> None:
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+        ])
+        plan = build_dag_plan(wf, {"1"}, step_prompts={"1": "planned prompt"})
+        captured: Dict[str, str] = {}
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            captured[step_id] = prompt
+            return True
+
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            dag_plan=plan,
+        )
+        _run(executor.execute())
+
+        self.assertEqual(captured["1"], "planned prompt")
 
 
 if __name__ == "__main__":

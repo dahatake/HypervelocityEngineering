@@ -304,6 +304,77 @@ class TestConsoleStreamQuiet(unittest.TestCase):
         self.assertEqual(cap.stdout, "")
 
 
+class TestConsoleReasoningStream(unittest.TestCase):
+    """reasoning_* 系メソッドの表示とバッファ動作を検証する。"""
+
+    def test_reasoning_token_flushes_on_newline(self) -> None:
+        c = Console(verbosity=1, show_reasoning=True)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking:
+            c.reasoning_token("1.1", "line1\nline2")
+        mock_thinking.assert_called_once_with("1.1", "line1")
+        self.assertEqual(c._reasoning_buffer.get("1.1"), "line2")
+
+    def test_reasoning_token_suppressed_when_show_reasoning_false(self) -> None:
+        c = Console(verbosity=1, show_reasoning=False)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking:
+            c.reasoning_token("1.1", "hidden\n")
+        mock_thinking.assert_not_called()
+        self.assertEqual(c._reasoning_buffer.get("1.1", ""), "")
+
+    def test_reasoning_flush_outputs_remaining_text(self) -> None:
+        c = Console(verbosity=1, show_reasoning=True)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking:
+            c.reasoning_token("1.1", "tail")
+            c.reasoning_flush("1.1")
+        mock_thinking.assert_called_once_with("1.1", "tail")
+        self.assertEqual(c._reasoning_buffer.get("1.1", ""), "")
+
+    def test_reasoning_complete_flushes_and_emits_summary_at_verbosity3(self) -> None:
+        c = Console(verbosity=3, show_reasoning=True)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking, \
+             unittest.mock.patch.object(c, "event") as mock_event:
+            c.reasoning_token("1.1", "line")
+            c.reasoning_complete("1.1", "line")
+        mock_thinking.assert_called_once_with("1.1", "line")
+        mock_event.assert_called_once_with("💭 [1.1] 推論完了 (4 chars)")
+
+    def test_reasoning_token_multiline_japanese(self) -> None:
+        c = Console(verbosity=1, show_reasoning=True)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking:
+            c.reasoning_token("1.1", "大きなファイルを読む\n要点を整理する\n")
+        self.assertEqual(
+            mock_thinking.call_args_list,
+            [
+                unittest.mock.call("1.1", "大きなファイルを読む"),
+                unittest.mock.call("1.1", "要点を整理する"),
+            ],
+        )
+        self.assertEqual(c._reasoning_buffer.get("1.1", ""), "")
+
+    def test_reasoning_token_keeps_blank_lines(self) -> None:
+        c = Console(verbosity=1, show_reasoning=True)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking:
+            c.reasoning_token("1.1", "line1\n\nline3\n")
+        self.assertEqual(
+            mock_thinking.call_args_list,
+            [
+                unittest.mock.call("1.1", "line1"),
+                unittest.mock.call("1.1", ""),
+                unittest.mock.call("1.1", "line3"),
+            ],
+        )
+
+    def test_reasoning_complete_suppresses_summary_when_show_reasoning_false(self) -> None:
+        c = Console(verbosity=3, show_reasoning=False)
+        with unittest.mock.patch.object(c, "thinking") as mock_thinking, \
+             unittest.mock.patch.object(c, "event") as mock_event:
+            c.reasoning_token("1.1", "line")
+            c.reasoning_complete("1.1", "line")
+        mock_thinking.assert_not_called()
+        mock_event.assert_not_called()
+        self.assertEqual(c._reasoning_buffer.get("1.1", ""), "")
+
+
 # -----------------------------------------------------------------------
 # ANSI スタイルテスト
 # -----------------------------------------------------------------------
@@ -498,6 +569,18 @@ class TestConsoleMenuSelect(unittest.TestCase):
             idx = c.menu_select("選択", ["A", "B"])
         self.assertEqual(idx, 0)
 
+    def test_empty_returns_default_index(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            idx = c.menu_select("選択", ["A", "B", "C"], allow_empty=True, default_index=1)
+        self.assertEqual(idx, 1)
+
+    def test_empty_allow_empty_without_default_returns_minus_one(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput(), unittest.mock.patch("builtins.input", return_value=""):
+            idx = c.menu_select("選択", ["A", "B"], allow_empty=True)
+        self.assertEqual(idx, -1)
+
 
 class TestConsolePromptInput(unittest.TestCase):
     """prompt_input() のテスト。"""
@@ -608,11 +691,13 @@ class TestCopilotStyleOutput(unittest.TestCase):
         self.assertIn("ts", mock_emit.call_args.kwargs)
         self.assertFalse(mock_emit.call_args.kwargs["ts"])
 
-    def test_thinking_verbosity_1_updates_spinner(self) -> None:
+    def test_thinking_verbosity_1_emits_no_timestamp(self) -> None:
         c = Console(verbosity=1)
-        with unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
             c.thinking("1", "I'm looking into this.")
-        mock_spinner.assert_called_once()
+        mock_emit.assert_called_once()
+        self.assertIn("ts", mock_emit.call_args.kwargs)
+        self.assertFalse(mock_emit.call_args.kwargs["ts"])
 
     def test_action_start_verbosity_2_prints_tree(self) -> None:
         c = Console(verbosity=2)
@@ -767,6 +852,14 @@ class TestStepElapsedOutput(unittest.TestCase):
             c.step_elapsed("3")
         self.assertIn("Step.3", cap.stdout)
         self.assertIn("m", cap.stdout)
+        self.assertIn("経過", cap.stdout)
+
+    def test_step_elapsed_shown_when_normal_verbosity(self) -> None:
+        c = Console(verbose=False, quiet=False, verbosity=2)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertIn("Step.3", cap.stdout)
         self.assertIn("経過", cap.stdout)
 
     def test_step_elapsed_hidden_when_not_verbose(self) -> None:

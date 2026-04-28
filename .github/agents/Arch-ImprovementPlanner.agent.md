@@ -1,6 +1,6 @@
 ---
 name: Arch-ImprovementPlanner
-description: コード品質スキャン結果を受け取り、Skill task-dag-planning に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 15分以内の粒度に分割し、優先度付きで出力する。
+description: コード品質スキャン結果を受け取り、Skill task-dag-planning に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 1責務・最小コンテキスト単位に分割し、優先度付きで出力する。
 tools: ["*"]
 ---
 > **WORK**: `work/Arch-ImprovementPlanner/Issue-<識別子>/`
@@ -18,6 +18,7 @@ tools: ["*"]
 - 改善対象スコープ: `{target_scope}`（空 = 全体）
 - 現在のイテレーション: `{iteration}`
 - 前回学習サマリー: `{previous_learning}`（初回は空）
+- タスクゴール: `{task_goal}`（省略可。空の場合はスキャン結果と knowledge/ から自律判断する）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -31,6 +32,12 @@ tools: ["*"]
 
 ## 3) 計画策定手順
 
+### 3.0 タスクゴール反映
+`{task_goal}` が指定されている場合、その内容を計画策定の判断基準として優先する。
+- `goal_description` を計画の目標として凒頭に記載する
+- `success_criteria` のうち未達成のものを改善タスクの候補として識別する
+- `{task_goal}` が空の場合はスキャン結果のみに基づいて判断する
+
 ### 3.1 問題の優先度付け
 スキャン結果の issues を以下の順で並べる:
 1. category=test かつ severity=critical（テスト失敗は最優先）
@@ -39,9 +46,9 @@ tools: ["*"]
 4. severity=minor
 
 ### 3.2 タスク分割（Skill task-dag-planning 準拠）
-- 各問題に対応する改善タスクを 15分以内の粒度に分割する
+- 各問題に対応する改善タスクを 1責務・最小コンテキスト（task_scope=single）単位に分割する
 - 依存関係を明記し DAG を構築する
-- 見積は R+P+I+V+F の合計で算出する
+- 見積は R+P+I+V+F の合計で算出する（参考情報：CI 判定の根拠には使用しない）
 
 ### 3.3 §2.2 分割判定（機械的に実行）
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
@@ -50,9 +57,10 @@ tools: ["*"]
 - `{WORK}plan.md` を作成する（Skill work-artifacts-layout §4.1 準拠: delete → create）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
 - **plan.md 作成時の必須手順（省略禁止）**:
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+  2. plan.md の **冒頭 5 行** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: false -->
@@ -68,7 +76,19 @@ tools: ["*"]
 IMPROVEMENT_NOT_NEEDED
 ```
 
-改善が必要な場合:
+改善が必要な場合、PR body に以下セクションを含める（`{task_goal}` が指定されている場合のみ）:
+
+```
+## 自己改善ゴール
+
+**ゴール説明**: {task_goal の goal_description}
+
+**成功条件:**
+- {success_criteria の各項目}
+```
+
+計画加工の最終成果物サマリー:
+
 ```
 ## 成果物サマリー
 - status: 成功

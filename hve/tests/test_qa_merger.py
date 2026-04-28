@@ -318,6 +318,19 @@ class TestFindQaFilesExcludesConsolidated(unittest.TestCase):
             self.assertIn("ccc.md", names)
             self.assertNotIn("bbb-consolidated.md", names)
 
+    def test_excludes_workiq_reports(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            qa_dir = Path(tmpdir)
+            (qa_dir / "aaa.md").write_text("content", encoding="utf-8")
+            (qa_dir / "run-1-1-workiq-qa.md").write_text("content", encoding="utf-8")
+            (qa_dir / "run-1-1-workiq-draft.md").write_text("content", encoding="utf-8")
+
+            files = QAMerger.find_qa_files(qa_dir)
+            names = [f.name for f in files]
+            self.assertIn("aaa.md", names)
+            self.assertNotIn("run-1-1-workiq-qa.md", names)
+            self.assertNotIn("run-1-1-workiq-draft.md", names)
+
     def test_empty_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             files = QAMerger.find_qa_files(Path(tmpdir))
@@ -611,6 +624,18 @@ _STRUCTURED_CONTENT = """\
 - 未回答のまま進めた場合の影響: 実装方針が未決
 """
 
+_AQOD_STRUCTURED_CONTENT = """\
+[Q01]
+- 対象ドキュメント: original-docs/spec.md
+- 該当箇所: 「代表SKUの算出条件が明記されていない」
+- 問題種別: 不明瞭
+- 重大度: major
+- 質問内容: 代表SKUの算出条件はどのドキュメントを正としますか。
+- 未回答時の既定値候補: original-docs/spec.md を暫定的な正とする
+- 既定値候補の理由: 他に明示された根拠がないため
+- 未回答のまま進めた場合の影響: 算出結果の解釈が分岐する
+"""
+
 _STRUCTURED_NUMERIC_LABELS = """\
 [Q01]
 - 質問文: 数字ラベルテスト
@@ -708,6 +733,29 @@ class TestStructuredQuestionParsing(unittest.TestCase):
 
     def test_q2_priority(self):
         self.assertEqual(self.doc.questions[1].priority, "高")
+
+
+class TestAqodStructuredQuestionParsing(unittest.TestCase):
+    """AQOD 専用フィールド名（質問内容/問題種別/重大度）のパーステスト"""
+
+    def setUp(self):
+        self.doc = QAMerger.parse_qa_content(_AQOD_STRUCTURED_CONTENT)
+
+    def test_question_content_alias_parsed(self):
+        self.assertEqual(len(self.doc.questions), 1)
+        self.assertIn("代表SKU", self.doc.questions[0].question)
+
+    def test_issue_type_maps_to_category(self):
+        self.assertEqual(self.doc.questions[0].category, "不明瞭")
+
+    def test_severity_maps_to_priority(self):
+        self.assertEqual(self.doc.questions[0].priority, "major")
+
+    def test_default_reason_and_impact_parsed(self):
+        q = self.doc.questions[0]
+        self.assertIn("暫定的な正", q.default_answer)
+        self.assertIn("根拠", q.reason)
+        self.assertIn("解釈", q.impact_if_unanswered)
 
 
 class TestStructuredNumericLabelConversion(unittest.TestCase):

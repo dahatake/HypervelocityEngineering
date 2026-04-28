@@ -1,0 +1,195 @@
+name: "AI Agent Dev & Deploy"
+description: "Issue から AI Agent 実装・デプロイワークフロー (Step.1〜Step.3) を自動起動します"
+title: "[AI Agent Dev] "
+labels:
+  - "auto-ai-agent-dev"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## AI Agent Dev & Deploy
+
+        | ステップ | 内容 |
+        |---------|------|
+        | **Step.1** | AI Agent 構成設計 |
+        | **Step.2.1** | AI Agent テスト仕様書 (TDD RED) |
+        | **Step.2.2** | AI Agent テストコード生成 (TDD RED) |
+        | **Step.2.3** | AI Agent 実装 (TDD GREEN) |
+        | **Step.3** | AI Agent Deploy |
+
+        ⚠️ **前提条件**:
+        - AI Agent Design (AAG) が完了していること（`docs/agent/*.md`）
+        - Web App Dev (ASDW-WEB) の Azure Compute Deploy が完了していること（Azure リソースがデプロイ済み）
+        - `users-guide/08-ai-agent.md`
+
+        ⚠️ **ラベル注意**: `auto-ai-agent-dev` ラベルが未作成の場合は、先に Setup Labels Issue テンプレート（`.github/ISSUE_TEMPLATE/setup-labels.yml`）で Issue を作成して実行してください。
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21）が存在する場合、参照されます。
+
+  - type: input
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
+      description: |
+        対象とする APP-ID をカンマ区切りで指定してください。
+        未指定の場合は全アプリケーションを対象に実行します。
+      placeholder: "例: APP-01, APP-02"
+    validations:
+      required: false
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "コード/ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/ai-agent-dev"
+      value: "main"
+    validations:
+      required: true
+
+  - type: input
+    id: resource_group
+    attributes:
+      label: "リソースグループ名"
+      description: "Azure のリソースグループ名を入力してください。各ステップの Azure CLI スクリプトおよび Sub-issue のタスク指示に埋め込まれます。"
+      placeholder: "例: rg-royalty-service-dev"
+    validations:
+      required: true
+
+  - type: input
+    id: usecase_id
+    attributes:
+      label: "ユースケースID（任意）"
+      description: "AI Agent 実装で使用するユースケース ID を入力してください。"
+      placeholder: "例: UC-001"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: 全 Step が実行されます。**
+        📋 **依存関係**: Step.1 → Step.2 → Step.3
+      options:
+        - label: "Step.1 — AI Agent 構成設計"
+        - label: "Step.2 — AI Agent 実装 (Step.2.1 テスト仕様書 / Step.2.2 テストコード生成 / Step.2.3 実装)"
+        - label: "Step.3 — AI Agent Deploy ※ Step.2 が必須"
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      description: |
+        Copilot cloud agent が使用する AI モデルを選択してください。
+        「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
+        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+      options:
+        - "Auto"
+        - "gpt-5.5"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "claude-sonnet-4.6"
+        - "gpt-5.4"
+        - "gpt-5.3-codex"
+        - "gemini-2.5-pro"
+      default: 0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        デフォルト（チェックなし）では質問票は作成されません。
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: tdd_max_retries
+    attributes:
+      label: "TDD GREEN リトライ最大回数"
+      description: |
+        TDD GREEN フェーズでテストが全 PASS にならない場合、
+        実装を修正しながら最大この回数まで再試行します。
+        上限を超えた場合は blocked ラベルを付与して停止します。
+      options:
+        - "3"
+        - "5 (デフォルト)"
+        - "7"
+        - "10"
+      default: 1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step の Sub-issue にも引用されます。"
+      placeholder: "例: デプロイ先は Japan East。AI Agent は FAQ + ナレッジ検索対応。"
+    validations:
+      required: false

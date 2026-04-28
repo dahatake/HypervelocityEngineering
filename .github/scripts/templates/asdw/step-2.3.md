@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/asdw-web/step-2.3.md に移動しました。 -->
 {root_ref}
 ## 目的
 `docs/azure/azure-services-additional.md` を根拠に、追加Azureサービスを Azure CLI で冪等に作成する（APP-ID 指定時はスコープ内のサービスのみ）。
@@ -30,4 +31,4 @@
 ## 完了条件
 - 出力ファイルが作成されている
 - 検証スクリプトで全項目 PASS であること
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

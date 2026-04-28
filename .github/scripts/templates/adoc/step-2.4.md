@@ -22,4 +22,4 @@ CI/CD ファイルをファイル単位で要約する。
 
 ## 完了条件
 - 対象ファイルのサマリーが `docs-generated/files/` に作成されている
-- 完了時に自身に `adoc:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

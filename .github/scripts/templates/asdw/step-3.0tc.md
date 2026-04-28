@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/asdw-web/step-3.0TC.md に移動しました。 -->
 {root_ref}
 ## 目的
 TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）から UI テストコードのみを生成する（APP-ID 指定時はスコープ内の画面のみ）。
@@ -30,4 +31,4 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 ## 完了条件
 - `test/ui/` 配下に UI テストコードが生成されている
 - Jest テストで全テストが FAIL（RED 状態）であることが確認されている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

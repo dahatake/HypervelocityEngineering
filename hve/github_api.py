@@ -21,6 +21,7 @@ __all__ = [
     "GitHubAPIError",
     "api_call",
     "create_issue",
+    "add_labels",
     "link_sub_issue",
     "post_comment",
     "create_pull_request",
@@ -232,6 +233,24 @@ def create_issue(
         payload["assignees"] = list(assignees)
     resp = api_call("POST", url, data=payload, token=token)
     return (int(resp["number"]), int(resp["id"]))
+
+
+def add_labels(
+    issue_num: int,
+    labels: list,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> bool:
+    """Issue にラベルを付与する。"""
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues/{issue_num}/labels"
+    try:
+        api_call("POST", url, data={"labels": list(labels)}, token=token)
+    except GitHubAPIError as exc:
+        print(f"WARNING: add_labels 失敗: {exc}", flush=True)
+        return False
+    time.sleep(1)
+    return True
 
 
 def link_sub_issue(

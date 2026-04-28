@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aas/step-4.md に移動しました。 -->
 {root_ref}
 ## 目的
 ドメイン分析結果とサービス一覧を根拠に、データモデルを設計する。
@@ -22,4 +23,4 @@
 
 ## 完了条件
 - `docs/catalog/data-model.md` と `src/data/sample-data.json` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

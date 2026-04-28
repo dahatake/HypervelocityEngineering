@@ -1,4 +1,5 @@
-<!-- estimate_total: 10 -->
+<!-- task_scope: single -->
+<!-- context_size: medium -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
 <!-- implementation_files: false -->
@@ -12,14 +13,13 @@
 ## DAG
 
 ```
-R(調査:2min) → P(計画:3min) → I(実装:3min) → V(検証:1min) → F(仕上げ:1min)
+S1(調査:2min) → S2(実装:3min) → S3(検証:1min)
 ```
 
 ## 分割判定
 
-- 見積合計: 10 分
-- 15分以下か: YES
-- 不確実性: 低
+- task_scope: single
+- context_size: medium（参照ファイル: 5件）
 - 判定結果: PROCEED
-- 判定根拠: Skill task-dag-planning §2.2（.github/skills/planning/task-dag-planning/SKILL.md）の条件「見積合計 > 15分」に非該当
-- 実装に進む理由: 見積 10分 ≤ 15分、不確実性: 低
+- 判定根拠: task_scope=single かつ context_size=medium → PROCEED（上記いずれも非該当）
+- 実装に進む理由: task_scope=single、context_size=medium

@@ -1,13 +1,13 @@
-name: AAD Orchestrator
+name: "AAD-WEB: Web App Design (Reusable)"
 
-# auto-app-detail-design ラベル付き Issue の opened/labeled/closed イベントで起動
+# auto-app-detail-design-web 系ラベル付き Issue の opened/labeled/closed イベントで起動
 #
 # 設計メモ:
 #   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
 #     発火せず issues.opened のみを発火する（GitHub Community Discussion #26753）。
 #   - そのため opened イベントも監視し、ジョブレベル if で対象ラベルを持つ Issue のみ実行する。
 #   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
-#   - 既存の冪等化ガード（aad:initialized チェック）により、opened + labeled が同時発火しても安全。
+#   - 既存の冪等化ガード（aad-web:initialized チェック）により、opened + labeled が同時発火しても安全。
 on:
   workflow_call:
     inputs:
@@ -33,14 +33,14 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
     concurrency:
-      group: aad-orchestrator-${{ inputs.issue_number }}
+      group: aad-web-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -49,7 +49,7 @@ jobs:
 
     steps:
       # ----------------------------------------------------------------
-      # 1. 実行ゲート: auto-app-detail-design ラベルあり + aad:initialized なし
+      # 1. 実行ゲート: auto-app-detail-design-web 系ラベルあり + aad-web:initialized なし
       # ----------------------------------------------------------------
       - name: 実行ゲートチェック
         id: gate
@@ -76,38 +76,38 @@ jobs:
           echo "リアルタイムラベル: ${ISSUE_LABELS}"
 
           if [[ "${EVENT_ACTION}" == "labeled" ]]; then
-            if [[ "${LABEL_NAME}" == "aad:done" ]]; then
-              if [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]]; then
-                echo "Sub Issue ([AAD] タイトル) への aad:done 付与を検知: state_transition に進みます。"
+            if [[ "${LABEL_NAME}" == "aad-web:done" ]]; then
+              if [[ "${ISSUE_TITLE}" =~ ^\[AAD-WEB\] ]]; then
+                echo "Sub Issue ([AAD-WEB] タイトル) への aad-web:done 付与を検知: state_transition に進みます。"
                 echo "mode=state_transition" >> "$GITHUB_OUTPUT"
                 echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
                 exit 0
               else
-                echo "Root Issue への aad:done 付与を検知: ワークフローはスキップします。"
+                echo "Root Issue への aad-web:done 付与を検知: ワークフローはスキップします。"
                 echo "mode=skip" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            elif [[ "${LABEL_NAME}" == "auto-app-detail-design" ]]; then
-              echo "auto-app-detail-design labeled イベント: initialize ゲートチェックへ進みます。"
+            elif [[ "${LABEL_NAME}" == "auto-app-detail-design" || "${LABEL_NAME}" == "auto-app-detail-design-web" ]]; then
+              echo "auto-app-detail-design-web 系ラベルの labeled イベント: initialize ゲートチェックへ進みます。"
             else
-              echo "aad:done / auto-app-detail-design 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "aad-web:done / auto-app-detail-design 系以外の labeled イベント（${LABEL_NAME}）。スキップ。"
               echo "mode=skip" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
 
           if [[ "${EVENT_ACTION}" == "closed" ]]; then
-            if [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]]; then
+            if [[ "${ISSUE_TITLE}" =~ ^\[AAD-WEB\] ]]; then
               has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          print('true' if 'aad:done' in labels else 'false')
+          print('true' if 'aad-web:done' in labels else 'false')
           PY
               )
               if [[ "${has_done}" == "true" ]]; then
-                # aad:done labeled 時は Issue 未クローズのため自動クローズ判定が失敗する。
+                # aad-web:done labeled 時は Issue 未クローズのため自動クローズ判定が失敗する。
                 # closed イベントで再度コンテナ自動クローズ判定のみ実行する。
-                echo "aad:done ラベル済み + closed イベント: コンテナ自動クローズ判定のみ実行。"
+                echo "aad-web:done ラベル済み + closed イベント: コンテナ自動クローズ判定のみ実行。"
                 echo "mode=container_close_check" >> "$GITHUB_OUTPUT"
                 echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
                 exit 0
@@ -116,14 +116,14 @@ jobs:
               echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
               exit 0
             else
-              echo "closed イベント: [AAD] Sub Issue 以外のためスキップ。"
+              echo "closed イベント: [AAD-WEB] Sub Issue 以外のためスキップ。"
               echo "mode=skip" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           fi
 
-          if [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]]; then
-            echo "[AAD] Sub Issue のため初期化対象外。スキップ。"
+          if [[ "${ISSUE_TITLE}" =~ ^\[AAD-WEB\] ]]; then
+            echo "[AAD-WEB] Sub Issue のため初期化対象外。スキップ。"
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -131,12 +131,13 @@ jobs:
           has_aad=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          print('true' if 'auto-app-detail-design' in labels else 'false')
+          triggers = {'auto-app-detail-design', 'auto-app-detail-design-web', 'auto-app-detail-design'}
+          print('true' if any(l in triggers for l in labels) else 'false')
           PY
           )
 
           if [[ "${has_aad}" != "true" ]]; then
-            echo "auto-app-detail-design ラベルなし。スキップ。"
+            echo "auto-app-detail-design-web 系ラベルなし。スキップ。"
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -144,13 +145,13 @@ jobs:
           has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          skip_labels = {'aad:initialized', 'aad:ready', 'aad:running', 'aad:done', 'aad:blocked'}
+          skip_labels = {'aad-web:initialized', 'aad-web:ready', 'aad-web:running', 'aad-web:done', 'aad-web:blocked'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
           )
 
           if [[ "${has_init}" == "true" ]]; then
-            echo "aad:* ラベル済み。スキップ（冪等化）。"
+            echo "aad-web:* ラベル済み。スキップ（冪等化）。"
             echo "mode=skip" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -197,47 +198,48 @@ jobs:
             sleep 1
           }
 
-          create_label "auto-app-detail-design"   "0E8A16" "run app detail design workflow (application detail design document generation)"
-          create_label "aad:initialized"   "C5DEF5" ""
-          create_label "aad:ready"         "0075CA" ""
-          create_label "aad:running"       "E4E669" ""
-          create_label "aad:done"          "0E8A16" ""
-          create_label "aad:blocked"       "D73A4A" ""
+          create_label "auto-app-detail-design-web"   "1D76DB" "Web App Design ワークフロートリガー"
+                    create_label "auto-app-detail-design"       "0E8A16" "旧 AAD トリガー（後方互換エイリアス）"
+          create_label "aad-web:initialized"   "C5DEF5" ""
+          create_label "aad-web:ready"         "0075CA" ""
+          create_label "aad-web:running"       "E4E669" ""
+          create_label "aad-web:done"          "0E8A16" ""
+          create_label "aad-web:blocked"       "D73A4A" ""
           create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-qa"             "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
-      # 2.5 aad:initialized 即時付与（二重実行防止）
+      # 2.5 aad-web:initialized 即時付与（二重実行防止）
       # ----------------------------------------------------------------
-      - name: 即時 aad:initialized 付与（二重実行防止）
+      - name: 即時 aad-web:initialized 付与（二重実行防止）
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
         run: |
           set -euo pipefail
-          echo "二重実行防止のため aad:initialized を即座に付与します..."
+          echo "二重実行防止のため aad-web:initialized を即座に付与します..."
           success=0
           for attempt in 1 2 3; do
-            echo "aad:initialized 付与試行 ${attempt}/3..."
+            echo "aad-web:initialized 付与試行 ${attempt}/3..."
             if curl -sf -X POST \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               -H "Content-Type: application/json" \
               "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
-              -d '{"labels":["aad:initialized"]}' > /dev/null; then
+              -d '{"labels":["aad-web:initialized"]}' > /dev/null; then
               success=1
               break
             fi
-            echo "WARN: aad:initialized の付与に失敗しました。リトライします..." >&2
+            echo "WARN: aad-web:initialized の付与に失敗しました。リトライします..." >&2
             sleep 2
           done
           if [[ "${success}" -ne 1 ]]; then
-            echo "ERROR: aad:initialized の付与に失敗しました（3回試行後も失敗）。" >&2
+            echo "ERROR: aad-web:initialized の付与に失敗しました（3回試行後も失敗）。" >&2
             exit 1
           fi
-          echo "aad:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
+          echo "aad-web:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
 
       # ----------------------------------------------------------------
       # 2.7. リポジトリ checkout（aad-common.sh を利用するため）
@@ -441,7 +443,39 @@ jobs:
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
-          echo "対象 APP-IDs: ${APP_IDS:-（未指定 = 全アプリケーション対象）}"
+          echo "対象 APP-IDs（フィルタ前）: ${APP_IDS:-（未指定 = 推薦アーキテクチャから自動選択）}"
+
+          # ---- 推薦アーキテクチャ APP-ID フィルタ ----
+          FILTER_RESULT=$(python3 -m hve.app_arch_filter \
+            --workflow aad-web \
+            ${APP_IDS:+--app-ids "${APP_IDS}"} \
+            --catalog docs/catalog/app-arch-catalog.md) || {
+            echo "ERROR: app-arch-catalog.md が見つからないか読み取れません。処理を中止します。" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: \`docs/catalog/app-arch-catalog.md\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
+            exit 1
+          }
+
+          FILTER_ERROR=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null || echo "")
+          if [[ -n "${FILTER_ERROR}" ]]; then
+            echo "ERROR: app-arch filter エラー: ${FILTER_ERROR}" >&2
+            post_comment "${ROOT_ISSUE}" "⚠️ エラー: app-arch filter: ${FILTER_ERROR}"
+            exit 1
+          fi
+
+          APP_IDS_JSON=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('matched_app_ids',[])))")
+          APP_IDS=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('matched_app_ids',[])))")
+          APP_ID=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); ids=d.get('matched_app_ids',[]); print(ids[0] if len(ids)==1 else '')")
+          APP_ARCH_SCOPE_SECTION=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('markdown_section',''))")
+
+          echo "対象 APP-IDs（フィルタ後）: ${APP_IDS:-（0件）}"
+
+          if [[ -z "${APP_IDS}" ]]; then
+            echo "推薦アーキテクチャ APP-ID フィルタ: 対象 APP-ID が 0 件です。Step Issue を作成しません。"
+            post_comment "${ROOT_ISSUE}" "ℹ️ 推薦アーキテクチャ \`Webフロントエンド + クラウド\` に該当する APP-ID が見つかりませんでした。\`docs/catalog/app-arch-catalog.md\` の \`A) サマリ表（全APP横断）\` を確認してください。"
+            exit 0
+          fi
+
+          export APP_IDS APP_IDS_JSON APP_ID APP_ARCH_SCOPE_SECTION
 
           if [[ -n "${SKIP_STEPS}" ]]; then
             echo "Root Issue body から未チェックのステップを除去します..."
@@ -534,9 +568,9 @@ jobs:
 
           rm -f "${REVIEW_TAG_FILE}"
 
-          # ---- Root Issue に aad:initialized を付与 ----
-          add_label "${ROOT_ISSUE}" "aad:initialized"
-          echo "aad:initialized を付与しました。"
+          # ---- Root Issue に aad-web:initialized を付与 ----
+          add_label "${ROOT_ISSUE}" "aad-web:initialized"
+          echo "aad-web:initialized を付与しました。"
 
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-context-review"
@@ -611,13 +645,13 @@ jobs:
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
 
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-detail-design","auto-context-review","auto-qa"]'
+            STEP_LABELS='["auto-app-detail-design-web","auto-context-review","auto-qa"]'
           elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS='["auto-app-detail-design","auto-context-review"]'
+            STEP_LABELS='["auto-app-detail-design-web","auto-context-review"]'
           elif [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-detail-design","auto-qa"]'
+            STEP_LABELS='["auto-app-detail-design-web","auto-qa"]'
           else
-            STEP_LABELS='["auto-app-detail-design"]'
+            STEP_LABELS='["auto-app-detail-design-web"]'
           fi
 
           if [[ "${AUTO_MERGE}" == "true" ]]; then
@@ -629,7 +663,7 @@ jobs:
             BODY_S1=$(printf '%s\n## Step.1 コンテナ\nStep.1 はコンテナ Issue。Sub Task（Step.1.1, Step.1.2）の完了を待つ。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n- `docs/catalog/app-arch-catalog.md` が存在すること（App Architecture Design の成果物）%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.1: ドメイン分析 + サービス一覧抽出" \
+              "[AAD-WEB] Step.1: ドメイン分析 + サービス一覧抽出" \
               "${BODY_S1}" \
               "${STEP_LABELS}"); then
               S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -637,15 +671,15 @@ jobs:
               echo "Step.1 作成: #${S1_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.1: ドメイン分析 + サービス一覧抽出 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.1: ドメイン分析 + サービス一覧抽出" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.1: ドメイン分析 + サービス一覧抽出 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.1: ドメイン分析 + サービス一覧抽出" >&2
             fi
 
             # Step.1.1
-            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION_S11}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.1.1: ドメイン分析" \
+              "[AAD-WEB] Step.1.1: ドメイン分析" \
               "${BODY_S11}" \
               "${STEP_LABELS}"); then
               S11_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -653,15 +687,15 @@ jobs:
               echo "Step.1.1 作成: #${S11_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.1.1: ドメイン分析 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.1.1: ドメイン分析" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.1.1: ドメイン分析 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.1.1: ドメイン分析" >&2
             fi
 
             # Step.1.2
-            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.1.2: サービス一覧抽出" \
+              "[AAD-WEB] Step.1.2: サービス一覧抽出" \
               "${BODY_S12}" \
               "${STEP_LABELS}"); then
               S12_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -669,17 +703,17 @@ jobs:
               echo "Step.1.2 作成: #${S12_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.1.2: サービス一覧抽出 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.1.2: サービス一覧抽出" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.1.2: サービス一覧抽出 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.1.2: サービス一覧抽出" >&2
             fi
           fi
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/data-model.md`\n- `src/data/sample-data.json`\n\n## Custom Agent\n`Arch-DataModeling` を使用\n\n## 依存\n- Step.1.2（サービス一覧抽出）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity Catalog の各エンティティに「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-model.md` と `src/data/sample-data.json` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S2=$(printf '%s\n## 目的\nドメイン分析結果とサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/data-model.md`\n- `src/data/sample-data.json`\n\n## Custom Agent\n`Arch-DataModeling` を使用\n\n## 依存\n- Step.1.2（サービス一覧抽出）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity Catalog の各エンティティに「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-model.md` と `src/data/sample-data.json` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.2: データモデル" \
+              "[AAD-WEB] Step.2: データモデル" \
               "${BODY_S2}" \
               "${STEP_LABELS}"); then
               S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -687,17 +721,17 @@ jobs:
               echo "Step.2 作成: #${S2_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.2: データモデル (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.2: データモデル" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.2: データモデル (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.2: データモデル" >&2
             fi
           fi
 
           # ---- Step.3 ----
           if ! skip_step "3" && ! skip_step "2"; then
-            BODY_S3=$(printf '%s\n## 目的\nデータモデルとドメイン分析を根拠に、概念エンティティ × 物理テーブル/列のマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`（必須）\n- `docs/catalog/domain-analytics.md`（必須）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/service-catalog.md`（存在すれば参照）\n- `docs/catalog/service-catalog-matrix.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog` を使用\n\n## 依存\n- Step.2（データモデル作成）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity-Table Mapping および Ownership Matrix に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S3=$(printf '%s\n## 目的\nデータモデルとドメイン分析を根拠に、概念エンティティ × 物理テーブル/列のマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`（必須）\n- `docs/catalog/domain-analytics.md`（必須）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/service-catalog.md`（存在すれば参照）\n- `docs/catalog/service-catalog-matrix.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog` を使用\n\n## 依存\n- Step.2（データモデル作成）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity-Table Mapping および Ownership Matrix に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.3: データカタログ作成" \
+              "[AAD-WEB] Step.3: データカタログ作成" \
               "${BODY_S3}" \
               "${STEP_LABELS}"); then
               S3_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -705,17 +739,17 @@ jobs:
               echo "Step.3 作成: #${S3_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.3: データカタログ作成 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.3: データカタログ作成" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.3: データカタログ作成 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.3: データカタログ作成" >&2
             fi
           fi
 
           # ---- Step.4 ----
           if ! skip_step "4"; then
-            BODY_S4=$(printf '%s\n## 目的\nドメイン分析結果、サービス一覧、データモデルを根拠に画面一覧を設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/screen-catalog.md`\n\n## Custom Agent\n`Arch-UI-List` を使用\n\n## 依存\n- Step.3（データカタログ）が `aad:done` であること（Step.3 がスキップ時は Step.2（データモデル）が `aad:done` であること）\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各画面に「所属APP」（1:1）を記載すること。\n\n## 完了条件\n- `docs/catalog/screen-catalog.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S4=$(printf '%s\n## 目的\nドメイン分析結果、サービス一覧、データモデルを根拠に画面一覧を設計する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/screen-catalog.md`\n\n## Custom Agent\n`Arch-UI-List` を使用\n\n## 依存\n- Step.3（データカタログ）が `aad-web:done` であること（Step.3 がスキップ時は Step.2（データモデル）が `aad-web:done` であること）\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各画面に「所属APP」（1:1）を記載すること。\n\n## 完了条件\n- `docs/catalog/screen-catalog.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.4: 画面一覧と遷移図" \
+              "[AAD-WEB] Step.4: 画面一覧と遷移図" \
               "${BODY_S4}" \
               "${STEP_LABELS}"); then
               S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -723,17 +757,17 @@ jobs:
               echo "Step.4 作成: #${S4_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.4: 画面一覧と遷移図 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.4: 画面一覧と遷移図" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.4: 画面一覧と遷移図 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.4: 画面一覧と遷移図" >&2
             fi
           fi
 
           # ---- Step.5 ----
           if ! skip_step "5"; then
-            BODY_S5=$(printf '%s\n## 目的\nサービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog` を使用\n\n## 依存\n- Step.4（画面一覧と遷移図）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S5=$(printf '%s\n## 目的\nサービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog` を使用\n\n## 依存\n- Step.4（画面一覧と遷移図）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.5: サービスカタログ" \
+              "[AAD-WEB] Step.5: サービスカタログ" \
               "${BODY_S5}" \
               "${STEP_LABELS}"); then
               S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -741,17 +775,17 @@ jobs:
               echo "Step.5 作成: #${S5_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.5: サービスカタログ (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.5: サービスカタログ" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.5: サービスカタログ (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.5: サービスカタログ" >&2
             fi
           fi
 
           # ---- Step.6 ----
           if ! skip_step "6" && ! skip_step "5"; then
-            BODY_S6=$(printf '%s\n## 目的\nサービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、TDDのためのプロジェクト全体テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/data-catalog.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy` を使用\n\n## 依存\n- Step.5（サービスカタログ）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S6=$(printf '%s\n## 目的\nサービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、TDDのためのプロジェクト全体テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `docs/catalog/data-catalog.md`（存在すれば参照）\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy` を使用\n\n## 依存\n- Step.5（サービスカタログ）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.6: テスト戦略書" \
+              "[AAD-WEB] Step.6: テスト戦略書" \
               "${BODY_S6}" \
               "${STEP_LABELS}"); then
               S6_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -759,8 +793,8 @@ jobs:
               echo "Step.6 作成: #${S6_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.6: テスト戦略書 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.6: テスト戦略書" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.6: テスト戦略書 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.6: テスト戦略書" >&2
             fi
           fi
 
@@ -774,7 +808,7 @@ jobs:
             BODY_S7=$(printf '%s\n## Step.7 コンテナ\nStep.7 はコンテナ Issue。Sub Task（%s）の完了を待つ。%s' \
               "${ROOT_REF}" "${_S7_SUBTASKS}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.7: 画面定義書 + マイクロサービス定義書" \
+              "[AAD-WEB] Step.7: 画面定義書 + マイクロサービス定義書" \
               "${BODY_S7}" \
               "${STEP_LABELS}"); then
               S7_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -782,23 +816,23 @@ jobs:
               echo "Step.7 作成: #${S7_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.7: 画面定義書 + マイクロサービス定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.7: 画面定義書 + マイクロサービス定義書" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7: 画面定義書 + マイクロサービス定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.7: 画面定義書 + マイクロサービス定義書" >&2
             fi
 
             if ! skip_step "6"; then
-              _S71_DEP="Step.6（テスト戦略書）が \`aad:done\` であること"
-              _S72_DEP="Step.6（テスト戦略書）が \`aad:done\` であること"
+              _S71_DEP="Step.6（テスト戦略書）が \`aad-web:done\` であること"
+              _S72_DEP="Step.6（テスト戦略書）が \`aad-web:done\` であること"
             else
-              _S71_DEP="Step.5（サービスカタログ）が \`aad:done\` であること"
-              _S72_DEP="Step.5（サービスカタログ）が \`aad:done\` であること"
+              _S71_DEP="Step.5（サービスカタログ）が \`aad-web:done\` であること"
+              _S72_DEP="Step.5（サービスカタログ）が \`aad-web:done\` であること"
             fi
 
             # Step.7.1
-            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${_S71_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.7.1: 画面定義書" \
+              "[AAD-WEB] Step.7.1: 画面定義書" \
               "${BODY_S71}" \
               "${STEP_LABELS}"); then
               S71_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -806,15 +840,15 @@ jobs:
               echo "Step.7.1 作成: #${S71_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.7.1: 画面定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.7.1: 画面定義書" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7.1: 画面定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.7.1: 画面定義書" >&2
             fi
 
             # Step.7.2
-            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${_S72_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.7.2: マイクロサービス定義書" \
+              "[AAD-WEB] Step.7.2: マイクロサービス定義書" \
               "${BODY_S72}" \
               "${STEP_LABELS}"); then
               S72_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -822,16 +856,16 @@ jobs:
               echo "Step.7.2 作成: #${S72_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.7.2: マイクロサービス定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.7.2: マイクロサービス定義書" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7.2: マイクロサービス定義書 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.7.2: マイクロサービス定義書" >&2
             fi
 
             # Step.7.3
             if ! skip_step "7.3"; then
-              BODY_S73=$(printf '%s\n## 目的\nテスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。\nこのステップの成果物（`docs/test-specs/{serviceId}-test-spec.md` と `docs/test-specs/{screenId}-test-spec.md`）は、Dev ワークフロー（ASDW Step.2.3TC・Step.3.0TC）の前提条件として参照される。\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/screen/{screenId}-{screenNameSlug}-description.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービスごとに1ファイル）\n- `docs/test-specs/{screenId}-test-spec.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.6（テスト戦略書）が `aad:done` であること（Step.6 がスキップされた場合は Step.5 が `aad:done` であること）\n- Step.7.1（画面定義書）が `aad:done` であること\n- Step.7.2（マイクロサービス定義書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              BODY_S73=$(printf '%s\n## 目的\nテスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。\nこのステップの成果物（`docs/test-specs/{serviceId}-test-spec.md` と `docs/test-specs/{screenId}-test-spec.md`）は、Dev ワークフロー（ASDW Step.2.3TC・Step.3.0TC）の前提条件として参照される。\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/screen/{screenId}-{screenNameSlug}-description.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービスごとに1ファイル）\n- `docs/test-specs/{screenId}-test-spec.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.6（テスト戦略書）が `aad-web:done` であること（Step.6 がスキップされた場合は Step.5 が `aad-web:done` であること）\n- Step.7.1（画面定義書）が `aad-web:done` であること\n- Step.7.2（マイクロサービス定義書）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
-                "[AAD] Step.7.3: TDDテスト仕様書" \
+                "[AAD-WEB] Step.7.3: TDDテスト仕様書" \
                 "${BODY_S73}" \
                 "${STEP_LABELS}"); then
                 S73_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -839,8 +873,8 @@ jobs:
                 echo "Step.7.3 作成: #${S73_NUM}"
                 sleep 3
               else
-                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.7.3: TDDテスト仕様書 (ワークフローログを確認し、再実行または手動対応してください)" || true
-                echo "ERROR: create_issue failed for: [AAD] Step.7.3: TDDテスト仕様書" >&2
+                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7.3: TDDテスト仕様書 (ワークフローログを確認し、再実行または手動対応してください)" || true
+                echo "ERROR: create_issue failed for: [AAD-WEB] Step.7.3: TDDテスト仕様書" >&2
               fi
             fi
           fi
@@ -850,7 +884,7 @@ jobs:
             BODY_S8=$(printf '%s\n## Step.8 コンテナ\nStep.8 はコンテナ Issue。Sub Task（Step.8.1, Step.8.2, Step.8.3）の完了を待つ。%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
-              "[AAD] Step.8: AI Agent 設計" \
+              "[AAD-WEB] Step.8: AI Agent 設計" \
               "${BODY_S8}" \
               "${STEP_LABELS}"); then
               S8_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -858,16 +892,16 @@ jobs:
               echo "Step.8 作成: #${S8_NUM}"
               sleep 3
             else
-              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.8: AI Agent 設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
-              echo "ERROR: create_issue failed for: [AAD] Step.8: AI Agent 設計" >&2
+              post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.8: AI Agent 設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
+              echo "ERROR: create_issue failed for: [AAD-WEB] Step.8: AI Agent 設計" >&2
             fi
 
             # Step.8.1
             if ! skip_step "8.1"; then
-              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
-                "[AAD] Step.8.1: AI Agent アプリケーション定義" \
+                "[AAD-WEB] Step.8.1: AI Agent アプリケーション定義" \
                 "${BODY_S81}" \
                 "${STEP_LABELS}"); then
                 S81_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -875,17 +909,17 @@ jobs:
                 echo "Step.8.1 作成: #${S81_NUM}"
                 sleep 3
               else
-                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.8.1: AI Agent アプリケーション定義 (ワークフローログを確認し、再実行または手動対応してください)" || true
-                echo "ERROR: create_issue failed for: [AAD] Step.8.1: AI Agent アプリケーション定義" >&2
+                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.8.1: AI Agent アプリケーション定義 (ワークフローログを確認し、再実行または手動対応してください)" || true
+                echo "ERROR: create_issue failed for: [AAD-WEB] Step.8.1: AI Agent アプリケーション定義" >&2
               fi
             fi
 
             # Step.8.2
             if ! skip_step "8.2"; then
-              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
-                "[AAD] Step.8.2: AI Agent 粒度設計" \
+                "[AAD-WEB] Step.8.2: AI Agent 粒度設計" \
                 "${BODY_S82}" \
                 "${STEP_LABELS}"); then
                 S82_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -893,17 +927,17 @@ jobs:
                 echo "Step.8.2 作成: #${S82_NUM}"
                 sleep 3
               else
-                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.8.2: AI Agent 粒度設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
-                echo "ERROR: create_issue failed for: [AAD] Step.8.2: AI Agent 粒度設計" >&2
+                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.8.2: AI Agent 粒度設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
+                echo "ERROR: create_issue failed for: [AAD-WEB] Step.8.2: AI Agent 粒度設計" >&2
               fi
             fi
 
             # Step.8.3
             if ! skip_step "8.3"; then
-              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad:done` ラベルを付与すること%s%s' \
+              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
-                "[AAD] Step.8.3: AI Agent 詳細設計" \
+                "[AAD-WEB] Step.8.3: AI Agent 詳細設計" \
                 "${BODY_S83}" \
                 "${STEP_LABELS}"); then
                 S83_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -911,8 +945,8 @@ jobs:
                 echo "Step.8.3 作成: #${S83_NUM}"
                 sleep 3
               else
-                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD] Step.8.3: AI Agent 詳細設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
-                echo "ERROR: create_issue failed for: [AAD] Step.8.3: AI Agent 詳細設計" >&2
+                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.8.3: AI Agent 詳細設計 (ワークフローログを確認し、再実行または手動対応してください)" || true
+                echo "ERROR: create_issue failed for: [AAD-WEB] Step.8.3: AI Agent 詳細設計" >&2
               fi
             fi
           fi
@@ -975,97 +1009,97 @@ jobs:
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S11_NUM}" ]]; then
-            add_label "${S11_NUM}" "aad:ready"
+            add_label "${S11_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S11}")
             if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S11_NUM}" "aad:running"
-              echo "Step.1.1 に copilot アサイン + aad:running 付与完了"
+              add_label "${S11_NUM}" "aad-web:running"
+              echo "Step.1.1 に copilot アサイン + aad-web:running 付与完了"
             else
-              echo "WARNING: Step.1.1 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.1.1 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S2_NUM}" ]]; then
-            add_label "${S2_NUM}" "aad:ready"
+            add_label "${S2_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S2}")
             if assign_copilot "${S2_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S2_NUM}" "aad:running"
+              add_label "${S2_NUM}" "aad-web:running"
               echo "Step.1 がスキップ済み: Step.2 (#${S2_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.2 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.2 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S3_NUM}" ]]; then
-            add_label "${S3_NUM}" "aad:ready"
+            add_label "${S3_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S3}")
             if assign_copilot "${S3_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S3_NUM}" "aad:running"
+              add_label "${S3_NUM}" "aad-web:running"
               echo "Step.1/2 がスキップ済み: Step.3 (#${S3_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.3 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.3 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S4_NUM}" ]]; then
-            add_label "${S4_NUM}" "aad:ready"
+            add_label "${S4_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S4}")
             if assign_copilot "${S4_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S4_NUM}" "aad:running"
+              add_label "${S4_NUM}" "aad-web:running"
               echo "Step.1/2/3 がスキップ済み: Step.4 (#${S4_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.4 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.4 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S5_NUM}" ]]; then
-            add_label "${S5_NUM}" "aad:ready"
+            add_label "${S5_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S5}")
             if assign_copilot "${S5_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S5_NUM}" "aad:running"
+              add_label "${S5_NUM}" "aad-web:running"
               echo "Step.1/2/3/4 がスキップ済み: Step.5 (#${S5_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.5 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.5 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S6_NUM}" ]]; then
-            add_label "${S6_NUM}" "aad:ready"
+            add_label "${S6_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S6}")
             if assign_copilot "${S6_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S6_NUM}" "aad:running"
+              add_label "${S6_NUM}" "aad-web:running"
               echo "Step.1/2/3/4/5 がスキップ済み: Step.6 (#${S6_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.6 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.6 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S71_NUM}" ]] || [[ -n "${S72_NUM}" ]]; then
             if [[ -n "${S71_NUM}" ]]; then
-              add_label "${S71_NUM}" "aad:ready"
+              add_label "${S71_NUM}" "aad-web:ready"
               CA=$(extract_custom_agent "${BODY_S71}")
               if assign_copilot "${S71_NUM}" "${CA}" "${BRANCH}" ""; then
-                add_label "${S71_NUM}" "aad:running"
+                add_label "${S71_NUM}" "aad-web:running"
                 echo "Step.7.1 (#${S71_NUM}) を起動しました。"
               else
-                echo "WARNING: Step.7.1 へのアサイン失敗。aad:running は付与しません。"
+                echo "WARNING: Step.7.1 へのアサイン失敗。aad-web:running は付与しません。"
               fi
             fi
             if [[ -n "${S72_NUM}" ]]; then
-              add_label "${S72_NUM}" "aad:ready"
+              add_label "${S72_NUM}" "aad-web:ready"
               CA=$(extract_custom_agent "${BODY_S72}")
               if assign_copilot "${S72_NUM}" "${CA}" "${BRANCH}" ""; then
-                add_label "${S72_NUM}" "aad:running"
+                add_label "${S72_NUM}" "aad-web:running"
                 echo "Step.7.2 (#${S72_NUM}) を起動しました。"
               else
-                echo "WARNING: Step.7.2 へのアサイン失敗。aad:running は付与しません。"
+                echo "WARNING: Step.7.2 へのアサイン失敗。aad-web:running は付与しません。"
               fi
             fi
           elif [[ -n "${S73_NUM}" ]]; then
-            add_label "${S73_NUM}" "aad:ready"
+            add_label "${S73_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S73}")
             if assign_copilot "${S73_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S73_NUM}" "aad:running"
+              add_label "${S73_NUM}" "aad-web:running"
               echo "Step.7.1/7.2 がスキップ済み: Step.7.3 (#${S73_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.7.3 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.7.3 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           elif [[ -n "${S81_NUM}" ]]; then
-            add_label "${S81_NUM}" "aad:ready"
+            add_label "${S81_NUM}" "aad-web:ready"
             CA=$(extract_custom_agent "${BODY_S81}")
             if assign_copilot "${S81_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S81_NUM}" "aad:running"
+              add_label "${S81_NUM}" "aad-web:running"
               echo "Step.8.1 (#${S81_NUM}) を起動しました。"
             else
-              echo "WARNING: Step.8.1 へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Step.8.1 へのアサイン失敗。aad-web:running は付与しません。"
             fi
           else
             echo "実行すべき Step が存在しません（全 Step スキップ）。"
@@ -1074,7 +1108,7 @@ jobs:
           echo "初期化完了。"
 
       # ----------------------------------------------------------------
-      # 4. 状態遷移: aad:done ラベル付与時
+      # 4. 状態遷移: aad-web:done ラベル付与時
       # ----------------------------------------------------------------
       - name: 状態遷移処理
         if: steps.gate.outputs.mode == 'state_transition'
@@ -1096,18 +1130,18 @@ jobs:
           import sys, json
           d = json.load(sys.stdin)
           labels = [l['name'] for l in d.get('labels', [])]
-          print('true' if 'aad:done' in labels else 'false')
+          print('true' if 'aad-web:done' in labels else 'false')
           ")
           if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
-            echo "aad:done ラベルを付与します（closed イベント由来）..."
+            echo "aad-web:done ラベルを付与します（closed イベント由来）..."
             curl -s -o /dev/null \
               -X POST \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
-              -d '{"labels":["aad:done"]}' || true
-            echo "aad:done ラベルを付与しました。"
+              -d '{"labels":["aad-web:done"]}' || true
+            echo "aad-web:done ラベルを付与しました。"
             sleep 2
           fi
 
@@ -1129,12 +1163,12 @@ jobs:
               | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
             local agent_name
             agent_name=$(extract_custom_agent "${issue_body}") || true
-            add_label "${issue_num}" "aad:ready"
+            add_label "${issue_num}" "aad-web:ready"
             if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
-              add_label "${issue_num}" "aad:running"
-              echo "Issue #${issue_num} を aad:ready + copilot アサイン + aad:running に設定しました。(custom_agent: ${agent_name})"
+              add_label "${issue_num}" "aad-web:running"
+              echo "Issue #${issue_num} を aad-web:ready + copilot アサイン + aad-web:running に設定しました。(custom_agent: ${agent_name})"
             else
-              echo "WARNING: Issue #${issue_num} へのアサイン失敗。aad:running は付与しません。"
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。aad-web:running は付与しません。"
             fi
           }
 
@@ -1142,7 +1176,7 @@ jobs:
           STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
           import sys, re
           title = sys.stdin.read().strip()
-          m = re.search(r'\[AAD\] Step\.(\d+(?:\.\d+)?)', title)
+          m = re.search(r'\] Step\.(\d+(?:\.\d+)?)', title)
           print(m.group(1) if m else '')
           PY
           )
@@ -1261,9 +1295,9 @@ jobs:
           case "${STEP_MATCH}" in
             "1.1")
               # Step.1.1 完了 → Step.1.2 を ready + assign
-              S1_NUM=$(get_sub_issue_number '\[AAD\] Step\.1:')
+              S1_NUM=$(get_sub_issue_number '\] Step\.1:')
               if [[ -n "${S1_NUM}" ]]; then
-                S12_NUM=$(get_sub_issue_number_from_parent "${S1_NUM}" '\[AAD\] Step\.1\.2:')
+                S12_NUM=$(get_sub_issue_number_from_parent "${S1_NUM}" '\] Step\.1\.2:')
                 if [[ -n "${S12_NUM}" ]]; then
                   activate_issue "${S12_NUM}"
                 fi
@@ -1271,18 +1305,18 @@ jobs:
               ;;
 
             "1.2")
-              # Step.1.2 完了 → Step.1 コンテナに aad:done + Step.2 を ready + assign
-              S1_NUM=$(get_sub_issue_number '\[AAD\] Step\.1:')
-              [[ -n "${S1_NUM}" ]] && add_label "${S1_NUM}" "aad:done"
-              S2_NUM=$(get_sub_issue_number '\[AAD\] Step\.2:')
+              # Step.1.2 完了 → Step.1 コンテナに aad-web:done + Step.2 を ready + assign
+              S1_NUM=$(get_sub_issue_number '\] Step\.1:')
+              [[ -n "${S1_NUM}" ]] && add_label "${S1_NUM}" "aad-web:done"
+              S2_NUM=$(get_sub_issue_number '\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
                 activate_issue "${S2_NUM}"
               else
-                S3_NUM=$(get_sub_issue_number '\[AAD\] Step\.3:')
+                S3_NUM=$(get_sub_issue_number '\] Step\.3:')
                 if [[ -n "${S3_NUM}" ]]; then
                   activate_issue "${S3_NUM}"
                 else
-                  S4_NUM=$(get_sub_issue_number '\[AAD\] Step\.4:')
+                  S4_NUM=$(get_sub_issue_number '\] Step\.4:')
                   [[ -n "${S4_NUM}" ]] && activate_issue "${S4_NUM}"
                 fi
               fi
@@ -1290,15 +1324,15 @@ jobs:
 
             "2")
               # Step.2 完了 → Step.3 を ready + assign（なければ Step.4 へ）
-              S3_NUM=$(get_sub_issue_number '\[AAD\] Step\.3:')
+              S3_NUM=$(get_sub_issue_number '\] Step\.3:')
               if [[ -n "${S3_NUM}" ]]; then
                 activate_issue "${S3_NUM}"
               else
-                S4_NUM=$(get_sub_issue_number '\[AAD\] Step\.4:')
+                S4_NUM=$(get_sub_issue_number '\] Step\.4:')
                 if [[ -n "${S4_NUM}" ]]; then
                   activate_issue "${S4_NUM}"
                 else
-                  S5_NUM=$(get_sub_issue_number '\[AAD\] Step\.5:')
+                  S5_NUM=$(get_sub_issue_number '\] Step\.5:')
                   [[ -n "${S5_NUM}" ]] && activate_issue "${S5_NUM}"
                 fi
               fi
@@ -1306,29 +1340,29 @@ jobs:
 
             "3")
               # Step.3 完了 → Step.4 を ready + assign（なければ Step.5 へ）
-              S4_NUM=$(get_sub_issue_number '\[AAD\] Step\.4:')
+              S4_NUM=$(get_sub_issue_number '\] Step\.4:')
               if [[ -n "${S4_NUM}" ]]; then
                 activate_issue "${S4_NUM}"
               else
-                S5_NUM=$(get_sub_issue_number '\[AAD\] Step\.5:')
+                S5_NUM=$(get_sub_issue_number '\] Step\.5:')
                 [[ -n "${S5_NUM}" ]] && activate_issue "${S5_NUM}"
               fi
               ;;
 
             "4")
               # Step.4 完了 → Step.5 を ready + assign
-              S5_NUM=$(get_sub_issue_number '\[AAD\] Step\.5:')
+              S5_NUM=$(get_sub_issue_number '\] Step\.5:')
               if [[ -n "${S5_NUM}" ]]; then
                 activate_issue "${S5_NUM}"
               else
-                S6_NUM=$(get_sub_issue_number '\[AAD\] Step\.6:')
+                S6_NUM=$(get_sub_issue_number '\] Step\.6:')
                 if [[ -n "${S6_NUM}" ]]; then
                   activate_issue "${S6_NUM}"
                 else
-                  S7_NUM=$(get_sub_issue_number '\[AAD\] Step\.7:')
+                  S7_NUM=$(get_sub_issue_number '\] Step\.7:')
                   if [[ -n "${S7_NUM}" ]]; then
-                    S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.1:')
-                    S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.2:')
+                    S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.1:')
+                    S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.2:')
                     [[ -n "${S71_NUM}" ]] && activate_issue "${S71_NUM}"
                     [[ -n "${S72_NUM}" ]] && activate_issue "${S72_NUM}"
                   fi
@@ -1338,14 +1372,14 @@ jobs:
 
             "5")
               # Step.5 完了 → Step.6 を ready + assign（なければ Step.7.1/7.2 を並列起動）
-              S6_NUM=$(get_sub_issue_number '\[AAD\] Step\.6:')
+              S6_NUM=$(get_sub_issue_number '\] Step\.6:')
               if [[ -n "${S6_NUM}" ]]; then
                 activate_issue "${S6_NUM}"
               else
-                S7_NUM=$(get_sub_issue_number '\[AAD\] Step\.7:')
+                S7_NUM=$(get_sub_issue_number '\] Step\.7:')
                 if [[ -n "${S7_NUM}" ]]; then
-                  S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.1:')
-                  S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.2:')
+                  S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.1:')
+                  S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.2:')
                   [[ -n "${S71_NUM}" ]] && activate_issue "${S71_NUM}"
                   [[ -n "${S72_NUM}" ]] && activate_issue "${S72_NUM}"
                 fi
@@ -1354,10 +1388,10 @@ jobs:
 
             "6")
               # Step.6 完了 → Step.7.1 と Step.7.2 を並列で ready + assign
-              S7_NUM=$(get_sub_issue_number '\[AAD\] Step\.7:')
+              S7_NUM=$(get_sub_issue_number '\] Step\.7:')
               if [[ -n "${S7_NUM}" ]]; then
-                S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.1:')
-                S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\[AAD\] Step\.7\.2:')
+                S71_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.1:')
+                S72_NUM=$(get_sub_issue_number_from_parent "${S7_NUM}" '\] Step\.7\.2:')
                 [[ -n "${S71_NUM}" ]] && activate_issue "${S71_NUM}"
                 [[ -n "${S72_NUM}" ]] && activate_issue "${S72_NUM}"
               fi
@@ -1366,8 +1400,8 @@ jobs:
             "7.1"|"7.2")
               # Step.7.1 または 7.2 完了 →
               #   Step.7.3 が存在する場合: 7.1 AND 7.2 の両方完了を確認して Step.7.3 を起動
-              #   Step.7.3 が存在しない場合: 両方完了を確認して Step.7 コンテナ + Root に aad:done
-              S7_NUM=$(get_sub_issue_number '\[AAD\] Step\.7:')
+              #   Step.7.3 が存在しない場合: 両方完了を確認して Step.7 コンテナ + Root に aad-web:done
+              S7_NUM=$(get_sub_issue_number '\] Step\.7:')
               if [[ -n "${S7_NUM}" ]]; then
                 S7_SUBS=$(api_call GET \
                   "https://api.github.com/repos/${REPO}/issues/${S7_NUM}/sub_issues")
@@ -1375,15 +1409,15 @@ jobs:
           import sys, json, re
           issues = json.load(sys.stdin)
           s71_done = any(
-              'aad:done' in [l['name'] for l in i.get('labels', [])]
-              for i in issues if re.search(r'\[AAD\] Step\.7\.1:', i.get('title', ''))
+              'aad-web:done' in [l['name'] for l in i.get('labels', [])]
+              for i in issues if re.search(r'\] Step\.7\.1:', i.get('title', ''))
           )
           s72_done = any(
-              'aad:done' in [l['name'] for l in i.get('labels', [])]
-              for i in issues if re.search(r'\[AAD\] Step\.7\.2:', i.get('title', ''))
+              'aad-web:done' in [l['name'] for l in i.get('labels', [])]
+              for i in issues if re.search(r'\] Step\.7\.2:', i.get('title', ''))
           )
           s73_issue = next(
-              (i for i in issues if re.search(r'\[AAD\] Step\.7\.3:', i.get('title', ''))),
+              (i for i in issues if re.search(r'\] Step\.7\.3:', i.get('title', ''))),
               None
           )
           if s71_done and s72_done:
@@ -1397,22 +1431,22 @@ jobs:
                 )
                 case "${NEXT_ACTION}" in
                   done_s7)
-                    add_label "${S7_NUM}" "aad:done"
-                    echo "Step.7 コンテナに aad:done を付与しました。"
+                    add_label "${S7_NUM}" "aad-web:done"
+                    echo "Step.7 コンテナに aad-web:done を付与しました。"
                     # Step.8 が存在すれば Step.8.1 を起動、なければ全完了
-                    _S8_NUM=$(get_sub_issue_number '\[AAD\] Step\.8:')
+                    _S8_NUM=$(get_sub_issue_number '\] Step\.8:')
                     if [[ -n "${_S8_NUM}" ]]; then
-                      _S81_NUM=$(get_sub_issue_number_from_parent "${_S8_NUM}" '\[AAD\] Step\.8\.1:')
+                      _S81_NUM=$(get_sub_issue_number_from_parent "${_S8_NUM}" '\] Step\.8\.1:')
                       if [[ -n "${_S81_NUM}" ]]; then
                         activate_issue "${_S81_NUM}"
                         echo "Step.7.3 スキップ時: Step.8.1 (#${_S81_NUM}) を起動しました。"
                       else
-                        _S82_NUM=$(get_sub_issue_number_from_parent "${_S8_NUM}" '\[AAD\] Step\.8\.2:')
+                        _S82_NUM=$(get_sub_issue_number_from_parent "${_S8_NUM}" '\] Step\.8\.2:')
                         [[ -n "${_S82_NUM}" ]] && activate_issue "${_S82_NUM}"
                       fi
                     else
-                      add_label "${ROOT_ISSUE}" "aad:done"
-                      echo "Root Issue #${ROOT_ISSUE} に aad:done を付与しました。"
+                      add_label "${ROOT_ISSUE}" "aad-web:done"
+                      echo "Root Issue #${ROOT_ISSUE} に aad-web:done を付与しました。"
                       _done_msg=$(printf '🎉 全ての設計書生成ステップが完了しました！Root Issue #%s のワークフローが正常に終了しました。\n\n**主な成果物:**\n- `docs/catalog/domain-analytics.md` — ドメイン分析\n- `docs/catalog/service-catalog.md` — サービス一覧\n- `docs/catalog/data-model.md` — データモデル\n- `docs/catalog/data-catalog.md` — データカタログ（Step.3 実行時）\n- `docs/catalog/screen-catalog.md` — 画面一覧\n- `docs/catalog/service-catalog-matrix.md` — サービスカタログ\n- `docs/catalog/test-strategy.md` — テスト戦略書（Step.6 実行時）\n- `docs/screen/` — 画面定義書群\n- `docs/services/` — マイクロサービス定義書群' "${ROOT_ISSUE}")
                       post_comment "${ROOT_ISSUE}" "${_done_msg}"
                       echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
@@ -1420,12 +1454,12 @@ jobs:
                     ;;
                   activate_73:*)
                     S73_NUM="${NEXT_ACTION#activate_73:}"
-                    S6_NUM=$(get_sub_issue_number '\[AAD\] Step\.6:')
+                    S6_NUM=$(get_sub_issue_number '\] Step\.6:')
                     S6_DONE="false"
                     if [[ -n "${S6_NUM}" ]]; then
                       S6_DONE=$(api_call GET \
                         "https://api.github.com/repos/${REPO}/issues/${S6_NUM}" \
-                        | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'aad:done' in [l['name'] for l in d.get('labels',[])] else 'false')")
+                        | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if 'aad-web:done' in [l['name'] for l in d.get('labels',[])] else 'false')")
                     else
                       # Step.6 がスキップされた場合は依存完了とみなす
                       S6_DONE="true"
@@ -1434,18 +1468,18 @@ jobs:
                       activate_issue "${S73_NUM}"
                       echo "Step.7.1/7.2 が両方完了 + Step.6 完了確認済み: Step.7.3 (#${S73_NUM}) を起動しました。"
                     else
-                      echo "WARNING: Step.6 が aad:done ではありません。Step.7.3 を起動できません。ワークフローをブロック状態にします。"
-                      add_label "${S7_NUM}" "aad:blocked"
-                      add_label "${ROOT_ISSUE}" "aad:blocked"
-                      add_label "${S73_NUM}" "aad:blocked"
+                      echo "WARNING: Step.6 が aad-web:done ではありません。Step.7.3 を起動できません。ワークフローをブロック状態にします。"
+                      add_label "${S7_NUM}" "aad-web:blocked"
+                      add_label "${ROOT_ISSUE}" "aad-web:blocked"
+                      add_label "${S73_NUM}" "aad-web:blocked"
                       block_msg=$'⚠️ **Step.7.3（テスト仕様書）がスキップされました**\n'
                       block_msg+=$'\nStep.6（テスト戦略書）が完了していないため、Step.7.3 を起動できませんでした。'
-                      block_msg+=$'\nテスト仕様書は TDD プロセスの重要な成果物です。ワークフローは `aad:blocked` 状態です。'
+                      block_msg+=$'\nテスト仕様書は TDD プロセスの重要な成果物です。ワークフローは `aad-web:blocked` 状態です。'
                       block_msg+=$'\n\n**手動で Step.7.3 を起動する手順:**'
-                      block_msg+=$'\n1. Step.6（テスト戦略書）の Issue を完了させ、`aad:done` ラベルを付与する'
-                      block_msg+=$'\n2. Step.7.3 の Issue に `aad:ready` ラベルを付与する'
+                      block_msg+=$'\n1. Step.6（テスト戦略書）の Issue を完了させ、`aad-web:done` ラベルを付与する'
+                      block_msg+=$'\n2. Step.7.3 の Issue に `aad-web:ready` ラベルを付与する'
                       block_msg+=$'\n3. Step.7.3 の Issue に copilot-swe-agent をアサインする'
-                      block_msg+=$'\n4. Step.7.3 完了後、必要に応じて（進捗表示目的でのみ）Step.7 コンテナと Root Issue の `aad:blocked` を `aad:done` に変更する'
+                      block_msg+=$'\n4. Step.7.3 完了後、必要に応じて（進捗表示目的でのみ）Step.7 コンテナと Root Issue の `aad-web:blocked` を `aad-web:done` に変更する'
                       block_msg+=$'\n\n設計書生成ステップ（Step.7.1/7.2）は正常に完了しています。'
                       post_comment "${ROOT_ISSUE}" "${block_msg}"
                     fi
@@ -1458,33 +1492,33 @@ jobs:
               ;;
 
             "7.3")
-              # Step.7.3 完了 → Step.7 コンテナに aad:done + Step.8.1 を起動（Step.8 がなければ Root に aad:done）
-              S7_NUM=$(get_sub_issue_number '\[AAD\] Step\.7:')
+              # Step.7.3 完了 → Step.7 コンテナに aad-web:done + Step.8.1 を起動（Step.8 がなければ Root に aad-web:done）
+              S7_NUM=$(get_sub_issue_number '\] Step\.7:')
               if [[ -n "${S7_NUM}" ]]; then
-                add_label "${S7_NUM}" "aad:done"
-                echo "Step.7 コンテナに aad:done を付与しました。"
+                add_label "${S7_NUM}" "aad-web:done"
+                echo "Step.7 コンテナに aad-web:done を付与しました。"
               fi
-              S8_NUM=$(get_sub_issue_number '\[AAD\] Step\.8:')
+              S8_NUM=$(get_sub_issue_number '\] Step\.8:')
               if [[ -n "${S8_NUM}" ]]; then
-                S81_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.1:')
+                S81_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.1:')
                 if [[ -n "${S81_NUM}" ]]; then
                   activate_issue "${S81_NUM}"
                   echo "Step.7.3 完了: Step.8.1 (#${S81_NUM}) を起動しました。"
                 else
                   # Step.8.1 がない（スキップ）→ Step.8.2 を起動
-                  S82_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.2:')
+                  S82_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.2:')
                   if [[ -n "${S82_NUM}" ]]; then
                     activate_issue "${S82_NUM}"
                     echo "Step.8.1 スキップ: Step.8.2 (#${S82_NUM}) を起動しました。"
                   else
-                    S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.3:')
+                    S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.3:')
                     [[ -n "${S83_NUM}" ]] && activate_issue "${S83_NUM}"
                   fi
                 fi
               else
                 # Step.8 がない（スキップ）→ 全完了
-                add_label "${ROOT_ISSUE}" "aad:done"
-                echo "Root Issue #${ROOT_ISSUE} に aad:done を付与しました。"
+                add_label "${ROOT_ISSUE}" "aad-web:done"
+                echo "Root Issue #${ROOT_ISSUE} に aad-web:done を付与しました。"
                 _done_msg=$(printf '🎉 全ての設計書生成ステップが完了しました！Root Issue #%s のワークフローが正常に終了しました。\n\n**主な成果物:**\n- `docs/catalog/domain-analytics.md` — ドメイン分析\n- `docs/catalog/service-catalog.md` — サービス一覧\n- `docs/catalog/data-model.md` — データモデル\n- `docs/catalog/data-catalog.md` — データカタログ（Step.3 実行時）\n- `docs/catalog/screen-catalog.md` — 画面一覧\n- `docs/catalog/service-catalog-matrix.md` — サービスカタログ\n- `docs/catalog/test-strategy.md` — テスト戦略書\n- `docs/screen/` — 画面定義書群\n- `docs/services/` — マイクロサービス定義書群\n- `docs/test-specs/` — TDDテスト仕様書群' "${ROOT_ISSUE}")
                 post_comment "${ROOT_ISSUE}" "${_done_msg}"
                 echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
@@ -1493,21 +1527,21 @@ jobs:
 
             "8.1")
               # Step.8.1 完了 → Step.8.2 を起動
-              S8_NUM=$(get_sub_issue_number '\[AAD\] Step\.8:')
+              S8_NUM=$(get_sub_issue_number '\] Step\.8:')
               if [[ -n "${S8_NUM}" ]]; then
-                S82_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.2:')
+                S82_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.2:')
                 if [[ -n "${S82_NUM}" ]]; then
                   activate_issue "${S82_NUM}"
                   echo "Step.8.1 完了: Step.8.2 (#${S82_NUM}) を起動しました。"
                 else
                   # Step.8.2 がない（スキップ）→ Step.8.3 を起動
-                  S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.3:')
+                  S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.3:')
                   if [[ -n "${S83_NUM}" ]]; then
                     activate_issue "${S83_NUM}"
                   else
                     # Step.8.2/8.3 ともにない → Step.8 コンテナ完了 + 全完了
-                    add_label "${S8_NUM}" "aad:done"
-                    add_label "${ROOT_ISSUE}" "aad:done"
+                    add_label "${S8_NUM}" "aad-web:done"
+                    add_label "${ROOT_ISSUE}" "aad-web:done"
                     _done_msg=$(printf '🎉 全ての設計書生成ステップが完了しました！Root Issue #%s のワークフローが正常に終了しました。\n\n**主な成果物（AI Agent 設計含む）:**\n- `docs/catalog/domain-analytics.md` — ドメイン分析\n- `docs/catalog/service-catalog.md` — サービス一覧\n- `docs/catalog/data-model.md` — データモデル\n- `docs/catalog/screen-catalog.md` — 画面一覧\n- `docs/catalog/service-catalog-matrix.md` — サービスカタログ\n- `docs/screen/` — 画面定義書群\n- `docs/services/` — マイクロサービス定義書群\n- `docs/test-specs/` — TDDテスト仕様書群\n- `docs/agent/` — AI Agent 設計書群\n- `docs/ai-agent-catalog.md` — AI Agent 一覧' "${ROOT_ISSUE}")
                     post_comment "${ROOT_ISSUE}" "${_done_msg}"
                   fi
@@ -1517,16 +1551,16 @@ jobs:
 
             "8.2")
               # Step.8.2 完了 → Step.8.3 を起動
-              S8_NUM=$(get_sub_issue_number '\[AAD\] Step\.8:')
+              S8_NUM=$(get_sub_issue_number '\] Step\.8:')
               if [[ -n "${S8_NUM}" ]]; then
-                S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\[AAD\] Step\.8\.3:')
+                S83_NUM=$(get_sub_issue_number_from_parent "${S8_NUM}" '\] Step\.8\.3:')
                 if [[ -n "${S83_NUM}" ]]; then
                   activate_issue "${S83_NUM}"
                   echo "Step.8.2 完了: Step.8.3 (#${S83_NUM}) を起動しました。"
                 else
                   # Step.8.3 がない（スキップ）→ Step.8 コンテナ完了 + 全完了
-                  add_label "${S8_NUM}" "aad:done"
-                  add_label "${ROOT_ISSUE}" "aad:done"
+                  add_label "${S8_NUM}" "aad-web:done"
+                  add_label "${ROOT_ISSUE}" "aad-web:done"
                   _done_msg=$(printf '🎉 全ての設計書生成ステップが完了しました！Root Issue #%s のワークフローが正常に終了しました。\n\n**主な成果物（AI Agent 設計含む）:**\n- `docs/catalog/domain-analytics.md` — ドメイン分析\n- `docs/catalog/service-catalog.md` — サービス一覧\n- `docs/catalog/data-model.md` — データモデル\n- `docs/catalog/screen-catalog.md` — 画面一覧\n- `docs/catalog/service-catalog-matrix.md` — サービスカタログ\n- `docs/screen/` — 画面定義書群\n- `docs/services/` — マイクロサービス定義書群\n- `docs/test-specs/` — TDDテスト仕様書群\n- `docs/agent/` — AI Agent 設計書群\n- `docs/ai-agent-catalog.md` — AI Agent 一覧' "${ROOT_ISSUE}")
                   post_comment "${ROOT_ISSUE}" "${_done_msg}"
                 fi
@@ -1534,14 +1568,14 @@ jobs:
               ;;
 
             "8.3")
-              # Step.8.3 完了 → Step.8 コンテナに aad:done + Root に aad:done + 完了コメント
-              S8_NUM=$(get_sub_issue_number '\[AAD\] Step\.8:')
+              # Step.8.3 完了 → Step.8 コンテナに aad-web:done + Root に aad-web:done + 完了コメント
+              S8_NUM=$(get_sub_issue_number '\] Step\.8:')
               if [[ -n "${S8_NUM}" ]]; then
-                add_label "${S8_NUM}" "aad:done"
-                echo "Step.8 コンテナに aad:done を付与しました。"
+                add_label "${S8_NUM}" "aad-web:done"
+                echo "Step.8 コンテナに aad-web:done を付与しました。"
               fi
-              add_label "${ROOT_ISSUE}" "aad:done"
-              echo "Root Issue #${ROOT_ISSUE} に aad:done を付与しました。"
+              add_label "${ROOT_ISSUE}" "aad-web:done"
+              echo "Root Issue #${ROOT_ISSUE} に aad-web:done を付与しました。"
               _done_msg=$(printf '🎉 全ての設計書生成ステップが完了しました！Root Issue #%s のワークフローが正常に終了しました。\n\n**主な成果物（AI Agent 設計含む）:**\n- `docs/catalog/domain-analytics.md` — ドメイン分析\n- `docs/catalog/service-catalog.md` — サービス一覧\n- `docs/catalog/data-model.md` — データモデル\n- `docs/catalog/data-catalog.md` — データカタログ（Step.3 実行時）\n- `docs/catalog/screen-catalog.md` — 画面一覧\n- `docs/catalog/service-catalog-matrix.md` — サービスカタログ\n- `docs/catalog/test-strategy.md` — テスト戦略書\n- `docs/screen/` — 画面定義書群\n- `docs/services/` — マイクロサービス定義書群\n- `docs/test-specs/` — TDDテスト仕様書群\n- `docs/agent/` — AI Agent 設計書群\n- `docs/ai-agent-catalog.md` — AI Agent 一覧' "${ROOT_ISSUE}")
               post_comment "${ROOT_ISSUE}" "${_done_msg}"
               echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
@@ -1557,13 +1591,13 @@ jobs:
 
             # コンテナ Issue の自動クローズ判定
             _AC_CONTAINER_NUM=""
-            if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAD\]\ Step\.[0-9]+\.[0-9] ]]; then
+            if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAD-WEB\]\ Step\.[0-9]+\.[0-9] ]]; then
               _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
-                | grep -oP '\[AAD\]\s*Step\.\K\d+' | head -1)
+                | grep -oP '\]\s*Step\.\K\d+' | head -1)
               if [[ -n "${_AC_PARENT_STEP}" ]]; then
                 _AC_CONTAINER_NUM=$(gh api --paginate \
                   "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
-                  --jq ".[] | select(.title | test(\"\\\\[AAD\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                  --jq ".[] | select(.title | test(\"\\\\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
                   2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
               fi
             fi
@@ -1621,13 +1655,13 @@ jobs:
 
           # ── コンテナ Issue の自動クローズ判定 ──
           _AC_CONTAINER_NUM=""
-          if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAD\]\ Step\.[0-9]+\.[0-9] ]]; then
+          if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAD-WEB\]\ Step\.[0-9]+\.[0-9] ]]; then
             _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
-              | grep -oP '\[AAD\]\s*Step\.\K\d+' | head -1)
+              | grep -oP '\]\s*Step\.\K\d+' | head -1)
             if [[ -n "${_AC_PARENT_STEP}" ]]; then
               _AC_CONTAINER_NUM=$(gh api --paginate \
                 "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
-                --jq ".[] | select(.title | test(\"\\\\[AAD\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                --jq ".[] | select(.title | test(\"\\\\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
                 2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
             fi
           fi
@@ -1642,3 +1676,67 @@ jobs:
           # ── Root Issue の自動クローズ判定 ──
           echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
           auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に <!-- branch: ... --> がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: pip install ruff
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          git push origin HEAD:${{ steps.parse.outputs.branch }}

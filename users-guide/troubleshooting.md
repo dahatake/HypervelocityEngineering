@@ -13,7 +13,7 @@
   - [ワークフローがエラーで終了する](#ワークフローがエラーで終了する)
   - [Azure Static Web Apps デプロイエラー](#azure-static-web-apps-デプロイエラー)
   - [Copilot cloud agent のタスク実行エラー](#copilot-cloud-agent-のタスク実行エラー)
-- [SDK 版のトラブル](#sdk-版のトラブル)
+- [hve アプリケーションのトラブル](#hve-アプリケーションのトラブル)
 
 ---
 
@@ -169,20 +169,20 @@
 
 ---
 
-## SDK 版のトラブル
+## hve アプリケーションのトラブル
 
-SDK 版（ローカル実行方式）のトラブルシューティングは [sdk-guide.md 付録D](./sdk-guide.md#付録d-トラブルシューティング) を参照してください。
+hve アプリケーション（ローカル実行方式）のトラブルシューティングは [hve-app-guide.md 付録D](./hve-app-guide.md#付録d-トラブルシューティング) を参照してください。
 
 主なトラブルと対応:
 
 | 症状 | 参照箇所 |
 |------|---------|
-| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./sdk-guide.md#copilot-cli-が見つからない) |
-| `ModuleNotFoundError: No module named 'copilot'` | [付録D: SDK がインストールされていない](./sdk-guide.md#sdk-がインストールされていない--python--m-hve-が動かない) |
-| セッションタイムアウト | [付録D: セッションタイムアウト](./sdk-guide.md#セッションタイムアウト) |
-| MCP Server が接続できない | [付録D: MCP Server が接続できない](./sdk-guide.md#mcp-server-が接続できない) |
-| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./sdk-guide.md#並列実行でメモリ不足) |
-| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./sdk-guide.md#pr-作成時に-http-422-エラー) |
+| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./hve-app-guide.md#copilot-cli-が見つからない) |
+| `ModuleNotFoundError: No module named 'copilot'` | [付録D: github-copilot-sdk がインストールされていない](./hve-app-guide.md#github-copilot-sdk-がインストールされていない--python--m-hve-が動かない) |
+| セッションタイムアウト | [付録D: セッションタイムアウト](./hve-app-guide.md#セッションタイムアウト) |
+| MCP Server が接続できない | [付録D: MCP Server が接続できない](./hve-app-guide.md#mcp-server-が接続できない) |
+| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./hve-app-guide.md#並列実行でメモリ不足) |
+| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./hve-app-guide.md#pr-作成時に-http-422-エラー) |
 
 ## knowledge/ ドキュメント関連のトラブル
 

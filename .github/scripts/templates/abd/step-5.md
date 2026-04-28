@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 サービスカタログとデータモデルを根拠に、バッチ処理固有のテスト戦略書（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト方針）を作成する。
 
@@ -17,4 +19,4 @@
 
 ## 完了条件
 - `docs/batch/batch-test-strategy.md` が作成されている
-- 完了時に自身に `abd:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

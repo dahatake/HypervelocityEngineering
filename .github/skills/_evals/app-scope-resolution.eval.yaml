@@ -1,6 +1,6 @@
 skill: app-scope-resolution
 skill_path: .github/skills/planning/app-scope-resolution/SKILL.md
-description: APP-ID に基づくスコープ解決ルール。Issue body から APP-ID を取得し、app-catalog.md との紐付けで対象サービス・画面・エンティティを特定する。
+description: APP-ID に基づくスコープ解決ルール。Issue body から APP-ID を取得し、app-catalog.md との紐付けで対象サービス・画面・エンティティを特定する。AAD-WEB/ASDW-WEB/ABD/ABDV では app-arch-catalog.md の推薦アーキテクチャで自動フィルタリングする。
 
 test_cases:
   # --- 正のテストケース ---
@@ -20,13 +20,21 @@ test_cases:
         detail: "APP-05 に紐付くサービス一覧をカンマ区切りで取得する（N:N 関係）"
     reason: "WHEN: APP-ID のスコープ解決 に該当する"
 
-  - id: fallback-to-all-services-when-no-app-id
-    input: "Issue body に APP-ID の記載がない。どのサービスを対象にすればよいか"
+  - id: aad-web-no-app-id-uses-arch-filter
+    input: "aad-web ワークフローで APP-ID が未指定の場合、何を対象にするか"
     expected_trigger: true
     verify:
       - type: action
-        detail: "APP-ID 未指定のため全サービス/全画面対象（後方互換）として処理する"
-    reason: "APP-ID 未指定時の動作ルールに該当する"
+        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャ = Webフロントエンド + クラウド の APP-ID のみを対象にする"
+    reason: "AAD-WEB では APP-ID 未指定時に全対象とせず推薦アーキテクチャでフィルタリングする"
+
+  - id: abd-no-app-id-uses-arch-filter
+    input: "abd ワークフローで APP-ID が未指定の場合、何を対象にするか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャ = データバッチ処理 または バッチ の APP-ID のみを対象にする"
+    reason: "ABD では APP-ID 未指定時に全対象とせず推薦アーキテクチャでフィルタリングする"
 
   # --- 負のテストケース ---
   - id: not-for-service-implementation

@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-TDD-TestStrategy
 description: "サービスカタログ・データモデルからTDDテスト戦略書を docs/catalog/test-strategy.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -76,7 +76,8 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -87,7 +88,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - 固有の分割粒度: 「出力セクション単位」で分割（§9 の `##` トップレベル見出し7セクション: `## 1. 概要` 〜 `## 7. 網羅性チェック` を各1単位とする）
 
 ## 6.4 生成（test-strategy.md）
-13. 15分以内で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/catalog/test-strategy.md` を生成/更新する。
+13. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/catalog/test-strategy.md` を生成/更新する。
     - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）

@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aas/step-6.md に移動しました。 -->
 {root_ref}
 ## 目的
 サービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。
@@ -23,4 +24,4 @@
 
 ## 完了条件
 - `docs/catalog/service-catalog-matrix.md` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

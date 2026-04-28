@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/asdw-web/step-2.3TC.md に移動しました。 -->
 {root_ref}
 ## 目的
 TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）からテストコードのみを生成する（APP-ID 指定時はスコープ内のサービスのみ）。
@@ -27,4 +28,4 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 ## 完了条件
 - `test/api/{サービス名}.Tests/` 配下にテストコードが生成されている
 - `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

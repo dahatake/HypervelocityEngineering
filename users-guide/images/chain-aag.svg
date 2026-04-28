@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 220" role="img" aria-label="AAG 3ステップチェーン図">
+  <desc>AAG（AI Agent Design）: 3ステップ直列チェーン。Step.1 Arch-AIAgentDesign → Step.2 Arch-AIAgentDesign → Step.3 Arch-AIAgentDesign</desc>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
+    .box { fill: #4A90D9; stroke: #1f3a5a; stroke-width: 1.5; }
+    .out { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
+    .ln  { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .bt  { fill: white; font-weight: bold; font-size: 10px; }
+    .bs  { fill: white; font-size: 9px; }
+    .ttl { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
+  </style>
+  <text x="350" y="28" text-anchor="middle" class="ttl">AAG — AI Agent Design（3ステップ直列）</text>
+  <!-- Step 1 -->
+  <rect x="30" y="60" width="140" height="60" rx="5" class="box"/>
+  <text x="100" y="79" text-anchor="middle" class="bt">Step.1</text>
+  <text x="100" y="93" text-anchor="middle" class="bs">Arch-AIAgentDesign</text>
+  <text x="100" y="107" text-anchor="middle" class="bs">アプリケーション定義</text>
+  <!-- Arrow -->
+  <line x1="170" y1="90" x2="200" y2="90" class="ln"/>
+  <!-- Step 2 -->
+  <rect x="200" y="60" width="140" height="60" rx="5" class="box"/>
+  <text x="270" y="79" text-anchor="middle" class="bt">Step.2</text>
+  <text x="270" y="93" text-anchor="middle" class="bs">Arch-AIAgentDesign</text>
+  <text x="270" y="107" text-anchor="middle" class="bs">粒度設計</text>
+  <!-- Arrow -->
+  <line x1="340" y1="90" x2="370" y2="90" class="ln"/>
+  <!-- Step 3 -->
+  <rect x="370" y="60" width="140" height="60" rx="5" class="box"/>
+  <text x="440" y="79" text-anchor="middle" class="bt">Step.3</text>
+  <text x="440" y="93" text-anchor="middle" class="bs">Arch-AIAgentDesign</text>
+  <text x="440" y="107" text-anchor="middle" class="bs">詳細設計</text>
+  <!-- Arrow to output -->
+  <line x1="510" y1="90" x2="540" y2="90" class="ln"/>
+  <!-- Output -->
+  <rect x="540" y="65" width="140" height="50" rx="5" class="out"/>
+  <text x="610" y="84" text-anchor="middle" class="bt" style="fill:white;">成果物</text>
+  <text x="610" y="97" text-anchor="middle" class="bs" style="fill:white;">docs/agent/</text>
+  <text x="610" y="110" text-anchor="middle" class="bs" style="fill:white;">ai-agent-catalog.md</text>
+  <!-- Legend -->
+  <rect x="30" y="160" width="14" height="14" rx="3" class="box"/>
+  <text x="50" y="171" style="font-size:11px;fill:#333;">Custom Agent（Arch-AIAgentDesign）</text>
+  <rect x="310" y="160" width="14" height="14" rx="3" class="out"/>
+  <text x="330" y="171" style="font-size:11px;fill:#333;">成果物（出力）</text>
+</svg>

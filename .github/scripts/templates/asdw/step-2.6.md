@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aagd/step-1.md に移動しました。 -->
 {root_ref}
 ## 目的
 ユースケース記述を入力として、AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、Agent 一覧を出力する（APP-ID 指定時はスコープ内のサービス/画面のみ）。
@@ -31,4 +32,4 @@
 
 ## 完了条件
 - `docs/ai-agent-catalog.md` が作成されている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

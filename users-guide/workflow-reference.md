@@ -20,12 +20,14 @@
 
 | ファイル名 | 用途 | トリガー |
 |-----------|------|---------|
-| `auto-orchestrator-dispatcher.yml` | Issueイベント統合ディスパッチャー（AAS/AAD/ASDW/ABD/ABDV/ADOC/AKM/AQOD/setup-labels） | `issues: [opened, labeled, closed]` |
+| `auto-orchestrator-dispatcher.yml` | Issueイベント統合ディスパッチャー（AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/ADOC/AKM/AQOD/setup-labels） | `issues: [opened, labeled, closed]` |
 | `auto-app-selection-reusable.yml` | アプリケーションアーキテクチャ設計（AAS）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-app-detail-design-reusable.yml` | アプリケーション詳細設計（AAD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-app-dev-microservice-azure-reusable.yml` | マイクロサービス実装（ASDW）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-app-detail-design-web-reusable.yml` | Web App Design（AAD-WEB）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-app-dev-microservice-web-reusable.yml` | Web App Dev & Deploy（ASDW-WEB）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `auto-batch-design-reusable.yml` | バッチ設計（ABD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `auto-batch-dev-reusable.yml` | バッチ実装（ABDV）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-ai-agent-design-reusable.yml` | AI Agent 設計（AAG）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
+| `auto-ai-agent-dev-reusable.yml` | AI Agent 実装（AAGD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `auto-app-documentation-reusable.yml` | Source Codeからのドキュメント作成（ADOC）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `auto-knowledge-management-reusable.yml` | Knowledge Management（AKM）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
 | `auto-aqod.yml` | Original Docs Review 原本ドキュメント質問票生成（AQOD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
@@ -53,41 +55,37 @@
 | `auto-review-to-approve-transition.yml` | reusable: レビュー完了判定→`auto-approve-ready` 付与（dispatcher から呼び出し） | `workflow_call` |
 | `auto-create-subissues-transition.yml` | reusable: split-mode 完了判定→`create-subissues` 付与（dispatcher から呼び出し） | `workflow_call` |
 | `validate-subissues.yml` | `subissues.md` の `<!-- title: ... -->` 必須チェック（フォーマット検証） | 全 PR の `pull_request: [opened, synchronize, reopened]` で起動し、ジョブ内で `work/**/subissues.md` の変更有無を判定 |
-### SDK 版ワークフロー ID（逆引き）
+### hve アプリケーション版ワークフロー ID（逆引き）
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
 | `aas` | App Architecture Design | `auto-app-selection-reusable.yml` |
-| `aad` | App Detail Design | `auto-app-detail-design-reusable.yml` |
-| `asdw` | App Dev Microservice Azure | `auto-app-dev-microservice-azure-reusable.yml` |
+| `aad` / `aad-web` | Web App Design | `auto-app-detail-design-web-reusable.yml` |
+| `asdw` / `asdw-web` | Web App Dev & Deploy | `auto-app-dev-microservice-web-reusable.yml` |
 | `abd` | Batch Design | `auto-batch-design-reusable.yml` |
 | `abdv` | Batch Dev | `auto-batch-dev-reusable.yml` |
+| `aag` | AI Agent Design | `auto-ai-agent-design-reusable.yml`（dispatcher 経由） |
+| `aagd` | AI Agent Dev & Deploy | `auto-ai-agent-dev-reusable.yml`（dispatcher 経由） |
 | `akm` | Knowledge Management（QA + original-docs） | `auto-knowledge-management-reusable.yml` |
 | `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
 | `aqod` | Original Docs Review | `auto-aqod.yml` |
 
-> **注意**: SDK 版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad` / `asdw` / `abd` / `abdv` / `akm` / `adoc` / `aqod` を使用してください。
+> **注意**: hve アプリケーション版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad-web` / `asdw-web` / `abd` / `abdv` / `aag` / `aagd` / `akm` / `adoc` / `aqod` を使用してください（`aad`/`asdw` はエイリアスとして使用可能）。
 >
 > `akm` / `aqod` / `adoc` は本リポジトリの中核的特徴（`knowledge/` を介した要求定義一元管理）を担うワークフローです。
 
 ### Work IQ 連携（オプション）
 
-`--workiq` 有効時、以下のワークフローで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。
+`--auto-qa` と `--workiq` が有効な場合のみ、QA フェーズで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。
 
 - **QA（`--auto-qa`）**:  
-  - 通常モード: 質問票から要約した問いを一括で問い合わせ、デフォルト回答補強に利用  
-  - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-*-workiq-draft.md` を生成
-- **AKM（`akm`）**: Step 実行前に Work IQ 問い合わせを実施し、整合性確認の根拠として反映。`knowledge/workiq-consistency-report-{run_id}.md` にも出力
-- **AQOD（`aqod`）**: Step 実行前に Work IQ 問い合わせを実施し、原本ドキュメントとの整合性確認に利用。`qa/workiq-doc-review-{run_id}.md` にも出力
+  - 通常モード: 質問票から要約した問いを一括で問い合わせ、`qa/{run_id}-{step_id}-workiq-qa.md` を生成
+  - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-{step_id}-workiq-qa-draft.md` を生成
+- **AQOD（`aqod`）**: wizard では `aqod` + `auto_qa=True` の組み合わせで `workiq_draft_mode` が自動 ON になります（質問なし）。Work IQ は AQOD 本体の `original-docs/` 整合性レビューでは使用しません。
+- wizard モード（`python -m hve`）では、QA 自動投入を有効にした場合のみ Work IQ 有効化メニューが表示されます。ログイン成功後に「Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト」を入力すると、QA フェーズの Work IQ プロンプトへ追記できます。
 
-利用ツール（読み取り専用・7種）:
-- `search_emails`
-- `search_messages`
-- `search_meetings`
-- `search_files`
-- `search_people`
-- `get_calendar`
-- `ask`
+利用ツール（読み取り専用）:
+- `ask_work_iq`
 
 ---
 
@@ -132,10 +130,12 @@
 | プレフィックス | ワークフロー | bootstrap 箇所 |
 |-------------|------------|---------------|
 | `aas:*` | `auto-app-selection-reusable.yml` | ワークフロー内 bootstrap ステップ |
-| `aad:*` | `auto-app-detail-design-reusable.yml` | ワークフロー内 bootstrap ステップ |
-| `asdw:*` | `auto-app-dev-microservice-azure-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `aad-web:*` | `auto-app-detail-design-web-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `asdw-web:*` | `auto-app-dev-microservice-web-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `abd:*` | `auto-batch-design-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `abdv:*` | `auto-batch-dev-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `aag:*` | `auto-ai-agent-design-reusable.yml` | ワークフロー内 bootstrap ステップ |
+| `aagd:*` | `auto-ai-agent-dev-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `adoc:*` | `auto-app-documentation-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `akm:*` | `auto-knowledge-management-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `aqod:*` | `auto-aqod.yml` | ワークフロー内 bootstrap ステップ |
@@ -156,7 +156,7 @@
 
 ## モデル選択ルール
 
-- 選択肢: `Auto` / `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `gpt-5.4` / `gpt-5.3-codex` / `gemini-2.5-pro`
+- 選択肢: `Auto` / `gpt-5.5` / `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `gpt-5.4` / `gpt-5.3-codex` / `gemini-2.5-pro`
 - `Auto` は GitHub が最適モデルを動的に選択（可用性・レイテンシ・レート制限・プラン/ポリシーを考慮）
 - `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）
 - プレミアム乗数 1x 超のモデルは `Auto` 対象外
@@ -174,15 +174,17 @@
 
 ### 全体俯瞰図
 
-![全Custom Agentと8ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
+![全Custom Agentと10ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
 
 ### ワークフロー別チェーン図
 
 - AAS: [chain-aas.svg](./images/chain-aas.svg)
-- AAD: [chain-aad.svg](./images/chain-aad.svg)
-- ASDW: [chain-asdw.svg](./images/chain-asdw.svg)
+- AAD-WEB: [chain-aad-web.svg](./images/chain-aad-web.svg)
+- ASDW-WEB: [chain-asdw.svg](./images/chain-asdw.svg)
 - ABD: [chain-abd.svg](./images/chain-abd.svg)
 - ABDV: [chain-abdv.svg](./images/chain-abdv.svg)
+- AAG: [chain-aag.svg](./images/chain-aag.svg)
+- AAGD: [chain-aagd.svg](./images/chain-aagd.svg)
 - AKM: [chain-akm.svg](./images/chain-akm.svg)
 - AQOD: [chain-aqod.svg](./images/chain-aqod.svg)
 - ADOC: [chain-adoc.svg](./images/chain-adoc.svg)
@@ -387,7 +389,7 @@
 | `QA-AzureArchitectureReview` | デプロイ済み Azure リソースを棚卸しし、Azure WAF（5 本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ / セキュリティをレビュー |
 | `QA-AzureDependencyReview` | サービスカタログ準拠で Azure 依存（参照 / 設定 / IaC）を証跡付きで点検 |
 | `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
-| `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用 |
+| `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用。AQOD ワークフロー（`aqod`）でも参照され、`original-docs/` から質問票を生成する（**質問票生成モード**）と、`qa/` / `docs/` 文書との整合性チェックを行う（**整合性チェックモード**）の 2 モードで動作する。**AQOD 本体成果物は `qa/QA-DocConsistency-*.md`（`qa/QA-DocConsistency-Issue-<N>.md` または `qa/QA-DocConsistency-<yyyymmdd-HHMMSS>.md`）であり、HVE Auto-QA の補助成果物 `qa/{run_id}-{step_id}-execution-qa-merged.md` とは別物** |
 | `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。Skill: harness-verification-loop Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
 
 ### Knowledge Management（1）
@@ -431,18 +433,24 @@
 
 `.github/ISSUE_TEMPLATE/` 配下の全テンプレートです。
 
-| ファイル名 | 用途 | トリガーラベル |
-|-----------|------|-------------|
-| `app-architecture-design.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` |
-| `app-detail-design.yml` | アプリケーション設計ワークフロー起動 | `auto-app-detail-design` |
-| `app-dev-microservice.yml` | マイクロサービス実装ワークフロー起動 | `auto-app-dev-microservice` |
-| `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` |
-| `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` |
-| `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成ワークフロー起動 | `auto-app-documentation` |
-| `knowledge-management.yml` | knowledge ドキュメント管理（qa/original-docs/both） | `knowledge-management` |
-| `original-docs-review.yml` | AQOD 原本質問票生成ワークフロー起動 | `original-docs-review` |
-| `self-improve.yml` | セルフ改善ループの起動 | `self-improve` |
-| `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` |
+| ファイル名 | 用途 | トリガーラベル | 自己改善設定 |
+|-----------|------|-------------|-----------|
+| `app-architecture-design.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` | ✅ あり |
+| `web-app-design.yml` | Web App Design（AAD-WEB）ワークフロー起動 | `auto-app-detail-design` | ✅ あり |
+| `web-app-dev.yml` | Web App Dev & Deploy（ASDW-WEB）ワークフロー起動 | `auto-app-dev-microservice` | ✅ あり |
+| `ai-agent-design.yml` | AI Agent Design（AAG）ワークフロー起動 | `auto-ai-agent-design` | ✅ あり |
+| `ai-agent-dev.yml` | AI Agent Dev & Deploy（AAGD）ワークフロー起動 | `auto-ai-agent-dev` | ✅ あり |
+| `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` | ✅ あり |
+| `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` | ✅ あり |
+| `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成ワークフロー起動 | `auto-app-documentation` | ✅ あり |
+| `knowledge-management.yml` | knowledge ドキュメント管理（qa/original-docs/both） | `knowledge-management` | ✅ あり |
+| `original-docs-review.yml` | AQOD 原本質問票生成ワークフロー起動 | `original-docs-review` | ✅ あり |
+| `self-improve.yml` | セルフ改善ループの直接起動（専用テンプレート） | `self-improve` | 自己改善そのもの（別経路） |
+| `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` | ❌ 対象外 |
+
+> **自己改善設定について**: 上記テンプレートの `enable_self_improve` チェックボックスを ON にすると、全ステップ完了後に自己改善ループが実行されます（デフォルトは OFF）。`self-improve.yml` は自己改善専用テンプレートで別経路です。`setup-labels.yml` はラベル初期化用のため自己改善対象外です。
+
+> **hve CLI からの自己改善制御**: `hve orchestrate -w <workflow_id> --self-improve` で有効化、`--no-self-improve` で無効化（`--self-improve` より優先）、`HVE_AUTO_SELF_IMPROVE=true` 環境変数でも有効化できます。
 
 ---
 
@@ -485,6 +493,9 @@ Issue body または PR body に以下の HTML コメントを含めることで
 <!-- app-id: APP-01, APP-03 -->
 ```
 
-APP-ID 未指定の場合は全サービス/全画面が対象となります（後方互換）。
+APP-ID 未指定の場合:
+- `aad-web` / `asdw-web`: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `Webフロントエンド + クラウド` の APP-ID が自動選択されます。
+- `abd` / `abdv`: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `データバッチ処理` / `バッチ` の APP-ID が自動選択されます。
+- その他のワークフロー: 全サービス/全画面が対象となります（後方互換）。
 
 [^improvement-planner-phase4b]: QA 自己改善ループ（Self-Improve）の Phase 4b で使用。

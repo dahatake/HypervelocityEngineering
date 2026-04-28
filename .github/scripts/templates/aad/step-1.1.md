@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aas/step-3.1.md に移動しました。 -->
 {root_ref}
 ## 目的
 ユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。
@@ -20,4 +21,4 @@
 
 ## 完了条件
 - `docs/catalog/domain-analytics.md` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

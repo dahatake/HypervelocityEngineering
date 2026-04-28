@@ -174,11 +174,16 @@ cd .github/scripts/powershell
 
 | ID | 名称 | ステップ数 |
 |----|------|-----------|
-| `aas` | App Architecture Design | 2 |
-| `aad` | App Detail Design | 16 |
-| `asdw` | App Dev (Microservice Azure) | 24 |
+| `aas` | App Architecture Design | 8 |
+| `aad-web` | Web App Design | 4 |
+| `asdw-web` | Web App Dev & Deploy | 19 |
 | `abd` | Batch Design | 9 |
 | `abdv` | Batch Dev | 7 |
+| `aag` | AI Agent Design | 3 |
+| `aagd` | AI Agent Dev & Deploy | 5 |
+| `akm` | Knowledge Management | 1 |
+| `aqod` | Original Docs Review | 1 |
+| `adoc` | Source Codeからのドキュメント作成 | 23 |
 
 ## テスト実行
 

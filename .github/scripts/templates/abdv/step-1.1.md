@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 バッチジョブ設計書・サービスカタログを根拠に、データ系 Azure サービスの選定と設計を行う。
 
@@ -21,4 +23,4 @@
 
 ## 完了条件
 - `docs/azure/azure-services-data.md` が作成または更新されている
-- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}
+{completion_instruction}{rg_section}{job_section}{additional_section}

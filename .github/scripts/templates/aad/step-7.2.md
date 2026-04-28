@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aad-web/step-2.2.md に移動しました。 -->
 {root_ref}
 ## 目的
 サービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。
@@ -20,4 +21,4 @@
 
 ## 完了条件
 - マイクロサービス定義書がサービスカタログに基づいて全て作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

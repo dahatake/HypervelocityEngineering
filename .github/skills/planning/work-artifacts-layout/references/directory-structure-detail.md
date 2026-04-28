@@ -47,7 +47,8 @@ else:
 - **Web UI 方式**: Issue 番号（`Issue-<N>`）で自動分離（変更不要）
 - **CLI SDK 方式**:
   - `work` ディレクトリ: `work/self-improve/run-{run_id}/step-{step_id}/`
-  - `qa` ファイル: `qa/{run_id}-{step_id}-qa-merged.md`
+  - `qa` ファイル: `qa/{run_id}-{step_id}-execution-qa-merged.md`（HVE 実行補助 QA の回答マージ。AQOD 本体成果物 `qa/QA-DocConsistency-*.md` とは別物）
+  - `qa-merged.md`（`execution-` なし）: **非推奨**（v2 以前の出力形式、新規生成は `execution-qa-merged.md` を使用）
   - ロックファイル: `work/self-improve/run-{run_id}/.self-improve-lock`
 
 ### ディレクトリ構造（CLI SDK 方式）
@@ -93,7 +94,7 @@ def generate_run_id() -> str:
 
 ---
 
-質問票（QA）のファイル出力先は `qa/` 配下とする（`work/` には質問票を保存しない）。
+質問票（QA）および Work IQ 補助レポートのファイル出力先は `qa/` 配下とする（`work/` には保存しない）。
 
 **構造**: `qa/` 直下にフラットにファイルを配置する（サブディレクトリは作成しない）。
 
@@ -108,11 +109,13 @@ def generate_run_id() -> str:
 **適用対象**:
 - copilot-instructions.md §0.2 ステップ3 で作成する質問票（非PR連携時のコンテキスト収集）
 - `copilot-auto-qa.yml` や類似のトリガーによる質問票作成依頼の応答として出力するファイル
+- `*-workiq-*.md` 形式の Work IQ 補助レポート
+- `*-workiq-*.jsonl` 形式の Work IQ 事前問い合わせトレース
 - PR コメントやチャットでの回答はファイル出力ではないため対象外
 
 **書き込みルール**: §4.1 の適用範囲に `qa/` 配下が含まれるため、削除→新規作成ルールが同等に適用される。
 
-> **注意**: `qa/` 配下には質問票ファイルのみを配置する。`plan.md`、`subissues.md` 等の計画ファイルは従来通り `work/` 配下に保存する。
+> **注意**: `qa/` 配下には質問票ファイル、`*-workiq-*.md` 形式の Work IQ 補助レポート、`*-workiq-*.jsonl` 形式の Work IQ 事前問い合わせトレースのみを配置する。`plan.md`、`subissues.md` 等の計画ファイルは従来通り `work/` 配下に保存する。
 
 ---
 

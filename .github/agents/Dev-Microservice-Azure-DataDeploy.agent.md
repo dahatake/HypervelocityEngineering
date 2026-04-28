@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-DataDeploy
 description: Azure CLIでデータ系サービスを最小構成で作成し、サンプルデータを変換・一括登録して検証する（冪等/再試行/証跡/ドキュメント更新）。
 tools: ["*"]
@@ -80,7 +80,8 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -91,7 +92,7 @@ Azure上のデータストア最小構成デプロイ + サンプルデータ一
   ※ただし Azure 実行の待ち時間（リソースプロビジョニング等）は見積に含めない
 
 ### 3.2 Split Mode（分割時）
-- `{WORK}subissues.md` を作成し、**10〜15分程度で終わるSub**に分割した Issue 本文（コピペ可能）を出力する
+- `{WORK}subissues.md` を作成し、**task_scope=single・最小コンテキスト単位の Sub**に分割した Issue 本文（コピペ可能）を出力する
 - 例（必要に応じて調整）：
   1) azure-services-data.md の解析＋最小構成方針の確定（SKU/リージョン/命名/タグ）
   2) `create-azure-data-resources-prep.sh` 作成＋shellcheck 検証

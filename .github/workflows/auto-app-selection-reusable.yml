@@ -33,7 +33,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -638,6 +638,12 @@ jobs:
           # ---- Step Issue 生成 ----
           S1_NUM="" S1_ID=""
           S2_NUM="" S2_ID=""
+          S31_NUM="" S31_ID=""
+          S32_NUM="" S32_ID=""
+          S4_NUM="" S4_ID=""
+          S5_NUM="" S5_ID=""
+          S6_NUM="" S6_ID=""
+          S7_NUM="" S7_ID=""
 
           # 各 Step Issue の body 先頭に埋め込む共通メタ情報
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
@@ -697,10 +703,100 @@ jobs:
             sleep 3
           fi
 
+          # ---- Step.3.1 ----
+          if ! skip_step "3.1"; then
+            BODY_S31=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics`\n\n## 依存\n- Step.2（ソフトウェアアーキテクチャの推薦）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.3.1: ドメイン分析" \
+              "${BODY_S31}" \
+              "${STEP_LABELS}")
+            S31_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S31_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.1 作成: #${S31_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.3.2 ----
+          if ! skip_step "3.2"; then
+            BODY_S32=$(printf '%s\n## 目的\nドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify`\n\n## 依存\n- Step.3.1（ドメイン分析）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.3.2: サービス一覧抽出" \
+              "${BODY_S32}" \
+              "${STEP_LABELS}")
+            S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S32_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.2 作成: #${S32_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4 ----
+          if ! skip_step "4"; then
+            BODY_S4=$(printf '%s\n## 目的\nサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-model.md`\n\n## Custom Agent\n`Arch-DataModeling`\n\n## 依存\n- Step.3.2（サービス一覧抽出）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-model.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.4: データモデル" \
+              "${BODY_S4}" \
+              "${STEP_LABELS}")
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.5 ----
+          if ! skip_step "5"; then
+            BODY_S5=$(printf '%s\n## 目的\n概念エンティティと物理テーブルのマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog`\n\n## 依存\n- Step.4（データモデル）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.5: データカタログ作成" \
+              "${BODY_S5}" \
+              "${STEP_LABELS}")
+            S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S5_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5 作成: #${S5_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.6 ----
+          if ! skip_step "6"; then
+            BODY_S6=$(printf '%s\n## 目的\n画面・機能・API・SoT データのマッピングを持つサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog`\n\n## 依存\n- Step.5（データカタログ作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.6: サービスカタログ" \
+              "${BODY_S6}" \
+              "${STEP_LABELS}")
+            S6_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S6_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6 作成: #${S6_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.7 ----
+          if ! skip_step "7"; then
+            BODY_S7=$(printf '%s\n## 目的\nプロジェクト全体の TDD テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy`\n\n## 依存\n- Step.6（サービスカタログ）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.7: テスト戦略書" \
+              "${BODY_S7}" \
+              "${STEP_LABELS}")
+            S7_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S7_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.7 作成: #${S7_NUM}"
+            sleep 3
+          fi
+
           # ---- Sub Issue 紐付け ----
           echo "Sub Issue 紐付けを開始します..."
           [[ -n "${S1_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
           [[ -n "${S2_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S31_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S31_ID}"; echo "Root → Step.3.1 紐付け完了"; }
+          [[ -n "${S32_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S32_ID}"; echo "Root → Step.3.2 紐付け完了"; }
+          [[ -n "${S4_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S5_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
+          [[ -n "${S6_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S6_ID}"; echo "Root → Step.6 紐付け完了"; }
+          [[ -n "${S7_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S7_ID}"; echo "Root → Step.7 紐付け完了"; }
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S1_NUM}" ]]; then
@@ -971,11 +1067,44 @@ jobs:
               ;;
 
             "2")
-              # Step.2 完了 → Root Issue に aas:done + 完了コメント
+              S31_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.1:')
+              if [[ -n "${S31_NUM}" ]]; then
+                activate_issue "${S31_NUM}"
+              else
+                add_label "${ROOT_ISSUE}" "aas:done"
+              fi
+              ;;
+
+            "3.1")
+              S32_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.2:')
+              [[ -n "${S32_NUM}" ]] && activate_issue "${S32_NUM}" || true
+              ;;
+
+            "3.2")
+              S4_NUM=$(get_sub_issue_number '\[AAS\] Step\.4:')
+              [[ -n "${S4_NUM}" ]] && activate_issue "${S4_NUM}" || true
+              ;;
+
+            "4")
+              S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
+              [[ -n "${S5_NUM}" ]] && activate_issue "${S5_NUM}" || true
+              ;;
+
+            "5")
+              S6_NUM=$(get_sub_issue_number '\[AAS\] Step\.6:')
+              [[ -n "${S6_NUM}" ]] && activate_issue "${S6_NUM}" || true
+              ;;
+
+            "6")
+              S7_NUM=$(get_sub_issue_number '\[AAS\] Step\.7:')
+              [[ -n "${S7_NUM}" ]] && activate_issue "${S7_NUM}" || true
+              ;;
+
+            "7")
+              # Step.7 完了 → Root Issue に aas:done + 完了コメント
               add_label "${ROOT_ISSUE}" "aas:done"
               echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-              post_comment "${ROOT_ISSUE}" "🎉 フェーズ1（アプリケーションアーキテクチャ設計）の全ステップが完了しました！\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\` — アプリケーションリスト\n- \`docs/catalog/app-arch-catalog.md\` — アーキテクチャ選定結果\n\nフェーズ2（アプリケーション設計）を実行するには、**App Detail Design** Issue を別途作成してください。"
-              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜7）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
               ;;
 
             *)
@@ -1071,3 +1200,68 @@ jobs:
           # ── Root Issue の自動クローズ判定 ──
           echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
           auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に <!-- branch: ... --> がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: pip install ruff
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          git push origin HEAD:${{ steps.parse.outputs.branch }}
+

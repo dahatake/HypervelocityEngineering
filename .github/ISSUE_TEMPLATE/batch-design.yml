@@ -24,8 +24,25 @@ body:
         | **Step.6.2** | 監視・運用設計書（詳細）|
         | **Step.6.3** | TDD テスト仕様書（Step.6.1 AND Step.6.2 完了後）|
 
+        ⚠️ **前提条件**:
+        - Architecture Design (AAS) が完了していること
+        - 以下のファイルが存在すること:
+          - `docs/catalog/app-arch-catalog.md`（推薦アーキテクチャ フィルタリングの正本）
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
+  - type: input
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
+      description: |
+        対象とする APP-ID をカンマ区切りで指定してください。
+        指定した場合: 指定 APP-ID のうち `データバッチ処理` または `バッチ` の推薦アーキテクチャのもののみ対象になります。
+        未指定の場合: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `データバッチ処理` / `バッチ` の APP-ID が自動選択されます。
+        ※ Batch 系は独自の APP 対応表を持たず、`docs/catalog/app-arch-catalog.md` のみを正本とします。
+      placeholder: "例: APP-02, APP-03"
+    validations:
+      required: false
+
   - type: input
     id: branch
     attributes:
@@ -69,6 +86,7 @@ body:
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"
+        - "gpt-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"
@@ -98,6 +116,45 @@ body:
         デフォルト（チェックなし）では質問票は作成されません。
       options:
         - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
 
   - type: checkboxes
     id: enable_auto_merge

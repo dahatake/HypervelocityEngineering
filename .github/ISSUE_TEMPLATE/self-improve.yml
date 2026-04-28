@@ -47,6 +47,19 @@ body:
     validations:
       required: false
 
+  - type: textarea
+    id: task_goal
+    attributes:
+      label: "自己改善ゴール（任意）"
+      description: |
+        改善ループの目標説明を記載します。省略した場合、ワークフロー種別の標準ゴールまたは
+        .github/agents/ / knowledge/ / docs/ の自動解析結果が適用されます。
+      placeholder: |
+        例: テスト失敗を 0 件にし lint エラーを解消する
+        例: knowledge/ D01〜D21 の整合性を確保する
+    validations:
+      required: false
+
   - type: dropdown
     id: max_iterations
     attributes:
@@ -132,6 +145,7 @@ body:
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"
+        - "gpt-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"

@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-UI-Detail
 description: "全画面の実装用画面定義書（UX/A11y/セキュリティ含む）を docs/screen/ に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -53,7 +53,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
    1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
    2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
       ```
-      <!-- estimate_total: XX -->
+      <!-- task_scope: single|multi -->
+      <!-- context_size: small|medium|large -->
       <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
       <!-- subissues_count: N -->
       <!-- implementation_files: true or false -->
@@ -68,9 +69,9 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
-### 4.2 Split Mode（合計>15分 など）
+### 4.2 Split Mode（task_scope=multi または context_size=large）
 - `{WORK}subissues.md` を作成し、**そのままSub Issue化できる本文**を出力する
-- 1サブあたりの目安: 3〜5画面（または見積<=15分になるよう調整）
+- 1サブあたりの目安: 3〜5画面（または context_size ≤ medium になるよう調整）
 - 各Subには以下を必ず含める:
   - 対象画面ID一覧
   - 成果物（生成するファイル）

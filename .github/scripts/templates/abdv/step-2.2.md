@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 テストコードを通過させるバッチジョブ本実装（TDD GREEN フェーズ）を行う。
 
@@ -21,4 +23,9 @@
 
 ## 完了条件
 - `dotnet test` が全テスト PASS（TDD GREEN）になっている
-- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}
+
+## TDD GREEN リトライルール
+- テストが PASS にならない場合、最大 {tdd_max_retries} 回まで実装を修正して再試行する
+- {tdd_max_retries} 回で全 PASS にならない場合: `abdv:blocked` ラベルを付与し、未 PASS テスト一覧と試行回数を Issue コメントで報告する
+- テストコード（`test/batch/`）は原則変更禁止
+{completion_instruction}{rg_section}{job_section}{additional_section}

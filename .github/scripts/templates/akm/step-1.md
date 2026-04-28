@@ -42,4 +42,4 @@
 ## 完了条件
 - `knowledge/business-requirement-document-status.md` が生成されている
 - マッピングがある D クラスについて `knowledge/D{NN}-<文書名>.md` が生成されている
-- 完了時に `akm:done` を付与すること{additional_section}
+{completion_instruction}{additional_section}

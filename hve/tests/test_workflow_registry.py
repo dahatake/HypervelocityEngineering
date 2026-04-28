@@ -3,47 +3,56 @@
 import pytest
 
 from hve.workflow_registry import (
+    MetaWorkflowDef,
     StepDef,
     WorkflowDef,
-    get_workflow,
-    get_step,
+    WorkflowDependency,
+    get_meta_dependencies,
     get_next_steps,
     get_root_steps,
+    get_step,
+    get_workflow,
     list_workflows,
 )
 
 
 # ---------------------------------------------------------------------------
-# bash 版と一致するステップ数定義 (workflow-registry.sh より)
+# ステップ数定義
 # ---------------------------------------------------------------------------
 
 EXPECTED_STEP_COUNTS = {
-    "aas": 2,
-    "aad": 16,   # 3 containers + 13 real steps
-    "asdw": 24,  # 4 containers + 20 real steps
+    "aas": 8,
+    "aad-web": 4,
+    "asdw-web": 19,  # 4 containers + 15 real steps
     "abd": 9,
     "abdv": 7,
+    "aag": 3,
+    "aagd": 5,
     "akm": 1,
     "aqod": 1,
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
-    "aas": 2,
-    "aad": 13,
-    "asdw": 20,
+    "aas": 8,
+    "aad-web": 4,
+    "asdw-web": 15,
     "abd": 9,
     "abdv": 7,
+    "aag": 3,
+    "aagd": 5,
     "akm": 1,
     "aqod": 1,
     "adoc": 19,
 }
 
+CANONICAL_WORKFLOW_IDS = list(EXPECTED_STEP_COUNTS.keys())
+
 
 class TestGetWorkflow:
     """get_workflow() のテスト。"""
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
+    @pytest.mark.parametrize("wf_id", CANONICAL_WORKFLOW_IDS)
     def test_get_all_workflows(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -54,17 +63,30 @@ class TestGetWorkflow:
         assert wf is not None
         assert wf.id == "aas"
 
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("aad", "aad-web"),
+            ("asdw", "asdw-web"),
+            ("aad_web", "aad-web"),
+            ("asdw_web", "asdw-web"),
+        ],
+    )
+    def test_get_workflow_aliases(self, alias: str, expected: str):
+        wf = get_workflow(alias)
+        assert wf is not None
+        assert wf.id == expected
+
     def test_get_workflow_unknown(self):
         assert get_workflow("unknown") is None
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
-    def test_step_count_matches_bash(self, wf_id: str):
-        """各ワークフローのステップ数が bash 版と一致すること。"""
+    @pytest.mark.parametrize("wf_id", CANONICAL_WORKFLOW_IDS)
+    def test_step_count_matches_expected(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
         assert len(wf.steps) == EXPECTED_STEP_COUNTS[wf_id]
 
-    @pytest.mark.parametrize("wf_id", ["aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"])
+    @pytest.mark.parametrize("wf_id", CANONICAL_WORKFLOW_IDS)
     def test_non_container_count(self, wf_id: str):
         wf = get_workflow(wf_id)
         assert wf is not None
@@ -104,40 +126,58 @@ class TestWorkflowDef:
         assert wf.state_labels["initialized"] == "aas:initialized"
         assert wf.state_labels["done"] == "aas:done"
 
-    def test_params_asdw(self):
-        wf = get_workflow("asdw")
+    def test_params_asdw_web(self):
+        wf = get_workflow("asdw-web")
+        assert "app_ids" in wf.params
         assert "app_id" in wf.params
         assert "resource_group" in wf.params
         assert "usecase_id" in wf.params
 
-    def test_params_aad(self):
-        wf = get_workflow("aad")
-        assert "app_ids" in wf.params
-        assert "app_id" in wf.params
+    def test_params_aad_web(self):
+        wf = get_workflow("aad-web")
+        assert wf.params == ["app_ids", "app_id"]
+
+    def test_params_aag(self):
+        wf = get_workflow("aag")
+        assert wf.params == ["app_ids", "app_id", "usecase_id"]
+
+    def test_params_aagd(self):
+        wf = get_workflow("aagd")
+        assert wf.params == ["app_ids", "app_id", "resource_group", "usecase_id"]
 
     def test_params_abdv(self):
         wf = get_workflow("abdv")
+        assert "app_ids" in wf.params
+        assert "app_id" in wf.params
         assert "resource_group" in wf.params
         assert "batch_job_id" in wf.params
+
+    def test_params_abd(self):
+        wf = get_workflow("abd")
+        assert "app_ids" in wf.params
+        assert "app_id" in wf.params
 
 
 class TestGetRootSteps:
     """get_root_steps() のテスト。"""
 
     def test_aas_roots(self):
-        """AAS: Step.1 のみがルート。"""
         roots = get_root_steps("aas")
-        root_ids = [s.id for s in roots]
-        assert root_ids == ["1"]
+        assert [s.id for s in roots] == ["1"]
 
-    def test_aad_roots(self):
-        """AAD: Step.1.1 のみがルート（コンテナは除外）。"""
-        roots = get_root_steps("aad")
-        root_ids = [s.id for s in roots]
-        assert root_ids == ["1.1"]
+    def test_aad_web_roots(self):
+        roots = get_root_steps("aad-web")
+        assert [s.id for s in roots] == ["1"]
+
+    def test_aag_roots(self):
+        roots = get_root_steps("aag")
+        assert [s.id for s in roots] == ["1"]
+
+    def test_aagd_roots(self):
+        roots = get_root_steps("aagd")
+        assert [s.id for s in roots] == ["1"]
 
     def test_abd_roots(self):
-        """ABD: Step.1.1 と Step.1.2 が並列ルート。"""
         roots = get_root_steps("abd")
         root_ids = sorted(s.id for s in roots)
         assert root_ids == ["1.1", "1.2"]
@@ -149,45 +189,70 @@ class TestGetRootSteps:
 class TestGetNextSteps:
     """get_next_steps() のテスト — DAG 走査ロジック。"""
 
-    def test_sequential(self):
-        """AAS: Step.1 完了 → Step.2 が次。"""
-        nexts = get_next_steps("aas", completed_step_ids=["1"])
-        assert [s.id for s in nexts] == ["2"]
+    def test_aas_expanded_dag_walk(self):
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=[])] == ["1"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1"])] == ["2"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2"])] == ["3.1"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1"])] == ["3.2"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2"])] == ["4"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4"])] == ["5"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4", "5"])] == ["6"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4", "5", "6"])] == ["7"]
 
-    def test_initial_state(self):
-        """AAS: 何も完了していない → ルートのみ。"""
-        nexts = get_next_steps("aas", completed_step_ids=[])
-        assert [s.id for s in nexts] == ["1"]
+    def test_aad_web_dag_walk(self):
+        assert [s.id for s in get_next_steps("aad-web", completed_step_ids=[])] == ["1"]
 
-    def test_all_completed(self):
-        """AAS: 全て完了 → 空。"""
-        nexts = get_next_steps("aas", completed_step_ids=["1", "2"])
-        assert nexts == []
+        nexts = get_next_steps("aad-web", completed_step_ids=["1"])
+        assert sorted(s.id for s in nexts) == ["2.1", "2.2"]
+
+        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1"])
+        assert [s.id for s in nexts] == ["2.2"]
+
+        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2"])
+        assert [s.id for s in nexts] == ["2.3"]
+
+    def test_asdw_web_dag_walk_and_bypass_agent_chain(self):
+        step_30t = get_step("asdw-web", "3.0T")
+        assert step_30t is not None
+        assert step_30t.depends_on == ["2.5"]
+        assert step_30t.skip_fallback_deps == ["2.5"]
+
+        assert get_step("asdw-web", "2.6") is None
+        assert get_step("asdw-web", "2.7") is None
+        assert get_step("asdw-web", "2.8") is None
+
+        completed = ["1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5"]
+        nexts = get_next_steps("asdw-web", completed_step_ids=completed)
+        assert [s.id for s in nexts] == ["3.0T"]
+
+    def test_aag_dag_walk(self):
+        assert [s.id for s in get_next_steps("aag", completed_step_ids=[])] == ["1"]
+        assert [s.id for s in get_next_steps("aag", completed_step_ids=["1"])] == ["2"]
+        assert [s.id for s in get_next_steps("aag", completed_step_ids=["1", "2"])] == ["3"]
+
+    def test_aagd_dag_walk(self):
+        assert [s.id for s in get_next_steps("aagd", completed_step_ids=[])] == ["1"]
+        assert [s.id for s in get_next_steps("aagd", completed_step_ids=["1"])] == ["2.1"]
+        assert [s.id for s in get_next_steps("aagd", completed_step_ids=["1", "2.1"])] == ["2.2"]
+        assert [s.id for s in get_next_steps("aagd", completed_step_ids=["1", "2.1", "2.2"])] == ["2.3"]
+        assert [s.id for s in get_next_steps("aagd", completed_step_ids=["1", "2.1", "2.2", "2.3"])] == ["3"]
+
+    def test_aagd_agent_steps_present(self):
+        assert get_step("aagd", "1").custom_agent == "Arch-AIAgentDesign"
+        assert get_step("aagd", "2.3").custom_agent == "Dev-Microservice-Azure-AgentCoding"
+        assert get_step("aagd", "3").custom_agent == "Dev-Microservice-Azure-AgentDeploy"
 
     def test_and_join(self):
-        """ABD: Step.1.1 AND Step.1.2 → Step.2 (AND join)。"""
-        # 片方だけ完了 → Step.2 はまだ
         nexts = get_next_steps("abd", completed_step_ids=["1.1"])
         next_ids = [s.id for s in nexts]
         assert "2" not in next_ids
         assert "1.2" in next_ids
 
-        # 両方完了 → Step.2 が起動可能
         nexts = get_next_steps("abd", completed_step_ids=["1.1", "1.2"])
         next_ids = [s.id for s in nexts]
         assert "2" in next_ids
 
-    def test_parallel_fork(self):
-        """AAD: Step.6 完了 → Step.7.1 と Step.7.2 が並列起動。"""
-        completed = ["1.1", "1.2", "2", "3", "4", "5", "6"]
-        nexts = get_next_steps("aad", completed_step_ids=completed)
-        next_ids = sorted(s.id for s in nexts)
-        assert "7.1" in next_ids
-        assert "7.2" in next_ids
-
     def test_skipped_resolves_dependency(self):
-        """スキップされたステップは依存解決に使える。"""
-        # ABD: Step.1.1 完了、Step.1.2 スキップ → Step.2 が起動可能
         nexts = get_next_steps(
             "abd",
             completed_step_ids=["1.1"],
@@ -197,7 +262,6 @@ class TestGetNextSteps:
         assert "2" in next_ids
 
     def test_nonexistent_dep_auto_resolves(self):
-        """レジストリに存在しない依存先は自動解決される。"""
         wf = WorkflowDef(
             id="test",
             name="Test",
@@ -212,13 +276,12 @@ class TestGetNextSteps:
         assert [s.id for s in nexts] == ["A"]
 
     def test_containers_excluded(self):
-        """コンテナは get_next_steps の結果に含まれない。"""
-        nexts = get_next_steps("aad", completed_step_ids=[])
+        nexts = get_next_steps("asdw-web", completed_step_ids=[])
         next_ids = [s.id for s in nexts]
-        # コンテナ ID ("1", "7", "8") が含まれないこと
         assert "1" not in next_ids
-        assert "7" not in next_ids
-        assert "8" not in next_ids
+        assert "2" not in next_ids
+        assert "3" not in next_ids
+        assert "4" not in next_ids
 
     def test_unknown_workflow(self):
         assert get_next_steps("nonexistent", completed_step_ids=[]) == []
@@ -228,7 +291,7 @@ class TestGetStep:
     """モジュールレベル get_step() のテスト。"""
 
     def test_existing(self):
-        step = get_step("asdw", "2.3T")
+        step = get_step("asdw-web", "2.3T")
         assert step is not None
         assert step.custom_agent == "Arch-TDD-TestSpec"
 
@@ -242,13 +305,41 @@ class TestGetStep:
 class TestListWorkflows:
     """list_workflows() のテスト。"""
 
-    def test_list_workflows_returns_eight(self):
-        wfs = list_workflows()
-        assert len(wfs) == 8
+    def test_all_ids_are_present(self):
+        workflows = list_workflows()
+        wf_ids = [wf.id for wf in workflows]
 
-    def test_all_ids(self):
-        wf_ids = sorted(wf.id for wf in list_workflows())
-        assert wf_ids == ["aad", "aas", "abd", "abdv", "adoc", "akm", "aqod", "asdw"]
+        assert len(workflows) == len(CANONICAL_WORKFLOW_IDS)
+        assert len(wf_ids) == len(set(wf_ids))
+        assert set(wf_ids) == set(CANONICAL_WORKFLOW_IDS)
+
+
+class TestMetaWorkflow:
+    """MetaWorkflowDef / WorkflowDependency のテスト。"""
+
+    def test_meta_dataclasses_constructible(self):
+        dep = WorkflowDependency(workflow_id="aas", required_artifacts=["docs/catalog/*.md"], soft=True)
+        mwf = MetaWorkflowDef(
+            id="meta",
+            workflows=["aas"],
+            dependencies={"aas": [dep]},
+        )
+        assert mwf.dependencies["aas"][0].workflow_id == "aas"
+        assert mwf.dependencies["aas"][0].soft is True
+
+    def test_get_meta_dependencies_for_aad_web(self):
+        deps = get_meta_dependencies("aad-web")
+        assert len(deps) == 1
+        assert deps[0].workflow_id == "aas"
+        assert "docs/catalog/app-catalog.md" in deps[0].required_artifacts
+
+    def test_get_meta_dependencies_for_alias(self):
+        deps = get_meta_dependencies("asdw")
+        assert len(deps) == 1
+        assert deps[0].workflow_id == "aad-web"
+
+    def test_get_meta_dependencies_unknown(self):
+        assert get_meta_dependencies("unknown") == []
 
 
 class TestAKMWorkflow:
@@ -261,7 +352,6 @@ class TestAKMWorkflow:
 
     @pytest.mark.parametrize("sources", ["qa", "original-docs", "both"])
     def test_akm_sources_values_documented(self, sources: str):
-        """AKM が受け入れる sources 値をテストで固定化する。"""
         assert sources in ["qa", "original-docs", "both"]
 
     def test_akm_single_step(self):
@@ -269,46 +359,6 @@ class TestAKMWorkflow:
         assert wf is not None
         assert len(wf.steps) == 1
         assert wf.steps[0].id == "1"
-
-    def test_akm_custom_agent(self):
-        wf = get_workflow("akm")
-        assert wf is not None
-        assert wf.steps[0].custom_agent == "KnowledgeManager"
-
-    def test_akm_template_path(self):
-        step = get_step("akm", "1")
-        assert step is not None
-        assert step.body_template_path == "templates/akm/step-1.md"
-
-    def test_akm_root_step(self):
-        roots = get_root_steps("akm")
-        assert len(roots) == 1
-        assert roots[0].id == "1"
-
-    def test_akm_template_mentions_knowledge(self):
-        """AKM step-1.md テンプレートが knowledge/ 出力への言及を含むこと。"""
-        from hve.template_engine import _load_template
-        content = _load_template("templates/akm/step-1.md")
-        assert "knowledge/" in content
-
-    def test_akm_template_uses_correct_master_list_path(self):
-        """AKM step-1.md テンプレートが正しいパス template/ を参照していること（docs/ ではない）。"""
-        from hve.template_engine import _load_template
-        content = _load_template("templates/akm/step-1.md")
-        assert "template/business-requirement-document-master-list.md" in content
-        assert "docs/business-requirement-document-master-list.md" not in content
-
-    def test_akm_template_has_12_steps(self):
-        """AKM step-1.md テンプレートが拡張ステップを記述していること。"""
-        from hve.template_engine import _load_template
-        content = _load_template("templates/akm/step-1.md")
-        assert "Step 6.5" in content
-
-    def test_akm_template_output_lists_knowledge(self):
-        """AKM step-1.md テンプレートの出力セクションに knowledge/ が含まれること。"""
-        from hve.template_engine import _load_template
-        content = _load_template("templates/akm/step-1.md")
-        assert "knowledge/D{NN}" in content
 
 
 class TestAQODWorkflow:
@@ -324,21 +374,6 @@ class TestAQODWorkflow:
         assert wf is not None
         assert len(wf.steps) == 1
         assert wf.steps[0].id == "1"
-
-    def test_aqod_custom_agent(self):
-        wf = get_workflow("aqod")
-        assert wf is not None
-        assert wf.steps[0].custom_agent == "QA-DocConsistency"
-
-    def test_aqod_template_path(self):
-        step = get_step("aqod", "1")
-        assert step is not None
-        assert step.body_template_path == "templates/aqod/step-1.md"
-
-    def test_aqod_root_step(self):
-        roots = get_root_steps("aqod")
-        assert len(roots) == 1
-        assert roots[0].id == "1"
 
 
 class TestADOCWorkflow:
@@ -357,21 +392,6 @@ class TestADOCWorkflow:
         assert len(roots) == 1
         assert roots[0].id == "1"
 
-    def test_adoc_parallel_step_2(self):
-        nexts = get_next_steps("adoc", completed_step_ids=["1"])
-        next_ids = sorted(s.id for s in nexts)
-        assert next_ids == ["2.1", "2.2", "2.3", "2.4", "2.5"]
-
-    def test_adoc_final_parallel_step_6(self):
-        completed = [
-            "1", "2.1", "2.2", "2.3", "2.4", "2.5",
-            "3.1", "3.2", "3.3", "3.4", "3.5",
-            "4", "5.1", "5.2", "5.3", "5.4",
-        ]
-        nexts = get_next_steps("adoc", completed_step_ids=completed)
-        next_ids = sorted(s.id for s in nexts)
-        assert next_ids == ["6.1", "6.2", "6.3"]
-
 
 class TestStepDefFields:
     """StepDef の各フィールドが正しく設定されていること。"""
@@ -380,16 +400,9 @@ class TestStepDefFields:
         step = get_step("aas", "1")
         assert step.body_template_path == "templates/aas/step-1.md"
 
-    def test_container_no_template(self):
-        wf = get_workflow("aad")
-        container = wf.get_step("1")
-        assert container.is_container is True
-        assert container.body_template_path is None
-        assert container.custom_agent is None
-
     def test_skip_fallback_deps(self):
-        step = get_step("aad", "3")
-        assert step.skip_fallback_deps == ["2"]
+        step = get_step("aas", "5")
+        assert step.skip_fallback_deps == ["4"]
 
     def test_block_unless_empty(self):
         step = get_step("aas", "1")

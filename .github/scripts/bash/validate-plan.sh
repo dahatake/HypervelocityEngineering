@@ -4,8 +4,8 @@
 # Ported from: .github/cli/validate_plan.py
 #
 # Validates:
-#   1. Required metadata presence (estimate_total, split_decision, implementation_files)
-#   2. estimate_total vs split_decision consistency
+#   1. Required metadata presence (task_scope, context_size, split_decision, implementation_files)
+#   2. task_scope/context_size vs split_decision consistency
 #   3. SPLIT_REQUIRED + implementation_files incompatibility
 #   4. SPLIT_REQUIRED → subissues.md existence
 #   5. subissues_count vs actual <!-- subissue --> block count
@@ -56,11 +56,15 @@ validate() {
   local content
   content=$(cat "${plan_path}")
 
-  local estimate decision impl_files subissues_count
-  estimate=$(_extract_int "${content}" "estimate_total")
+  local task_scope context_size decision impl_files subissues_count
+  task_scope=$(_extract_str "${content}" "task_scope")
+  context_size=$(_extract_str "${content}" "context_size")
   decision=$(_extract_str "${content}" "split_decision")
   impl_files=$(_extract_str "${content}" "implementation_files")
   subissues_count=$(_extract_int "${content}" "subissues_count")
+  # estimate_total は任意（参考情報）として extract のみ行い判定には使用しない
+  local estimate
+  estimate=$(_extract_int "${content}" "estimate_total")
 
   # Default decision to MISSING if empty
   if [[ -z "${decision}" ]]; then
@@ -72,7 +76,7 @@ validate() {
   fi
 
   echo "Checking: ${plan_path}"
-  echo "  Estimate: ${estimate}min | Decision: ${decision} | Impl files: ${impl_files} | Subissues count: ${subissues_count}"
+  echo "  task_scope: ${task_scope} | context_size: ${context_size} | Decision: ${decision} | Impl files: ${impl_files} | Subissues count: ${subissues_count}"
 
   # Rule 0: required metadata must exist and have valid values
   if [[ "${decision}" == "MISSING" ]]; then
@@ -81,8 +85,16 @@ validate() {
     errors+=("${plan_path}: invalid split_decision='${decision}'. Must be PROCEED or SPLIT_REQUIRED")
   fi
 
-  if [[ "${estimate}" == "0" ]] && ! echo "${content}" | grep -qP '<!--\s*estimate_total:'; then
-    errors+=("${plan_path}: missing required metadata <!-- estimate_total: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
+  if [[ -z "${task_scope}" ]]; then
+    errors+=("${plan_path}: missing required metadata <!-- task_scope: ... -->. Must be single or multi. See Skill task-dag-planning §2.1.2")
+  elif [[ "${task_scope}" != "single" && "${task_scope}" != "multi" ]]; then
+    errors+=("${plan_path}: invalid task_scope='${task_scope}'. Must be single or multi")
+  fi
+
+  if [[ -z "${context_size}" ]]; then
+    errors+=("${plan_path}: missing required metadata <!-- context_size: ... -->. Must be small, medium, or large. See Skill task-dag-planning §2.1.2")
+  elif [[ "${context_size}" != "small" && "${context_size}" != "medium" && "${context_size}" != "large" ]]; then
+    errors+=("${plan_path}: invalid context_size='${context_size}'. Must be small, medium, or large")
   fi
 
   if [[ "${impl_files}" == "MISSING" ]]; then
@@ -91,9 +103,14 @@ validate() {
     errors+=("${plan_path}: invalid implementation_files='${impl_files}'. Must be true or false")
   fi
 
-  # Rule 1: estimate > 15 must be SPLIT_REQUIRED
-  if (( estimate > 15 )) && [[ "${decision}" == "PROCEED" ]]; then
-    errors+=("${plan_path}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
+  # Rule 1a: task_scope=multi must be SPLIT_REQUIRED
+  if [[ "${task_scope}" == "multi" && "${decision}" == "PROCEED" ]]; then
+    errors+=("${plan_path}: task_scope=multi but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
+  fi
+
+  # Rule 1b: context_size=large must be SPLIT_REQUIRED
+  if [[ "${context_size}" == "large" && "${decision}" == "PROCEED" ]]; then
+    errors+=("${plan_path}: context_size=large but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
   fi
 
   # Rule 2: SPLIT_REQUIRED must not have implementation files

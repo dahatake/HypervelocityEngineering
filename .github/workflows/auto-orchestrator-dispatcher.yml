@@ -6,7 +6,7 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -41,31 +41,46 @@ jobs:
           allowed_associations = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 
           trigger_map = [
-              ('auto-app-detail-design', 'AAD'),
-              ('auto-app-dev-microservice', 'ASDW'),
-              ('auto-app-documentation', 'ADOC'),
-              ('auto-app-selection', 'AAS'),
-              ('auto-batch-design', 'ABD'),
-              ('auto-batch-dev', 'ABDV'),
-              ('knowledge-management', 'AKM'),
+              ('auto-app-selection',              'AAS'),
+              ('auto-app-detail-design-web',      'AAD-WEB'),
+              ('auto-app-dev-microservice-web',   'ASDW-WEB'),
+              ('auto-batch-design',               'ABD'),
+              ('auto-batch-dev',                  'ABDV'),
+              ('auto-ai-agent-design',            'AAG'),
+              ('auto-ai-agent-dev',               'AAGD'),
+              ('auto-app-documentation',          'ADOC'),
+              ('knowledge-management',            'AKM'),
+              # 後方互換
+              ('auto-app-detail-design',          'AAD-WEB'),
+              ('auto-app-dev-microservice',       'ASDW-WEB'),
           ]
           done_map = {
-              'aad:done': 'AAD',
-              'asdw:done': 'ASDW',
-              'adoc:done': 'ADOC',
-              'aas:done': 'AAS',
-              'abd:done': 'ABD',
-              'abdv:done': 'ABDV',
-              'akm:done': 'AKM',
+              'aas:done':      'AAS',
+              'aad-web:done':  'AAD-WEB',
+              'asdw-web:done': 'ASDW-WEB',
+              'abd:done':      'ABD',
+              'abdv:done':     'ABDV',
+              'aag:done':      'AAG',
+              'aagd:done':     'AAGD',
+              'adoc:done':     'ADOC',
+              'akm:done':      'AKM',
+              # 後方互換
+              'aad:done':      'AAD-WEB',
+              'asdw:done':     'ASDW-WEB',
           }
           closed_prefix_map = [
-              ('[AAD]', 'AAD'),
-              ('[ASDW]', 'ASDW'),
+              ('[AAD-WEB]', 'AAD-WEB'),
+              ('[ASDW-WEB]', 'ASDW-WEB'),
+              ('[AAG]', 'AAG'),
+              ('[AAGD]', 'AAGD'),
               ('[ADOC]', 'ADOC'),
               ('[AAS]', 'AAS'),
               ('[ABD]', 'ABD'),
               ('[ABDV]', 'ABDV'),
               ('[AKM]', 'AKM'),
+              # 後方互換
+              ('[AAD]', 'AAD-WEB'),
+              ('[ASDW]', 'ASDW-WEB'),
           ]
 
           target = 'none'
@@ -124,10 +139,10 @@ jobs:
             f.write('issue_labels=' + json.dumps(labels) + '\n')
           PY
 
-  aad:
+  aad-web:
     needs: detect
-    if: needs.detect.outputs.target == 'AAD'
-    uses: ./.github/workflows/auto-app-detail-design-reusable.yml
+    if: needs.detect.outputs.target == 'AAD-WEB'
+    uses: ./.github/workflows/auto-app-detail-design-web-reusable.yml
     with:
       mode: ${{ needs.detect.outputs.mode }}
       issue_number: ${{ needs.detect.outputs.issue_number }}
@@ -136,10 +151,34 @@ jobs:
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
     secrets: inherit
 
-  asdw:
+  asdw-web:
     needs: detect
-    if: needs.detect.outputs.target == 'ASDW'
-    uses: ./.github/workflows/auto-app-dev-microservice-azure-reusable.yml
+    if: needs.detect.outputs.target == 'ASDW-WEB'
+    uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  aag:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAG'
+    uses: ./.github/workflows/auto-ai-agent-design-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+    secrets: inherit
+
+  aagd:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAGD'
+    uses: ./.github/workflows/auto-ai-agent-dev-reusable.yml
     with:
       mode: ${{ needs.detect.outputs.mode }}
       issue_number: ${{ needs.detect.outputs.issue_number }}
@@ -228,3 +267,41 @@ jobs:
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
     secrets: inherit
+
+  suggest-next:
+    needs: detect
+    if: |
+      needs.detect.outputs.mode == 'state_transition'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Suggest next workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ needs.detect.outputs.issue_number }}
+          COMPLETED_WF: ${{ needs.detect.outputs.target }}
+        run: |
+          python3 <<'PY'
+          import os, subprocess
+
+          chain_map = {
+              "AAS":      [("AAD-WEB", "Web App Design"), ("ABD", "Batch Design"), ("AAG", "AI Agent Design")],
+              "AAD-WEB":  [("ASDW-WEB", "Web App Dev & Deploy")],
+              "ABD":      [("ABDV", "Batch Dev & Deploy")],
+              "AAG":      [("AAGD", "AI Agent Dev & Deploy")],
+          }
+
+          completed = os.environ.get("COMPLETED_WF", "")
+          issue = os.environ.get("ISSUE_NUMBER", "")
+          suggestions = chain_map.get(completed, [])
+
+          if not suggestions or not issue:
+              raise SystemExit(0)
+
+          lines = [f"## ✅ {completed} 完了 — 次のワークフロー候補\n"]
+          for wf_id, name in suggestions:
+              lines.append(f"- **{name}** (`{wf_id}`): Issue Template から `{wf_id}` 対応テンプレートで新しい Issue を作成してください")
+          lines.append("\n> ⚠️ 各ワークフローのパラメータ（APP-ID, リソースグループ等）は個別に指定が必要です。")
+
+          body = "\n".join(lines)
+          subprocess.run(["gh", "issue", "comment", issue, "--body", body], check=True)
+          PY

@@ -78,9 +78,10 @@ else
   fail "validate-plan: detects missing split_decision — got: ${output}"
 fi
 
-# 2c. Estimate > 15 but PROCEED
-cat > "${tmpdir}/plan-over15.md" <<'PLAN'
-<!-- estimate_total: 20 -->
+# 2c. context_size=large + PROCEED (should fail)
+cat > "${tmpdir}/plan-large-proceed.md" <<'PLAN'
+<!-- task_scope: single -->
+<!-- context_size: large -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
 <!-- implementation_files: false -->
@@ -90,11 +91,31 @@ cat > "${tmpdir}/plan-over15.md" <<'PLAN'
 ## 分割判定
 PLAN
 
-output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-over15.md" 2>&1) || true
-if echo "${output}" | grep -q "estimate=20min.*PROCEED.*SPLIT_REQUIRED"; then
-  pass "validate-plan: rejects estimate>15 + PROCEED"
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-large-proceed.md" 2>&1) || true
+if echo "${output}" | grep -q "context_size=large.*PROCEED.*SPLIT_REQUIRED"; then
+  pass "validate-plan: rejects context_size=large + PROCEED"
 else
-  fail "validate-plan: rejects estimate>15 + PROCEED — got: ${output}"
+  fail "validate-plan: rejects context_size=large + PROCEED — got: ${output}"
+fi
+
+# 2d. task_scope=multi + PROCEED (should fail)
+cat > "${tmpdir}/plan-multi-proceed.md" <<'PLAN'
+<!-- task_scope: multi -->
+<!-- context_size: small -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+PLAN
+
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-multi-proceed.md" 2>&1) || true
+if echo "${output}" | grep -q "task_scope=multi.*PROCEED.*SPLIT_REQUIRED"; then
+  pass "validate-plan: rejects task_scope=multi + PROCEED"
+else
+  fail "validate-plan: rejects task_scope=multi + PROCEED — got: ${output}"
 fi
 
 # ===========================================================================

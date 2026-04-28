@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 560" role="img" aria-label="AAGD ステップ別ファイル I/O 図">
+  <desc>AAGD（AI Agent Dev and Deploy）: 各 StepDef が消費・生成するファイルの I/O 図（workflow_registry.py L418-444 根拠）</desc>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
+    .step  { fill: #4A90D9; stroke: #1a4d80; stroke-width: 1.5; }
+    .step2 { fill: #50C878; stroke: #1b5e20; stroke-width: 1.5; }
+    .in    { fill: #EAF4FB; stroke: #7a9ab5; stroke-width: 1; }
+    .out   { fill: #FEF9E7; stroke: #c8a600; stroke-width: 1; }
+    .ln    { stroke: #555; stroke-width: 1.3; fill: none; marker-end: url(#arr); }
+    .wt    { fill: white; font-weight: bold; font-size: 10px; }
+    .ws    { fill: white; font-size: 9px; }
+    .it    { fill: #334; font-size: 8.5px; }
+    .ttl   { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
+    .sub   { font-size: 10px; fill: #555; }
+  </style>
+
+  <text x="400" y="26" text-anchor="middle" class="ttl">AAGD — ステップ別ファイル I/O 図</text>
+  <text x="400" y="42" text-anchor="middle" class="sub">根拠: hve/workflow_registry.py AAGD WorkflowDef (L418-444)</text>
+
+  <!-- ====== Step 1 ====== -->
+  <rect x="270" y="60" width="260" height="48" rx="7" class="step"/>
+  <text x="400" y="80" text-anchor="middle" class="wt">Step.1 — AI Agent 構成設計</text>
+  <text x="400" y="96" text-anchor="middle" class="ws">Arch-AIAgentDesign</text>
+
+  <!-- Step.1 Input -->
+  <rect x="30" y="58" width="210" height="52" rx="5" class="in"/>
+  <text x="135" y="74" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">入力</text>
+  <text x="135" y="87" text-anchor="middle" class="it">docs/catalog/service-catalog.md</text>
+  <text x="135" y="100" text-anchor="middle" class="it">docs/screen/*.md / docs/services/*.md</text>
+  <line x1="240" y1="84" x2="270" y2="84" class="ln"/>
+
+  <!-- Step.1 Output -->
+  <rect x="560" y="58" width="210" height="52" rx="5" class="out"/>
+  <text x="665" y="74" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">出力</text>
+  <text x="665" y="87" text-anchor="middle" class="it">docs/agent/agent-application-definition.md</text>
+  <text x="665" y="100" text-anchor="middle" class="it">docs/agent/agent-catalog.md</text>
+  <text x="665" y="113" text-anchor="middle" class="it">docs/ai-agent-catalog.md</text>
+  <line x1="530" y1="84" x2="560" y2="84" class="ln"/>
+
+  <!-- Arrow down -->
+  <line x1="400" y1="108" x2="400" y2="135" class="ln"/>
+
+  <!-- ====== Step 2.1 ====== -->
+  <rect x="270" y="135" width="260" height="48" rx="7" class="step"/>
+  <text x="400" y="155" text-anchor="middle" class="wt">Step.2.1 — テスト仕様書（TDD RED）</text>
+  <text x="400" y="171" text-anchor="middle" class="ws">Arch-TDD-TestSpec</text>
+
+  <!-- Step.2.1 Input -->
+  <rect x="30" y="133" width="210" height="52" rx="5" class="in"/>
+  <text x="135" y="149" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">入力</text>
+  <text x="135" y="162" text-anchor="middle" class="it">docs/agent/agent-detail-*.md</text>
+  <text x="135" y="175" text-anchor="middle" class="it">docs/ai-agent-catalog.md</text>
+  <line x1="240" y1="159" x2="270" y2="159" class="ln"/>
+
+  <!-- Step.2.1 Output -->
+  <rect x="560" y="133" width="210" height="38" rx="5" class="out"/>
+  <text x="665" y="149" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">出力</text>
+  <text x="665" y="162" text-anchor="middle" class="it">docs/test-specs/{agentId}-test-spec.md</text>
+  <line x1="530" y1="159" x2="560" y2="159" class="ln"/>
+
+  <line x1="400" y1="183" x2="400" y2="210" class="ln"/>
+
+  <!-- ====== Step 2.2 ====== -->
+  <rect x="270" y="210" width="260" height="48" rx="7" class="step2"/>
+  <text x="400" y="230" text-anchor="middle" class="wt">Step.2.2 — テストコード生成（TDD RED）</text>
+  <text x="400" y="246" text-anchor="middle" class="ws">Dev-Microservice-Azure-AgentTestCoding</text>
+
+  <!-- Step.2.2 Input -->
+  <rect x="30" y="208" width="210" height="52" rx="5" class="in"/>
+  <text x="135" y="224" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">入力</text>
+  <text x="135" y="237" text-anchor="middle" class="it">docs/test-specs/{agentId}-test-spec.md</text>
+  <text x="135" y="250" text-anchor="middle" class="it">docs/agent/agent-detail-*.md</text>
+  <line x1="240" y1="234" x2="270" y2="234" class="ln"/>
+
+  <!-- Step.2.2 Output -->
+  <rect x="560" y="208" width="210" height="38" rx="5" class="out"/>
+  <text x="665" y="224" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">出力</text>
+  <text x="665" y="237" text-anchor="middle" class="it">test/agent/{AgentName}.Tests/（全 FAIL）</text>
+  <line x1="530" y1="234" x2="560" y2="234" class="ln"/>
+
+  <line x1="400" y1="258" x2="400" y2="285" class="ln"/>
+
+  <!-- ====== Step 2.3 ====== -->
+  <rect x="270" y="285" width="260" height="48" rx="7" class="step2"/>
+  <text x="400" y="305" text-anchor="middle" class="wt">Step.2.3 — AI Agent 実装（TDD GREEN）</text>
+  <text x="400" y="321" text-anchor="middle" class="ws">Dev-Microservice-Azure-AgentCoding</text>
+
+  <!-- Step.2.3 Input -->
+  <rect x="30" y="283" width="210" height="52" rx="5" class="in"/>
+  <text x="135" y="299" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">入力</text>
+  <text x="135" y="312" text-anchor="middle" class="it">test/agent/{AgentName}.Tests/</text>
+  <text x="135" y="325" text-anchor="middle" class="it">docs/agent/agent-detail-*.md</text>
+  <line x1="240" y1="309" x2="270" y2="309" class="ln"/>
+
+  <!-- Step.2.3 Output -->
+  <rect x="560" y="283" width="210" height="38" rx="5" class="out"/>
+  <text x="665" y="299" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">出力</text>
+  <text x="665" y="312" text-anchor="middle" class="it">src/agent/{AgentID}-{AgentName}/</text>
+  <line x1="530" y1="309" x2="560" y2="309" class="ln"/>
+
+  <line x1="400" y1="333" x2="400" y2="360" class="ln"/>
+
+  <!-- ====== Step 3 ====== -->
+  <rect x="270" y="360" width="260" height="48" rx="7" class="step2"/>
+  <text x="400" y="380" text-anchor="middle" class="wt">Step.3 — AI Agent Deploy</text>
+  <text x="400" y="396" text-anchor="middle" class="ws">Dev-Microservice-Azure-AgentDeploy</text>
+
+  <!-- Step.3 Input -->
+  <rect x="30" y="358" width="210" height="52" rx="5" class="in"/>
+  <text x="135" y="374" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">入力</text>
+  <text x="135" y="387" text-anchor="middle" class="it">src/agent/{AgentID}-{AgentName}/</text>
+  <text x="135" y="400" text-anchor="middle" class="it">docs/azure/azure-services-additional.md</text>
+  <line x1="240" y1="384" x2="270" y2="384" class="ln"/>
+
+  <!-- Step.3 Output -->
+  <rect x="560" y="358" width="210" height="52" rx="5" class="out"/>
+  <text x="665" y="374" text-anchor="middle" style="font-weight:bold;font-size:9.5px;fill:#334;">出力</text>
+  <text x="665" y="387" text-anchor="middle" class="it">infra/azure/create-azure-agent-resources*.sh</text>
+  <text x="665" y="400" text-anchor="middle" class="it">.github/workflows/deploy-agent-*.yml</text>
+  <text x="665" y="413" text-anchor="middle" class="it">（Azure AI Foundry Agent デプロイ）</text>
+  <line x1="530" y1="384" x2="560" y2="384" class="ln"/>
+
+  <!-- Legend -->
+  <rect x="30" y="448" width="14" height="14" rx="3" class="step"/>
+  <text x="50" y="459" style="font-size:11px;fill:#333;">Arch Agent（設計）</text>
+  <rect x="200" y="448" width="14" height="14" rx="3" class="step2"/>
+  <text x="220" y="459" style="font-size:11px;fill:#333;">Dev Agent（実装/Deploy）</text>
+  <rect x="400" y="448" width="14" height="14" rx="3" class="in"/>
+  <text x="420" y="459" style="font-size:11px;fill:#333;">入力ファイル</text>
+  <rect x="540" y="448" width="14" height="14" rx="3" class="out"/>
+  <text x="560" y="459" style="font-size:11px;fill:#333;">出力ファイル</text>
+</svg>

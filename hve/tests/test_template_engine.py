@@ -7,8 +7,11 @@ from unittest.mock import patch
 import pytest
 
 from hve.template_engine import (
+    _WORKFLOW_DISPLAY_NAMES,
+    _WORKFLOW_PREFIX,
     _build_additional_section,
     _build_app_id_section,
+    _build_completion_instruction,
     _build_job_section,
     _build_rg_section,
     _build_root_ref,
@@ -17,7 +20,6 @@ from hve.template_engine import (
     build_root_issue_body,
     collect_params,
     render_template,
-    resolve_all_app_ids,
     resolve_selected_steps,
 )
 from hve.workflow_registry import get_workflow, StepDef, WorkflowDef
@@ -151,18 +153,6 @@ class TestBuildAppIdSection:
         assert "APP-05" in result
         assert "docs/catalog/app-catalog.md" in result
 
-    def test_build_app_id_section_is_all_apps_true(self):
-        result = _build_app_id_section(["APP-01", "APP-02"], is_all_apps=True)
-        assert "対象アプリケーション（全APP）" in result
-        assert "APP-01" in result
-        assert "APP-02" in result
-
-    def test_build_app_id_section_is_all_apps_false(self):
-        result = _build_app_id_section(["APP-01"], is_all_apps=False)
-        assert "対象アプリケーション" in result
-        assert "対象アプリケーション（全APP）" not in result
-        assert "APP-01" in result
-
 
 # ---------------------------------------------------------------------------
 # _build_rg_section / _build_job_section
@@ -183,6 +173,17 @@ class TestBuildRgJobSections:
     def test_job_with_value(self):
         result = _build_job_section("BATCH-01")
         assert "`BATCH-01`" in result
+
+
+class TestBuildCompletionInstruction:
+    def test_github_mode(self):
+        result = _build_completion_instruction("akm", "github")
+        assert result == "- 完了時に自身に `akm:done` ラベルを付与すること"
+
+    def test_local_mode(self):
+        result = _build_completion_instruction("akm", "local")
+        assert "出力ファイルが全て正常に生成" in result
+        assert "`akm:done` ラベルの付与は不要" in result
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +285,47 @@ class TestRenderTemplate:
         assert "`original-docs/`" in body
         assert "`lightweight`" in body
         assert "`データ整合性`" in body
+
+    def test_completion_instruction_github_mode(self):
+        wf = get_workflow("akm")
+        body = render_template(
+            "templates/akm/step-1.md",
+            root_issue_num=70,
+            params={"branch": "main"},
+            wf=wf,
+            execution_mode="github",
+        )
+        assert "- 完了時に自身に `akm:done` ラベルを付与すること" in body
+
+    def test_completion_instruction_local_mode(self):
+        wf = get_workflow("akm")
+        body = render_template(
+            "templates/akm/step-1.md",
+            root_issue_num=70,
+            params={"branch": "main"},
+            wf=wf,
+            execution_mode="local",
+        )
+        assert "ローカル実行のため `akm:done` ラベルの付与は不要です" in body
+        assert "- 完了時に自身に `akm:done` ラベルを付与すること" not in body
+
+    def test_completion_instruction_local_fallback_for_legacy_template(self):
+        wf = get_workflow("akm")
+        legacy = (
+            "{root_ref}\n## 完了条件\n"
+            "- 完了時に自身に `akm:done` ラベルを付与すること\n"
+            "{additional_section}\n"
+        )
+        with patch("hve.template_engine._load_template", return_value=legacy):
+            body = render_template(
+                "templates/akm/step-1.md",
+                root_issue_num=1,
+                params={"branch": "main"},
+                wf=wf,
+                execution_mode="local",
+            )
+        assert "ローカル実行のため done ラベルの付与は不要です" in body
+        assert "完了時に自身に `akm:done` ラベルを付与すること" not in body
 
 
 class TestCollectParams:
@@ -397,82 +439,6 @@ class TestCollectParams:
         assert params["sources"] == "qa"
         assert params["enable_auto_merge"] is True
 
-    def test_collect_params_auto_resolve(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        wf = get_workflow("aad")
-        catalog = tmp_path / "docs" / "catalog"
-        catalog.mkdir(parents=True)
-        (catalog / "app-catalog.md").write_text(
-            textwrap.dedent(
-                """
-                | APP-ID | アプリ名 |
-                |---|---|
-                | APP-01 | A |
-                | APP-02 | B |
-                """
-            ),
-            encoding="utf-8",
-        )
-        monkeypatch.chdir(tmp_path)
-        inputs = iter([
-            "main",  # branch
-            "",      # app_ids 未入力
-            "",      # selected_steps = all
-            "n",     # skip_review
-            "n",     # skip_qa
-            "",      # additional_comment
-        ])
-        with patch("builtins.input", side_effect=lambda _: next(inputs)):
-            params = collect_params(wf)
-        assert params["app_ids"] == ["APP-01", "APP-02"]
-        assert params["app_ids_auto_resolved"] is True
-
-
-class TestResolveAllAppIds:
-    def test_resolve_all_app_ids_normal(self, tmp_path: Path):
-        catalog = tmp_path / "app-catalog.md"
-        catalog.write_text(
-            textwrap.dedent(
-                """
-                | APP-ID | Name |
-                |---|---|
-                | APP-01 | A |
-                | APP-02 | B |
-                | APP-03 | C |
-                | APP-04 | D |
-                | APP-05 | E |
-                | APP-06 | F |
-                | APP-07 | G |
-                | APP-08 | H |
-                | APP-09 | I |
-                """
-            ),
-            encoding="utf-8",
-        )
-        assert resolve_all_app_ids(catalog) == [
-            "APP-01", "APP-02", "APP-03", "APP-04", "APP-05", "APP-06", "APP-07", "APP-08", "APP-09",
-        ]
-
-    def test_resolve_all_app_ids_file_not_found(self, tmp_path: Path):
-        missing = tmp_path / "not-found.md"
-        assert resolve_all_app_ids(missing) == []
-
-    def test_resolve_all_app_ids_dedup(self, tmp_path: Path):
-        catalog = tmp_path / "app-catalog.md"
-        catalog.write_text(
-            textwrap.dedent(
-                """
-                | APP-ID | Name |
-                |---|---|
-                | APP-01 | A |
-                | APP-01 | A2 |
-                | APP-02 | B |
-                | APP-02 | B2 |
-                """
-            ),
-            encoding="utf-8",
-        )
-        assert resolve_all_app_ids(catalog) == ["APP-01", "APP-02"]
-
 
 # ---------------------------------------------------------------------------
 # resolve_selected_steps
@@ -483,15 +449,13 @@ class TestResolveSelectedSteps:
     def test_empty_returns_all(self):
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, [])
-        assert result == {"1", "2"}
+        assert result == {"1", "2", "3.1", "3.2", "4", "5", "6", "7"}
 
     def test_specific_steps(self):
-        wf = get_workflow("aad")
-        result = resolve_selected_steps(wf, ["1.1", "1.2"])
-        assert "1.1" in result
-        assert "1.2" in result
-        # 親コンテナ "1" も含まれる
-        assert "1" in result
+        wf = get_workflow("aad-web")
+        result = resolve_selected_steps(wf, ["2.1", "2.2"])
+        assert "2.1" in result
+        assert "2.2" in result
 
     def test_unknown_steps_excluded(self, capsys):
         wf = get_workflow("aas")
@@ -499,24 +463,23 @@ class TestResolveSelectedSteps:
         captured = capsys.readouterr()
         assert "未知の Step ID" in captured.out
         # 有効な選択がないので全ステップにフォールバック
-        assert result == {"1", "2"}
+        assert result == {"1", "2", "3.1", "3.2", "4", "5", "6", "7"}
 
     def test_mixed_valid_invalid(self, capsys):
-        wf = get_workflow("aad")
-        result = resolve_selected_steps(wf, ["1.1", "INVALID"])
+        wf = get_workflow("aad-web")
+        result = resolve_selected_steps(wf, ["2.1", "INVALID"])
         captured = capsys.readouterr()
         assert "未知の Step ID" in captured.out
-        assert "1.1" in result
+        assert "2.1" in result
         assert "INVALID" not in result
-        # コンテナ "1" は "1.1" の親なので含まれる
-        assert "1" in result
 
     def test_container_not_added_without_children(self):
-        wf = get_workflow("aad")
-        # "2" は非コンテナの実ステップなので、コンテナとして追加されない
-        result = resolve_selected_steps(wf, ["2"])
+        wf = get_workflow("asdw-web")
+        result = resolve_selected_steps(wf, ["2.3T"])
+        assert "2.3T" in result
+        # 親コンテナ "2" が追加される
         assert "2" in result
-        # コンテナ "1" は子が選択されていないので含まれない
+        # 無関係なコンテナ "1" は含まれない
         assert "1" not in result
 
 
@@ -529,9 +492,9 @@ class TestBuildRootIssueBody:
     def test_aas(self):
         wf = get_workflow("aas")
         body = build_root_issue_body(wf, {"branch": "main"})
-        assert "# [AAS] App Architecture Design" in body
+        assert "# [AAS] Architecture Design" in body
         assert "<!-- branch: main -->" in body
-        assert "ワークフロー: **App Architecture Design**" in body
+        assert "ワークフロー: **Architecture Design**" in body
 
     def test_asdw_with_params(self):
         wf = get_workflow("asdw")
@@ -543,7 +506,7 @@ class TestBuildRootIssueBody:
             "resource_group": "rg-prod",
             "usecase_id": "UC-42",
         })
-        assert "# [ASDW]" in body
+        assert "# [ASDW-WEB]" in body
         assert "<!-- auto-merge: true -->" in body
         assert "<!-- app-ids: APP-05 -->" in body
         assert "<!-- resource-group: rg-prod -->" in body
@@ -584,6 +547,26 @@ class TestBuildRootIssueBody:
         assert "# [ADOC] Source Codeからのドキュメント作成" in body
 
 
+class TestWorkflowNameMappings:
+    def test_display_names_include_new_workflows_and_aliases(self):
+        assert _WORKFLOW_DISPLAY_NAMES["aas"] == "Architecture Design"
+        assert _WORKFLOW_DISPLAY_NAMES["aad-web"] == "Web App Design"
+        assert _WORKFLOW_DISPLAY_NAMES["asdw-web"] == "Web App Dev & Deploy"
+        assert _WORKFLOW_DISPLAY_NAMES["aag"] == "AI Agent Design"
+        assert _WORKFLOW_DISPLAY_NAMES["aagd"] == "AI Agent Dev & Deploy"
+        assert _WORKFLOW_DISPLAY_NAMES["aad"] == "Web App Design"
+        assert _WORKFLOW_DISPLAY_NAMES["asdw"] == "Web App Dev & Deploy"
+
+    def test_prefixes_include_new_workflows_and_aliases(self):
+        assert _WORKFLOW_PREFIX["aas"] == "AAS"
+        assert _WORKFLOW_PREFIX["aad-web"] == "AAD-WEB"
+        assert _WORKFLOW_PREFIX["asdw-web"] == "ASDW-WEB"
+        assert _WORKFLOW_PREFIX["aag"] == "AAG"
+        assert _WORKFLOW_PREFIX["aagd"] == "AAGD"
+        assert _WORKFLOW_PREFIX["aad"] == "AAD-WEB"
+        assert _WORKFLOW_PREFIX["asdw"] == "ASDW-WEB"
+
+
 # ---------------------------------------------------------------------------
 # 全テンプレートに {additional_section} が含まれること
 # ---------------------------------------------------------------------------
@@ -599,6 +582,17 @@ class TestAllTemplatesHaveAdditionalSection:
             if "{additional_section}" not in content:
                 missing.append(str(md_file.relative_to(templates_dir)))
         assert not missing, f"以下のテンプレートに {{additional_section}} がありません: {missing}"
+
+    def test_no_legacy_done_instruction_in_templates(self):
+        templates_dir = _TEMPLATES_BASE / "templates"
+        legacy_patterns = []
+        for md_file in sorted(templates_dir.rglob("*.md")):
+            content = md_file.read_text(encoding="utf-8")
+            if (
+                "完了時に自身に `" in content and ":done` ラベルを付与すること" in content
+            ) or ("完了時に `" in content and ":done` を付与すること" in content):
+                legacy_patterns.append(str(md_file.relative_to(templates_dir)))
+        assert not legacy_patterns, f"以下のテンプレートに旧 done 指示が残っています: {legacy_patterns}"
 
 
 # ---------------------------------------------------------------------------

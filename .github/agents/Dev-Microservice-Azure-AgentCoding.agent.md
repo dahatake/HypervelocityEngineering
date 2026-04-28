@@ -1,6 +1,6 @@
 ---
 name: Dev-Microservice-Azure-AgentCoding
-description: AI Agent 詳細設計書から Azure AI Foundry Agent Service を使用して Agent を実装し、test/agent/ のテストが全て PASS するまで反復する（TDD GREEN フェーズ）。最大 5 回反復。
+description: AI Agent 詳細設計書から Azure AI Foundry Agent Service を使用して Agent を実装し、test/agent/ のテストが全て PASS するまで反復する（TDD GREEN フェーズ）。Issue body 記載の回数（未指定時 5 回）反復。
 tools: ["*"]
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AgentCoding/Issue-<識別子>/`
@@ -102,7 +102,7 @@ Issue body または追加コメントにプログラミング言語の指定が
 | Observability | Section 11: Observability |
 | 権限モデル | Section 9: Permission Model |
 
-# 6) TDD GREEN フロー（反復 — 最大 5 回）
+# 6) TDD GREEN フロー（反復 — Issue body 指定値 / 未指定時 5 回）
 
 ```
 1. テストコードが存在し、全テストが FAIL（RED 状態）であることを確認する
@@ -111,9 +111,9 @@ Issue body または追加コメントにプログラミング言語の指定が
    - Python: pytest test/agent/{AgentName}.Tests/
    - C#: dotnet test test/agent/{AgentName}.Tests/
 4. 全テスト PASS なら Section 6.5 の REFACTOR フェーズへ進む。FAIL があれば実装を修正して手順3に戻る
-5. 最大 5 回反復する
-6. 5 回で全 PASS にならない場合:
-   - `asdw:blocked` ラベルを Issue に付与する（gh コマンド: `gh issue edit <Issue番号> --add-label "asdw:blocked"`）
+5. **リトライ上限**: Issue body に記載されている回数（例: `最大 N 回反復する`）を上限とする。記載がない場合は **最大 5 回** を上限とする。
+6. 上限を超えた場合:
+   - `aagd:blocked` ラベルを Issue に付与する（gh コマンド: `gh issue edit <Issue番号> --add-label "aagd:blocked"`）
    - 未 PASS テスト一覧と失敗原因の分析を Issue コメントで報告する（`gh issue comment <Issue番号> --body "..."` で投稿）
 ```
 

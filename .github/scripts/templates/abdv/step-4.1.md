@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 デプロイ済みの Azure リソース構成を Azure Well-Architected Framework（WAF）5本柱で評価する。
 
@@ -20,4 +22,4 @@
 
 ## 完了条件
 - `docs/azure/waf-review.md` が作成されている
-- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}
+{completion_instruction}{rg_section}{job_section}{additional_section}

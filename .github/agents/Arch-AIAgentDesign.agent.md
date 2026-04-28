@@ -147,7 +147,7 @@ tools: ["*"]
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
 - Step 5.1〜5.3 の各 Step は、`users-guide/08-ai-agent.md` 内の各 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
-- Step 全体として Skill task-dag-planning の15分ルールを適用する（詳細は Skill `task-dag-planning` を参照）。
+- Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は Step 単位（5.1 / 5.2 / 5.3 / 5.4）で Sub Issue に分割する
   - 各 Sub Issue には `## Custom Agent` セクションに `Arch-AIAgentDesign` を含める
 

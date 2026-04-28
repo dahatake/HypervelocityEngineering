@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aagd/step-2.1.md に移動しました。 -->
 {root_ref}
 ## 目的
 TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、Agent 用 TDD テスト仕様書を生成する（APP-ID 指定時はスコープ内の Agent のみ）。
@@ -30,4 +31,4 @@ TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、A
 ## 完了条件
 - `docs/test-specs/` 配下に Agent 別テスト仕様書が生成されている
 - テスト仕様書に上記5種のテストカテゴリが含まれている
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

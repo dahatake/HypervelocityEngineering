@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-AddServiceDeploy
 description: Azure追加サービスをAzure CLIで冪等作成し、service-catalog等を更新、AC検証で完了判定する
 tools: ["*"]
@@ -68,7 +68,8 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -113,7 +114,7 @@ AC 検証時間の見積目安：
 
 > ⚠️ **前提条件（すべて満たすこと）**:
 > 1. `plan.md` の `## 分割判定` で `判定結果: PROCEED` と記載済みであること
-> 2. 見積合計が 15分以下であること
+> 2. task_scope=single かつ context_size ≤ medium であること
 > 3. `subissues.md` が不要であることを確認済みであること
 >
 > いずれか1つでも未達の場合、本セクションには進まない。

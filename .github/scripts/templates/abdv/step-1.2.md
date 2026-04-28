@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 データサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。
 
@@ -18,4 +20,4 @@
 
 ## 完了条件
 - Azure データ系リソースが作成/確認されている
-- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}
+{completion_instruction}{rg_section}{job_section}{additional_section}

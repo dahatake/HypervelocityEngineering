@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 ドメイン分析結果とデータソース分析結果を根拠に、バッチデータモデル（入力/ステージング/中間/出力モデル・冪等性キー・パーティション戦略・ER図）を設計する。
 
@@ -19,4 +21,4 @@
 
 ## 完了条件
 - `docs/batch/batch-data-model.md` が作成されている
-- 完了時に自身に `abd:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

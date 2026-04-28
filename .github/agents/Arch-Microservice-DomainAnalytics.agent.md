@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-Microservice-DomainAnalytics
 description: ユースケース文書を根拠に、DDD観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント / コンテキストマップ等）を整理し、docs/catalog/domain-analytics.md を作成する。
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -42,7 +42,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -51,7 +52,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
-### 3.3 生成（15分以内で完了できる場合のみ）
+### 3.3 生成（task_scope=single かつ context_size ≤ medium の場合のみ）
 1. 主文書を read し、根拠として扱う。
 2. 出力ファイル `docs/catalog/domain-analytics.md` を作成する。
 3. 章立て（後述）を **順番どおり** に埋める。空欄放置は禁止。不明は「不明/要確認」。

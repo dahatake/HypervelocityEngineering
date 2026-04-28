@@ -19,6 +19,7 @@ from hve.github_api import (
     _parse_retry_after,
     _resolve_repo,
     _resolve_token,
+    add_labels,
     api_call,
     create_issue,
     create_pull_request,
@@ -324,6 +325,39 @@ class TestLinkSubIssue:
         result = link_sub_issue(1, 999)
         assert result is False
         mock_sleep.assert_called_once_with(1)
+
+
+# =====================================================================
+# add_labels
+# =====================================================================
+
+
+class TestAddLabels:
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.api_call")
+    def test_success(self, mock_api, mock_sleep, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = {}
+        result = add_labels(42, ["akm:done"])
+        assert result is True
+        mock_api.assert_called_once_with(
+            "POST",
+            "https://api.github.com/repos/o/r/issues/42/labels",
+            data={"labels": ["akm:done"]},
+            token=None,
+        )
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.api_call")
+    def test_failure_returns_false(self, mock_api, mock_sleep, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.side_effect = GitHubAPIError("forbidden", status=403)
+        result = add_labels(42, ["akm:done"])
+        assert result is False
+        mock_sleep.assert_not_called()
 
 
 # =====================================================================

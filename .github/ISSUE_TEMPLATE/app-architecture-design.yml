@@ -1,24 +1,40 @@
-name: "App Architecture Design"
-description: "Issue からアプリケーションアーキテクチャ設計ワークフロー (Step.1〜Step.2) を自動起動します"
-title: "[App Architecture Design] アプリケーションアーキテクチャ設計"
+name: "Architecture Design（アーキテクチャ設計）"
+description: "要求定義からサブシステム共通のアーキテクチャ設計を自動実行します (Step.1〜Step.7)"
+title: "[Architecture Design] アーキテクチャ設計"
 labels:
   - "auto-app-selection"
 body:
   - type: markdown
     attributes:
       value: |
-        ## App Architecture Design
-        このフォームから Issue を作成すると、自動で Step.1〜Step.2 のアプリケーションアーキテクチャ設計タスクが
-        Sub-issue として生成され、Copilot が順次実行します。
+        ## Architecture Design（アーキテクチャ設計）
+        このフォームから Issue を作成すると、要求定義からサブシステム共通のアーキテクチャ設計タスクが
+        Sub-issue として生成され、Copilot が依存関係に従って実行します。
+
+        ### 実行されるステップ
+        | ステップ | 内容 | 旧ワークフロー |
+        |---------|------|---------------|
+        | **Step.1** | アプリケーションリストの作成 | AAS Step.1 |
+        | **Step.2** | ソフトウェアアーキテクチャの推薦 | AAS Step.2 |
+        | **Step.3.1** | ドメイン分析 | AAD Step.1.1 |
+        | **Step.3.2** | サービス一覧抽出 | AAD Step.1.2 |
+        | **Step.4** | データモデル作成 | AAD Step.2 |
+        | **Step.5** | データカタログ作成 | AAD Step.3 |
+        | **Step.6** | サービスカタログ | AAD Step.5 |
+        | **Step.7** | テスト戦略書 | AAD Step.6 |
+
+        ※ 旧 AAD Step.4（画面一覧と遷移図）は Web App Design（`web-app-design.yml`）へ移管されています。
 
         ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
-        - `docs/catalog/use-case-catalog.md` — ユースケース文書（Step.1 の入力）
+        - `docs/catalog/use-case-catalog.md`
 
-        App Detail Design（Step.1 以降）のアプリケーション設計は、このワークフロー完了後に
-        **App Detail Design** Issue を別途作成してください。
-
+        ✅ **完了後の次ステップ**:
+        - Web App Design（`web-app-design.yml`）
+        - Batch Design（`batch-design.yml`）
+        - AI Agent Design（`ai-agent-design.yml`）
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
+
   - type: input
     id: branch
     attributes:
@@ -38,11 +54,16 @@ body:
         ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
         ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
         📋 **依存関係**:
-        Step.1 → Step.2
-        ・Step.2（ソフトウェアアーキテクチャの推薦）は Step.1 が必須
+        Step.1 → Step.2 → Step.3.1 → Step.3.2 → Step.4 → Step.5 → Step.6 → Step.7
       options:
-        - label: "Step.1 — アプリケーションリストの作成（ユースケースからアプリリストを作成）"
-        - label: "Step.2 — ソフトウェアアーキテクチャの推薦（アプリごとにアーキテクチャを選定）※ Step.1 が必須"
+        - label: "Step.1 — アプリケーションリストの作成"
+        - label: "Step.2 — ソフトウェアアーキテクチャの推薦 ※ Step.1 が必須"
+        - label: "Step.3.1 — ドメイン分析 ※ Step.2 が必須"
+        - label: "Step.3.2 — サービス一覧抽出 ※ Step.3.1 が必須"
+        - label: "Step.4 — データモデル作成 ※ Step.3.2 が必須"
+        - label: "Step.5 — データカタログ作成 ※ Step.4 が必須"
+        - label: "Step.6 — サービスカタログ ※ Step.5 が必須"
+        - label: "Step.7 — テスト戦略書 ※ Step.6 が必須"
 
   - type: dropdown
     id: model
@@ -54,6 +75,7 @@ body:
         ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
       options:
         - "Auto"
+        - "gpt-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"
@@ -83,6 +105,44 @@ body:
         デフォルト（チェックなし）では質問票は作成されません。
       options:
         - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
 
   - type: checkboxes
     id: enable_auto_merge

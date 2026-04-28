@@ -15,6 +15,16 @@ body:
         - custom agent: `QA-DocConsistency`
 
   - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "qa/ 成果物をコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/aqod"
+      value: "main"
+    validations:
+      required: true
+
+  - type: input
     id: target_scope
     attributes:
       label: "対象スコープ"
@@ -45,31 +55,57 @@ body:
       required: false
 
   - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: "チェックを入れると、auto-qa ラベルが付与され、質問票が自動作成されます。"
+      options:
+        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
+
+  - type: checkboxes
     id: enable_auto_merge
     attributes:
       label: "PR完全自動化設定"
       options:
         - label: "PR の自動 Approve & Auto-merge を有効にする"
-
-  - type: checkboxes
-    id: enable_review
-    attributes:
-      label: "レビュー設定"
-      description: |
-        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
-        デフォルト（チェックなし）ではセルフレビューは実行されません。
-      options:
-        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
-
-  - type: checkboxes
-    id: enable_qa
-    attributes:
-      label: "質問票設定"
-      description: |
-        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
-        デフォルト（チェックなし）では質問票は作成されません。
-      options:
-        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
 
   - type: dropdown
     id: model
@@ -79,6 +115,7 @@ body:
         「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
       options:
         - "Auto"
+        - "gpt-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "claude-sonnet-4.6"

@@ -249,9 +249,9 @@ jobs:
             ISSUE_BODY=$(printf '%s' "${ISSUE_JSON}" | python3 -c \
               "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')" 2>/dev/null || true)
 
-            # [ASD]/[ASDW]/[AAS]/[AAD] Issue は AAS/AAD 系ワークフロー（auto-app-selection.yml / auto-app-detail-design.yml / auto-app-dev-microservice-azure.yml 等）が処理する
-            if [[ "${ISSUE_TITLE}" =~ ^\[ASD\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[ASDW\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]]; then
-              echo "  Skipping [ASD]/[ASDW]/[AAS]/[AAD] issue: ${ISSUE_TITLE}"
+            # [ASD]/[ASDW]/[AAS]/[AAD]/[AAD-WEB]/[ASDW-WEB]/[AAG]/[AAGD] は専用ワークフローで処理する
+            if [[ "${ISSUE_TITLE}" =~ ^\[ASD\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[ASDW\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAD\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAD-WEB\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[ASDW-WEB\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAG\] ]] || [[ "${ISSUE_TITLE}" =~ ^\[AAGD\] ]]; then
+              echo "  Skipping workflow-managed issue: ${ISSUE_TITLE}"
               continue
             fi
 
@@ -302,9 +302,9 @@ jobs:
                 continue
               fi
 
-              # [ASD]/[ASDW]/[AAS]/[AAD] Sub Issue は専用ワークフローが処理する
-              if [[ "${sub_title}" =~ ^\[ASD\] ]] || [[ "${sub_title}" =~ ^\[ASDW\] ]] || [[ "${sub_title}" =~ ^\[AAS\] ]] || [[ "${sub_title}" =~ ^\[AAD\] ]]; then
-                echo "    Skipping [ASD]/[ASDW]/[AAS]/[AAD] sub-issue."
+              # [ASD]/[ASDW]/[AAS]/[AAD]/[AAD-WEB]/[ASDW-WEB]/[AAG]/[AAGD] Sub Issue は専用ワークフローが処理する
+              if [[ "${sub_title}" =~ ^\[ASD\] ]] || [[ "${sub_title}" =~ ^\[ASDW\] ]] || [[ "${sub_title}" =~ ^\[AAS\] ]] || [[ "${sub_title}" =~ ^\[AAD\] ]] || [[ "${sub_title}" =~ ^\[AAD-WEB\] ]] || [[ "${sub_title}" =~ ^\[ASDW-WEB\] ]] || [[ "${sub_title}" =~ ^\[AAG\] ]] || [[ "${sub_title}" =~ ^\[AAGD\] ]]; then
+                echo "    Skipping workflow-managed sub-issue."
                 continue
               fi
 

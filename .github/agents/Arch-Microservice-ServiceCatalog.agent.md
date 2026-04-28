@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-Microservice-ServiceCatalog
 description: "画面→機能→API→SoTデータのマッピングを docs/catalog/service-catalog-matrix.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -47,7 +47,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -58,7 +59,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - 固有の分割粒度: 「セクション単位」で分割
 
 ## 5.4 生成（service-catalog.md）
-7. 15分以内で完了できる見込みがある場合のみ、以下の **固定スキーマ**で `service-catalog.md` を生成/更新する。
+7. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、以下の **固定スキーマ**で `service-catalog.md` を生成/更新する。
    - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 ## 5.5 成果物の分割ルール

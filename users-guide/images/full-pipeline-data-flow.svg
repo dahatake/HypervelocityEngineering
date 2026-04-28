@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 680" role="img" aria-label="FULL_PIPELINE ワークフロー間データフロー図">
+  <desc>FULL_PIPELINE: AAS → AAD-WEB → ASDW-WEB / ABD → ABDV / AAG → AAGD のワークフロー間依存関係とアーティファクトフロー（workflow_registry.py FULL_PIPELINE MetaWorkflowDef 根拠）</desc>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#444"/>
+    </marker>
+    <marker id="arr-soft" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#aaa"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
+    .wf   { fill: #4A90D9; stroke: #1a4d80; stroke-width: 2; }
+    .wf-g { fill: #50C878; stroke: #1b5e20; stroke-width: 2; }
+    .wf-o { fill: #E67E22; stroke: #7e3d00; stroke-width: 2; }
+    .wf-p { fill: #9B59B6; stroke: #4a235a; stroke-width: 2; }
+    .art  { fill: #F0F4F8; stroke: #7a9ab5; stroke-width: 1; }
+    .ln   { stroke: #444; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+    .ln-s { stroke: #aaa; stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#arr-soft); }
+    .wt   { fill: white; font-weight: bold; font-size: 13px; }
+    .at   { fill: #334; font-size: 9.5px; }
+    .ttl  { font-size: 16px; font-weight: bold; fill: #1f3a5a; }
+    .sub  { font-size: 11px; fill: #555; }
+  </style>
+
+  <!-- Title -->
+  <text x="400" y="28" text-anchor="middle" class="ttl">FULL_PIPELINE — ワークフロー間データフロー図</text>
+  <text x="400" y="46" text-anchor="middle" class="sub">根拠: hve/workflow_registry.py FULL_PIPELINE MetaWorkflowDef</text>
+
+  <!-- ========= Row 1: AAS ========= -->
+  <rect x="310" y="65" width="180" height="44" rx="8" class="wf"/>
+  <text x="400" y="84" text-anchor="middle" class="wt">AAS</text>
+  <text x="400" y="100" text-anchor="middle" style="fill:white;font-size:10px;">アーキテクチャ設計</text>
+
+  <!-- AAS output artifact box -->
+  <rect x="200" y="130" width="400" height="52" rx="5" class="art"/>
+  <text x="400" y="147" text-anchor="middle" style="font-weight:bold;font-size:10px;fill:#334;">AAS 成果物</text>
+  <text x="400" y="160" text-anchor="middle" class="at">docs/catalog/app-catalog.md  domain-analytics.md  service-catalog.md  data-model.md  test-strategy.md</text>
+  <text x="400" y="173" text-anchor="middle" class="at">（docs/catalog/）</text>
+
+  <!-- AAS → artifact -->
+  <line x1="400" y1="109" x2="400" y2="130" class="ln"/>
+
+  <!-- ========= Row 2: AAD-WEB | ABD (side by side) ========= -->
+  <!-- AAD-WEB -->
+  <rect x="120" y="210" width="180" height="44" rx="8" class="wf-g"/>
+  <text x="210" y="229" text-anchor="middle" class="wt">AAD-WEB</text>
+  <text x="210" y="245" text-anchor="middle" style="fill:white;font-size:10px;">Web App 設計</text>
+
+  <!-- ABD -->
+  <rect x="500" y="210" width="180" height="44" rx="8" class="wf-o"/>
+  <text x="590" y="229" text-anchor="middle" class="wt">ABD</text>
+  <text x="590" y="245" text-anchor="middle" style="fill:white;font-size:10px;">Batch 設計</text>
+
+  <!-- artifact → AAD-WEB -->
+  <line x1="280" y1="182" x2="210" y2="210" class="ln"/>
+  <!-- artifact → ABD (soft) -->
+  <line x1="530" y1="182" x2="590" y2="210" class="ln-s"/>
+  <text x="555" y="200" style="font-size:9px;fill:#aaa;">soft</text>
+
+  <!-- AAD-WEB output artifact box -->
+  <rect x="55" y="280" width="310" height="52" rx="5" class="art"/>
+  <text x="210" y="297" text-anchor="middle" style="font-weight:bold;font-size:10px;fill:#334;">AAD-WEB 成果物</text>
+  <text x="210" y="310" text-anchor="middle" class="at">docs/screen/*.md  docs/services/*.md</text>
+  <text x="210" y="323" text-anchor="middle" class="at">docs/test-specs/*-test-spec.md</text>
+
+  <!-- ABD output artifact box -->
+  <rect x="435" y="280" width="320" height="52" rx="5" class="art"/>
+  <text x="595" y="297" text-anchor="middle" style="font-weight:bold;font-size:10px;fill:#334;">ABD 成果物</text>
+  <text x="595" y="310" text-anchor="middle" class="at">docs/batch/batch-*.md  docs/batch/jobs/*.md</text>
+  <text x="595" y="323" text-anchor="middle" class="at">docs/test-specs/*-test-spec.md</text>
+
+  <!-- AAD-WEB → its artifact -->
+  <line x1="210" y1="254" x2="210" y2="280" class="ln"/>
+  <!-- ABD → its artifact -->
+  <line x1="590" y1="254" x2="590" y2="280" class="ln"/>
+
+  <!-- ========= Row 3: ASDW-WEB | ABDV ========= -->
+  <rect x="55" y="365" width="180" height="44" rx="8" class="wf-g"/>
+  <text x="145" y="384" text-anchor="middle" class="wt">ASDW-WEB</text>
+  <text x="145" y="400" text-anchor="middle" style="fill:white;font-size:10px;">Web App 実装</text>
+
+  <rect x="500" y="365" width="180" height="44" rx="8" class="wf-o"/>
+  <text x="590" y="384" text-anchor="middle" class="wt">ABDV</text>
+  <text x="590" y="400" text-anchor="middle" style="fill:white;font-size:10px;">Batch 実装</text>
+
+  <!-- AAD-WEB artifact → ASDW-WEB -->
+  <line x1="145" y1="332" x2="145" y2="365" class="ln"/>
+  <!-- ABD artifact → ABDV -->
+  <line x1="590" y1="332" x2="590" y2="365" class="ln"/>
+
+  <!-- ========= Row 3b: AAG ========= -->
+  <rect x="295" y="365" width="160" height="44" rx="8" class="wf-p"/>
+  <text x="375" y="384" text-anchor="middle" class="wt">AAG</text>
+  <text x="375" y="400" text-anchor="middle" style="fill:white;font-size:10px;">AI Agent 設計</text>
+
+  <!-- AAS artifact (service-catalog) → AAG -->
+  <line x1="375" y1="182" x2="375" y2="365" class="ln"/>
+  <text x="378" y="285" style="font-size:8.5px;fill:#555;">service-catalog.md</text>
+
+  <!-- AAD-WEB artifact → AAG -->
+  <line x1="365" y1="332" x2="355" y2="365" class="ln"/>
+
+  <!-- AAG output artifact box -->
+  <rect x="280" y="435" width="190" height="36" rx="5" class="art"/>
+  <text x="375" y="452" text-anchor="middle" style="font-weight:bold;font-size:10px;fill:#334;">AAG 成果物</text>
+  <text x="375" y="464" text-anchor="middle" class="at">docs/agent/*.md</text>
+
+  <!-- AAG → its artifact -->
+  <line x1="375" y1="409" x2="375" y2="435" class="ln"/>
+
+  <!-- ========= Row 4: AAGD ========= -->
+  <rect x="295" y="500" width="160" height="44" rx="8" class="wf-p"/>
+  <text x="375" y="519" text-anchor="middle" class="wt">AAGD</text>
+  <text x="375" y="535" text-anchor="middle" style="fill:white;font-size:10px;">AI Agent 実装/Deploy</text>
+
+  <!-- AAG artifact → AAGD -->
+  <line x1="375" y1="471" x2="375" y2="500" class="ln"/>
+  <!-- ASDW-WEB → AAGD (soft) -->
+  <line x1="235" y1="387" x2="295" y2="522" class="ln-s"/>
+  <text x="240" y="460" style="font-size:9px;fill:#aaa;">soft</text>
+
+  <!-- AAGD output -->
+  <rect x="295" y="565" width="160" height="36" rx="5" class="art"/>
+  <text x="375" y="582" text-anchor="middle" style="font-weight:bold;font-size:10px;fill:#334;">AAGD 成果物</text>
+  <text x="375" y="594" text-anchor="middle" class="at">Azure AI Foundry Agent</text>
+  <line x1="375" y1="544" x2="375" y2="565" class="ln"/>
+
+  <!-- ========= Legend ========= -->
+  <rect x="30" y="615" width="16" height="14" rx="3" class="wf"/>
+  <text x="52" y="626" style="font-size:11px;fill:#333;">AAS（Architecture）</text>
+  <rect x="200" y="615" width="16" height="14" rx="3" class="wf-g"/>
+  <text x="222" y="626" style="font-size:11px;fill:#333;">Web App（AAD/ASDW）</text>
+  <rect x="390" y="615" width="16" height="14" rx="3" class="wf-o"/>
+  <text x="412" y="626" style="font-size:11px;fill:#333;">Batch（ABD/ABDV）</text>
+  <rect x="555" y="615" width="16" height="14" rx="3" class="wf-p"/>
+  <text x="577" y="626" style="font-size:11px;fill:#333;">AI Agent（AAG/AAGD）</text>
+  <line x1="30" y1="647" x2="60" y2="647" class="ln"/>
+  <text x="65" y="651" style="font-size:11px;fill:#333;">hard dependency</text>
+  <line x1="200" y1="647" x2="230" y2="647" class="ln-s"/>
+  <text x="235" y="651" style="font-size:11px;fill:#333;">soft dependency</text>
+</svg>

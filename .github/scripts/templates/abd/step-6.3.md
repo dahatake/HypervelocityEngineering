@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 テスト戦略書・ジョブ詳細仕様書・監視設計書を根拠に、TDD用テスト仕様書をジョブごとに作成する。
 
@@ -20,4 +22,4 @@
 
 ## 完了条件
 - テスト仕様書がジョブカタログに基づいて全ジョブ分作成されている
-- 完了時に自身に `abd:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

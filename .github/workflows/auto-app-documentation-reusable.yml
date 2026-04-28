@@ -340,6 +340,17 @@ jobs:
           doc_purpose = parse_field("ドキュメントの主目的", "all")
           max_file_lines = parse_field("大規模ファイル分割閾値", "500")
 
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          enable_self_improve = bool(si_section and re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          si_iter_raw = parse_field("自己改善 最大イテレーション数", "3 (デフォルト)")
+          n = re.match(r"(\d+)", si_iter_raw.strip())
+          self_improve_max_iterations = n.group(1) if n else "3"
+
+          si_qual_raw = parse_field("自己改善 品質スコア閾値", "80 (デフォルト)")
+          q = re.match(r"(\d+)", si_qual_raw.strip())
+          self_improve_quality_threshold = q.group(1) if q else "80"
+
           result = {
               "branch": branch,
               "skip_steps": sorted(list(skip_steps)),
@@ -351,6 +362,9 @@ jobs:
               "exclude_patterns": exclude_patterns,
               "doc_purpose": doc_purpose,
               "max_file_lines": max_file_lines,
+              "enable_self_improve": enable_self_improve,
+              "self_improve_max_iterations": self_improve_max_iterations,
+              "self_improve_quality_threshold": self_improve_quality_threshold,
           }
           print(json.dumps(result))
           PYEOF
@@ -362,6 +376,9 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           MODEL_RAW=$(extract_model "${ISSUE_BODY}")
           SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
           TARGET_DIRS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['target_dirs'])")
@@ -382,8 +399,8 @@ jobs:
             add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
           fi
 
-          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge タグを埋め込み ----
-          export AUTO_CONTEXT_REVIEW AUTO_QA AUTO_MERGE
+          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
+          export AUTO_CONTEXT_REVIEW AUTO_QA AUTO_MERGE BRANCH ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
           _ROOT_UPDATED=$(python3 - <<'PY'
           import os, re
           body = os.environ.get("ISSUE_BODY", "")
@@ -391,11 +408,15 @@ jobs:
               ("auto-context-review", os.environ.get("AUTO_CONTEXT_REVIEW", "false")),
               ("auto-qa", os.environ.get("AUTO_QA", "false")),
               ("auto-merge", os.environ.get("AUTO_MERGE", "false")),
+              ("branch", os.environ.get("BRANCH", "main")),
+              ("enable-self-improve", os.environ.get("ENABLE_SELF_IMPROVE", "false")),
+              ("self-improve-max-iterations", os.environ.get("SELF_IMPROVE_MAX_ITER", "3")),
+              ("self-improve-quality-threshold", os.environ.get("SELF_IMPROVE_QUALITY_THRESHOLD", "80")),
           ]
           updated = body
           for key, value in meta:
               tag = f"<!-- {key}: {value} -->"
-              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:\s*(true|false)\s*-->")
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
               if pat.search(updated):
                   updated = pat.sub(tag, updated, count=1)
               else:
@@ -471,3 +492,131 @@ jobs:
         if: steps.gate.outputs.mode == 'delegate_advance'
         run: |
           echo "adoc:done を検知しました。advance-subissues.yml が次ステップ生成を担当します。"
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          # HTML コメント形式（workflow init で埋め込まれた場合）を優先
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          # フォールバック: Issue Form Markdown 形式
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf "%s" "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に branch 情報がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+              self_improve_quality_threshold=int(os.environ.get('QUALITY_THRESHOLD', '80')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          branch='${{ steps.parse.outputs.branch }}'
+          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
+            echo "Invalid branch name: ${branch}" >&2
+            exit 1
+          }
+          git push origin "HEAD:refs/heads/${branch}"

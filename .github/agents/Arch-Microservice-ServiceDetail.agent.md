@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-Microservice-ServiceDetail
 description: "全サービスのマイクロサービス詳細仕様（API/イベント/データ/セキュリティ）を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -39,7 +39,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - 各ファイルに「対象serviceId一覧」を必ず明記（重複防止）
   - `<NNN>` は 001 から連番
 
-# 3) 実行フロー（15分バッチ）
+# 3) 実行フロー（task_scope/context_size 判定ベース）
 ## 3.1 準備（必須）
 1) `{WORK}` が無ければ作る（README/planは Skill work-artifacts-layout の規約に従う）。
 2) 参照ファイルを読み、`service-list` からサービス一覧（serviceId/serviceName）を確定する。
@@ -51,7 +51,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: false -->
@@ -62,10 +63,10 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **分割要否は Skill task-dag-planning の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**。詳細は Skill `task-dag-planning` を参照。
   - plan.md のメタデータを §2.3 準拠で設定する（`implementation_files: false` 必須）
   - `{WORK}subissues.md` を Skill task-dag-planning のフォーマットで作成する（`subissues_count ≥ 1` 必須）
-  - **最初のSub（=今回の15分で処理するserviceIdの集合）だけ**実行対象にする。
+  - **最初のSub（=今回処理する serviceId の集合）だけ**実行対象にする。
   - ⚠️ 「全サービス一括」「1バッチで完了」「完全な解を優先」等の判断は、Skill task-dag-planning の分割判定により禁止。
 
-## 3.3 実行（15分でできる分だけ）
+## 3.3 実行（今回サブの対象 serviceId のみ）
 - 今回対象の serviceId のみ処理する（対象外は触らない）。
 - サービスごとに以下を行う:
   1) 既存の `*-description.md` があれば更新、無ければ新規作成
@@ -77,7 +78,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3.4 最終品質レビュー（Skill adversarial-review 準拠・3観点）
 
 ### 3.4.2 3つの異なる観点（このエージェント固有）
-- **1回目：機能完全性・要件達成度**：15分バジェット内に処理対象が完了でき、テンプレ章立てが崩れていないか
+- **1回目：機能完全性・要件達成度**：処理対象が完了でき、テンプレ章立てが崩れていないか
 - **2回目：ユーザー視点・実装可能性**：推測/捏造がなく、TBD 運用が妥当で、進捗ログが更新されているか
 - **3回目：保守性・拡張性・堅牢性**：サンプルデータ要約のみで、根拠が明確で、重複行がなく、再実行に耐えられるか
 
@@ -88,7 +89,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - 未処理サービスが残る場合:
   - `{WORK}issue-prompt-<NNN>.md` を作り、
     次バッチの「対象serviceId一覧」「読むべき根拠」「成果物パス」「完了条件」を短く書く。
-  - その時点で作業を止める（1タスク=1PRの制約と、15分分割の原則に従う）。
+  - その時点で作業を止める（1タスク=1PR の制約と、task_scope=single・最小コンテキストの原則に従う）。
 
 # 4) 品質チェック（軽量・必須）
 - すべての処理済みサービスについて:

@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-ComputeDeploy-AzureFunctions
 description: サービスリストの全てのサービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う。copilot-instructions.md のルールを守り、推測せず、根拠はリポジトリ内資料またはCLIヘルプ/実行結果で残す。AC検証によりAzureリソースの実在確認を必須とする。
 tools: ["*"]
@@ -49,7 +49,7 @@ A) スクリプト作成
 ※ A-exec は A とは独立したステップであり、SPLIT_REQUIRED 時には独立した Sub Issue として分割すること。A の Sub Issue に統合してはならない。
 
 # Required Deliverables（必須成果物）
-以下は "15分以内で完了する単位" で実装する。分割時は subissues.md に落とす。
+以下は "task_scope=single・最小コンテキスト単位" で実装する。分割時は subissues.md に落とす。
 
 **分割時の必須ルール:** 以下の全ステップ（A, A-exec, B, C, D, E, F）をそれぞれ独立した Sub Issue として見積・分割すること。特に **A-exec は A に統合せず独立 Sub Issue** とする。
 

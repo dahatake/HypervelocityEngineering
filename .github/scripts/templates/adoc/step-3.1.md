@@ -19,4 +19,4 @@
 
 ## 完了条件
 - コンポーネント設計書が `docs-generated/components/` に作成されている
-- 完了時に自身に `adoc:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

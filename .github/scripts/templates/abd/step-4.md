@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 ジョブ設計書・データモデル・ドメイン分析を統合してバッチジョブ版サービスカタログを作成する。
 
@@ -18,4 +20,4 @@
 
 ## 完了条件
 - `docs/batch/batch-service-catalog.md` が作成されている
-- 完了時に自身に `abd:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

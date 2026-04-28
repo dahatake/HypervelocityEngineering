@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aagd/step-3.md に移動しました。 -->
 {root_ref}
 ## 目的
 AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions で CI/CD を構築する（APP-ID 指定時はスコープ内の Agent のみ）。
@@ -33,4 +34,4 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 ## 完了条件
 - デプロイスクリプトと CI/CD ワークフローが作成されている
 - 検証スクリプトで全項目 PASS であること
-- 完了時に自身に `asdw:done` ラベルを付与すること{app_id_section}{additional_section}
+{completion_instruction}{app_id_section}{additional_section}

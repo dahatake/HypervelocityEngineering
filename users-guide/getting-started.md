@@ -26,14 +26,14 @@
 | GitHub Copilot ライセンス | **必須** | Copilot cloud agent 利用 |
 | Git | **必須** | リポジトリのクローン |
 | Web ブラウザ | **必須** | GitHub.com の操作（Web UI 方式） |
-| Python 3.9+ | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
-| GitHub Copilot CLI | GitHub Copilot CLI SDK 版のみ | GitHub Copilot CLI SDK 版ワークフロー実行 |
-| Node.js（npm/npx） | オプション | MCP Server（filesystem 等）使用時 |
-| Microsoft Work IQ（`@microsoft/workiq`） | オプション | SDK 版で M365 補助情報を参照する場合（[詳細](./sdk-guide.md#work-iq-mcp-連携オプション)） |
+| Python 3.11+ | hve アプリケーション版のみ | hve アプリケーション版ワークフロー実行 |
+| GitHub Copilot CLI（外部 `copilot` コマンド） | オプション | SDK 同梱ではなく外部 CLI を明示利用する場合 |
+| Node.js（npm/npx） | オプション | MCP Server（filesystem 等）/ Work IQ / npm 方式の外部 Copilot CLI 使用時 |
+| Microsoft Work IQ（`@microsoft/workiq`） | オプション | hve アプリケーション版で M365 補助情報を参照する場合（[詳細](./hve-app-guide.md#work-iq-mcp-連携オプション)） |
 
 > Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: GitHub が最適モデルを動的選択。0.9x 計上）または任意モデルを選択できます。公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
-> Work IQ のセットアップ手順は [sdk-guide.md — Work IQ MCP 連携](./sdk-guide.md#work-iq-mcp-連携オプション) を参照してください。
+> Work IQ のセットアップ手順は [hve-app-guide.md — Work IQ MCP 連携](./hve-app-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
 ---
 
@@ -140,7 +140,7 @@ GitHub リポジトリの **Settings → Copilot → Cloud agent → MCP Servers
 - Azure MCP Server 設定: [Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/developer/azure-mcp-server/how-to/github-copilot-coding-agent)
 - Microsoft Learn Docs MCP Server: [Qiita 解説記事](https://qiita.com/dahatake/items/4f6f0deb53333c0200ef)
 
-> SDK 版の MCP Server 設定については [SDK ユーザーガイド 付録A](./sdk-guide.md#付録a-mcp-server-設定ガイド) を参照してください。
+> hve アプリケーション版の MCP Server 設定については [hve アプリケーション ユーザーガイド 付録A](./hve-app-guide.md#付録a-mcp-server-設定ガイド) を参照してください。
 
 ---
 
@@ -326,13 +326,17 @@ bash infra/azure/create-azure-webui-resources.sh
 
 Setup Labels ワークフローが作成・更新するラベル一覧です:
 
-**ワークフロートリガー系（9 個）**
+**ワークフロートリガー系（13 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
 | `auto-app-detail-design` | `#0E8A16` | AAD ワークフロートリガー |
+| `auto-app-detail-design-web` | `#1D76DB` | AAD-WEB ワークフロートリガー |
+| `auto-ai-agent-design` | `#7B68EE` | AAG ワークフロートリガー |
 | `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー |
+| `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー |
+| `auto-ai-agent-dev` | `#6A5ACD` | AAGD ワークフロートリガー |
 | `auto-batch-design` | `#0E8A16` | ABD ワークフロートリガー |
 | `auto-batch-dev` | `#0E8A16` | ABDV ワークフロートリガー |
 | `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
@@ -449,5 +453,5 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 - **Custom Agent エコシステム図**: [agent-ecosystem-overview.svg](./images/agent-ecosystem-overview.svg)
 - **方式1（個別 Issue + Custom Agent 手動実行）**: [web-ui-guide.md](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
 - **方式2（ワークフローオーケストレーション Web）**: [web-ui-guide.md](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
-- **方式3（ローカル: GitHub Copilot CLI SDK 版）**: [sdk-guide.md](./sdk-guide.md)
+- **方式3（ローカル: hve アプリケーション版）**: [hve-app-guide.md](./hve-app-guide.md)
 - **フェーズ別ガイド**: [overview.md](./overview.md#フェーズ別ガイドナビゲーション)

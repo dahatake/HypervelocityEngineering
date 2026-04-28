@@ -1,4 +1,6 @@
 {root_ref}
+
+{app_arch_scope_section}
 ## 目的
 バッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。
 
@@ -23,4 +25,4 @@
 
 ## 完了条件
 - バッチジョブが Azure 上で稼働している
-- 完了時に自身に `abdv:done` ラベルを付与すること{rg_section}{job_section}{additional_section}
+{completion_instruction}{rg_section}{job_section}{additional_section}

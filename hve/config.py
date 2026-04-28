@@ -12,6 +12,7 @@ DEFAULT_MODEL: str = "claude-opus-4.7"
 MODEL_AUTO_VALUE: str = "Auto"
 LEGACY_MODEL_ID: str = "claude-opus-4-7"
 MODEL_CHOICES: tuple[str, ...] = (
+    "gpt-5.5",
     "claude-opus-4.7",
     "claude-opus-4.6",
     "claude-sonnet-4.6",
@@ -96,6 +97,7 @@ class SDKConfig:
     verbose: bool = True                    # レガシー互換。出力レベルは verbosity が主制御
     quiet: bool = False                     # レガシー互換。出力レベルは verbosity が主制御
     show_stream: bool = False               # トークンストリーム表示（デフォルト: 無効）
+    show_reasoning: bool = True             # 推論（Thinking）表示（デフォルト: 有効）
     log_level: str = "error"                # CLI ログレベル (none/error/warning/info/debug/all)
     verbosity: int = 1                      # Console verbosity: 0=quiet, 1=compact, 2=normal, 3=verbose
 
@@ -141,23 +143,28 @@ class SDKConfig:
     additional_prompt: Optional[str] = None  # 全 Custom Agent の prompt 末尾に追記する文字列
 
     # --- Work IQ (Microsoft 365 データ参照) ---
-    workiq_enabled: bool = False                          # Work IQ 連携の有効/無効
+    workiq_enabled: bool = False                          # Work IQ 連携の有効/無効（後方互換の総合フラグ）
+    workiq_qa_enabled: Optional[bool] = None              # QA フェーズ用 Work IQ（None = workiq_enabled を継承）
+    workiq_akm_review_enabled: Optional[bool] = None      # AKM 実行後レビュー用 Work IQ（None = workiq_enabled を継承）
     workiq_tenant_id: Optional[str] = None                # Entra テナント ID（任意）
     workiq_prompt_qa: Optional[str] = None                # QA 用カスタムプロンプト（None = デフォルト）
     workiq_prompt_km: Optional[str] = None                # KM 用カスタムプロンプト（None = デフォルト）
     workiq_prompt_review: Optional[str] = None            # Review 用カスタムプロンプト（None = デフォルト）
-    workiq_query_timeout_seconds: float = 120.0           # Work IQ クエリタイムアウト秒数
     workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
-    workiq_draft_output_dir: str = "qa"                   # QA: 回答ドラフト出力先ディレクトリ
-    workiq_per_question_timeout: float = 60.0             # QA: 質問ごとの Work IQ クエリタイムアウト秒数
+    workiq_draft_output_dir: str = "qa"                   # Work IQ 補助レポート出力先ディレクトリ（互換のため設定名は据え置き）
+    workiq_per_question_timeout: float = 900.0            # QA: 質問ごとの Work IQ クエリタイムアウト秒数
     workiq_max_draft_questions: int = 30                  # QA: ドラフト生成対象の最大質問数
 
     # --- Self-Improve ---
-    auto_self_improve: bool = True              # 自己改善ループ（デフォルト: 有効）
+    auto_self_improve: bool = False             # デフォルト: 無効。Issue Template / CLI --self-improve / HVE_AUTO_SELF_IMPROVE で有効化
     self_improve_max_iterations: int = 3        # 最大イテレーション数
+    tdd_max_retries: int = 5                    # TDD GREEN フェーズの最大リトライ回数。HVE_TDD_MAX_RETRIES 環境変数で上書き可能
+    self_improve_quality_threshold: int = 80    # ゴール達成率閾値（この値以上で完了。goal_achievement_pct * 100 と比較）
     self_improve_max_tokens: int = 500_000      # コストハードリミット（トークン上限）
     self_improve_max_requests: int = 50         # コストハードリミット（リクエスト上限）
     self_improve_target_scope: str = ""         # 改善対象スコープ（空 = 全体）
+    self_improve_goal: str = ""                 # タスク固有ゴールの説明（空 = ワークフロー ID から自動生成）
+    self_improve_success_criteria: List[str] = field(default_factory=list)  # 自動検索で得た success_criteria（空 = ワークフロー標準を使用）
     self_improve_skip: bool = False             # --no-self-improve で True
 
     # --- 実行 ID ---
@@ -183,6 +190,14 @@ class SDKConfig:
         if self.qa_model != MODEL_AUTO_VALUE:
             self.qa_model = _normalize_model_with_warning(self.qa_model)
 
+    def is_workiq_qa_enabled(self) -> bool:
+        """QA フェーズで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
+        return self.workiq_enabled if self.workiq_qa_enabled is None else self.workiq_qa_enabled
+
+    def is_workiq_akm_review_enabled(self) -> bool:
+        """AKM 実行後レビューで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
+        return self.workiq_enabled if self.workiq_akm_review_enabled is None else self.workiq_akm_review_enabled
+
     @classmethod
     def from_env(cls) -> "SDKConfig":
         """環境変数から SDKConfig を構築する。"""
@@ -194,16 +209,23 @@ class SDKConfig:
             env_model = _normalize_model_with_warning(raw_model) or MODEL_AUTO_VALUE
         try:
             env_workiq_per_question_timeout = float(
-                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "60.0")
+                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "900.0")
             )
         except (TypeError, ValueError):
-            env_workiq_per_question_timeout = 60.0
+            env_workiq_per_question_timeout = 900.0
         try:
             env_workiq_max_draft_questions = int(
                 os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "30")
             )
         except (TypeError, ValueError):
             env_workiq_max_draft_questions = 30
+
+        def _env_bool_or_none(name: str) -> Optional[bool]:
+            raw = os.environ.get(name)
+            if raw is None or raw.strip() == "":
+                return None
+            return raw.strip().lower() in ("true", "1", "yes")
+
         return cls(
             model=env_model,
             github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
@@ -211,7 +233,10 @@ class SDKConfig:
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
             review_model=_normalize_model_with_warning(os.environ.get("REVIEW_MODEL") or None),
             qa_model=_normalize_model_with_warning(os.environ.get("QA_MODEL") or None),
+            show_reasoning=os.environ.get("SHOW_REASONING", "true").lower() in ("true", "1", "yes"),
             workiq_enabled=os.environ.get("WORKIQ_ENABLED", "").lower() in ("true", "1", "yes"),
+            workiq_qa_enabled=_env_bool_or_none("WORKIQ_QA_ENABLED"),
+            workiq_akm_review_enabled=_env_bool_or_none("WORKIQ_AKM_REVIEW_ENABLED"),
             workiq_tenant_id=os.environ.get("WORKIQ_TENANT_ID") or None,
             workiq_prompt_qa=os.environ.get("WORKIQ_PROMPT_QA") or None,
             workiq_prompt_km=os.environ.get("WORKIQ_PROMPT_KM") or None,
@@ -220,6 +245,8 @@ class SDKConfig:
             workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
             workiq_per_question_timeout=env_workiq_per_question_timeout,
             workiq_max_draft_questions=env_workiq_max_draft_questions,
+            auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),
+            tdd_max_retries=int(os.environ.get("HVE_TDD_MAX_RETRIES", "5")),
         )
 
     def get_review_model(self) -> str:

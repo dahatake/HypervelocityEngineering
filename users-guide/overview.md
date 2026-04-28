@@ -105,7 +105,7 @@
 
 ### Custom Agent エコシステム俯瞰図
 
-![全Custom Agentと8ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
+![全Custom Agentと10ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
 
 ### Agent の行動ルール
 
@@ -154,9 +154,10 @@ Agent の行動ルールは `.github/copilot-instructions.md` と `.github/skill
 
 Custom Agent の完全な一覧は [workflow-reference.md](./workflow-reference.md) および [web-ui-guide.md](./web-ui-guide.md) を参照してください。
 
-![8ワークフローとSelf-ImproveのファイルI/O連携図](./images/workflow-interconnection.svg)
-![8ワークフロー×主要ディレクトリのRead/Write関係図](./images/orchestration-data-flow.svg)
+![10ワークフローとSelf-ImproveのファイルI/O連携図](./images/workflow-interconnection.svg)
+![10ワークフロー×主要ディレクトリのRead/Write関係図](./images/orchestration-data-flow.svg)
 ![フェーズ別ガイドで使う Custom Agent の主要ファイルI/O（R/W）関係図](./images/orchestration-phase-agent-file-io.svg)
+![FULL_PIPELINE ワークフロー間データフロー図](./images/full-pipeline-data-flow.svg)
 
 ### Skills の概要
 
@@ -273,8 +274,8 @@ python -m hve（wizard または CLI）
       → PR 作成（オプション）
 ```
 
-詳細な手順は [sdk-guide.md](./sdk-guide.md) を参照してください。
-> オプション機能の Work IQ 連携（M365 データ参照）については [sdk-guide.md](./sdk-guide.md#work-iq-mcp-連携オプション) を参照してください。
+詳細な手順は [hve-app-guide.md](./hve-app-guide.md) を参照してください。
+> オプション機能の Work IQ 連携（M365 データ参照）については [hve-app-guide.md](./hve-app-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
 ---
 
@@ -312,12 +313,12 @@ python -m hve（wizard または CLI）
 | フェーズ | ガイド | ワークフロー ID |
 |---------|--------|:---:|
 | **02 — アプリケーションアーキテクチャ設計** | [02-app-architecture-design.md](./02-app-architecture-design.md) | `aas` |
-| **03 — Microservice 設計** | [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | `aad` |
+| **03 — Microservice 設計** | [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | `aad-web` |
 | **04 — Batch 設計** | [04-app-design-batch.md](./04-app-design-batch.md) | `abd` |
-| **05 — Microservice 実装** | [05-app-dev-microservice-azure.md](./05-app-dev-microservice-azure.md) | `asdw` |
+| **05 — Microservice 実装** | [05-app-dev-microservice-azure.md](./05-app-dev-microservice-azure.md) | `asdw-web` |
 | **06 — Batch 実装** | [06-app-dev-batch-azure.md](./06-app-dev-batch-azure.md) | `abdv` |
-| **07 — AI Agent（Quick）** | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | — |
-| **08 — AI Agent（本格）** | [08-ai-agent.md](./08-ai-agent.md) | — |
+| **07 — AI Agent（Quick）** | [07-ai-agent-simple.md](./07-ai-agent-simple.md) | `aag` |
+| **08 — AI Agent（本格）** | [08-ai-agent.md](./08-ai-agent.md) | `aagd` |
 
 #### Knowledge Management
 
@@ -332,7 +333,7 @@ python -m hve（wizard または CLI）
 |---------|--------|:---:|
 | **ADOC: Source Codeからのドキュメント作成** | [sourcecode-documentation.md](./sourcecode-documentation.md) | `adoc` |
 
-> 01（要求定義）、07（AI Agent Quick）、08（AI Agent 本格）は手動実行です。それ以外はワークフローによる自動実行が可能です。
+> 01（要求定義）は手動実行です。02 以降はガイドによって手動実行とワークフロー実行が分かれるため、各ガイドの前提を確認してください。
 
 ---
 
@@ -341,5 +342,5 @@ python -m hve（wizard または CLI）
 - **初回セットアップ** → [getting-started.md](./getting-started.md)（リポジトリ作成・MCP 設定・PAT 設定・ラベル設定）
 - **方式1 で開始** → [web-ui-guide.md — 方式1](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
 - **方式2 で開始** → [web-ui-guide.md — 方式2](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
-- **方式3 で開始** → [sdk-guide.md](./sdk-guide.md)
+- **方式3 で開始** → [hve-app-guide.md](./hve-app-guide.md)
 - **ワークフロー・Agent 一覧を確認** → [workflow-reference.md](./workflow-reference.md)

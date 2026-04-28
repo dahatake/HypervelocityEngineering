@@ -20,4 +20,4 @@
 
 ## 完了条件
 - `docs-generated/guides/onboarding.md` が作成されている
-- 完了時に自身に `adoc:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

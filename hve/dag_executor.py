@@ -29,17 +29,21 @@ class StepResult:
         elapsed: float = 0.0,
         skipped: bool = False,
         error: Optional[str] = None,
+        state: Optional[str] = None,
+        reason: Optional[str] = None,
     ) -> None:
         self.step_id = step_id
         self.success = success
         self.elapsed = elapsed
         self.skipped = skipped
         self.error = error  # 失敗時の例外メッセージ（デバッグ用）
+        self.state = state or ("skipped" if skipped else "success" if success else "failed")
+        self.reason = reason
 
     def __repr__(self) -> str:
         return (
             f"StepResult(step_id={self.step_id!r}, "
-            f"success={self.success}, skipped={self.skipped}, elapsed={self.elapsed:.1f}s)"
+            f"success={self.success}, skipped={self.skipped}, state={self.state!r}, elapsed={self.elapsed:.1f}s)"
         )
 
 
@@ -74,18 +78,25 @@ class DAGExecutor:
         max_parallel: int = 15,
         console: Any = None,
         step_prompts: Optional[Dict[str, str]] = None,
+        dag_plan: Any = None,
     ) -> None:
         self.workflow = workflow
+        self.dag_plan = dag_plan
         self.run_step_fn = run_step_fn
-        self.active_step_ids = active_step_ids
-        self._semaphore = asyncio.Semaphore(max(1, max_parallel))
+        self.active_step_ids = set(getattr(dag_plan, "active_step_ids", active_step_ids))
+        plan_max_parallel = getattr(dag_plan, "max_parallel", max_parallel)
+        self._semaphore = asyncio.Semaphore(max(1, plan_max_parallel))
         self.console = console
-        self._step_prompts: Dict[str, str] = step_prompts or {}
+        self._step_prompts: Dict[str, str] = self._freeze_prompts(step_prompts, dag_plan)
+        self._workflow_step_index: Dict[str, Any] = {
+            getattr(step, "id", ""): step for step in getattr(workflow, "steps", [])
+        }
 
         # 実行状態
         self.completed: Set[str] = set()
         self.skipped: Set[str] = set()
         self.failed: Set[str] = set()
+        self.blocked: Set[str] = set()
         self.running: Set[str] = set()
 
         # 結果マップ (step_id → StepResult)
@@ -101,12 +112,18 @@ class DAGExecutor:
         Returns:
             [[step, ...], [step, ...], ...] — 各内部リストが 1 Wave
         """
+        if self.dag_plan is not None:
+            return [
+                [self._step_for_id(step_id) for step_id in wave.step_ids]
+                for wave in getattr(self.dag_plan, "waves", ())
+            ]
+
         completed: Set[str] = set()
         skipped: Set[str] = set()
         waves: List[List[Any]] = []
 
         while True:
-            next_steps = self.workflow.get_next_steps(
+            next_steps = self._get_next_steps(
                 completed_step_ids=list(completed),
                 skipped_step_ids=list(skipped),
             )
@@ -162,7 +179,7 @@ class DAGExecutor:
         HEARTBEAT_INTERVAL = 15  # 秒 — ローカル実行ではより頻繁なチェックで応答性を向上
 
         while True:
-            next_steps = self.workflow.get_next_steps(
+            next_steps = self._get_next_steps(
                 completed_step_ids=list(self.completed),
                 skipped_step_ids=list(self.skipped),
             )
@@ -175,10 +192,18 @@ class DAGExecutor:
                     and s.id not in self.skipped
                     and s.id not in self.completed
                     and s.id not in self.failed
+                    and s.id not in self.blocked
                     and s.id not in self.running
                 ):
                     self.skipped.add(s.id)
-                    self._results[s.id] = StepResult(s.id, success=False, elapsed=0.0, skipped=True)
+                    self._results[s.id] = StepResult(
+                        s.id,
+                        success=False,
+                        elapsed=0.0,
+                        skipped=True,
+                        state="skipped",
+                        reason="inactive",
+                    )
                     newly_skipped = True
 
             # 失敗ステップの後続を除外し、起動可能なステップを絞り込む
@@ -189,6 +214,7 @@ class DAGExecutor:
                 and s.id not in self.running
                 and s.id not in self.completed
                 and s.id not in self.failed
+                and s.id not in self.blocked
                 and s.id not in self.skipped
             ]
 
@@ -214,6 +240,7 @@ class DAGExecutor:
                     # 後続ステップが解放される可能性があるため再ループする
                     continue
                 # 本当に完了（or デッドロック）
+                self._mark_unresolved_active_steps()
                 break
 
             if not pending_tasks:
@@ -281,3 +308,78 @@ class DAGExecutor:
                 self.failed.add(step.id)
 
             return StepResult(step.id, success, elapsed, error=error_msg)
+
+    def _get_next_steps(
+        self,
+        completed_step_ids: List[str],
+        skipped_step_ids: Optional[List[str]] = None,
+    ) -> List[Any]:
+        if self.dag_plan is None:
+            return self.workflow.get_next_steps(completed_step_ids, skipped_step_ids)
+
+        completed = set(completed_step_ids)
+        skipped = set(skipped_step_ids or [])
+        effective_done = completed | skipped
+        existing_ids = {node.id for node in getattr(self.dag_plan, "nodes", ())}
+        result: List[Any] = []
+        for node in getattr(self.dag_plan, "nodes", ()):
+            if node.is_container:
+                continue
+            if node.id in completed or node.id in skipped or node.id in self.failed or node.id in self.blocked:
+                continue
+            if any(dep not in completed for dep in getattr(node, "block_unless", ())):
+                continue
+            deps_satisfied = all(
+                dep in effective_done or dep not in existing_ids
+                for dep in getattr(node, "depends_on", ())
+            )
+            if deps_satisfied:
+                result.append(self._step_for_id(node.id))
+        return result
+
+    def _mark_unresolved_active_steps(self) -> None:
+        if self.dag_plan is None:
+            return
+        for step_id in sorted(self.active_step_ids):
+            if step_id in self.completed or step_id in self.failed or step_id in self.skipped or step_id in self.running:
+                continue
+            node = self.dag_plan.get_node(step_id)
+            if node is None or node.is_container:
+                continue
+            reason = self._blocked_reason(node)
+            self.blocked.add(step_id)
+            self._results[step_id] = StepResult(
+                step_id,
+                success=False,
+                elapsed=0.0,
+                skipped=False,
+                state="blocked",
+                reason=reason,
+            )
+
+    def _blocked_reason(self, node: Any) -> str:
+        if any(dep in self.failed for dep in getattr(node, "depends_on", ())):
+            return "blocked_by_failed_dependency"
+        if any(dep not in self.completed for dep in getattr(node, "block_unless", ())):
+            return "blocked_by_block_unless"
+        return "unresolved_dependencies"
+
+    def _step_for_id(self, step_id: str) -> Any:
+        step = self._workflow_step_index.get(step_id)
+        if step is not None:
+            return step
+        if self.dag_plan is not None:
+            node = self.dag_plan.get_node(step_id)
+            if node is not None:
+                return node
+        raise KeyError(f"unknown DAG step id: {step_id}")
+
+    @staticmethod
+    def _freeze_prompts(step_prompts: Optional[Dict[str, str]], dag_plan: Any = None) -> Dict[str, str]:
+        prompts: Dict[str, str] = {}
+        if dag_plan is not None:
+            for prompt in getattr(dag_plan, "step_prompts", ()):
+                prompts[prompt.step_id] = prompt.prompt
+        if step_prompts:
+            prompts.update(step_prompts)
+        return prompts

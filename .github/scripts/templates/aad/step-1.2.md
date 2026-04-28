@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aas/step-3.2.md に移動しました。 -->
 {root_ref}
 ## 目的
 ユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。
@@ -21,4 +22,4 @@
 
 ## 完了条件
 - `docs/catalog/service-catalog.md` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

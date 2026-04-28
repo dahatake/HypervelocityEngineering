@@ -22,7 +22,9 @@ Copilot SDK でローカル実行するバージョン。
 from __future__ import annotations
 
 import asyncio
+import functools
 import glob as _glob
+import json
 import os
 import subprocess
 import sys
@@ -35,17 +37,19 @@ from typing import Dict, List, Optional, Set
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
 # -----------------------------------------------------------------------
 try:
-    from .config import SDKConfig, generate_run_id
+    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id
     from .console import Console, timestamp_prefix
-    from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT
+    from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT
     from .runner import StepRunner, _is_review_fail, _extract_text
     from .dag_executor import DAGExecutor
+    from .dag_planner import build_dag_plan
 except ImportError:
-    from config import SDKConfig, generate_run_id  # type: ignore[no-redef]
+    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
-    from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT  # type: ignore[no-redef]
+    from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT  # type: ignore[no-redef]
     from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
     from dag_executor import DAGExecutor  # type: ignore[no-redef]
+    from dag_planner import build_dag_plan  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
@@ -56,18 +60,19 @@ from hve.template_engine import (
     resolve_selected_steps,
     build_root_issue_body,
     collect_params as cli_collect_params,
-    resolve_all_app_ids,
     _WORKFLOW_DISPLAY_NAMES,
     _WORKFLOW_PREFIX,
 )
 from hve.github_api import (
     GitHubAPIError,
+    add_labels,
     api_call,
     create_issue,
     link_sub_issue,
     post_comment,
     create_pull_request,
 )
+from hve.app_arch_filter import resolve_app_arch_scope
 
 
 # -----------------------------------------------------------------------
@@ -128,8 +133,8 @@ def _collect_params_non_interactive(
     }
 
     # ワークフロー固有パラメータ
-    # app_ids/app_id は AAD・ASDW で使用。未指定時はスコープセクションなし = 全APP対象。
-    # Cloud 側 Issue Template と同一のポリシー（任意、未指定=全対象）。
+    # app_ids/app_id は AAD-WEB・ASDW-WEB・ABD・ABDV で使用。
+    # 未指定時は app-arch filter で推薦アーキテクチャに合致する APP-ID が自動選択される。
     if args.get("app_ids"):
         params["app_ids"] = args["app_ids"]  # リストとしてそのまま渡す
         if len(args["app_ids"]) == 1:
@@ -137,13 +142,6 @@ def _collect_params_non_interactive(
     elif args.get("app_id"):
         params["app_ids"] = [args["app_id"]]
         params["app_id"] = args["app_id"]
-    elif wf.id in ("aad", "asdw"):
-        all_ids = resolve_all_app_ids()
-        if all_ids:
-            params["app_ids"] = all_ids
-            params["app_ids_auto_resolved"] = True
-            if len(all_ids) == 1:
-                params["app_id"] = all_ids[0]
     if args.get("resource_group"):
         params["resource_group"] = args["resource_group"]
     if args.get("usecase_id"):
@@ -163,8 +161,6 @@ def _collect_params_non_interactive(
         params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
         params["focus_areas"] = args.get("focus_areas") or ""
-        if args.get("enable_auto_merge") is not None:
-            params["enable_auto_merge"] = args["enable_auto_merge"]
     else:
         if args.get("sources"):
             params["sources"] = args["sources"]
@@ -181,8 +177,6 @@ def _collect_params_non_interactive(
         # 非 AKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         if "force_refresh" in args:
             params["force_refresh"] = args["force_refresh"]
-        if args.get("enable_auto_merge") is not None:
-            params["enable_auto_merge"] = args["enable_auto_merge"]
 
     # Issue タイトル上書き
     if args.get("issue_title"):
@@ -339,20 +333,20 @@ def _create_issues_if_needed(
     console: Console,
     render_template_fn,
     build_root_issue_body_fn,
-) -> Optional[int]:
+) -> tuple[Optional[int], Dict[str, int]]:
     """create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。
 
     Returns:
-        root_issue_num (int) または None（作成しない場合）
+        (root_issue_num, step_issue_map)
     """
     if not config.create_issues:
-        return None
+        return None, {}
 
     token = config.resolve_token()
     repo = config.repo
     if not token or not repo:
         console.warning("create_issues=True ですが GH_TOKEN または REPO が未設定のため Issue 作成をスキップします。")
-        return None
+        return None, {}
 
     console.event("Root Issue を作成中...")
     root_body = build_root_issue_body_fn(wf, params)
@@ -370,6 +364,8 @@ def _create_issues_if_needed(
     )
     console.event(f"Root Issue #{root_issue_num} を作成しました。")
 
+    step_issue_map: Dict[str, int] = {}
+
     # Sub-Issue 作成（active_steps に含まれるステップのみ）
     for step in wf.steps:
         if step.is_container:
@@ -384,6 +380,7 @@ def _create_issues_if_needed(
             root_issue_num=root_issue_num,
             params=params,
             wf=wf,
+            execution_mode="github",
         )
         step_title = f"[{prefix}] Step.{step.id} {step.title}"
         sub_num, sub_id = create_issue(
@@ -394,6 +391,7 @@ def _create_issues_if_needed(
             token=token,
         )
         console.event(f"Sub-Issue #{sub_num} (Step.{step.id}) を作成しました。")
+        step_issue_map[step.id] = sub_num
         # 親子リンク（ベストエフォート）
         try:
             link_sub_issue(
@@ -405,7 +403,7 @@ def _create_issues_if_needed(
         except Exception as exc:
             console.warning(f"Sub-Issue #{sub_num} の親子リンクに失敗しました: {exc}")
 
-    return root_issue_num
+    return root_issue_num, step_issue_map
 
 
 # -----------------------------------------------------------------------
@@ -419,6 +417,7 @@ def _build_step_prompt(
     render_template_fn,
     wf,
     additional_prompt: Optional[str] = None,
+    execution_mode: str = "local",
 ) -> str:
     """ステップのプロンプト文字列を構築する。
 
@@ -437,6 +436,7 @@ def _build_step_prompt(
                 root_issue_num=root_issue_num or 0,
                 params=params,
                 wf=wf,
+                execution_mode=execution_mode,
             )
             if prompt:
                 if additional_prompt:
@@ -596,16 +596,39 @@ async def _prefetch_workiq(
     config: SDKConfig,
     query: str,
     console: Console,
-    timeout: float = 120.0,
+    timeout: float = 900.0,
 ) -> str:
-    """Work IQ を別セッションで事前呼び出しし、結果テキストを返す。
+    """Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。"""
+    result = await _prefetch_workiq_detailed(config, query, console, timeout=timeout)
+    return result.content
 
-    orchestrator が DAG 実行前に Work IQ データを取得し、
-    結果をプロンプトに注入するために使用する。
-    エージェントにツール呼び出しを委譲する方式では
-    エージェントが指示を無視する可能性があるため、
-    この事前フェッチ方式で確実性を担保する。
+
+async def _prefetch_workiq_detailed(
+    config: SDKConfig,
+    query: str,
+    console: Console,
+    timeout: float = 900.0,
+) -> "WorkIQPrefetchResult":
+    """Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。
+
+    現行のワークフロー実行経路では Work IQ を QA フェーズ専用にしているため、
+    orchestrator からこのヘルパーを直接呼び出してプロンプト注入する処理は行わない。
     """
+    try:
+        from .workiq import (
+            build_workiq_mcp_config, query_workiq,
+            WorkIQPrefetchResult, WORKIQ_MCP_SERVER_NAME,
+            extract_workiq_tool_name_from_event,
+        )
+    except ImportError:
+        from workiq import (  # type: ignore[no-redef]
+            build_workiq_mcp_config, query_workiq,
+            WorkIQPrefetchResult, WORKIQ_MCP_SERVER_NAME,
+            extract_workiq_tool_name_from_event,
+        )
+
+    _start = time.monotonic()
+
     try:
         from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
@@ -613,12 +636,11 @@ async def _prefetch_workiq(
         console.warning(
             "Copilot SDK が利用できないため Work IQ 事前取得をスキップします。"
         )
-        return ""
-
-    try:
-        from .workiq import build_workiq_mcp_config, query_workiq
-    except ImportError:
-        from workiq import build_workiq_mcp_config, query_workiq  # type: ignore[no-redef]
+        return WorkIQPrefetchResult(
+            error_type="sdk_import_failure",
+            error_message="Copilot SDK が利用できません",
+            elapsed_seconds=time.monotonic() - _start,
+        )
 
     if config.cli_url:
         sdk_cfg = ExternalServerConfig(url=config.cli_url)
@@ -634,22 +656,498 @@ async def _prefetch_workiq(
 
     try:
         _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
-        session = await client.create_session(
-            model=config.model,
-            on_permission_request=PermissionHandler.approve_all,
-            streaming=True,
-            mcp_servers=_mcp,
-        )
+        _session_opts: dict = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            "mcp_servers": _mcp,
+        }
+        # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+        if config.model and config.model != MODEL_AUTO_VALUE:
+            _session_opts["model"] = config.model
+        session = await client.create_session(**_session_opts)
+
+        # ツール呼び出し追跡
+        _called_tools: list = []
+        _event_subscription_succeeded = False
+
+        def _on_event(event: object) -> None:
+            tool_name = extract_workiq_tool_name_from_event(event)
+            if tool_name:
+                _called_tools.append(tool_name)
+
         try:
-            result = await query_workiq(session, query, timeout=timeout)
-            return result
+            session.on(_on_event)
+            _event_subscription_succeeded = True
+        except Exception:
+            pass
+
+        try:
+            # MCP ステータス確認（runner.py run_step() と同等のチェック）
+            try:
+                mcp_list = await session.rpc.mcp.list()
+                wiq_found = False
+                mcp_status = None
+                mcp_error = None
+                for srv in mcp_list.servers:
+                    if srv.name == WORKIQ_MCP_SERVER_NAME:
+                        # SDK 実装差異により enum もしくは文字列で返るため両対応する
+                        mcp_status = srv.status.value if hasattr(srv.status, "value") else str(srv.status)
+                        mcp_error = getattr(srv, "error", None)
+                        if mcp_status != "connected":
+                            console.warning(
+                                f"Work IQ prefetch: MCP サーバー状態 = {mcp_status}"
+                                + (f" — {mcp_error}" if mcp_error else "")
+                                + "\n  診断コマンド: python -m hve workiq-doctor --sdk-probe --sdk-tool-probe --sdk-event-trace"
+                                + "\n  Windows の場合は npx.cmd -y @microsoft/workiq mcp を手動確認してください"
+                            )
+                            return WorkIQPrefetchResult(
+                                error_type="mcp_not_connected",
+                                error_message=f"MCP status={mcp_status}" + (f", error={mcp_error}" if mcp_error else ""),
+                                mcp_server_found=True,
+                                mcp_status=mcp_status,
+                                mcp_error=str(mcp_error) if mcp_error else None,
+                                elapsed_seconds=time.monotonic() - _start,
+                            )
+                        wiq_found = True
+                        break
+                if not wiq_found:
+                    console.warning(
+                        f"Work IQ prefetch: MCP サーバー '{WORKIQ_MCP_SERVER_NAME}' がセッション一覧に存在しません\n"
+                        "  診断コマンド: python -m hve workiq-doctor --sdk-probe --sdk-tool-probe --sdk-event-trace\n"
+                        "  Windows の場合は WORKIQ_NPX_COMMAND=npx.cmd を試してください"
+                    )
+                    return WorkIQPrefetchResult(
+                        error_type="mcp_not_found",
+                        error_message=f"MCP サーバー '{WORKIQ_MCP_SERVER_NAME}' がセッション一覧に存在しません",
+                        mcp_server_found=False,
+                        elapsed_seconds=time.monotonic() - _start,
+                    )
+            except Exception as mcp_err:
+                console.warning(
+                    f"Work IQ prefetch: MCP ステータス確認失敗: {mcp_err}\n"
+                    "  診断コマンド: python -m hve workiq-doctor --sdk-probe --sdk-tool-probe --sdk-event-trace"
+                )
+                return WorkIQPrefetchResult(
+                    error_type="mcp_list_failure",
+                    error_message=str(mcp_err),
+                    elapsed_seconds=time.monotonic() - _start,
+                )
+
+            console.workiq_prompt(query, label="Work IQ プロンプト [prefetch]")
+            result_text = await query_workiq(session, query, timeout=timeout)
+            console.workiq_response(result_text or "", label="Work IQ 応答 [prefetch]")
+            _elapsed = time.monotonic() - _start
+            _tool_called = bool(_called_tools)
+
+            if not _tool_called:
+                # tool_called=False の場合: result_text の有無に関わらず未観測として扱う。
+                # LLM がツールを呼ばずに説明文のみ返した可能性があるため、
+                # M365 信頼データとして扱わない（safe_to_inject=False）。
+                _has_text = bool(result_text)
+                if _has_text:
+                    console.warning(
+                        "⚠️ Work IQ prefetch: Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。\n"
+                        "  LLM がツールを呼ばずに応答した、またはイベント検出に失敗した可能性があります。\n"
+                        "  テキスト応答は Work IQ 由来のデータとして扱いません。\n"
+                        "  診断コマンド: python -m hve workiq-doctor --event-extractor-self-test --sdk-tool-probe --sdk-event-trace"
+                    )
+                else:
+                    console.warning(
+                        "⚠️ Work IQ prefetch: ツールが呼び出されませんでした。\n"
+                        "  エージェントが Work IQ 指示を実行しなかった可能性があります。\n"
+                        "  診断コマンド: python -m hve workiq-doctor --event-extractor-self-test --sdk-tool-probe --sdk-event-trace"
+                    )
+                return WorkIQPrefetchResult(
+                    content=result_text or "",
+                    error_type="tool_not_invoked",
+                    error_message=(
+                        "Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。 "
+                        "LLM がツールを呼ばずに応答した、またはイベント検出に失敗した可能性があります。"
+                    ),
+                    mcp_server_found=True,
+                    mcp_status="connected",
+                    tool_called=False,
+                    called_tools=[],
+                    elapsed_seconds=_elapsed,
+                    safe_to_inject=False,
+                    result_source="llm_text" if _has_text else None,
+                    event_subscription_succeeded=_event_subscription_succeeded,
+                )
+
+            return WorkIQPrefetchResult(
+                content=result_text,
+                success=bool(result_text),
+                mcp_server_found=True,
+                mcp_status="connected",
+                tool_called=_tool_called,
+                called_tools=list(_called_tools),
+                elapsed_seconds=_elapsed,
+                safe_to_inject=bool(result_text),
+                result_source="tool_execution" if _tool_called else None,
+                event_subscription_succeeded=_event_subscription_succeeded,
+            )
         finally:
             await session.disconnect()
     except Exception as exc:
         console.warning(f"Work IQ 事前取得に失敗しました: {exc}")
-        return ""
+        return WorkIQPrefetchResult(
+            error_type="query_exception",
+            error_message=str(exc),
+            elapsed_seconds=time.monotonic() - _start,
+        )
     finally:
         await client.stop()
+
+
+def _append_workiq_prefetch_log(
+    log_path: Path,
+    *,
+    event_type: str,
+    query_label: str,
+    content: str = "",
+    error_type: Optional[str] = None,
+    error_message: Optional[str] = None,
+    resolved_npx_command: Optional[str] = None,
+    tenant_id_specified: bool = False,
+    tool_called: Optional[bool] = None,
+    called_tools: Optional[list] = None,
+    mcp_status: Optional[str] = None,
+    event_subscription_succeeded: Optional[bool] = None,
+    result_source: Optional[str] = None,
+    safe_to_inject: Optional[bool] = None,
+) -> None:
+    """Work IQ prefetch の prompt / result / error を JSONL へ追記する。
+
+    エラーイベント（event_type が ``.error`` で終わるもの）または
+    error_type が指定されている場合は content が空でも書き込む。機微情報は含めないこと。
+    """
+    is_error_event = event_type.endswith(".error") or event_type.endswith("_error") or error_type is not None
+    if not is_error_event and (not content or not content.strip()):
+        return
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    record: dict = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "eventType": event_type,
+        "queryLabel": query_label,
+    }
+    if content:
+        record["content"] = content
+    if error_type:
+        record["errorType"] = error_type
+    if error_message:
+        record["message"] = error_message
+    if resolved_npx_command:
+        record["resolvedNpxCommand"] = resolved_npx_command
+    if tenant_id_specified:
+        record["tenantIdSpecified"] = True
+    if tool_called is not None:
+        record["toolCalled"] = tool_called
+    if called_tools is not None:
+        record["calledTools"] = called_tools
+    if mcp_status is not None:
+        record["mcpStatus"] = mcp_status
+    if event_subscription_succeeded is not None:
+        record["eventSubscriptionSucceeded"] = event_subscription_succeeded
+    if result_source is not None:
+        record["resultSource"] = result_source
+    if safe_to_inject is not None:
+        record["safeToInject"] = safe_to_inject
+    try:
+        with log_path.open("a", encoding="utf-8") as fp:
+            fp.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError:
+        return
+
+
+# -----------------------------------------------------------------------
+# AKM Work IQ 検証フェーズ
+# -----------------------------------------------------------------------
+
+_AKM_WORKIQ_DXX_MAX_CONTENT_LENGTH: int = 30_000
+"""Dxx ファイル全文の切り詰め上限（Work IQ 検証用）。"""
+
+_AKM_WORKIQ_SUMMARY_MAX_LENGTH: int = 3_000
+"""Work IQ クエリに送る Dxx 要約の最大長。"""
+
+_AKM_WORKIQ_QUERY_INTERVAL: float = 2.0
+"""Dxx 間のクエリインターバル（秒）。"""
+
+
+def _summarize_dxx_for_query(filepath: Path, content: str) -> str:
+    """Dxx ファイルの内容から Work IQ クエリ用の要約を生成する。
+
+    タイトル行 + 各セクション見出し + 未解決/仮定項目の先頭数行を抽出し、
+    _AKM_WORKIQ_SUMMARY_MAX_LENGTH 以内に収める。
+    """
+    lines = content.splitlines()
+    summary_parts: list[str] = []
+
+    # タイトル行（# で始まる最初の行）
+    for line in lines[:5]:
+        if line.startswith("# "):
+            summary_parts.append(line)
+            break
+
+    # セクション見出し + 直後の内容を抽出
+    in_section = False
+    section_lines: list[str] = []
+    for line in lines:
+        if line.startswith("## "):
+            if section_lines:
+                summary_parts.extend(section_lines[:5])
+            summary_parts.append(line)
+            section_lines = []
+            in_section = True
+        elif in_section:
+            stripped = line.strip()
+            if stripped:
+                section_lines.append(line)
+    if section_lines:
+        summary_parts.extend(section_lines[:5])
+
+    summary = "\n".join(summary_parts)
+    if len(summary) > _AKM_WORKIQ_SUMMARY_MAX_LENGTH:
+        summary = summary[:_AKM_WORKIQ_SUMMARY_MAX_LENGTH] + "\n...(truncated)"
+    return summary
+
+
+async def _run_akm_workiq_verification(
+    config: SDKConfig,
+    console: Console,
+    workiq_report_paths: Set[str],
+) -> None:
+    """AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。
+
+    各 Dxx ファイルについて:
+    1. Work IQ に KM 用プロンプトで検証クエリを送信
+    2. 有効な情報が見つかった場合、Copilot セッションで Dxx ファイルを更新
+    3. 更新箇所に情報ソースを付与
+    """
+    try:
+        from .workiq import (
+            build_workiq_mcp_config, query_workiq,
+            get_workiq_prompt_template, save_workiq_result,
+            is_workiq_error_response, is_workiq_available,
+            WORKIQ_MCP_SERVER_NAME,
+        )
+    except ImportError:
+        from workiq import (  # type: ignore[no-redef]
+            build_workiq_mcp_config, query_workiq,
+            get_workiq_prompt_template, save_workiq_result,
+            is_workiq_error_response, is_workiq_available,
+            WORKIQ_MCP_SERVER_NAME,
+        )
+
+    if not is_workiq_available():
+        console.warning("Work IQ が利用できないため AKM Work IQ 検証をスキップします。")
+        return
+
+    # Dxx ファイル一覧を取得（business-requirement-document-status.md を除外）
+    dxx_files = sorted(
+        p for p in Path("knowledge").glob("D??-*.md")
+        if p.name != "business-requirement-document-status.md"
+    )
+    if not dxx_files:
+        console.warning("knowledge/ 配下に Dxx ファイルが見つかりません。検証をスキップします。")
+        return
+
+    console.event(f"AKM Work IQ 検証: {len(dxx_files)} 件の Dxx ファイルを検証します")
+
+    # SDK / セッション準備
+    try:
+        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
+        from copilot.session import PermissionHandler
+    except ImportError:
+        console.warning(
+            "Copilot SDK が利用できないため AKM Work IQ 検証をスキップします。"
+        )
+        return
+
+    if config.cli_url:
+        sdk_cfg = ExternalServerConfig(url=config.cli_url)
+    else:
+        sdk_cfg = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level="error",
+        )
+
+    client = CopilotClient(config=sdk_cfg)
+    await client.start()
+
+    verified_count = 0
+    updated_count = 0
+    skipped_count = 0
+    error_count = 0
+
+    try:
+        # Work IQ MCP 付きセッションを作成
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        session_opts: dict = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            "mcp_servers": _mcp,
+        }
+        if config.model and config.model != MODEL_AUTO_VALUE:
+            session_opts["model"] = config.model
+
+        session = await client.create_session(**session_opts)
+
+        try:
+            # MCP 接続確認
+            try:
+                mcp_list = await session.rpc.mcp.list()
+                wiq_found = False
+                for srv in mcp_list.servers:
+                    if srv.name == WORKIQ_MCP_SERVER_NAME:
+                        mcp_status = srv.status.value if hasattr(srv.status, "value") else str(srv.status)
+                        if mcp_status != "connected":
+                            console.warning(
+                                f"AKM Work IQ 検証: MCP サーバー状態 = {mcp_status}。検証をスキップします。"
+                            )
+                            return
+                        wiq_found = True
+                        break
+                if not wiq_found:
+                    console.warning(
+                        f"AKM Work IQ 検証: MCP サーバー '{WORKIQ_MCP_SERVER_NAME}' が見つかりません。検証をスキップします。"
+                    )
+                    return
+            except Exception as mcp_err:
+                console.warning(f"AKM Work IQ 検証: MCP ステータス確認失敗: {mcp_err}")
+                return
+
+            console.event("AKM Work IQ 検証: MCP 接続確認完了")
+
+            # 各 Dxx ファイルを順次処理
+            for idx, dxx_path in enumerate(dxx_files):
+                dxx_filename = dxx_path.name
+                dxx_filepath = str(dxx_path).replace("\\", "/")
+
+                console.event(f"  [{idx + 1}/{len(dxx_files)}] {dxx_filename} を検証中...")
+
+                try:
+                    dxx_content = dxx_path.read_text(encoding="utf-8")
+                except OSError as read_err:
+                    console.warning(f"  {dxx_filename}: ファイル読み取り失敗: {read_err}")
+                    error_count += 1
+                    continue
+
+                if not dxx_content.strip():
+                    console.warning(f"  {dxx_filename}: ファイルが空です。スキップします。")
+                    skipped_count += 1
+                    continue
+
+                # (2) Work IQ 検証クエリ
+                dxx_summary = _summarize_dxx_for_query(dxx_path, dxx_content)
+                km_prompt_template = get_workiq_prompt_template(
+                    "km", config.workiq_prompt_km
+                )
+                workiq_query = km_prompt_template.format(target_content=dxx_summary)
+                console.workiq_prompt(
+                    workiq_query,
+                    label=f"Work IQ プロンプト [{dxx_filename.split('-')[0]} KM]",
+                )
+
+                try:
+                    workiq_result = await query_workiq(
+                        session, workiq_query,
+                        timeout=config.workiq_per_question_timeout,
+                    )
+                except Exception as wiq_err:
+                    console.warning(f"  {dxx_filename}: Work IQ クエリ失敗: {wiq_err}")
+                    error_count += 1
+                    if idx < len(dxx_files) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                console.workiq_response(
+                    workiq_result or "",
+                    label=f"Work IQ 応答 [{dxx_filename.split('-')[0]} KM]",
+                )
+
+                # 結果を保存
+                _d_class_id = dxx_filename.split("-")[0]  # "D01", "D02", etc.
+                save_path = save_workiq_result(
+                    config.run_id, "1", f"km-verify-{_d_class_id}",
+                    workiq_result or "",
+                    is_error=is_workiq_error_response(workiq_result or ""),
+                    base_dir=config.workiq_draft_output_dir or "qa",
+                )
+                if save_path:
+                    workiq_report_paths.add(str(save_path))
+
+                verified_count += 1
+
+                # (3) 応答判定
+                if not workiq_result or not workiq_result.strip():
+                    console.event(f"  {dxx_filename}: Work IQ 応答なし。スキップします。")
+                    skipped_count += 1
+                    if idx < len(dxx_files) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                if is_workiq_error_response(workiq_result):
+                    console.warning(f"  {dxx_filename}: Work IQ エラー応答。スキップします。")
+                    skipped_count += 1
+                    if idx < len(dxx_files) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                # 「関連情報なし」判定
+                _no_info_keywords = ("関連情報なし", "関連する情報は見つかりませんでした", "該当する情報はありません")
+                _result_lower = workiq_result.strip()
+                if any(kw in _result_lower for kw in _no_info_keywords):
+                    console.event(f"  {dxx_filename}: 関連情報なし")
+                    if idx < len(dxx_files) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                # (4) Dxx ファイル更新
+                console.event(f"  {dxx_filename}: Work IQ 関連情報あり → ファイル更新を実行")
+
+                # Dxx 内容を切り詰め
+                _dxx_for_prompt = dxx_content
+                if len(_dxx_for_prompt) > _AKM_WORKIQ_DXX_MAX_CONTENT_LENGTH:
+                    _dxx_for_prompt = _dxx_for_prompt[:_AKM_WORKIQ_DXX_MAX_CONTENT_LENGTH] + "\n...(truncated)"
+
+                update_prompt = AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT.format(
+                    dxx_filename=dxx_filename,
+                    dxx_content=_dxx_for_prompt,
+                    dxx_filepath=dxx_filepath,
+                    workiq_result=workiq_result,
+                )
+
+                try:
+                    update_response = await session.send_and_wait(
+                        update_prompt, timeout=config.timeout_seconds
+                    )
+                    update_output = _extract_text(update_response)
+                    if update_output:
+                        updated_count += 1
+                        console.event(f"  {dxx_filename}: 更新完了")
+                    else:
+                        console.warning(f"  {dxx_filename}: 更新応答が空でした")
+                except Exception as upd_err:
+                    console.warning(f"  {dxx_filename}: ファイル更新失敗: {upd_err}")
+                    error_count += 1
+
+                if idx < len(dxx_files) - 1:
+                    await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+
+        finally:
+            await session.disconnect()
+    except Exception as exc:
+        console.warning(f"AKM Work IQ 検証中にエラーが発生しました: {exc}")
+        error_count += 1
+    finally:
+        await client.stop()
+
+    console.event(
+        f"AKM Work IQ 検証完了: 検証={verified_count}, 更新={updated_count}, "
+        f"スキップ={skipped_count}, エラー={error_count}"
+    )
 
 
 # -----------------------------------------------------------------------
@@ -696,8 +1194,13 @@ async def run_workflow(
     if not config.run_id:
         config.run_id = generate_run_id()
 
-    console = Console(verbose=config.verbose, quiet=config.quiet, show_stream=config.show_stream,
-                      verbosity=config.verbosity)
+    console = Console(
+        verbose=config.verbose,
+        quiet=config.quiet,
+        show_stream=config.show_stream,
+        show_reasoning=config.show_reasoning,
+        verbosity=config.verbosity,
+    )
     start_total = time.time()
 
     # --- 1. ワークフロー定義取得 ---
@@ -723,6 +1226,19 @@ async def run_workflow(
     if config.create_issues:
         _phases.append("Issue 作成")
     _phases.append("実行計画 → DAG 実行")
+    if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
+        _phases.append("AKM Work IQ 検証")
+    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run:
+        # Post-DAG の前（"後処理 (git push + PR)" の前）に挿入
+        # create_issues/create_pr の場合は後処理の前、そうでなければ末尾
+        idx = len(_phases)
+        if config.create_issues or config.create_pr:
+            # "後処理 (git push + PR)" の前に挿入
+            for i, phase_name in enumerate(_phases):
+                if "後処理" in phase_name:
+                    idx = i
+                    break
+        _phases.insert(idx, "自己改善ループ")
     if config.create_issues or config.create_pr:
         _phases.append("後処理 (git push + PR)")
     _phases.append("サマリー")
@@ -745,6 +1261,8 @@ async def run_workflow(
 
     if params is None:
         params = {}
+    # Agent プロンプトでは done ラベル付与を要求しない（付与は orchestrator 側で実施）。
+    execution_mode = "local"
 
     # dry_run 時は常に非対話モード（インタラクティブプロンプト不要）
     # CLI 引数が揃っていれば非対話モード、そうでなければ対話モード
@@ -777,18 +1295,64 @@ async def run_workflow(
     if config.dry_run:
         effective_params["dry_run"] = True
 
-    if wf.id in ("asdw", "abdv") and not effective_params.get("resource_group"):
-        console.error("resource_group は ASDW/ABDV ワークフローの必須パラメーターです。--resource-group を指定してください。")
-        return {
-            "workflow_id": workflow_id,
-            "completed": [],
-            "failed": [],
-            "skipped": [],
-            "elapsed_total": time.time() - start_total,
-            "error": "resource_group is required for ASDW/ABDV workflows.",
-        }
-
     console.phase_end(p, _total_phases, "パラメータ収集", time.time() - phase_start)
+
+    # --- 2.5. 推薦アーキテクチャ APP-ID フィルタ ---
+    _ARCH_FILTER_WORKFLOWS = {"aad-web", "asdw-web", "abd", "abdv"}
+    if wf.id in _ARCH_FILTER_WORKFLOWS:
+        _requested_ids = effective_params.get("app_ids") or (
+            [effective_params["app_id"]] if effective_params.get("app_id") else None
+        )
+        try:
+            _filter_result = resolve_app_arch_scope(
+                workflow_id=wf.id,
+                requested_app_ids=_requested_ids,
+                dry_run=config.dry_run,
+            )
+        except (FileNotFoundError, ValueError) as _filter_exc:
+            console.error(f"app-arch filter エラー: {_filter_exc}")
+            elapsed = time.time() - start_total
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "elapsed_total": elapsed,
+                "error": str(_filter_exc),
+            }
+
+        if _filter_result.matched_app_ids:
+            effective_params["app_ids"] = _filter_result.matched_app_ids
+            effective_params["app_id"] = (
+                _filter_result.matched_app_ids[0]
+                if len(_filter_result.matched_app_ids) == 1
+                else ""
+            )
+        elif _filter_result.catalog_found:
+            # catalog が存在して 0 件 → DAG を実行しない
+            _reason = "対象アーキテクチャに一致する APP-ID がありません"
+            console.warning(
+                f"推薦アーキテクチャ APP-ID フィルタ: 対象 APP-ID が 0 件のためスキップします（{_reason}）"
+            )
+            elapsed = time.time() - start_total
+            _zero_match_result = {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "elapsed_total": elapsed,
+                "skipped_reason": _reason,
+            }
+            if config.dry_run:
+                _zero_match_result["dry_run"] = True
+            return _zero_match_result
+        else:
+            # catalog が存在しない（dry_run=True の場合は warning 継続済み）
+            # params は変更しない（従来互換）
+            pass
+
+        effective_params["app_arch_filter"] = _filter_result.to_dict()
+        effective_params["app_arch_scope_section"] = _filter_result.to_markdown_section()
 
     # --- 3. ステップフィルタリング ---
     p = _next_phase()
@@ -801,9 +1365,16 @@ async def run_workflow(
     console.event(f"実行対象ステップ数: {len(active_steps)}")
     console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
+    dry_run_plan = build_dag_plan(
+        wf,
+        active_steps,
+        max_parallel=config.max_parallel,
+        max_parallel_source="config",
+    )
+
     # --- dry_run: 実行計画表示のみ ---
     if config.dry_run:
-        _print_dry_run_plan(wf, active_steps, config, console)
+        _print_dry_run_plan(wf, active_steps, config, console, dry_run_plan)
         elapsed = time.time() - start_total
         return {
             "workflow_id": workflow_id,
@@ -812,6 +1383,7 @@ async def run_workflow(
             "skipped": list(active_steps),
             "elapsed_total": elapsed,
             "dry_run": True,
+            "dag_plan_waves": len(dry_run_plan.waves),
         }
 
     # --- 4. 新ブランチ作成（--create-issues または --create-pr 時） ---
@@ -842,7 +1414,7 @@ async def run_workflow(
         phase_start_issue = time.time()
         console.phase_start(p, _total_phases, "Issue 作成")
 
-    root_issue_num = _create_issues_if_needed(
+    root_issue_num, step_issue_map = _create_issues_if_needed(
         wf=wf,
         params=effective_params,
         active_steps=active_steps,
@@ -881,6 +1453,44 @@ async def run_workflow(
         os.makedirs(_dir, exist_ok=True)
     console.event(f"成果物ディレクトリを確認/作成しました（{len(_REQUIRED_DIRS)} 件）")
 
+    # --- メタワークフロー前提チェック ---
+    from hve.workflow_registry import get_meta_dependencies
+
+    deps = get_meta_dependencies(workflow_id)
+    if deps:
+        glob_cache: Dict[str, bool] = {}
+
+        def _artifact_exists(pattern: str) -> bool:
+            if pattern not in glob_cache:
+                glob_cache[pattern] = next(_glob.iglob(pattern), None) is not None
+            return glob_cache[pattern]
+
+        missing_artifacts: List[str] = []
+        for dep in deps:
+            for pattern in dep.required_artifacts:
+                if not _artifact_exists(pattern):
+                    missing_artifacts.append(f"  - {pattern} (required by {dep.workflow_id})")
+
+        if missing_artifacts:
+            msg = "以下の前提成果物が見つかりません:\n" + "\n".join(missing_artifacts)
+            soft_only = all(
+                d.soft for d in deps
+                if any(not _artifact_exists(p) for p in d.required_artifacts)
+            )
+            if soft_only:
+                console.warning(msg + "\n(soft dependency のため続行します)")
+            else:
+                console.error(msg)
+                if not config.dry_run:
+                    return {
+                        "workflow_id": workflow_id,
+                        "completed": [],
+                        "failed": [],
+                        "skipped": [],
+                        "elapsed_total": time.time() - start_total,
+                        "error": msg,
+                    }
+
     runner = StepRunner(config=config, console=console)
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
@@ -911,92 +1521,16 @@ async def run_workflow(
             render_template_fn=render_template,
             wf=wf,
             additional_prompt=effective_additional_prompt,
+            execution_mode=execution_mode,
         )
-        step_prompt = step_prompts[step.id]
 
-        # Work IQ 事前フェッチは AKM のみ（AQOD は Phase 2 QA で利用）
-        if config.workiq_enabled and workflow_id == "akm":
-            try:
-                from .workiq import (
-                    is_workiq_available, get_workiq_prompt_template,
-                    enrich_prompt_with_workiq, save_workiq_result, is_workiq_error_response,
-                )
-            except ImportError:
-                from workiq import (  # type: ignore[no-redef]
-                    is_workiq_available, get_workiq_prompt_template,
-                    enrich_prompt_with_workiq, save_workiq_result, is_workiq_error_response,
-                )
-
-            if is_workiq_available():
-                _akm_sources = str(effective_params.get("sources") or "qa")
-                _wiq_mode = "review" if _akm_sources == "original-docs" else "km"
-                _wiq_template = get_workiq_prompt_template(
-                    _wiq_mode,
-                    config.workiq_prompt_km if _wiq_mode == "km" else config.workiq_prompt_review,
-                )
-                _topic_raw = step_prompt[:500]
-                _last_period = max(_topic_raw.rfind("。"), _topic_raw.rfind("\n"))
-                _topic_summary = _topic_raw[:_last_period + 1] if _last_period > 100 else _topic_raw
-                _wiq_query = _wiq_template.format(target_content=_topic_summary)
-
-                # 事前フェッチ: 別セッションで Work IQ を呼び出す
-                console.status(
-                    f"🔍 Work IQ: Step.{step.id} の M365 関連情報を事前取得中..."
-                )
-                console.spinner_start("Work IQ 問い合わせ中...")
-                _wiq_context = await _prefetch_workiq(
-                    config=config,
-                    query=_wiq_query,
-                    console=console,
-                    timeout=getattr(config, "workiq_query_timeout_seconds", 120.0),
-                )
-                console.spinner_stop()
-
-                if _wiq_context and not is_workiq_error_response(_wiq_context):
-                    console.status(
-                        f"✅ Work IQ: Step.{step.id} の関連情報を取得しました"
-                    )
-                    _saved_wiq = save_workiq_result(
-                        config.run_id, step.id, _wiq_mode, _wiq_context,
-                    )
-                    if _saved_wiq:
-                        workiq_report_paths.add(_saved_wiq.as_posix())
-                    # ここは外側条件（workflow_id == "akm"）内のため AKM 専用レポートを生成する。
-                    _akm_report_path = Path("knowledge") / f"workiq-consistency-report-{config.run_id}.md"
-                    _akm_report_path.parent.mkdir(parents=True, exist_ok=True)
-                    _header = (
-                        "# Work IQ レビュー補助レポート\n\n"
-                        f"- **run_id**: {config.run_id}\n"
-                        f"- **workflow**: {workflow_id}\n"
-                        f"- **step**: {step.id}\n"
-                        f"- **timestamp**: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n\n"
-                        "> ⚠️ 人間レビューが必要です。このレポートを鵜呑みにせず、原文・証跡を確認してください。\n\n"
-                        "---\n\n"
-                    )
-                    _akm_report_path.write_text(_header + _wiq_context, encoding="utf-8")
-                    workiq_report_paths.add(_akm_report_path.as_posix())
-                    step_prompt = enrich_prompt_with_workiq(
-                        _wiq_context, step_prompt,
-                        context_type="M365 参考情報",
-                    )
-                elif _wiq_context:
-                    console.warning(
-                        f"⚠️ Work IQ: Step.{step.id} の事前取得でエラー応答を検出したため、"
-                        "プロンプト注入をスキップします"
-                    )
-                    save_workiq_result(
-                        config.run_id, step.id, _wiq_mode, _wiq_context,
-                        is_error=True,
-                    )
-                else:
-                    console.status(
-                        f"ℹ️ Work IQ: Step.{step.id} の関連情報は見つかりませんでした"
-                    )
-                step_prompts[step.id] = step_prompt
-            else:
-                console.warning(
-                    "Work IQ が検出できません。Work IQ 連携をスキップします。"
-                )
+    dag_plan = build_dag_plan(
+        wf,
+        active_steps,
+        step_prompts=step_prompts,
+        max_parallel=config.max_parallel,
+        max_parallel_source="config",
+    )
 
     # --- 6-7. DAGExecutor 実行 ---
     async def run_step_fn(
@@ -1010,6 +1544,7 @@ async def run_workflow(
             title=title,
             prompt=prompt,
             custom_agent=custom_agent,
+            workflow_id=workflow_id,
         )
 
     executor = DAGExecutor(
@@ -1019,6 +1554,7 @@ async def run_workflow(
         max_parallel=config.max_parallel,
         console=console,
         step_prompts=step_prompts,
+        dag_plan=dag_plan,
     )
 
     # 実行計画を事前表示
@@ -1027,7 +1563,182 @@ async def run_workflow(
         console.execution_plan(waves, len(active_steps), config.max_parallel)
 
     results = await executor.execute()
+    if config.create_issues and step_issue_map:
+        token = config.resolve_token()
+        repo = config.repo
+        if token and repo:
+            done_label = f"{wf.label_prefix}:done"
+            for step_id in executor.completed:
+                issue_num = step_issue_map.get(step_id)
+                if issue_num is None:
+                    continue
+                ok = add_labels(
+                    issue_num=issue_num,
+                    labels=[done_label],
+                    repo=repo,
+                    token=token,
+                )
+                if not ok:
+                    console.warning(
+                        f"Step.{step_id} の Sub-Issue #{issue_num} へのラベル付与に失敗しました。"
+                    )
     console.phase_end(p, _total_phases, "実行計画 → DAG 実行", time.time() - phase_start_dag)
+
+    # --- AQOD 成果物検証（warning のみ、hard fail なし）---
+    aqod_validation_result: Optional[dict] = None
+    if workflow_id == "aqod" and not config.dry_run:
+        try:
+            try:
+                from .artifact_validation import validate_aqod_run
+            except ImportError:
+                from artifact_validation import validate_aqod_run  # type: ignore[no-redef]
+            aqod_validation_result = validate_aqod_run(qa_dir="qa", run_id=config.run_id)
+            _av_overall = aqod_validation_result.get("overall", "FAIL")
+            _av_found = aqod_validation_result.get("artifacts_found", 0)
+            _av_passed = aqod_validation_result.get("passed", 0)
+            if _av_overall == "PASS":
+                console.event(
+                    f"✅ AQOD 成果物検証 PASS: {_av_passed}/{_av_found} 件の QA-DocConsistency-*.md が有効です。"
+                )
+            elif _av_overall == "WARN":
+                console.warning(
+                    f"⚠️ AQOD 成果物検証 WARN: {_av_passed}/{_av_found} 件が有効（一部に問題あり）。"
+                )
+            else:
+                console.warning(
+                    "⚠️ AQOD 成果物検証 FAIL: QA-DocConsistency-*.md が見つからないか、必須要件を満たしていません。\n"
+                    "   execution-qa-merged.md は HVE 実行補助 QA であり、AQOD 本体成果物ではありません。\n"
+                    "   AQOD 本体成果物は qa/QA-DocConsistency-*.md です。"
+                )
+            for vr in (aqod_validation_result.get("validation_results") or []):
+                for err in (vr.get("errors") or []):
+                    console.warning(f"  [検証エラー] {vr.get('path')}: {err}")
+                for warn in (vr.get("warnings") or []):
+                    console.warning(f"  [検証警告] {vr.get('path')}: {warn}")
+        except Exception as av_exc:
+            console.warning(f"AQOD 成果物検証中にエラーが発生しました（無視して続行）: {av_exc}")
+
+    # --- AKM Work IQ 検証（AKM 実行後レビュー Work IQ が有効な場合）---
+    if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
+        p = _next_phase()
+        phase_start_akm_wiq = time.time()
+        console.phase_start(p, _total_phases, "AKM Work IQ 検証")
+        try:
+            await _run_akm_workiq_verification(
+                config=config,
+                console=console,
+                workiq_report_paths=workiq_report_paths,
+            )
+        except Exception as akm_wiq_exc:
+            console.warning(
+                f"AKM Work IQ 検証中にエラーが発生しました（無視して続行）: {akm_wiq_exc}"
+            )
+        console.phase_end(p, _total_phases, "AKM Work IQ 検証", time.time() - phase_start_akm_wiq)
+
+    # PR 作成フェーズで参照するため事前初期化（auto_self_improve=False 時の NameError 防止）
+    si_task_goal: Optional["TaskGoal"] = None
+    si_disc_sources: List[str] = []
+
+    # --- Self-Improve（オプション） ---
+    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run:
+        p = _next_phase()
+        phase_start_si = time.time()
+        console.phase_start(p, _total_phases, "自己改善ループ")
+
+        from hve.self_improve import (
+            run_improvement_loop, define_task_goal, TaskGoal,
+            discover_task_goal_from_docs,
+        )
+
+        # ワークフロー種別に応じたデフォルト target_scope
+        _si_scope_defaults: Dict[str, str] = {
+            "aas": "docs/",
+            "aad-web": "docs/",
+            "asdw-web": ".",
+            "abd": "docs/",
+            "abdv": ".",
+            "aag": "docs/",
+            "aagd": ".",
+            "akm": "knowledge/",
+            "aqod": "qa/",
+            "adoc": "docs/",
+        }
+        effective_si_scope = (
+            config.self_improve_target_scope
+            or _si_scope_defaults.get(workflow_id, "")
+        )
+        orig_scope = config.self_improve_target_scope
+        config.self_improve_target_scope = effective_si_scope
+
+        # タスクゴールを確定する（TDD 的: ループ開始前に成功条件を定義）
+        _user_goal = getattr(config, "self_improve_goal", "")
+        if _user_goal:
+            # ユーザー指定ゴールを優先
+            task_goal = define_task_goal(
+                workflow_id=workflow_id,
+                user_goal_description=_user_goal,
+            )
+        else:
+            # ドキュメントから自動生成（非対話モードでも実行）
+            try:
+                _disc_result = discover_task_goal_from_docs(
+                    workflow_id=workflow_id,
+                    target_scope=effective_si_scope,
+                    repo_root=".",
+                )
+                task_goal = _disc_result["task_goal"]
+                si_disc_sources = _disc_result["sources"]
+                console.event(
+                    f"自己改善ゴールを自動生成しました: "
+                    f"{task_goal['goal_description'][:80]}"
+                )
+            except Exception as _disc_exc:
+                console.warning(
+                    f"ゴール自動検索に失敗しました: {_disc_exc}。標準ゴールを使用します。"
+                )
+                task_goal = define_task_goal(workflow_id=workflow_id)
+
+        # config.self_improve_success_criteria が指定されていれば success_criteria を上書き
+        _override_criteria = getattr(config, "self_improve_success_criteria", [])
+        if _override_criteria:
+            task_goal = TaskGoal(
+                goal_description=task_goal["goal_description"],
+                success_criteria=_override_criteria,
+                reward_weights=task_goal["reward_weights"],
+                tdd_phase=task_goal["tdd_phase"],
+            )
+
+        si_task_goal = task_goal
+
+        # workflow_id をループ内で参照できるよう config に一時設定
+        _prev_workflow_id = getattr(config, "workflow_id", "")
+        config.workflow_id = workflow_id  # type: ignore[attr-defined]
+
+        try:
+            # run_improvement_loop は同期関数（内部で subprocess.run を使用）のため、
+            # asyncio イベントループをブロックしないようスレッドプールに委譲する
+            loop = asyncio.get_running_loop()
+            si_result = await loop.run_in_executor(
+                None,
+                functools.partial(
+                    run_improvement_loop,
+                    config=config,
+                    work_dir=Path(f"work/self-improve/run-{config.run_id}"),
+                    repo_root=".",
+                    task_goal=task_goal,
+                ),
+            )
+        finally:
+            config.self_improve_target_scope = orig_scope  # 復元
+            config.workflow_id = _prev_workflow_id  # type: ignore[attr-defined]
+
+        console.event(
+            f"Self-Improve 完了: {si_result['iterations_completed']} イテレーション, "
+            f"最終スコア={si_result['final_score']}, "
+            f"ゴール達成率={si_result['final_goal_achievement_pct'] * 100:.1f}%, "
+            f"終了理由={si_result['stopped_reason']}"
+        )
+        console.phase_end(p, _total_phases, "自己改善ループ", time.time() - phase_start_si)
 
     # --- 8. Post-DAG: 統一後処理 ---
     code_review_error: Optional[str] = None
@@ -1066,6 +1777,8 @@ async def run_workflow(
                 console=console,
                 root_issue_num=root_issue_num,
                 workiq_report_paths=sorted(workiq_report_paths),
+                task_goal=si_task_goal,
+                goal_sources=si_disc_sources,
             )
             if pr_number is None:
                 pr_error = "PR 作成に失敗しました。ログを確認してください。"
@@ -1087,6 +1800,7 @@ async def run_workflow(
     completed_ids = list(executor.completed)
     failed_ids = list(executor.failed)
     skipped_ids = list(executor.skipped)
+    blocked_ids = list(getattr(executor, "blocked", set()))
 
     console.summary({
         "success": len(completed_ids),
@@ -1110,12 +1824,14 @@ async def run_workflow(
         "completed": completed_ids,
         "failed": failed_ids,
         "skipped": skipped_ids,
+        "blocked": blocked_ids,
         "elapsed_total": elapsed_total,
         "code_review_error": code_review_error,
         "pr_number": pr_number,
         "root_issue_num": root_issue_num,
         "working_branch": working_branch,
         "error": pr_error,
+        "aqod_validation": aqod_validation_result,
     }
 
 
@@ -1123,10 +1839,20 @@ async def run_workflow(
 # ドライラン計画表示
 # -----------------------------------------------------------------------
 
-def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: Console) -> None:
+def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: Console, dag_plan=None) -> None:
     """ドライラン時に DAG の波（Wave）を表示する。"""
     console.event(f"[DRY RUN] orchestrate: workflow={wf.id}")
     console.event("[DRY RUN] DAG Traversal:")
+
+    if dag_plan is not None:
+        for wave in dag_plan.waves:
+            labels = " ‖ ".join(f"Step.{step_id}" for step_id in wave.step_ids)
+            console.event(f"[DRY RUN]   Wave {wave.index}: {labels}")
+        console.event(
+            f"[DRY RUN] Plan summary: active={len(dag_plan.active_step_ids)}, "
+            f"auto_skipped={len(dag_plan.auto_skipped_step_ids)}, waves={len(dag_plan.waves)}"
+        )
+        return
 
     completed: Set[str] = set()
     skipped: Set[str] = set()
@@ -1416,6 +2142,8 @@ def _create_pr_if_needed(
     console: Console,
     root_issue_num: Optional[int] = None,
     workiq_report_paths: Optional[List[str]] = None,
+    task_goal: Optional["TaskGoal"] = None,
+    goal_sources: Optional[List[str]] = None,
 ) -> Optional[int]:
     """PR を作成する。
 
@@ -1443,25 +2171,51 @@ def _create_pr_if_needed(
         "",
         f"ブランチ: `{head_branch}` → `{base_branch}`",
     ]
-    if config.workiq_enabled:
+    if task_goal:
+        body_lines.extend([
+            "",
+            "## 自己改善ゴール",
+            "",
+            f"**ゴール説明**: {task_goal['goal_description']}",
+            "",
+            "**成功条件:**",
+        ])
+        for crit in (task_goal.get("success_criteria") or []):
+            body_lines.append(f"- {crit}")
+        body_lines.append(f"\n**TDD フェーズ**: `{task_goal.get('tdd_phase', 'GREEN')}`")
+        _goal_srcs = goal_sources or []
+        if _goal_srcs:
+            body_lines.extend(["", "**参照ソース:**"])
+            for src in _goal_srcs[:5]:
+                body_lines.append(f"- `{src}`")
+            if len(_goal_srcs) > 5:
+                body_lines.append(f"  - ...他 {len(_goal_srcs) - 5} 件")
+    if config.workiq_enabled or config.is_workiq_qa_enabled() or config.is_workiq_akm_review_enabled():
         discovered_paths: Set[str] = set(workiq_report_paths or [])
         run_id = config.run_id
         draft_output_dir = (config.workiq_draft_output_dir or "").strip() or "qa"
+        normalized_output_dir = Path(draft_output_dir).as_posix().lstrip("./")
         if run_id:
-            draft_glob = str(Path(draft_output_dir) / f"{run_id}-*-workiq-draft.md")
-            for path in sorted(_glob.glob(draft_glob)):
-                discovered_paths.add(path)
-            akm_report = f"knowledge/workiq-consistency-report-{run_id}.md"
-            if os.path.exists(akm_report):
-                discovered_paths.add(akm_report)
+            report_globs = [
+                str(Path(draft_output_dir) / f"{run_id}-*-workiq-*.md"),
+                str(Path(draft_output_dir) / f"{run_id}-*-workiq-*.jsonl"),
+            ]
+            for report_glob in report_globs:
+                for path in sorted(_glob.glob(report_glob)):
+                    discovered_paths.add(path)
         ignore_roots = tuple((p or "").strip().strip("/\\") for p in (config.ignore_paths or []))
         filtered_paths = []
         for p in sorted(discovered_paths):
             normalized = Path(p).as_posix().lstrip("./")
+            is_workiq_report = (
+                normalized_output_dir
+                and normalized.startswith(f"{normalized_output_dir}/")
+                and "-workiq-" in Path(normalized).name
+            )
             if normalized.startswith("work/"):
                 # work/ は中間成果物（既定で ignore）で PR 本文の参照対象外とする。
                 continue
-            if any(
+            if (not is_workiq_report) and any(
                 root and (normalized == root or normalized.startswith(f"{root}/"))
                 for root in ignore_roots
             ):

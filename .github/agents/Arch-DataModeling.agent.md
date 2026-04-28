@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-DataModeling
 description: "ユースケースから全エンティティ・サービス境界・データモデル（Mermaid）とJSONサンプルを生成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -40,7 +40,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `{WORK}plan.md`
 - `{WORK}subissues.md`
 
-## 3) 実行フロー（15分超は“実装開始前”に分割）
+## 3) 実行フロー（task_scope=multi または context_size=large は“実装開始前”に分割）
 ### 3.0 依存確認（必須・最初に実行）
 - `docs/catalog/domain-analytics.md` と `docs/catalog/service-catalog.md` の両方を `read` で確認する。
 - いずれかが存在しない、空、または見出し構造が不完全な場合：
@@ -60,7 +60,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->

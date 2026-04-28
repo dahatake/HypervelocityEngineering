@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aad-web/step-1.md に移動しました。 -->
 {root_ref}
 ## 目的
 ドメイン分析結果、サービス一覧、データモデルを根拠に画面一覧を設計する。
@@ -22,4 +23,4 @@
 
 ## 完了条件
 - `docs/catalog/screen-catalog.md` が作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

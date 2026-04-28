@@ -14,12 +14,14 @@ tools: ["*"]
   - `sources=qa`: `qa/*.md`
   - `sources=original-docs`: `original-docs/*`（`.md`/`.txt`/`.csv`）
   - `sources=both`: 上記両方
+  - ただし `qa/*-workiq-*.md` は Work IQ 補助レポートのため除外する
 - 任意: `additional_comment` 内 `custom_source_dir: <path>`
 - 共通: `template/business-requirement-document-master-list.md`
 
 ## §3 出力
 - `knowledge/business-requirement-document-status.md`
 - `knowledge/D{NN}-*.md`
+- `knowledge/D{NN}-*-ChangeLog.md`
 - `work/KnowledgeManager/Issue-<識別子>/artifacts/*`
 
 ## §4 処理手順
@@ -33,12 +35,13 @@ tools: ["*"]
 8. Step 6: カバレッジ分析
 9. Step 6.5: 矛盾検出（`sources` に `original-docs` を含む場合のみ）
 10. Step 7: status 生成
-11. Step 7.5: `knowledge/D{NN}` 生成
+11. Step 7.5: `knowledge/D{NN}` および `D{NN}-*-ChangeLog.md` 生成
 12. Step 8: 敵対的レビュー（オプション）
 
 ### Step 0 判定ロジック
 - パス判定（優先）
   - `qa/*.md` → (A) 質問票抽出
+  - `qa/*-workiq-*.md` → 除外（質問票ではなく Work IQ 補助レポート）
   - `original-docs/*` → (B) セクション分割
 - 内容判定（フォールバック）
   - `|---|` + `質問ID`/`質問` 列 → (A)
@@ -61,6 +64,7 @@ tools: ["*"]
   - `knowledge/` / `hve/` / `src/` / `test/` / `infra/` / `.github/` / `images/` 配下も拒否
 - knowledge/ への書き込み許可:
   - `D[0-9][0-9]-*.md`
+  - `D[0-9][0-9]-*-ChangeLog.md`
   - `business-requirement-document-status.md`
 
 ## §8 参照

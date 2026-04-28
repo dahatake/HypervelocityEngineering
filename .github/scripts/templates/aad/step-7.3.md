@@ -1,3 +1,4 @@
+<!-- DEPRECATED: このテンプレートは templates/aad-web/step-2.3.md に移動しました。 -->
 {root_ref}
 ## 目的
 テスト戦略書・画面定義書・サービス定義書を根拠に、TDD用テスト仕様書をサービスごと・画面ごとに作成する。
@@ -28,4 +29,4 @@
 
 ## 完了条件
 - テスト仕様書がサービスカタログに基づいて全サービス・全画面分作成されている
-- 完了時に自身に `aad:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}

@@ -10,9 +10,29 @@
     "description": "run app detail design workflow (application detail design document generation)"
   },
   {
+    "name": "auto-app-detail-design-web",
+    "color": "1D76DB",
+    "description": "Web App Design ワークフロートリガー"
+  },
+  {
+    "name": "auto-ai-agent-design",
+    "color": "7B68EE",
+    "description": "AI Agent Design ワークフロートリガー"
+  },
+  {
     "name": "auto-app-dev-microservice",
     "color": "1D76DB",
     "description": "run full microservice app development workflow on Azure"
+  },
+  {
+    "name": "auto-app-dev-microservice-web",
+    "color": "0E8A16",
+    "description": "Web App Dev & Deploy ワークフロートリガー"
+  },
+  {
+    "name": "auto-ai-agent-dev",
+    "color": "6A5ACD",
+    "description": "AI Agent Dev & Deploy ワークフロートリガー"
   },
   {
     "name": "auto-batch-design",
@@ -105,6 +125,11 @@
     "description": "Copilot cloud agent モデル指定: gemini-2.5-pro"
   },
   {
+    "name": "model/Auto",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: Auto（GitHub が最適モデルを動的選択。0.9x 計上、1x 超モデルは対象外）"
+  },
+  {
     "name": "setup-labels",
     "color": "C5DEF5",
     "description": "trigger label setup workflow (run once after repository creation, re-runnable for updates)"
@@ -113,5 +138,105 @@
     "name": "knowledge-management",
     "color": "0E8A16",
     "description": "run knowledge management workflow (qa/original-docs to knowledge D01-D21 documents)"
+  },
+  {
+    "name": "aad-web:initialized",
+    "color": "BDB76B",
+    "description": "AAD-WEB 初期化完了"
+  },
+  {
+    "name": "aad-web:ready",
+    "color": "90EE90",
+    "description": "AAD-WEB 実行可能"
+  },
+  {
+    "name": "aad-web:running",
+    "color": "87CEEB",
+    "description": "AAD-WEB 実行中"
+  },
+  {
+    "name": "aad-web:done",
+    "color": "32CD32",
+    "description": "AAD-WEB 完了"
+  },
+  {
+    "name": "aad-web:blocked",
+    "color": "FF6347",
+    "description": "AAD-WEB ブロック中"
+  },
+  {
+    "name": "asdw-web:initialized",
+    "color": "C2E0C6",
+    "description": "ASDW-WEB 初期化完了"
+  },
+  {
+    "name": "asdw-web:ready",
+    "color": "0E8A16",
+    "description": "ASDW-WEB 実行可能"
+  },
+  {
+    "name": "asdw-web:running",
+    "color": "006B75",
+    "description": "ASDW-WEB 実行中"
+  },
+  {
+    "name": "asdw-web:done",
+    "color": "0E8A16",
+    "description": "ASDW-WEB 完了"
+  },
+  {
+    "name": "asdw-web:blocked",
+    "color": "B60205",
+    "description": "ASDW-WEB ブロック中"
+  },
+  {
+    "name": "aag:initialized",
+    "color": "D4C5F9",
+    "description": "AAG 初期化完了"
+  },
+  {
+    "name": "aag:ready",
+    "color": "7B68EE",
+    "description": "AAG 実行可能"
+  },
+  {
+    "name": "aag:running",
+    "color": "5319E7",
+    "description": "AAG 実行中"
+  },
+  {
+    "name": "aag:done",
+    "color": "7B68EE",
+    "description": "AAG 完了"
+  },
+  {
+    "name": "aag:blocked",
+    "color": "B60205",
+    "description": "AAG ブロック中"
+  },
+  {
+    "name": "aagd:initialized",
+    "color": "E6D8F9",
+    "description": "AAGD 初期化完了"
+  },
+  {
+    "name": "aagd:ready",
+    "color": "6A5ACD",
+    "description": "AAGD 実行可能"
+  },
+  {
+    "name": "aagd:running",
+    "color": "4B0082",
+    "description": "AAGD 実行中"
+  },
+  {
+    "name": "aagd:done",
+    "color": "6A5ACD",
+    "description": "AAGD 完了"
+  },
+  {
+    "name": "aagd:blocked",
+    "color": "B60205",
+    "description": "AAGD ブロック中"
   }
 ]

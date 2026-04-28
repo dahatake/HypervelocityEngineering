@@ -46,6 +46,20 @@ assert_eq "${result}" "Auto" "extract Auto"
 result=$(echo 'no model section here' | python3 "${SCRIPT_DIR}/extract-model.py")
 assert_eq "${result}" "" "no section → empty"
 
+result=$(echo '### 使用するモデル
+
+GPT-5.5
+
+### 他' | python3 "${SCRIPT_DIR}/extract-model.py")
+assert_eq "${result}" "gpt-5.5" "extract GPT-5.5 → gpt-5.5 (normalize)"
+
+result=$(echo '### 使用するモデル
+
+gpt-5.5
+
+### 他' | python3 "${SCRIPT_DIR}/extract-model.py")
+assert_eq "${result}" "gpt-5.5" "extract gpt-5.5"
+
 echo "=== check-assignees.py tests ==="
 result=$(echo '{"assignees":[{"login":"copilot-swe-agent"}]}' | python3 "${SCRIPT_DIR}/check-assignees.py")
 assert_eq "${result}" "true" "copilot assigned"

@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-TDD-TestSpec
 description: "テスト戦略書・画面/サービス定義書からTDDテスト仕様書を docs/test-specs/ に生成/更新（推測禁止）"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -79,7 +79,8 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -90,7 +91,7 @@ Step 7.1（画面定義書）と Step 7.2（サービス定義書）の成果物
 - 固有の分割粒度: 「サービス/画面単位」で分割（対象が多い場合は §9 の出力スキーマを1単位として分割）
 
 ## 6.4 生成（test-specs/）
-12. 15分以内で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で各テスト仕様書を生成/更新する。
+12. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で各テスト仕様書を生成/更新する。
     - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）

@@ -253,9 +253,12 @@ def cmd_extract_model(_: list[str]) -> int:
     value = match.group(1).strip()
     if value == "claude-opus-4-7":
         value = "claude-opus-4.7"
+    elif value == "GPT-5.5":
+        value = "gpt-5.5"
 
     allowed = {
         "Auto",
+        "gpt-5.5",
         "claude-opus-4.7",
         "claude-opus-4.6",
         "claude-sonnet-4.6",

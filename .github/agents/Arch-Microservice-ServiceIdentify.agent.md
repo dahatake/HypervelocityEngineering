@@ -1,4 +1,4 @@
----
+﻿---
 name: Arch-Microservice-ServiceIdentify
 description: "ドメイン分析からマイクロサービス候補を抽出し service-list.md を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
@@ -38,7 +38,8 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
@@ -48,14 +49,14 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
 ### 3.3 Split Mode（必須条件に該当した場合）
-- `{WORK}subissues.md` に、約15分単位のサブタスクを複数作成する。
+- `{WORK}subissues.md` に、task_scope=single・最小コンテキスト単位のサブタスクを複数作成する。
 - 各サブタスクには必ず含める：
   - Title / 背景（1〜3行）
   - 受け入れ条件（チェックボックス）
   - 根拠（参照ファイルと節/見出し）
   - 変更対象（想定パス）
   - 検証方法
-  - 見積（<=15分）/ 依存関係
+  - context_size / 依存関係
 - **subissues.md 出力後は停止**（このエージェントは1タスク=1PR前提で、最初のSubから着手する）。
 
 ### 3.4 Execution（Split Mode でない場合のみ）

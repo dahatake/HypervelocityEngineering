@@ -1,4 +1,4 @@
----
+﻿---
 name: Dev-Microservice-Azure-ComputeDesign
 description: ユースケース内の全マイクロサービスについて、最適な Azure コンピュート（ホスティング）を選定し、根拠・代替案・前提・未決事項を設計書に記録する（ドキュメント作成特化）
 tools: ["*"]
@@ -58,22 +58,23 @@ tools: ["*"]
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
      ```
-     <!-- estimate_total: XX -->
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
      ```
   3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-- 見積は粗くてよいが、**合計が15分を超えそう** または **レビュー困難** なら分割へ切り替える。
+- 見積は粗くてよいが、****task_scope=multi または context_size=large** なら分割へ切り替える。
 
-### 4.2 分割判定（15分超なら実装しない）
-- 15分超（または不確実性が高い / サービス数が多くレビュー困難）なら:
+### 4.2 分割判定（task_scope=multi or context_size=large なら実装しない）
+- task_scope=multi または context_size=large（サービス数が多く参照ファイルが 9 件以上）なら:
   - `{WORK}subissues.md` を作り、Sub Issue本文を出力して終了（設計書の全量作成はしない）。
   - 分割は「サービス範囲（例: A〜F）」で切り、競合ファイルが同じなら直列、独立なら並列とする。
   - 各Subには必ず「対象サービス範囲」「更新するファイルパス」「AC」「検証」「依存」を書く。
 
-### 4.3 Execution（15分以内のときのみ）
+### 4.3 Execution（task_scope=single かつ context_size ≤ medium のときのみ）
 1) 入力3ファイルを読み、対象サービスの完全な一覧を取得（不足や矛盾は notes に記録しつつ先へ進む）。  
 2) 設計書 `docs/azure/azure-services-compute.md` を **小さく作成**（ヘッダ＋空表まで）。  
 3) 表を **数行ずつ追記**しながら、対象サービスの Primary / Alternatives / 理由（>=3観点）/ 参照URL を埋める。  

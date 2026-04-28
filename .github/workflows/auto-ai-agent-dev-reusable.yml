@@ -1,0 +1,1947 @@
+name: "AAGD: AI Agent Dev & Deploy (Reusable)"
+
+# auto-ai-agent-dev ラベル付き Issue の opened/labeled/closed イベントで起動
+#
+# 設計メモ:
+#   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
+#     発火せず issues.opened のみを発火する（GitHub Community Discussion #26753）。
+#   - そのため opened イベントも監視し、ジョブレベル if で対象ラベルを持つ Issue のみ実行する。
+#   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
+#   - 既存の冪等化ガード（aagd:initialized チェック）により、opened + labeled が同時発火しても安全。
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: aagd-orchestrator-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: auto-ai-agent-dev ラベルあり + aagd:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
+        run: |
+          set -euo pipefail
+
+          # Issue title を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_TITLE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export ISSUE_TITLE
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "aagd:done" ]]; then
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "${LABEL_NAME}" == "auto-ai-agent-dev" || "${LABEL_NAME}" == "auto-ai-agent-dev" || "${LABEL_NAME}" == "auto-ai-agent-dev" ]]; then
+              # auto-ai-agent-dev ラベルが後から付与された場合:
+              # 下の has_asdw / has_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に aagd:initialized 済みの場合は has_init チェックで skip になる。
+              echo "auto-ai-agent-dev ラベルの labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "aagd:done / auto-ai-agent-dev 系以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [AAGD] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[AAGD\] ]]; then
+              # ---- ラベル一覧はイベントペイロードのものを使用（API 呼び出しを削減） ----
+              # 既に aagd:done がついている場合は closed イベントで再判定に進む
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'aagd:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                # aagd:done labeled 時は Issue 未クローズのため自動クローズ判定が失敗する。
+                # closed イベントで再度コンテナ自動クローズ判定のみ実行する。
+                echo "aagd:done ラベル済み + closed イベント: コンテナ自動クローズ判定のみ実行。"
+                echo "mode=container_close_check" >> "$GITHUB_OUTPUT"
+                echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # aagd:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [AAGD] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [AAGD] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[AAGD\] ]]; then
+            echo "[AAGD] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # ---- リアルタイムにラベル一覧を API 経由で取得（payload はスナップショットのため） ----
+          ISSUE_LABELS=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+          # auto-ai-agent-dev ラベルを持つか確認
+          has_asdw=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          triggers = {'auto-ai-agent-dev', 'auto-ai-agent-dev', 'auto-ai-agent-dev'}
+          print('true' if any(l in triggers for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_asdw}" != "true" ]]; then
+            echo "auto-ai-agent-dev ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # aagd:initialized / aagd:ready / aagd:running / aagd:done / aagd:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'aagd:initialized', 'aagd:ready', 'aagd:running', 'aagd:done', 'aagd:blocked'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_init}" == "true" ]]; then
+            echo "aagd:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: ゲート結果のデバッグ出力
+        if: always()
+        env:
+          GATE_MODE: ${{ steps.gate.outputs.mode }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+        run: |
+          echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
+          if [[ "${GATE_MODE}" == "skip" ]]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} のゲートチェックは skip でした（event: ${EVENT_ACTION}）"
+          fi
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベル作成関数（インライン定義: checkout 前でも動作可能にするため）
+          create_label() {
+            local name="$1" color="$2" desc="${3:-}"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            case "${http_code}" in
+              201) echo "ラベル作成: ${name}" ;;
+              422) echo "ラベル既存（スキップ）: ${name}" ;;
+              *)   echo "ラベル作成エラー: ${name} HTTP ${http_code}" ;;
+            esac
+            sleep 1
+          }
+
+          create_label "auto-ai-agent-dev" "6A5ACD" "AI Agent Dev & Deploy ワークフロートリガー"
+          create_label "auto-ai-agent-dev" "1D76DB" "run web app dev and deploy workflow (ASDW-WEB)"
+          create_label "auto-ai-agent-dev"         "1D76DB" "run AI agent dev and deploy workflow (AAGD)"
+          create_label "aagd:initialized"           "C5DEF5" ""
+          create_label "aagd:ready"                 "0075CA" ""
+          create_label "aagd:running"               "E4E669" ""
+          create_label "aagd:done"                  "0E8A16" ""
+          create_label "aagd:blocked"               "D73A4A" ""
+          create_label "aagd:test-failed"           "EE0701" "test execution failed (TDD RED not confirmed or GREEN not reached)"
+          create_label "auto-context-review"       "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa"                    "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready"          "1D76DB" "Ready for auto-approve and auto-merge"
+
+      # ----------------------------------------------------------------
+      # 2.5. 即時 aagd:initialized 付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 aagd:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          max_retries=5
+          attempt=1
+          http_code=""
+          while (( attempt <= max_retries )); do
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aagd:initialized"]}')
+            if [[ "${http_code}" =~ ^2 ]]; then
+              echo "aagd:initialized を Issue #${ISSUE_NUMBER} に付与しました。（HTTP ${http_code}）"
+              break
+            fi
+            if (( attempt == max_retries )); then
+              echo "ERROR: aagd:initialized の付与に失敗しました。HTTP ${http_code}（試行回数: ${attempt}/${max_retries}）" >&2
+              exit 1
+            fi
+            echo "WARN: aagd:initialized の付与に失敗しました。HTTP ${http_code}（試行回数: ${attempt}/${max_retries}）。リトライします..." >&2
+            sleep $(( 2 ** (attempt - 1) ))
+            attempt=$(( attempt + 1 ))
+          done
+
+      # ----------------------------------------------------------------
+      # 2.6. リポジトリ checkout（state_transition で auto-close.sh を利用するため）
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 3. Issue body パース & Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: 成果物ディレクトリの事前作成
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          # 成果物ディレクトリの事前作成
+          mkdir -p docs/catalog
+          mkdir -p docs/batch
+          mkdir -p docs/batch/jobs
+          mkdir -p docs/services
+          mkdir -p docs/screen
+          mkdir -p docs/test-specs
+          mkdir -p docs/agent
+          mkdir -p docs/azure
+          mkdir -p docs/usecase
+
+      - name: Issue 初期化とStep Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+
+          # リトライ付き curl
+          api_call() {
+            local method="$1"; shift
+            local url="$1"; shift
+            local data="${1:-}"
+            local max_retry=5
+            local wait=1
+            local http_code response body
+
+            for i in $(seq 1 "${max_retry}"); do
+              if [[ -n "${data}" ]]; then
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  -H "Content-Type: application/json" \
+                  "${url}" \
+                  -d "${data}")
+              else
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${url}")
+              fi
+              http_code=$(echo "${response}" | tail -1)
+              body=$(echo "${response}" | head -n -1)
+              if [[ "${http_code}" =~ ^2 ]]; then
+                echo "${body}"
+                return 0
+              fi
+              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
+              sleep "${wait}"
+              wait=$((wait * 2))
+            done
+            echo "API 呼び出し失敗: ${method} ${url}" >&2
+            return 1
+          }
+
+          # Issue 作成
+          create_issue() {
+            local title="$1"
+            local body="$2"
+            local labels_json="$3"
+            local data
+            data=$(python3 - "${title}" "${body}" "${labels_json}" <<'PY'
+          import json, sys
+          title = sys.argv[1]
+          body  = sys.argv[2]
+          labels = json.loads(sys.argv[3])
+          print(json.dumps({'title': title, 'body': body, 'labels': labels}))
+          PY
+          )
+            api_call POST "https://api.github.com/repos/${REPO}/issues" "${data}"
+          }
+
+          # Sub Issue 紐付け
+          link_sub_issue() {
+            local parent_num="$1"
+            local child_id="$2"
+            local data="{\"sub_issue_id\":${child_id}}"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues" \
+              "${data}" || true
+            sleep 1
+          }
+
+          # ラベル付与
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          # アサイン
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+
+          # コメント投稿
+          post_comment() {
+            local issue_num="$1"
+            local comment_body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${comment_body}")
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null
+            sleep 1
+          }
+
+          # Issue body から Custom Agent 名を抽出
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # ブランチ名抽出（input フォームの値）
+          branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              branch = m.group(1).strip()
+              if not branch or branch == "_No response_":
+                  branch = "main"
+
+          # リソースグループ名抽出
+          resource_group = ""
+          m = re.search(r"###\s*リソースグループ名\s*\n+(.+)", body)
+          if m:
+              resource_group = m.group(1).strip()
+              if resource_group == "_No response_":
+                  resource_group = ""
+
+          # 実行するステップからスキップ対象を検出
+          skip_steps = set()
+          exec_section = re.search(
+              r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if exec_section:
+              section_text = exec_section.group(1)
+              all_items = re.findall(
+                  r"-\s*\[[ xX]\]\s*Step\.(\d+)",
+                  section_text
+              )
+              all_steps = set(all_items)
+              checked_items = re.findall(
+                  r"-\s*\[[xX]\]\s*Step\.(\d+)",
+                  section_text
+              )
+              exec_steps = set(checked_items)
+              skip_steps = all_steps - exec_steps
+              # チェックが1つもない場合は「全ステップ実行」とみなしてスキップなし
+              if not exec_steps and all_steps:
+                  skip_steps = set()
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              additional_comment = m.group(1).strip()
+              if additional_comment == "_No response_":
+                  additional_comment = ""
+
+          # ユースケースID抽出
+          usecase_id = ""
+          m = re.search(r"###\s*ユースケースID\s*\n+(.+)", body)
+          if m:
+              usecase_id = m.group(1).strip()
+              if usecase_id == "_No response_":
+                  usecase_id = ""
+
+          # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_context_review = False
+          review_section = re.search(
+              r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_qa = False
+          qa_section = re.search(
+              r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if qa_section:
+              section_text = qa_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_qa = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          merge_section = re.search(
+              r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if merge_section:
+              section_text = merge_section.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # APP-ID 抽出（複数 APP-ID に対応：カンマ区切りで分割・正規化）
+          app_ids_raw = ""
+          m = re.search(r"###\s*対象アプリケーション.*?\n+(.+)", body)
+          if m:
+              app_ids_raw = m.group(1).strip()
+              if app_ids_raw == "_No response_":
+                  app_ids_raw = ""
+
+          # カンマ区切りで分割し、空要素を除去
+          app_ids_list = [s.strip() for s in app_ids_raw.split(",") if s.strip()] if app_ids_raw else []
+          # 後方互換: 単一 APP-ID の場合は app_id にも設定
+          app_id = app_ids_list[0] if len(app_ids_list) == 1 else ""
+
+          # TDD GREEN リトライ最大回数
+          tdd_max_retries = "5"
+          m_tdd = re.search(r"###\s*TDD GREEN リトライ最大回数\s*\n+([^\n]+)", body)
+          if m_tdd:
+              raw_tdd = m_tdd.group(1).strip()
+              nm_tdd = re.search(r'\d+', raw_tdd)
+              tdd_max_retries = nm_tdd.group() if nm_tdd else "5"
+
+          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "app_id": app_id, "tdd_max_retries": tdd_max_retries}
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          RESOURCE_GROUP=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['resource_group'])")
+          SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          USECASE_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('usecase_id',''))")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          MODEL_RAW=$(extract_model "${ISSUE_BODY}")
+          SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          APP_IDS_JSON=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('app_ids',[])))")
+          APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
+          APP_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('app_id',''))")
+          TDD_MAX_RETRIES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tdd_max_retries','5'))")
+          [[ -z "${TDD_MAX_RETRIES}" ]] && TDD_MAX_RETRIES="5"
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "リソースグループ名: ${RESOURCE_GROUP}"
+          echo "スキップ Steps: ${SKIP_STEPS}"
+          echo "ユースケースID: ${USECASE_ID}"
+          echo "対象 APP-IDs: ${APP_IDS:-（未指定 = 全アプリケーション対象）}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+
+          # ---- ROOT_REF（リソースグループメタコメント含む）----
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}")
+          if [[ -n "${APP_IDS}" ]]; then
+            ROOT_REF+=$(printf '\n<!-- app-ids: %s -->' "${APP_IDS}")
+          fi
+          ROOT_REF+=$(printf '\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
+            "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+
+          # 追加コメントが存在する場合のフッター
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+          else
+            ADDITIONAL_SECTION=""
+          fi
+
+          # ---- Root Issue の title に APP-ID(s) を追記 ----
+          if [[ -n "${APP_IDS}" ]]; then
+            CURRENT_TITLE=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))") || CURRENT_TITLE=""
+            if [[ -n "${CURRENT_TITLE}" ]] && [[ "${CURRENT_TITLE}" != *"(${APP_IDS})"* ]]; then
+              NEW_TITLE="${CURRENT_TITLE} (${APP_IDS})"
+              api_call PATCH "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+                "$(python3 -c "import sys,json; print(json.dumps({'title': sys.argv[1]}))" "${NEW_TITLE}")" > /dev/null || true
+              echo "Root Issue #${ROOT_ISSUE} のタイトルに APP-ID(s) を追記しました: ${NEW_TITLE}"
+            fi
+          fi
+
+          # ---- Root Issue body からスキップ対象のステップ行を除去して更新 ----
+          # （注意: ISSUE_BODY シェル変数は古い値のまま。パースは完了済みなので影響なし）
+          if [[ -n "${SKIP_STEPS}" ]]; then
+            echo "Root Issue body から未チェックのステップを除去します..."
+
+            PATCH_JSON_FILE=$(mktemp)
+
+            python3 - "${SKIP_STEPS}" "${PATCH_JSON_FILE}" <<'PYBODY'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          skip_steps_str = sys.argv[1]
+          output_file = sys.argv[2]
+
+          skip_steps = set(skip_steps_str.split()) if skip_steps_str.strip() else set()
+
+          if skip_steps:
+              lines = body.split('\n')
+              new_lines = []
+              for line in lines:
+                  # 未チェック行のみ除去（チェック済み行 - [x] は残す）
+                  m = re.match(r'^\s*-\s*\[[ ]\]\s*Step\.(\d+)\b', line)
+                  if m and m.group(1) in skip_steps:
+                      continue
+                  new_lines.append(line)
+
+              # 連続空行を最大2行に制限
+              cleaned = []
+              blank_count = 0
+              for line in new_lines:
+                  if line.strip() == '':
+                      blank_count += 1
+                      if blank_count <= 2:
+                          cleaned.append(line)
+                  else:
+                      blank_count = 0
+                      cleaned.append(line)
+
+              body = '\n'.join(cleaned)
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYBODY
+
+            api_call PATCH \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+              "$(cat "${PATCH_JSON_FILE}")" > /dev/null \
+              && echo "Root Issue #${ROOT_ISSUE} の body を更新しました（未チェックのステップ行を除去）。" \
+              || echo "WARNING: Root Issue body の更新に失敗しました。処理を続行します。" >&2
+
+            rm -f "${PATCH_JSON_FILE}"
+
+            # PYBODY が body を更新したため、PYREVIEW 用に最新の body を再取得する
+            _refreshed=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' 2>/dev/null) \
+              && ISSUE_BODY="${_refreshed}" && export ISSUE_BODY \
+              || echo "WARNING: ISSUE_BODY の再取得に失敗しました。スキップステップ除去後の body で auto-context-review タグが埋め込まれない可能性があります。" >&2
+          else
+            echo "全ステップ実行のため Root Issue body の更新は不要です。"
+          fi
+
+          # ---- Root Issue に auto-context-review タグを埋め込み ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_context_review = sys.argv[1]
+          auto_merge = sys.argv[2]
+          tdd_max_retries = sys.argv[3]
+          output_file = sys.argv[4]
+
+          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
+          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
+          tdd_tag = f"<!-- tdd-max-retries: {tdd_max_retries} -->"
+          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
+          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+          tdd_pat = re.compile(r'<!--\s*tdd-max-retries:\s*\d+\s*-->')
+
+          if context_pat.search(body):
+              body = context_pat.sub(context_tag, body)
+          else:
+              body = body.rstrip() + "\n" + context_tag + "\n"
+
+          if merge_pat.search(body):
+              body = merge_pat.sub(merge_tag, body)
+          else:
+              body = body.rstrip() + "\n" + merge_tag + "\n"
+
+          if tdd_pat.search(body):
+              body = tdd_pat.sub(tdd_tag, body)
+          else:
+              body = body.rstrip() + "\n" + tdd_tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYREVIEW
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}, tdd-max-retries: ${TDD_MAX_RETRIES}）。" \
+            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
+          add_label "${ROOT_ISSUE}" "aagd:initialized"
+          echo "aagd:initialized を付与しました。"
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
+          fi
+
+          # skip_step helper: SKIP_STEPS に Step 番号が含まれていれば true
+          skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # ---- APP-ID スコープセクション（複数 APP-ID 対応）----
+          if [[ -n "${APP_IDS}" ]]; then
+            APP_ID_SECTION=$(APP_IDS="${APP_IDS}" python3 -c 'import os; ids=[s.strip() for s in os.environ.get("APP_IDS","").split(",") if s.strip()]; id_list=", ".join("`"+aid+"`" for aid in ids); print("\\n\\n## 対象アプリケーション\\n- APP-ID: "+id_list+"\\n- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする\\n- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\\n- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む")')
+          else
+            APP_ID_SECTION=""
+          fi
+
+          # Step Issue タイトルに APP-ID(s) を付加するサフィックス
+          APP_ID_SUFFIX="${APP_IDS:+ (${APP_IDS})}"
+
+          # Step Issue に付与するラベルセット
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-ai-agent-dev","auto-context-review","auto-qa"]'
+          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-ai-agent-dev","auto-context-review"]'
+          elif [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-ai-agent-dev","auto-qa"]'
+          else
+            STEP_LABELS='["auto-ai-agent-dev"]'
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+
+          # ---- Step Issue 生成 ----
+          S1_NUM=""  S1_ID=""
+          S11_NUM="" S11_ID=""
+          S12_NUM="" S12_ID=""
+          S2_NUM=""  S2_ID=""
+          S21_NUM="" S21_ID=""
+          S22_NUM="" S22_ID=""
+          S23_NUM="" S23_ID=""
+          S23TC_NUM="" S23TC_ID=""
+          S24_NUM="" S24_ID=""
+          S25_NUM="" S25_ID=""
+          S26_NUM="" S26_ID=""
+          S27T_NUM="" S27T_ID=""
+          S27TC_NUM="" S27TC_ID=""
+          S27_NUM="" S27_ID=""
+          S28_NUM="" S28_ID=""
+          S3_NUM=""  S3_ID=""
+          S30TC_NUM="" S30TC_ID=""
+          S31_NUM="" S31_ID=""
+          S32_NUM="" S32_ID=""
+          S4_NUM=""  S4_ID=""
+          S41_NUM="" S41_ID=""
+          S42_NUM="" S42_ID=""
+
+          # ---- Step.1 コンテナ + サブステップ ----
+          if ! skip_step "1"; then
+            BODY_S1=$(printf '%s\n## Step.1 コンテナ\nStep.1 はコンテナ Issue。Sub Task（Step.1.1, Step.1.2）の完了を待つ。%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.1: データ（コンテナ）${APP_ID_SUFFIX}" \
+              "${BODY_S1}" \
+              "${STEP_LABELS}")
+            S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S1_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1 作成: #${S1_NUM}"
+            sleep 3
+
+            # ---- Step.1.1 ----
+            BODY_S11=$(printf '%s\n## 目的\nPolyglot Persistenceに基づき、対象エンティティの最適Azureデータストア選定と根拠/整合性方針を文書化する（APP-ID 指定時はスコープ内のエンティティのみ）。\n\n## 入力\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- （任意）`docs/templates/agent-playbook.md`\n\n## 出力\n- `docs/azure/azure-services-data.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 完了条件\n- `docs/azure/azure-services-data.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.1.1: Azure データストア選定${APP_ID_SUFFIX}" \
+              "${BODY_S11}" \
+              "${STEP_LABELS}")
+            S11_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S11_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.1 作成: #${S11_NUM}"
+            sleep 3
+
+            # ---- Step.1.2 ----
+            BODY_S12=$(printf '%s\n## 目的\nAzure CLIでデータ系サービスを最小構成で作成し、サンプルデータを変換・一括登録する（冪等・検証付き）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/azure/azure-services-data.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/data/sample-data.json`\n\n## 出力\n- `infra/azure/create-azure-data-resources-prep.sh`\n- `infra/azure/create-azure-data-resources.sh`\n- `src/data/azure/data-registration-script.sh`\n- `docs/azure/service-catalog.md` 更新\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step1-data-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-data-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.1.1（Azure データストア選定）が `aagd:done` であること\n\n## 完了条件\n- 出力ファイルが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.1.2: Azure データサービス Deploy${APP_ID_SUFFIX}" \
+              "${BODY_S12}" \
+              "${STEP_LABELS}")
+            S12_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S12_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1.2 作成: #${S12_NUM}"
+            sleep 3
+          else
+            echo "Step.1 はスキップされました。"
+          fi
+
+          # ---- Step.2 コンテナ + サブステップ ----
+          if ! skip_step "2"; then
+            BODY_S2=$(printf '%s\n## Step.2 コンテナ\nStep.2 はコンテナ Issue。Sub Task（Step.2.1, 2.2, 2.3, 2.3TC, 2.4, 2.5, 2.6, 2.7T, 2.7TC, 2.7, 2.8）の完了を待つ。%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2: マイクロサービス作成（コンテナ）${APP_ID_SUFFIX}" \
+              "${BODY_S2}" \
+              "${STEP_LABELS}")
+            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2 作成: #${S2_NUM}"
+            sleep 3
+
+            # ---- Step.2.1 ----
+            BODY_S21=$(printf '%s\n## 目的\nユースケース内の対象マイクロサービスについて、最適な Azure コンピュート（ホスティング）を選定し、根拠・代替案・前提・未決事項を設計書に記録する（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/azure/azure-services-compute.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.1（データコンテナ）が `aagd:done` であること\n\n## 完了条件\n- `docs/azure/azure-services-compute.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.1: Azure コンピュート選定${APP_ID_SUFFIX}" \
+              "${BODY_S21}" \
+              "${STEP_LABELS}")
+            S21_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S21_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.1 作成: #${S21_NUM}"
+            sleep 3
+
+            # ---- Step.2.2 ----
+            BODY_S22=$(printf '%s\n## 目的\nサービス定義書の「外部依存・統合」から、追加で必要な Azure サービス（AI/認証/統合/運用等）を選定し、根拠（Microsoft Learn）付きで記録する（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/{サービスID}-{サービス名}-description.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- 既存採用済み（追加提案から除外）:\n  - `docs/azure/azure-services-compute.md`\n  - `docs/azure/azure-services-data.md`\n\n## 出力\n- `docs/azure/azure-services-additional.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.2.1（Azure コンピュート選定）が `aagd:done` であること\n\n## 完了条件\n- `docs/azure/azure-services-additional.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.2: 追加 Azure サービス選定${APP_ID_SUFFIX}" \
+              "${BODY_S22}" \
+              "${STEP_LABELS}")
+            S22_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S22_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.2 作成: #${S22_NUM}"
+            sleep 3
+
+            # ---- Step.2.3 ----
+            BODY_S23=$(printf '%s\n## 目的\n`docs/azure/azure-services-additional.md` を根拠に、追加Azureサービスを Azure CLI で冪等に作成する（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- （任意）subscription / tenant / 優先リージョン / 命名規則\n\n## 出力\n- `infra/azure/create-azure-additional-resources-prep.sh`\n- `infra/azure/create-azure-additional-resources/create.sh`\n- （複数サービスの場合）`infra/azure/create-azure-additional-resources/services/<service>.sh`\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-additional-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-additional-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.2.2（追加 Azure サービス選定）が `aagd:done` であること\n\n## 完了条件\n- 出力ファイルが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.3: 追加 Azure サービス Deploy${APP_ID_SUFFIX}" \
+              "${BODY_S23}" \
+              "${STEP_LABELS}")
+            S23_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S23_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.3 作成: #${S23_NUM}"
+            sleep 3
+
+            # ---- Step.2.3TC (TDD RED: サービス テストコード生成) ----
+            BODY_S23TC=$(printf '%s\n## 目的\nTDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）からテストコードのみを生成する（APP-ID 指定時はスコープ内のサービスのみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.2.4（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済みのサービス別テスト仕様書）\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentTestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. `cd test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する\n2. 移動先ディレクトリで `dotnet build` を実行し、コンパイル成功を確認する\n3. 同じディレクトリで `dotnet test` を実行し、そのテストプロジェクト内の全テストが FAIL であることを確認する（RED 状態）\n4. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 依存\n- Step.2.3（追加 Azure サービス Deploy）が `aagd:done` であること\n- `docs/test-specs/{serviceId}-test-spec.md` が存在すること（設計ワークフロー AAD Step.7.3 で作成済み）\n\n## 完了条件\n- `test/api/{サービス名}.Tests/` 配下にテストコードが生成されている\n- `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.3TC: サービス テストコード生成 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S23TC}" \
+              "${STEP_LABELS}")
+            S23TC_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S23TC_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.3TC 作成: #${S23TC_NUM}"
+            sleep 3
+
+            # ---- Step.2.4 ----
+            BODY_S24=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\nマイクロサービス定義書から対象サービスの Azure Functions を実装し、テスト/最小ドキュメント/設定雛形まで揃える（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- Azure Functions プログラミング言語: `C#（最新版のAzure Functionsでサポートされているもの）`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-*.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- TDD テストコード（RED状態）: `test/api/{サービス名}.Tests/`（Step.2.3TC の成果物）\n- テスト仕様書: `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/api/{サービスID}-{サービス名}/` 配下に Azure Functions を作成/更新\n- （任意推奨）`test/api/smoke-ui/index.html`\n\n## TDD GREEN フロー（反復）\n1. `dotnet test` で全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小実装を作成する\n3. `dotnet test` を実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `aagd:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは実装コードのみを修正する（`test/api/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentCoding` を使用\n\n## 依存\n- Step.2.3TC（サービス テストコード生成）が `aagd:done` であること\n\n## 完了条件\n- `src/api/` 配下に Azure Functions が実装されている\n- `dotnet test` の全テストが PASS であること（TDD GREEN 確認）\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.4: サービスコード実装 (Azure Functions)${APP_ID_SUFFIX}" \
+              "${BODY_S24}" \
+              "${STEP_LABELS}")
+            S24_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S24_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.4 作成: #${S24_NUM}"
+            sleep 3
+
+            # ---- Step.2.5 ----
+            BODY_S25=$(printf '%s\n## 目的\nサービスリストの対象サービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/api/{サービスID}-{サービス名}/`\n- リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `Southeast Asia`）\n\n## 出力\n- `infra/azure/create-azure-api-resources-prep.sh`\n- `.github/workflows/` にCI/CD（OIDC + azure/login 優先）\n- `docs/catalog/service-catalog-matrix.md` 更新\n- `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-compute-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## 注意\nCopilot が push しても workflow は自動実行されないことがある。PR 側でユーザーが実行承認できるよう説明を残す。\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentDeploy` を使用\n\n## 依存\n- Step.2.4（サービスコード実装）が `aagd:done` であること\n\n## 完了条件\n- デプロイスクリプトと CI/CD ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.5: Azure Compute Deploy${APP_ID_SUFFIX}" \
+              "${BODY_S25}" \
+              "${STEP_LABELS}")
+            S25_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S25_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.5 作成: #${S25_NUM}"
+            sleep 3
+
+            # ---- Step.2.6 ----
+            USECASE_PATH=""
+            if [[ -n "${USECASE_ID}" ]]; then
+              USECASE_PATH="docs/usecase/${USECASE_ID}/usecase-description.md"
+            fi
+
+            BODY_S26=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、Agent 一覧を出力する（APP-ID 指定時はスコープ内のサービス/画面のみ）。\n\n## 入力\n- ユースケースID: %s\n- ユースケース記述: %s\n- ガイドライン: `users-guide/08-ai-agent.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- 参照（存在すれば）:\n  - `docs/catalog/service-catalog-matrix.md`\n  - `docs/catalog/service-catalog.md`\n  - `docs/catalog/data-model.md`\n  - `docs/catalog/domain-analytics.md`\n  - `docs/catalog/use-case-catalog.md`\n  - `docs/services/SVC-*.md`\n  - `docs/azure/azure-services-data.md`\n  - `docs/azure/azure-services-additional.md`\n\n## 成果物\n- `docs/agent/agent-application-definition.md`\n- `docs/agent/agent-architecture.md`\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごと）\n- `docs/ai-agent-catalog.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.2.5（Azure Compute Deploy）が `aagd:done` であること\n\n## 完了条件\n- `docs/ai-agent-catalog.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${USECASE_ID}" "${USECASE_PATH}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.6: AI Agent 構成設計${APP_ID_SUFFIX}" \
+              "${BODY_S26}" \
+              "${STEP_LABELS}")
+            S26_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S26_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.6 作成: #${S26_NUM}"
+            sleep 3
+
+            # ---- Step.2.7T (TDD RED: AI Agent テスト仕様書) ----
+            BODY_S27T=$(printf '%s\n## 目的\nTDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、Agent 用 TDD テスト仕様書を生成する（APP-ID 指定時はスコープ内の Agent のみ）。\n\n## 必須テストカテゴリ（全5種を含めること）\n1. **Agent I/O 契約テスト** — 入力（ユーザーメッセージ・コンテキスト）→ 期待出力（応答・アクション）の検証\n2. **Tool モック統合テスト** — Tool 呼び出しのパラメータ・戻り値・エラー時の動作検証（Tool は全てモック化）\n3. **Guardrails テスト** — 禁止操作・PII マスキング・ポリシー違反検出の検証\n4. **状態遷移テスト** — 正常フロー・例外フロー・エスカレーションフローの検証\n5. **プロンプト回帰テスト** — System Prompt 変更後の動作一貫性（期待出力のマッチング）検証\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/ai-agent-catalog.md`\n- `docs/agent/agent-detail-*.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/test-specs/{agentId}-test-spec.md`（Agent 別テスト仕様書）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.2.6（AI Agent 構成設計）が `aagd:done` であること\n- `docs/catalog/test-strategy.md` が存在すること\n\n## 完了条件\n- `docs/test-specs/` 配下に Agent 別テスト仕様書が生成されている\n- テスト仕様書に上記5種のテストカテゴリが含まれている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.7T: AI Agent テスト仕様書 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S27T}" \
+              "${STEP_LABELS}")
+            S27T_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S27T_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.7T 作成: #${S27T_NUM}"
+            sleep 3
+
+            # ---- Step.2.7TC (TDD RED: AI Agent テストコード生成) ----
+            BODY_S27TC=$(printf '%s\n## 目的\nTDD RED フェーズ: Agent テスト仕様書（`docs/test-specs/{agentId}-test-spec.md`）からテストコードのみを生成する（APP-ID 指定時はスコープ内の Agent のみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.2.7（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{agentId}-test-spec.md`（Step.2.7T で生成済みの Agent テスト仕様書）\n- `docs/agent/agent-detail-*.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentTestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. テストを実行し、全テストが FAIL であることを確認する（RED 状態）\n2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 依存\n- Step.2.7T（AI Agent テスト仕様書）が `aagd:done` であること\n\n## 完了条件\n- `test/agent/{AgentName}.Tests/` 配下にテストコードが生成されている\n- テストで全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.7TC: AI Agent テストコード生成 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S27TC}" \
+              "${STEP_LABELS}")
+            S27TC_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S27TC_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.7TC 作成: #${S27TC_NUM}"
+            sleep 3
+
+            # ---- Step.2.7 (TDD GREEN: AI Agent 実装) ----
+            BODY_S27=$(printf '%s\n## 目的\nTDD GREEN フェーズ: Agent 詳細設計書から AI Agent を実装し、全テストを PASS させる。\nMicrosoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を実装する（APP-ID 指定時はスコープ内の Agent のみ）。\n\n## 重要\n- **Azure AI Foundry Agent Service** を使用する\n- チュートリアル参照: https://learn.microsoft.com/ja-jp/azure/foundry/quickstarts/get-started-code?tabs=python\n  - ⚠️ チュートリアルのコードをそのままコピーしない\n- **ユーザーが指定したプログラミング言語で最新の SDK** を使用する\n  - Python: `azure-ai-projects`（最新版）\n  - C#: `Azure.AI.Projects`（最新版）\n- `DefaultAzureCredential` を使用して Azure に認証する\n\n## 入力\n- `docs/agent/agent-detail-*.md`（Agent 詳細設計書）\n- `docs/ai-agent-catalog.md`\n- TDD テストコード（RED状態）: `test/agent/{AgentName}.Tests/`\n- TDD テスト仕様書: `docs/test-specs/{agentId}-test-spec.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `src/agent/{AgentID}-{AgentName}/`\n\n## TDD GREEN フロー（反復）\n1. テストが全て FAIL（RED 状態）であることを確認する\n2. 最小限の Agent 実装を作成する\n3. テストを実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `aagd:blocked` ラベルを付与し、未 PASS テスト一覧を報告する\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentCoding` を使用\n\n## 依存\n- Step.2.7TC（AI Agent テストコード生成）が `aagd:done` であること\n\n## 完了条件\n- `src/agent/` 配下に Agent 実装コードが存在する\n- テストの全テストが PASS であること（TDD GREEN 確認）\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.7: AI Agent 実装 (TDD GREEN)${APP_ID_SUFFIX}" \
+              "${BODY_S27}" \
+              "${STEP_LABELS}")
+            S27_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S27_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.7 作成: #${S27_NUM}"
+            sleep 3
+
+            # ---- Step.2.8 (AI Agent Deploy) ----
+            BODY_S28=$(printf '%s\n## 目的\nAI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions で CI/CD を構築する（APP-ID 指定時はスコープ内の Agent のみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `src/agent/{agentId}-{agentName}/`\n- `docs/ai-agent-catalog.md`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-agent-resources-prep.sh`\n- `infra/azure/create-azure-agent-resources.sh`\n- `infra/azure/verify-agent-resources.sh`\n- `.github/workflows/deploy-agent-{agentId}-{agentName}.yml`\n- `docs/test-specs/deploy-step2-agent-test-spec.md`\n- `docs/azure/service-catalog.md`（Agent エンドポイント追記）\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-agent-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-agent-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-AgentDeploy` を使用\n\n## 依存\n- Step.2.7（AI Agent 実装）が `aagd:done` であること\n\n## 完了条件\n- デプロイスクリプトと CI/CD ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.2.8: AI Agent Deploy${APP_ID_SUFFIX}" \
+              "${BODY_S28}" \
+              "${STEP_LABELS}")
+            S28_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S28_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.8 作成: #${S28_NUM}"
+            sleep 3
+          else
+            echo "Step.2 はスキップされました。"
+          fi
+
+          # ---- Step.3 コンテナ + サブステップ ----
+          if ! skip_step "3"; then
+            BODY_S3=$(printf '%s\n## Step.3 コンテナ\nStep.3 はコンテナ Issue。Sub Task（Step.3.0TC, Step.3.1, Step.3.2）の完了を待つ。\n\n> **前提**: Step.3.0TC で使用する画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）は設計ワークフロー AAD Step.7.3 で生成済みであることを確認してください。%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.3: UI 作成（コンテナ）${APP_ID_SUFFIX}" \
+              "${BODY_S3}" \
+              "${STEP_LABELS}")
+            S3_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S3_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3 作成: #${S3_NUM}"
+            sleep 3
+
+            # ---- Step.3.0TC (TDD RED: UI テストコード生成) ----
+            BODY_S30TC=$(printf '%s\n## 目的\nTDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）から UI テストコードのみを生成する（APP-ID 指定時はスコープ内の画面のみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.3.1（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済みの画面別テスト仕様書）\n- `docs/screen/{screenId}-*.md`（画面定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-UITestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. Jest + jsdom テストを実行し、全テストが FAIL であることを確認する（RED 状態）\n2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 最小スタブの配置（RED 状態維持のため）\n- Jest テストを実行可能にするため、`src/app/` 配下に以下の最小スタブのみ配置してよい:\n  - 空の HTML エントリポイント（`index.html` 等）\n  - 空のモジュールファイル（`.js` 等）\n\n## 依存\n- Step.2（マイクロサービス作成コンテナ）が `aagd:done` であること\n- `docs/test-specs/{screenId}-test-spec.md` が存在すること（設計ワークフロー AAD Step.7.3 で作成済み）\n\n## 完了条件\n- `test/ui/` 配下に UI テストコードが生成されている\n- Jest テストで全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.3.0TC: UI テストコード生成 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S30TC}" \
+              "${STEP_LABELS}")
+            S30TC_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S30TC_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.0TC 作成: #${S30TC_NUM}"
+            sleep 3
+
+            # ---- Step.3.1 ----
+            BODY_S31=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\n画面定義書に基づき、対象画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する（APP-ID 指定時はスコープ内の画面のみ）。\n\n## 入力\n- `docs/screen/{画面ID}.md`（画面ID 例: `SCR-XXX-YYY`）\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- UI実装技術: `HTML5/CSS/JavaScript（リポジトリ既存規約に合わせる）`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/data/sample-data.json`\n- TDD テストコード（RED状態）: `test/ui/`（Step.3.0TC の成果物）\n- テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/app/` 配下にUI実装\n\n## TDD GREEN フロー（反復）\n1. Jest テストで全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小 UI 実装を作成する\n3. Jest テストを実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `aagd:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは UI 実装コードのみを修正する（`test/ui/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-UICoding` を使用\n\n## 依存\n- Step.3.0TC（UI テストコード生成）が `aagd:done` であること\n\n## 完了条件\n- `src/app/` 配下にUI実装が完成している\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.3.1: UI 実装${APP_ID_SUFFIX}" \
+              "${BODY_S31}" \
+              "${STEP_LABELS}")
+            S31_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S31_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.1 作成: #${S31_NUM}"
+            sleep 3
+
+            # ---- Step.3.2 ----
+            BODY_S32=$(printf '%s\n## 目的\nAzure Static Web Apps へのWebデプロイと、GitHub Actionsによる継続的デリバリー（CD）構築を実施する。\n\n## 入力\n- リソースグループ名: `%s`\n- デプロイブランチ: `main`\n- `app_location`: `src/app/`\n- `api_location`: `src/app/lib/api/`\n- リージョン優先: East Asia → Japan West → Southeast Asia\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-webui-resources-prep.sh`\n- `infra/azure/create-azure-webui-resources.sh`\n- `.github/workflows/` に SWA デプロイワークフロー（Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` 参照）\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step3-swa-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-webui-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` を使用\n\n## 依存\n- Step.3.1（UI 実装）が `aagd:done` であること\n\n## 完了条件\n- デプロイスクリプトと SWA ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.3.2: Web アプリ Deploy (Azure Static Web Apps)${APP_ID_SUFFIX}" \
+              "${BODY_S32}" \
+              "${STEP_LABELS}")
+            S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S32_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.2 作成: #${S32_NUM}"
+            sleep 3
+          else
+            echo "Step.3 はスキップされました。"
+          fi
+
+          # ---- Step.4 コンテナ + サブステップ ----
+          if ! skip_step "4"; then
+            BODY_S4=$(printf '%s\n## Step.4 コンテナ\nStep.4 はコンテナ Issue。Sub Task（Step.4.1, Step.4.2）の**並列**完了を待つ。%s' \
+              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.4: アーキテクチャレビュー（コンテナ）${APP_ID_SUFFIX}" \
+              "${BODY_S4}" \
+              "${STEP_LABELS}")
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
+            sleep 3
+
+            # ---- Step.4.1 ----
+            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する（APP-ID 指定時はスコープ内のリソースのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/azure/azure-architecture-review-report.md`\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- Step.3（UI 作成コンテナ）が `aagd:done` であること\n- Step.4.2 と並列実行可能\n\n## 完了条件\n- `docs/azure/azure-architecture-review-report.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.4.1: WAF アーキテクチャレビュー${APP_ID_SUFFIX}" \
+              "${BODY_S41}" \
+              "${STEP_LABELS}")
+            S41_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S41_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4.1 作成: #${S41_NUM}"
+            sleep 3
+
+            # ---- Step.4.2 ----
+            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、必要なら最小差分で修正する（APP-ID 指定時はスコープ内の依存のみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`\n\n## 出力\n- `docs/azure/dependency-review-report.md`\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.3（UI 作成コンテナ）が `aagd:done` であること\n- Step.4.1 と並列実行可能\n\n## 完了条件\n- `docs/azure/dependency-review-report.md` が作成されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.4.2: 整合性チェック${APP_ID_SUFFIX}" \
+              "${BODY_S42}" \
+              "${STEP_LABELS}")
+            S42_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S42_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4.2 作成: #${S42_NUM}"
+            sleep 3
+          else
+            echo "Step.4 はスキップされました。"
+          fi
+
+          # ---- Sub Issue 紐付け ----
+          echo "Sub Issue 紐付けを開始します..."
+
+          # Root → Step.1, Step.2, Step.3, Step.4（コンテナ）
+          [[ -n "${S1_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
+          [[ -n "${S2_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S3_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}"; echo "Root → Step.3 紐付け完了"; }
+          [[ -n "${S4_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+
+          # Step.1 → Step.1.1, Step.1.2
+          [[ -n "${S1_NUM}" && -n "${S11_ID}" ]] && { link_sub_issue "${S1_NUM}" "${S11_ID}"; echo "Step.1 → Step.1.1 紐付け完了"; }
+          [[ -n "${S1_NUM}" && -n "${S12_ID}" ]] && { link_sub_issue "${S1_NUM}" "${S12_ID}"; echo "Step.1 → Step.1.2 紐付け完了"; }
+
+          # Step.2 → Step.2.1〜2.6 + Step.2.3TC
+          [[ -n "${S2_NUM}" && -n "${S21_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S21_ID}"; echo "Step.2 → Step.2.1 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S22_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S22_ID}"; echo "Step.2 → Step.2.2 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S23_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S23_ID}"; echo "Step.2 → Step.2.3 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S23TC_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S23TC_ID}"; echo "Step.2 → Step.2.3TC 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S24_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S24_ID}"; echo "Step.2 → Step.2.4 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S25_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S25_ID}"; echo "Step.2 → Step.2.5 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S26_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S26_ID}"; echo "Step.2 → Step.2.6 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S27T_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S27T_ID}"; echo "Step.2 → Step.2.7T 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S27TC_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S27TC_ID}"; echo "Step.2 → Step.2.7TC 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S27_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S27_ID}"; echo "Step.2 → Step.2.7 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S28_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S28_ID}"; echo "Step.2 → Step.2.8 紐付け完了"; }
+
+          # Step.3 → Step.3.0TC, Step.3.1, Step.3.2
+          [[ -n "${S3_NUM}" && -n "${S30TC_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S30TC_ID}"; echo "Step.3 → Step.3.0TC 紐付け完了"; }
+          [[ -n "${S3_NUM}" && -n "${S31_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S31_ID}"; echo "Step.3 → Step.3.1 紐付け完了"; }
+          [[ -n "${S3_NUM}" && -n "${S32_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S32_ID}"; echo "Step.3 → Step.3.2 紐付け完了"; }
+
+          # Step.4 → Step.4.1, Step.4.2
+          [[ -n "${S4_NUM}" && -n "${S41_ID}" ]] && { link_sub_issue "${S4_NUM}" "${S41_ID}"; echo "Step.4 → Step.4.1 紐付け完了"; }
+          [[ -n "${S4_NUM}" && -n "${S42_ID}" ]] && { link_sub_issue "${S4_NUM}" "${S42_ID}"; echo "Step.4 → Step.4.2 紐付け完了"; }
+
+          # ---- 最初の leaf Step を起動（Step.1.1 → Step.2.1 → Step.3.0TC → Step.3.1 → Step.4.1/4.2 の順でフォールバック）----
+          if [[ -n "${S11_NUM}" ]]; then
+            add_label "${S11_NUM}" "aagd:ready"
+            CA=$(extract_custom_agent "${BODY_S11}")
+            if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+              add_label "${S11_NUM}" "aagd:running"
+              echo "Step.1.1 に copilot アサイン + aagd:running 付与完了"
+            else
+              echo "WARNING: Step.1.1 へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          elif [[ -n "${S21_NUM}" ]]; then
+            add_label "${S21_NUM}" "aagd:ready"
+            CA=$(extract_custom_agent "${BODY_S21}")
+            if assign_copilot "${S21_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S21_NUM}" "aagd:running"
+              echo "Step.1 がスキップ済み: Step.2.1 (#${S21_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.2.1 へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          elif [[ -n "${S30TC_NUM}" ]]; then
+            add_label "${S30TC_NUM}" "aagd:ready"
+            CA=$(extract_custom_agent "${BODY_S30TC}")
+            if assign_copilot "${S30TC_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S30TC_NUM}" "aagd:running"
+              echo "Step.1/2 がスキップ済み: Step.3.0TC (#${S30TC_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3.0TC へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          elif [[ -n "${S31_NUM}" ]]; then
+            add_label "${S31_NUM}" "aagd:ready"
+            CA=$(extract_custom_agent "${BODY_S31}")
+            if assign_copilot "${S31_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S31_NUM}" "aagd:running"
+              echo "Step.1/2 がスキップ済み: Step.3.1 (#${S31_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3.1 へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          elif [[ -n "${S41_NUM}" ]] || [[ -n "${S42_NUM}" ]]; then
+            if [[ -n "${S41_NUM}" ]]; then
+              add_label "${S41_NUM}" "aagd:ready"
+              CA=$(extract_custom_agent "${BODY_S41}")
+              if assign_copilot "${S41_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S41_NUM}" "aagd:running"
+                echo "Step.1/2/3 がスキップ済み: Step.4.1 (#${S41_NUM}) を起動しました。"
+              else
+                echo "WARNING: Step.4.1 へのアサイン失敗。aagd:running は付与しません。"
+              fi
+            fi
+            if [[ -n "${S42_NUM}" ]]; then
+              add_label "${S42_NUM}" "aagd:ready"
+              CA=$(extract_custom_agent "${BODY_S42}")
+              if assign_copilot "${S42_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S42_NUM}" "aagd:running"
+                echo "Step.1/2/3 がスキップ済み: Step.4.2 (#${S42_NUM}) を起動しました。"
+              else
+                echo "WARNING: Step.4.2 へのアサイン失敗。aagd:running は付与しません。"
+              fi
+            fi
+          else
+            echo "起動可能な leaf Step が存在しません。初期化をスキップします。"
+          fi
+
+          echo "初期化完了。"
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移: aagd:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得（YAML 展開問題を回避）
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: aagd:done ラベルをまだ持っていなければ付与する
+          # （labeled(aagd:done) イベントと closed イベントのどちらで state_transition に来ても正しく動作するための冪等処理）
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'aagd:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "aagd:done ラベルを付与します（closed イベント由来）..."
+            # add_label関数の定義より前なので直接curl（リトライなし・エラーは無視）
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aagd:done"]}' || true
+            echo "aagd:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          # ---- ユーティリティ関数（再定義） ----
+          api_call() {
+            local method="$1"; shift
+            local url="$1"; shift
+            local data="${1:-}"
+            local max_retry=5
+            local wait=1
+            local http_code response body
+
+            for i in $(seq 1 "${max_retry}"); do
+              if [[ -n "${data}" ]]; then
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  -H "Content-Type: application/json" \
+                  "${url}" \
+                  -d "${data}")
+              else
+                response=$(curl -s -w "\n%{http_code}" \
+                  -X "${method}" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "${url}")
+              fi
+              http_code=$(echo "${response}" | tail -1)
+              body=$(echo "${response}" | head -n -1)
+              if [[ "${http_code}" =~ ^2 ]]; then
+                echo "${body}"
+                return 0
+              fi
+              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
+              sleep "${wait}"
+              wait=$((wait * 2))
+            done
+            echo "API 呼び出し失敗: ${method} ${url}" >&2
+            return 1
+          }
+
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+
+          post_comment() {
+            local issue_num="$1"
+            local body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${body}")
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null
+            sleep 1
+          }
+
+          # Issue body から Custom Agent 名を抽出
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          activate_issue() {
+            local issue_num="$1"
+            local issue_body
+            issue_body=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
+            local agent_name
+            agent_name=$(extract_custom_agent "${issue_body}") || true
+            add_label "${issue_num}" "aagd:ready"
+            if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
+              add_label "${issue_num}" "aagd:running"
+              echo "Issue #${issue_num} を aagd:ready + copilot アサイン + aagd:running に設定しました。(custom_agent: ${agent_name})"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          }
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[AAGD\] Step\.(\d+(?:\.\d+)?[A-Z]{0,2})', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- ブランチ名の取得 ----
+          BRANCH=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- branch: (.+?) -->', body)
+          print(m.group(1).strip() if m else 'main')
+          PY
+          )
+
+          echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review / auto-qa PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+            # Timeline API で Issue を close する open PR を逆引き（gh pr list --search では "closes:#N" 構文が機能しないため）
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                fi
+                if [[ "${AUTO_QA}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-qa ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-qa ラベル付与に失敗しました。" >&2
+                fi
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
+
+          # ---- Root Issue の Sub Issues を取得して Step Issue を特定 ----
+          get_sub_issue_number() {
+            local pattern="$1"
+            # Root Issue から全 Sub Issues を取得
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          get_sub_issue_number_from_parent() {
+            local parent_num="$1"
+            local pattern="$2"
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
+          case "${STEP_MATCH}" in
+
+            "1.1")
+              # Step.1.1 完了 → Step.1.2 を起動
+              S1_NUM=$(get_sub_issue_number '\[AAGD\] Step\.1:')
+              if [[ -n "${S1_NUM}" ]]; then
+                S12_NUM=$(get_sub_issue_number_from_parent "${S1_NUM}" '\[AAGD\] Step\.1\.2:')
+                if [[ -n "${S12_NUM}" ]]; then
+                  activate_issue "${S12_NUM}"
+                else
+                  echo "WARNING: Step.1.2 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.1 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "1.2")
+              # Step.1.2 完了 → Step.1 コンテナに aagd:done → Step.2.1 を起動
+              S1_NUM=$(get_sub_issue_number '\[AAGD\] Step\.1:')
+              if [[ -n "${S1_NUM}" ]]; then
+                add_label "${S1_NUM}" "aagd:done"
+                echo "Step.1 コンテナに aagd:done を付与しました。"
+              fi
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S21_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.1:')
+                if [[ -n "${S21_NUM}" ]]; then
+                  activate_issue "${S21_NUM}"
+                else
+                  echo "WARNING: Step.2.1 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.1")
+              # Step.2.1 完了 → Step.2.2 を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S22_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.2:')
+                if [[ -n "${S22_NUM}" ]]; then
+                  activate_issue "${S22_NUM}"
+                else
+                  echo "WARNING: Step.2.2 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.2")
+              # Step.2.2 完了 → Step.2.3 を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S23_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.3:')
+                if [[ -n "${S23_NUM}" ]]; then
+                  activate_issue "${S23_NUM}"
+                else
+                  echo "WARNING: Step.2.3 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.3")
+              # Step.2.3 完了 → Step.2.3TC (TDD RED テストコード生成) を起動
+              # テスト仕様書 (docs/test-specs/{serviceId}-test-spec.md) は設計ワークフロー AAD Step.7.3 で生成済みとして前提
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.3TC:')
+                if [[ -n "${S23TC_NUM}" ]]; then
+                  activate_issue "${S23TC_NUM}"
+                else
+                  echo "WARNING: Step.2.3TC が見つかりません。Step.2.4 にフォールバック。"
+                  S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.4:')
+                  if [[ -n "${S24_NUM}" ]]; then
+                    activate_issue "${S24_NUM}"
+                  else
+                    echo "WARNING: Step.2.4 も見つかりません。"
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.3TC")
+              # Step.2.3TC 完了 → Step.2.4 を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.4:')
+                if [[ -n "${S24_NUM}" ]]; then
+                  activate_issue "${S24_NUM}"
+                else
+                  echo "WARNING: Step.2.4 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.4")
+              # Step.2.4 完了 → Step.2.5 を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S25_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.5:')
+                if [[ -n "${S25_NUM}" ]]; then
+                  activate_issue "${S25_NUM}"
+                else
+                  echo "WARNING: Step.2.5 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.5")
+              # Step.2.5 完了 → Step.2.6 を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S26_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.6:')
+                if [[ -n "${S26_NUM}" ]]; then
+                  activate_issue "${S26_NUM}"
+                else
+                  echo "WARNING: Step.2.6 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.6")
+              # Step.2.6 完了 → Step.2.7T (AI Agent テスト仕様書 TDD RED) を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S27T_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7T:')
+                if [[ -n "${S27T_NUM}" ]]; then
+                  activate_issue "${S27T_NUM}"
+                else
+                  echo "WARNING: Step.2.7T が見つかりません。Step.2.7TC にフォールバック。"
+                  S27TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7TC:')
+                  if [[ -n "${S27TC_NUM}" ]]; then
+                    activate_issue "${S27TC_NUM}"
+                  else
+                    echo "WARNING: Step.2.7TC が見つかりません。Step.2.7 にフォールバック。"
+                    S27_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7:')
+                    if [[ -n "${S27_NUM}" ]]; then
+                      activate_issue "${S27_NUM}"
+                    else
+                      echo "WARNING: Step.2.7 も見つかりません。Step.2.8 にフォールバック。"
+                      S28_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.8:')
+                      if [[ -n "${S28_NUM}" ]]; then
+                        activate_issue "${S28_NUM}"
+                      else
+                        echo "WARNING: Step.2.8 も見つかりません。Step.2 コンテナを完了扱いにします。"
+                        add_label "${S2_NUM}" "aagd:done"
+                        echo "Step.2 コンテナに aagd:done を付与しました。"
+                        S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+                        if [[ -n "${S3_NUM}" ]]; then
+                          S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.0TC:')
+                          if [[ -n "${S30TC_NUM}" ]]; then
+                            activate_issue "${S30TC_NUM}"
+                          else
+                            echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                            S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.1:')
+                            if [[ -n "${S31_NUM}" ]]; then
+                              activate_issue "${S31_NUM}"
+                            else
+                              echo "WARNING: Step.3.1 も見つかりません。"
+                            fi
+                          fi
+                        else
+                          echo "WARNING: Step.3 コンテナが見つかりません。"
+                        fi
+                      fi
+                    fi
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.7T")
+              # Step.2.7T 完了 → Step.2.7TC (AI Agent テストコード生成 TDD RED) を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S27TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7TC:')
+                if [[ -n "${S27TC_NUM}" ]]; then
+                  activate_issue "${S27TC_NUM}"
+                else
+                  echo "WARNING: Step.2.7TC が見つかりません。Step.2.7 にフォールバック。"
+                  S27_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7:')
+                  if [[ -n "${S27_NUM}" ]]; then
+                    activate_issue "${S27_NUM}"
+                  else
+                    echo "WARNING: Step.2.7 も見つかりません。"
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.7TC")
+              # Step.2.7TC 完了 → Step.2.7 (AI Agent 実装 TDD GREEN) を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S27_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.7:')
+                if [[ -n "${S27_NUM}" ]]; then
+                  activate_issue "${S27_NUM}"
+                else
+                  echo "WARNING: Step.2.7 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.7")
+              # Step.2.7 完了 → Step.2.8 (AI Agent Deploy) を起動
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S28_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\[AAGD\] Step\.2\.8:')
+                if [[ -n "${S28_NUM}" ]]; then
+                  activate_issue "${S28_NUM}"
+                else
+                  echo "WARNING: Step.2.8 が見つかりません。Step.2 コンテナを完了扱いにします。"
+                  add_label "${S2_NUM}" "aagd:done"
+                  echo "Step.2 コンテナに aagd:done を付与しました。"
+                  S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+                  if [[ -n "${S3_NUM}" ]]; then
+                    S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.0TC:')
+                    if [[ -n "${S30TC_NUM}" ]]; then
+                      activate_issue "${S30TC_NUM}"
+                    else
+                      echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                      S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.1:')
+                      if [[ -n "${S31_NUM}" ]]; then
+                        activate_issue "${S31_NUM}"
+                      else
+                        echo "WARNING: Step.3.1 も見つかりません。"
+                      fi
+                    fi
+                  else
+                    echo "WARNING: Step.3 コンテナが見つかりません。"
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.8")
+              # Step.2.8 完了 → Step.2 コンテナに aagd:done → Step.3.0TC (TDD RED) を起動
+              # テスト仕様書 (docs/test-specs/{screenId}-test-spec.md) は設計ワークフロー AAD Step.7.3 で生成済みとして前提
+              S2_NUM=$(get_sub_issue_number '\[AAGD\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                add_label "${S2_NUM}" "aagd:done"
+                echo "Step.2 コンテナに aagd:done を付与しました。"
+              fi
+              S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.0TC:')
+                if [[ -n "${S30TC_NUM}" ]]; then
+                  activate_issue "${S30TC_NUM}"
+                else
+                  echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                  S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.1:')
+                  if [[ -n "${S31_NUM}" ]]; then
+                    activate_issue "${S31_NUM}"
+                  else
+                    echo "WARNING: Step.3.1 も見つかりません。"
+                  fi
+                fi
+              else
+                echo "WARNING: Step.3 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "3.0TC")
+              # Step.3.0TC 完了 → Step.3.1 を起動
+              S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.1:')
+                if [[ -n "${S31_NUM}" ]]; then
+                  activate_issue "${S31_NUM}"
+                else
+                  echo "WARNING: Step.3.1 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.3 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "3.1")
+              # Step.3.1 完了 → Step.3.2 を起動
+              S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                S32_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\[AAGD\] Step\.3\.2:')
+                if [[ -n "${S32_NUM}" ]]; then
+                  activate_issue "${S32_NUM}"
+                else
+                  echo "WARNING: Step.3.2 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.3 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "3.2")
+              # Step.3.2 完了 → Step.3 コンテナに aagd:done → Step.4.1 + Step.4.2 を並列起動
+              S3_NUM=$(get_sub_issue_number '\[AAGD\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                add_label "${S3_NUM}" "aagd:done"
+                echo "Step.3 コンテナに aagd:done を付与しました。"
+              fi
+              S4_NUM=$(get_sub_issue_number '\[AAGD\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                S41_NUM=$(get_sub_issue_number_from_parent "${S4_NUM}" '\[AAGD\] Step\.4\.1:')
+                S42_NUM=$(get_sub_issue_number_from_parent "${S4_NUM}" '\[AAGD\] Step\.4\.2:')
+                if [[ -n "${S41_NUM}" ]]; then
+                  activate_issue "${S41_NUM}"
+                  echo "Step.4.1 を起動しました（並列実行）。"
+                else
+                  echo "WARNING: Step.4.1 が見つかりません。"
+                fi
+                if [[ -n "${S42_NUM}" ]]; then
+                  activate_issue "${S42_NUM}"
+                  echo "Step.4.2 を起動しました（並列実行）。"
+                else
+                  echo "WARNING: Step.4.2 が見つかりません。"
+                fi
+              else
+                echo "WARNING: Step.4 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "4.1"|"4.2")
+              # Step.4.1 or Step.4.2 完了 → 両方完了確認 → Step.4 コンテナに aagd:done → Root に aagd:done + 完了コメント
+              S4_NUM=$(get_sub_issue_number '\[AAGD\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                # Step.4.1 と Step.4.2 の両方が aagd:done かチェック
+                S4_SUBS=$(api_call GET \
+                  "https://api.github.com/repos/${REPO}/issues/${S4_NUM}/sub_issues")
+                BOTH_DONE=$(echo "${S4_SUBS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          issues = json.load(sys.stdin)
+          # Step.4.1 と Step.4.2 の label に aagd:done が含まれるか確認
+          done_count = 0
+          for issue in issues:
+              labels = [l['name'] for l in issue.get('labels', [])]
+              if 'aagd:done' in labels:
+                  done_count += 1
+          # 両方(2つ)が done なら true
+          print('true' if done_count >= 2 else 'false')
+          PY
+                )
+                if [[ "${BOTH_DONE}" == "true" ]]; then
+                  add_label "${S4_NUM}" "aagd:done"
+                  echo "Step.4 コンテナに aagd:done を付与しました。"
+                  # Root Issue に aagd:done を付与してワークフロー完了を示す
+                  add_label "${ROOT_ISSUE}" "aagd:done"
+                  echo "Root Issue #${ROOT_ISSUE} に aagd:done を付与しました。"
+                  # Root Issue に完了コメント
+                  post_comment "${ROOT_ISSUE}" "🎉 全ての開発ステップが完了しました！Root Issue #${ROOT_ISSUE} の Web App on Azure 開発ワークフローが正常に終了しました。"
+                  echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+                else
+                  echo "Step.4 の両方の Sub Issue がまだ完了していません。もう一方の完了を待ちます。"
+                fi
+              else
+                echo "WARNING: Step.4 コンテナが見つかりません。"
+              fi
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac
+          # ── 自動クローズ判定（auto-merge 有効時）──────────────
+          if [[ -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+            # コンテナ Issue の自動クローズ判定
+            _AC_CONTAINER_NUM=""
+            if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAGD\]\ Step\.[0-9]+\.[0-9] ]]; then
+              _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+                | grep -oP '\[AAGD\]\s*Step\.\K\d+' | head -1)
+              if [[ -n "${_AC_PARENT_STEP}" ]]; then
+                _AC_CONTAINER_NUM=$(gh api --paginate \
+                  "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                  --jq ".[] | select(.title | test(\"\\\\[ASDW\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                  2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+              fi
+            fi
+
+            if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+              echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+              auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+            fi
+
+            echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+            auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+          fi
+
+      # ----------------------------------------------------------------
+      # 4.5. closed イベント時のコンテナ/Root 自動クローズ判定
+      # ----------------------------------------------------------------
+      - name: コンテナ自動クローズ判定（closed イベント）
+        if: steps.gate.outputs.mode == 'container_close_check'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # ── 完了した Issue の情報取得 ──
+          if ! DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null); then
+            echo "::warning::Issue #${DONE_ISSUE_NUMBER} の取得に失敗しました（削除済みまたはアクセス不可）。"
+            DONE_ISSUE_JSON='{}'
+          fi
+          DONE_ISSUE_TITLE=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+
+          # ── Root Issue 番号の抽出 ──
+          ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*root-issue:\s*#(\d+)\s*-->', b)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" || ! "${ROOT_ISSUE}" =~ ^[0-9]+$ ]]; then
+            echo "Root Issue を特定できないためスキップ。"
+            exit 0
+          fi
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ── auto-close.sh の読み込み ──
+          if [[ ! -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            echo "auto-close.sh が見つかりません。スキップ。"
+            exit 0
+          fi
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+          # ── コンテナ Issue の自動クローズ判定 ──
+          _AC_CONTAINER_NUM=""
+          if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAGD\]\ Step\.[0-9]+\.[0-9] ]]; then
+            _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+              | grep -oP '\[AAGD\]\s*Step\.\K\d+' | head -1)
+            if [[ -n "${_AC_PARENT_STEP}" ]]; then
+              _AC_CONTAINER_NUM=$(gh api --paginate \
+                "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                --jq ".[] | select(.title | test(\"\\\\[ASDW\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+            fi
+          fi
+
+          if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+            echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+            auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+          else
+            echo "コンテナ Issue が特定できないためスキップ。"
+          fi
+
+          # ── Root Issue の自動クローズ判定 ──
+          echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+          auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${threshold}" ]] && threshold="80"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          echo "threshold=${threshold}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true'
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true'
+        run: pip install ruff
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true'
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.threshold }}
+        run: |
+          python -c "
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig(
+              auto_self_improve=True,
+              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
+          )
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          "
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
+          git push
+

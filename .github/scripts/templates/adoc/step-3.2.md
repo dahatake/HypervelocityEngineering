@@ -16,4 +16,4 @@ API 関連サマリーから API 仕様書を生成する。
 
 ## 完了条件
 - `docs-generated/components/api-spec.md` が作成されている
-- 完了時に自身に `adoc:done` ラベルを付与すること{additional_section}
+{completion_instruction}{additional_section}
