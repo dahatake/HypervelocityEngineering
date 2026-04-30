@@ -14,7 +14,7 @@ name: ABDV Orchestrator
 #   Step.1.2 — Azure リソース Deploy        (Dev-Microservice-Azure-DataDeploy)          ← Step.1.1 完了後
 #   Step.2.1 — TDD RED: テストコード作成   (Dev-Batch-TestCoding)              ← Step.1.2 完了後
 #   Step.2.2 — TDD GREEN: 本実装           (Dev-Batch-ServiceCoding)            ← Step.2.1 完了後
-#   Step.3   — Azure Functions/コンテナ Deploy (Dev-Batch-Deploy)               ← Step.2.2 完了後
+#   Step.3   — Azure Functions/コンテナ Deploy (Dev-Batch-FunctionsDeploy)               ← Step.2.2 完了後
 #   Step.4.1 — WAF レビュー                (QA-AzureArchitectureReview)        ← Step.3 完了後（並列）
 #   Step.4.2 — 整合性チェック              (QA-AzureDependencyReview)          ← Step.3 完了後（並列）
 #
@@ -59,6 +59,7 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
       group: abdv-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -175,7 +176,7 @@ jobs:
           has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          skip_labels = {'abdv:initialized', 'abdv:ready', 'abdv:running', 'abdv:done', 'abdv:blocked'}
+          skip_labels = {'abdv:initialized', 'abdv:ready', 'abdv:running', 'abdv:done', 'abdv:blocked', 'abdv:qa-ready'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
           )
@@ -401,6 +402,28 @@ jobs:
               nm_tdd = re.search(r'\d+', raw_tdd)
               tdd_max_retries = nm_tdd.group() if nm_tdd else "5"
 
+          # 自己改善設定
+          enable_self_improve = False
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if si_section:
+              enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          self_improve_max_iterations = "3"
+          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_max_iterations = n.group(1)
+
+          self_improve_quality_threshold = "80"
+          q = re.search(r"###\s*自己改善\s*品質スコア閾値.*?\n+(.+)", body)
+          if q:
+              val = q.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_quality_threshold = n.group(1)
+
           result = {
               "branch": branch,
               "resource_group": resource_group,
@@ -411,7 +434,10 @@ jobs:
               "auto_context_review": auto_context_review,
               "auto_qa": auto_qa,
               "auto_merge": auto_merge,
-              "tdd_max_retries": tdd_max_retries
+              "tdd_max_retries": tdd_max_retries,
+              "enable_self_improve": enable_self_improve,
+              "self_improve_max_iterations": self_improve_max_iterations,
+              "self_improve_quality_threshold": self_improve_quality_threshold,
           }
           print(json.dumps(result))
           PYEOF
@@ -425,6 +451,9 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
           TDD_MAX_RETRIES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tdd_max_retries','5'))")
           [[ -z "${TDD_MAX_RETRIES}" ]] && TDD_MAX_RETRIES="5"
@@ -470,46 +499,46 @@ jobs:
 
           # ---- Root Issue body に auto-context-review / auto-merge タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
           auto_merge = sys.argv[2]
           tdd_max_retries = sys.argv[3]
-          output_file = sys.argv[4]
+          branch = sys.argv[4]
+          enable_si = sys.argv[5]
+          si_max_iter = sys.argv[6]
+          si_quality_threshold = sys.argv[7]
+          output_file = sys.argv[8]
 
-          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
-          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
-          tdd_tag = f"<!-- tdd-max-retries: {tdd_max_retries} -->"
-          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
-          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
-          tdd_pat = re.compile(r'<!--\s*tdd-max-retries:\s*\d+\s*-->')
+          tags = [
+              ("auto-context-review", auto_context_review),
+              ("auto-merge", auto_merge),
+              ("tdd-max-retries", tdd_max_retries),
+              ("branch", branch),
+              ("enable-self-improve", enable_si),
+              ("self-improve-max-iterations", si_max_iter),
+              ("self-improve-quality-threshold", si_quality_threshold),
+          ]
 
-          if context_pat.search(body):
-              body = context_pat.sub(context_tag, body)
-          else:
-              body = body.rstrip() + "\n" + context_tag + "\n"
-
-          if merge_pat.search(body):
-              body = merge_pat.sub(merge_tag, body)
-          else:
-              body = body.rstrip() + "\n" + merge_tag + "\n"
-
-          if tdd_pat.search(body):
-              body = tdd_pat.sub(tdd_tag, body)
-          else:
-              body = body.rstrip() + "\n" + tdd_tag + "\n"
+          for key, value in tags:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
+              if pat.search(body):
+                  body = pat.sub(tag, body, count=1)
+              else:
+                  body = body.rstrip() + "\n" + tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
-          PYREVIEW
+          PYMERGE
 
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}, tdd-max-retries: ${TDD_MAX_RETRIES}）。" \
-            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries / branch / self-improve タグを埋め込みました。" \
+            || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
 
@@ -537,11 +566,13 @@ jobs:
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- batch-job-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
             "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${BATCH_JOB_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
           # 追加コメントセクション（空の場合は空文字）
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
-            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
-            ADDITIONAL_SECTION=""
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
 
           # リソースグループ／ジョブID セクション（存在する場合のみ）
@@ -585,7 +616,7 @@ jobs:
 
           # ---- Step.1.1: データサービス選定 ----
           if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
-            BODY_S11=$(printf '%s\n## 目的\nバッチジョブ設計書・サービスカタログを根拠に、データ系 Azure サービスの選定と設計を行う。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）\n\n## 出力\n- `docs/azure/azure-services-data.md`（データストア設計）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- 依存なし（最初の Step）\n\n## 完了条件\n- `docs/azure/azure-services-data.md` が作成または更新されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S11=$(printf '%s\n## 目的\nバッチジョブ設計書・サービスカタログを根拠に、必要な Azure データ系リソースを特定し、リソース作成スクリプトと検証スクリプトを準備する。\n\n## 入力\n- `docs/batch/batch-domain-analytics.md`\n- `docs/batch/batch-data-source-analysis.md`\n- `docs/batch/batch-data-model.md`\n- `docs/batch/batch-job-catalog.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-test-strategy.md`（テスト戦略書: データストア選定の参考）\n\n## 出力\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI リソース作成スクリプト）\n- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI リソース検証スクリプト）\n\n## Custom Agent\n`Dev-Batch-DataServiceSelect` を使用\n\n## 依存\n- 依存なし（最初の Step）\n\n## 完了条件\n- `infra/azure/batch/create-batch-resources.sh` が作成されている\n- `infra/azure/batch/verify-batch-resources.sh` が作成されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S11_RESP=$(create_issue \
               "[ABDV] Step.1.1: データサービス選定" \
@@ -601,7 +632,7 @@ jobs:
 
           # ---- Step.1.2: Azure リソース Deploy ----
           if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
-            BODY_S12=$(printf '%s\n## 目的\nデータサービス選定結果を根拠に、Azure CLI で冪等的に Azure データ系リソースを作成する。\n\n## 入力\n- `docs/azure/azure-services-data.md`\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）\n\n## 出力\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- Step.1.1（データサービス選定）が `abdv:done` であること\n\n## 完了条件\n- Azure データ系リソースが作成/確認されている\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S12=$(printf '%s\n## 目的\nStep.1.1 で作成したリソース作成スクリプトを実行し、Azure データ系リソースを冪等的に作成・検証する。\n\n## 入力\n- `infra/azure/batch/create-batch-resources.sh`（Step.1.1 の成果物）\n- `infra/azure/batch/verify-batch-resources.sh`（Step.1.1 の成果物）\n- `docs/batch/batch-service-catalog.md`\n- `docs/batch/batch-monitoring-design.md`（監視設計: データリソースの冗長性・バックアップ要件）\n\n## 出力\n- Azure データ系リソースの作成・検証完了\n- 実行・検証ログ（`{WORK}deploy-work-status.md`）\n\n## Custom Agent\n`Dev-Batch-DataDeploy` を使用\n\n## 依存\n- Step.1.1（データサービス選定）が `abdv:done` であること\n\n## 完了条件\n- Azure データ系リソースが作成/確認されている\n- `infra/azure/batch/verify-batch-resources.sh` の実行結果が全項目 PASS であること\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S12_RESP=$(create_issue \
               "[ABDV] Step.1.2: Azure データリソース Deploy" \
@@ -663,7 +694,7 @@ jobs:
             else
               _S3_DEP="依存なし（Step.1 / Step.2 がスキップされたため）"
             fi
-            BODY_S3=$(printf '%s\n## 目的\nバッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。\n\n## 入力\n- `src/` または `functions/` 配下の本実装コード\n- `docs/azure/azure-services-data.md`（データストア設計）\n- `docs/batch/batch-service-catalog.md`（サービスカタログ）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）\n- `docs/azure/azure-services-compute.md`（コンピュート設計: 存在する場合のみ参照）\n\n## 出力\n- Azure Functions / コンテナのデプロイ完了\n- CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）\n- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト: バッチリソース作成）\n- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI スクリプト: バッチリソース検証）\n\n## Custom Agent\n`Dev-Batch-Deploy` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- バッチジョブが Azure 上で稼働している\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
+            BODY_S3=$(printf '%s\n## 目的\nバッチジョブ実装コードを Azure Functions またはコンテナとして Azure にデプロイする。\n\n## 入力\n- `src/` または `functions/` 配下の本実装コード\n- `docs/azure/azure-services-data.md`（データストア設計）\n- `docs/batch/batch-service-catalog.md`（サービスカタログ）\n- `docs/batch/batch-monitoring-design.md`（監視設計書: アラート・ログ・スケーリング設定）\n- `docs/azure/azure-services-compute.md`（コンピュート設計: 存在する場合のみ参照）\n\n## 出力\n- Azure Functions / コンテナのデプロイ完了\n- CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）\n- `infra/azure/batch/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）\n\n## Custom Agent\n`Dev-Batch-FunctionsDeploy` を使用\n\n## 依存\n- %s\n\n## 完了条件\n- バッチジョブが Azure 上で稼働している\n- 完了時に自身に `abdv:done` ラベルを付与すること%s%s%s' \
               "${ROOT_REF}" "${_S3_DEP}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
             S3_RESP=$(create_issue \
               "[ABDV] Step.3: Azure Functions/コンテナ Deploy" \
@@ -754,13 +785,18 @@ jobs:
           }
 
           if [[ -n "${S11_NUM}" ]]; then
-            activate_first_step "${S11_NUM}" "Dev-Batch-Deploy"
-            echo "Step.1.1 (#${S11_NUM}) を起動しました。"
+            if [[ "${AUTO_QA}" == "true" ]]; then
+              add_label "${S11_NUM}" "abdv:qa-ready"
+              echo "Step.1.1 (#${S11_NUM}) に abdv:qa-ready を付与しました（QA 完了待ち）。Copilot アサインは QA 回答後に実行されます。"
+            else
+              activate_first_step "${S11_NUM}" "Dev-Batch-DataServiceSelect"
+              echo "Step.1.1 (#${S11_NUM}) を起動しました。"
+            fi
           elif [[ -n "${S21_NUM}" ]]; then
             activate_first_step "${S21_NUM}" "Dev-Batch-TestCoding"
             echo "Step.1 がスキップ済み: Step.2.1 (#${S21_NUM}) を起動しました。"
           elif [[ -n "${S3_NUM}" ]]; then
-            activate_first_step "${S3_NUM}" "Dev-Batch-Deploy"
+            activate_first_step "${S3_NUM}" "Dev-Batch-FunctionsDeploy"
             echo "Step.1〜2 がスキップ済み: Step.3 (#${S3_NUM}) を起動しました。"
           else
             # Step.1/2/3 全スキップ → Step.4.1 と Step.4.2 を並列起動
@@ -1234,6 +1270,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings
         id: parse
@@ -1246,11 +1283,59 @@ jobs:
           body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
           enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
           max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
           [[ -z "${enable}" ]] && enable="false"
           [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          [[ -z "${branch}" ]] && branch="main"
           echo "enable=${enable}" >> "$GITHUB_OUTPUT"
           echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
-          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -1266,24 +1351,33 @@ jobs:
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
       - name: Install dependencies
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
-        run: pip install ruff
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
       - name: Run Self-Improve
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()

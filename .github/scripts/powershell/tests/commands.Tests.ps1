@@ -268,22 +268,19 @@ Describe 'orchestrate.ps1' {
         $output | Should -Match 'ドライラン'
     }
 
-    It 'shows execution plan for AAD with step filter' {
+    It 'shows execution plan for ABD with step filter' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
-        $output = & $ScriptPath -Workflow aad -Steps '1.1,1.2' -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAD.*App Detail Design'
-        $output | Should -Match 'Step\.1\.1:.*ドメイン分析'
-        $output | Should -Match 'Step\.1\.2:.*サービス一覧抽出'
-        $output | Should -Match 'コンテナ Issue'
+        $output = & $ScriptPath -Workflow abd -Steps '1.1,1.2' -DryRun *>&1 | Out-String
+        $output | Should -Match 'ABD.*Batch Design'
+        $output | Should -Match 'Step\.1\.1:.*バッチドメイン分析'
+        $output | Should -Match 'Step\.1\.2:.*データソース'
         $output | Should -Match 'スキップされるステップ'
     }
 
-    It 'shows execution plan for all 5 workflows' {
+    It 'shows execution plan for all 3 workflows' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $workflows = @(
             @{ id = 'aas';  prefix = 'AAS';  count = 2 },
-            @{ id = 'aad';  prefix = 'AAD';  count = 13 },
-            @{ id = 'asdw'; prefix = 'ASDW'; count = 20 },
             @{ id = 'abd';  prefix = 'ABD';  count = 9 },
             @{ id = 'abdv'; prefix = 'ABDV'; count = 7 }
         )

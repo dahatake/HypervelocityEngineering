@@ -1437,6 +1437,351 @@ class TestBuildReuseContext(unittest.TestCase):
         self.assertIn("...他 5 ファイル", result)
 
 
+class TestReuseContextFiltering(unittest.TestCase):
+    """HVE_REUSE_CONTEXT_FILTERING フィーチャーフラグのテスト。
+
+    _compute_step_additional_prompt() を経由して実装ロジックを直接検証する。
+    """
+
+    def _make_step(self, step_id: str, consumed_artifacts=None):
+        """テスト用 StepDef を生成する。"""
+        from workflow_registry import StepDef
+        return StepDef(
+            id=step_id,
+            title=f"Step {step_id}",
+            custom_agent="TestAgent",
+            consumed_artifacts=consumed_artifacts,
+        )
+
+    def _make_artifacts(self):
+        return {
+            "app_catalog": "docs/catalog/app-catalog.md",
+            "service_specs": ["docs/services/SVC-01.md"],
+        }
+
+    # ------------------------------------------------------------------
+    # フラグ OFF: 旧挙動（base_additional_prompt そのまま返す）
+    # ------------------------------------------------------------------
+
+    def test_flag_off_returns_base_additional_prompt(self) -> None:
+        """フラグ OFF の場合、base_additional_prompt がそのまま返ること。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=[])
+        cfg = SDKConfig(reuse_context_filtering=False)
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "base_prompt")
+        self.assertEqual(result, "base_prompt")
+
+    def test_flag_off_with_none_consumed_returns_base(self) -> None:
+        """フラグ OFF + consumed_artifacts=None でも base_additional_prompt を返すこと。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=None)
+        cfg = SDKConfig(reuse_context_filtering=False)
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "base_prompt")
+        self.assertEqual(result, "base_prompt")
+
+    # ------------------------------------------------------------------
+    # フラグ ON + consumed_artifacts=None: 後方互換（全成果物）
+    # ------------------------------------------------------------------
+
+    def test_flag_on_none_consumed_artifacts_fallback_to_base(self) -> None:
+        """フラグ ON + consumed_artifacts=None（未アノテーション）の場合、後方互換で base を返すこと。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=None)
+        cfg = SDKConfig(reuse_context_filtering=True)
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "base_prompt")
+        self.assertEqual(result, "base_prompt")
+
+    # ------------------------------------------------------------------
+    # フラグ ON + consumed_artifacts=[]: reuse_context なし
+    # ------------------------------------------------------------------
+
+    def test_flag_on_empty_consumed_artifacts_omits_reuse_context(self) -> None:
+        """フラグ ON + consumed_artifacts=[] のステップには reuse_context が付かないこと。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=[])
+        cfg = SDKConfig(reuse_context_filtering=True, additional_prompt="user_prompt")
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "user_prompt")
+        # reuse_context は空なので、additional_prompt が除去された None または "user_prompt" 相当
+        # _build_reuse_context({}) == "" なので ("user_prompt" + "").strip() == "user_prompt"
+        self.assertEqual(result, "user_prompt")
+
+    def test_flag_on_empty_consumed_no_base_returns_none(self) -> None:
+        """フラグ ON + consumed_artifacts=[] + base が None の場合、None が返ること。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=[])
+        cfg = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, None)
+        # ("" + "").strip() == "" → None
+        self.assertIsNone(result)
+
+    # ------------------------------------------------------------------
+    # フラグ ON + consumed_artifacts=[key]: 指定キーのみ
+    # ------------------------------------------------------------------
+
+    def test_flag_on_filtered_consumed_artifacts(self) -> None:
+        """フラグ ON + consumed_artifacts=["app_catalog"] のステップには app_catalog のみ含む reuse_context が付くこと。"""
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("4", consumed_artifacts=["app_catalog"])
+        cfg = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        result = _compute_step_additional_prompt(step, self._make_artifacts(), cfg, None)
+        self.assertIsNotNone(result)
+        self.assertIn("app-catalog.md", result)
+        self.assertNotIn("SVC-01.md", result)
+
+    def test_flag_on_full_context_smaller_than_partial(self) -> None:
+        """フラグ ON でフィルタリングすると、全成果物を渡す場合よりプロンプトが短くなること。"""
+        from orchestrator import _compute_step_additional_prompt
+        from orchestrator import _build_reuse_context as _brc
+        from config import SDKConfig
+        artifacts = {
+            "app_catalog": "docs/catalog/app-catalog.md",
+            "service_catalog": "docs/catalog/service-catalog.md",
+            "service_specs": [f"docs/services/SVC-{i:02d}.md" for i in range(5)],
+            "doc_generated": [f"docs-generated/file{i}.md" for i in range(3)],
+        }
+        cfg_off = SDKConfig(reuse_context_filtering=False, additional_prompt=None)
+        cfg_on = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        step = self._make_step("4", consumed_artifacts=["doc_generated"])
+
+        # フラグ OFF は base_additional_prompt をそのまま返す
+        # テスト用 base として全成果物の reuse_context 文字列を使用
+        base_with_all = _brc(artifacts)  # 全成果物入りの大きな文字列
+        result_off = _compute_step_additional_prompt(step, artifacts, cfg_off, base_with_all)
+        self.assertEqual(result_off, base_with_all)
+
+        # フラグ ON は doc_generated のみを含む reuse_context を構築
+        result_filtered = _compute_step_additional_prompt(step, artifacts, cfg_on, base_with_all)
+        self.assertIsNotNone(result_filtered)
+        self.assertIn("docs-generated/file0.md", result_filtered)
+        self.assertLess(len(result_filtered), len(base_with_all))
+
+    # ------------------------------------------------------------------
+    # 未知キーの警告
+    # ------------------------------------------------------------------
+
+    def test_unknown_key_emits_warning(self) -> None:
+        """consumed_artifacts に存在しないキーが含まれる場合、UserWarning が発行されること。"""
+        import warnings
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("X", consumed_artifacts=["nonexistent_key"])
+        cfg = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _compute_step_additional_prompt(step, self._make_artifacts(), cfg, None)
+        self.assertTrue(
+            any("nonexistent_key" in str(w.message) for w in caught),
+            f"期待する警告が発行されませんでした。発行された警告: {[str(w.message) for w in caught]}",
+        )
+
+    def test_known_key_no_warning(self) -> None:
+        """consumed_artifacts のキーが全て存在する場合、警告は発行されないこと。"""
+        import warnings
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("4", consumed_artifacts=["app_catalog"])
+        cfg = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _compute_step_additional_prompt(step, self._make_artifacts(), cfg, None)
+        self.assertFalse(
+            any("consumed_artifacts" in str(w.message) for w in caught),
+            f"不要な警告が発行されました: {[str(w.message) for w in caught]}",
+        )
+
+    # ------------------------------------------------------------------
+    # SDKConfig / 環境変数
+    # ------------------------------------------------------------------
+
+    def test_sdkconfig_reuse_context_filtering_default_true(self) -> None:
+        """SDKConfig のデフォルトは reuse_context_filtering=True であること。"""
+        from config import SDKConfig
+        cfg = SDKConfig()
+        self.assertTrue(cfg.reuse_context_filtering)
+
+    def test_sdkconfig_from_env_reads_flag(self) -> None:
+        """環境変数 HVE_REUSE_CONTEXT_FILTERING=true で SDKConfig.reuse_context_filtering=True になること。"""
+        import os
+        from config import SDKConfig
+        with unittest.mock.patch.dict(os.environ, {"HVE_REUSE_CONTEXT_FILTERING": "true"}):
+            cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.reuse_context_filtering)
+
+    def test_sdkconfig_from_env_reads_flag_false(self) -> None:
+        """環境変数 HVE_REUSE_CONTEXT_FILTERING=false で SDKConfig.reuse_context_filtering=False になること。"""
+        import os
+        from config import SDKConfig
+        with unittest.mock.patch.dict(os.environ, {"HVE_REUSE_CONTEXT_FILTERING": "false"}):
+            cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.reuse_context_filtering)
+
+    def test_sdkconfig_from_env_default_true(self) -> None:
+        """環境変数 HVE_REUSE_CONTEXT_FILTERING 未設定の場合 True（デフォルト有効）であること。"""
+        import os
+        from config import SDKConfig
+        env = {k: v for k, v in os.environ.items() if k != "HVE_REUSE_CONTEXT_FILTERING"}
+        with unittest.mock.patch.dict(os.environ, env, clear=True):
+            cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.reuse_context_filtering)
+
+    # ------------------------------------------------------------------
+    # ワークフロー定義アノテーション確認
+    # ------------------------------------------------------------------
+
+    def test_adoc_steps_have_consumed_artifacts_annotated(self) -> None:
+        """ADOC 全ステップに consumed_artifacts アノテーションが設定されていること。"""
+        from workflow_registry import ADOC
+        for step in ADOC.steps:
+            if step.is_container:
+                continue
+            self.assertIsNotNone(
+                step.consumed_artifacts,
+                f"ADOC Step {step.id} の consumed_artifacts が未アノテーション（None）",
+            )
+
+    def test_adoc_early_steps_consume_no_artifacts(self) -> None:
+        """ADOC Step 1-3.x（ソースコード分析フェーズ）は consumed_artifacts=[] であること。"""
+        from workflow_registry import ADOC
+        early_step_ids = {"1", "2.1", "2.2", "2.3", "2.4", "2.5",
+                          "3.1", "3.2", "3.3", "3.4", "3.5"}
+        for step in ADOC.steps:
+            if step.id in early_step_ids:
+                self.assertEqual(
+                    step.consumed_artifacts, [],
+                    f"ADOC Step {step.id}: consumed_artifacts={step.consumed_artifacts!r}, expected []",
+                )
+
+    def test_adoc_late_steps_consume_doc_generated(self) -> None:
+        """ADOC Step 4 以降（統合・横断分析フェーズ）は consumed_artifacts=['doc_generated'] であること。"""
+        from workflow_registry import ADOC
+        late_step_ids = {"4", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"}
+        for step in ADOC.steps:
+            if step.id in late_step_ids:
+                self.assertEqual(
+                    step.consumed_artifacts, ["doc_generated"],
+                    f"ADOC Step {step.id}: consumed_artifacts={step.consumed_artifacts!r}, expected ['doc_generated']",
+                )
+
+    def test_aas_steps_have_consumed_artifacts_annotated(self) -> None:
+        """AAS ワークフローステップは consumed_artifacts が明示アノテーション済みであること。
+        Phase 8 で全 AAS ステップに consumed_artifacts を設定した。
+        """
+        from workflow_registry import AAS
+        for step in AAS.steps:
+            if step.is_container:
+                continue
+            self.assertIsNotNone(
+                step.consumed_artifacts,
+                f"AAS Step {step.id} の consumed_artifacts が未アノテーション（None）",
+            )
+            self.assertIsInstance(
+                step.consumed_artifacts,
+                list,
+                f"AAS Step {step.id} の consumed_artifacts がリストでない: {step.consumed_artifacts!r}",
+            )
+
+    def test_filtering_token_reduction_for_adoc(self) -> None:
+        """ADOC 早期ステップでフィルタリング ON 時にトークン削減効果があること（文字列長比較）。"""
+        from orchestrator import _compute_step_additional_prompt
+        from orchestrator import _build_reuse_context as _brc
+        from config import SDKConfig
+        # 典型的な既存成果物（AAS / AAD 実行後の状態）
+        artifacts = {
+            "app_catalog": "docs/catalog/app-catalog.md",
+            "service_catalog": "docs/catalog/service-catalog.md",
+            "data_model": "docs/catalog/data-model.md",
+            "domain_analytics": "docs/catalog/domain-analytics.md",
+            "service_specs": [f"docs/services/SVC-{i:02d}.md" for i in range(5)],
+            "doc_generated": [f"docs-generated/file{i}.md" for i in range(3)],
+        }
+        # フラグ OFF 相当の base（全成果物入り）: run_workflow が構築する effective_additional_prompt と等価
+        base_with_all = _brc(artifacts)
+
+        cfg_off = SDKConfig(reuse_context_filtering=False, additional_prompt=None)
+        cfg_on = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+
+        # ADOC Step 1: consumed_artifacts=[] → reuse_context なし
+        # フラグ ON + consumed_artifacts=[] + config.additional_prompt=None → ("" + "").strip() = "" → None
+        step1 = self._make_step("1", consumed_artifacts=[])
+        result_step1 = _compute_step_additional_prompt(step1, artifacts, cfg_on, base_with_all)
+        self.assertIsNone(result_step1)
+
+        # ADOC Step 4: consumed_artifacts=["doc_generated"] → doc_generated のみ
+        step4 = self._make_step("4", consumed_artifacts=["doc_generated"])
+        result_step4 = _compute_step_additional_prompt(step4, artifacts, cfg_on, base_with_all)
+        self.assertIsNotNone(result_step4)
+        self.assertIn("docs-generated/file0.md", result_step4)
+
+        # フラグ OFF（= base_with_all をそのまま返す）と比較して短い
+        result_off = _compute_step_additional_prompt(step4, artifacts, cfg_off, base_with_all)
+        self.assertEqual(result_off, base_with_all)
+        self.assertLess(len(result_step4), len(result_off))
+
+    def test_aad_web_steps_have_consumed_artifacts_annotated(self) -> None:
+        """AAD-WEB 全ステップに consumed_artifacts アノテーションが設定されていること。"""
+        from workflow_registry import AAD_WEB
+        for step in AAD_WEB.steps:
+            if step.is_container:
+                continue
+            self.assertIsNotNone(
+                step.consumed_artifacts,
+                f"AAD-WEB Step {step.id} の consumed_artifacts が未アノテーション（None）",
+            )
+
+    def test_aad_web_step1_consumed_artifacts(self) -> None:
+        """AAD-WEB Step 1 は app_catalog / service_catalog / data_model / domain_analytics を参照すること。"""
+        from workflow_registry import AAD_WEB
+        step1 = next(s for s in AAD_WEB.steps if s.id == "1")
+        for key in ("app_catalog", "service_catalog", "data_model", "domain_analytics"):
+            self.assertIn(key, step1.consumed_artifacts,
+                          f"AAD-WEB Step 1: expected {key!r} in consumed_artifacts")
+
+    def test_aad_web_step2_3_consumed_artifacts_include_specs(self) -> None:
+        """AAD-WEB Step 2.3 は screen_specs / service_specs / test_strategy を参照すること。"""
+        from workflow_registry import AAD_WEB
+        step23 = next(s for s in AAD_WEB.steps if s.id == "2.3")
+        for key in ("screen_specs", "service_specs", "test_strategy"):
+            self.assertIn(key, step23.consumed_artifacts,
+                          f"AAD-WEB Step 2.3: expected {key!r} in consumed_artifacts")
+
+    def test_aad_web_filtering_reduces_context(self) -> None:
+        """AAD-WEB Step 1（filtered）は全成果物渡しより短いコンテキストになること。"""
+        from orchestrator import _compute_step_additional_prompt, _build_reuse_context as _brc
+        from config import SDKConfig
+        from workflow_registry import AAD_WEB
+        # 典型的な AAS 実行後の成果物
+        artifacts = {
+            "app_catalog": "docs/catalog/app-catalog.md",
+            "service_catalog": "docs/catalog/service-catalog.md",
+            "data_model": "docs/catalog/data-model.md",
+            "domain_analytics": "docs/catalog/domain-analytics.md",
+            "test_strategy": "docs/catalog/test-strategy.md",
+            "service_specs": [f"docs/services/SVC-{i:02d}.md" for i in range(5)],
+            "screen_specs": [f"docs/screen/SCR-{i:02d}.md" for i in range(3)],
+        }
+        base_with_all = _brc(artifacts)
+        cfg_on = SDKConfig(reuse_context_filtering=True, additional_prompt=None)
+        cfg_off = SDKConfig(reuse_context_filtering=False, additional_prompt=None)
+
+        step1 = next(s for s in AAD_WEB.steps if s.id == "1")
+        result_on = _compute_step_additional_prompt(step1, artifacts, cfg_on, base_with_all)
+        result_off = _compute_step_additional_prompt(step1, artifacts, cfg_off, base_with_all)
+
+        # フィルタリング ON では全成果物より短い
+        self.assertIsNotNone(result_on)
+        self.assertLess(len(result_on), len(result_off))
+        # Step 1 に不要な screen_specs は含まれない
+        self.assertNotIn("SCR-00.md", result_on)
+        # Step 1 に必要な app_catalog は含まれる
+        self.assertIn("app-catalog.md", result_on)
+
+
 class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
     """_collect_params_non_interactive() の app_ids 対応テスト。"""
 
@@ -1534,12 +1879,13 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
         fake_loop.run_in_executor = unittest.mock.AsyncMock(side_effect=lambda _pool, fn: fn())
         observed_scope: dict = {}
 
-        def _fake_run_improvement_loop(*, config, work_dir, repo_root):
+        def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
             observed_scope["value"] = config.self_improve_target_scope
             return {
                 "iterations_completed": 1,
                 "final_score": 75,
                 "stopped_reason": "converged",
+                "final_goal_achievement_pct": 0.75,
             }
 
         with patch("orchestrator.Console", return_value=mock_console), \
@@ -1583,6 +1929,7 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                  "iterations_completed": 1,
                  "final_score": 80,
                  "stopped_reason": "done",
+                 "final_goal_achievement_pct": 0.80,
              }), \
              patch("asyncio.get_running_loop", return_value=fake_loop):
             _run(run_workflow(
@@ -1644,12 +1991,13 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                 fake_loop = unittest.mock.MagicMock()
                 fake_loop.run_in_executor = unittest.mock.AsyncMock(side_effect=lambda _pool, fn: fn())
 
-                def _fake_run_improvement_loop(*, config, work_dir, repo_root):
+                def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
                     observed_scope["value"] = config.self_improve_target_scope
                     return {
                         "iterations_completed": 1,
                         "final_score": 80,
                         "stopped_reason": "done",
+                        "final_goal_achievement_pct": 0.80,
                     }
 
                 _arch_result = self._fake_arch_filter_result(workflow_id)
@@ -1669,7 +2017,97 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                 self.assertEqual(observed_scope.get("value"), expected_scope)
 
 
-class TestCollectParamsNonInteractiveAkmDefaults(unittest.TestCase):
+class TestRunWorkflowSelfImproveScope(unittest.TestCase):
+    """run_workflow の Self-Improve scope 制御テスト。"""
+
+    class _FakeDAGExecutor:
+        def __init__(self, *args, **kwargs):
+            self.completed = set()
+            self.failed = set()
+            self.skipped = set()
+
+        def compute_waves(self):
+            return []
+
+        async def execute(self):
+            return {"completed": [], "failed": [], "skipped": []}
+
+    def _fake_arch_filter_result(self, workflow_id: str = "aas"):
+        from hve.app_arch_filter import AppArchFilterResult
+        return AppArchFilterResult(
+            workflow_id=workflow_id,
+            target_kind="web-cloud",
+            target_architectures=["Webフロントエンド + クラウド"],
+            requested_app_ids=None,
+            matched_app_ids=["APP-01"],
+        )
+
+    def _run_with_scope(self, scope: str, workflow_id: str = "aas"):
+        """指定 scope で run_workflow を実行し (si_called, phase_names) を返す。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            quiet=True,
+            auto_self_improve=True,
+            self_improve_skip=False,
+            run_id=f"run-scope-{scope or 'default'}-{workflow_id}",
+            self_improve_scope=scope,
+        )
+        si_called = {"value": False}
+        fake_loop = unittest.mock.MagicMock()
+        fake_loop.run_in_executor = unittest.mock.AsyncMock(
+            side_effect=lambda _pool, fn: (si_called.__setitem__("value", True) or None) or fn()
+        )
+
+        def _fake_run_improvement_loop(*, config, work_dir, repo_root, **kwargs):
+            si_called["value"] = True
+            return {"iterations_completed": 1, "final_score": 80, "stopped_reason": "done",
+                    "records": [], "reward_history": [], "final_goal_achievement_pct": 0.8}
+
+        mock_console = unittest.mock.MagicMock()
+        with patch("orchestrator.Console", return_value=mock_console), \
+             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+             patch("orchestrator.resolve_app_arch_scope",
+                   return_value=self._fake_arch_filter_result(workflow_id)), \
+             patch("orchestrator.DAGExecutor",
+                   side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
+             patch("hve.self_improve.run_improvement_loop",
+                   side_effect=_fake_run_improvement_loop), \
+             patch("asyncio.get_running_loop", return_value=fake_loop):
+            result = _run(run_workflow(
+                workflow_id=workflow_id,
+                params={"branch": "main", "selected_steps": []},
+                config=cfg,
+            ))
+
+        phase_names = [call.args[2] for call in mock_console.phase_start.call_args_list]
+        return si_called["value"], phase_names
+
+    def test_scope_workflow_runs_post_dag(self) -> None:
+        """scope='workflow' のとき Post-DAG Self-Improve が実行される。"""
+        si_called, phase_names = self._run_with_scope("workflow")
+        self.assertTrue(si_called, "Post-DAG Self-Improve が呼ばれること")
+        self.assertIn("自己改善ループ", phase_names)
+
+    def test_scope_step_skips_post_dag(self) -> None:
+        """scope='step' のとき Post-DAG Self-Improve はスキップされる。"""
+        si_called, phase_names = self._run_with_scope("step")
+        self.assertFalse(si_called, "Post-DAG Self-Improve が呼ばれないこと")
+        self.assertNotIn("自己改善ループ", phase_names)
+
+    def test_scope_disabled_skips_post_dag(self) -> None:
+        """scope='disabled' のとき Post-DAG Self-Improve はスキップされる。"""
+        si_called, phase_names = self._run_with_scope("disabled")
+        self.assertFalse(si_called, "Post-DAG Self-Improve が呼ばれないこと")
+        self.assertNotIn("自己改善ループ", phase_names)
+
+    def test_scope_empty_runs_post_dag_backward_compat(self) -> None:
+        """scope='' (デフォルト) のとき後方互換で Post-DAG Self-Improve が実行される。"""
+        si_called, phase_names = self._run_with_scope("")
+        self.assertTrue(si_called, "後方互換: Post-DAG Self-Improve が呼ばれること")
+        self.assertIn("自己改善ループ", phase_names)
+
+
+
     """_collect_params_non_interactive() の AKM デフォルト適用テスト。"""
 
     def _make_wf(self):
@@ -2254,6 +2692,26 @@ class TestPrefetchWorkIQDetailed(unittest.TestCase):
         self.assertEqual(result.content, llm_text)
         # 上位処理では safe_to_inject=False なのでプロンプト注入しない。
         console.warning.assert_called()
+
+
+class TestQaPhaseField(unittest.TestCase):
+    """SDKConfig.qa_phase フィールドが正しく機能することを確認する。"""
+
+    def test_qa_phase_field_exists(self) -> None:
+        cfg = SDKConfig()
+        self.assertTrue(hasattr(cfg, "qa_phase"))
+
+    def test_qa_phase_default_value(self) -> None:
+        cfg = SDKConfig()
+        self.assertEqual(cfg.qa_phase, "pre")
+
+    def test_qa_phase_can_be_set_to_post(self) -> None:
+        cfg = SDKConfig(qa_phase="post")
+        self.assertEqual(cfg.qa_phase, "post")
+
+    def test_qa_phase_can_be_set_to_both(self) -> None:
+        cfg = SDKConfig(qa_phase="both")
+        self.assertEqual(cfg.qa_phase, "both")
 
 
 if __name__ == "__main__":

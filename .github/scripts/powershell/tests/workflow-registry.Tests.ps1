@@ -14,20 +14,6 @@ Describe 'workflow-registry.ps1' {
             $wf.steps.Count | Should -Be 2
         }
 
-        It 'retrieves AAD workflow' {
-            $wf = Get-Workflow -WorkflowId 'aad'
-            $wf.id | Should -Be 'aad'
-            $wf.name | Should -Be 'App Detail Design'
-            $wf.steps.Count | Should -Be 16
-        }
-
-        It 'retrieves ASDW workflow' {
-            $wf = Get-Workflow -WorkflowId 'asdw'
-            $wf.id | Should -Be 'asdw'
-            $wf.name | Should -Be 'App Dev Microservice Azure'
-            $wf.steps.Count | Should -Be 24
-        }
-
         It 'retrieves ABD workflow' {
             $wf = Get-Workflow -WorkflowId 'abd'
             $wf.id | Should -Be 'abd'
@@ -60,26 +46,19 @@ Describe 'workflow-registry.ps1' {
             $wf.state_labels.blocked | Should -Be 'aas:blocked'
         }
 
-        It 'includes params for ASDW' {
-            $wf = Get-Workflow -WorkflowId 'asdw'
-            $wf.params | Should -Contain 'app_id'
+        It 'includes params for ABDV' {
+            $wf = Get-Workflow -WorkflowId 'abdv'
             $wf.params | Should -Contain 'resource_group'
-            $wf.params | Should -Contain 'usecase_id'
+            $wf.params | Should -Contain 'batch_job_id'
         }
     }
 
     Context 'Get-Step' {
         It 'retrieves a specific step' {
-            $step = Get-Step -WorkflowId 'aad' -StepId '1.1'
+            $step = Get-Step -WorkflowId 'abd' -StepId '1.1'
             $step.id | Should -Be '1.1'
-            $step.custom_agent | Should -Be 'Arch-Microservice-DomainAnalytics'
+            $step.custom_agent | Should -Be 'Arch-Batch-DomainAnalytics'
             $step.is_container | Should -Be $false
-        }
-
-        It 'retrieves a container step' {
-            $step = Get-Step -WorkflowId 'aad' -StepId '1'
-            $step.is_container | Should -Be $true
-            $step.custom_agent | Should -BeNullOrEmpty
         }
 
         It 'throws for unknown step' {
@@ -87,16 +66,9 @@ Describe 'workflow-registry.ps1' {
         }
 
         It 'returns correct depends_on' {
-            $step = Get-Step -WorkflowId 'aad' -StepId '7.3'
-            $step.depends_on | Should -Contain '6'
-            $step.depends_on | Should -Contain '7.1'
-            $step.depends_on | Should -Contain '7.2'
-        }
-
-        It 'returns step with alpha suffix (ASDW 2.3T)' {
-            $step = Get-Step -WorkflowId 'asdw' -StepId '2.3T'
-            $step.id | Should -Be '2.3T'
-            $step.custom_agent | Should -Be 'Arch-TDD-TestSpec'
+            $step = Get-Step -WorkflowId 'abd' -StepId '6.3'
+            $step.depends_on | Should -Contain '6.1'
+            $step.depends_on | Should -Contain '6.2'
         }
     }
 
@@ -105,16 +77,6 @@ Describe 'workflow-registry.ps1' {
             $next = Get-NextStep -WorkflowId 'aas' -Completed @()
             $next.Count | Should -Be 1
             $next[0].id | Should -Be '1'
-        }
-
-        It 'returns root steps when nothing completed for AAD' {
-            $next = Get-NextStep -WorkflowId 'aad' -Completed @()
-            $ids = $next | ForEach-Object { $_.id }
-            $ids | Should -Contain '1.1'
-            # Containers should not be included
-            $ids | Should -Not -Contain '1'
-            $ids | Should -Not -Contain '7'
-            $ids | Should -Not -Contain '8'
         }
 
         It 'returns root steps for ABD' {
@@ -137,8 +99,8 @@ Describe 'workflow-registry.ps1' {
             $next.Count | Should -Be 0
         }
 
-        It 'advances with dependency resolution in AAD' {
-            $next = Get-NextStep -WorkflowId 'aad' -Completed @('1.1')
+        It 'advances with dependency resolution in ABD' {
+            $next = Get-NextStep -WorkflowId 'abd' -Completed @('1.1')
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '1.2'
             $ids | Should -Not -Contain '2'
@@ -158,7 +120,7 @@ Describe 'workflow-registry.ps1' {
 
     Context 'Get-NextStep (with skipped steps)' {
         It 'treats skipped steps as resolved dependencies' {
-            $next = Get-NextStep -WorkflowId 'aad' -Completed @('1.1', '1.2') -Skipped @('2')
+            $next = Get-NextStep -WorkflowId 'abd' -Completed @('1.1', '1.2') -Skipped @('2')
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '3'
         }

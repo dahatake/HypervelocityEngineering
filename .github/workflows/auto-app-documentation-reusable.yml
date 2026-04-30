@@ -32,6 +32,7 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
       group: adoc-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -100,7 +101,7 @@ jobs:
             exit 0
           fi
 
-          has_init=$(echo "${ISSUE_LABELS}" | python3 -c "import sys, json; labels = json.load(sys.stdin); skip_labels = {'adoc:initialized', 'adoc:ready', 'adoc:running', 'adoc:done', 'adoc:blocked'}; print('true' if any(l in skip_labels for l in labels) else 'false')")
+          has_init=$(echo "${ISSUE_LABELS}" | python3 -c "import sys, json; labels = json.load(sys.stdin); skip_labels = {'adoc:initialized', 'adoc:ready', 'adoc:running', 'adoc:done', 'adoc:blocked', 'adoc:qa-ready'}; print('true' if any(l in skip_labels for l in labels) else 'false')")
 
           if [[ "${has_init}" == "true" ]]; then
             echo "mode=skip" >> "$GITHUB_OUTPUT"
@@ -173,6 +174,12 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+          # 状態メモ用途: ADOC はテンプレートファイル単一ソース方式で運用している。
+          # USE_HVE_ADOC はその状態を明示的に記録するための変数であり、
+          # このワークフロー内の分岐条件には未使用。
+          # vars.USE_HVE_ADOC を切り替えても、このワークフローの挙動は変わらない。
+          # 実際のテンプレート利用は advance-subissues.yml の adoc:done ハンドラ側。
+          USE_HVE_ADOC: ${{ vars.USE_HVE_ADOC || 'true' }}
         run: |
           set -euo pipefail
 
@@ -434,13 +441,13 @@ jobs:
 
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
 
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
-            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
-            ADDITIONAL_SECTION=""
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
-
-          if echo " ${SKIP_STEPS} " | grep -q " 1 "; then
             post_comment "${ROOT_ISSUE}" "⚠️ Step.1 がスキップ指定のため、初期Waveで作成される Sub-issue はありません。"
             exit 0
           fi
@@ -482,10 +489,15 @@ jobs:
           S1_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
 
           link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"
-          add_label "${S1_NUM}" "adoc:ready"
-          CA=$(extract_custom_agent "${BODY_S1}")
-          if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
-            add_label "${S1_NUM}" "adoc:running"
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${S1_NUM}" "adoc:qa-ready"
+            echo "Step.1 (#${S1_NUM}) に adoc:qa-ready を付与しました（QA 完了待ち）。Copilot アサインは QA 回答後に実行されます。"
+          else
+            add_label "${S1_NUM}" "adoc:ready"
+            CA=$(extract_custom_agent "${BODY_S1}")
+            if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+              add_label "${S1_NUM}" "adoc:running"
+            fi
           fi
 
       - name: 状態遷移は advance-subissues.yml に委譲
@@ -497,6 +509,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: write
     steps:
@@ -594,16 +607,17 @@ jobs:
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-              self_improve_quality_threshold=int(os.environ.get('QUALITY_THRESHOLD', '80')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
           print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "

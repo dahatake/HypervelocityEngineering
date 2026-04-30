@@ -1,12 +1,19 @@
 ﻿# orchestrate.ps1 — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
 #
+# ============================================================
+# DEPRECATED: このスクリプトは GitHub Actions ワークフローからは
+# 直接呼び出されていません（grep で参照 0 件を確認済み）。
+# ローカルでのデバッグ・手動実行用途として残されています。
+# 本番フローは .github/workflows/auto-*-reusable.yml を使用してください。
+# ============================================================
+#
 # Ported from: .github/scripts/bash/orchestrate.sh
 #
 # Creates Root Issue, Sub-Issues from templates, establishes parent-child
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   .\orchestrate.ps1 -Workflow aad -Branch main -Steps "1.1,1.2" -Model claude-opus-4.7 -DryRun
+#   .\orchestrate.ps1 -Workflow abd -Branch main -Steps "1.1,1.2" -Model claude-opus-4.7 -DryRun
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format
@@ -59,24 +66,18 @@ $TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
 
 $script:WorkflowDisplayNames = @{
     aas  = 'App Architecture Design'
-    aad  = 'App Detail Design'
-    asdw = 'App Dev Microservice Azure'
     abd  = 'Batch Design'
     abdv = 'Batch Dev'
 }
 
 $script:TriggerLabels = @{
     aas  = 'auto-app-selection'
-    aad  = 'auto-app-detail-design'
-    asdw = 'auto-app-dev-microservice'
     abd  = 'auto-batch-design'
     abdv = 'auto-batch-dev'
 }
 
 $script:WorkflowPrefixMap = @{
     aas  = 'AAS'
-    aad  = 'AAD'
-    asdw = 'ASDW'
     abd  = 'ABD'
     abdv = 'ABDV'
 }
@@ -241,7 +242,7 @@ Usage:
   orchestrate.ps1 -Workflow <id> [options]
 
 Options:
-  -Workflow, -w <id>     Workflow ID: aas|aad|asdw|abd|abdv (required)
+  -Workflow, -w <id>     Workflow ID: aas|abd|abdv (required)
   -Branch <name>         Target branch (default: main)
   -Steps <csv>           Comma-separated step IDs (default: all)
   -AppId <id>            ASDW: Application ID

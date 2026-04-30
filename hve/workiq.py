@@ -30,8 +30,6 @@ _WORKIQ_QUERY_INTERVAL_SECONDS: float = 2.0
 WORKIQ_MCP_SERVER_NAME: str = "_hve_workiq"
 WORKIQ_MCP_TOOL_NAMES: tuple[str, ...] = (
     "ask_work_iq",
-    "accept_eula",
-    "get_debug_link",
 )
 
 
@@ -109,37 +107,77 @@ _WORKIQ_PROMPT_HEADER: str = (
     "ツールを呼び出さずに「workiq ツールが存在しない」と結論しないでください。\n"
 )
 
+# F1: 役割プライミング + F7: 検索戦略指示
+_WORKIQ_ROLE_PROMPT: str = (
+    "\nあなたは Microsoft 365 のリサーチアシスタントです。\n"
+    "- 一次情報の引用と要約のみを行い、推測・解釈・追加助言はしないでください。\n"
+    "- 個人情報（氏名・メール本文・添付内容など）は最低限の引用に留め、要約してください。\n"
+    "- 検索キーワードは原文・同義語・略称・英訳の少なくとも 2 通りで試行してください。\n"
+    "- 1 回の `ask_work_iq` で十分な結果が得られない場合、観点を変えて再度呼び出してください（最大 3 回）。\n"
+)
+
+# F2+F3+F4: 出力スキーマ＋ステータスラベル＋件数/長さ上限
+_WORKIQ_OUTPUT_SCHEMA_PROMPT: str = (
+    "\n## 出力フォーマット（厳守）\n"
+    "1 行目に以下のいずれかの STATUS ラベルを必ず付けてください:\n"
+    "- `STATUS: FOUND` — 関連情報が見つかった\n"
+    "- `STATUS: NOT_FOUND` — 検索したが関連情報なし\n"
+    "- `STATUS: UNAVAILABLE` — ツール未公開・認証失敗・タイムアウト等で検索自体が実行できなかった\n"
+    "- `STATUS: PARTIAL` — 一部のソース（例: メールのみ）でしか検索できなかった\n"
+    "\n2 行目以降は以下の Markdown 表で報告してください（**最大 5 件、各セルは 200 字以内**）:\n"
+    "\n| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
+    "|---|---|---:|---|---|\n"
+    "| メール / Teams / 会議 / ファイル / Loop | 件名・送信者・会議名・ファイル名等 | YYYY-MM-DD HH:MM | URL/パス | 1 行で要点 |\n"
+    "\n表の下に `**補足**:` を 1 ブロックだけ追加してよい（任意・最大 5 行）。\n"
+    "`STATUS: NOT_FOUND` / `STATUS: UNAVAILABLE` の場合は表を省略し、理由を 1〜3 行で記載してください。\n"
+)
+
+# F5: Few-shot 例（FOUND と UNAVAILABLE）
+_WORKIQ_FEWSHOT_PROMPT: str = (
+    "\n## 例\n"
+    "### 例1（見つかった場合）\n"
+    "STATUS: FOUND\n"
+    "| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
+    "|---|---|---:|---|---|\n"
+    "| メール | 件名: 連携設計レビュー / 送信者: yamada@example.com | 2026-04-20 10:15 | Outlook | API契約合意状況 |\n"
+    "| ファイル | API仕様書_v1.2.docx | 2026-04-22 | SharePoint/Docs | エンドポイント一覧 |\n"
+    "**補足**: 2件とも署名前ドラフトのため確定情報ではない。\n"
+    "\n### 例2（ツール未接続の場合）\n"
+    "STATUS: UNAVAILABLE\n"
+    "ask_work_iq ツールが現在のセッションに公開されていないため、Microsoft 365 を検索できませんでした。\n"
+)
+
 DEFAULT_WORKIQ_QA_PROMPT: str = (
     _WORKIQ_PROMPT_HEADER
+    + _WORKIQ_ROLE_PROMPT
     + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "過去1か月のメール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
+    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
     "以下の質問に関連する情報がないか調査してください。\n"
-    "見つかった場合は、情報ソース（メール件名・送信者・日時、会議名・日時、"
-    "ファイル名・パス等）とともに報告してください。\n"
-    "見つからなかった場合は「関連情報なし」と報告してください。\n\n"
-    "質問一覧:\n{target_content}"
+    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
+    + _WORKIQ_FEWSHOT_PROMPT
+    + "\n質問一覧:\n{target_content}"
 )
 
 DEFAULT_WORKIQ_KM_PROMPT: str = (
     _WORKIQ_PROMPT_HEADER
+    + _WORKIQ_ROLE_PROMPT
     + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "過去1か月のメール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
+    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
     "以下の Knowledge 項目に関連する情報がないか調査してください。\n"
-    "見つかった場合は、情報ソース（メール件名・送信者・日時、会議名・日時、"
-    "ファイル名・パス等）とともに報告してください。\n"
-    "見つからなかった場合は「関連情報なし」と報告してください。\n\n"
-    "Knowledge 項目:\n{target_content}"
+    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
+    + _WORKIQ_FEWSHOT_PROMPT
+    + "\nKnowledge 項目:\n{target_content}"
 )
 
 DEFAULT_WORKIQ_REVIEW_PROMPT: str = (
     _WORKIQ_PROMPT_HEADER
+    + _WORKIQ_ROLE_PROMPT
     + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "過去1か月のメール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
+    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
     "以下のドキュメント内容と矛盾する情報や、補足すべき最新情報がないか調査してください。\n"
-    "見つかった場合は、情報ソース（メール件名・送信者・日時、会議名・日時、"
-    "ファイル名・パス等）とともに報告してください。\n"
-    "見つからなかった場合は「関連情報なし」と報告してください。\n\n"
-    "ドキュメント概要:\n{target_content}"
+    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
+    + _WORKIQ_FEWSHOT_PROMPT
+    + "\nドキュメント概要:\n{target_content}"
 )
 
 
@@ -950,6 +988,18 @@ def is_workiq_error_response(context: str) -> bool:
     """
     if not context or not context.strip():
         return False
+    # F3: 明示 STATUS ラベルがあれば優先判定（ヒューリスティック前に確定させる）
+    # 先頭行の大文字小文字・余分な空白を無視してラベルを抽出する
+    head = context.lstrip().splitlines()[0]
+    _status_match = re.match(r"^\s*STATUS\s*:\s*(\w+)", head, re.IGNORECASE)
+    if _status_match:
+        label = _status_match.group(1).upper()
+        if label == "UNAVAILABLE":
+            return True
+        if label in ("FOUND", "PARTIAL", "NOT_FOUND"):
+            # NOT_FOUND は「正しく検索した上で関連情報なし」なのでエラー扱いしない
+            return False
+    # 以降は既存ヒューリスティック（後方互換のため温存）
     has_error = any(p in context for p in _WORKIQ_ERROR_INDICATORS)
     if not has_error:
         return False
@@ -978,6 +1028,39 @@ def is_workiq_error_response(context: str) -> bool:
     return real_data_count == 0
 
 
+def _escape_workiq_sandbox_tags(text: Optional[str]) -> Optional[str]:
+    """Work IQ コンテンツ中のサンドボックスタグをエスケープする。
+
+    `<workiq_reference_data>` / `</workiq_reference_data>` を含む応答や
+    knowledge/Dxx-*.md の内容が入力された場合、そのままプロンプトに
+    埋め込むとサンドボックスタグの整合性が崩れ、後続テキストが
+    LLM 指示として有効化される（プロンプトインジェクション）。
+
+    本関数は両方のタグを `workiq_reference_data_escaped` に置換し、
+    タグの構造を保ちつつ意味を無効化する。
+
+    大文字小文字を区別しない（HTML タグの慣習に合わせる）。
+
+    Note:
+        本関数は `enrich_prompt_with_workiq()` および
+        `orchestrator._run_akm_workiq_verification()` から呼び出される。
+        新規箇所で Work IQ データや外部ファイル内容を
+        `WORKIQ_CONTEXT_INJECTION_PROMPT` /
+        `AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT` に埋め込む際も
+        必ず本関数を経由すること。
+    """
+    if not text:
+        return text
+
+    def _replace(m: re.Match) -> str:
+        tag = m.group(0)
+        # タグ名の大文字小文字に合わせてサフィックスを決定
+        suffix = "_ESCAPED" if tag.isupper() else "_escaped"
+        return re.sub(r"workiq_reference_data", lambda inner_match: inner_match.group(0) + suffix, tag, flags=re.IGNORECASE)
+
+    return re.sub(r"</?workiq_reference_data>", _replace, text, flags=re.IGNORECASE)
+
+
 def enrich_prompt_with_workiq(
     workiq_context: str,
     original_prompt: str,
@@ -990,6 +1073,7 @@ def enrich_prompt_with_workiq(
         return original_prompt
 
     truncated = _truncate_workiq_context(workiq_context, _MAX_WORKIQ_CONTEXT_LENGTH)
+    truncated = _escape_workiq_sandbox_tags(truncated)  # プロンプトインジェクション対策
 
     try:
         from .prompts import WORKIQ_CONTEXT_INJECTION_PROMPT

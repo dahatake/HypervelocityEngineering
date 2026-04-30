@@ -559,6 +559,225 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     return existing
 
 
+# -----------------------------------------------------------------------
+# 前提成果物チェック（Phase 8）
+# -----------------------------------------------------------------------
+
+# artifact key → 期待ファイルパス / glob パターン（メッセージ表示用）
+# _detect_existing_artifacts() の検索パスと同期して維持する。
+_ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
+    "app_catalog": "docs/catalog/app-catalog.md",
+    "service_catalog": "docs/catalog/service-catalog.md",
+    "data_model": "docs/catalog/data-model.md",
+    "domain_analytics": "docs/catalog/domain-analytics.md",
+    "screen_catalog": "docs/catalog/screen-catalog.md",
+    "test_strategy": "docs/catalog/test-strategy.md",
+    "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
+    "use_case_catalog": "docs/catalog/use-case-catalog.md",
+    "batch_job_catalog": "docs/batch/batch-job-catalog.md",
+    "batch_service_catalog": "docs/batch/batch-service-catalog.md",
+    "batch_data_model": "docs/batch/batch-data-model.md",
+    "batch_domain_analytics": "docs/batch/batch-domain-analytics.md",
+    "service_specs": "docs/services/*.md",
+    "screen_specs": "docs/screen/*.md",
+    "test_specs": "docs/test-specs/*.md",
+    "src_files": "src/**/*",
+    "test_files": "test/**/*",
+    "knowledge": "knowledge/*.md",
+    "agent_specs": "docs/agent/*.md",
+    "batch_job_specs": "docs/batch/jobs/*.md",
+    "doc_generated": "docs-generated/**/*.md",
+}
+
+# artifact key → 生成ワークフロー（確認済みのもののみ記載。要確認のものは None）
+# workflow_registry.py の FULL_PIPELINE 定義および各ワークフローの出力から確認。
+_ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
+    "app_catalog": "aas",
+    "service_catalog": "aas",
+    "data_model": "aas",
+    "domain_analytics": "aas",
+    "screen_catalog": "aad-web",
+    "test_strategy": "aas",
+    "service_catalog_matrix": "aas",
+    "use_case_catalog": None,       # 要確認: 生成ワークフロー未確認（ユーザー提供の可能性あり）
+    "batch_job_catalog": "abd",
+    "batch_service_catalog": "abd",
+    "batch_data_model": "abd",
+    "batch_domain_analytics": "abd",
+    "service_specs": "aad-web",
+    "screen_specs": "aad-web",
+    "test_specs": "aad-web",        # aad-web Step 2.3 / asdw-web 内でも生成されるが確定できない
+    "src_files": None,              # 要確認: ユーザーコードまたは asdw-web / abdv の出力
+    "test_files": None,             # 要確認: ユーザーコードまたは asdw-web / abdv の出力
+    "knowledge": "akm",
+    "agent_specs": "aag",
+    "batch_job_specs": "abd",
+    "doc_generated": "adoc",
+}
+
+
+def check_step_input_artifacts(
+    step,
+    existing_artifacts: dict,
+) -> dict:
+    """ステップの前提成果物が存在するかチェックする。
+
+    Args:
+        step: StepDef インスタンス。
+        existing_artifacts: _detect_existing_artifacts() が返す dict。
+
+    Returns:
+        {
+            "missing": [{"key": str, "expected": str, "next_workflow": str | None}],
+            "skipped_none": bool,  # True = consumed_artifacts=None → 後方互換でスキップ
+        }
+
+    セマンティクス:
+        consumed_artifacts=None → 後方互換モード。チェックをスキップして skipped_none=True。
+        consumed_artifacts=[]   → 前提成果物なし。missing=[].
+        consumed_artifacts=[k]  → 各キーを existing_artifacts で照合。
+        未知のキー               → expected = "(不明: 要確認)" で missing に追加。
+    """
+    if step.consumed_artifacts is None:
+        return {"missing": [], "skipped_none": True}
+
+    missing = []
+    for key in step.consumed_artifacts:
+        if key not in existing_artifacts:
+            expected = _ARTIFACT_KEY_TO_EXPECTED_PATH.get(key, f"(不明: 要確認 key={key!r})")
+            next_wf = _ARTIFACT_KEY_TO_GENERATING_WORKFLOW.get(key)  # None は未確認
+            missing.append({
+                "key": key,
+                "expected": expected,
+                "next_workflow": next_wf,
+            })
+
+    return {"missing": missing, "skipped_none": False}
+
+
+def _check_workflow_input_artifacts(
+    wf,
+    active_steps: Set[str],
+    existing_artifacts: dict,
+    config: "SDKConfig",
+    console: "Console",
+) -> dict:
+    """ワークフロー実行前に**ルートステップ**の前提成果物をチェックする。
+
+    チェック対象をルートステップ（depends_on=[] の非コンテナ Step）に限定する理由:
+    非ルートステップが consumed_artifacts に列挙した成果物は、同一ワークフロー内の
+    先行ステップが生成する場合がある。ワークフロー開始前の時点でそれらが存在しないのは
+    正常であり、不足扱いにすると正当な実行でも中断されてしまう。
+    ルートステップの前提成果物は外部ワークフローが生成するものであり、開始前に
+    存在しない場合は真に前提が満たされていない。
+
+    警告モード（require_input_artifacts=False、デフォルト）:
+        不足成果物を console.warning で出力して続行する。
+
+    Strict モード（require_input_artifacts=True）:
+        不足成果物がある場合は console.error で出力し、should_abort=True を返す。
+
+    Args:
+        wf: WorkflowDef インスタンス。
+        active_steps: 実行対象のステップ ID セット。
+        existing_artifacts: _detect_existing_artifacts() が返す dict。
+        config: SDKConfig。require_input_artifacts フラグを参照する。
+        console: Console インスタンス。
+
+    Returns:
+        {"should_abort": bool, "error": str | None}
+    """
+    all_missing: List[dict] = []
+
+    for step in wf.steps:
+        # ルートステップ（depends_on=[] の非コンテナ）のみチェック対象とする。
+        # 非ルートステップは同ワークフロー内の先行ステップが成果物を生成するため除外。
+        if step.is_container or step.id not in active_steps or step.depends_on:
+            continue
+        result = check_step_input_artifacts(step, existing_artifacts)
+        if result["skipped_none"]:
+            continue
+        for m in result["missing"]:
+            all_missing.append({**m, "step_id": step.id})
+
+    if not all_missing:
+        return {"should_abort": False, "error": None}
+
+    # メッセージ構築
+    lines = [
+        f"前提成果物チェック: 以下の成果物が見つかりません（{len(all_missing)} 件）:",
+    ]
+    for item in all_missing:
+        next_wf = item.get("next_workflow")
+        if next_wf:
+            hint = f" → 先に '{next_wf}' ワークフローを実行してください"
+        else:
+            hint = " → 生成ワークフローを確認してください（要確認）"
+        lines.append(
+            f"  - key={item['key']!r}, 期待パス: {item['expected']}"
+            f" (Step {item['step_id']}){hint}"
+        )
+
+    if config.require_input_artifacts:
+        lines.append(
+            "\nstrict モード (HVE_REQUIRE_INPUT_ARTIFACTS=true) のため実行を中断します。"
+            "\n警告モードで実行するには HVE_REQUIRE_INPUT_ARTIFACTS=false（デフォルト）を設定してください。"
+        )
+        msg = "\n".join(lines)
+        console.error(msg)
+        return {"should_abort": True, "error": msg}
+    else:
+        lines.append(
+            "\n(warning モード: 続行します。strict モードにするには HVE_REQUIRE_INPUT_ARTIFACTS=true を設定してください)"
+        )
+        msg = "\n".join(lines)
+        console.warning(msg)
+        return {"should_abort": False, "error": None}
+
+
+def _compute_step_additional_prompt(
+    step,
+    existing_artifacts: dict,
+    config: "SDKConfig",
+    base_additional_prompt: Optional[str],
+) -> Optional[str]:
+    """ステップの additional_prompt を計算する。
+
+    HVE_REUSE_CONTEXT_FILTERING が有効で consumed_artifacts がアノテーション済みの場合、
+    consumed_artifacts に指定されたキーのみを含む reuse_context を構築する。
+    それ以外の場合は base_additional_prompt をそのまま返す（後方互換）。
+
+    Args:
+        step: StepDef インスタンス。
+        existing_artifacts: _detect_existing_artifacts() が返す dict。
+        config: SDKConfig。reuse_context_filtering フラグを参照する。
+        base_additional_prompt: フィルタリングしない場合に使用する additional_prompt。
+
+    Returns:
+        フィルタリング済み additional_prompt または base_additional_prompt。
+    """
+    if not (config.reuse_context_filtering and existing_artifacts and step.consumed_artifacts is not None):
+        return base_additional_prompt
+
+    # consumed_artifacts に未知キーが含まれている場合は警告
+    missing_keys = [k for k in step.consumed_artifacts if k not in existing_artifacts]
+    if missing_keys:
+        import warnings as _warnings
+        _warnings.warn(
+            f"Step.{step.id}: consumed_artifacts に未知のキーが含まれています: {missing_keys}。"
+            f"利用可能なキー: {sorted(existing_artifacts.keys())}",
+            stacklevel=2,
+        )
+
+    # アノテーション済み: consumed_artifacts キーのみでフィルタリング
+    filtered_artifacts = {
+        k: v for k, v in existing_artifacts.items()
+        if k in step.consumed_artifacts
+    }
+    step_reuse_context = _build_reuse_context(filtered_artifacts)
+    return ((config.additional_prompt or "") + step_reuse_context).strip() or None
+
+
 def _build_reuse_context(existing_artifacts: dict) -> str:
     """既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。"""
     if not existing_artifacts:
@@ -919,6 +1138,9 @@ async def _run_akm_workiq_verification(
 ) -> None:
     """AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。
 
+    AKM の各ステップにおける事後 QA フェーズ（Phase 2）は廃止されたため、
+    本関数が AKM 後の Work IQ 経由検証の唯一の経路である。
+
     各 Dxx ファイルについて:
     1. Work IQ に KM 用プロンプトで検証クエリを送信
     2. 有効な情報が見つかった場合、Copilot セッションで Dxx ファイルを更新
@@ -929,14 +1151,14 @@ async def _run_akm_workiq_verification(
             build_workiq_mcp_config, query_workiq,
             get_workiq_prompt_template, save_workiq_result,
             is_workiq_error_response, is_workiq_available,
-            WORKIQ_MCP_SERVER_NAME,
+            WORKIQ_MCP_SERVER_NAME, _escape_workiq_sandbox_tags,
         )
     except ImportError:
         from workiq import (  # type: ignore[no-redef]
             build_workiq_mcp_config, query_workiq,
             get_workiq_prompt_template, save_workiq_result,
             is_workiq_error_response, is_workiq_available,
-            WORKIQ_MCP_SERVER_NAME,
+            WORKIQ_MCP_SERVER_NAME, _escape_workiq_sandbox_tags,
         )
 
     if not is_workiq_available():
@@ -1114,9 +1336,9 @@ async def _run_akm_workiq_verification(
 
                 update_prompt = AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT.format(
                     dxx_filename=dxx_filename,
-                    dxx_content=_dxx_for_prompt,
+                    dxx_content=_escape_workiq_sandbox_tags(_dxx_for_prompt),
                     dxx_filepath=dxx_filepath,
-                    workiq_result=workiq_result,
+                    workiq_result=_escape_workiq_sandbox_tags(workiq_result),
                 )
 
                 try:
@@ -1225,10 +1447,15 @@ async def run_workflow(
         _phases.append("ブランチ作成")
     if config.create_issues:
         _phases.append("Issue 作成")
-    _phases.append("実行計画 → DAG 実行")
+    if config.auto_qa and config.qa_phase in ("pre", "both"):
+        _phases.append("実行計画 → DAG 実行（事前 QA + Work IQ → 各ステップ実行）")
+    else:
+        _phases.append("実行計画 → DAG 実行")
     if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
         _phases.append("AKM Work IQ 検証")
-    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run:
+    _si_scope = config.self_improve_scope
+    _workflow_si_allowed = _si_scope in ("", "workflow")
+    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run and _workflow_si_allowed:
         # Post-DAG の前（"後処理 (git push + PR)" の前）に挿入
         # create_issues/create_pr の場合は後処理の前、そうでなければ末尾
         idx = len(_phases)
@@ -1508,19 +1735,43 @@ async def run_workflow(
     else:
         effective_additional_prompt = config.additional_prompt
 
+    # --- Phase 8: ステップ前提成果物チェック ---
+    _artifact_check = _check_workflow_input_artifacts(
+        wf=wf,
+        active_steps=active_steps,
+        existing_artifacts=existing_artifacts,
+        config=config,
+        console=console,
+    )
+    if _artifact_check["should_abort"]:
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "elapsed_total": time.time() - start_total,
+            "error": _artifact_check["error"],
+        }
+
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
     workiq_report_paths: Set[str] = set()
     for step in wf.steps:
         if step.is_container or step.id not in active_steps:
             continue
+        step_additional = _compute_step_additional_prompt(
+            step=step,
+            existing_artifacts=existing_artifacts,
+            config=config,
+            base_additional_prompt=effective_additional_prompt,
+        )
         step_prompts[step.id] = _build_step_prompt(
             step=step,
             params=effective_params,
             root_issue_num=root_issue_num,
             render_template_fn=render_template,
             wf=wf,
-            additional_prompt=effective_additional_prompt,
+            additional_prompt=step_additional,
             execution_mode=execution_mode,
         )
 
@@ -1640,7 +1891,15 @@ async def run_workflow(
     si_disc_sources: List[str] = []
 
     # --- Self-Improve（オプション） ---
-    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run:
+    # scope が "" または "workflow" の場合のみ実行。"step" / "disabled" の場合はスキップ。
+    _si_scope = config.self_improve_scope
+    _workflow_si_allowed = _si_scope in ("", "workflow")
+    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run and not _workflow_si_allowed:
+        console.event(
+            f"Post-DAG Self-Improve をスキップ "
+            f"(self_improve_scope={_si_scope!r} — workflow-level は実行しない)"
+        )
+    if config.auto_self_improve and not config.self_improve_skip and not config.dry_run and _workflow_si_allowed:
         p = _next_phase()
         phase_start_si = time.time()
         console.phase_start(p, _total_phases, "自己改善ループ")
@@ -1932,12 +2191,13 @@ def _print_dry_run_plan(wf, active_steps: Set[str], config: SDKConfig, console: 
 # -----------------------------------------------------------------------
 
 
-def _get_git_diff(base_ref: str, console: Console) -> str:
+def _get_git_diff(base_ref: str, console: Console, max_diff_chars: int = _MAX_DIFF_CHARS) -> str:
     """git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。
 
     Args:
         base_ref: git diff の基点 (例: "HEAD~1", "main", "origin/main")
         console: コンソール出力用
+        max_diff_chars: 差分の最大文字数（デフォルト: _MAX_DIFF_CHARS）
 
     Returns:
         差分テキスト（空文字は差分なし or エラー）
@@ -1951,11 +2211,11 @@ def _get_git_diff(base_ref: str, console: Console) -> str:
             console.warning(f"git diff {base_ref} に失敗: {result.stderr.strip()}")
             return ""
         diff = result.stdout.strip()
-        if len(diff) > _MAX_DIFF_CHARS:
+        if len(diff) > max_diff_chars:
             console.warning(
-                f"差分が {len(diff)} 文字を超えるため {_MAX_DIFF_CHARS} 文字にトリミングします。"
+                f"差分が {len(diff)} 文字を超えるため {max_diff_chars} 文字にトリミングします。"
             )
-            diff = diff[:_MAX_DIFF_CHARS] + "\n... (truncated)"
+            diff = diff[:max_diff_chars] + "\n... (truncated)"
         return diff
     except subprocess.TimeoutExpired:
         console.warning("git diff がタイムアウトしました。")
@@ -1991,7 +2251,7 @@ async def _request_code_review(
         None = 成功, str = エラーメッセージ
     """
     # 1. git diff で差分を取得
-    diff = _get_git_diff(config.review_base_ref, console)
+    diff = _get_git_diff(config.review_base_ref, console, config.max_diff_chars)
     if not diff:
         console.warning("レビュー対象の差分がありません。Code Review をスキップします。")
         return None

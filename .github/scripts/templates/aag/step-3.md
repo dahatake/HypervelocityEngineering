@@ -15,7 +15,7 @@ Step.2 の Agent Catalog の各 Agent について詳細設計書を作成し、
 - `docs/ai-agent-catalog.md`（Agent 一覧）
 
 ## Custom Agent
-`Arch-AIAgentDesign` を使用
+`Arch-AIAgentDesign-Step3` を使用
 
 ## 依存
 - Step.2（AI Agent 粒度設計）が `aag:done` であること

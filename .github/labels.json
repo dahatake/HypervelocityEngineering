@@ -238,5 +238,70 @@
     "name": "aagd:blocked",
     "color": "B60205",
     "description": "AAGD ブロック中"
+  },
+  {
+    "name": "aas:qa-ready",
+    "color": "C8E6C9",
+    "description": "AAS Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aas:timeout",
+    "color": "B60205",
+    "description": "AAS Step がタイムアウト（aas:running 付与から 6 時間以上経過）"
+  },
+  {
+    "name": "aad:qa-ready",
+    "color": "C8E6C9",
+    "description": "AAD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aad-web:qa-ready",
+    "color": "C8E6C9",
+    "description": "AAD-WEB Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "asdw:qa-ready",
+    "color": "C8E6C9",
+    "description": "ASDW Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "asdw-web:qa-ready",
+    "color": "C8E6C9",
+    "description": "ASDW-WEB Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "abd:qa-ready",
+    "color": "C8E6C9",
+    "description": "ABD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "abdv:qa-ready",
+    "color": "C8E6C9",
+    "description": "ABDV Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aag:qa-ready",
+    "color": "C8E6C9",
+    "description": "AAG Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aagd:qa-ready",
+    "color": "C8E6C9",
+    "description": "AAGD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "akm:qa-ready",
+    "color": "C8E6C9",
+    "description": "AKM Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aqod:qa-ready",
+    "color": "C8E6C9",
+    "description": "AQOD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "adoc:qa-ready",
+    "color": "C8E6C9",
+    "description": "ADOC Step が事前 QA 完了待ち"
   }
 ]

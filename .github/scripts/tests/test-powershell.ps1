@@ -60,16 +60,16 @@ Describe 'orchestrate dry-run output' {
         $output | Should -Match 'Step'
     }
 
-    It 'AAD dry-run output contains step list' {
+    It 'ABD dry-run output contains step list' {
         $ScriptPath = "$ScriptRoot/orchestrate.ps1"
-        $output = & $ScriptPath -Workflow aad -DryRun *>&1 | Out-String
-        $output | Should -Match 'AAD'
+        $output = & $ScriptPath -Workflow abd -DryRun *>&1 | Out-String
+        $output | Should -Match 'ABD'
         $output | Should -Match 'Step'
     }
 
-    It 'all 5 workflows produce dry-run output' {
+    It 'all 3 workflows produce dry-run output' {
         $ScriptPath = "$ScriptRoot/orchestrate.ps1"
-        foreach ($wfId in @('aas', 'aad', 'asdw', 'abd', 'abdv')) {
+        foreach ($wfId in @('aas', 'abd', 'abdv')) {
             $output = & $ScriptPath -Workflow $wfId -DryRun *>&1 | Out-String
             $output | Should -Match $wfId.ToUpper()
         }

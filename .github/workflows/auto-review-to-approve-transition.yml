@@ -63,6 +63,7 @@ jobs:
     #   - Copilot Bot のコメントである（copilot-swe-agent または Copilot ログインで限定）
     #   - draft 判定は行わない（issue_comment 経路は draft PR でも遷移判定を継続）
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}

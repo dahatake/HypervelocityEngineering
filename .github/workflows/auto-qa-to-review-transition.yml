@@ -83,6 +83,7 @@ jobs:
     #   - Copilot Bot のコメント（copilot-swe-agent または Copilot）である
     #   - または <!-- auto-qa-default-answered --> マーカー付きコメントであり、投稿者が OWNER/MEMBER/COLLABORATOR
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}

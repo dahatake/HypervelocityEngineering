@@ -965,19 +965,23 @@ flowchart TD
 
 ### Step.4.3 質問票の作成方法
 
-#### 方法A: PR の `auto-qa` ラベル（自動）
+#### 方法A: Issue の `auto-qa` チェックボックス（自動・推奨）
 
-1. Issue を作成し、ラベル `auto-qa` を付与
-2. Copilot を Assignee に設定
-3. Copilot が PR を作成し、`auto-qa` ラベルが PR に伝播
-4. PR が ready 状態になると、`copilot-auto-qa.yml` が自動発火
-5. Copilot に質問票作成指示コメントが自動投稿される
-6. Copilot が選択式質問票を PR コメントとして作成
+Issue Template の「質問票設定」チェックボックスをオンにして Issue を作成すると、事前 QA が自動実行されます。
 
-- **`auto-qa` ラベルの役割**: PR に付与された状態で PR が ready になると、Copilot に「自分で判断できない全ての事項について質問票を作成せよ」という指示コメントが自動投稿されます
-- QA 完了後は `auto-qa-to-review-transition.yml` により自動的に `auto-context-review` ラベルが付与され、レビューフェーズに遷移します
+**フロー**:
+1. Issue を作成し、「実行前 QA を実施する」チェックボックスをオン
+2. Sub-Issue 作成時に `*:qa-ready` ラベルが付与される（Copilot アサインは保留）
+3. `copilot-auto-feedback.yml` が `*:qa-ready` ラベルを検知し、事前 QA 質問票を Issue コメントに投稿
+4. ユーザー（または `auto-qa-default-answer.yml`）が質問票に回答
+5. `auto-issue-qa-ready-transition.yml` が `*:qa-ready` → `*:ready` に遷移し、Copilot をアサイン
+6. Copilot が実行計画を立て、メインタスクを実行
 
-出典: `.github/workflows/copilot-auto-qa.yml`
+- **`auto-qa` ラベルの役割**: Issue に付与された状態で Sub-Issue が作成されると、事前 QA フローが起動します
+- QA 完了後は自動的に `*:ready` に遷移し、Copilot がメインタスクを開始します
+- 既定値で回答する場合は `auto-qa-default-answer.yml` が自動応答します
+
+出典: `.github/workflows/copilot-auto-feedback.yml`, `auto-issue-qa-ready-transition.yml`, `auto-qa-default-answer.yml`
 
 #### 方法B: Issue から Copilot Agent に直接依頼
 

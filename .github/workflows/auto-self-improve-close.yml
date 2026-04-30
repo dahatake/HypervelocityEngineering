@@ -13,6 +13,7 @@ jobs:
   close-self-improve-issue:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}

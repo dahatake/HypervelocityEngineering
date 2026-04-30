@@ -1,5 +1,6 @@
 """test_template_engine.py — hve/template_engine.py のテスト"""
 
+import re
 import textwrap
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from hve.template_engine import (
     _build_app_id_section,
     _build_completion_instruction,
     _build_job_section,
+    _build_qa_review_context_section,
     _build_rg_section,
     _build_root_ref,
     _load_template,
@@ -624,3 +626,152 @@ class TestRenderTemplateAdditionalComment:
         )
         assert "{additional_section}" not in body
         assert "## 追加コメント" not in body
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: QA / Review コンテキスト参照セクションの注入検証
+# ---------------------------------------------------------------------------
+
+
+class TestQaReviewContextSection:
+    """Phase 3: _build_qa_review_context_section と render_template への注入を検証する。"""
+
+    def test_section_is_non_empty_string(self):
+        """`_build_qa_review_context_section()` が空でない文字列を返すこと。"""
+        section = _build_qa_review_context_section()
+        assert isinstance(section, str)
+        assert len(section.strip()) > 0
+
+    def test_section_contains_qa_reference(self):
+        """`qa/` への参照が含まれること。"""
+        assert "qa/" in _build_qa_review_context_section()
+
+    def test_section_contains_review_reference(self):
+        """レビュー指摘への参照が含まれること。"""
+        assert "レビュー指摘" in _build_qa_review_context_section()
+
+    def test_section_contains_reflect_instruction(self):
+        """成果物反映指示が含まれること。"""
+        assert "成果物へ反映" in _build_qa_review_context_section()
+
+    def test_section_contains_no_fabrication(self):
+        """存在しない情報を推測しない旨の記述が含まれること。"""
+        assert "推測せず" in _build_qa_review_context_section()
+
+    def test_section_contains_reason_recording(self):
+        """未反映時の理由記録指示が含まれること。"""
+        assert "理由を完了コメントまたは成果物内に記録" in _build_qa_review_context_section()
+
+    def test_rendered_template_contains_qa_review_section(self):
+        """render_template の出力に QA / Review コンテキスト参照セクションが含まれること。"""
+        wf = get_workflow("aas")
+        body = render_template(
+            "templates/aas/step-1.md",
+            root_issue_num=1,
+            params={"branch": "main"},
+            wf=wf,
+        )
+        assert "## 追加コンテキストの参照" in body
+        assert "qa/" in body
+
+    def test_rendered_template_qa_section_precedes_additional_comment(self):
+        """QA / Review コンテキストセクションが追加コメントより前に現れること。"""
+        wf = get_workflow("aas")
+        body = render_template(
+            "templates/aas/step-1.md",
+            root_issue_num=1,
+            params={"branch": "main", "additional_comment": "追加テスト"},
+            wf=wf,
+        )
+        qa_pos = body.find("## 追加コンテキストの参照")
+        comment_pos = body.find("追加テスト")
+        assert qa_pos != -1
+        assert comment_pos != -1
+        assert qa_pos < comment_pos
+
+    def test_all_templates_get_qa_review_section(self):
+        """全テンプレートのレンダリング結果に QA/Review 参照セクションが含まれること。"""
+        templates_dir = _TEMPLATES_BASE / "templates"
+        missing = []
+        for md_file in sorted(templates_dir.rglob("*.md")):
+            rel = str(md_file.relative_to(_TEMPLATES_BASE))  # e.g. "templates/aas/step-1.md"
+            wf_id = md_file.parts[-2]  # e.g. "aas"
+            try:
+                wf = get_workflow(wf_id)
+            except Exception:
+                continue
+            body = render_template(rel, root_issue_num=1, params={"branch": "main"}, wf=wf)
+            if body and "## 追加コンテキストの参照" not in body:
+                missing.append(rel)
+        assert not missing, f"以下のテンプレートに QA/Review 参照セクションがありません: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: workflow_registry の body_template_path と custom_agent の整合性検証
+# ---------------------------------------------------------------------------
+
+
+class TestRegistryTemplateConsistencyPhase5:
+    """Phase 5: workflow_registry.py の body_template_path 存在確認と custom_agent 整合性検証。
+
+    外部 API に依存しない静的テストとして実装する。
+    custom_agent が一致しない既知の例外は ALLOWLIST で管理する。
+    """
+
+    # 既知の不一致を許容する template_path のリスト。
+    # 実際に不一致があり意図的に許容する場合のみここに追加する。
+    _CUSTOM_AGENT_ALLOWLIST: list[str] = []
+
+    def _collect_registry_steps(self) -> list[tuple[str, str | None]]:
+        """workflow_registry の全ワークフローから (body_template_path, custom_agent) ペアを収集する。
+
+        workflow_registry モジュールを直接 import して走査するため、
+        StepDef 引数の順序や title 内の ')' に依存しない。
+        """
+        from hve.workflow_registry import list_workflows
+        results = []
+        for wf in list_workflows():
+            for step in wf.steps:
+                if step.body_template_path and step.custom_agent:
+                    results.append((step.body_template_path, step.custom_agent))
+        return results
+
+    def test_all_body_template_paths_exist(self) -> None:
+        """workflow_registry.py の全 body_template_path ファイルが .github/scripts/ 配下に存在すること。"""
+        missing = []
+        for tpl_path, _ in self._collect_registry_steps():
+            full = _TEMPLATES_BASE / tpl_path
+            if not full.exists():
+                missing.append(tpl_path)
+        assert not missing, (
+            f"以下の body_template_path が .github/scripts/ 配下に存在しません: {missing}"
+        )
+
+    def test_template_custom_agent_matches_registry(self) -> None:
+        """各テンプレートの '## Custom Agent' 行が workflow_registry.py の custom_agent と一致すること。
+
+        不一致が許容される既知ケースは _CUSTOM_AGENT_ALLOWLIST で管理する。
+        """
+        mismatches = []
+        for tpl_path, registry_agent in self._collect_registry_steps():
+            if tpl_path in self._CUSTOM_AGENT_ALLOWLIST:
+                continue
+            full = _TEMPLATES_BASE / tpl_path
+            if not full.exists():
+                continue  # 存在確認は別テストで行う
+
+            content = full.read_text(encoding="utf-8")
+            match = re.search(r"## Custom Agent\n`([^`]+)`", content)
+            if match:
+                tpl_agent = match.group(1)
+                if tpl_agent != registry_agent:
+                    mismatches.append(
+                        f"{tpl_path}: registry='{registry_agent}', template='{tpl_agent}'"
+                    )
+            # ## Custom Agent セクションがないテンプレートは比較対象外（コンテナ Step 等）
+
+        assert not mismatches, (
+            "以下のテンプレートで ## Custom Agent と workflow_registry.py の custom_agent が一致しません。\n"
+            "意図的な不一致は _CUSTOM_AGENT_ALLOWLIST に追加してください:\n"
+            + "\n".join(mismatches)
+        )

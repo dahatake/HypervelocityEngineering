@@ -15,7 +15,7 @@
 `Arch-DataModeling` を使用
 
 ## 依存
-- Step.1.2（サービス一覧抽出）が `aas:done` であること
+- Step.3.2（サービス一覧抽出）が `aas:done` であること
 
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity Catalog の各エンティティに「利用APP」（N:N）を記載すること。

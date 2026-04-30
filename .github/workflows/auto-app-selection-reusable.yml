@@ -39,6 +39,7 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
       group: aas-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -158,7 +159,7 @@ jobs:
           has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          skip_labels = {'aas:initialized', 'aas:ready', 'aas:running', 'aas:done', 'aas:blocked'}
+          skip_labels = {'aas:initialized', 'aas:ready', 'aas:running', 'aas:done', 'aas:blocked', 'aas:qa-ready'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
           )
@@ -281,6 +282,11 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+          # Feature flag: USE_HVE_AAS=true でテンプレートファイル単一ソース方式を使用。
+          # デフォルト false = 旧 bash ハードコード方式（安全側）。
+          # GitHub Actions Repository Variables (vars.USE_HVE_AAS) で切り替え可能。
+          # ロールバック: vars.USE_HVE_AAS を削除または 'false' に設定するだけ。
+          USE_HVE_AAS: ${{ vars.USE_HVE_AAS || 'false' }}
         run: |
           set -euo pipefail
 
@@ -364,9 +370,11 @@ jobs:
             local parent_num="$1"
             local child_id="$2"
             local data="{\"sub_issue_id\":${child_id}}"
-            api_call POST \
+            if ! api_call POST \
               "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues" \
-              "${data}" || true
+              "${data}" > /dev/null 2>&1; then
+              echo "::warning::link_sub_issue 失敗: parent=#${parent_num} child_id=${child_id}"
+            fi
             sleep 1
           }
 
@@ -389,9 +397,11 @@ jobs:
             local comment_body="$2"
             local data
             data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${comment_body}")
-            api_call POST \
+            if ! api_call POST \
               "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
-              "${data}" > /dev/null
+              "${data}" > /dev/null; then
+              echo "::warning::post_comment 失敗: issue_num=${issue_num}"
+            fi
             sleep 1
           }
 
@@ -500,7 +510,29 @@ jobs:
               section_text = merge_section.group(1)
               auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge}
+          # 自己改善設定
+          enable_self_improve = False
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if si_section:
+              enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          self_improve_max_iterations = "3"
+          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_max_iterations = n.group(1)
+
+          self_improve_quality_threshold = "80"
+          q = re.search(r"###\s*自己改善\s*品質スコア閾値.*?\n+(.+)", body)
+          if q:
+              val = q.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_quality_threshold = n.group(1)
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
           print(json.dumps(result))
           PYEOF
           )
@@ -511,6 +543,9 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           MODEL_RAW=$(extract_model "${ISSUE_BODY}")
           SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
 
@@ -578,38 +613,44 @@ jobs:
 
           # ---- Root Issue に auto-context-review タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
           auto_merge = sys.argv[2]
-          output_file = sys.argv[3]
+          branch = sys.argv[3]
+          enable_si = sys.argv[4]
+          si_max_iter = sys.argv[5]
+          si_quality_threshold = sys.argv[6]
+          output_file = sys.argv[7]
 
-          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
-          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
-          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
-          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+          tags = [
+              ("auto-context-review", auto_context_review),
+              ("auto-merge", auto_merge),
+              ("branch", branch),
+              ("enable-self-improve", enable_si),
+              ("self-improve-max-iterations", si_max_iter),
+              ("self-improve-quality-threshold", si_quality_threshold),
+          ]
 
-          if context_pat.search(body):
-              body = context_pat.sub(context_tag, body)
-          else:
-              body = body.rstrip() + "\n" + context_tag + "\n"
-
-          if merge_pat.search(body):
-              body = merge_pat.sub(merge_tag, body)
-          else:
-              body = body.rstrip() + "\n" + merge_tag + "\n"
+          for key, value in tags:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
+              if pat.search(body):
+                  body = pat.sub(tag, body, count=1)
+              else:
+                  body = body.rstrip() + "\n" + tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
-          PYREVIEW
+          PYMERGE
 
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}）。" \
-            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve タグを埋め込みました。" \
+            || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
 
@@ -648,14 +689,37 @@ jobs:
           # 各 Step Issue の body 先頭に埋め込む共通メタ情報
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
-          # 追加コメントが存在する場合のフッター
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
-            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
-            ADDITIONAL_SECTION=""
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
 
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # hve テンプレートからボディを生成する関数（USE_HVE_AAS=true 時に使用）
+          # テンプレートファイルを読み込み、プレースホルダを展開する。
+          # 引数: $1=ステップ番号 (例: "3.1"), $2=ROOT_REF, $3=ADDITIONAL_SECTION
+          render_aas_step_body() {
+            local step_num="$1"
+            local root_ref_arg="$2"
+            local additional_section_arg="$3"
+            local tpl_path="${GITHUB_WORKSPACE}/.github/scripts/templates/aas/step-${step_num}.md"
+            python3 - "${tpl_path}" "${root_ref_arg}" "${additional_section_arg}" <<'PY'
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          if not p.exists():
+              raise FileNotFoundError(f"テンプレートが見つかりません: {sys.argv[1]}")
+          body = p.read_text(encoding='utf-8')
+          body = body.replace('{root_ref}', sys.argv[2])
+          body = body.replace('{additional_section}', sys.argv[3])
+          body = body.replace('{completion_instruction}', '- 完了時に自身に `aas:done` ラベルを付与すること')
+          print(body)
+          PY
+          }
 
           # Step Issue に付与するラベルセット
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
@@ -677,8 +741,12 @@ jobs:
 
           # ---- Step.1 ----
           if ! skip_step "1"; then
-            BODY_S1=$(printf '%s\n## 目的\nユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n\n## 出力\n- `docs/catalog/app-catalog.md`\n\n## Custom Agent\n`Arch-ApplicationAnalytics`\n\n## 依存\n- なし（最初に実行）\n\n## 完了条件\n- `docs/catalog/app-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S1=$(render_aas_step_body "1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S1=$(printf '%s\n## 目的\nユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n\n## 出力\n- `docs/catalog/app-catalog.md`\n\n## Custom Agent\n`Arch-ApplicationAnalytics`\n\n## 依存\n- なし（最初に実行）\n\n## 完了条件\n- `docs/catalog/app-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.1: アプリケーションリストの作成" \
               "${BODY_S1}" \
@@ -691,8 +759,12 @@ jobs:
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## 目的\nアプリケーションリスト（docs/catalog/app-catalog.md）の各APPに対し、個別の入力ファイル（docs/architectural-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リストからアーキテクチャを選定する。\n\n## 入力\n- `docs/catalog/app-catalog.md`\n- `docs/architectural-requirements-app-xx.md`（存在するもののみ）\n\n## 出力\n- `docs/catalog/app-arch-catalog.md`\n\n## 注意\n- 全APPの入力ファイルが揃っていなくても実行可能です\n- 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます\n- ユーザーが `docs/architectural-requirements-app-xx.md` を作成する手順は users-guide/02-app-architecture-design.md の Step 2 を参照してください\n\n## Custom Agent\n`Arch-ArchitectureCandidateAnalyzer`\n\n## 依存\n- Step.1（アプリケーションリストの作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/app-arch-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S2=$(render_aas_step_body "2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S2=$(printf '%s\n## 目的\nアプリケーションリスト（docs/catalog/app-catalog.md）の各APPに対し、個別の入力ファイル（docs/architectural-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リストからアーキテクチャを選定する。\n\n## 入力\n- `docs/catalog/app-catalog.md`\n- `docs/architectural-requirements-app-xx.md`（存在するもののみ）\n\n## 出力\n- `docs/catalog/app-arch-catalog.md`\n\n## 注意\n- 全APPの入力ファイルが揃っていなくても実行可能です\n- 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます\n- ユーザーが `docs/architectural-requirements-app-xx.md` を作成する手順は users-guide/02-app-architecture-design.md の Step 2 を参照してください\n\n## Custom Agent\n`Arch-ArchitectureCandidateAnalyzer`\n\n## 依存\n- Step.1（アプリケーションリストの作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/app-arch-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.2: ソフトウェアアーキテクチャの推薦" \
               "${BODY_S2}" \
@@ -705,8 +777,12 @@ jobs:
 
           # ---- Step.3.1 ----
           if ! skip_step "3.1"; then
-            BODY_S31=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics`\n\n## 依存\n- Step.2（ソフトウェアアーキテクチャの推薦）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S31=$(render_aas_step_body "3.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S31=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics`\n\n## 依存\n- Step.2（ソフトウェアアーキテクチャの推薦）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.3.1: ドメイン分析" \
               "${BODY_S31}" \
@@ -719,8 +795,12 @@ jobs:
 
           # ---- Step.3.2 ----
           if ! skip_step "3.2"; then
-            BODY_S32=$(printf '%s\n## 目的\nドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify`\n\n## 依存\n- Step.3.1（ドメイン分析）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S32=$(render_aas_step_body "3.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S32=$(printf '%s\n## 目的\nドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify`\n\n## 依存\n- Step.3.1（ドメイン分析）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.3.2: サービス一覧抽出" \
               "${BODY_S32}" \
@@ -733,8 +813,12 @@ jobs:
 
           # ---- Step.4 ----
           if ! skip_step "4"; then
-            BODY_S4=$(printf '%s\n## 目的\nサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-model.md`\n\n## Custom Agent\n`Arch-DataModeling`\n\n## 依存\n- Step.3.2（サービス一覧抽出）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-model.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S4=$(printf '%s\n## 目的\nサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-model.md`\n\n## Custom Agent\n`Arch-DataModeling`\n\n## 依存\n- Step.3.2（サービス一覧抽出）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-model.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.4: データモデル" \
               "${BODY_S4}" \
@@ -747,8 +831,12 @@ jobs:
 
           # ---- Step.5 ----
           if ! skip_step "5"; then
-            BODY_S5=$(printf '%s\n## 目的\n概念エンティティと物理テーブルのマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog`\n\n## 依存\n- Step.4（データモデル）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S5=$(render_aas_step_body "5" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S5=$(printf '%s\n## 目的\n概念エンティティと物理テーブルのマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog`\n\n## 依存\n- Step.4（データモデル）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.5: データカタログ作成" \
               "${BODY_S5}" \
@@ -761,8 +849,12 @@ jobs:
 
           # ---- Step.6 ----
           if ! skip_step "6"; then
-            BODY_S6=$(printf '%s\n## 目的\n画面・機能・API・SoT データのマッピングを持つサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog`\n\n## 依存\n- Step.5（データカタログ作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S6=$(render_aas_step_body "6" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S6=$(printf '%s\n## 目的\n画面・機能・API・SoT データのマッピングを持つサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog`\n\n## 依存\n- Step.5（データカタログ作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.6: サービスカタログ" \
               "${BODY_S6}" \
@@ -775,8 +867,12 @@ jobs:
 
           # ---- Step.7 ----
           if ! skip_step "7"; then
-            BODY_S7=$(printf '%s\n## 目的\nプロジェクト全体の TDD テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy`\n\n## 依存\n- Step.6（サービスカタログ）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-              "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
+              BODY_S7=$(render_aas_step_body "7" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            else
+              BODY_S7=$(printf '%s\n## 目的\nプロジェクト全体の TDD テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy`\n\n## 依存\n- Step.6（サービスカタログ）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
+                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            fi
             RESP=$(create_issue \
               "[AAS] Step.7: テスト戦略書" \
               "${BODY_S7}" \
@@ -800,13 +896,19 @@ jobs:
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S1_NUM}" ]]; then
-            add_label "${S1_NUM}" "aas:ready"
-            CA=$(extract_custom_agent "${BODY_S1}")
-            if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
-              add_label "${S1_NUM}" "aas:running"
-              echo "Step.1 に copilot アサイン + aas:running 付与完了"
+            if [[ "${AUTO_QA}" == "true" ]]; then
+              # auto_qa=true の場合: aas:qa-ready を付与し、Copilot アサインを保留
+              add_label "${S1_NUM}" "aas:qa-ready"
+              echo "Step.1 (#${S1_NUM}) に aas:qa-ready を付与しました（QA 完了待ち）。Copilot アサインは QA 回答後に実行されます。"
             else
-              echo "WARNING: Step.1 へのアサイン失敗。aas:running は付与しません。"
+              add_label "${S1_NUM}" "aas:ready"
+              CA=$(extract_custom_agent "${BODY_S1}")
+              if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+                add_label "${S1_NUM}" "aas:running"
+                echo "Step.1 に copilot アサイン + aas:running 付与完了"
+              else
+                echo "WARNING: Step.1 へのアサイン失敗。aas:running は付与しません。"
+              fi
             fi
           elif [[ -n "${S2_NUM}" ]]; then
             # Step.1 が存在しない / スキップされている状態で Step.2 は実行できないため、blocked とする
@@ -919,13 +1021,13 @@ jobs:
             local body="$2"
             local data
             data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${body}")
-            api_call POST \
+            if ! api_call POST \
               "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
-              "${data}" > /dev/null
+              "${data}" > /dev/null; then
+              echo "::warning::post_comment 失敗: issue_num=${issue_num}"
+            fi
             sleep 1
           }
-
-          # Issue body から Custom Agent 名を抽出
           extract_custom_agent() {
             local body="$1"
             echo "${body}" | python3 /dev/fd/3 3<<'PY'
@@ -1205,6 +1307,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings
         id: parse
@@ -1217,11 +1320,59 @@ jobs:
           body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
           enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
           max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
           [[ -z "${enable}" ]] && enable="false"
           [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          [[ -z "${branch}" ]] && branch="main"
           echo "enable=${enable}" >> "$GITHUB_OUTPUT"
           echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
-          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -1237,24 +1388,33 @@ jobs:
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
       - name: Install dependencies
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
-        run: pip install ruff
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
       - name: Run Self-Improve
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()

@@ -1,17 +1,17 @@
-﻿---
-name: Dev-Batch-Deploy
-description: "バッチサービスをAzureにデプロイしGitHub Actions CI/CDを構築、AC検証まで実施"
+---
+name: Dev-Batch-FunctionsDeploy
+description: "GitHub Actions CI/CD ワークフロー・README・スモークテストを作成し Azure Functions バッチジョブをデプロイする（Step 3: Azure Functions Deploy）"
 tools: ["*"]
 ---
-> **WORK**: `work/Dev-Batch-Deploy/Issue-<識別子>/`
+> **WORK**: `work/Dev-Batch-FunctionsDeploy/Issue-<識別子>/`
 
 ## 共通ルール → Skill `agent-common-preamble` を参照
 
 ## 1) 役割（このエージェントがやること）
 
-バッチジョブ デプロイ & CI/CD 構築専用Agent。
+バッチジョブ デプロイ & CI/CD 構築専用Agent の **Step 3: Azure Functions/コンテナ Deploy** 担当。
 バッチサービスカタログ・ジョブカタログ・ジョブ詳細仕様書を根拠に、
-**Azure リソース作成スクリプト**・**GitHub Actions CI/CD ワークフロー**・**スモークテスト** を整備する。
+**GitHub Actions CI/CD ワークフロー**・**README**・**スモークテスト** を整備し、AC 検証を実施する。
 "全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 ## 2) 変数
@@ -36,8 +36,6 @@ tools: ["*"]
 
 ### 3.3 出力（必須）
 
-- `infra/azure/batch/create-batch-resources.sh`（Azure CLI でバッチ用リソースを冪等作成）
-- `infra/azure/batch/verify-batch-resources.sh`（作成したリソースの存在・状態検証）
 - `.github/workflows/deploy-batch-functions.yml`（バッチジョブ Azure Functions の CI/CD ワークフロー）
 - `infra/azure/batch/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
 - 作業ログ: `{WORK}` 配下
@@ -63,65 +61,23 @@ tools: ["*"]
 
 ## 5) 実行フロー（DAG）
 
-成果物の実行順序は以下の通り。DAG の見積にはこの順序を反映すること。
+このエージェントは以下のステップを実行する：
 
 ```
-A) Azure 作成スクリプト作成（infra/azure/batch/）
-→ A-exec) Azure リソース作成スクリプトの実行と検証（A 完了後に実施 — 独立ステップ）
-  → B) GitHub Actions CI/CD ワークフロー（A-exec の出力値を利用）
-  → C) サービスカタログ/README 更新（A-exec の出力値を利用）
-  → D) スモークテスト（A-exec の出力値を利用）
-→ E) 進捗ログ（全ステップ通して随時更新）
+B) GitHub Actions CI/CD ワークフロー
+→ C) サービスカタログ/README 更新
+→ D) スモークテスト
+→ E) 進捗ログ（随時更新）
 → AC検証（全ステップ完了後）
 → 最終品質レビュー（AC検証完了後）
 ```
 
 ※ B, C, D は互いに並列実行可能。E は全ステップで随時更新。
-※ A-exec は A とは独立したステップ。SPLIT_REQUIRED 時には独立した Sub Issue として分割すること。
+※ Azure データリソースの作成（ステップ A + A-exec）は Step 1.1/1.2（Dev-Batch-DataServiceSelect / Dev-Batch-DataDeploy）が担当した前提。
 
 ## 6) 実行手順（この順で）
 
-### 6.1 計画・分割
-
-- `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
-- Skill task-dag-planning に従い分割要否を判定する。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
-
-### 6.2 ステップ A: Azure 作成スクリプト作成
-
-1. `batch-service-catalog.md` の「2. ジョブ → Azure サービスマッピング表」と「依存関係マトリクス」から、作成が必要な Azure リソースを一覧化する（根拠を控える）。
-2. `infra/azure/batch/create-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1「3点セットテンプレート」および §2「冪等性パターン」に準拠）：
-   - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）
-   - リソース種別の根拠は `batch-service-catalog.md` と、利用可能なら **Azure MCP**（Azure サービス操作のための Model Context Protocol ツール）または **Microsoft Learn MCP**（Microsoft 公式ドキュメント検索ツール）を参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
-3. `infra/azure/batch/verify-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1.4 テンプレートに準拠）：
-   - `create-batch-resources.sh` が作成する全リソースの存在を Azure CLI で検証するスクリプト。
-
-### 6.3 ステップ A-exec: Azure リソース作成スクリプトの実行と検証
-
-> **A-exec は A とは独立したステップ。SPLIT_REQUIRED 時（Plan-Only モード）には実行を行わず、独立した Sub Issue として分割すること。A の Sub Issue が完了・マージされた後に、A-exec の Sub Issue で実際のリソース作成コマンドを実行する。**
-
-1. `infra/azure/batch/create-batch-resources.sh` を実行する。
-   - **成功判定**: exit code 0、かつ全リソースの URL/Resource ID/リージョンが出力されること。
-2. `infra/azure/batch/verify-batch-resources.sh` を実行する（AC-3 の事前検証）。
-   - **成功判定**: exit code 0、かつ全リソースの `provisioningState` が `Succeeded` であること。
-3. べき等性検証: ステップ 1 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する（`azure-cli-deploy-scripts` Skill §2.2 チェックリスト参照）。
-4. 取得した値（Function App URL / Resource ID / Connection Strings 等）を `{WORK}deploy-work-status.md` に記録する（機密値は記録しない）。
-
-**Azure CLI 利用不可の場合**: `azure-cli-deploy-scripts` Skill §3 に従う。対象 README: `infra/azure/batch/README.md`。
-
-### 6.4 ステップ B: GitHub Actions CI/CD ワークフロー
+### 6.1 ステップ B: GitHub Actions CI/CD ワークフロー
 
 > **共通仕様**: `github-actions-cicd` Skill に従う（§1 OIDC 認証・§2 `workflow_dispatch` トリガー・§2.3 PR description 手動実行案内）。
 
@@ -135,7 +91,7 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
   - デプロイ対象: `src/batch/` 配下の全バッチジョブ（またはジョブ別に分割する場合は `src/batch/{jobId}-{jobNameSlug}/`）。
   - 既存の `.github/workflows/deploy-api-functions.yml` がある場合はパターンを踏襲する。
 
-### 6.5 ステップ C: README 更新
+### 6.2 ステップ C: README 更新
 
 - `infra/azure/batch/README.md` を作成する：
   - 環境変数一覧（環境変数名・説明・シークレット要否）
@@ -143,12 +99,12 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
   - トラブルシューティング（よくあるエラーと対処法）
   - AC 検証手順
 
-### 6.6 ステップ D: スモークテスト（任意だが推奨）
+### 6.3 ステップ D: スモークテスト（任意だが推奨）
 
 - `scripts/batch/smoke/` 配下に最小限のスモークテストスクリプトを作成する（curl/PowerShell 等）。
 - 既存の自動テストプロジェクト（`test/batch/` 配下など）には混ぜない（手動検証専用のスクリプト群として管理する）。
 
-### 6.7 AC 検証（全ステップ完了後・必須）
+### 6.4 AC 検証（全ステップ完了後・必須）
 
 > AC 検証結果の記録は `azure-ac-verification` Skill §1 のテンプレートに従う。完了判定は §2 の統一ステータス名（PASS / NEEDS-VERIFICATION / FAIL）に従う。Azure リソース存在確認は §3 のパターンに従う。Azure CLI 利用不可時は §4 に従う。
 
@@ -181,7 +137,7 @@ A) Azure 作成スクリプト作成（infra/azure/batch/）
 - `infra/azure/batch/create-batch-resources.sh` が存在し、構文的に正しい（`bash -n` または ShellCheck が成功）。
 - `infra/azure/batch/verify-batch-resources.sh` が存在し、構文的に正しい。
 - `.github/workflows/deploy-batch-functions.yml` が存在し、YAML 構文的に正しい。
-- AC 検証（§6.7）の全 AC が合格している。
+- AC 検証（§6.4）の全 AC が合格している。
 - シークレット情報がコード/スクリプトにハードコードされていない。
 - `infra/azure/batch/README.md` に手順・環境変数・トラブルシューティングが記載されている。
 - 作業ログが更新されている。

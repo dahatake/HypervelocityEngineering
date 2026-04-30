@@ -17,6 +17,7 @@ jobs:
   create-subissues:
     if: github.event.label.name == 'create-subissues'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}

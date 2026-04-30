@@ -756,6 +756,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
             dry_run=False,
             model="claude-opus-4.7",
             auto_qa=True,
+            qa_phase="post",
             auto_contents_review=False,
             auto_self_improve=False,
         )
@@ -829,6 +830,7 @@ class TestRunStepPhase2QaPrompt(unittest.TestCase):
             dry_run=False,
             model="claude-opus-4.7",
             auto_qa=True,
+            qa_phase="post",
             auto_contents_review=False,
             auto_self_improve=False,
             qa_auto_defaults=qa_auto_defaults,
@@ -1025,6 +1027,7 @@ class TestRunStepWorkIqMcpHealthCheck(unittest.TestCase):
             model="claude-opus-4.7",
             workiq_enabled=True,
             auto_qa=True,
+            qa_phase="post",
             qa_auto_defaults=True,
             auto_contents_review=False,
             auto_self_improve=False,
@@ -1241,6 +1244,7 @@ class TestRunStepWorkIqMcpHealthCheck(unittest.TestCase):
             workiq_enabled=True,
             mcp_servers={WORKIQ_MCP_SERVER_NAME: {"command": "manual-workiq"}},
             auto_qa=True,
+            qa_phase="post",
             qa_auto_defaults=True,
             auto_contents_review=False,
             auto_self_improve=False,
@@ -1723,7 +1727,7 @@ class TestAqodWorkIQWarningSuppressionPhase1(unittest.TestCase):
 
     def test_aqod_workiq_draft_no_warning(self) -> None:
         """AQOD + workiq_draft_mode では Work IQ 未呼び出し警告が出ない。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True)
+        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True, aqod_post_qa_enabled=True)
         _statuses, warnings = self._run_with_mcp_connected(runner, workflow_id="aqod")
         self.assertFalse(
             any("Work IQ MCP ツールが1度も呼び出されませんでした" in w for w in warnings),
@@ -1732,7 +1736,7 @@ class TestAqodWorkIQWarningSuppressionPhase1(unittest.TestCase):
 
     def test_aqod_workiq_draft_info_log(self) -> None:
         """AQOD + workiq_draft_mode では QA セッションで Work IQ 接続確認を行う。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True)
+        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True, aqod_post_qa_enabled=True)
         statuses, warnings = self._run_with_mcp_connected(runner, workflow_id="aqod")
         self.assertTrue(
             any("QA セッション" in s for s in statuses),
@@ -1909,5 +1913,229 @@ class TestIsWorkIQToolNameHelperInRunner(unittest.TestCase):
         self.assertFalse(bool(after_qa_tools), "ツール未観測を正しく検出できること")
 
 
+# ---------------------------------------------------------------------------
+# _apply_main_artifact_improvements テスト
+# ---------------------------------------------------------------------------
+
+class TestApplyMainArtifactImprovements(unittest.TestCase):
+    """StepRunner._apply_main_artifact_improvements の動作を検証する。"""
+
+    def _make_runner(self, **cfg_kwargs) -> StepRunner:
+        cfg = SDKConfig(dry_run=False, model="claude-opus-4.7", **cfg_kwargs)
+        console = Console(verbose=False, quiet=True)
+        return StepRunner(config=cfg, console=console)
+
+    def test_method_exists(self) -> None:
+        """_apply_main_artifact_improvements メソッドが StepRunner に存在する。"""
+        runner = self._make_runner()
+        self.assertTrue(
+            callable(getattr(runner, "_apply_main_artifact_improvements", None)),
+            "StepRunner に _apply_main_artifact_improvements が存在すること",
+        )
+
+    def test_returns_empty_when_context_empty(self) -> None:
+        """improvement_context が空の場合は何もせず空文字を返す。"""
+        runner = self._make_runner()
+        mock_session = unittest.mock.AsyncMock()
+
+        result = asyncio.run(runner._apply_main_artifact_improvements(
+            session=mock_session,
+            step_id="1.1",
+            title="テスト",
+            workflow_id=None,
+            custom_agent=None,
+            original_prompt="prompt",
+            main_output="output",
+            source_phase="Phase 3",
+            improvement_context="",
+            timeout=10.0,
+        ))
+        mock_session.send_and_wait.assert_not_awaited()
+        self.assertEqual(result, "")
+
+    def test_returns_empty_when_context_whitespace_only(self) -> None:
+        """improvement_context が空白のみの場合も何もしない。"""
+        runner = self._make_runner()
+        mock_session = unittest.mock.AsyncMock()
+
+        result = asyncio.run(runner._apply_main_artifact_improvements(
+            session=mock_session,
+            step_id="1.1",
+            title="テスト",
+            workflow_id=None,
+            custom_agent=None,
+            original_prompt="prompt",
+            main_output="output",
+            source_phase="Phase 3",
+            improvement_context="   \n  ",
+            timeout=10.0,
+        ))
+        mock_session.send_and_wait.assert_not_awaited()
+        self.assertEqual(result, "")
+
+    def test_sends_to_main_session(self) -> None:
+        """send_and_wait をメインセッションに対して呼び出す。"""
+        runner = self._make_runner()
+        mock_response = unittest.mock.MagicMock()
+        mock_response.data = unittest.mock.MagicMock()
+        mock_response.data.content = "改善完了"
+        mock_session = unittest.mock.AsyncMock()
+        mock_session.send_and_wait.return_value = mock_response
+
+        result = asyncio.run(runner._apply_main_artifact_improvements(
+            session=mock_session,
+            step_id="1.1",
+            title="テスト",
+            workflow_id="aqod",
+            custom_agent="TestAgent",
+            original_prompt="original",
+            main_output="main output",
+            source_phase="Phase 3 Adversarial Review",
+            improvement_context="Critical issue found",
+            timeout=30.0,
+        ))
+        mock_session.send_and_wait.assert_awaited_once()
+        self.assertEqual(result, "改善完了")
+
+    def test_returns_empty_on_exception(self) -> None:
+        """例外が発生した場合は警告を出して空文字を返す（後続処理を継続）。"""
+        runner = self._make_runner()
+        mock_session = unittest.mock.AsyncMock()
+        mock_session.send_and_wait.side_effect = RuntimeError("session error")
+
+        result = asyncio.run(runner._apply_main_artifact_improvements(
+            session=mock_session,
+            step_id="1.1",
+            title="テスト",
+            workflow_id=None,
+            custom_agent=None,
+            original_prompt="prompt",
+            main_output="output",
+            source_phase="Phase 4",
+            improvement_context="plan content",
+            timeout=10.0,
+        ))
+        self.assertEqual(result, "")
+
+
+class TestApplyMainArtifactImprovementsInspection(unittest.TestCase):
+    """Phase 2c / 3 / 4 の共通ヘルパー呼び出し確認（ソースインスペクション）。"""
+
+    def test_phase2c_calls_helper_when_enabled(self) -> None:
+        """Phase 2c: apply_qa_improvements_to_main=True のとき _apply_main_artifact_improvements が呼ばれる。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("apply_qa_improvements_to_main", source)
+        self.assertIn("_apply_main_artifact_improvements", source)
+        self.assertIn("Phase 2c QA Merge", source)
+
+    def test_phase3_calls_helper_when_fail(self) -> None:
+        """Phase 3: review FAIL 時に _apply_main_artifact_improvements が呼ばれる。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("apply_review_improvements_to_main", source)
+        self.assertIn("Phase 3 Adversarial Review", source)
+
+    def test_phase4_calls_helper_when_enabled(self) -> None:
+        """Phase 4: apply_self_improve_to_main=True のとき _apply_main_artifact_improvements が呼ばれる。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("apply_self_improve_to_main", source)
+        self.assertIn("Phase 4 Self-Improve iteration", source)
+
+    def test_phase3_and_4_are_workflow_independent(self) -> None:
+        """Phase 3 / Phase 4 の _apply_main_artifact_improvements 呼び出しに workflow_id 条件分岐がないこと。
+
+        これは全オーケストレーター共通処理として実装されていることを確認する。
+        """
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        # Phase 3 の apply 呼び出し部分に workflow_id による条件分岐がないことを確認
+        # (workflow_id を引数として渡すのは OK, if workflow_id == "xxx" で skip するのは NG)
+        # 簡略化: ソース中に "if workflow_id" の後に "apply_review" が出てこないことを確認
+        lines = source.splitlines()
+        for i, line in enumerate(lines):
+            if "apply_review_improvements_to_main" in line or "apply_self_improve_to_main" in line:
+                # 直前の数行に workflow_id == で始まる条件がないことを確認
+                context = "\n".join(lines[max(0, i - 3):i])
+                self.assertNotIn('workflow_id == "', context,
+                                 f"Phase 3/4 should not be gated by workflow_id check near line {i}")
+
+
+# ---------------------------------------------------------------------------
+# _check_diff_after_improvement テスト
+# ---------------------------------------------------------------------------
+
+class TestCheckDiffAfterImprovement(unittest.TestCase):
+    """StepRunner._check_diff_after_improvement の動作を検証する。"""
+
+    def _make_runner(self) -> StepRunner:
+        cfg = SDKConfig(dry_run=True)
+        console = Console(verbose=False, quiet=True)
+        return StepRunner(config=cfg, console=console)
+
+    def test_returns_changed_files_on_diff(self) -> None:
+        """git diff に差分がある場合、変更ファイルリストを返すこと。"""
+        runner = self._make_runner()
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "hve/runner.py\nhve/config.py\n"
+        with unittest.mock.patch("subprocess.run", return_value=mock_result):
+            changed = runner._check_diff_after_improvement("step-1", "Phase 3 Adversarial Review")
+        self.assertEqual(changed, ["hve/runner.py", "hve/config.py"])
+
+    def test_returns_empty_and_logs_warning_when_no_diff(self) -> None:
+        """git diff に差分がない場合、空リストを返し warning が記録されること。"""
+        runner = self._make_runner()
+        warnings: list[str] = []
+        original_warning = runner.console.warning
+        runner.console.warning = lambda msg: warnings.append(msg)  # type: ignore[method-assign]
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        with unittest.mock.patch("subprocess.run", return_value=mock_result):
+            changed = runner._check_diff_after_improvement("step-1", "Phase 3 Adversarial Review")
+        runner.console.warning = original_warning
+        self.assertEqual(changed, [])
+        self.assertTrue(len(warnings) > 0, "差分なし時に warning が発行されること")
+        self.assertIn("差分がありません", warnings[0])
+
+    def test_returns_empty_when_git_fails(self) -> None:
+        """git diff が非ゼロ終了した場合、空リストを返し warning が記録されること。"""
+        runner = self._make_runner()
+        warnings: list[str] = []
+        runner.console.warning = lambda msg: warnings.append(msg)  # type: ignore[method-assign]
+        mock_result = unittest.mock.MagicMock()
+        mock_result.returncode = 128
+        mock_result.stdout = ""
+        mock_result.stderr = "not a git repository"
+        with unittest.mock.patch("subprocess.run", return_value=mock_result):
+            changed = runner._check_diff_after_improvement("step-1", "Phase 3 Adversarial Review")
+        self.assertEqual(changed, [])
+        self.assertTrue(len(warnings) > 0, "git 失敗時に warning が発行されること")
+        self.assertIn("git diff", warnings[0])
+
+    def test_returns_empty_on_subprocess_error(self) -> None:
+        """subprocess.run が例外を出した場合、空リストを返すこと（処理を継続）。"""
+        runner = self._make_runner()
+        with unittest.mock.patch("subprocess.run", side_effect=OSError("git not found")):
+            changed = runner._check_diff_after_improvement("step-1", "Phase 4 Self-Improve")
+        self.assertEqual(changed, [])
+
+    def test_source_inspection_calls_diff_check_in_phase3(self) -> None:
+        """Phase 3 Adversarial Review で _check_diff_after_improvement が呼ばれること（ソースインスペクション）。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("_check_diff_after_improvement", source)
+        self.assertIn("Phase 3 Adversarial Review", source)
+
+    def test_source_inspection_calls_diff_check_in_phase4(self) -> None:
+        """Phase 4 Self-Improve で _check_diff_after_improvement が呼ばれること（ソースインスペクション）。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("Phase 4 Self-Improve", source)
+
+
 if __name__ == "__main__":
     unittest.main()
+

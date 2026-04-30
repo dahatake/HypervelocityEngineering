@@ -27,6 +27,11 @@ body:
         - 確認コマンド例: `find work/self-improve -type f -name '.self-improve-lock'`
         - Issue open = 実行中 / closed = 完了
 
+        ### ⚠️ ブランチ・直接 push に関する注意
+        - Issue Template 経由で実行された場合、Copilot cloud agent は **現在アクティブなブランチへ直接コミット/push** します。
+        - マージ済みブランチや保護ブランチへの直接 push を避けるため、実行前に専用の作業ブランチを作成することを推奨します。
+        - hve ローカル実行（`--self-improve`）の場合も同様に、実行開始時に使用ブランチが標準出力に表示されます。
+
         ### 使用 Custom Agents
         - `QA-CodeQualityScan` — コード品質スキャン
         - `QA-DocConsistency` — ドキュメント整合性チェック
@@ -140,18 +145,10 @@ body:
     attributes:
       label: "使用するモデル"
       description: |
-        Copilot cloud agent が使用する AI モデルを選択してください。
-        「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
-        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+        GitHub が自動的に最適なモデルを選択します（Auto）。
+        特定モデルを指定する場合は `HVE_MODEL_OVERRIDE` 環境変数を使用してください。
       options:
         - "Auto"
-        - "gpt-5.5"
-        - "claude-opus-4.7"
-        - "claude-opus-4.6"
-        - "claude-sonnet-4.6"
-        - "gpt-5.4"
-        - "gpt-5.3-codex"
-        - "gemini-2.5-pro"
       default: 0
     validations:
       required: false

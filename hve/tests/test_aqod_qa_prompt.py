@@ -109,9 +109,9 @@ class TestRunStepAqodPromptSelectionSource(unittest.TestCase):
         self.assertIn("QA_PROMPT_V2", self.src)
 
     def test_aqod_prompt_conditional_on_is_aqod(self) -> None:
-        """プロンプト選択が _is_aqod 条件で分岐している。"""
-        self.assertIn("_is_aqod", self.src)
-        self.assertIn("AQOD_QA_PROMPT if _is_aqod else QA_PROMPT_V2", self.src)
+        """プロンプト選択が _is_aqod_workflow 条件で分岐している。"""
+        self.assertIn("_is_aqod_workflow", self.src)
+        self.assertIn("AQOD_QA_PROMPT if _is_aqod_workflow else QA_PROMPT_V2", self.src)
 
 
 # ---------------------------------------------------------------------------
@@ -203,12 +203,20 @@ class TestRunStepAqodPromptSelectionRuntime(unittest.TestCase):
         from console import Console
         from runner import StepRunner
 
+        # AQOD ワークフローでは aqod_post_qa_enabled=True が必要（デフォルトは False）
+        is_aqod = (
+            workflow_id == "aqod"
+            or (custom_agent == "QA-DocConsistency" and "original-docs-questionnaire" in (prompt or ""))
+        )
+        # 非AQODワークフローでの事後QAテストは qa_phase="post" が必要
         cfg = SDKConfig(
             dry_run=False,
             model="claude-opus-4.7",
             auto_qa=True,
+            qa_phase="post" if not is_aqod else "pre",
             auto_contents_review=False,
             auto_self_improve=False,
+            aqod_post_qa_enabled=is_aqod,  # AQOD では事後 QA オプトインを有効化
         )
         console = Console(verbose=False, quiet=True)
         step_runner = StepRunner(config=cfg, console=console)

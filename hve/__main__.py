@@ -534,6 +534,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（デフォルト: 600）",
     )
+    orch.add_argument(
+        "--aqod-post-qa",
+        action="store_true",
+        default=False,
+        help=(
+            "AQOD ワークフローでメインタスク完了後の事後 QA を実行する（オプトイン）。"
+            "デフォルトは無効。auto_qa と併用して有効化される。"
+            "環境変数 HVE_AQOD_POST_QA=true でも有効化可能。"
+        ),
+    )
 
     # Issue/PR 作成
     orch.add_argument(
@@ -554,6 +564,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "ローカル実行後に GitHub PR を作成する (デフォルト: 作成しない)。"
             " --branch から新ブランチを作成して作業し、完了後に PR をリクエスト。"
             " --repo と GH_TOKEN が必要。"
+            " ⚠️ PR 作成のみで自動マージは行いません（Issue Template の auto_merge とは異なります）。"
         ),
     )
     orch.add_argument(
@@ -1104,6 +1115,8 @@ def _build_config(args: argparse.Namespace):
     _workiq_pq_timeout = getattr(args, "workiq_per_question_timeout", None)
     if _workiq_pq_timeout is not None and _workiq_pq_timeout > 0:
         cfg.workiq_per_question_timeout = _workiq_pq_timeout
+    if getattr(args, "aqod_post_qa", False):
+        cfg.aqod_post_qa_enabled = True
 
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
@@ -1236,6 +1249,21 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
             "   Code Review Agent はローカルの GitHub Copilot CLI SDK で実行されます。",
             file=sys.stderr,
         )
+
+    # 同時有効化警告: 敵対的レビュー（--auto-contents-review）と
+    # Code Review Agent（--auto-coding-agent-review）が両方有効な場合、
+    # 同一成果物に対してレビューセッションが重複しトークン消費・タスク回数が増える可能性がある。
+    if getattr(args, "auto_contents_review", False):
+        print(
+            f"{_ts()} ⚠️  WARNING: --auto-contents-review（敵対的レビュー）と"
+            " --auto-coding-agent-review（Code Review Agent）が同時に有効です。\n"
+            "   同一成果物に対してレビューセッションが重複し、"
+            "トークン消費・タスク回数が増える可能性があります。\n"
+            "   通常はどちらか一方を選択することを推奨します。\n"
+            "   （強制終了ではありません。このまま続行する場合は無視してください。）",
+            file=sys.stderr,
+        )
+
     return True
 
 
@@ -1353,6 +1381,8 @@ def _cmd_run_interactive() -> int:
         workiq_akm_review_enabled = False
         workiq_draft_mode = False
         workiq_per_question_timeout = 600.0
+        qa_phase = "pre"  # クイック全自動ではデフォルトの "pre" を使用
+        aqod_post_qa_enabled = False
         issue_title = ""
         issue_additional_comment = ""
         # ワークフロー固有パラメータ
@@ -1423,25 +1453,47 @@ def _cmd_run_interactive() -> int:
             qa_answer_mode = None
             force_interactive = False
             auto_review = False
+            aqod_post_qa_enabled = False
             if is_akm:
+                qa_phase = "pre"  # AKM は事前 QA を qa_phase に従って実行（事後 QA は常にスキップ）
                 auto_qa = con.prompt_yes_no(
-                    "AKM 完了後に QA（質問票生成・回答）を実施する？",
+                    "AKM 実行前に QA（事前確認・質問票生成・回答）を実施する？",
                     default=False,
                 )
                 if auto_qa:
                     qa_answer_mode = "all"
             elif is_aqod:
+                qa_phase = "post"  # AQOD は事前 QA をスキップ（事後 QA は aqod_post_qa_enabled で制御）
                 auto_qa = con.prompt_yes_no(
                     "AQOD 完了後に QA（質問票生成・回答）を実施する？",
                     default=False,
                 )
                 if auto_qa:
                     qa_answer_mode = "all"
+                    aqod_post_qa_enabled = True
             else:
+                qa_phase = "pre"
                 auto_qa = False
         else:
-            auto_qa = con.prompt_yes_no("QA 自動投入を有効にする？", default=False)
+            aqod_post_qa_enabled = False
+            auto_qa = con.prompt_yes_no(
+                "QA 自動投入を有効にする？（質問票はステップ実行の前に作成されます）",
+                default=False,
+            )
             if auto_qa:
+                # QA タイミングの選択
+                _qa_phase_choices = [
+                    ("pre (実行前のみ・推奨)", "pre"),
+                    ("post (実行後のみ・旧挙動)", "post"),
+                    ("both (前後両方)", "both"),
+                ]
+                _qa_phase_idx = con.menu_select(
+                    "QA タイミングを選択",
+                    [opt for opt, _ in _qa_phase_choices],
+                    allow_empty=True,
+                    default_index=0,
+                )
+                qa_phase = _qa_phase_choices[_qa_phase_idx if _qa_phase_idx >= 0 else 0][1]
                 # QA 自動投入 ON 時は全問デフォルト値を自動採用する一択。
                 # Issue Template Workflow (auto-qa-default-answer.yml) と同じ動作。
                 # prompt_answer_mode() / force_interactive プロンプトは不要。
@@ -1461,6 +1513,7 @@ def _cmd_run_interactive() -> int:
             else:
                 qa_answer_mode = None
                 force_interactive = False
+                qa_phase = "pre"  # auto_qa=False の場合はデフォルト値
             auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
             if auto_review:
                 use_different_review_model = con.prompt_yes_no(
@@ -1685,6 +1738,7 @@ def _cmd_run_interactive() -> int:
     ]
     if auto_qa:
         summary_lines.append(f"QA モデル    : {qa_model_display or '(メインと同じ)'}")
+        summary_lines.append(f"QA タイミング : {qa_phase}")
         summary_lines.append(f"QA 回答モード : 全問デフォルト自動採用")
         # force_interactive は auto_qa=True 時は常に False のため表示不要
     if workiq_enabled:
@@ -1752,6 +1806,8 @@ def _cmd_run_interactive() -> int:
         cfg.qa_model = qa_model
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
+    cfg.qa_phase = qa_phase
+    cfg.aqod_post_qa_enabled = aqod_post_qa_enabled
     cfg.workiq_enabled = workiq_enabled
     cfg.workiq_qa_enabled = workiq_qa_enabled
     cfg.workiq_akm_review_enabled = workiq_akm_review_enabled

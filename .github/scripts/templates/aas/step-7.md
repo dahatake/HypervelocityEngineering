@@ -17,7 +17,7 @@
 `Arch-TDD-TestStrategy` を使用
 
 ## 依存
-- Step.5（サービスカタログ）が `aas:done` であること
+- Step.6（サービスカタログ）が `aas:done` であること
 
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。

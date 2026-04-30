@@ -9,7 +9,32 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 DEFAULT_MODEL: str = "claude-opus-4.7"
+
+# --- Self-Improve scope 定数 ---
+# self_improve_scope の許可値。
+# ""         : デフォルト（後方互換）。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される。
+# "disabled" : auto_self_improve の値に関係なく Self-Improve を一切実行しない。
+# "step"     : Step-level（runner.py Phase 4）のみ実行する。Post-DAG はスキップ。
+# "workflow" : Post-DAG（orchestrator.py）のみ実行する。Step-level はスキップ。
+#              Issue Template 経路（GitHub Actions `self-improve` ジョブ）推奨値。
+VALID_SELF_IMPROVE_SCOPES: tuple[str, ...] = ("", "disabled", "step", "workflow")
 MODEL_AUTO_VALUE: str = "Auto"
+# Phase 9 棚卸し結果 (2026-04-30):
+# 後方互換: 旧ハイフン区切りモデル ID（claude-opus-4-7）を保持。
+# 参照元:
+#   - labels.json: model/claude-opus-4-7 (deprecated 注記あり)
+#   - .github/scripts/bash/lib/assign-copilot.sh: resolve_model で変換
+#   - .github/scripts/bash/lib/extract-model.py: allowed セット・変換ロジック
+#   - .github/scripts/python/workflow_helpers.py: 変換ロジック
+# 維持理由: labels.json に model/claude-opus-4-7 が残っており、既存 Issue にこのラベルが付いている
+#           可能性がある。以下を全て実施した時点で削除可能:
+#   削除手順:
+#     1. labels.json の "model/claude-opus-4-7" エントリを削除
+#     2. assign-copilot.sh の claude-opus-4-7 変換ブロック削除
+#     3. extract-model.py の "claude-opus-4-7" 参照削除
+#     4. workflow_helpers.py の変換ロジック削除
+#     5. LEGACY_MODEL_ID / _MODEL_ALIASES / normalize_model の後方互換部分を削除
+#     6. test_config.py の test_normalize_model_legacy を削除
 LEGACY_MODEL_ID: str = "claude-opus-4-7"
 MODEL_CHOICES: tuple[str, ...] = (
     "gpt-5.5",
@@ -55,6 +80,21 @@ def generate_run_id() -> str:
     ts = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
     short_uuid = uuid.uuid4().hex[:6]
     return f"{ts}-{short_uuid}"
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """環境変数を bool として読む。
+
+    - 未設定（None）の場合は default を返す。
+    - "true"・"1"・"yes" (大小文字不問) → True。
+    - それ以外（"false"・"0"・"no"・空文字・その他の値） → False。
+    - 例: "maybe" や "2" などの未知値も False として扱う。
+    """
+    import os
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("true", "1", "yes")
 
 
 @dataclass
@@ -155,6 +195,19 @@ class SDKConfig:
     workiq_per_question_timeout: float = 900.0            # QA: 質問ごとの Work IQ クエリタイムアウト秒数
     workiq_max_draft_questions: int = 30                  # QA: ドラフト生成対象の最大質問数
 
+    # --- QA フェーズ制御 ---
+    qa_phase: str = "pre"                                 # QA フェーズ: "pre"=実行前のみ, "post"=実行後のみ, "both"=前後両方
+    # 推奨デフォルト: "pre"（主タスク実行前の準備重視・トークン節約）
+    # 設定方法: HVE_QA_PHASE 環境変数（"pre"/"post"/"both"）または SDKConfig.from_env() 経由
+    # 不正値は from_env() で "pre" にフォールバックする
+    # AKM ワークフロー: 事前 QA は qa_phase の指定に従う / 事後 QA は常にスキップする
+    # AQOD ワークフロー: 事前 QA は常にスキップ / 事後 QA は aqod_post_qa_enabled で制御する
+
+    # --- AQOD 専用 ---
+    aqod_post_qa_enabled: bool = False                    # AQOD: メインタスク完了後の事後 QA をオプトイン実行する
+    # True: AQOD で事後 QA を実行する（qa_phase の値には依存しない）
+    # False (デフォルト): AQOD では事後 QA を実行しない
+
     # --- Self-Improve ---
     auto_self_improve: bool = False             # デフォルト: 無効。Issue Template / CLI --self-improve / HVE_AUTO_SELF_IMPROVE で有効化
     self_improve_max_iterations: int = 3        # 最大イテレーション数
@@ -166,9 +219,40 @@ class SDKConfig:
     self_improve_goal: str = ""                 # タスク固有ゴールの説明（空 = ワークフロー ID から自動生成）
     self_improve_success_criteria: List[str] = field(default_factory=list)  # 自動検索で得た success_criteria（空 = ワークフロー標準を使用）
     self_improve_skip: bool = False             # --no-self-improve で True
+    self_improve_scope: str = ""                # 実行単位: "" (後方互換), "disabled", "step", "workflow"
+    # HVE_SELF_IMPROVE_SCOPE 環境変数でも指定可能。
+    # ""         : 後方互換。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される。
+    # "disabled" : Self-Improve を一切実行しない（auto_self_improve の値に関係なく）。
+    # "step"     : Step-level（runner.py Phase 4）のみ実行。Issue Template 外のローカル実行向け。
+    # "workflow" : Post-DAG（orchestrator.py）のみ実行。Issue Template 経路（GitHub Actions）推奨。
 
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
+
+    # --- その他 ---
+    max_diff_chars: int = 80_000            # git diff の最大文字数（トークン上限対策）。HVE_MAX_DIFF_CHARS 環境変数で上書き可能
+
+    # --- コンテキスト最適化 ---
+    reuse_context_filtering: bool = True    # True: ステップ依存関係ベースの reuse_context フィルタリング（HVE_REUSE_CONTEXT_FILTERING）
+    # デフォルト true（consumed_artifacts アノテーション済みのステップのみフィルタリング）。
+    # consumed_artifacts=None のステップは後方互換で全成果物を渡す。false にすると全ステップに全成果物を渡す（旧挙動）。
+
+    # --- セキュリティ ---
+    model_override: Optional[str] = None    # 緊急回避用モデル上書き。設定時は Issue Template の選択より優先される。HVE_MODEL_OVERRIDE 環境変数で設定
+    # ※ プロンプトサニタイズの有効/無効は HVE_PROMPT_SANITIZATION 環境変数で直接制御する（security.is_sanitization_enabled() 参照）
+
+    # --- メイン成果物改善制御 ---
+    apply_qa_improvements_to_main: bool = False   # QA 結果をメイン成果物へ反映（デフォルト: 無効）
+    apply_review_improvements_to_main: bool = True  # レビュー指摘をメイン成果物へ反映（デフォルト: 有効）
+    apply_self_improve_to_main: bool = True       # Self-Improve 計画をメイン成果物へ反映（デフォルト: 有効）
+
+    # --- 前提成果物チェック（Phase 8） ---
+    require_input_artifacts: bool = False
+    # False (デフォルト): 不足 artifact を warning として出力して続行する。
+    # True (strict mode): 不足 artifact がある場合に実行を中断する。
+    # 設定方法: HVE_REQUIRE_INPUT_ARTIFACTS 環境変数（"true"/"1"/"yes"）。
+    # consumed_artifacts=None のステップは後方互換としてチェック対象外。
+    # consumed_artifacts=[] のステップは前提成果物なしとして扱い、不足なし。
 
     # --- 全自動モード ---
     unattended: bool = False                # True の場合、実行中のインタラクティブ入力を全てスキップ
@@ -189,6 +273,25 @@ class SDKConfig:
             self.review_model = _normalize_model_with_warning(self.review_model)
         if self.qa_model != MODEL_AUTO_VALUE:
             self.qa_model = _normalize_model_with_warning(self.qa_model)
+        # model_override が設定されている場合、model フィールドを上書きする。
+        # Issue Template の選択（AUTO 含む）よりも優先される緊急回避手段。
+        if self.model_override:
+            normalized = _normalize_model_with_warning(self.model_override) or None
+            self.model_override = normalized  # 正規化後の値を self.model_override にも反映
+            if normalized:
+                self.model = normalized
+        # self_improve_scope は from_env() と同様に正規化してから検証し、
+        # 直接コンストラクタ呼び出し時も挙動を統一する。
+        self.self_improve_scope = (self.self_improve_scope or "").strip().lower()
+        if self.self_improve_scope not in VALID_SELF_IMPROVE_SCOPES:
+            import warnings
+            warnings.warn(
+                f"self_improve_scope='{self.self_improve_scope}' は無効な値です。"
+                f"有効な値: {VALID_SELF_IMPROVE_SCOPES}。"
+                f"'' (後方互換) にフォールバックします。",
+                stacklevel=2,
+            )
+            self.self_improve_scope = ""
 
     def is_workiq_qa_enabled(self) -> bool:
         """QA フェーズで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
@@ -220,6 +323,33 @@ class SDKConfig:
         except (TypeError, ValueError):
             env_workiq_max_draft_questions = 30
 
+        _valid_qa_phases = ("pre", "post", "both")
+        _raw_qa_phase = os.environ.get("HVE_QA_PHASE", "pre").strip().lower()
+        if _raw_qa_phase and _raw_qa_phase not in _valid_qa_phases:
+            import warnings
+            warnings.warn(
+                f"HVE_QA_PHASE='{_raw_qa_phase}' は無効な値です。"
+                f"有効な値: {_valid_qa_phases}。'pre' にフォールバックします。",
+                stacklevel=2,
+            )
+        env_qa_phase = _raw_qa_phase if _raw_qa_phase in _valid_qa_phases else "pre"
+
+        _raw_si_scope = os.environ.get("HVE_SELF_IMPROVE_SCOPE", "").strip().lower()
+        if _raw_si_scope and _raw_si_scope not in VALID_SELF_IMPROVE_SCOPES:
+            import warnings
+            warnings.warn(
+                f"HVE_SELF_IMPROVE_SCOPE='{_raw_si_scope}' は無効な値です。"
+                f"有効な値: {VALID_SELF_IMPROVE_SCOPES}。"
+                f"'' (後方互換) にフォールバックします。",
+                stacklevel=2,
+            )
+        env_si_scope = _raw_si_scope if _raw_si_scope in VALID_SELF_IMPROVE_SCOPES else ""
+
+        try:
+            env_max_diff_chars = int(os.environ.get("HVE_MAX_DIFF_CHARS", "80000"))
+        except (TypeError, ValueError):
+            env_max_diff_chars = 80_000
+
         def _env_bool_or_none(name: str) -> Optional[bool]:
             raw = os.environ.get(name)
             if raw is None or raw.strip() == "":
@@ -245,8 +375,18 @@ class SDKConfig:
             workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
             workiq_per_question_timeout=env_workiq_per_question_timeout,
             workiq_max_draft_questions=env_workiq_max_draft_questions,
+            qa_phase=env_qa_phase,
+            aqod_post_qa_enabled=os.environ.get("HVE_AQOD_POST_QA", "").lower() in ("true", "1", "yes"),
             auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),
             tdd_max_retries=int(os.environ.get("HVE_TDD_MAX_RETRIES", "5")),
+            max_diff_chars=env_max_diff_chars,
+            reuse_context_filtering=_env_bool("HVE_REUSE_CONTEXT_FILTERING", default=True),
+            model_override=_normalize_model_with_warning(os.environ.get("HVE_MODEL_OVERRIDE") or None),
+            apply_qa_improvements_to_main=_env_bool("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", default=False),
+            apply_review_improvements_to_main=_env_bool("HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN", default=True),
+            apply_self_improve_to_main=_env_bool("HVE_APPLY_SELF_IMPROVE_TO_MAIN", default=True),
+            self_improve_scope=env_si_scope,
+            require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
         )
 
     def get_review_model(self) -> str:

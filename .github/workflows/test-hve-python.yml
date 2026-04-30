@@ -1,0 +1,43 @@
+name: Test HVE Python
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hve/**'
+      - '.github/workflows/test-hve-python.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'hve/**'
+      - '.github/scripts/bash/lib/workflow-registry.sh'
+      - '.github/workflows/**'
+      - '.github/workflows/test-hve-python.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hve-python-tests:
+    name: HVE Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Run DAG parity tests
+        run: pytest hve/tests/test_dag_parity.py -v
+
+      - name: Run all HVE tests
+        run: pytest hve/tests/ -v --ignore=hve/tests/test_dag_parity.py

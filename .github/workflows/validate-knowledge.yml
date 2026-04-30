@@ -24,6 +24,7 @@ jobs:
   validate-knowledge-files:
     name: Validate knowledge/ D クラス要求定義書ドラフト
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

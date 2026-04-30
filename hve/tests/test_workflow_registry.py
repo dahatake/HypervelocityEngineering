@@ -68,8 +68,8 @@ class TestGetWorkflow:
         [
             ("aad", "aad-web"),
             ("asdw", "asdw-web"),
-            ("aad_web", "aad-web"),
-            ("asdw_web", "asdw-web"),
+            # aad_web / asdw_web (snake_case) は Phase 9 で削除済み。
+            # .github/ 配下から呼ばれる経路がないことを確認して削除。
         ],
     )
     def test_get_workflow_aliases(self, alias: str, expected: str):
@@ -143,7 +143,7 @@ class TestWorkflowDef:
 
     def test_params_aagd(self):
         wf = get_workflow("aagd")
-        assert wf.params == ["app_ids", "app_id", "resource_group", "usecase_id"]
+        assert wf.params == ["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"]
 
     def test_params_abdv(self):
         wf = get_workflow("abdv")
@@ -238,7 +238,7 @@ class TestGetNextSteps:
         assert [s.id for s in get_next_steps("aagd", completed_step_ids=["1", "2.1", "2.2", "2.3"])] == ["3"]
 
     def test_aagd_agent_steps_present(self):
-        assert get_step("aagd", "1").custom_agent == "Arch-AIAgentDesign"
+        assert get_step("aagd", "1").custom_agent == "Arch-AIAgentDesign-Step1"
         assert get_step("aagd", "2.3").custom_agent == "Dev-Microservice-Azure-AgentCoding"
         assert get_step("aagd", "3").custom_agent == "Dev-Microservice-Azure-AgentDeploy"
 
@@ -407,3 +407,29 @@ class TestStepDefFields:
     def test_block_unless_empty(self):
         step = get_step("aas", "1")
         assert step.block_unless == []
+
+
+class TestAAGAgentNames:
+    """AAG ワークフローの各 Step が新しい Agent 名を使用していること（P3-1）。"""
+
+    def test_aag_step1_uses_new_agent(self):
+        assert get_step("aag", "1").custom_agent == "Arch-AIAgentDesign-Step1"
+
+    def test_aag_step2_uses_new_agent(self):
+        assert get_step("aag", "2").custom_agent == "Arch-AIAgentDesign-Step2"
+
+    def test_aag_step3_uses_new_agent(self):
+        assert get_step("aag", "3").custom_agent == "Arch-AIAgentDesign-Step3"
+
+
+class TestABDVAgentNames:
+    """ABDV ワークフローの各 Step が新しい Agent 名を使用していること（P3-2）。"""
+
+    def test_abdv_step11_uses_new_agent(self):
+        assert get_step("abdv", "1.1").custom_agent == "Dev-Batch-DataServiceSelect"
+
+    def test_abdv_step12_uses_new_agent(self):
+        assert get_step("abdv", "1.2").custom_agent == "Dev-Batch-DataDeploy"
+
+    def test_abdv_step3_uses_new_agent(self):
+        assert get_step("abdv", "3").custom_agent == "Dev-Batch-FunctionsDeploy"

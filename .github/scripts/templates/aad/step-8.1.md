@@ -17,7 +17,7 @@
 - `docs/agent/agent-application-definition.md`
 
 ## Custom Agent
-`Arch-AIAgentDesign` を使用
+`Arch-AIAgentDesign-Step1` を使用
 
 ## 依存
 - Step.7.3（TDDテスト仕様書）が `aad:done` であること

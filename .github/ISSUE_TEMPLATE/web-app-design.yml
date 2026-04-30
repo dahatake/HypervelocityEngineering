@@ -73,18 +73,10 @@ body:
     attributes:
       label: "使用するモデル"
       description: |
-        Copilot cloud agent が使用する AI モデルを選択してください。
-        「Auto」を選んだ場合は、GitHub が最適モデルを動的に選択します（10% ディスカウント適用）。空欄時も Auto として扱われます。
-        ※ 選択したモデルが API 側で未対応の場合、自動的に既定にフォールバックします。
+        GitHub が自動的に最適なモデルを選択します（Auto）。
+        特定モデルを指定する場合は `HVE_MODEL_OVERRIDE` 環境変数を使用してください。
       options:
         - "Auto"
-        - "gpt-5.5"
-        - "claude-opus-4.7"
-        - "claude-opus-4.6"
-        - "claude-sonnet-4.6"
-        - "gpt-5.4"
-        - "gpt-5.3-codex"
-        - "gemini-2.5-pro"
       default: 0
     validations:
       required: false
@@ -104,10 +96,10 @@ body:
     attributes:
       label: "質問票設定"
       description: |
-        チェックを入れると、Copilot がタスクに不明瞭な点があった場合に選択式の質問票を作成し、PR にコメントとして投稿します。
+        チェックを入れると、Copilot がステップ実行前に選択式の質問票（事前 QA）を作成します。回答後に実行が開始されます。
         デフォルト（チェックなし）では質問票は作成されません。
       options:
-        - label: "質問票の作成を有効にする（チェックすると auto-qa ラベルが付与され、質問票が自動作成されます）"
+        - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
 
   - type: checkboxes
     id: enable_self_improve

@@ -661,5 +661,95 @@ class TestRunImprovementLoopRunId(unittest.TestCase):
             self.assertEqual(result["stopped_reason"], "dry_run")
 
 
+# ---------------------------------------------------------------------------
+# self_improve_scope テスト
+# ---------------------------------------------------------------------------
+
+
+class TestSelfImproveScopeConfig(unittest.TestCase):
+    """SDKConfig.self_improve_scope フィールドの検証。"""
+
+    def test_default_scope_empty(self) -> None:
+        """デフォルトの self_improve_scope は空文字列（後方互換）。"""
+        cfg = SDKConfig()
+        self.assertEqual(cfg.self_improve_scope, "")
+
+    def test_valid_scopes(self) -> None:
+        """許可値（disabled / step / workflow / ""）はそのまま設定できる。"""
+        for scope in ("", "disabled", "step", "workflow"):
+            cfg = SDKConfig(self_improve_scope=scope)
+            self.assertEqual(cfg.self_improve_scope, scope)
+
+    def test_scope_normalized_case_insensitive(self) -> None:
+        """大文字・末尾スペース付きの scope も正規化される。"""
+        cfg = SDKConfig(self_improve_scope="Workflow")
+        self.assertEqual(cfg.self_improve_scope, "workflow")
+        cfg2 = SDKConfig(self_improve_scope=" step ")
+        self.assertEqual(cfg2.self_improve_scope, "step")
+
+    def test_invalid_scope_falls_back_to_empty(self) -> None:
+        """無効な scope 値は警告を出して空文字列にフォールバックする。"""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = SDKConfig(self_improve_scope="invalid-value")
+        self.assertEqual(cfg.self_improve_scope, "")
+        self.assertTrue(any("invalid-value" in str(warning.message) for warning in w))
+
+    def test_from_env_reads_hve_self_improve_scope(self) -> None:
+        """HVE_SELF_IMPROVE_SCOPE 環境変数が from_env() で読まれる。"""
+        with patch.dict(os.environ, {"HVE_SELF_IMPROVE_SCOPE": "workflow"}):
+            cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.self_improve_scope, "workflow")
+
+    def test_from_env_invalid_scope_falls_back(self) -> None:
+        """HVE_SELF_IMPROVE_SCOPE に無効値を設定すると '' にフォールバックする。"""
+        import warnings
+        with patch.dict(os.environ, {"HVE_SELF_IMPROVE_SCOPE": "bad-scope"}):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.self_improve_scope, "")
+        self.assertTrue(any("bad-scope" in str(warning.message) for warning in w))
+
+    def test_from_env_missing_scope_defaults_empty(self) -> None:
+        """HVE_SELF_IMPROVE_SCOPE が未設定の場合は '' になる。"""
+        env = {k: v for k, v in os.environ.items() if k != "HVE_SELF_IMPROVE_SCOPE"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.self_improve_scope, "")
+
+
+class TestRunImprovementLoopAutoFalse(unittest.TestCase):
+    """auto_self_improve=False の場合は scope に関係なく実行されない。"""
+
+    def _run_with_scope(self, scope: str) -> str:
+        cfg = SDKConfig(auto_self_improve=False, self_improve_scope=scope)
+        result = run_improvement_loop(cfg)
+        return result["stopped_reason"]
+
+    def test_disabled_scope_auto_false(self) -> None:
+        self.assertEqual(self._run_with_scope("disabled"), "disabled")
+
+    def test_step_scope_auto_false(self) -> None:
+        self.assertEqual(self._run_with_scope("step"), "disabled")
+
+    def test_workflow_scope_auto_false(self) -> None:
+        self.assertEqual(self._run_with_scope("workflow"), "disabled")
+
+    def test_empty_scope_auto_false(self) -> None:
+        self.assertEqual(self._run_with_scope(""), "disabled")
+
+
+class TestRunImprovementLoopDisabledScope(unittest.TestCase):
+    """scope='disabled' の場合は auto_self_improve の値に関係なく実行されない。"""
+
+    def test_disabled_scope_blocks_execution(self) -> None:
+        """scope='disabled' は auto_self_improve=True でも実行しない。"""
+        cfg = SDKConfig(auto_self_improve=True, self_improve_scope="disabled")
+        result = run_improvement_loop(cfg)
+        self.assertEqual(result["stopped_reason"], "disabled")
+
+
 if __name__ == "__main__":
     unittest.main()

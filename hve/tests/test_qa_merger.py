@@ -927,5 +927,47 @@ class TestColumnIndexZeroSafety(unittest.TestCase):
         self.assertEqual(doc.questions[0].reason, "実績あり")
 
 
+class TestMergeWorkiqResultsStatusSkip(unittest.TestCase):
+    """STATUS: NOT_FOUND / UNAVAILABLE 応答は workiq_answer にセットされないこと。"""
+
+    def _make_doc(self) -> QADocument:
+        return QADocument(questions=[
+            QAQuestion(no=1, question="質問1"),
+            QAQuestion(no=2, question="質問2"),
+            QAQuestion(no=3, question="質問3"),
+            QAQuestion(no=4, question="質問4"),
+        ])
+
+    def test_not_found_skipped(self) -> None:
+        doc = self._make_doc()
+        results = {1: "STATUS: NOT_FOUND\n関連情報なし"}
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertEqual(merged.questions[0].workiq_answer, "")
+
+    def test_unavailable_skipped(self) -> None:
+        doc = self._make_doc()
+        results = {2: "STATUS: UNAVAILABLE\nツール未接続"}
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertEqual(merged.questions[1].workiq_answer, "")
+
+    def test_found_sets_workiq_answer(self) -> None:
+        doc = self._make_doc()
+        results = {3: "STATUS: FOUND\n| メール | 件名: 議事録 | 2026-04-20 | Outlook | 関連あり |"}
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertNotEqual(merged.questions[2].workiq_answer, "")
+
+    def test_partial_sets_workiq_answer(self) -> None:
+        doc = self._make_doc()
+        results = {4: "STATUS: PARTIAL\n| メール | 件名: 部分的な結果 | 2026-04-21 | Outlook | 一部のみ |"}
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertNotEqual(merged.questions[3].workiq_answer, "")
+
+    def test_case_insensitive_not_found_skipped(self) -> None:
+        doc = self._make_doc()
+        results = {1: "status: not_found\n関連情報なし"}
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertEqual(merged.questions[0].workiq_answer, "")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,11 +14,10 @@
 ## 出力
 - Azure Functions / コンテナのデプロイ完了
 - CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）
-- `infra/azure/batch/create-batch-resources.sh`（Azure CLI スクリプト: バッチリソース作成）
-- `infra/azure/batch/verify-batch-resources.sh`（Azure CLI スクリプト: バッチリソース検証）
+- `infra/azure/batch/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
 
 ## Custom Agent
-`Dev-Batch-Deploy` を使用
+`Dev-Batch-FunctionsDeploy` を使用
 
 ## 依存
 - {dep}

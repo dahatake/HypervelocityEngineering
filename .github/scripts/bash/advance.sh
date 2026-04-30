@@ -380,7 +380,8 @@ _mark_workflow_done() {
 
   local wf_name
   wf_name=$(echo "${wf_json}" | jq -r '.name // ""')
-  post_comment "${root_issue}" "## ✅ ワークフロー完了\n\n**${wf_name}** のすべてのステップが完了しました。" "${repo}" 2>/dev/null || true
+  post_comment "${root_issue}" "## ✅ ワークフロー完了\n\n**${wf_name}** のすべてのステップが完了しました。" "${repo}" \
+    || echo "::warning::ワークフロー完了コメント投稿に失敗しました: issue #${root_issue}" >&2
   auto_close_root_if_all_done "${root_issue}" "${repo}" || true
 }
 

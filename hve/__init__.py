@@ -13,9 +13,10 @@ try:
     from .config import SDKConfig
     from .console import Console
     from .prompts import (
-        QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT,
+        QA_APPLY_PROMPT, REVIEW_PROMPT,
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
+        PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from .workiq import is_workiq_available, build_workiq_mcp_config
     from .runner import StepRunner
@@ -24,9 +25,10 @@ except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
     from console import Console  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
-        QA_PROMPT, QA_APPLY_PROMPT, REVIEW_PROMPT,
+        QA_APPLY_PROMPT, REVIEW_PROMPT,
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
+        PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from workiq import is_workiq_available, build_workiq_mcp_config  # type: ignore[no-redef]
     from runner import StepRunner  # type: ignore[no-redef]
@@ -36,7 +38,6 @@ __all__ = [
     "__version__",
     "SDKConfig",
     "Console",
-    "QA_PROMPT",
     "QA_APPLY_PROMPT",
     "REVIEW_PROMPT",
     "CODE_REVIEW_AGENT_FIX_PROMPT",
@@ -45,6 +46,8 @@ __all__ = [
     "QA_PROMPT_V2",
     "QA_MERGE_SAVE_PROMPT",
     "QA_CONSOLIDATE_PROMPT",
+    "PRE_EXECUTION_QA_PROMPT_V2",
+    "MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT",
     "is_workiq_available",
     "build_workiq_mcp_config",
     "StepRunner",

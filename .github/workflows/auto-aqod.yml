@@ -30,6 +30,7 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
       group: aqod-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -178,6 +179,8 @@ jobs:
               branch = "main"
           qa_section = section("質問票設定")
           auto_qa = bool(qa_section and re.search(r"-\s*\[[xX]\]", qa_section))
+          review_section = section("レビュー設定")
+          auto_context_review = bool(review_section and re.search(r"-\s*\[[xX]\]", review_section))
           sec = section("PR完全自動化設定")
           auto_merge = bool(re.search(r"-\s*\[[xX]\]", sec))
 
@@ -198,6 +201,7 @@ jobs:
               "model": model or "Auto",
               "branch": branch,
               "auto_qa": auto_qa,
+              "auto_context_review": auto_context_review,
               "auto_merge": auto_merge,
               "enable_self_improve": enable_self_improve,
               "self_improve_max_iterations": self_improve_max_iterations,
@@ -212,27 +216,30 @@ jobs:
           MODEL=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])")
           BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['branch'])")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_qa'] else 'false')")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('auto_context_review') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_merge'] else 'false')")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['enable_self_improve'] else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['self_improve_max_iterations'])")
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('self_improve_quality_threshold','80'))")
-          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL BRANCH AUTO_QA AUTO_MERGE ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
+          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL BRANCH AUTO_QA AUTO_CONTEXT_REVIEW AUTO_MERGE ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
 
           # ---- Root Issue body に branch / auto-qa / auto-merge / self-improve タグを埋め込み ----
           _ROOT_TAG_FILE=$(mktemp)
-          python3 - "${BRANCH}" "${AUTO_QA}" "${AUTO_MERGE}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${_ROOT_TAG_FILE}" <<'PYTAGS'
+          python3 - "${BRANCH}" "${AUTO_QA}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${_ROOT_TAG_FILE}" <<'PYTAGS'
           import sys, os, re, json
           body = os.environ.get("ISSUE_BODY", "")
           branch = sys.argv[1]
           auto_qa = sys.argv[2]
-          auto_merge = sys.argv[3]
-          enable_si = sys.argv[4]
-          si_max_iter = sys.argv[5]
-          si_quality_threshold = sys.argv[6]
-          output_file = sys.argv[7]
+          auto_context_review = sys.argv[3]
+          auto_merge = sys.argv[4]
+          enable_si = sys.argv[5]
+          si_max_iter = sys.argv[6]
+          si_quality_threshold = sys.argv[7]
+          output_file = sys.argv[8]
           tags = [
               ("branch", branch),
               ("auto-qa", auto_qa),
+              ("auto-context-review", auto_context_review),
               ("auto-merge", auto_merge),
               ("enable-self-improve", enable_si),
               ("self-improve-max-iterations", si_max_iter),
@@ -264,6 +271,11 @@ jobs:
             echo "Root Issue #${ISSUE_NUMBER} に auto-qa ラベルを付与しました。"
           fi
 
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ISSUE_NUMBER}" "auto-context-review"
+            echo "Root Issue #${ISSUE_NUMBER} に auto-context-review ラベルを付与しました。"
+          fi
+
           STEP_TITLE="[AQOD] original-docs 質問票生成"
           STEP_BODY=$(python3 - <<'PYEOF'
           from pathlib import Path
@@ -274,16 +286,27 @@ jobs:
           focus_areas = os.environ["FOCUS_AREAS"]
           model = os.environ["MODEL"]
           auto_merge = os.environ["AUTO_MERGE"]
+          auto_context_review = os.environ.get("AUTO_CONTEXT_REVIEW", "false")
           template = Path(".github/scripts/templates/aqod/step-1.md").read_text(encoding="utf-8")
           root_ref = "\n".join([
               f"<!-- root-issue: #{issue_num} -->",
               f"<!-- branch: {os.environ.get('BRANCH', 'main')} -->",
               "<!-- auto-review: true -->",
-              "<!-- auto-context-review: true -->",
+              f"<!-- auto-context-review: {auto_context_review} -->",
               f"<!-- auto-qa: {os.environ.get('AUTO_QA', 'false')} -->",
               "<!-- mode: original-docs-questionnaire -->",
           ])
-          additional = f"\n\n## 追加コメント\n- model: {model}\n- auto-merge: {auto_merge}"
+          additional = (
+              "\n\n## 追加コンテキストの参照\n\n"
+              "以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n"
+              "- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n"
+              "- この PR または関連 Issue のレビュー指摘\n"
+              "- Self-Improve 結果または改善計画（存在する場合のみ）\n"
+              "- `## 入力` に記載された前 Step 成果物\n"
+              "- 追加で注入された既存成果物・reuse context\n\n"
+              "参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。"
+              f"\n\n## 追加コメント\n- model: {model}\n- auto-merge: {auto_merge}"
+          )
           body = (template
               .replace("{root_ref}", root_ref)
               .replace("{aqod_target_scope}", target_scope)
@@ -295,7 +318,10 @@ jobs:
           PYEOF
           )
 
-          LABELS='["aqod:ready","auto-context-review"]'
+          LABELS='["aqod:ready"]'
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-context-review"]')
+          fi
           if [[ "${AUTO_QA}" == "true" ]]; then
             LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-qa"]')
           fi
@@ -318,6 +344,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: write
     steps:
@@ -415,16 +442,17 @@ jobs:
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-              self_improve_quality_threshold=int(os.environ.get('QUALITY_THRESHOLD', '80')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
           print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "

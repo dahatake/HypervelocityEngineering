@@ -1437,9 +1437,17 @@ python -m hve orchestrate \
 | `--qa-model` | QA 質問票生成（`--auto-qa`）で使用するモデル（省略時は `--model` と同じ） | `None`（`--model` にフォールバック） |
 | `--max-parallel` | 同時実行するステップ数の上限 | `15` |
 | `--auto-qa` | 各ステップ後に自動 QA を実行（対話的） | `false` |
+| `--aqod-post-qa` | AQOD ワークフローでメインタスク完了後の事後 QA を実行する（オプトイン。`--auto-qa` と併用）。`HVE_AQOD_POST_QA=true` でも有効化可能 | `false` |
 | `--auto-contents-review` | 各ステップ後に自動レビューを実行 | `false` |
-| `--auto-coding-agent-review` | 全ステップ完了後に Code Review Agent レビューを実行（`--repo` + `GH_TOKEN` 必須） | `false` |
+| `--auto-coding-agent-review` | 全ステップ完了後に Code Review Agent レビューを実行（`--repo` / `GH_TOKEN` 不要、ローカル SDK で実行） | `false` |
 | `--auto-coding-agent-review-auto-approval` | Code Review Agent の修正プランを全て自動承認 | `false` |
+
+> **⚠️ `--auto-contents-review` と `--auto-coding-agent-review` の同時有効化について**:
+> 両オプションを同時に有効にすると、同一成果物に対してレビューセッションが重複し、**トークン消費・タスク回数が増える**可能性があります。
+> 同時有効化時は CLI 起動時に WARNING が表示されます（強制終了はしません）。
+> 通常はどちらか一方を選択してください:
+> - `--auto-contents-review` … ステップごとに敵対的レビューを実行（Phase 3 組み込み）
+> - `--auto-coding-agent-review` … 全ステップ完了後に Code Review Agent が差分全体をレビュー
 | `--timeout` | idle タイムアウト秒数 | `21600`（6時間） |
 | `--review-timeout` | Code Review Agent レビュー完了待ちタイムアウト秒数 | `7200`（2時間） |
 | `--show-stream` | モデル応答のトークンストリーム表示 | `false` |
@@ -1631,9 +1639,15 @@ python -m hve orchestrate --workflow aad --branch main --verbosity <LEVEL>
 |-----------|------|------------|
 | `--create-issues` | 実行前に GitHub Issue を作成 | `false` |
 | `--create-pr` | 実行後に GitHub PR を作成 | `false` |
-| `--repo` | リポジトリ名（`owner/repo` 形式） | `$REPO` 環境変数の値、未設定時は空（`--create-issues` / `--create-pr` / `--auto-coding-agent-review` 使用時は必須） |
+| `--repo` | リポジトリ名（`owner/repo` 形式） | `$REPO` 環境変数の値、未設定時は空（`--create-issues` / `--create-pr` 使用時は必須） |
 
 > **これらは全てオプションです。GitHub に Issue/PR を作成せずローカル実行のみで完結できます。**
+
+> **⚠️ `--create-pr` と Issue Template の `auto_merge` の違い**:
+> `--create-pr` は PR を作成するだけで、**自動マージ（auto-merge）は行いません**。
+> Issue Template 起動では `auto_merge: true` チェックを入れると QA・レビュー完了後に自動 Approve + squash merge まで実行されますが、hve の `--create-pr` にはこの機能はありません。
+> PR のレビュー・承認・マージはユーザーが手動で行う必要があります。
+> 完全自動マージが必要な場合は Issue Template 側の `auto_merge` オプションを使用してください。
 
 > **`$REPO` 環境変数の設定方法**: `--create-issues` または `--create-pr` を使用する場合は `owner/repo` 形式でリポジトリを指定してください。環境変数で設定する場合は以下のコマンドを使用します。
 > ```bash
@@ -1659,7 +1673,9 @@ python -m hve orchestrate --workflow aad --branch main --verbosity <LEVEL>
 | オプション | 説明 | 対応ワークフロー |
 |-----------|------|--------------|
 | `--app-ids` | アプリケーション ID（カンマ区切りで複数指定可。例: `APP-01,APP-02,APP-03`） | `asdw` |
-| `--app-id` | アプリケーション ID（例: `APP-04`。後方互換のため残す。複数指定は `--app-ids` を推奨） | `asdw` |
+| `--app-id` | アプリケーション ID（例: `APP-04`。**後方互換のため残存**。複数指定は `--app-ids` を推奨） | `asdw` |
+
+> **後方互換オプションについて**: `--app-id` は以前のバージョンとの互換性のために保持されています。新規実装では `--app-ids`（複数形）を使用してください。`--app-id` は将来のバージョンで削除される可能性があります。
 | `--resource-group` | Azure リソースグループ名（例: `rg-dev`） | `asdw`, `abdv` |
 | `--usecase-id` | ユースケース ID（例: `UC-01`） | `asdw` |
 | `--batch-job-id` | バッチジョブ ID（カンマ区切り可。例: `JOB-01,JOB-02`） | `abdv` |
@@ -1976,6 +1992,26 @@ WORKFLOW_REGISTRY = {
 | `--auto-qa` のみ | メインタスク → QA → ユーザー回答 |
 | `--auto-contents-review` のみ | メインタスク → Review |
 | 両方 | メインタスク → QA → ユーザー回答 → Review |
+
+#### ワークフロー別 QA フェーズ動作
+
+| ワークフロー | 事前 QA (Phase 0) | 事後 QA (Phase 2) | 備考 |
+|---|---|---|---|
+| AAD / その他通常 | `qa_phase ∈ {pre,both}` で実行 | `qa_phase ∈ {post,both}` で実行 | 既存通り |
+| **AKM** | **`qa_phase` に従う** | **常時スキップ** | 事前 QA → Phase 1 注入で要件充足。DAG 終了後に `_run_akm_workiq_verification` が別途実行される |
+| **AQOD** | 常時スキップ | **`aqod_post_qa_enabled=True` のときのみ実行** | `--aqod-post-qa` または `HVE_AQOD_POST_QA=true` でオプトイン |
+
+```bash
+# AKM: 事前 QA を有効化してメインタスクへ注入（事後 QA は実行されない）
+python -m hve orchestrate --workflow akm --auto-qa --qa-phase pre
+
+# AQOD: デフォルト（事後 QA なし）
+python -m hve orchestrate --workflow aqod --auto-qa
+
+# AQOD: 事後 QA をオプトインで実行
+python -m hve orchestrate --workflow aqod --auto-qa --aqod-post-qa
+HVE_AQOD_POST_QA=true python -m hve orchestrate --workflow aqod --auto-qa
+```
 
 > **インタラクティブモードでの設定**: wizard 内で「QA 自動投入を有効にする？ [y/N]」「Review 自動投入を有効にする？ [y/N]」と順番に確認されます。`y` を選んだ場合のみ、各項目ごとに「メインモデルとは別モデルを使うか」を確認し、必要時のみ QA/Review 用モデル選択メニューが表示されます。CLI モードの `--auto-qa` / `--auto-contents-review` フラグに相当します。
 

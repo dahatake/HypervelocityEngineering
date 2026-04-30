@@ -34,9 +34,10 @@
 | `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
 | `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
 | `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
-| `copilot-auto-feedback.yml` | Copilot QA/レビュー指示を自動投稿（`auto-qa` / `auto-context-review`） | `pull_request_target: [labeled, ready_for_review]` |
+| `copilot-auto-feedback.yml` | Copilot QA/レビュー指示を自動投稿（`auto-qa` / `auto-context-review`）。Issue の `*:qa-ready` ラベル付与時は事前 QA 質問票を投稿 | `pull_request_target: [labeled, ready_for_review]` / `issues: [labeled]` |
 | `auto-pr-transition-dispatcher.yml` | PR遷移ディスパッチャー（QA→Review→Approve/ create-subissues） | `pull_request_target: [synchronize]` / `issue_comment: [created]` |
-| `auto-qa-default-answer.yml` | QA 質問票への既定値回答を自動投稿 | Copilot 質問票コメント作成後（`issue_comment.created`） |
+| `auto-qa-default-answer.yml` | QA 質問票への既定値回答を自動投稿（PR コメント・Issue コメント両対応） | Copilot 質問票コメント作成後（`issue_comment.created`） |
+| `auto-issue-qa-ready-transition.yml` | Issue の `*:qa-ready` → `*:ready` 遷移と Copilot アサイン | `issue_comment: [created]` — `<!-- auto-qa-default-answered -->` マーカーまたは @copilot メンション（OWNER/MEMBER/COLLABORATOR） |
 | `post-qa-to-pr-comment.yml` | QA 結果を PR コメントに投稿 | PR プッシュ（`pull_request_target.synchronize`）かつ `auto-qa` ラベル付き PR 等の条件 |
 | `auto-draft-to-ready.yml` | Copilot PR の Draft → Ready 自動遷移 | `auto-approve-ready` ラベル付き draft PR でデバウンス完了時 |
 | `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `auto-approve-ready` ラベル付き PR（非 draft, 非 split-mode） |
@@ -81,7 +82,9 @@
 - **QA（`--auto-qa`）**:  
   - 通常モード: 質問票から要約した問いを一括で問い合わせ、`qa/{run_id}-{step_id}-workiq-qa.md` を生成
   - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-{step_id}-workiq-qa-draft.md` を生成
-- **AQOD（`aqod`）**: wizard では `aqod` + `auto_qa=True` の組み合わせで `workiq_draft_mode` が自動 ON になります（質問なし）。Work IQ は AQOD 本体の `original-docs/` 整合性レビューでは使用しません。
+- **AQOD（`aqod`）**: Work IQ は AQOD 本体の `original-docs/` 整合性レビューでは使用しません。
+  - wizard では、AQOD 選択時の対話プロンプトで post-QA を有効にした場合、`aqod` + `auto_qa=True` の組み合わせで `workiq_draft_mode` が自動 ON になります。
+  - CLI では、`aqod` + `auto_qa=True` に加えて `--aqod-post-qa` または `HVE_AQOD_POST_QA=true` を指定した場合、`workiq_draft_mode` が自動 ON になります。
 - wizard モード（`python -m hve`）では、QA 自動投入を有効にした場合のみ Work IQ 有効化メニューが表示されます。ログイン成功後に「Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト」を入力すると、QA フェーズの Work IQ プロンプトへ追記できます。
 
 利用ツール（読み取り専用）:
@@ -140,11 +143,12 @@
 | `akm:*` | `auto-knowledge-management-reusable.yml` | ワークフロー内 bootstrap ステップ |
 | `aqod:*` | `auto-aqod.yml` | ワークフロー内 bootstrap ステップ |
 
-各プレフィックスには以下の 5 状態があります:
+各プレフィックスには以下の状態があります:
 
 | サフィックス | 意味 |
 |------------|------|
 | `:initialized` | 初期化開始済み（重複実行防止。Sub Issue 生成前に付与される場合あり） |
+| `:qa-ready` | 事前 QA 完了待ち（`auto-qa` 有効時）。Copilot アサインは QA 回答後 |
 | `:ready` | 実行待ち（依存解決済み、Copilot アサイン前） |
 | `:running` | Copilot 実行中 |
 | `:done` | Step 完了（次 Step の起動トリガー） |

@@ -138,11 +138,18 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_workiq_draft_defaults(self) -> None:
         self.assertFalse(self.cfg.workiq_draft_mode)
         self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
-        self.assertEqual(self.cfg.workiq_per_question_timeout, 600.0)
+        self.assertEqual(self.cfg.workiq_per_question_timeout, 900.0)
         self.assertEqual(self.cfg.workiq_max_draft_questions, 30)
 
     def test_auto_self_improve_default_false(self) -> None:
         self.assertFalse(self.cfg.auto_self_improve)
+
+    def test_max_diff_chars_default(self) -> None:
+        self.assertEqual(self.cfg.max_diff_chars, 80_000)
+
+    def test_aqod_post_qa_enabled_default_false(self) -> None:
+        """aqod_post_qa_enabled のデフォルト値は False であること。"""
+        self.assertFalse(self.cfg.aqod_post_qa_enabled)
 
 
 class TestSDKConfigFromEnv(unittest.TestCase):
@@ -284,6 +291,74 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ.clear()
             os.environ.update(env_backup)
 
+    def test_from_env_hve_max_diff_chars(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["HVE_MAX_DIFF_CHARS"] = "12345"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.max_diff_chars, 12345)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_max_diff_chars_default(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ.pop("HVE_MAX_DIFF_CHARS", None)
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.max_diff_chars, 80_000)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_max_diff_chars_invalid_fallback(self) -> None:
+        """無効値（非数値）の場合は 80_000 にフォールバックすること。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ["HVE_MAX_DIFF_CHARS"] = "not_a_number"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.max_diff_chars, 80_000)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_aqod_post_qa_default_false(self) -> None:
+        """HVE_AQOD_POST_QA 未設定時は False であること。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ.pop("HVE_AQOD_POST_QA", None)
+            cfg = SDKConfig.from_env()
+            self.assertFalse(cfg.aqod_post_qa_enabled)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_aqod_post_qa_true_variants(self) -> None:
+        """HVE_AQOD_POST_QA=true/1/yes で aqod_post_qa_enabled=True になること。"""
+        env_backup = os.environ.copy()
+        try:
+            for value in ("true", "1", "yes"):
+                with self.subTest(value=value):
+                    os.environ["HVE_AQOD_POST_QA"] = value
+                    cfg = SDKConfig.from_env()
+                    self.assertTrue(cfg.aqod_post_qa_enabled)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_hve_aqod_post_qa_false_variants(self) -> None:
+        """HVE_AQOD_POST_QA=false/0/no/"" で aqod_post_qa_enabled=False になること。"""
+        env_backup = os.environ.copy()
+        try:
+            for value in ("false", "0", "no", ""):
+                with self.subTest(value=value):
+                    os.environ["HVE_AQOD_POST_QA"] = value
+                    cfg = SDKConfig.from_env()
+                    self.assertFalse(cfg.aqod_post_qa_enabled)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
 
 class TestSDKConfigResolveToken(unittest.TestCase):
     """resolve_token() の動作を検証する。"""
@@ -345,6 +420,187 @@ class TestSDKConfigModelResolution(unittest.TestCase):
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
+
+
+class TestSDKConfigModelOverride(unittest.TestCase):
+    """HVE_MODEL_OVERRIDE の動作を検証する。"""
+
+    def setUp(self) -> None:
+        self._backup = os.environ.copy()
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._backup)
+
+    def test_model_override_default_is_none(self) -> None:
+        self.assertIsNone(SDKConfig().model_override)
+
+    def test_model_override_applies_when_set(self) -> None:
+        """HVE_MODEL_OVERRIDE が設定された場合、model フィールドが上書きされる。"""
+        os.environ["HVE_MODEL_OVERRIDE"] = "gpt-5.4"
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.model, "gpt-5.4")
+        self.assertEqual(cfg.model_override, "gpt-5.4")
+
+    def test_model_override_takes_precedence_over_model_env(self) -> None:
+        """HVE_MODEL_OVERRIDE は MODEL 環境変数より優先される。"""
+        os.environ["MODEL"] = "claude-opus-4.7"
+        os.environ["HVE_MODEL_OVERRIDE"] = "gpt-5.5"
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.model, "gpt-5.5")
+
+    def test_model_override_takes_precedence_over_auto(self) -> None:
+        """HVE_MODEL_OVERRIDE は Auto（未指定）より優先される。"""
+        os.environ.pop("MODEL", None)
+        os.environ["HVE_MODEL_OVERRIDE"] = "gemini-2.5-pro"
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.model, "gemini-2.5-pro")
+
+    def test_model_override_unset_does_not_affect_model(self) -> None:
+        """HVE_MODEL_OVERRIDE 未設定時は通常の MODEL 環境変数が使われる。"""
+        os.environ.pop("HVE_MODEL_OVERRIDE", None)
+        os.environ["MODEL"] = "claude-opus-4.6"
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.model, "claude-opus-4.6")
+        self.assertIsNone(cfg.model_override)
+
+    def test_model_override_empty_string_ignored(self) -> None:
+        """HVE_MODEL_OVERRIDE が空文字の場合は無視される。"""
+        os.environ["HVE_MODEL_OVERRIDE"] = ""
+        os.environ["MODEL"] = "claude-opus-4.7"
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.model, "claude-opus-4.7")
+
+
+class TestSDKConfigArtifactImprovementDefaults(unittest.TestCase):
+    """apply_*_improvements_to_main フィールドのデフォルト値を検証する。"""
+
+    def setUp(self) -> None:
+        self.cfg = SDKConfig()
+
+    def test_apply_qa_improvements_to_main_default_false(self) -> None:
+        self.assertFalse(self.cfg.apply_qa_improvements_to_main)
+
+    def test_apply_review_improvements_to_main_default_true(self) -> None:
+        self.assertTrue(self.cfg.apply_review_improvements_to_main)
+
+    def test_apply_self_improve_to_main_default_true(self) -> None:
+        self.assertTrue(self.cfg.apply_self_improve_to_main)
+
+
+class TestSDKConfigArtifactImprovementFromEnv(unittest.TestCase):
+    """apply_*_improvements_to_main 環境変数読み取りの検証。"""
+
+    def setUp(self) -> None:
+        self._backup = os.environ.copy()
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._backup)
+
+    def test_apply_qa_improvements_enabled_by_env(self) -> None:
+        os.environ["HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN"] = "true"
+        cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.apply_qa_improvements_to_main)
+
+    def test_apply_qa_improvements_default_false_when_unset(self) -> None:
+        os.environ.pop("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", None)
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_qa_improvements_to_main)
+
+    def test_apply_review_improvements_disabled_by_env(self) -> None:
+        os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = "false"
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_review_improvements_to_main)
+
+    def test_apply_review_improvements_default_true_when_unset(self) -> None:
+        os.environ.pop("HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN", None)
+        cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.apply_review_improvements_to_main)
+
+    def test_apply_self_improve_disabled_by_env(self) -> None:
+        os.environ["HVE_APPLY_SELF_IMPROVE_TO_MAIN"] = "false"
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_self_improve_to_main)
+
+    def test_apply_self_improve_default_true_when_unset(self) -> None:
+        os.environ.pop("HVE_APPLY_SELF_IMPROVE_TO_MAIN", None)
+        cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.apply_self_improve_to_main)
+
+    def test_apply_review_improvements_disabled_by_zero(self) -> None:
+        os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = "0"
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_review_improvements_to_main)
+
+    def test_apply_self_improve_disabled_by_no(self) -> None:
+        os.environ["HVE_APPLY_SELF_IMPROVE_TO_MAIN"] = "no"
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_self_improve_to_main)
+
+    def test_apply_review_improvements_enabled_by_yes(self) -> None:
+        os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = "yes"
+        cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.apply_review_improvements_to_main)
+
+    def test_apply_review_improvements_disabled_by_empty_string(self) -> None:
+        os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = ""
+        cfg = SDKConfig.from_env()
+        self.assertFalse(cfg.apply_review_improvements_to_main)
+
+
+class TestSelfImproveWorkflowSdkConfig(unittest.TestCase):
+    """Issue Template 起動の self-improve ジョブで SDKConfig.from_env() を使う際の
+    github_token / cli_path / model 等が正しく渡されることを検証する。"""
+
+    def setUp(self):
+        self._env_backup = os.environ.copy()
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._env_backup)
+
+    def test_from_env_provides_github_token_for_self_improve(self) -> None:
+        """GH_TOKEN が set されている場合、from_env() が github_token を取得すること。"""
+        os.environ["GH_TOKEN"] = "ghp_test_token"
+        os.environ.pop("GITHUB_TOKEN", None)
+        cfg = SDKConfig.from_env()
+        cfg.auto_self_improve = True
+        cfg.self_improve_max_iterations = 3
+        self.assertEqual(cfg.github_token, "ghp_test_token")
+        self.assertTrue(cfg.auto_self_improve)
+        self.assertEqual(cfg.self_improve_max_iterations, 3)
+
+    def test_from_env_provides_cli_path_for_self_improve(self) -> None:
+        """COPILOT_CLI_PATH が set されている場合、from_env() が cli_path を取得すること。"""
+        os.environ["COPILOT_CLI_PATH"] = "/usr/local/bin/copilot"
+        cfg = SDKConfig.from_env()
+        cfg.auto_self_improve = True
+        self.assertEqual(cfg.cli_path, "/usr/local/bin/copilot")
+
+    def test_from_env_provides_model_for_self_improve(self) -> None:
+        """MODEL が set されている場合、from_env() が model を取得すること。"""
+        os.environ["MODEL"] = "claude-sonnet-4.6"
+        cfg = SDKConfig.from_env()
+        cfg.auto_self_improve = True
+        self.assertEqual(cfg.model, "claude-sonnet-4.6")
+
+    def test_from_env_with_quality_threshold_override(self) -> None:
+        """from_env() + quality_threshold 上書きが正しく動作すること。"""
+        os.environ["GH_TOKEN"] = "ghp_test"
+        cfg = SDKConfig.from_env()
+        cfg.auto_self_improve = True
+        cfg.self_improve_max_iterations = 5
+        cfg.self_improve_quality_threshold = 90
+        self.assertEqual(cfg.self_improve_quality_threshold, 90)
+        self.assertEqual(cfg.self_improve_max_iterations, 5)
+        self.assertEqual(cfg.github_token, "ghp_test")
+
+    def test_qa_phase_default_is_pre_for_self_improve(self) -> None:
+        """from_env() 経由での qa_phase デフォルトが 'pre' であること（QA 二重発火防止）。"""
+        os.environ.pop("HVE_QA_PHASE", None)
+        cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.qa_phase, "pre")
 
 
 if __name__ == "__main__":

@@ -42,6 +42,7 @@ permissions:
 jobs:
   sync-labels:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}

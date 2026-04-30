@@ -32,6 +32,7 @@ jobs:
   advance:
     if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
@@ -519,6 +520,7 @@ jobs:
   advance_adoc:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'adoc:done'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}

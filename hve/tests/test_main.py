@@ -924,6 +924,43 @@ class TestValidateAutoCodingAgentReview(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(args.auto_coding_agent_review_auto_approval)
 
+    def test_warns_when_both_review_modes_enabled(self) -> None:
+        """--auto-contents-review と --auto-coding-agent-review が同時に有効な場合、
+        warning が stderr に出力されるが実行は続行する（戻り値は True）。"""
+        args = _parse([
+            "orchestrate", "-w", "aas",
+            "--auto-coding-agent-review",
+            "--auto-contents-review",
+        ])
+        config = self._make_config()
+        import io
+        buf = io.StringIO()
+        with mock.patch("sys.stderr", buf):
+            result = _validate_auto_coding_agent_review(args, config)
+        output = buf.getvalue()
+
+        self.assertTrue(result)  # 強制終了しない
+        self.assertIn("WARNING", output)
+        self.assertIn("--auto-contents-review", output)
+        self.assertIn("--auto-coding-agent-review", output)
+
+    def test_no_warning_when_only_coding_agent_review_enabled(self) -> None:
+        """--auto-coding-agent-review のみ有効な場合、重複レビュー WARNING は出力されない。"""
+        args = _parse([
+            "orchestrate", "-w", "aas",
+            "--auto-coding-agent-review",
+            "--quiet",
+        ])
+        config = self._make_config()
+        import io
+        buf = io.StringIO()
+        with mock.patch("sys.stderr", buf):
+            result = _validate_auto_coding_agent_review(args, config)
+        output = buf.getvalue()
+
+        self.assertTrue(result)
+        self.assertNotIn("WARNING", output)
+
 
 class TestCreateIssuesNewFlow(unittest.TestCase):
     """--create-issues 新フローのバリデーションテスト。"""
@@ -1511,7 +1548,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         self.assertFalse(cfg.is_workiq_akm_review_enabled())
         mock_workiq_mod.workiq_login.assert_not_called()
         prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
-        self.assertTrue(any("AKM 完了後に QA" in str(p) for p in prompts))
+        self.assertTrue(any("AKM 実行前に QA" in str(p) for p in prompts))
         self.assertTrue(any("Work IQ" in str(p) and "knowledge/" in str(p) for p in prompts))
 
     def test_manual_mode_aqod_auto_qa_enables_workiq_draft_mode(self) -> None:

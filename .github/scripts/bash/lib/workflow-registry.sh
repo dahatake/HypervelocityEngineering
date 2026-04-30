@@ -62,83 +62,7 @@ _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
 JSONEOF
 )
 
-_WORKFLOW_REGISTRY[aad]=$(cat <<'JSONEOF'
-{
-  "id": "aad",
-  "name": "App Detail Design",
-  "label_prefix": "aad",
-  "state_labels": {
-    "initialized": "aad:initialized",
-    "ready": "aad:ready",
-    "running": "aad:running",
-    "done": "aad:done",
-    "blocked": "aad:blocked"
-  },
-  "params": [],
-  "steps": [
-    {"id":"1","title":"ドメイン分析 + サービス一覧抽出（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"7","title":"画面定義書 + マイクロサービス定義書（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"8","title":"AI Agent 設計（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"1.1","title":"ドメイン分析","custom_agent":"Arch-Microservice-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aad/step-1.1.md"},
-    {"id":"1.2","title":"サービス一覧抽出","custom_agent":"Arch-Microservice-ServiceIdentify","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aad/step-1.2.md"},
-    {"id":"2","title":"データモデル","custom_agent":"Arch-DataModeling","depends_on":["1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aad/step-2.md"},
-    {"id":"3","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["2"],"is_container":false,"skip_fallback_deps":["2"],"block_unless":[],"body_template_path":"templates/aad/step-3.md"},
-    {"id":"4","title":"画面一覧と遷移図","custom_agent":"Arch-UI-List","depends_on":["3"],"is_container":false,"skip_fallback_deps":["3"],"block_unless":[],"body_template_path":"templates/aad/step-4.md"},
-    {"id":"5","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/aad/step-5.md"},
-    {"id":"6","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["5"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"},
-    {"id":"7.1","title":"画面定義書","custom_agent":"Arch-UI-Detail","depends_on":["6"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aad/step-7.1.md"},
-    {"id":"7.2","title":"マイクロサービス定義書","custom_agent":"Arch-Microservice-ServiceDetail","depends_on":["6"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aad/step-7.2.md"},
-    {"id":"7.3","title":"TDDテスト仕様書","custom_agent":"Arch-TDD-TestSpec","depends_on":["6","7.1","7.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aad-web/step-2.3.md"},
-    {"id":"8.1","title":"AI Agent アプリケーション定義","custom_agent":"Arch-AIAgentDesign","depends_on":["7.3"],"is_container":false,"skip_fallback_deps":["7.1","7.2"],"block_unless":[],"body_template_path":"templates/aad/step-8.1.md"},
-    {"id":"8.2","title":"AI Agent 粒度設計","custom_agent":"Arch-AIAgentDesign","depends_on":["8.1"],"is_container":false,"skip_fallback_deps":["7.3"],"block_unless":[],"body_template_path":"templates/aad/step-8.2.md"},
-    {"id":"8.3","title":"AI Agent 詳細設計","custom_agent":"Arch-AIAgentDesign","depends_on":["8.2"],"is_container":false,"skip_fallback_deps":["8.1"],"block_unless":[],"body_template_path":"templates/aad/step-8.3.md"}
-  ]
-}
-JSONEOF
-)
 
-_WORKFLOW_REGISTRY[asdw]=$(cat <<'JSONEOF'
-{
-  "id": "asdw",
-  "name": "App Dev Microservice Azure",
-  "label_prefix": "asdw",
-  "state_labels": {
-    "initialized": "asdw:initialized",
-    "ready": "asdw:ready",
-    "running": "asdw:running",
-    "done": "asdw:done",
-    "blocked": "asdw:blocked"
-  },
-  "params": ["app_id", "resource_group", "usecase_id"],
-  "steps": [
-    {"id":"1","title":"データ（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"2","title":"マイクロサービス作成（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"3","title":"UI 作成（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"4","title":"アーキテクチャレビュー（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
-    {"id":"1.1","title":"Azure データストア選定","custom_agent":"Dev-Microservice-Azure-DataDesign","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-1.1.md"},
-    {"id":"1.2","title":"Azure データサービス Deploy","custom_agent":"Dev-Microservice-Azure-DataDeploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-1.2.md"},
-    {"id":"2.1","title":"Azure コンピュート選定","custom_agent":"Dev-Microservice-Azure-ComputeDesign","depends_on":["1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-2.1.md"},
-    {"id":"2.2","title":"追加 Azure サービス選定","custom_agent":"Dev-Microservice-Azure-AddServiceDesign","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-2.2.md"},
-    {"id":"2.3","title":"追加 Azure サービス Deploy","custom_agent":"Dev-Microservice-Azure-AddServiceDeploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":["2.2"],"block_unless":[],"body_template_path":"templates/asdw/step-2.3.md"},
-    {"id":"2.3T","title":"サービス テスト仕様書 (TDD RED)","custom_agent":"Arch-TDD-TestSpec","depends_on":["2.3"],"is_container":false,"skip_fallback_deps":["2.3"],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.3T.md"},
-    {"id":"2.3TC","title":"サービス テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-ServiceTestCoding","depends_on":["2.3T"],"is_container":false,"skip_fallback_deps":["2.3T"],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.3TC.md"},
-    {"id":"2.4","title":"サービスコード実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-ServiceCoding-AzureFunctions","depends_on":["2.3TC"],"is_container":false,"skip_fallback_deps":["2.3TC"],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.4.md"},
-    {"id":"2.5","title":"Azure Compute Deploy","custom_agent":"Dev-Microservice-Azure-ComputeDeploy-AzureFunctions","depends_on":["2.4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.5.md"},
-    {"id":"2.6","title":"AI Agent 構成設計","custom_agent":"Arch-AIAgentDesign","depends_on":["2.5"],"is_container":false,"skip_fallback_deps":["2.5"],"block_unless":[],"body_template_path":"templates/aagd/step-1.md"},
-    {"id":"2.7T","title":"AI Agent テスト仕様書 (TDD RED)","custom_agent":"Arch-TDD-TestSpec","depends_on":["2.6"],"is_container":false,"skip_fallback_deps":["2.6"],"block_unless":[],"body_template_path":"templates/aagd/step-2.1.md"},
-    {"id":"2.7TC","title":"AI Agent テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-AgentTestCoding","depends_on":["2.7T"],"is_container":false,"skip_fallback_deps":["2.7T"],"block_unless":[],"body_template_path":"templates/aagd/step-2.2.md"},
-    {"id":"2.7","title":"AI Agent 実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-AgentCoding","depends_on":["2.7TC"],"is_container":false,"skip_fallback_deps":["2.7TC"],"block_unless":[],"body_template_path":"templates/aagd/step-2.3.md"},
-    {"id":"2.8","title":"AI Agent Deploy","custom_agent":"Dev-Microservice-Azure-AgentDeploy","depends_on":["2.7"],"is_container":false,"skip_fallback_deps":["2.7"],"block_unless":[],"body_template_path":"templates/asdw/step-2.8.md"},
-    {"id":"3.0T","title":"UI テスト仕様書 (TDD RED)","custom_agent":"Arch-TDD-TestSpec","depends_on":["2.8"],"is_container":false,"skip_fallback_deps":["2.8"],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.0T.md"},
-    {"id":"3.0TC","title":"UI テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-UITestCoding","depends_on":["3.0T"],"is_container":false,"skip_fallback_deps":["3.0T"],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.0TC.md"},
-    {"id":"3.1","title":"UI 実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-UICoding","depends_on":["3.0TC"],"is_container":false,"skip_fallback_deps":["3.0TC"],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.1.md"},
-    {"id":"3.2","title":"Web アプリ Deploy (Azure SWA)","custom_agent":"Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.2.md"},
-    {"id":"4.1","title":"WAF アーキテクチャレビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["3.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-4.1.md"},
-    {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw/step-4.2.md"}
-  ]
-}
-JSONEOF
-)
 
 _WORKFLOW_REGISTRY[abd]=$(cat <<'JSONEOF'
 {
@@ -182,11 +106,11 @@ _WORKFLOW_REGISTRY[abdv]=$(cat <<'JSONEOF'
   },
   "params": ["resource_group", "batch_job_id"],
   "steps": [
-    {"id":"1.1","title":"データサービス選定","custom_agent":"Dev-Batch-Deploy","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.1.md"},
-    {"id":"1.2","title":"Azure データリソース Deploy","custom_agent":"Dev-Batch-Deploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.2.md"},
+    {"id":"1.1","title":"データサービス選定","custom_agent":"Dev-Batch-DataServiceSelect","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.1.md"},
+    {"id":"1.2","title":"Azure データリソース Deploy","custom_agent":"Dev-Batch-DataDeploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.2.md"},
     {"id":"2.1","title":"TDD RED — テストコード作成","custom_agent":"Dev-Batch-TestCoding","depends_on":["1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-2.1.md"},
     {"id":"2.2","title":"TDD GREEN — バッチジョブ本実装","custom_agent":"Dev-Batch-ServiceCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-2.2.md"},
-    {"id":"3","title":"Azure Functions/コンテナ Deploy","custom_agent":"Dev-Batch-Deploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-3.md"},
+    {"id":"3","title":"Azure Functions/コンテナ Deploy","custom_agent":"Dev-Batch-FunctionsDeploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-3.md"},
     {"id":"4.1","title":"WAF レビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-4.1.md"},
     {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-4.2.md"}
   ]
@@ -208,9 +132,9 @@ _WORKFLOW_REGISTRY[aag]=$(cat <<'JSONEOF'
   },
   "params": ["app_ids", "app_id", "usecase_id"],
   "steps": [
-    {"id":"1","title":"AI Agent アプリケーション定義","custom_agent":"Arch-AIAgentDesign","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-1.md"},
-    {"id":"2","title":"AI Agent 粒度設計","custom_agent":"Arch-AIAgentDesign","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-2.md"},
-    {"id":"3","title":"AI Agent 詳細設計","custom_agent":"Arch-AIAgentDesign","depends_on":["2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-3.md"}
+    {"id":"1","title":"AI Agent アプリケーション定義","custom_agent":"Arch-AIAgentDesign-Step1","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-1.md"},
+    {"id":"2","title":"AI Agent 粒度設計","custom_agent":"Arch-AIAgentDesign-Step2","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-2.md"},
+    {"id":"3","title":"AI Agent 詳細設計","custom_agent":"Arch-AIAgentDesign-Step3","depends_on":["2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aag/step-3.md"}
   ]
 }
 JSONEOF
@@ -230,7 +154,7 @@ _WORKFLOW_REGISTRY[aagd]=$(cat <<'JSONEOF'
   },
   "params": ["app_ids", "app_id", "resource_group", "usecase_id"],
   "steps": [
-    {"id":"1","title":"AI Agent 構成設計","custom_agent":"Arch-AIAgentDesign","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-1.md"},
+    {"id":"1","title":"AI Agent 構成設計","custom_agent":"Arch-AIAgentDesign-Step1","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-1.md"},
     {"id":"2.1","title":"AI Agent テスト仕様書 (TDD RED)","custom_agent":"Arch-TDD-TestSpec","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-2.1.md"},
     {"id":"2.2","title":"AI Agent テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-AgentTestCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-2.2.md"},
     {"id":"2.3","title":"AI Agent 実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-AgentCoding","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-2.3.md"},

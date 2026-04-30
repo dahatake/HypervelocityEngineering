@@ -538,6 +538,10 @@ class QAMerger:
             result = per_question_results.get(q.no, "").strip()
             if not result:
                 continue
+            # STATUS ラベルがある場合は NOT_FOUND / UNAVAILABLE をスキップ
+            _status_m = re.match(r"^\s*STATUS\s*:\s*(\w+)", result, re.IGNORECASE)
+            if _status_m and _status_m.group(1).upper() in ("NOT_FOUND", "UNAVAILABLE"):
+                continue
             # エラー応答（「実行できません」「利用できません」等）はスキップ
             _error_indicators = (
                 "実行できません", "利用できません", "アクセスできない",

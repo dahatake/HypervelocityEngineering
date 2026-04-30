@@ -325,7 +325,7 @@ mutation(
   local comment_token="${gh_token:-${copilot_pat}}"
   if [[ -n "${comment_token}" ]]; then
     post_comment "${issue_number}" "${fail_msg}" "${repo}" 2>/dev/null || {
-      echo "WARNING: アサイン失敗通知の投稿にも失敗しました。" >&2
+      echo "::warning::アサイン失敗通知の投稿にも失敗しました: issue #${issue_number}" >&2
     }
     echo "WARNING: Issue #${issue_number} へのアサイン失敗通知を投稿しました。" >&2
   fi

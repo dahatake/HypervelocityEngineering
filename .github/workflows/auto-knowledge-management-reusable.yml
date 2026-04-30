@@ -39,8 +39,11 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
-      group: akm-orchestrator-${{ inputs.issue_number }}
+      # knowledge/ への書き込み競合防止: 同一リポジトリ内で AKM orchestrate を直列化する。
+      # 複数の AKM Issue が同時起動しても knowledge/ への並列書き込みが発生しない。
+      group: akm-knowledge-write-${{ github.repository }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -219,6 +222,7 @@ jobs:
           create_label "akm:done"         "0E8A16" ""
           create_label "akm:blocked"      "D73A4A" ""
           create_label "auto-qa"          "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
+          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
           create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
 
       # ----------------------------------------------------------------
@@ -333,6 +337,13 @@ jobs:
               section_text = m.group(1)
               force_refresh = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
+          # レビュー設定: チェック [x] → auto-context-review 有効
+          auto_context_review = False
+          m = re.search(r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              section_text = m.group(1)
+              auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
           # 質問票設定: チェック [x] → auto-qa 有効
           auto_qa = False
           m = re.search(r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
@@ -388,6 +399,7 @@ jobs:
               "target_files": target_files,
               "custom_source_dir": " ".join(custom_source_dir),
               "force_refresh": force_refresh,
+              "auto_context_review": auto_context_review,
               "auto_qa": auto_qa,
               "auto_merge": auto_merge,
               "additional_comment": additional_comment,
@@ -405,6 +417,7 @@ jobs:
           CUSTOM_SOURCE_DIR=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('custom_source_dir',''))")
           FORCE_REFRESH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('force_refresh') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
@@ -416,24 +429,27 @@ jobs:
           echo "対象ファイル: ${TARGET_FILES}"
           echo "custom_source_dir: ${CUSTOM_SOURCE_DIR}"
           echo "force_refresh: ${FORCE_REFRESH}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
-          # ---- Root Issue body に auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
+          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
           MERGE_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_QA}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${MERGE_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
-          auto_qa = sys.argv[1]
-          auto_merge = sys.argv[2]
-          branch = sys.argv[3]
-          enable_si = sys.argv[4]
-          si_max_iter = sys.argv[5]
-          si_quality_threshold = sys.argv[6]
-          output_file = sys.argv[7]
+          auto_context_review = sys.argv[1]
+          auto_qa = sys.argv[2]
+          auto_merge = sys.argv[3]
+          branch = sys.argv[4]
+          enable_si = sys.argv[5]
+          si_max_iter = sys.argv[6]
+          si_quality_threshold = sys.argv[7]
+          output_file = sys.argv[8]
 
           tags = [
+              ("auto-context-review", auto_context_review),
               ("auto-qa", auto_qa),
               ("auto-merge", auto_merge),
               ("branch", branch),
@@ -457,7 +473,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-qa / auto-merge / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${MERGE_TAG_FILE}"
@@ -465,6 +481,11 @@ jobs:
           # ---- Root Issue に akm:initialized を付与（Step bootstrap で付与済みだが念のため） ----
           add_label "${ROOT_ISSUE}" "akm:initialized"
           echo "akm:initialized を付与しました。"
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-qa"
@@ -477,17 +498,22 @@ jobs:
           fi
 
           # ---- Step Issue の body に埋め込む共通メタ情報 ----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
-          # 追加コメントが存在する場合のフッター
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
-            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
-            ADDITIONAL_SECTION=""
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
 
           # Step Issue に付与するラベルセット
           STEP_LABELS='["knowledge-management"]'
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-context-review"]')
+          fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-qa"]')
@@ -739,6 +765,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: write
     steps:
@@ -836,16 +863,17 @@ jobs:
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-              self_improve_quality_threshold=int(os.environ.get('QUALITY_THRESHOLD', '80')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
           print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "

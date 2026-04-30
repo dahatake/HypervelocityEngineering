@@ -16,7 +16,7 @@
 `Arch-Microservice-ServiceCatalog` を使用
 
 ## 依存
-- Step.4（画面一覧と遷移図）が `aas:done` であること
+- Step.5（データカタログ作成）が `aas:done` であること
 
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。

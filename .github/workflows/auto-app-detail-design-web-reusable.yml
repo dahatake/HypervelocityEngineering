@@ -39,6 +39,7 @@ permissions:
 jobs:
   orchestrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     concurrency:
       group: aad-web-orchestrator-${{ inputs.issue_number }}
       cancel-in-progress: false
@@ -145,7 +146,7 @@ jobs:
           has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          skip_labels = {'aad-web:initialized', 'aad-web:ready', 'aad-web:running', 'aad-web:done', 'aad-web:blocked'}
+          skip_labels = {'aad-web:initialized', 'aad-web:ready', 'aad-web:running', 'aad-web:done', 'aad-web:blocked', 'aad-web:qa-ready'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
           )
@@ -425,7 +426,29 @@ jobs:
                       if normalized not in app_ids_list:
                           app_ids_list.append(normalized)
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list}
+          # 自己改善設定
+          enable_self_improve = False
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if si_section:
+              enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          self_improve_max_iterations = "3"
+          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_max_iterations = n.group(1)
+
+          self_improve_quality_threshold = "80"
+          q = re.search(r"###\s*自己改善\s*品質スコア閾値.*?\n+(.+)", body)
+          if q:
+              val = q.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_quality_threshold = n.group(1)
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
           print(json.dumps(result))
           PYEOF
           )
@@ -436,6 +459,9 @@ jobs:
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
 
           echo "対象ブランチ: ${BRANCH}"
@@ -533,38 +559,44 @@ jobs:
           fi
 
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${REVIEW_TAG_FILE}" <<'PYREVIEW'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           auto_context_review = sys.argv[1]
           auto_merge = sys.argv[2]
-          output_file = sys.argv[3]
+          branch = sys.argv[3]
+          enable_si = sys.argv[4]
+          si_max_iter = sys.argv[5]
+          si_quality_threshold = sys.argv[6]
+          output_file = sys.argv[7]
 
-          context_tag = f"<!-- auto-context-review: {auto_context_review} -->"
-          merge_tag = f"<!-- auto-merge: {auto_merge} -->"
-          context_pat = re.compile(r'<!--\s*auto-context-review:\s*(true|false)\s*-->')
-          merge_pat = re.compile(r'<!--\s*auto-merge:\s*(true|false)\s*-->')
+          tags = [
+              ("auto-context-review", auto_context_review),
+              ("auto-merge", auto_merge),
+              ("branch", branch),
+              ("enable-self-improve", enable_si),
+              ("self-improve-max-iterations", si_max_iter),
+              ("self-improve-quality-threshold", si_quality_threshold),
+          ]
 
-          if context_pat.search(body):
-              body = context_pat.sub(context_tag, body)
-          else:
-              body = body.rstrip() + "\n" + context_tag + "\n"
-
-          if merge_pat.search(body):
-              body = merge_pat.sub(merge_tag, body)
-          else:
-              body = body.rstrip() + "\n" + merge_tag + "\n"
+          for key, value in tags:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
+              if pat.search(body):
+                  body = pat.sub(tag, body, count=1)
+              else:
+                  body = body.rstrip() + "\n" + tag + "\n"
 
           with open(output_file, 'w', encoding='utf-8') as f:
               json.dump({'body': body}, f, ensure_ascii=False)
-          PYREVIEW
+          PYMERGE
 
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge タグを埋め込みました（auto-context-review: ${AUTO_CONTEXT_REVIEW}, auto-merge: ${AUTO_MERGE}）。" \
-            || echo "WARNING: Root Issue body の auto-context-review / auto-merge タグ埋め込みに失敗しました。" >&2
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve タグを埋め込みました。" \
+            || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
 
@@ -614,10 +646,12 @@ jobs:
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->%s\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
             "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
-            ADDITIONAL_SECTION=$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
-            ADDITIONAL_SECTION=""
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
 
           if [[ -n "${APP_IDS}" ]]; then
@@ -898,7 +932,7 @@ jobs:
 
             # Step.8.1
             if ! skip_step "8.1"; then
-              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+              BODY_S81=$(printf '%s\n## 目的\nユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`（ユースケース記述）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）\n\n## 出力\n- `docs/agent/agent-application-definition.md`\n\n## Custom Agent\n`Arch-AIAgentDesign-Step1` を使用\n\n## 依存\n- Step.7.3（TDDテスト仕様書）が `aad-web:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Agent の対象 APP-ID を明記すること。\n\n## 完了条件\n- `docs/agent/agent-application-definition.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD-WEB] Step.8.1: AI Agent アプリケーション定義" \
@@ -916,7 +950,7 @@ jobs:
 
             # Step.8.2
             if ! skip_step "8.2"; then
-              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+              BODY_S82=$(printf '%s\n## 目的\nStep.8.1 のアプリケーション定義を入力として、AI Agent の粒度設計（Single/Multi 判断）とアーキテクチャ骨格を設計する。\n\n## 入力\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）\n\n## 出力\n- `docs/agent/agent-architecture.md`\n\n## Custom Agent\n`Arch-AIAgentDesign-Step2` を使用\n\n## 依存\n- Step.8.1（AI Agent アプリケーション定義）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/agent-architecture.md` が作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD-WEB] Step.8.2: AI Agent 粒度設計" \
@@ -934,7 +968,7 @@ jobs:
 
             # Step.8.3
             if ! skip_step "8.3"; then
-              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign-Step3` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD-WEB] Step.8.3: AI Agent 詳細設計" \
@@ -1009,13 +1043,18 @@ jobs:
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S11_NUM}" ]]; then
-            add_label "${S11_NUM}" "aad-web:ready"
-            CA=$(extract_custom_agent "${BODY_S11}")
-            if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" ""; then
-              add_label "${S11_NUM}" "aad-web:running"
-              echo "Step.1.1 に copilot アサイン + aad-web:running 付与完了"
+            if [[ "${AUTO_QA}" == "true" ]]; then
+              add_label "${S11_NUM}" "aad-web:qa-ready"
+              echo "Step.1.1 (#${S11_NUM}) に aad-web:qa-ready を付与しました（QA 完了待ち）。Copilot アサインは QA 回答後に実行されます。"
             else
-              echo "WARNING: Step.1.1 へのアサイン失敗。aad-web:running は付与しません。"
+              add_label "${S11_NUM}" "aad-web:ready"
+              CA=$(extract_custom_agent "${BODY_S11}")
+              if assign_copilot "${S11_NUM}" "${CA}" "${BRANCH}" ""; then
+                add_label "${S11_NUM}" "aad-web:running"
+                echo "Step.1.1 に copilot アサイン + aad-web:running 付与完了"
+              else
+                echo "WARNING: Step.1.1 へのアサイン失敗。aad-web:running は付与しません。"
+              fi
             fi
           elif [[ -n "${S2_NUM}" ]]; then
             add_label "${S2_NUM}" "aad-web:ready"
@@ -1681,6 +1720,7 @@ jobs:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings
         id: parse
@@ -1693,11 +1733,59 @@ jobs:
           body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
           enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
           max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
           [[ -z "${enable}" ]] && enable="false"
           [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          [[ -z "${branch}" ]] && branch="main"
           echo "enable=${enable}" >> "$GITHUB_OUTPUT"
           echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
-          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
           echo "branch=${branch}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -1713,24 +1801,33 @@ jobs:
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
       - name: Install dependencies
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
-        run: pip install ruff
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
       - name: Run Self-Improve
         if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
         env:
           MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python -c "
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
-          config = SDKConfig(
-              auto_self_improve=True,
-              self_improve_max_iterations=int(os.environ.get('MAX_ITERATIONS', '3')),
-          )
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
           "
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()

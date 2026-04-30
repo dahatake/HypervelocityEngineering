@@ -28,6 +28,7 @@ jobs:
   bash-tests:
     name: Bash Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +57,7 @@ jobs:
   powershell-tests:
     name: PowerShell Tests
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -103,6 +105,7 @@ jobs:
   powershell-ubuntu:
     name: PowerShell Tests (Ubuntu)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

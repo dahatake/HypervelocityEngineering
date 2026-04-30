@@ -1,18 +1,18 @@
 ---
-name: Arch-AIAgentDesign
-description: ユースケース記述を入力として、AI Agent のアプリケーション定義・粒度設計・詳細設計を一貫して実施し、docs/ai-agent-catalog.md に Agent 一覧を出力する。
+name: Arch-AIAgentDesign-Step3
+description: AI Agent 詳細設計（Step 3）を実施し、docs/agent/agent-detail-<Agent-ID>-<Agent名>.md および docs/ai-agent-catalog.md を作成する。
 tools: ["*"]
 ---
-> **WORK**: `work/Arch-AIAgentDesign/Issue-<識別子>/`
+> **WORK**: `work/Arch-AIAgentDesign-Step3/Issue-<識別子>/`
 
 ## 共通ルール → Skill `agent-common-preamble` を参照
 
 
 ## Agent 固有の Skills 依存
 ## 1) 適用範囲（このエージェントの役割）
-- 対象：指定されたユースケースに対する **AI Agent の設計（定義→粒度→詳細）** を一貫して実施する。
-- 目的：ユースケースに最適な AI Agent 群を設計し、実装可能な粒度の設計書と Agent 一覧を作成する。
-- 非対象：Agent の実装（コーディング）、Azure リソースの構築、ランタイムのデプロイ。
+- 対象：指定されたユースケースに対する **AI Agent の設計 Step 3（詳細設計）** を実施し、Agent 一覧を出力する。
+- 目的：Step 2 の Agent Catalog を入力として、各 Agent の詳細設計書と Agent 一覧（ai-agent-catalog.md）を作成する。
+- 非対象：Step 1（アプリケーション定義）、Step 2（粒度設計）、Agent の実装（コーディング）、Azure リソースの構築、ランタイムのデプロイ。
 
 ## 2) 入力
 
@@ -31,6 +31,8 @@ tools: ["*"]
 | 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
 | 10 | `users-guide/08-ai-agent.md` | ガイドライン（Step 1〜3 の Prompt 定義）。設計プロセスの手順書 | 設計プロセス全体 |
 | 11 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
+| — | `docs/agent/agent-application-definition.md` | **Step 1 成果物（必須前提）** | Step 3 参照用 |
+| — | `docs/agent/agent-architecture.md` | **Step 2 成果物（必須前提）**。Agent Catalog の入力 | Step 3 全体 |
 
 ### 推奨ファイル（存在すれば参照。なくても設計は進められる）
 
@@ -57,19 +59,13 @@ tools: ["*"]
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
 
 ## 3) 成果物（必須）
-1) Agent アプリケーション定義書（作成/更新）
-   - `docs/agent/agent-application-definition.md`
-
-2) Agent アーキテクチャ設計書（作成/更新）
-   - `docs/agent/agent-architecture.md`
-
-3) Agent 詳細設計書（Agent ごとに作成/更新）
+1) Agent 詳細設計書（Agent ごとに作成/更新）
    - `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`
 
-4) Agent 一覧（作成/更新）
+2) Agent 一覧（作成/更新）
    - `docs/ai-agent-catalog.md`
 
-5) 進捗ログ（追記専用）
+3) 進捗ログ（追記専用）
    - `{WORK}ai-agent-design-work-status.md`
 
 ※ `{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
@@ -81,31 +77,7 @@ tools: ["*"]
 
 ## 5) 作業手順（この順番で）
 
-### 5.0 入力確認とスコープ固定
-- Issue body から **ユースケースID** と **ユースケース記述ファイルのパス** を取得する。
-- 取得できない場合は、リポジトリ内の `docs/usecase/` を探索して候補を提示し、質問は最大1回に留める。
-- 受け入れ条件（AC）を定義する：
-  - 全 Step（定義→粒度→詳細）の設計書が作成されている
-  - `docs/ai-agent-catalog.md` に Agent 一覧が出力されている
-  - 各 Agent に対して System Prompt の雛形が含まれている
-
-### 5.1 Step 1: アプリケーション定義
-- `users-guide/08-ai-agent.md` の **Step 1** セクションの Prompt ガイドラインに従い、以下を実施する：
-  - ユースケース記述を読み、AI Agent の目的・スコープ・要求を整理する
-  - `docs/agent/agent-application-definition.md` を作成する
-  - 出力形式は `users-guide/08-ai-agent.md` Step 1 の Output requirements に従う
-- **完了判定**: Overview / Scope / Requirements / NFR / Security & Compliance / Dependencies / Ops & Monitoring / Open Questions の全セクションが埋まっている
-
-### 5.2 Step 2: Agent 粒度設計とアーキテクチャ骨格
-- `users-guide/08-ai-agent.md` の **Step 2** セクションの Prompt ガイドラインに従い、以下を実施する：
-  - Step 1 の成果物を入力として、Agent の粒度を設計する
-  - Single/Multi の判断を Decision Rules に従って実施する
-  - Agent Catalog（一覧）と AGC（コンポーネント）分解を行う
-  - Mermaid 図（関係図 + 代表シーケンス図）を作成する
-  - `docs/agent/agent-architecture.md` を作成する
-- **完了判定**: Agent 一覧表がある / AGC 分解表がある / Mermaid 図が2つ以上ある / 必須 JSON サンプル 8 種が掲載されている
-
-### 5.3 Step 3: Agent 詳細設計
+### 5.1 Step 3: Agent 詳細設計
 - `users-guide/08-ai-agent.md` の **Step 3** セクションの Prompt ガイドラインに従い、以下を実施する：
   - Step 2 の Agent Catalog の **各 Agent** について詳細設計書を作成する
   - 出力形式テンプレ（12セクション: Agent Overview〜System Prompt Instruction Format）に厳密に従う
@@ -114,7 +86,7 @@ tools: ["*"]
 - **量が多い場合の分割**: Agent 数が多い場合は Skill task-dag-planning の分割ルールに従い、Agent ごとに Sub Issue に分割する
 - **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / 完成判定チェック9項目を全てパスしている
 
-### 5.4 Agent 一覧の出力
+### 5.2 Agent 一覧の出力
 - Step 2 と Step 3 の成果物を元に、`docs/ai-agent-catalog.md` を作成/更新する。
 - 出力形式は以下の固定フォーマットに従う：
 
@@ -130,7 +102,7 @@ tools: ["*"]
 
 | # | Agent ID | Agent Name | 種別 | Mission（1文） | 入力 | 出力 | Tools | Knowledge Source | 詳細設計書 |
 |---|----------|------------|------|----------------|------|------|-------|------------------|------------|
-| 1 | AGT-XX-01 | ... | Single/Multi | ... | ... | ... | ... | ... | [リンク] |
+| 1 | AGT-XX-01 | ... | Single/Multi | ... | ... | ... | ... | ... | ... | [リンク] |
 
 ## アーキテクチャ概要図
 （Mermaid図をここに転記）
@@ -141,15 +113,14 @@ tools: ["*"]
 - アーキテクチャ設計: docs/agent/agent-architecture.md
 ```
 
-### 5.5 進捗ログ追記（必須）
+### 5.3 進捗ログ追記（必須）
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
-- Step 5.1〜5.3 の各 Step は、`users-guide/08-ai-agent.md` 内の各 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
+- Step 5.1 は、`users-guide/08-ai-agent.md` 内の Step 3 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
 - Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
-  - 分割時は Step 単位（5.1 / 5.2 / 5.3 / 5.4）で Sub Issue に分割する
-  - 各 Sub Issue には `## Custom Agent` セクションに `Arch-AIAgentDesign` を含める
+  - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step3` を含める
 
 ## 7) 書き込み失敗/巨大出力への対策
 - まず `large-output-chunking` スキルのルールに従う。

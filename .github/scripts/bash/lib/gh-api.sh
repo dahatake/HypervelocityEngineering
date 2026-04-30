@@ -202,7 +202,7 @@ link_sub_issue() {
 {"sub_issue_id":${child_id}}
 EOF
   if (( _link_rc != 0 )); then
-    echo "WARNING: link_sub_issue 失敗: parent=#${parent_num} child_id=${child_id}" >&2
+    echo "::warning::link_sub_issue 失敗: parent=#${parent_num} child_id=${child_id} repo=${repo}" >&2
   fi
   sleep 1
   return "${_link_rc}"
@@ -309,8 +309,13 @@ post_comment() {
   trap "rm -f '${tmpfile}'" RETURN
   printf '%s' "${body}" > "${tmpfile}"
 
-  gh issue comment "${issue_num}" -R "${repo}" --body-file "${tmpfile}" > /dev/null
+  local _comment_rc=0
+  gh issue comment "${issue_num}" -R "${repo}" --body-file "${tmpfile}" > /dev/null 2>&1 || _comment_rc=$?
+  if (( _comment_rc != 0 )); then
+    echo "::warning::post_comment 失敗: issue_num=${issue_num} repo=${repo}" >&2
+  fi
   sleep 1
+  return "${_comment_rc}"
 }
 
 # get_issue ISSUE_NUM [REPO]

@@ -72,7 +72,71 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         self.assertNotIn('"<!-- auto-qa: true -->"', content)
         self.assertNotIn('LABELS=\'["aqod:ready","auto-context-review","auto-qa"]\'', content)
 
-    def test_embedded_python_heredocs_are_syntactically_valid(self) -> None:
+    def test_aas_workflow_auto_qa_dynamic(self) -> None:
+        """AAS ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-app-selection-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_aad_web_workflow_auto_qa_dynamic(self) -> None:
+        """AAD-WEB ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-app-detail-design-web-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_asdw_web_workflow_auto_qa_dynamic(self) -> None:
+        """ASDW-WEB ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-app-dev-microservice-web-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_abd_workflow_auto_qa_dynamic(self) -> None:
+        """ABD ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-batch-design-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_abdv_workflow_auto_qa_dynamic(self) -> None:
+        """ABDV ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-batch-dev-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_aag_workflow_auto_qa_dynamic(self) -> None:
+        """AAG ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-ai-agent-design-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_aagd_workflow_auto_qa_dynamic(self) -> None:
+        """AAGD ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-ai-agent-dev-reusable.yml")
+        self.assertIn("###\\s*質問票設定", content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+    def test_adoc_workflow_auto_qa_dynamic(self) -> None:
+        """ADOC ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-app-documentation-reusable.yml")
+        self.assertIn('質問票設定', content)
+        self.assertIn('"auto_qa": auto_qa', content)
+        self.assertIn('<!-- auto-qa: %s -->', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
+
+
         pattern = re.compile(
             r"<<'(?P<marker>PY(?:EOF|TAGS|MERGE))'\n(?P<code>.*?)\n\s*(?P=marker)",
             re.DOTALL,

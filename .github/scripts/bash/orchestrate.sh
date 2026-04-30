@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # orchestrate.sh — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
 #
+# ============================================================
+# DEPRECATED: このスクリプトは GitHub Actions ワークフローからは
+# 直接呼び出されていません（grep で参照 0 件を確認済み）。
+# ローカルでのデバッグ・手動実行用途として残されています。
+# 本番フローは .github/workflows/auto-*-reusable.yml を使用してください。
+# ============================================================
+#
 # Ported from: .github/cli/orchestrate.py
 #
 # Creates Root Issue, Sub-Issues from templates, establishes parent-child
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   ./orchestrate.sh --workflow aad --branch main --steps 1.1,1.2 --dry-run
+#   ./orchestrate.sh --workflow abd --branch main --steps 1.1,1.2 --dry-run
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format
@@ -35,8 +42,6 @@ _TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
 
 declare -A _WORKFLOW_DISPLAY_NAMES=(
   [aas]="App Architecture Design"
-  [aad]="App Detail Design"
-  [asdw]="App Dev Microservice Azure"
   [abd]="Batch Design"
   [abdv]="Batch Dev"
   [adoc]="Source Codeからのドキュメント作成"
@@ -44,8 +49,6 @@ declare -A _WORKFLOW_DISPLAY_NAMES=(
 
 declare -A _TRIGGER_LABELS=(
   [aas]="auto-app-selection"
-  [aad]="auto-app-detail-design"
-  [asdw]="auto-app-dev-microservice"
   [abd]="auto-batch-design"
   [abdv]="auto-batch-dev"
   [adoc]="auto-app-documentation"
@@ -53,8 +56,6 @@ declare -A _TRIGGER_LABELS=(
 
 declare -A _WORKFLOW_PREFIX=(
   [aas]="AAS"
-  [aad]="AAD"
-  [asdw]="ASDW"
   [abd]="ABD"
   [abdv]="ABDV"
   [adoc]="ADOC"
@@ -684,7 +685,8 @@ ${step_list_md}"
 **Copilot アサイン先**: Step.${assigned_step_id} (#${created_nums[${assigned_step_id}]})"
   fi
 
-  post_comment "${root_num}" "${summary}" "${repo}" 2>/dev/null || true
+  post_comment "${root_num}" "${summary}" "${repo}" \
+    || echo "::warning::Sub Issue サマリーコメント投稿に失敗しました: issue #${root_num}" >&2
 
   echo ""
   echo "============================================================"
@@ -706,7 +708,7 @@ Usage:
   orchestrate.sh --workflow <id> [options]
 
 Options:
-  --workflow, -w <id>      Workflow ID: aas|aad|asdw|abd|abdv|adoc (required)
+  --workflow, -w <id>      Workflow ID: aas|abd|abdv|adoc (required)
   --branch <name>          Target branch (default: main)
   --steps <csv>            Comma-separated step IDs (default: all)
   --app-id <id>            ASDW: Application ID

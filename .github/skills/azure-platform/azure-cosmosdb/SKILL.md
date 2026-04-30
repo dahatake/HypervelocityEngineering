@@ -336,6 +336,6 @@ az cosmosdb sql role assignment create \
 | `Dev-Microservice-Azure-DataDeploy` | §1 §2 §3 §4 §6 §7 |
 | `Dev-Microservice-Azure-DataDesign` | §1 §7（設計時の認証方式判断） |
 | `Dev-Batch-ServiceCoding` | §2 §3 §5（Cosmos DB を読み取るバッチ実装） |
-| `Dev-Batch-Deploy` | §4 §6（バッチデータ登録・検証） |
+| `Dev-Batch-DataDeploy` | §4 §6（バッチデータ登録・検証） |
 
 新しく Cosmos DB のデータプレーン操作が必要な Agent は本 Skill の §1〜§7 を参照すること。

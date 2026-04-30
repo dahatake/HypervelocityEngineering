@@ -14,6 +14,7 @@ permissions:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       target: ${{ steps.detect.outputs.target }}
       pr_number: ${{ steps.detect.outputs.pr_number }}

@@ -1,0 +1,198 @@
+name: Issue QA-Ready to Ready Transition
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: issue-qa-ready-transition-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+
+jobs:
+  transition:
+    # Issue コメントが投稿された時に、*:qa-ready ラベルを持つ Issue を *:ready に遷移させる
+    # トリガー条件:
+    #   - <!-- auto-qa-default-answered --> マーカー付きコメント
+    #   - または @copilot メンション付きの OWNER/MEMBER/COLLABORATOR コメント
+    if: >
+      !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      COMMENT_BODY: ${{ github.event.comment.body }}
+      COMMENT_AUTHOR_ASSOC: ${{ github.event.comment.author_association }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Issue の *:qa-ready ラベル確認
+        id: detect-qa-ready
+        run: |
+          set -euo pipefail
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data=''
+          if [ -z "${issue_data}" ]; then
+            echo "qa_ready_label=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          qa_ready_label=$(echo "${issue_data}" | python3 -c "
+          import sys, json
+          labels = [l['name'] for l in json.load(sys.stdin).get('labels', [])]
+          qa_labels = [l for l in labels if l.endswith(':qa-ready')]
+          print(qa_labels[0] if qa_labels else '')
+          " 2>/dev/null || echo '')
+          echo "qa_ready_label=${qa_ready_label}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${qa_ready_label}" ]; then
+            echo "このIssueには *:qa-ready ラベルがありません。スキップします。"
+          fi
+
+      - name: コメントがQA回答かどうか確認
+        id: detect-answer
+        if: steps.detect-qa-ready.outputs.qa_ready_label != ''
+        run: |
+          set -euo pipefail
+          is_answer="false"
+
+          # 条件1: <!-- auto-qa-default-answered --> マーカー付きコメント
+          if printf '%s' "${COMMENT_BODY}" | grep -q '<!-- auto-qa-default-answered -->'; then
+            is_answer="true"
+            echo "detect=auto-qa-default-answered" >> "${GITHUB_OUTPUT}"
+          fi
+
+          # 条件2: @copilot メンション付きの OWNER/MEMBER/COLLABORATOR コメント
+          if [ "${is_answer}" != "true" ]; then
+            if printf '%s' "${COMMENT_BODY}" | grep -q '@copilot'; then
+              if [ "${COMMENT_AUTHOR_ASSOC}" = "OWNER" ] || \
+                 [ "${COMMENT_AUTHOR_ASSOC}" = "MEMBER" ] || \
+                 [ "${COMMENT_AUTHOR_ASSOC}" = "COLLABORATOR" ]; then
+                is_answer="true"
+                echo "detect=copilot-mention-by-collaborator" >> "${GITHUB_OUTPUT}"
+              fi
+            fi
+          fi
+
+          echo "is_answer=${is_answer}" >> "${GITHUB_OUTPUT}"
+
+      - name: qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）
+        if: >
+          steps.detect-qa-ready.outputs.qa_ready_label != ''
+          && steps.detect-answer.outputs.is_answer == 'true'
+        env:
+          QA_READY_LABEL: ${{ steps.detect-qa-ready.outputs.qa_ready_label }}
+        run: |
+          set -euo pipefail
+
+          # ready ラベルを qa-ready ラベルから生成 (例: aas:qa-ready → aas:ready)
+          READY_LABEL="${QA_READY_LABEL/:qa-ready/:ready}"
+          echo "遷移: ${QA_READY_LABEL} → ${READY_LABEL}"
+
+          # *:qa-ready ラベルを除去
+          gh api -X DELETE \
+            "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" \
+            --silent 2>/dev/null || true
+          sleep 1
+
+          # *:ready ラベルを付与
+          gh issue edit "${ISSUE_NUMBER}" \
+            --repo "${REPO}" \
+            --add-label "${READY_LABEL}" || true
+          sleep 1
+
+          # Issue body からカスタムエージェント・ブランチ・モデルを抽出して Copilot アサイン
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}") || issue_data=''
+          BRANCH=$(echo "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'<!--\s*branch:\s*([^\s-][^-]*?)\s*-->', body)
+          print(m.group(1).strip() if m else 'main')
+          " 2>/dev/null || echo 'main')
+          CUSTOM_AGENT=$(echo "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'## Custom Agent\s*\n\s*\`([^\`]+)\`', body)
+          print(m.group(1) if m else '')
+          " 2>/dev/null || echo '')
+          SELECTED_MODEL=$(echo "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'<!--\s*model:\s*([^\s-][^-]*?)\s*-->', body)
+          print(m.group(1).strip() if m else '')
+          " 2>/dev/null || echo '')
+
+          # Copilot アサイン（assign-copilot.sh 使用）
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+          if assign_copilot "${ISSUE_NUMBER}" "${CUSTOM_AGENT}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+            # *:running ラベルを付与
+            RUNNING_LABEL="${READY_LABEL/:ready/:running}"
+            gh issue edit "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --add-label "${RUNNING_LABEL}" || true
+            echo "✅ ${ISSUE_NUMBER} に Copilot アサイン + ${RUNNING_LABEL} 付与完了"
+          else
+            echo "WARNING: Issue #${ISSUE_NUMBER} への Copilot アサインに失敗しました。"
+          fi
+
+      - name: QA 回答サマリーを Issue body に追記（冪等性マーカー付き）
+        # QA 回答が存在することをメインタスク開始前に Issue body で確認できるようにする。
+        # <!-- hve-qa-summary-linked --> マーカーで重複追記を防ぐ。
+        if: >
+          steps.detect-qa-ready.outputs.qa_ready_label != ''
+          && steps.detect-answer.outputs.is_answer == 'true'
+        run: |
+          set -euo pipefail
+          MARKER="<!-- hve-qa-summary-linked -->"
+
+          # 冪等性チェック: 既に追記済みならスキップ
+          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            --jq '.body // ""' 2>/dev/null) || {
+            echo "WARNING: Issue body の取得に失敗しました。QA サマリー追記をスキップします。"
+            exit 0
+          }
+          if printf '%s' "${current_body}" | grep -qF "${MARKER}"; then
+            echo "QA サマリー参照は既に追記済みです。スキップします。"
+            exit 0
+          fi
+
+          # QA 回答コメントの URL を取得（最新の <!-- auto-qa-default-answered --> または
+          # <!-- copilot-auto-pre-qa-posted --> コメント）
+          # --paginate はページごとに配列を出力するため --jq '.[]' で NDJSON 化し
+          # jq -rs で全ページを集約してから最後の一致を選択する。
+          qa_comment_url=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' \
+            2>/dev/null | jq -rs '
+              [
+                .[]
+                | select(
+                    ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
+                    or
+                    ((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->"))
+                  )
+              ]
+              | last
+              | .html_url // ""
+            ') || {
+            echo "WARNING: QA コメント一覧の取得に失敗しました。QA サマリー追記をスキップします。"
+            exit 0
+          }
+
+          if [ -z "${qa_comment_url}" ]; then
+            echo "QA 回答コメントが見つかりませんでした。追記をスキップします。"
+            exit 0
+          fi
+
+          # Issue body に QA サマリー参照セクションを追記
+          APPEND_TEXT=$(printf '\n\n---\n## 📋 QA 回答参照\n\n事前 QA の回答が完了しました。メインタスク実行時は下記コメントを参照してください。\n\n- QA 回答: %s\n\n%s' \
+            "${qa_comment_url}" "${MARKER}")
+          NEW_BODY="${current_body}${APPEND_TEXT}"
+          gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            --field "body=${NEW_BODY}" \
+            --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
+          echo "✅ QA 回答参照を Issue #${ISSUE_NUMBER} の body に追記しました。"
+

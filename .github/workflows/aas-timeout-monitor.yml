@@ -1,0 +1,139 @@
+name: AAS Timeout Monitor
+
+# 目的: aas:running ラベルが付いた Issue のうち、最終更新から 6 時間以上経過した
+#       ものを検出し、aas:timeout ラベルを付与・aas:running を削除・コメント投稿する。
+#
+# 設計メモ:
+#   - タイムアウト値は hve/config.py の timeout_seconds = 21600 (6 時間) に合わせている。
+#   - aas:done が付いている Issue は対象外（完了済みのため誤タイムアウト防止）。
+#   - aas:initialized のみで aas:running がない Issue は対象外（Step 未開始）。
+#   - schedule トリガーは fork 環境では動作しない。本リポジトリ上でのみ有効。
+#   - タイムアウト後の自動再開はしない。手動介入を促すラベル付与とコメントのみ。
+
+on:
+  schedule:
+    # 30 分ごとに実行（デフォルト）
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      timeout_hours:
+        description: 'タイムアウト判定時間（時間）。未指定時は 6 時間。'
+        required: false
+        default: '6'
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      # hve/config.py の timeout_seconds = 21600 (6 時間) と同値をデフォルトに使用
+      TIMEOUT_HOURS: ${{ inputs.timeout_hours || '6' }}
+
+    steps:
+      - name: Ensure aas:timeout label exists
+        run: |
+          if gh label view "aas:timeout" --repo "${REPO}" >/dev/null 2>&1; then
+            echo "Label aas:timeout already exists."
+          else
+            echo "Creating label aas:timeout..."
+            if gh label create "aas:timeout" \
+              --repo "${REPO}" \
+              --color "B60205" \
+              --description "AAS Step がタイムアウト（aas:running 付与から ${TIMEOUT_HOURS} 時間以上経過）"; then
+              echo "Label aas:timeout created."
+            else
+              echo "WARN: Failed to create label aas:timeout. See error output above."
+            fi
+          fi
+
+      - name: Detect and handle timed-out AAS issues
+        run: |
+          set -euo pipefail
+
+          # 判定基準時刻（Unix epoch 秒）
+          # Note: `date -d` is GNU coreutils syntax; works on ubuntu-latest runners.
+          # UTC timestamps are used throughout to match GitHub API's updatedAt format.
+          CUTOFF_EPOCH=$(date -u -d "${TIMEOUT_HOURS} hours ago" "+%s")
+          echo "Cutoff epoch: ${CUTOFF_EPOCH} ($(date -u -d "@${CUTOFF_EPOCH}" --iso-8601=seconds))"
+
+          # aas:running ラベルが付いているオープン Issue を取得（最大 100 件）
+          ISSUES=$(gh issue list \
+            --repo "${REPO}" \
+            --label "aas:running" \
+            --state open \
+            --json number,title,labels,updatedAt \
+            --limit 100)
+
+          # 条件フィルタ:
+          #   1. updatedAt を fromdateiso8601 で epoch 変換し数値比較（表記揺れを回避）
+          #   2. aas:done ラベルが付いていない（完了済みは除外）
+          TIMED_OUT=$(echo "${ISSUES}" | jq \
+            --argjson cutoff "${CUTOFF_EPOCH}" \
+            '[
+              .[] |
+              select((.updatedAt | fromdateiso8601) < $cutoff) |
+              select(.labels | map(.name) | contains(["aas:done"]) | not)
+            ]')
+
+          COUNT=$(echo "${TIMED_OUT}" | jq 'length')
+          echo "Timed-out issues found: ${COUNT}"
+
+          if [[ "${COUNT}" -eq 0 ]]; then
+            echo "No timed-out issues. Exiting."
+            exit 0
+          fi
+
+          # 各タイムアウト Issue を処理
+          # Use process substitution to avoid subshell created by pipe-to-while.
+          while IFS= read -r issue; do
+            ISSUE_NUMBER=$(echo "${issue}" | jq -r '.number')
+            ISSUE_TITLE=$(echo "${issue}" | jq -r '.title')
+            UPDATED_AT=$(echo "${issue}" | jq -r '.updatedAt')
+
+            echo "Processing Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE} (last updated: ${UPDATED_AT})"
+
+            # aas:timeout ラベルを付与
+            if ! gh issue edit "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --add-label "aas:timeout"; then
+              echo "WARN: aas:timeout 付与失敗 #${ISSUE_NUMBER}"
+            fi
+
+            # aas:running ラベルを削除
+            if ! gh issue edit "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --remove-label "aas:running"; then
+              echo "WARN: aas:running 削除失敗 #${ISSUE_NUMBER}"
+            fi
+
+            # タイムアウト通知コメントを投稿
+            COMMENT=$(cat <<EOF
+⏰ **AAS タイムアウト検出**
+
+この Issue の AAS ステップは最終更新から **${TIMEOUT_HOURS} 時間以上**経過したため、タイムアウトと判断されました。
+
+- 最終更新日時: \`${UPDATED_AT}\`
+- ラベル変更: \`aas:running\` → \`aas:timeout\`
+
+**手動対応が必要です。** 以下をご確認ください：
+1. Copilot のセッションが正常に終了しているか確認する
+2. Issue をクローズするか、手動で \`aas:running\` を再付与して再開する
+3. 問題が解決しない場合は、担当者に連絡してください
+
+> このコメントは AAS Timeout Monitor ワークフローにより自動投稿されました。
+EOF
+)
+            if ! gh issue comment "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${COMMENT}"; then
+              echo "WARN: コメント投稿失敗 #${ISSUE_NUMBER}"
+            fi
+
+            echo "Processed Issue #${ISSUE_NUMBER}"
+          done < <(echo "${TIMED_OUT}" | jq -c '.[]')

@@ -12,6 +12,7 @@ permissions:
 jobs:
   detect:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       target: ${{ steps.detect.outputs.target }}
       mode: ${{ steps.detect.outputs.mode }}
@@ -68,6 +69,15 @@ jobs:
               'aad:done':      'AAD-WEB',
               'asdw:done':     'ASDW-WEB',
           }
+          # qa-ready ラベルは Copilot アサインを保留する状態。
+          # auto-issue-qa-ready-transition.yml が qa-ready → ready の遷移を処理するため、
+          # ここでは冪等性のために明示的にスキップする（再初期化を防止）。
+          qa_ready_labels = {
+              'aas:qa-ready', 'aad:qa-ready', 'asdw:qa-ready',
+              'abd:qa-ready', 'abdv:qa-ready', 'aag:qa-ready',
+              'aagd:qa-ready', 'akm:qa-ready', 'aqod:qa-ready', 'adoc:qa-ready',
+              'aad-web:qa-ready', 'asdw-web:qa-ready',
+          }
           closed_prefix_map = [
               ('[AAD-WEB]', 'AAD-WEB'),
               ('[ASDW-WEB]', 'ASDW-WEB'),
@@ -107,6 +117,10 @@ jobs:
             elif label_name == 'original-docs-review':
               target = 'AQOD'
               mode = 'initialize'
+            elif label_name in qa_ready_labels:
+              # qa-ready ラベルは auto-issue-qa-ready-transition.yml が処理するため明示的にスキップ
+              target = 'none'
+              mode = 'skip'
             elif label_name in done_map:
               target = done_map[label_name]
               mode = 'state_transition'
@@ -273,6 +287,7 @@ jobs:
     if: |
       needs.detect.outputs.mode == 'state_transition'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Suggest next workflows
         env:

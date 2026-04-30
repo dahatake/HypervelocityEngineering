@@ -17,6 +17,7 @@ jobs:
   validate-agents:
     name: Validate .agent.md frontmatter
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

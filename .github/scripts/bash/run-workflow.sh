@@ -6,10 +6,10 @@
 #
 # Usage:
 #   # 設計ワークフロー全体実行
-#   REPO=owner/repo WORKFLOW=aad BRANCH=main ./run-workflow.sh
+#   REPO=owner/repo WORKFLOW=abd BRANCH=main ./run-workflow.sh
 #
 #   # dry-run + ステップ限定
-#   REPO=owner/repo WORKFLOW=aad STEPS=1.1,1.2 DRY_RUN=1 ./run-workflow.sh
+#   REPO=owner/repo WORKFLOW=abd STEPS=1.1,1.2 DRY_RUN=1 ./run-workflow.sh
 #
 #   # 完了 → 次ステップ遷移
 #   REPO=owner/repo ISSUE_NO=123 ./run-workflow.sh advance
@@ -93,7 +93,7 @@ Subcommands:
 
 Environment Variables (for default/advance):
   REPO        Repository (owner/repo)
-  WORKFLOW    Workflow ID (aas|aad|asdw|abd|abdv)
+  WORKFLOW    Workflow ID (aas|abd|abdv)
   BRANCH      Target branch (default: main)
   STEPS       Comma-separated step IDs
   ISSUE_NO    Completed issue number (for advance)
@@ -101,10 +101,10 @@ Environment Variables (for default/advance):
 
 Examples:
   # Full workflow execution
-  REPO=owner/repo WORKFLOW=aad BRANCH=main ./run-workflow.sh
+  REPO=owner/repo WORKFLOW=abd BRANCH=main ./run-workflow.sh
 
   # Dry-run with step filter
-  REPO=owner/repo WORKFLOW=aad STEPS=1.1,1.2 DRY_RUN=1 ./run-workflow.sh
+  REPO=owner/repo WORKFLOW=abd STEPS=1.1,1.2 DRY_RUN=1 ./run-workflow.sh
 
   # Advance to next steps
   REPO=owner/repo ISSUE_NO=123 ./run-workflow.sh advance

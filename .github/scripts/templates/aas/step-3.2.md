@@ -14,7 +14,7 @@
 `Arch-Microservice-ServiceIdentify` を使用
 
 ## 依存
-- Step.1.1（ドメイン分析）が `aas:done` であること
+- Step.3.1（ドメイン分析）が `aas:done` であること
 
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。

@@ -73,9 +73,10 @@ _WORKFLOW_AGENT_MAP: Dict[str, List[str]] = {
                  "Dev-Microservice-Azure-ComputeDesign.agent.md"],
     "abd":      ["Arch-Batch-DomainAnalytics.agent.md",
                  "Arch-Batch-JobCatalog.agent.md"],
-    "abdv":     ["Dev-Batch-ServiceCoding.agent.md",
-                 "Dev-Batch-TestCoding.agent.md"],
-    "aag":      ["Arch-AIAgentDesign.agent.md"],
+    "abdv":     ["Dev-Batch-DataServiceSelect.agent.md",
+                 "Dev-Batch-DataDeploy.agent.md",
+                 "Dev-Batch-FunctionsDeploy.agent.md"],
+    "aag":      ["Arch-AIAgentDesign-Step1.agent.md", "Arch-AIAgentDesign-Step2.agent.md", "Arch-AIAgentDesign-Step3.agent.md"],
     "aagd":     ["Dev-Microservice-Azure-AgentCoding.agent.md"],
     "akm":      ["KnowledgeManager.agent.md"],
     "aqod":     ["QA-DocConsistency.agent.md"],
@@ -1200,6 +1201,11 @@ def run_improvement_loop(
     if config.self_improve_skip or not config.auto_self_improve:
         return SelfImproveResult(**{**_empty_result, "stopped_reason": "disabled"})
 
+    # scope="disabled" の場合は実行しない
+    _si_scope = getattr(config, "self_improve_scope", "")
+    if _si_scope == "disabled":
+        return SelfImproveResult(**{**_empty_result, "stopped_reason": "disabled"})
+
     _run_id = getattr(config, "run_id", "")
     if not _run_id:
         _run_id = generate_run_id()
@@ -1209,6 +1215,25 @@ def run_improvement_loop(
     # ロック取得（競合制御）
     if not _acquire_lock(_work_dir):
         return SelfImproveResult(**{**_empty_result, "stopped_reason": "locked"})
+
+    # 追跡性: 現在のブランチを記録（直接 push のリスクをユーザーに明示する）
+    # ⚠️ self-improve はカレントブランチへ直接コミット/push する可能性があります。
+    #    重要なブランチ（main 等）で実行する場合はあらかじめ別ブランチを作成してください。
+    try:
+        _current_branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        _current_branch = "(unknown)"
+    print(
+        f"[self-improve] run_id={_run_id} / branch={_current_branch} / "
+        f"work_dir={_work_dir}\n"
+        "⚠️  self-improve はこのブランチに直接変更を加えます。"
+        " 重要なブランチで実行する場合は事前に別ブランチを作成してください。",
+        flush=True,
+    )
 
     # タスクゴールの確定（TDD 的: ループ開始前に成功条件を定義する）
     _workflow_id = getattr(config, "workflow_id", "")

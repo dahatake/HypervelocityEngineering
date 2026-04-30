@@ -44,6 +44,7 @@ jobs:
   setup-labels:
     name: Create / Update Labels from labels.json
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: >
       github.event_name == 'workflow_dispatch' || inputs.trigger_source == 'issues'
 

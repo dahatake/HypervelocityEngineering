@@ -11,6 +11,11 @@ from typing import Dict, List, Optional, Set
 
 from .workflow_registry import WorkflowDef
 
+try:
+    from .security import sanitize_user_input as _sanitize_user_input
+except ImportError:
+    from security import sanitize_user_input as _sanitize_user_input  # type: ignore[no-redef]
+
 # ---------------------------------------------------------------------------
 # 定数
 # ---------------------------------------------------------------------------
@@ -391,8 +396,29 @@ def _build_additional_section(params: dict) -> str:
     """テンプレートの ``{additional_section}`` を展開する。"""
     additional = params.get("additional_comment", "")
     if additional:
+        additional = _sanitize_user_input(additional)
         return f"\n\n## 追加コメント\n{additional}"
     return ""
+
+
+def _build_qa_review_context_section() -> str:
+    """全 Step に共通の QA / Review / 前成果物 参照セクションを返す。
+
+    Issue Template 経路でも QA 回答・Review 指摘が主タスク成果物へ確実に反映されるよう、
+    全 Step template に自動注入する共通参照ルール（Phase 3 追加）。
+    """
+    return (
+        "\n\n## 追加コンテキストの参照\n\n"
+        "以下が存在する場合は必ず参照してください。"
+        "存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n"
+        "- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n"
+        "- この PR または関連 Issue のレビュー指摘\n"
+        "- Self-Improve 結果または改善計画（存在する場合のみ）\n"
+        "- `## 入力` に記載された前 Step 成果物\n"
+        "- 追加で注入された既存成果物・reuse context\n\n"
+        "参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。"
+        "反映しない場合は理由を完了コメントまたは成果物内に記録してください。"
+    )
 
 
 def _build_app_id_section(app_id) -> str:
@@ -471,9 +497,10 @@ def render_template(
 
     root_ref = _build_root_ref(root_issue_num, params)
     additional_section = _build_additional_section(params)
+    qa_review_section = _build_qa_review_context_section()
 
     body = body.replace("{root_ref}", root_ref)
-    body = body.replace("{additional_section}", additional_section)
+    body = body.replace("{additional_section}", qa_review_section + additional_section)
     body = body.replace(
         "{completion_instruction}",
         _build_completion_instruction(wf.label_prefix, execution_mode),
@@ -653,6 +680,7 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(params["app_arch_scope_section"])
     additional = params.get("additional_comment", "")
     if additional:
+        additional = _sanitize_user_input(additional)
         lines.append(f"\n## 追加コメント\n{additional}")
 
     return "\n".join(lines)

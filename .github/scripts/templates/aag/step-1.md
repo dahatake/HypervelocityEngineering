@@ -16,7 +16,7 @@
 - `docs/agent/agent-application-definition.md`
 
 ## Custom Agent
-`Arch-AIAgentDesign` を使用
+`Arch-AIAgentDesign-Step1` を使用
 
 ## 依存
 - aad-web 完了後に実行すること（Step.2.3 が `aad-web:done` であること）
