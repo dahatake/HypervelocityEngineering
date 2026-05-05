@@ -23,10 +23,6 @@ resolve_model() {
   if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
     echo "Auto"; return
   fi
-  if [[ "${raw}" == "claude-opus-4-7" ]]; then
-    echo "WARNING: 'claude-opus-4-7' は旧表記です。'claude-opus-4.7' に自動変換します。" >&2
-    echo "claude-opus-4.7"; return
-  fi
   echo "${raw}"
 }
 

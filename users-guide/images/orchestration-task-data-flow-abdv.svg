@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 950" font-family="system-ui, -apple-system, sans-serif">
+  <title>ABDV: バッチ実装・デプロイ データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="950" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ABDV: バッチ実装・デプロイ データフロー</text>
+  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+
+  <!-- Column headers -->
+  <text x="175" y="70" text-anchor="middle" font-size="12" font-weight="bold" fill="#0366d6">入力ファイル</text>
+  <text x="565" y="70" text-anchor="middle" font-size="12" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="980" y="70" text-anchor="middle" font-size="12" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- ========== Step 1.1 ========== -->
+  <text x="565" y="90" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 1.1</text>
+  <rect x="20" y="97" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="120" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-service-catalog.md</text>
+  <rect x="430" y="94" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="130" text-anchor="middle" font-size="9" fill="#586069">Azure データ/コンピュート準備</text>
+  <rect x="800" y="100" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="123" text-anchor="middle" font-size="10" fill="#24292e">infra/azure/ (データ準備成果物)</text>
+  <line x1="330" y1="116" x2="430" y2="118" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="118" x2="800" y2="119" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 1.2 ========== -->
+  <text x="565" y="165" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 1.2</text>
+  <line x1="565" y1="142" x2="565" y2="168" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="175" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="195" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-service-catalog.md</text>
+  <text x="175" y="211" text-anchor="middle" font-size="10" fill="#24292e">Step 1.1 成果物 (infra/azure/)</text>
+  <rect x="430" y="172" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="192" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="208" text-anchor="middle" font-size="9" fill="#586069">Azure リソース構築</text>
+  <text x="565" y="221" text-anchor="middle" font-size="9" fill="#959da5">コンピュート・ストレージ</text>
+  <rect x="800" y="182" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="205" text-anchor="middle" font-size="10" fill="#24292e">infra/azure/ (Azure リソース成果物)</text>
+  <line x1="330" y1="200" x2="430" y2="200" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="200" x2="800" y2="201" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 2.1 ========== -->
+  <text x="565" y="252" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.1</text>
+  <line x1="565" y1="229" x2="565" y2="255" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="262" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="285" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{jobId}-test-spec.md</text>
+  <rect x="430" y="259" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="279" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-TestCoding</text>
+  <text x="565" y="295" text-anchor="middle" font-size="9" fill="#586069">バッチ TDD テストコード生成</text>
+  <rect x="800" y="269" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="292" text-anchor="middle" font-size="10" fill="#24292e">test/batch/{jobId}.Tests/</text>
+  <line x1="330" y1="281" x2="430" y2="281" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="283" x2="800" y2="288" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 2.2 ========== -->
+  <text x="565" y="338" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.2</text>
+  <line x1="565" y1="307" x2="565" y2="341" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="348" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="368" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/jobs/{jobId}-spec.md</text>
+  <text x="175" y="384" text-anchor="middle" font-size="10" fill="#24292e">test/batch/{jobId}.Tests/</text>
+  <rect x="430" y="345" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="365" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-ServiceCoding</text>
+  <text x="565" y="381" text-anchor="middle" font-size="9" fill="#586069">バッチサービス実装 (TDD GREEN)</text>
+  <text x="565" y="394" text-anchor="middle" font-size="9" fill="#959da5">ジョブ実装コード生成</text>
+  <rect x="800" y="358" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="381" text-anchor="middle" font-size="10" fill="#24292e">src/batch/</text>
+  <line x1="330" y1="373" x2="430" y2="373" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="373" x2="800" y2="377" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 3 ========== -->
+  <text x="565" y="425" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 3</text>
+  <line x1="565" y1="402" x2="565" y2="428" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="435" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="458" text-anchor="middle" font-size="10" fill="#24292e">src/batch/</text>
+  <rect x="430" y="432" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="452" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="468" text-anchor="middle" font-size="9" fill="#586069">バッチジョブ デプロイ</text>
+  <rect x="800" y="438" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="456" text-anchor="middle" font-size="9" fill="#24292e">.github/workflows/</text>
+  <text x="980" y="472" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/ (デプロイ成果物)</text>
+  <line x1="330" y1="454" x2="430" y2="456" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="456" x2="800" y2="460" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Fork label -->
+  <text x="600" y="508" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行 (Fork)</text>
+  <path d="M 565 480 L 565 515 L 300 515 L 300 538" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 565 480 L 565 515 L 900 515 L 900 538" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 4.1 (left) ========== -->
+  <text x="300" y="534" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 4.1</text>
+  <rect x="20" y="541" width="220" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="130" y="561" text-anchor="middle" font-size="10" fill="#24292e">Step 3 成果物</text>
+  <text x="130" y="577" text-anchor="middle" font-size="10" fill="#24292e">(.github/, infra/azure/)</text>
+  <rect x="255" y="541" width="200" height="50" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="355" y="561" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">QA-AzureArchitectureReview</text>
+  <text x="355" y="577" text-anchor="middle" font-size="9" fill="#586069">Azure アーキテクチャレビュー</text>
+  <rect x="470" y="551" width="230" height="35" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="585" y="568" text-anchor="middle" font-size="9" fill="#24292e">docs/azure/azure-architecture-</text>
+  <text x="585" y="580" text-anchor="middle" font-size="9" fill="#24292e">review-report.md</text>
+  <line x1="240" y1="566" x2="255" y2="566" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="455" y1="566" x2="470" y2="566" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 4.2 (right) ========== -->
+  <text x="900" y="534" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 4.2</text>
+  <rect x="720" y="541" width="220" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="830" y="561" text-anchor="middle" font-size="10" fill="#24292e">Step 3 成果物</text>
+  <text x="830" y="577" text-anchor="middle" font-size="10" fill="#24292e">(.github/, infra/azure/)</text>
+  <rect x="955" y="541" width="200" height="50" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="1055" y="561" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">QA-AzureDependencyReview</text>
+  <text x="1055" y="577" text-anchor="middle" font-size="9" fill="#586069">依存関係レビュー</text>
+  <rect x="870" y="610" width="230" height="35" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="985" y="627" text-anchor="middle" font-size="9" fill="#24292e">docs/azure/dependency-review-report.md</text>
+  <line x1="940" y1="566" x2="955" y2="566" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="1055" y1="591" x2="1055" y2="610" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="985" y1="610" x2="985" y2="645" stroke="#586069" stroke-width="1"/>
+
+  <!-- Legend -->
+  <rect x="20" y="870" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="260" y="887" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
+  <rect x="35" y="895" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="52" y="905" font-size="10" fill="#24292e">入力ファイル</text>
+  <rect x="150" y="895" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="167" y="905" font-size="10" fill="#24292e">Custom Agent</text>
+  <rect x="275" y="895" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="292" y="905" font-size="10" fill="#24292e">成果物</text>
+  <text x="380" y="905" font-size="10" fill="#e36209" font-weight="bold">Step 4.1 と 4.2 は並列実行可</text>
+</svg>

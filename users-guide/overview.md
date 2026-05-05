@@ -77,6 +77,12 @@
 ![knowledge/ を中核とした要求定義の一元管理フロー](./images/knowledge-interface-flow.svg)
 ![反復精緻化サイクル](./images/iterative-refinement-cycle.svg)
 
+### knowledge/ ライフサイクル全体図
+
+以下の図は、`original-docs/`・`qa/`・`src/` を起点に、各ワークフローが `knowledge/` と `docs-generated/` を生成し、Custom Agent がそれを参照する全体像を示します。
+
+![knowledge/ ライフサイクル全体図](./images/knowledge-lifecycle-overview.svg)
+
 ---
 
 ## 用語集

@@ -40,7 +40,7 @@ def _safe_run_id(run_id: str) -> str:
     return rid or generate_run_id()
 
 try:
-    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id
+    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
     from .console import Console, _ACTION_DISPLAY, timestamp_prefix
     from .prompts import (
         QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
@@ -64,7 +64,7 @@ try:
         extract_workiq_tool_name_from_event,
     )
 except ImportError:
-    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id  # type: ignore[no-redef]
+    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
     from console import Console, _ACTION_DISPLAY, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
         QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
@@ -95,6 +95,57 @@ _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
 _MAX_CONTEXT_INJECTION_LENGTH: int = 50_000
 _ACTION_DETAIL_MAX_LENGTH: int = 120
 _ACTION_RESULT_SINGLE_LINE_MAX_LENGTH: int = 100
+
+# Wave 2-6: Work IQ 優先度フィルタで優先扱いする重要度値
+# priority_filter=True 時は "最重要"/"高" を先頭に寄せ、不足分は残りで補填して max 件に収める
+_WORKIQ_HIGH_PRIORITY_VALUES: frozenset[str] = frozenset(["最重要", "高"])
+
+
+def _filter_workiq_questions(
+    questions: "List[Any]",
+    max_questions: int,
+    priority_filter: bool,
+) -> "List[Any]":
+    """Work IQ クエリ対象の質問を絞り込む。
+
+    priority_filter=True の場合、重要度が "最重要"/"高" の質問を優先して先頭に寄せ、
+    不足分は残りの質問で補填した上で max_questions 件に収める。
+    priority_filter=False の場合は元の順番のまま max_questions 件を返す。
+    max_questions が負の値の場合は 0 として扱う。
+    """
+    normalized_max = max(0, max_questions)
+    if not priority_filter:
+        return list(questions)[:normalized_max]
+
+    high = [q for q in questions if getattr(q, "priority", "") in _WORKIQ_HIGH_PRIORITY_VALUES]
+    rest = [q for q in questions if getattr(q, "priority", "") not in _WORKIQ_HIGH_PRIORITY_VALUES]
+    combined = high + rest
+    return combined[:normalized_max]
+
+# ---------------------------------------------------------------------------
+# Self-Improve スコープ解決ヘルパー
+# ---------------------------------------------------------------------------
+
+# SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS は config.py からインポート済み
+# （_SI_SCOPE_DEFAULTS として後方互換エイリアスを公開）
+_SI_SCOPE_DEFAULTS = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+
+
+def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
+    """ステップから成果物パスを取得する。
+
+    workflow_registry.py の StepDef.output_paths を参照する。
+    output_paths が未定義または空の場合は空リストを返し、
+    呼び出し側で workflow_default にフォールバックする。
+    """
+    step = next(
+        (s for s in getattr(workflow, "steps", []) if getattr(s, "id", None) == step_id),
+        None,
+    )
+    if step is None:
+        return []
+    paths = getattr(step, "output_paths", None)
+    return list(paths) if paths else []
 
 # Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。AQOD 本体成果物 QA-DocConsistency-*.md とは別物）
 _EXECUTION_QA_MERGED_SUFFIX: str = "execution-qa-merged.md"
@@ -930,10 +981,13 @@ class StepRunner:
                     _wiq_template = get_workiq_prompt_template(
                         "qa", self.config.workiq_prompt_qa
                     )
-                    _question_items = [
-                        (q.no, q.question)
-                        for q in parsed_pre_qa.questions
-                    ][:self.config.workiq_max_draft_questions]
+                    # Wave 2-6: 重要度フィルタ + 上限適用でクエリ数を削減
+                    _filtered_questions = _filter_workiq_questions(
+                        parsed_pre_qa.questions,
+                        self.config.workiq_max_draft_questions,
+                        getattr(self.config, "workiq_priority_filter", True),
+                    )
+                    _question_items = [(q.no, q.question) for q in _filtered_questions]
 
                     _per_question_results: Dict[int, str] = {}
                     for _q_no, _q_text in _question_items:
@@ -1159,10 +1213,24 @@ class StepRunner:
 
             # ステップ固有 Custom Agent を先頭に追加し、agent で pre-select
             if custom_agent:
-                # グローバル定義に同名がなければ最小定義を追加
+                # グローバル定義に同名がなければ最小定義を追加（fallback）
                 existing_names = {a.get("name") for a in custom_agents}
                 if custom_agent not in existing_names:
-                    base_prompt = f"You are {custom_agent}."
+                    # Wave 4: fallback 発生時に警告を出力し、未定義 Agent を可観測にする。
+                    # Custom Agent 定義が .github/agents/{custom_agent}.agent.md に存在するか確認し、
+                    # 不足している場合は agent-common-preamble Skill の参照を促すこと。
+                    self.console.warning(
+                        f"Custom Agent '{custom_agent}' の定義が見つかりませんでした。"
+                        f" 最小定義 (fallback) で実行します。\n"
+                        f"  → .github/agents/{custom_agent}.agent.md を作成し、"
+                        f"agent-common-preamble Skill を参照することを推奨します。"
+                    )
+                    base_prompt = (
+                        f"You are {custom_agent}.\n\n"
+                        f"# 参照: agent-common-preamble\n"
+                        f"作業開始時は .github/skills/planning/agent-common-preamble/SKILL.md を参照し、"
+                        f"共通ルールを確認してください。"
+                    )
                     if self.config.additional_prompt:
                         base_prompt = base_prompt + "\n\n" + self.config.additional_prompt
                     custom_agents.insert(
@@ -1227,6 +1295,15 @@ class StepRunner:
                 _run_post_qa = (
                     self.config.auto_qa
                     and self.config.qa_phase in ("post", "both")
+                )
+            # Wave 2-4: qa_phase="post"/"both" を使う場合は warning を出す
+            # 事後 QA はトークン量・タスク回数を増やすため、標準は "pre" を推奨する。
+            if _run_post_qa and not _is_akm_workflow and not _is_aqod_workflow:
+                import warnings as _warnings
+                _warnings.warn(
+                    f"[{step_id}] qa_phase={self.config.qa_phase!r} — 事後 QA が有効です。"
+                    f"トークン量とタスク回数が増加します。標準は qa_phase='pre' を推奨します。",
+                    stacklevel=2,
                 )
             total_phases = 1  # Phase 1: メインタスク
             if _run_pre_qa:
@@ -1447,10 +1524,15 @@ class StepRunner:
                                 _wiq_template = get_workiq_prompt_template(
                                     "qa", self.config.workiq_prompt_qa
                                 )
+                                # Wave 2-6: 重要度フィルタ + 上限適用でクエリ数を削減
+                                _filtered_questions_post = _filter_workiq_questions(
+                                    parsed_qa_preview.questions,
+                                    self.config.workiq_max_draft_questions,
+                                    getattr(self.config, "workiq_priority_filter", True),
+                                )
                                 _question_items = [
-                                    (q.no, q.question)
-                                    for q in parsed_qa_preview.questions
-                                ][:self.config.workiq_max_draft_questions]
+                                    (q.no, q.question) for q in _filtered_questions_post
+                                ]
 
                                 # 質問ごとに Work IQ を問い合わせ、ツール呼び出し有無で結果を分類する
                                 _per_question_results: Dict[int, str] = {}
@@ -1800,8 +1882,12 @@ class StepRunner:
                     self.console.event(
                         f"  🔍 [{step_id}] 自己改善 {_iteration}/{_max_iter}: コードベーススキャン中..."
                     )
+                    _step_outputs = _resolve_step_output_paths(self.workflow, step_id)
+                    _workflow_default = _SI_SCOPE_DEFAULTS.get(self.workflow.id, "")
                     _scan = scan_codebase(
                         target_scope=self.config.self_improve_target_scope,
+                        step_output_paths=_step_outputs,
+                        workflow_default=_workflow_default,
                     )
                     _before_score = _scan["quality_score"]
                     self.console.event(
@@ -1877,6 +1963,8 @@ class StepRunner:
                     # Phase 4d: 改善後検証（Verification Loop §10.1 準拠）
                     _after_scan = scan_codebase(
                         target_scope=self.config.self_improve_target_scope,
+                        step_output_paths=_step_outputs,
+                        workflow_default=_workflow_default,
                     )
                     _verify_prompt = SELF_IMPROVE_VERIFY_PROMPT.format(
                         before_score=_before_score,

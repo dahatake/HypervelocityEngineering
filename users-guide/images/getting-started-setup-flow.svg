@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 780" font-family="system-ui, -apple-system, sans-serif">
+  <title>初期セットアップ フロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+  <rect width="700" height="780" fill="#f6f8fa"/>
+  <text x="350" y="38" text-anchor="middle" font-size="18" font-weight="bold" fill="#24292e">初期セットアップ フロー</text>
+
+  <!-- Step 1 -->
+  <rect x="80" y="60" width="540" height="65" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
+  <text x="350" y="87" text-anchor="middle" font-size="13" font-weight="bold" fill="#e36209">Step.1 リポジトリの作成</text>
+  <text x="350" y="107" text-anchor="middle" font-size="10" fill="#586069">テンプレートから「Use this template」/ git clone</text>
+
+  <line x1="350" y1="125" x2="350" y2="148" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2 -->
+  <rect x="80" y="150" width="540" height="65" rx="8" fill="#f6f8fa" stroke="#586069" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="350" y="177" text-anchor="middle" font-size="13" font-weight="bold" fill="#586069">Step.2 ファイルのコピー</text>
+  <text x="350" y="197" text-anchor="middle" font-size="10" fill="#586069">※ テンプレート使用時はスキップ可</text>
+
+  <line x1="350" y1="215" x2="350" y2="238" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3 -->
+  <rect x="80" y="240" width="540" height="65" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
+  <text x="350" y="267" text-anchor="middle" font-size="13" font-weight="bold" fill="#e36209">Step.3 MCP Server 設定</text>
+  <text x="350" y="287" text-anchor="middle" font-size="10" fill="#586069">.vscode/mcp.json 等に MCP Server を設定</text>
+
+  <line x1="350" y1="305" x2="350" y2="328" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3.1 -->
+  <rect x="120" y="330" width="460" height="60" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
+  <text x="350" y="355" text-anchor="middle" font-size="12" font-weight="bold" fill="#e36209">Step.3.1 GitHub Copilot Skills 設定（推奨）</text>
+  <text x="350" y="373" text-anchor="middle" font-size="10" fill="#586069">.github/skills/ 配下の Skills を有効化</text>
+
+  <line x1="350" y1="390" x2="350" y2="413" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 4 -->
+  <rect x="80" y="415" width="540" height="65" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
+  <text x="350" y="442" text-anchor="middle" font-size="13" font-weight="bold" fill="#e36209">Step.4 認証設定（COPILOT_PAT）</text>
+  <text x="350" y="462" text-anchor="middle" font-size="10" fill="#586069">Settings → Secrets → COPILOT_PAT を登録</text>
+
+  <line x1="350" y1="480" x2="350" y2="503" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Workflow permissions -->
+  <rect x="80" y="505" width="540" height="60" rx="8" fill="#ffeef0" stroke="#d73a49" stroke-width="2"/>
+  <text x="350" y="530" text-anchor="middle" font-size="12" font-weight="bold" fill="#d73a49">ワークフロー権限設定</text>
+  <text x="350" y="550" text-anchor="middle" font-size="10" fill="#586069">Settings → Actions → General → Read and write permissions</text>
+
+  <line x1="350" y1="565" x2="350" y2="588" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 5 -->
+  <rect x="80" y="590" width="540" height="65" rx="8" fill="#fff3cd" stroke="#856404" stroke-width="2.5"/>
+  <text x="350" y="613" text-anchor="middle" font-size="13" font-weight="bold" fill="#856404">★ Step.5 ラベル設定（最重要）</text>
+  <text x="350" y="633" text-anchor="middle" font-size="10" fill="#586069">setup-labels Issue を作成 → .github/labels.json から一括作成</text>
+  <text x="350" y="648" text-anchor="middle" font-size="10" fill="#856404">他ワークフロー実行の前提条件</text>
+
+  <line x1="350" y1="655" x2="350" y2="678" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Copilot enable -->
+  <rect x="80" y="680" width="540" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="2"/>
+  <text x="350" y="707" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">Copilot 有効化 → セットアップ完了</text>
+  <text x="350" y="727" text-anchor="middle" font-size="10" fill="#586069">Settings → GitHub Copilot → Enable / Issue を作成して開始</text>
+</svg>

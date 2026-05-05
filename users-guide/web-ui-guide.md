@@ -226,14 +226,14 @@ Bootstrap Workflow が自動的に Sub Issue を生成し、Copilot を各 Sub I
 
 `.github/agents/` 配下に **65 個** の Custom Agent が定義されています。6 カテゴリに分類されます。
 
-| カテゴリ | 接頭辞 | 個数 | 主な役割 |
-|---------|--------|:---:|----------|
-| ビジネス分析・要求定義 | `Arch-Application*`, `Arch-Architecture*` | 2 | ユースケース分析・候補アーキテクチャ選定 |
-| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | 21 | ドメイン設計・データモデル・テスト設計 |
-| 実装 | `Dev-*` | 17 | Azure リソース作成・コード生成・デプロイ |
-| ドキュメント生成 | `Doc-*` | 19 | API/データモデル/依存関係等の文書生成 |
-| QA / レビュー | `QA-*` | 5 | コード品質・アーキテクチャレビュー |
-| Knowledge Management | `KnowledgeManager` | 1 | qa/original-docs → knowledge/ D01〜D21 |
+| カテゴリ | 接頭辞 | 個数 | 主な役割 | 詳細参照 |
+|---------|--------|:---:|----------|---------|
+| ビジネス分析・要求定義 | `Arch-Application*`, `Arch-Architecture*` | 2 | ユースケース分析・候補アーキテクチャ選定 | [workflow-reference.md](./workflow-reference.md) |
+| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | 21 | ドメイン設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
+| 実装 | `Dev-*` | 17 | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
+| ドキュメント生成 | `Doc-*` | 19 | API/データモデル/依存関係等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
+| QA / レビュー | `QA-*` | 5 | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
+| Knowledge Management | `KnowledgeManager` | 1 | qa/original-docs → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
 
 > 完全な一覧（入出力マップ・knowledge/ 参照関係を含む）は [workflow-reference.md](./workflow-reference.md#custom-agent-一覧) を参照してください。
 

@@ -18,24 +18,30 @@ DEFAULT_MODEL: str = "claude-opus-4.7"
 # "workflow" : Post-DAG（orchestrator.py）のみ実行する。Step-level はスキップ。
 #              Issue Template 経路（GitHub Actions `self-improve` ジョブ）推奨値。
 VALID_SELF_IMPROVE_SCOPES: tuple[str, ...] = ("", "disabled", "step", "workflow")
+
+# --- Self-Improve 対象パス定数 ---
+# self_improve_target_scope の "*" 展開先。
+# ⚠️ docs-generated はリポジトリに存在しない可能性あり。
+# 実装側で「存在するパスのみ採用、非存在は警告ログを出してスキップ」とする。
+SELF_IMPROVE_WILDCARD_PATHS: List[str] = [
+    "data", "docs", "docs-generated", "knowledge", "src",
+]
+
+# Self-Improve 対象パスの常時除外ディレクトリ（先頭セグメント一致）
+SELF_IMPROVE_EXCLUDED_TOP_DIRS: List[str] = ["work"]
+
+# 新スコープ解決器のフィーチャーフラグ環境変数名
+SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV: str = "HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER"
+
+# ワークフロー種別に応じたデフォルト target_scope（フィーチャーフラグ ON 時のフォールバック用）
+SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
+    "aas": "docs/", "aad-web": "docs/", "asdw-web": ".",
+    "abd": "docs/", "abdv": ".",
+    "aag": "docs/", "aagd": ".",
+    "akm": "knowledge/", "aqod": "qa/", "adoc": "docs/",
+}
+
 MODEL_AUTO_VALUE: str = "Auto"
-# Phase 9 棚卸し結果 (2026-04-30):
-# 後方互換: 旧ハイフン区切りモデル ID（claude-opus-4-7）を保持。
-# 参照元:
-#   - labels.json: model/claude-opus-4-7 (deprecated 注記あり)
-#   - .github/scripts/bash/lib/assign-copilot.sh: resolve_model で変換
-#   - .github/scripts/bash/lib/extract-model.py: allowed セット・変換ロジック
-#   - .github/scripts/python/workflow_helpers.py: 変換ロジック
-# 維持理由: labels.json に model/claude-opus-4-7 が残っており、既存 Issue にこのラベルが付いている
-#           可能性がある。以下を全て実施した時点で削除可能:
-#   削除手順:
-#     1. labels.json の "model/claude-opus-4-7" エントリを削除
-#     2. assign-copilot.sh の claude-opus-4-7 変換ブロック削除
-#     3. extract-model.py の "claude-opus-4-7" 参照削除
-#     4. workflow_helpers.py の変換ロジック削除
-#     5. LEGACY_MODEL_ID / _MODEL_ALIASES / normalize_model の後方互換部分を削除
-#     6. test_config.py の test_normalize_model_legacy を削除
-LEGACY_MODEL_ID: str = "claude-opus-4-7"
 MODEL_CHOICES: tuple[str, ...] = (
     "gpt-5.5",
     "claude-opus-4.7",
@@ -45,30 +51,22 @@ MODEL_CHOICES: tuple[str, ...] = (
     "gpt-5.3-codex",
     "gemini-2.5-pro",
 )
-_MODEL_ALIASES = {
-    LEGACY_MODEL_ID: "claude-opus-4.7",
-}
-_DEPRECATED_MODEL_WARNED: set[str] = set()
 
 
 def normalize_model(name: str) -> str:
-    """旧ハイフン区切りのモデル ID をドット区切りへ正規化する。
-    Copilot CLI の /model 実機出力に合わせた後方互換レイヤ。
+    """モデル ID を正規化する（パススルー実装）。
+    Wave 4: claude-opus-4-7 後方互換レイヤ削除済み。現在は入力をそのまま返す。
     """
     if not name:
         return name
-    return _MODEL_ALIASES.get(name, name)
+    return name
 
 
 def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
-    """モデル名を正規化し、旧表記を 1 回だけ警告出力する。"""
+    """モデル名を正規化する（後方互換ラッパー）。"""
     if name is None:
         return None
-    normalized = normalize_model(name)
-    if normalized != name and name not in _DEPRECATED_MODEL_WARNED:
-        print(f"WARNING: '{name}' is deprecated; use '{normalized}'", file=sys.stderr)
-        _DEPRECATED_MODEL_WARNED.add(name)
-    return normalized
+    return normalize_model(name)
 
 
 def generate_run_id() -> str:
@@ -132,6 +130,16 @@ class SDKConfig:
     create_issues: bool = False             # デフォルト: 作成しない
     create_pr: bool = False                 # デフォルト: 作成しない
     ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "infra", "qa", "src", "test", "work"])
+    # qa/ は PR commit 対象外（ignore_paths に含まれる）。
+    # 例外: AQOD ワークフローでは qa/ の成果物が主成果物となる場合がある。
+    #   → auto-aqod.yml が qa/ を commit 対象に含めるかどうかはワークフロー設定で制御する。
+    #   → runner.py は qa/ に質問票・QA マージファイルを保存するが、
+    #     それらは hve ローカル実行時の作業ファイルであり、通常は commit しない。
+    # Skill work-artifacts-layout §4.1 の delete→create ルールは Git 上の成果物更新フローを指す。
+    # runner.py の qa/ ファイル書き込みは QAMerger.save_merged() を使用し、
+    #   - 実行時ファイル: run_id + step_id を含むユニークパスに保存（通常は衝突しない）
+    #   - 同一 run_id/step_id での再実行時: 一時ファイル書き込み → read-back 検証 → os.replace() による
+    #     アトミック rename（既存ファイルの原子的上書き）で保存する。
 
     # --- Console 出力 ---
     verbose: bool = True                    # レガシー互換。出力レベルは verbosity が主制御
@@ -193,7 +201,10 @@ class SDKConfig:
     workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
     workiq_draft_output_dir: str = "qa"                   # Work IQ 補助レポート出力先ディレクトリ（互換のため設定名は据え置き）
     workiq_per_question_timeout: float = 900.0            # QA: 質問ごとの Work IQ クエリタイムアウト秒数
-    workiq_max_draft_questions: int = 30                  # QA: ドラフト生成対象の最大質問数
+    workiq_max_draft_questions: int = 10                  # QA: ドラフト生成対象の最大質問数（Wave 2: 30→10 に削減）
+    # Wave 2-6: デフォルトを 30 から 10 に削減。WORKIQ_MAX_DRAFT_QUESTIONS 環境変数で上書き可能。
+    # 重要度フィルタ（workiq_priority_filter）により "最重要"/"高" の質問を優先し、不足分は残りの質問で補填する。
+    workiq_priority_filter: bool = True                   # Work IQ: 高優先度の質問を優先して抽出し、最大件数に満たない分は他の質問で補填する
 
     # --- QA フェーズ制御 ---
     qa_phase: str = "pre"                                 # QA フェーズ: "pre"=実行前のみ, "post"=実行後のみ, "both"=前後両方
@@ -215,16 +226,22 @@ class SDKConfig:
     self_improve_quality_threshold: int = 80    # ゴール達成率閾値（この値以上で完了。goal_achievement_pct * 100 と比較）
     self_improve_max_tokens: int = 500_000      # コストハードリミット（トークン上限）
     self_improve_max_requests: int = 50         # コストハードリミット（リクエスト上限）
-    self_improve_target_scope: str = ""         # 改善対象スコープ（空 = 全体）
+    self_improve_target_scope: str = ""
+    # 改善対象スコープ。受理する形式:
+    #   - ""       : (新仕様) そのステップの成果物。取得不能時は SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS。work/ 配下は常に除外。
+    #                (旧仕様) リポジトリ全体（フィーチャーフラグ OFF 時）
+    #   - "*"      : SELF_IMPROVE_WILDCARD_PATHS（実在するもののみ。存在しないパスは警告ログ）
+    #   - "src/ docs/" : カンマ/空白区切りの複数パス（先頭が "-" のトークンは拒否）
+    # 内部的には _resolve_target_scope_paths() で List[str] に正規化される。
     self_improve_goal: str = ""                 # タスク固有ゴールの説明（空 = ワークフロー ID から自動生成）
     self_improve_success_criteria: List[str] = field(default_factory=list)  # 自動検索で得た success_criteria（空 = ワークフロー標準を使用）
     self_improve_skip: bool = False             # --no-self-improve で True
-    self_improve_scope: str = ""                # 実行単位: "" (後方互換), "disabled", "step", "workflow"
+    self_improve_scope: str = "workflow"        # 実行単位: "" (後方互換), "disabled", "step", "workflow"
     # HVE_SELF_IMPROVE_SCOPE 環境変数でも指定可能。
-    # ""         : 後方互換。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される。
-    # "disabled" : Self-Improve を一切実行しない（auto_self_improve の値に関係なく）。
-    # "step"     : Step-level（runner.py Phase 4）のみ実行。Issue Template 外のローカル実行向け。
-    # "workflow" : Post-DAG（orchestrator.py）のみ実行。Issue Template 経路（GitHub Actions）推奨。
+    # "workflow"  : Post-DAG（orchestrator.py）のみ実行。Issue Template 経路推奨。Wave 2 以降デフォルト。
+    # ""          : 後方互換。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される（非推奨）。
+    # "disabled"  : Self-Improve を一切実行しない（auto_self_improve の値に関係なく）。
+    # "step"      : Step-level（runner.py Phase 4）のみ実行。Issue Template 外のローカル実行向け。
 
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
@@ -318,10 +335,10 @@ class SDKConfig:
             env_workiq_per_question_timeout = 900.0
         try:
             env_workiq_max_draft_questions = int(
-                os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "30")
+                os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "10")
             )
         except (TypeError, ValueError):
-            env_workiq_max_draft_questions = 30
+            env_workiq_max_draft_questions = 10
 
         _valid_qa_phases = ("pre", "post", "both")
         _raw_qa_phase = os.environ.get("HVE_QA_PHASE", "pre").strip().lower()
@@ -343,7 +360,12 @@ class SDKConfig:
                 f"'' (後方互換) にフォールバックします。",
                 stacklevel=2,
             )
-        env_si_scope = _raw_si_scope if _raw_si_scope in VALID_SELF_IMPROVE_SCOPES else ""
+        # Wave 2-5: HVE_SELF_IMPROVE_SCOPE 未設定時は "workflow" をデフォルトとする。
+        # "" を明示的に設定した場合は後方互換（Step-level + Post-DAG 両方実行）。
+        if not _raw_si_scope:
+            env_si_scope = "workflow"
+        else:
+            env_si_scope = _raw_si_scope if _raw_si_scope in VALID_SELF_IMPROVE_SCOPES else ""
 
         try:
             env_max_diff_chars = int(os.environ.get("HVE_MAX_DIFF_CHARS", "80000"))
@@ -375,6 +397,7 @@ class SDKConfig:
             workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
             workiq_per_question_timeout=env_workiq_per_question_timeout,
             workiq_max_draft_questions=env_workiq_max_draft_questions,
+            workiq_priority_filter=_env_bool("WORKIQ_PRIORITY_FILTER", default=True),
             qa_phase=env_qa_phase,
             aqod_post_qa_enabled=os.environ.get("HVE_AQOD_POST_QA", "").lower() in ("true", "1", "yes"),
             auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),

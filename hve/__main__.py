@@ -1686,7 +1686,25 @@ def _cmd_run_interactive() -> int:
             except ValueError:
                 con.warning("無効な値のため、デフォルトの 3 を使用します。")
                 self_improve_max_iterations = 3
-            self_improve_target_scope = con.prompt_input("自己改善 対象パス（例: src/  hve/  空=リポジトリ全体）", default="")
+            try:
+                from hve.self_improve import _is_new_resolver_enabled as _si_flag
+                _si_new_resolver = _si_flag()
+            except Exception:
+                _si_new_resolver = False
+            if _si_new_resolver:
+                _si_scope_prompt = (
+                    "自己改善 対象パス（HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER=1 有効時の新仕様）\n"
+                    "  - 未入力 : そのステップの成果物（work/ 配下は自動除外）\n"
+                    "  - '*'    : data, docs, docs-generated, knowledge, src を一括対象（実在するもののみ）\n"
+                    "  - 任意   : カンマ/空白区切りで複数パス可（例: 'src/ hve/'）\n"
+                    "             ※ '-' で始まるトークンは禁止"
+                )
+            else:
+                _si_scope_prompt = (
+                    "自己改善 対象パス（例: src/  hve/  空=リポジトリ全体）\n"
+                    "  ※ 新仕様（複数パス/ワイルドカード/work/ 除外）は HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER=1 で有効"
+                )
+            self_improve_target_scope = con.prompt_input(_si_scope_prompt, default="")
             self_improve_goal = con.prompt_input(
                 "自己改善 ゴール説明（省略可 → ワークフロー種別から自動設定）\n"
                 "  例: 'テスト失敗を 0 件にし lint エラーを解消する'\n"
@@ -1771,7 +1789,36 @@ def _cmd_run_interactive() -> int:
     ]
     if auto_self_improve:
         summary_lines.append(f"自己改善 繰り返し上限: {self_improve_max_iterations} 回")
-        summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope or '(空) = リポジトリ全体'}")
+        try:
+            from hve.self_improve import _is_new_resolver_enabled
+            _new_resolver_on = _is_new_resolver_enabled()
+        except Exception:
+            _new_resolver_on = False
+        if _new_resolver_on:
+            try:
+                from hve.self_improve import _resolve_target_scope_paths
+                from hve.config import SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+                _wf_default = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS.get(wf.id, "")
+                _resolved = _resolve_target_scope_paths(
+                    self_improve_target_scope,
+                    step_output_paths=None,
+                    workflow_default=_wf_default,
+                    repo_root=".",
+                )
+                _disp_resolved = ", ".join(_resolved) if _resolved else "(解決後に空 → スキャンスキップ)"
+            except ValueError as _err:
+                _disp_resolved = f"(エラー: {_err})"
+            except Exception:
+                _disp_resolved = self_improve_target_scope or "(空) = ステップ成果物"
+            if self_improve_target_scope == "":
+                summary_lines.append(f"自己改善 対象パス   : (空) → {_disp_resolved}")
+            elif self_improve_target_scope == "*":
+                summary_lines.append(f"自己改善 対象パス   : * → {_disp_resolved}")
+            else:
+                summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope} → {_disp_resolved}")
+        else:
+            # 旧仕様: 単一パス / 未入力=リポジトリ全体
+            summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope or '(空) = リポジトリ全体'}")
         if self_improve_goal:
             _goal_disp = self_improve_goal[:60] + ("..." if len(self_improve_goal) > 60 else "")
             summary_lines.append(f"自己改善 ゴール     : {_goal_disp}")

@@ -81,6 +81,12 @@
 
 ![ABDV アーキテクチャ: 入力ファイル → auto-batch-dev Workflow → Custom Agent チェーン → 成果物](./images/infographic-abdv.svg)
 
+### データフロー図（ABDV）
+
+以下の図は、各ステップで Custom Agent が読み書きするファイルのデータフローを示します。
+
+![ABDV データフロー: 各 Custom Agent の入出力ファイル](./images/orchestration-task-data-flow-abdv.svg)
+
 ### 依存グラフ（ABDV ワークフロー）
 
 ```

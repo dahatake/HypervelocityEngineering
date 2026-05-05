@@ -300,6 +300,7 @@ jobs:
                 -gt "$(date -d "${fail_comment_at}" +%s 2>/dev/null || echo 0)" ]; then
               echo "review_complete=false" >> "${GITHUB_OUTPUT}"
               echo "needs_recheck=true" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=FAIL" >> "${GITHUB_OUTPUT}"
               echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
               echo "reason=FAIL 後に修正コミットを検知。再レビューを実行します。" >> "${GITHUB_OUTPUT}"
             else
@@ -307,6 +308,7 @@ jobs:
               echo "${reason}"
               echo "review_complete=false" >> "${GITHUB_OUTPUT}"
               echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=FAIL" >> "${GITHUB_OUTPUT}"
               echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
               echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
             fi
@@ -318,6 +320,7 @@ jobs:
             echo "✅ review-verdict: PASS マーカーを検知しました。レビュー完了と判定します。"
             echo "review_complete=true" >> "${GITHUB_OUTPUT}"
             echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+            echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
             echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
             echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました。" >> "${GITHUB_OUTPUT}"
             exit 0
@@ -354,6 +357,7 @@ jobs:
 
           echo "review_complete=${review_complete}" >> "${GITHUB_OUTPUT}"
           echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+          echo "latest_verdict=none" >> "${GITHUB_OUTPUT}"
           echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
           echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
 
@@ -406,6 +410,73 @@ jobs:
             --repo "${REPO}" \
             --body "${COMMENT_BODY}"
           echo "✅ 再レビュー指示を投稿しました。"
+
+      - name: FAIL 時 @copilot 修正指示コメントを PR に投稿
+        # review-verdict: FAIL かつ修正コミット未検知の場合に、
+        # @copilot 宛の修正指示コメントを投稿する。
+        # head SHA ベースの冪等マーカーにより同一コミットへの重複投稿を防ぐ。
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-review-complete.outputs.review_complete != 'true'
+          && steps.check-review-complete.outputs.needs_recheck != 'true'
+          && steps.check-review-complete.outputs.latest_verdict == 'FAIL'
+        run: |
+          set -euo pipefail
+
+          # PR の head SHA を取得（冪等マーカーに使用）
+          head_sha=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '.head.sha // ""' 2>/dev/null || echo '')
+          if [ -z "${head_sha}" ]; then
+            echo "WARNING: head SHA の取得に失敗しました。修正指示コメントの投稿をスキップします。"
+            exit 0
+          fi
+
+          SHA_MARKER="<!-- copilot-auto-review-fix-requested: ${head_sha} -->"
+
+          # 冪等性チェック: 同一 head SHA に対して既に投稿済みならスキップ
+          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
+
+          existing_count=$(echo "${pr_comments}" \
+            | jq --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($sha_marker))] | length' 2>/dev/null || echo 0)
+
+          if [ "${existing_count:-0}" -gt 0 ]; then
+            echo "同一 head SHA (${head_sha}) への修正指示は既に投稿済みです。スキップします。"
+            exit 0
+          fi
+
+          # FAIL レビューコメント本文を取得（最新の review-verdict: FAIL コメント）
+          fail_comment_body=$(echo "${pr_comments}" \
+            | jq -r '[ .[] | select(
+                (.body | contains("<!-- review-verdict: FAIL -->"))
+                and (.user.type == "Bot")
+              )] | .[-1].body // ""' 2>/dev/null || echo '')
+
+          if [ -z "${fail_comment_body}" ]; then
+            fail_comment_body="（レビュー指摘内容を取得できませんでした。最新のレビューコメントを参照してください。）"
+          fi
+
+          # @copilot 修正指示コメントを投稿
+          COMMENT_BODY=$(printf '%s\n%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n\n%s\n\n%s' \
+            "<!-- copilot-auto-review-fix-requested -->" \
+            "${SHA_MARKER}" \
+            "@copilot" \
+            "The automated context review returned **FAIL**." \
+            "Please update the existing changes in this pull request by addressing the review findings below." \
+            "**Requirements:**" \
+            "- Do not create unrelated changes." \
+            "- Modify the artifacts produced by the main task." \
+            "- Keep the diff minimal." \
+            "- Push a new commit to this PR." \
+            "**Review findings:**" \
+            "${fail_comment_body}")
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT_BODY}"
+          echo "✅ FAIL 修正指示コメントを PR #${PR_NUMBER} に投稿しました（head SHA: ${head_sha}）。"
 
       - name: auto-approve-ready ラベルを PR に付与
         if: >

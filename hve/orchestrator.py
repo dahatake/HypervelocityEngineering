@@ -37,14 +37,14 @@ from typing import Dict, List, Optional, Set
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
 # -----------------------------------------------------------------------
 try:
-    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id
+    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
     from .console import Console, timestamp_prefix
     from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT
     from .runner import StepRunner, _is_review_fail, _extract_text
     from .dag_executor import DAGExecutor
     from .dag_planner import build_dag_plan
 except ImportError:
-    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id  # type: ignore[no-redef]
+    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT  # type: ignore[no-redef]
     from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
@@ -589,8 +589,12 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "doc_generated": "docs-generated/**/*.md",
 }
 
-# artifact key → 生成ワークフロー（確認済みのもののみ記載。要確認のものは None）
+# artifact key → 生成ワークフロー（確認済みのもののみ記載）
 # workflow_registry.py の FULL_PIPELINE 定義および各ワークフローの出力から確認。
+# 値の意味:
+#   "<workflow_id>"  — そのワークフローが生成する成果物
+#   "user_provided"  — ワークフローでは生成されない。ユーザーが事前に手動で用意する成果物
+#   None             — 生成ワークフロー未確認（ユーザー提供またはワークフロー生成の可能性あり）
 _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "app_catalog": "aas",
     "service_catalog": "aas",
@@ -599,7 +603,7 @@ _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "screen_catalog": "aad-web",
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
-    "use_case_catalog": None,       # 要確認: 生成ワークフロー未確認（ユーザー提供の可能性あり）
+    "use_case_catalog": "user_provided",  # ユーザーが手動で作成するユースケースカタログ
     "batch_job_catalog": "abd",
     "batch_service_catalog": "abd",
     "batch_data_model": "abd",
@@ -709,10 +713,12 @@ def _check_workflow_input_artifacts(
     ]
     for item in all_missing:
         next_wf = item.get("next_workflow")
-        if next_wf:
+        if next_wf == "user_provided":
+            hint = " → この成果物はワークフローでは生成されません。事前に手動で準備してください"
+        elif next_wf:
             hint = f" → 先に '{next_wf}' ワークフローを実行してください"
         else:
-            hint = " → 生成ワークフローを確認してください（要確認）"
+            hint = " → 生成ワークフローを確認してください（ユーザー提供またはワークフロー生成の可能性あり）"
         lines.append(
             f"  - key={item['key']!r}, 期待パス: {item['expected']}"
             f" (Step {item['step_id']}){hint}"
@@ -756,6 +762,15 @@ def _compute_step_additional_prompt(
     Returns:
         フィルタリング済み additional_prompt または base_additional_prompt。
     """
+    if step.consumed_artifacts is None:
+        # Wave 2: consumed_artifacts=None は後方互換（全成果物注入）を意味する。
+        # トークン増大の原因になるため、警告を出してどの Step が全成果物注入になっているか可視化する。
+        import warnings as _warnings
+        _warnings.warn(
+            f"Step.{step.id}: consumed_artifacts=None — 後方互換モードで全成果物を注入します。"
+            f"トークン削減のため consumed_artifacts を明示定義してください。",
+            stacklevel=2,
+        )
     if not (config.reuse_context_filtering and existing_artifacts and step.consumed_artifacts is not None):
         return base_additional_prompt
 
@@ -775,7 +790,16 @@ def _compute_step_additional_prompt(
         if k in step.consumed_artifacts
     }
     step_reuse_context = _build_reuse_context(filtered_artifacts)
-    return ((config.additional_prompt or "") + step_reuse_context).strip() or None
+    result = ((config.additional_prompt or "") + step_reuse_context).strip() or None
+    # Wave 2-3: context injection サイズを記録（デバッグ可視化）
+    _injection_chars = len(step_reuse_context)
+    if _injection_chars > 0:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(
+            "Step.%s context_injection: artifacts=%s chars=%d",
+            step.id, list(filtered_artifacts.keys()), _injection_chars,
+        )
+    return result
 
 
 def _build_reuse_context(existing_artifacts: dict) -> str:
@@ -817,7 +841,12 @@ async def _prefetch_workiq(
     console: Console,
     timeout: float = 900.0,
 ) -> str:
-    """Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。"""
+    """Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。
+
+    NOTE: 現行の production コードから直接呼び出されていません（テストのみ）。
+    現行ワークフロー実行経路では Work IQ は QA フェーズ専用であり、
+    orchestrator からの直接呼び出しは行いません。
+    """
     result = await _prefetch_workiq_detailed(config, query, console, timeout=timeout)
     return result.content
 
@@ -830,8 +859,10 @@ async def _prefetch_workiq_detailed(
 ) -> "WorkIQPrefetchResult":
     """Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。
 
+    NOTE: 現行の production コードから直接呼び出されていません（テストのみ）。
     現行のワークフロー実行経路では Work IQ を QA フェーズ専用にしているため、
     orchestrator からこのヘルパーを直接呼び出してプロンプト注入する処理は行わない。
+    Work IQ の利用は runner.py の QA フェーズ（run_step() 内）でのみ行われる。
     """
     try:
         from .workiq import (
@@ -1756,15 +1787,35 @@ async def run_workflow(
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
     workiq_report_paths: Set[str] = set()
+    # Wave 2-3 / 2-7: context injection サイズの観測カウンタ
+    _w2_none_steps: int = 0          # consumed_artifacts=None のステップ数
+    _w2_injection_total: int = 0     # context injection 合計文字数
+    _w2_injection_max: int = 0       # context injection 最大文字数（1 step あたり）
     for step in wf.steps:
         if step.is_container or step.id not in active_steps:
             continue
+        # Wave 2-2: consumed_artifacts=None ステップをカウント
+        if step.consumed_artifacts is None:
+            _w2_none_steps += 1
         step_additional = _compute_step_additional_prompt(
             step=step,
             existing_artifacts=existing_artifacts,
             config=config,
             base_additional_prompt=effective_additional_prompt,
         )
+        # Wave 2-3: context injection は共通 additional prompt を除いた、
+        # ステップ固有の追加コンテキスト分のみを計上する
+        _base_additional_chars = len(effective_additional_prompt) if effective_additional_prompt else 0
+        if step_additional:
+            if _base_additional_chars > 0 and step_additional.startswith(effective_additional_prompt or ""):
+                _injection_chars = len(step_additional) - _base_additional_chars
+            else:
+                _injection_chars = len(step_additional)
+        else:
+            _injection_chars = 0
+        _w2_injection_total += _injection_chars
+        if _injection_chars > _w2_injection_max:
+            _w2_injection_max = _injection_chars
         step_prompts[step.id] = _build_step_prompt(
             step=step,
             params=effective_params,
@@ -1909,25 +1960,31 @@ async def run_workflow(
             discover_task_goal_from_docs,
         )
 
-        # ワークフロー種別に応じたデフォルト target_scope
-        _si_scope_defaults: Dict[str, str] = {
-            "aas": "docs/",
-            "aad-web": "docs/",
-            "asdw-web": ".",
-            "abd": "docs/",
-            "abdv": ".",
-            "aag": "docs/",
-            "aagd": ".",
-            "akm": "knowledge/",
-            "aqod": "qa/",
-            "adoc": "docs/",
-        }
+        # ワークフロー種別に応じたデフォルト target_scope（config.py の定数を使用）
+        _si_scope_defaults = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+
+        def _collect_workflow_output_paths(wf_id: str) -> List[str]:
+            """ワークフローの全ステップの output_paths を集約する。
+            現状 Step に output_paths 属性はないため空リストを返す。
+            """
+            return []
+
+        _workflow_outputs = _collect_workflow_output_paths(workflow_id)
+        _workflow_default = _si_scope_defaults.get(workflow_id, "")
+
+        # 既存挙動互換: target_scope が空かつ outputs も取れない場合は _si_scope_defaults を使う
         effective_si_scope = (
             config.self_improve_target_scope
-            or _si_scope_defaults.get(workflow_id, "")
+            or (_workflow_default if not _workflow_outputs else "")
         )
         orig_scope = config.self_improve_target_scope
         config.self_improve_target_scope = effective_si_scope
+
+        # scan_codebase に渡せるよう一時属性として保持（設定前の値を退避）
+        _prev_resolved_step_paths = getattr(config, "_resolved_step_output_paths", None)
+        _prev_resolved_wf_default = getattr(config, "_resolved_workflow_default", "")
+        config._resolved_step_output_paths = _workflow_outputs  # type: ignore[attr-defined]
+        config._resolved_workflow_default = _workflow_default  # type: ignore[attr-defined]
 
         # タスクゴールを確定する（TDD 的: ループ開始前に成功条件を定義）
         _user_goal = getattr(config, "self_improve_goal", "")
@@ -1990,6 +2047,8 @@ async def run_workflow(
         finally:
             config.self_improve_target_scope = orig_scope  # 復元
             config.workflow_id = _prev_workflow_id  # type: ignore[attr-defined]
+            config._resolved_step_output_paths = _prev_resolved_step_paths  # type: ignore[attr-defined]
+            config._resolved_workflow_default = _prev_resolved_wf_default  # type: ignore[attr-defined]
 
         console.event(
             f"Self-Improve 完了: {si_result['iterations_completed']} イテレーション, "
@@ -2068,6 +2127,14 @@ async def run_workflow(
         "total_elapsed": elapsed_total,
     })
 
+    # Wave 2-7: 計測サマリーをログ出力
+    _w2_si_scope = config.self_improve_scope or "(後方互換: step+workflow)"
+    console.event(
+        f"[Wave2] context_injection: none_steps={_w2_none_steps}, "
+        f"total_chars={_w2_injection_total}, max_chars={_w2_injection_max}, "
+        f"self_improve_scope={_w2_si_scope!r}"
+    )
+
     if root_issue_num:
         console.event(f"Root Issue #{root_issue_num} が作成されています。")
     if working_branch:
@@ -2091,6 +2158,11 @@ async def run_workflow(
         "working_branch": working_branch,
         "error": pr_error,
         "aqod_validation": aqod_validation_result,
+        # Wave 2-7: 計測項目
+        "w2_none_steps": _w2_none_steps,
+        "w2_injection_total_chars": _w2_injection_total,
+        "w2_injection_max_chars": _w2_injection_max,
+        "w2_self_improve_scope": config.self_improve_scope,
     }
 
 

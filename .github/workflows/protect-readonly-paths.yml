@@ -1,0 +1,65 @@
+name: Protect Read-Only Paths
+
+# PR で以下のパスへの変更を禁止する:
+#   - ルート README.md (.github/copilot-instructions.md §0「ルート README.md 変更禁止」)
+#   - original-docs/ 配下のファイル (.github/copilot-instructions.md §0「original-docs/ 読み取り専用（絶対）」)
+#
+# 注: paths フィルタを使うと違反のない PR ではチェック自体が実行されず、
+#     ブランチ保護の必須チェックとして機能しない。全 PR で実行し、
+#     ジョブ内の差分検出で違反時のみ fail する構成にする。
+#
+# トリガー: 全 PR の作成・更新時
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-readme:
+    name: ルート README.md 変更禁止チェック（無効）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: ルート README.md 変更許可
+        run: |
+          echo "ℹ️ ルート README.md への変更制限は解除されています。"
+          echo "（リポジトリオーナーによる明示的な許可: 2026-05-05）"
+
+  check-original-docs:
+    name: original-docs/ 読み取り専用チェック
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: original-docs/ 配下の変更を検出
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if ! CHANGED_FILES=$(gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only 2>/dev/null); then
+            echo "::error::gh pr diff の実行に失敗しました（PR: #${PR_NUMBER}）"
+            exit 1
+          fi
+
+          # original-docs/ 配下の変更を検出
+          READONLY_VIOLATIONS=$(echo "${CHANGED_FILES}" | grep -E '^original-docs/' || true)
+
+          if [ -n "${READONLY_VIOLATIONS}" ]; then
+            echo "::error::original-docs/ 配下のファイルへの変更が検出されました。"
+            echo ""
+            echo ".github/copilot-instructions.md §0 ルール:"
+            echo "  「original-docs/ 読み取り専用（絶対）: original-docs/ 配下のファイルは全 Agent から読み取り専用。変更・削除・追記を禁止。」"
+            echo ""
+            echo "変更されたファイル:"
+            echo "${READONLY_VIOLATIONS}"
+            exit 1
+          fi
+
+          echo "✅ original-docs/ への変更はありません。"

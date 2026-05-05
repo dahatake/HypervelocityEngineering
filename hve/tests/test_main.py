@@ -1140,6 +1140,8 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         )
         menu_answers = [0, 0, 2, 1]  # workflow, model, exec_mode(手動=2), verbosity
         model_options_for_test = [_main_mod.MODEL_AUTO, *_main_mod.MODEL_CHOICES]
+        if auto_qa:
+            menu_answers.append(0)  # QA タイミング: pre (index 0)
         if auto_qa and use_different_qa_model:
             menu_answers.append(model_options_for_test.index("gpt-5.4"))
         if auto_review and use_different_review_model:
@@ -1436,7 +1438,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         MockConsole = mock.MagicMock()
         con = MockConsole.return_value
         con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
-        con.menu_select.side_effect = [0, 0, 2, 1]  # workflow, model, exec_mode(手動), verbosity
+        con.menu_select.side_effect = [0, 0, 2, 1, 0]  # workflow, model, exec_mode(手動), verbosity, QAタイミング(pre)
         # auto_qa=True, QAサブモデル利用確認=False, auto_review=False, issue=False, pr=False,
         # code_review=False, dry_run=False, auto_self_improve=False, 実行確認=True
         con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True]
@@ -1581,6 +1583,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
             "main",               # branch
             "21600",              # timeout
             "社内略語は使わない",  # workiq_additional_prompt
+            "600",                # workiq_per_question_timeout
             "original-docs/",     # target_scope
             "",                   # focus_areas
             "",                   # additional_prompt

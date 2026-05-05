@@ -669,10 +669,10 @@ class TestRunImprovementLoopRunId(unittest.TestCase):
 class TestSelfImproveScopeConfig(unittest.TestCase):
     """SDKConfig.self_improve_scope フィールドの検証。"""
 
-    def test_default_scope_empty(self) -> None:
-        """デフォルトの self_improve_scope は空文字列（後方互換）。"""
+    def test_default_scope_workflow(self) -> None:
+        """Wave 2: デフォルトの self_improve_scope は "workflow"（Post-DAG のみ実行）。"""
         cfg = SDKConfig()
-        self.assertEqual(cfg.self_improve_scope, "")
+        self.assertEqual(cfg.self_improve_scope, "workflow")
 
     def test_valid_scopes(self) -> None:
         """許可値（disabled / step / workflow / ""）はそのまま設定できる。"""
@@ -712,12 +712,12 @@ class TestSelfImproveScopeConfig(unittest.TestCase):
         self.assertEqual(cfg.self_improve_scope, "")
         self.assertTrue(any("bad-scope" in str(warning.message) for warning in w))
 
-    def test_from_env_missing_scope_defaults_empty(self) -> None:
-        """HVE_SELF_IMPROVE_SCOPE が未設定の場合は '' になる。"""
+    def test_from_env_missing_scope_defaults_workflow(self) -> None:
+        """Wave 2: HVE_SELF_IMPROVE_SCOPE が未設定の場合は "workflow" になる。"""
         env = {k: v for k, v in os.environ.items() if k != "HVE_SELF_IMPROVE_SCOPE"}
         with patch.dict(os.environ, env, clear=True):
             cfg = SDKConfig.from_env()
-        self.assertEqual(cfg.self_improve_scope, "")
+        self.assertEqual(cfg.self_improve_scope, "workflow")
 
 
 class TestRunImprovementLoopAutoFalse(unittest.TestCase):
@@ -749,6 +749,153 @@ class TestRunImprovementLoopDisabledScope(unittest.TestCase):
         cfg = SDKConfig(auto_self_improve=True, self_improve_scope="disabled")
         result = run_improvement_loop(cfg)
         self.assertEqual(result["stopped_reason"], "disabled")
+
+
+# ---------------------------------------------------------------------------
+# _resolve_target_scope_paths テスト
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTargetScopePaths(unittest.TestCase):
+    """_resolve_target_scope_paths の単体テスト。"""
+
+    def setUp(self) -> None:
+        from self_improve import _resolve_target_scope_paths
+        self.resolve = _resolve_target_scope_paths
+        self._tmpdir_obj = tempfile.TemporaryDirectory()
+        self.tmpdir = self._tmpdir_obj.name
+        # 実在パスを準備
+        for p in ["src", "docs", "knowledge", "data", "hve"]:
+            Path(self.tmpdir, p).mkdir(exist_ok=True)
+
+    def tearDown(self) -> None:
+        self._tmpdir_obj.cleanup()
+
+    def test_empty_with_step_outputs(self) -> None:
+        result = self.resolve("", ["docs"], "docs/", self.tmpdir)
+        self.assertEqual(result, ["docs"])
+
+    def test_step_output_paths_takes_precedence_over_workflow_default(self) -> None:
+        """step_output_paths が指定された場合、workflow_default は無視される。"""
+        result = self.resolve("", ["src"], "docs", self.tmpdir)
+        self.assertEqual(result, ["src"])
+        self.assertNotIn("docs", result)
+
+    def test_empty_no_outputs_with_default(self) -> None:
+        result = self.resolve("", None, "docs", self.tmpdir)
+        self.assertEqual(result, ["docs"])
+
+    def test_empty_no_outputs_no_default(self) -> None:
+        result = self.resolve("", None, "", self.tmpdir)
+        self.assertEqual(result, [])  # 縮小フォールバック
+
+    def test_wildcard(self) -> None:
+        result = self.resolve("*", None, "", self.tmpdir)
+        # docs-generated は存在しないため除外される
+        self.assertIn("data", result)
+        self.assertIn("docs", result)
+        self.assertIn("knowledge", result)
+        self.assertIn("src", result)
+        self.assertNotIn("docs-generated", result)
+
+    def test_wildcard_normalize_fullwidth(self) -> None:
+        result = self.resolve("＊", None, "", self.tmpdir)
+        self.assertIn("src", result)
+
+    def test_multiple_paths_space(self) -> None:
+        result = self.resolve("src hve", None, "", self.tmpdir)
+        self.assertEqual(result, ["src", "hve"])
+
+    def test_multiple_paths_comma(self) -> None:
+        result = self.resolve("src,hve", None, "", self.tmpdir)
+        self.assertEqual(result, ["src", "hve"])
+
+    def test_excludes_work(self) -> None:
+        Path(self.tmpdir, "work").mkdir(exist_ok=True)
+        result = self.resolve("src work", None, "", self.tmpdir)
+        self.assertEqual(result, ["src"])
+
+    def test_dedup(self) -> None:
+        result = self.resolve("src src", None, "", self.tmpdir)
+        self.assertEqual(result, ["src"])
+
+    def test_rejects_dash_token(self) -> None:
+        with self.assertRaises(ValueError):
+            self.resolve("src --exclude foo", None, "", self.tmpdir)
+
+    def test_skips_nonexistent(self) -> None:
+        result = self.resolve("nonexistent", None, "", self.tmpdir)
+        self.assertEqual(result, [])
+
+    def test_step_output_includes_work_excluded(self) -> None:
+        Path(self.tmpdir, "work").mkdir(exist_ok=True)
+        result = self.resolve("", ["src", "work/cache"], "", self.tmpdir)
+        self.assertEqual(result, ["src"])
+
+    def test_dotslash_prefix_stripped(self) -> None:
+        """'./src' は 'src' として解決される。"""
+        result = self.resolve("./src", None, "", self.tmpdir)
+        self.assertEqual(result, ["src"])
+
+    def test_absolute_path_skipped(self) -> None:
+        """絶対パスはスキップされる。"""
+        result = self.resolve("/etc/passwd", None, "", self.tmpdir)
+        self.assertEqual(result, [])
+
+    def test_path_traversal_skipped(self) -> None:
+        """'..' を含むパスはスキップされる。"""
+        result = self.resolve("../src", None, "", self.tmpdir)
+        self.assertEqual(result, [])
+
+
+# ---------------------------------------------------------------------------
+# scan_codebase フィーチャーフラグ分岐テスト
+# ---------------------------------------------------------------------------
+
+
+class TestScanCodebaseFeatureFlag(unittest.TestCase):
+    """scan_codebase のフィーチャーフラグ分岐テスト。"""
+
+    @patch.dict(os.environ, {"HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER": "0"})
+    @patch("self_improve._run_tool")
+    def test_legacy_mode_uses_single_path(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = ""
+        scan_codebase(target_scope="src/")
+        # 旧仕様: ruff check src/ ... という単一パス引数
+        first_call_args = mock_run.call_args_list[0].args[0]
+        self.assertIn("src/", first_call_args)
+
+    @patch.dict(os.environ, {"HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER": "0"})
+    @patch("self_improve._run_tool")
+    def test_legacy_mode_no_work_exclude(self, mock_run: MagicMock) -> None:
+        """旧仕様では ruff に --exclude work を付与しない。"""
+        mock_run.return_value = ""
+        scan_codebase(target_scope="src/")
+        ruff_args = mock_run.call_args_list[0].args[0]
+        self.assertNotIn("--exclude", ruff_args)
+        self.assertNotIn("--ignore=work", ruff_args)
+
+    @patch.dict(os.environ, {"HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER": "0"})
+    @patch("self_improve._run_tool")
+    def test_legacy_mode_no_ignore_work_pytest(self, mock_run: MagicMock) -> None:
+        """旧仕様では pytest に --ignore=work を付与しない。"""
+        mock_run.return_value = ""
+        scan_codebase(target_scope="src/")
+        pytest_args = mock_run.call_args_list[1].args[0]
+        self.assertNotIn("--ignore=work", pytest_args)
+
+    @patch.dict(os.environ, {"HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER": "1"})
+    @patch("self_improve._run_tool")
+    def test_new_mode_skips_when_empty(self, mock_run: MagicMock) -> None:
+        result = scan_codebase(
+            target_scope="",
+            step_output_paths=None,
+            workflow_default="",
+        )
+        # スキャンスキップで _run_tool は呼ばれない
+        mock_run.assert_not_called()
+        self.assertEqual(result["quality_score"], 100)
+        self.assertIn("[SCAN SKIPPED]", result["raw_output"])
 
 
 if __name__ == "__main__":

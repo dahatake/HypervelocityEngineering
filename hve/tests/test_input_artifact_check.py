@@ -143,12 +143,12 @@ class TestCheckStepInputArtifactsMissing(unittest.TestCase):
         item = result["missing"][0]
         self.assertEqual(item["next_workflow"], "akm")
 
-    def test_missing_use_case_catalog_next_workflow_is_none(self) -> None:
-        """use_case_catalog は生成ワークフロー未確認 → next_workflow=None（要確認）。"""
+    def test_missing_use_case_catalog_next_workflow_is_user_provided(self) -> None:
+        """use_case_catalog はユーザー提供成果物 → next_workflow='user_provided'。"""
         step = _make_step(consumed_artifacts=["use_case_catalog"])
         result = check_step_input_artifacts(step, existing_artifacts={})
         item = result["missing"][0]
-        self.assertIsNone(item["next_workflow"])
+        self.assertEqual(item["next_workflow"], "user_provided")
 
 
 # ---------------------------------------------------------------------------

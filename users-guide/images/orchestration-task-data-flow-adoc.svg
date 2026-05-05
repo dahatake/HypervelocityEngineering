@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1400" font-family="system-ui, -apple-system, sans-serif">
+  <title>ADOC: ソースコードからの段階的ドキュメント生成 データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1400" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#24292e">ADOC: ソースコードからの段階的ドキュメント生成 データフロー</text>
+  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">Wave 1〜6 の Doc-* Custom Agent とファイル入出力</text>
+
+  <!-- Wave label column (x=5, width=80) -->
+  <!-- Main content starts at x=90 -->
+
+  <!-- ======================== WAVE 1 ======================== -->
+  <rect x="0" y="68" width="1200" height="20" fill="#fff3e0" opacity="0.9"/>
+  <text x="45" y="82" text-anchor="middle" font-size="11" font-weight="bold" fill="#e36209">Wave 1</text>
+  <text x="700" y="82" text-anchor="middle" font-size="10" fill="#e36209">ファイル棚卸し（シングルステップ）</text>
+
+  <!-- Step 1 input -->
+  <rect x="90" y="96" width="250" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="215" y="119" text-anchor="middle" font-size="10" fill="#24292e">src/ (ソースコード全体)</text>
+  <!-- Step 1 agent -->
+  <rect x="430" y="93" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="113" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Doc-FileInventory</text>
+  <text x="565" y="129" text-anchor="middle" font-size="10" fill="#586069">ファイル棚卸し・分割計画</text>
+  <!-- Step 1 output -->
+  <rect x="800" y="100" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="123" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/inventory.md</text>
+  <!-- Arrows Step 1 -->
+  <line x1="340" y1="115" x2="430" y2="117" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="117" x2="800" y2="119" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Dependency arrow Wave 1→2 -->
+  <line x1="565" y1="141" x2="565" y2="163" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ======================== WAVE 2 ======================== -->
+  <rect x="0" y="165" width="1200" height="20" fill="#fff3e0" opacity="0.9"/>
+  <text x="45" y="179" text-anchor="middle" font-size="11" font-weight="bold" fill="#e36209">Wave 2</text>
+  <text x="700" y="179" text-anchor="middle" font-size="10" fill="#e36209">個別ファイルサマリー（5エージェント並列実行）</text>
+
+  <!-- Shared input note -->
+  <rect x="90" y="192" width="250" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="215" y="213" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/inventory.md</text>
+  <text x="215" y="229" text-anchor="middle" font-size="10" fill="#24292e">src/ ファイル</text>
+  <text x="215" y="243" text-anchor="middle" font-size="9" fill="#586069">（全 Wave 2 エージェント共通）</text>
+
+  <!-- 5 parallel agents Wave 2 -->
+  <rect x="360" y="192" width="145" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="432" y="214" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-FileSummary</text>
+  <text x="432" y="230" text-anchor="middle" font-size="9" fill="#586069">通常ファイル</text>
+  <text x="432" y="242" text-anchor="middle" font-size="9" fill="#586069">サマリー</text>
+
+  <rect x="515" y="192" width="145" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="587" y="209" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">Doc-LargeFileSummary</text>
+  <text x="587" y="225" text-anchor="middle" font-size="9" fill="#586069">大規模ファイル</text>
+  <text x="587" y="238" text-anchor="middle" font-size="9" fill="#586069">分割サマリー</text>
+
+  <rect x="670" y="192" width="145" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="742" y="212" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-TestSummary</text>
+  <text x="742" y="228" text-anchor="middle" font-size="9" fill="#586069">テストコード</text>
+  <text x="742" y="241" text-anchor="middle" font-size="9" fill="#586069">サマリー</text>
+
+  <rect x="825" y="192" width="145" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="897" y="212" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-CICDSummary</text>
+  <text x="897" y="228" text-anchor="middle" font-size="9" fill="#586069">CI/CD ワークフロー</text>
+  <text x="897" y="241" text-anchor="middle" font-size="9" fill="#586069">サマリー</text>
+
+  <rect x="980" y="192" width="145" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="1052" y="212" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-ConfigSummary</text>
+  <text x="1052" y="228" text-anchor="middle" font-size="9" fill="#586069">設定ファイル</text>
+  <text x="1052" y="241" text-anchor="middle" font-size="9" fill="#586069">サマリー</text>
+
+  <!-- Arrow from shared input to agents -->
+  <line x1="340" y1="219" x2="360" y2="219" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Shared output note Wave 2 -->
+  <rect x="440" y="262" width="400" height="30" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="640" y="281" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/files/*.md（各エージェントの出力）</text>
+
+  <!-- Dependency arrow Wave 2→3 -->
+  <line x1="640" y1="292" x2="640" y2="318" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ======================== WAVE 3 ======================== -->
+  <rect x="0" y="320" width="1200" height="20" fill="#ede7f6" opacity="0.9"/>
+  <text x="45" y="334" text-anchor="middle" font-size="11" font-weight="bold" fill="#6f42c1">Wave 3</text>
+  <text x="700" y="334" text-anchor="middle" font-size="10" fill="#6f42c1">コンポーネント設計ドキュメント（5エージェント並列実行）</text>
+
+  <!-- Shared input Wave 3 -->
+  <rect x="90" y="348" width="250" height="45" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="215" y="368" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/files/*.md</text>
+  <text x="215" y="383" text-anchor="middle" font-size="9" fill="#586069">（Wave 2 全成果物）</text>
+
+  <!-- 5 parallel agents Wave 3 -->
+  <rect x="360" y="348" width="155" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="437" y="368" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-ComponentDesign</text>
+  <text x="437" y="384" text-anchor="middle" font-size="9" fill="#586069">コンポーネント設計</text>
+
+  <rect x="525" y="348" width="130" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="590" y="368" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-APISpec</text>
+  <text x="590" y="384" text-anchor="middle" font-size="9" fill="#586069">API 仕様書</text>
+
+  <rect x="665" y="348" width="130" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="730" y="368" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-DataModel</text>
+  <text x="730" y="384" text-anchor="middle" font-size="9" fill="#586069">データモデル</text>
+
+  <rect x="805" y="348" width="130" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="870" y="368" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-TechDebt</text>
+  <text x="870" y="384" text-anchor="middle" font-size="9" fill="#586069">技術的負債</text>
+
+  <rect x="945" y="348" width="165" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="1027" y="362" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">Doc-TestSpecSummary</text>
+  <text x="1027" y="378" text-anchor="middle" font-size="9" fill="#586069">テスト仕様</text>
+  <text x="1027" y="391" text-anchor="middle" font-size="9" fill="#586069">サマリー</text>
+
+  <line x1="340" y1="370" x2="360" y2="375" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Shared output Wave 3 -->
+  <rect x="440" y="418" width="400" height="30" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="640" y="437" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/components/*.md</text>
+
+  <!-- Dependency arrow Wave 3→4 -->
+  <line x1="640" y1="448" x2="640" y2="474" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ======================== WAVE 4 ======================== -->
+  <rect x="0" y="476" width="1200" height="20" fill="#fff3e0" opacity="0.9"/>
+  <text x="45" y="490" text-anchor="middle" font-size="11" font-weight="bold" fill="#e36209">Wave 4</text>
+  <text x="700" y="490" text-anchor="middle" font-size="10" fill="#e36209">インデックス生成（シングルステップ）</text>
+
+  <!-- Step 4 input -->
+  <rect x="90" y="504" width="260" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="220" y="527" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/components/*.md</text>
+  <!-- Step 4 agent -->
+  <rect x="430" y="501" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="521" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Doc-ComponentIndex</text>
+  <text x="565" y="537" text-anchor="middle" font-size="10" fill="#586069">レイヤー2成果物の要約インデックス</text>
+  <!-- Step 4 output -->
+  <rect x="800" y="508" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="531" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/component-index.md</text>
+  <line x1="350" y1="523" x2="430" y2="525" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="525" x2="800" y2="527" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Dependency arrow Wave 4→5 -->
+  <line x1="565" y1="549" x2="565" y2="575" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ======================== WAVE 5 ======================== -->
+  <rect x="0" y="577" width="1200" height="20" fill="#ede7f6" opacity="0.9"/>
+  <text x="45" y="591" text-anchor="middle" font-size="11" font-weight="bold" fill="#6f42c1">Wave 5</text>
+  <text x="700" y="591" text-anchor="middle" font-size="10" fill="#6f42c1">アーキテクチャ分析ドキュメント（4エージェント並列実行）</text>
+
+  <!-- Shared input Wave 5 -->
+  <rect x="90" y="604" width="260" height="45" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="220" y="624" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/component-index.md</text>
+  <text x="220" y="639" text-anchor="middle" font-size="9" fill="#586069">（Wave 4 成果物）</text>
+
+  <!-- 4 parallel agents Wave 5 -->
+  <rect x="370" y="604" width="180" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="460" y="624" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-ArchOverview</text>
+  <text x="460" y="640" text-anchor="middle" font-size="9" fill="#586069">アーキテクチャ概要</text>
+
+  <rect x="560" y="604" width="180" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="650" y="624" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-DependencyMap</text>
+  <text x="650" y="640" text-anchor="middle" font-size="9" fill="#586069">依存関係マップ</text>
+
+  <rect x="750" y="604" width="160" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="830" y="624" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-InfraDeps</text>
+  <text x="830" y="640" text-anchor="middle" font-size="9" fill="#586069">インフラ依存分析</text>
+
+  <rect x="920" y="604" width="165" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="1002" y="624" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Doc-NFRAnalysis</text>
+  <text x="1002" y="640" text-anchor="middle" font-size="9" fill="#586069">非機能要件分析</text>
+
+  <line x1="350" y1="626" x2="370" y2="631" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Shared output Wave 5 -->
+  <rect x="440" y="675" width="400" height="30" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="640" y="694" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/architecture/*.md</text>
+
+  <!-- Dependency arrow Wave 5→6 -->
+  <line x1="640" y1="705" x2="640" y2="731" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ======================== WAVE 6 ======================== -->
+  <rect x="0" y="733" width="1200" height="20" fill="#e8f0fe" opacity="0.9"/>
+  <text x="45" y="747" text-anchor="middle" font-size="11" font-weight="bold" fill="#0366d6">Wave 6</text>
+  <text x="700" y="747" text-anchor="middle" font-size="10" fill="#0366d6">ガイドドキュメント生成（3エージェント並列実行）</text>
+
+  <!-- Shared input Wave 6 -->
+  <rect x="90" y="760" width="260" height="45" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="220" y="780" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/architecture/*.md</text>
+  <text x="220" y="796" text-anchor="middle" font-size="9" fill="#586069">（Wave 5 成果物）</text>
+
+  <!-- 3 parallel agents Wave 6 -->
+  <rect x="400" y="760" width="200" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="500" y="780" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Doc-Onboarding</text>
+  <text x="500" y="796" text-anchor="middle" font-size="9" fill="#586069">オンボーディングガイド</text>
+
+  <rect x="620" y="760" width="200" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="720" y="780" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Doc-Refactoring</text>
+  <text x="720" y="796" text-anchor="middle" font-size="9" fill="#586069">リファクタリングガイド</text>
+
+  <rect x="840" y="760" width="200" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="940" y="780" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Doc-Migration</text>
+  <text x="940" y="796" text-anchor="middle" font-size="9" fill="#586069">移行アセスメント</text>
+
+  <line x1="350" y1="783" x2="400" y2="787" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Shared output Wave 6 -->
+  <rect x="440" y="830" width="400" height="30" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="640" y="849" text-anchor="middle" font-size="10" fill="#24292e">docs-generated/guides/*.md</text>
+
+  <!-- Legend -->
+  <rect x="90" y="900" width="960" height="60" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="570" y="917" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
+  <rect x="110" y="925" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="127" y="935" font-size="10" fill="#24292e">入力ファイル</text>
+  <rect x="240" y="925" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="257" y="935" font-size="10" fill="#24292e">Custom Agent</text>
+  <rect x="380" y="925" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="397" y="935" font-size="10" fill="#24292e">成果物</text>
+  <line x1="490" y1="931" x2="520" y2="931" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="530" y="935" font-size="10" fill="#24292e">Wave 依存（縦方向）</text>
+  <text x="700" y="935" font-size="10" fill="#e36209" font-weight="bold">同一 Wave 内のエージェントは並列実行可</text>
+</svg>

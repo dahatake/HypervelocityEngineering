@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import (
     DEFAULT_MODEL,
-    LEGACY_MODEL_ID,
     MODEL_AUTO_VALUE,
     MODEL_CHOICES,
     SDKConfig,
@@ -31,7 +30,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertEqual(SDKConfig().model, "claude-opus-4.7")
 
     def test_model_choices_contains_both_46_and_47(self) -> None:
-        self.assertNotIn(LEGACY_MODEL_ID, MODEL_CHOICES)
+        self.assertNotIn("claude-opus-4-7", MODEL_CHOICES)
         self.assertIn("claude-opus-4.7", MODEL_CHOICES)
         self.assertIn("claude-opus-4.6", MODEL_CHOICES)
 
@@ -43,9 +42,6 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_default_model_constant(self) -> None:
         self.assertEqual(DEFAULT_MODEL, "claude-opus-4.7")
-
-    def test_normalize_model_legacy(self) -> None:
-        self.assertEqual(normalize_model(LEGACY_MODEL_ID), "claude-opus-4.7")
 
     def test_normalize_model_current(self) -> None:
         self.assertEqual(normalize_model("claude-opus-4.7"), "claude-opus-4.7")
@@ -139,7 +135,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertFalse(self.cfg.workiq_draft_mode)
         self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
         self.assertEqual(self.cfg.workiq_per_question_timeout, 900.0)
-        self.assertEqual(self.cfg.workiq_max_draft_questions, 30)
+        self.assertEqual(self.cfg.workiq_max_draft_questions, 10)  # Wave 2: 30→10 に削減
 
     def test_auto_self_improve_default_false(self) -> None:
         self.assertFalse(self.cfg.auto_self_improve)

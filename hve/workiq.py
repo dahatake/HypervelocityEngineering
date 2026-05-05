@@ -100,84 +100,148 @@ def resolve_npx_command() -> Optional[str]:
         return shutil.which("npx.cmd") or shutil.which("npx.exe") or shutil.which("npx")
     return shutil.which("npx")
 
-_WORKIQ_PROMPT_HEADER: str = (
-    f"Microsoft 365 のデータ検索には MCP サーバー `{WORKIQ_MCP_SERVER_NAME}` が提供する以下のツールを使用してください。\n"
-    f"利用可能なツール: {', '.join(WORKIQ_MCP_TOOL_NAMES)}\n"
-    "※ `workiq` という単独のツール名は存在しません。必ず上記のいずれかのツールを呼び出してください。\n"
-    "ツールを呼び出さずに「workiq ツールが存在しない」と結論しないでください。\n"
-)
-
-# F1: 役割プライミング + F7: 検索戦略指示
+# 役割プライミング（最小限・断定文）。
+# - MCP サーバー名 `_hve_workiq` はリポジトリ内部のセッション別名のためプロンプト本文には含めない
+#   （SDK 側の system prompt にツール schema が自動注入される）。
+# - 同様にツール名（`ask_work_iq`）や引数名（`question`）も本文に含めない。
+#   MCP ツール schema は SDK が system prompt へ自動注入するため、本文で併記すると
+#   「合成語による外部環境説明」となり Microsoft 365 Copilot のベストプラクティスに反する。
+# - 同義語・略称・英訳の指示は Work IQ サーバ側検索ロジック（Microsoft Graph）に委ねるため記載しない。
+# - Microsoft 365 Copilot の公式ガイダンス（Goal/Context/Source/Expectations・グラウンディング・
+#   human oversight）に準拠し、「捏造禁止」「取得後の自己レビュー」を明文化する。
 _WORKIQ_ROLE_PROMPT: str = (
-    "\nあなたは Microsoft 365 のリサーチアシスタントです。\n"
-    "- 一次情報の引用と要約のみを行い、推測・解釈・追加助言はしないでください。\n"
-    "- 個人情報（氏名・メール本文・添付内容など）は最低限の引用に留め、要約してください。\n"
-    "- 検索キーワードは原文・同義語・略称・英訳の少なくとも 2 通りで試行してください。\n"
-    "- 1 回の `ask_work_iq` で十分な結果が得られない場合、観点を変えて再度呼び出してください（最大 3 回）。\n"
+    "<role>\n"
+    "あなたは Microsoft 365 のリサーチアシスタントです。\n"
+    "ユーザーが進めているソフトウェア設計／開発タスクの判断材料として、"
+    "組織内の Microsoft 365 データ（メール／Teams／会議／SharePoint／OneDrive／Loop）から、"
+    "ユーザー本人がアクセス権を持つ一次情報のみを検索・要約して報告します。\n"
+    "\n"
+    "以下を厳守してください:\n"
+    "- 検索結果に**存在しない情報を一切作り出さない**"
+    "（タイトル・送信者・日時・URL・本文の捏造を禁止）。\n"
+    "- 推測・解釈・追加助言・一般論は返さない（一次情報の引用と要約のみ）。\n"
+    "- 確証が得られなかった場合は無理に返答せず、"
+    "STATUS ラベル（後述）で正直に報告する。\n"
+    "- 個人情報（氏名・メール本文・添付内容）は最低限に留め要約する。\n"
+    "- 出力する直前に「目的との整合・引用元の有無・取得できなかったソース」を"
+    "**自己レビュー**してから返答する。\n"
+    "</role>\n"
 )
 
-# F2+F3+F4: 出力スキーマ＋ステータスラベル＋件数/長さ上限
+# 出力スキーマ＋ステータスラベル＋件数/長さ上限。
+# - サンプル行（雛形）は Few-shot 例と重複するため削除（B-6 #9）。
 _WORKIQ_OUTPUT_SCHEMA_PROMPT: str = (
     "\n## 出力フォーマット（厳守）\n"
-    "1 行目に以下のいずれかの STATUS ラベルを必ず付けてください:\n"
+    "1 行目に以下のいずれかの STATUS ラベルを必ず付ける:\n"
     "- `STATUS: FOUND` — 関連情報が見つかった\n"
+    "- `STATUS: PARTIAL` — 一部のソース（例: メールのみ）でしか検索できなかった\n"
     "- `STATUS: NOT_FOUND` — 検索したが関連情報なし\n"
     "- `STATUS: UNAVAILABLE` — ツール未公開・認証失敗・タイムアウト等で検索自体が実行できなかった\n"
-    "- `STATUS: PARTIAL` — 一部のソース（例: メールのみ）でしか検索できなかった\n"
-    "\n2 行目以降は以下の Markdown 表で報告してください（**最大 5 件、各セルは 200 字以内**）:\n"
+    "\n2 行目以降は次の Markdown 表で報告する（**最大 5 件、各セルは 200 字以内**。"
+    "5 件を超える場合は重要度上位 5 件に絞り、補足欄にその旨を記す）:\n"
     "\n| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
     "|---|---|---:|---|---|\n"
-    "| メール / Teams / 会議 / ファイル / Loop | 件名・送信者・会議名・ファイル名等 | YYYY-MM-DD HH:MM | URL/パス | 1 行で要点 |\n"
     "\n表の下に `**補足**:` を 1 ブロックだけ追加してよい（任意・最大 5 行）。\n"
-    "`STATUS: NOT_FOUND` / `STATUS: UNAVAILABLE` の場合は表を省略し、理由を 1〜3 行で記載してください。\n"
+    "`STATUS: NOT_FOUND` / `STATUS: UNAVAILABLE` の場合は表を省略し、理由を 1〜3 行で記載する。\n"
 )
 
-# F5: Few-shot 例（FOUND と UNAVAILABLE）
+# Few-shot 例。
+# - UNAVAILABLE は LLM 側で観測できないため例から除外（B-6 #4 / B-2 #8）。
+# - PII は匿名化（B-2 #21）。
 _WORKIQ_FEWSHOT_PROMPT: str = (
     "\n## 例\n"
     "### 例1（見つかった場合）\n"
     "STATUS: FOUND\n"
     "| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
     "|---|---|---:|---|---|\n"
-    "| メール | 件名: 連携設計レビュー / 送信者: yamada@example.com | 2026-04-20 10:15 | Outlook | API契約合意状況 |\n"
+    "| メール | 件名: 連携設計レビュー / 送信者: 山田 (営業部) | 2026-04-20 10:15 | Outlook | API契約合意状況 |\n"
     "| ファイル | API仕様書_v1.2.docx | 2026-04-22 | SharePoint/Docs | エンドポイント一覧 |\n"
     "**補足**: 2件とも署名前ドラフトのため確定情報ではない。\n"
-    "\n### 例2（ツール未接続の場合）\n"
-    "STATUS: UNAVAILABLE\n"
-    "ask_work_iq ツールが現在のセッションに公開されていないため、Microsoft 365 を検索できませんでした。\n"
+    "\n### 例2（関連情報なしの場合）\n"
+    "STATUS: NOT_FOUND\n"
+    "Microsoft 365 を検索しましたが、対象期間内に関連するメール・チャット・ファイルは見つかりませんでした。\n"
 )
 
-DEFAULT_WORKIQ_QA_PROMPT: str = (
-    _WORKIQ_PROMPT_HEADER
-    + _WORKIQ_ROLE_PROMPT
-    + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
-    "以下の質問に関連する情報がないか調査してください。\n"
-    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
-    + _WORKIQ_FEWSHOT_PROMPT
-    + "\n質問一覧:\n{target_content}"
+
+def _compose_default_workiq_prompt(*, task_directive: str, target_label: str) -> str:
+    """QA / KM / Review の各デフォルトプロンプトを組み立てる共通ヘルパー。
+
+    - 役割 → 出力スキーマ → Few-shot → タスク指示（Goal/Context/Source） → `{target_content}` の順で構成する。
+    - `task_directive` は Microsoft 365 Copilot 推奨の Goal/Context/Source 4 要素構造を含む
+      モードごとのタスク記述。見出し（`## タスク…`）も task_directive 側に含める。
+    - `target_label` は対象ブロックの見出し名（"質問一覧" / "Knowledge 項目" / "ドキュメント概要"）。
+    """
+    return (
+        _WORKIQ_ROLE_PROMPT
+        + _WORKIQ_OUTPUT_SCHEMA_PROMPT
+        + _WORKIQ_FEWSHOT_PROMPT
+        + "\n"
+        + task_directive
+        + f"\n\n### {target_label}\n"
+        + "{target_content}\n"
+    )
+
+
+DEFAULT_WORKIQ_QA_PROMPT: str = _compose_default_workiq_prompt(
+    task_directive=(
+        "## タスク（Goal / Context / Source）\n"
+        "\n"
+        "### Goal（目的）\n"
+        "以下の「質問一覧」に列挙された各設問について、Microsoft 365 上で"
+        "関連する一次情報を検索し、回答の根拠候補を収集する。\n"
+        "\n"
+        "### Context（背景）\n"
+        "本検索結果は、ソフトウェア設計／開発タスクの事前 QA フェーズで、"
+        "人間が回答を確定させるための補助情報として参照される。"
+        "LLM が直接「正解」を出す用途ではないため、"
+        "**未確認の事実を補完で埋めず、見つからなかった項目は素直に NOT_FOUND を返すこと**。\n"
+        "\n"
+        "### Source（情報源）\n"
+        "ユーザーがアクセス権を持つ Microsoft 365 データ"
+        "（メール・Teams・会議・SharePoint・OneDrive・Loop）。"
+        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+    ),
+    target_label="質問一覧",
 )
 
-DEFAULT_WORKIQ_KM_PROMPT: str = (
-    _WORKIQ_PROMPT_HEADER
-    + _WORKIQ_ROLE_PROMPT
-    + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
-    "以下の Knowledge 項目に関連する情報がないか調査してください。\n"
-    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
-    + _WORKIQ_FEWSHOT_PROMPT
-    + "\nKnowledge 項目:\n{target_content}"
+DEFAULT_WORKIQ_KM_PROMPT: str = _compose_default_workiq_prompt(
+    task_directive=(
+        "## タスク（Goal / Context / Source）\n"
+        "\n"
+        "### Goal（目的）\n"
+        "以下の「Knowledge 項目」（事業要件文書 D クラスの 1 件）について、"
+        "Microsoft 365 上に文書内容を補強・修正できる一次情報があるか検索する。\n"
+        "\n"
+        "### Context（背景）\n"
+        "本検索結果は、Post-DAG の AKM 検証フェーズで `knowledge/D??-*.md` を"
+        "事実ベースで更新するための根拠として使われる。"
+        "**根拠が無い更新は行わない**ため、確証の無い情報は載せず、"
+        "見つからなかった場合は STATUS: NOT_FOUND を返すこと。\n"
+        "\n"
+        "### Source（情報源）\n"
+        "ユーザーがアクセス権を持つ Microsoft 365 データ。"
+        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+    ),
+    target_label="Knowledge 項目",
 )
 
-DEFAULT_WORKIQ_REVIEW_PROMPT: str = (
-    _WORKIQ_PROMPT_HEADER
-    + _WORKIQ_ROLE_PROMPT
-    + "\nまず `ask_work_iq` ツールを呼び出し、"
-    "メール、Teams チャット、会議、SharePoint/OneDrive のファイルの中に、"
-    "以下のドキュメント内容と矛盾する情報や、補足すべき最新情報がないか調査してください。\n"
-    + _WORKIQ_OUTPUT_SCHEMA_PROMPT
-    + _WORKIQ_FEWSHOT_PROMPT
-    + "\nドキュメント概要:\n{target_content}"
+DEFAULT_WORKIQ_REVIEW_PROMPT: str = _compose_default_workiq_prompt(
+    task_directive=(
+        "## タスク（Goal / Context / Source）\n"
+        "\n"
+        "### Goal（目的）\n"
+        "以下の「ドキュメント概要」と矛盾する情報、または補足すべき最新情報が"
+        "Microsoft 365 上にあるかを検索する。\n"
+        "\n"
+        "### Context（背景）\n"
+        "本検索結果は既存ドキュメントのレビュー補助に使われる。"
+        "**矛盾を捏造で埋めない**。実際に矛盾を示す一次情報が見つかった場合のみ報告する。\n"
+        "\n"
+        "### Source（情報源）\n"
+        "ユーザーがアクセス権を持つ Microsoft 365 データ。"
+        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+    ),
+    target_label="ドキュメント概要",
 )
 
 
@@ -1634,9 +1698,11 @@ async def probe_workiq_copilot_tool_invocation(
             ))
 
         probe_prompt = (
-            "診断専用です。`ask_work_iq` ツールを1回だけ呼び出してください。"
-            "引数 `question` は `ping` としてください。ツール結果の要約のみ短く返してください。"
-            "ツールが利用できない場合はその理由を一文で返してください。"
+            "これは Microsoft 365 検索連携の疎通診断です。以下を厳守してください:\n"
+            "- Microsoft 365 を 1 回だけ検索し、`ping` というキーワードに関連する任意の項目が"
+            "あれば要約を 1 行返す。何も見つからなくて構わない。\n"
+            "- 検索が実行できない場合（権限・接続・初期化の問題等）は、その理由を 1 文で返す。\n"
+            "- **創作・推測は禁止**。存在しない件名・送信者・ファイル名を作り出すのは不適切。"
         )
         try:
             await asyncio.wait_for(

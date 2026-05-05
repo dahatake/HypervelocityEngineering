@@ -82,7 +82,7 @@
 **確認事項**:
 
 1. Issue に `auto-app-documentation` または `knowledge-management` ラベルが付いているか
-2. **Actions** タブで `auto-app-documentation.yml` / `auto-knowledge-management.yml` が有効か
+2. **Actions** タブで `auto-app-documentation-reusable.yml` / `auto-knowledge-management-reusable.yml` が有効か
 3. ラベル未作成の場合は [getting-started.md Step.5](./getting-started.md#step5-ラベル設定) を参照し、少なくとも `auto-app-documentation` と `knowledge-management` を明示的に作成
 
 ---
@@ -90,6 +90,14 @@
 ### PR 完全自動化が動かない（Auto Approve / Auto-merge）
 
 **症状**: チェックボックスを有効化したのに自動 Approve / Auto-merge されない。
+
+**確認事項**:
+
+1. PR に `auto-approve-ready` ラベルが付与されているか
+2. PR が `split-mode` になっていないか（`split-mode` 付きは自動化対象外）
+3. `auto-review-to-approve-transition.yml` / `auto-approve-and-merge.yml` の実行ログに失敗がないか
+
+---
 
 ### 選択したモデルで 400 エラーになる
 
@@ -106,12 +114,6 @@
 
 > **モデル ID の命名規則**: Copilot CLI が受理するモデル ID はすべてドット区切りです（例: `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `claude-haiku-4.5` / `gpt-5.4` / `gpt-5.3-codex`）。`copilot` コマンドで `/model` を実行すると利用可能な正確な ID が確認できます。旧表記 `claude-opus-4-7`（ハイフン区切り）を環境変数や `--model` で指定した場合、SDK 側で自動的に `claude-opus-4.7` に正規化されます（WARNING ログあり）。ワークフロー YAML 側でも同様に正規化されます。
 
-**確認事項**:
-
-1. PR に `auto-approve-ready` ラベルが付与されているか
-2. PR が `split-mode` になっていないか（`split-mode` 付きは自動化対象外）
-3. `auto-review-to-approve-transition.yml` / `auto-approve-and-merge.yml` の実行ログに失敗がないか
-
 ---
 
 ### Azure Static Web Apps デプロイエラー
@@ -119,6 +121,33 @@
 **症状**: SWA デプロイ workflow が失敗する、または `::warning::` でスキップされる。
 
 **確認事項（チェック順）**:
+
+SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WEB_APPS_API_TOKEN` の設定は不要です。以下の Secrets が正しく設定されていることを確認してください。
+
+1. **OIDC 認証 Secrets が設定されているか確認**
+   ```bash
+   gh secret list --repo <owner>/<repo>
+   ```
+   以下の 3 つが存在することを確認:
+   - `AZURE_CLIENT_ID`
+   - `AZURE_TENANT_ID`
+   - `AZURE_SUBSCRIPTION_ID`
+   
+   未設定の場合は [getting-started.md Step.4.3](./getting-started.md#step43-シークレット設定) を参照してください。
+
+2. **Azure リソースが存在するか確認**
+   ```bash
+   az staticwebapp show --name <SWA_NAME> --resource-group <RESOURCE_GROUP>
+   ```
+   - リソースが存在しない場合は `create-azure-webui-resources.sh` を実行してください
+
+3. **`AZURE_CLIENT_ID` のサービスプリンシパルに SWA 権限があるか確認**
+   - サービスプリンシパルに `Contributor` ロールが付与されているか確認してください
+
+<details>
+<summary>旧方式（<code>AZURE_STATIC_WEB_APPS_API_TOKEN</code> トークン認証）をご利用の場合</summary>
+
+> **注意**: 現在の推奨方式は OIDC 認証です。以下の手順は、過去互換目的で残しています。
 
 1. **`AZURE_STATIC_WEB_APPS_API_TOKEN` が設定されているか確認**
    ```bash
@@ -133,24 +162,20 @@
      GH_TOKEN=$GITHUB_PAT gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo <owner>/<repo> --body "$TOKEN"
      ```
 
-2. **Azure リソースが存在するか確認**
-   ```bash
-   az staticwebapp show --name <SWA_NAME> --resource-group <RESOURCE_GROUP>
-   ```
-   - リソースが存在しない場合は `create-azure-webui-resources.sh` を実行してください
-
-3. **`GITHUB_PAT` の権限不足（`gh secret set` が 403 エラー）**
-   - Fine-grained PAT の場合: Repository Permission に **Secrets: Read and write** が必要
-   - Classic PAT の場合: `repo` スコープが必要
-   - PAT の有効期限が切れていないか確認
-
-4. **デプロイトークンの期限切れ**
+2. **デプロイトークンの期限切れ**
    - SWA のデプロイトークンは Azure リソース側で管理されます
    - トークンをリセットする場合:
      ```bash
      az staticwebapp secrets reset-api-key --name <SWA_NAME> -g <RESOURCE_GROUP>
      ```
    - リセット後は `AZURE_STATIC_WEB_APPS_API_TOKEN` を再設定してください
+
+3. **`GITHUB_PAT` の権限不足（`gh secret set` が 403 エラー）**
+   - Fine-grained PAT の場合: Repository Permission に **Secrets: Read and write** が必要
+   - Classic PAT の場合: `repo` スコープが必要
+   - PAT の有効期限が切れていないか確認
+
+</details>
 
 ---
 

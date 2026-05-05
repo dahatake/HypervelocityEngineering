@@ -16,7 +16,7 @@
 `Arch-Microservice-DomainAnalytics` を使用
 
 ## 依存
-- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）
+- Step.2（ソフトウェアアーキテクチャの推薦）が `aas:done` であること
 
 ## 完了条件
 - `docs/catalog/domain-analytics.md` が作成されている

@@ -65,6 +65,18 @@ class StepDef:
     (例: "app_catalog", "service_specs", "doc_generated")。
     """
 
+    output_paths: List[str] = field(default_factory=list)
+    """このステップが生成する成果物ファイルパスのリスト (リポジトリルート相対)。
+    空リストの場合は workflow_default へフォールバック。
+    Self-Improve の target scope 解決および Wave 3 以降の入力チェックで利用される。
+    """
+
+    required_input_paths: List[str] = field(default_factory=list)
+    """このステップが必須とする入力ファイルパスのリスト (リポジトリルート相対)。
+    テンプレートの ## 入力 内の（必須）項目に対応。オプション入力は含まない。
+    将来の事前チェック・Wave 1 品質ゲートでの利用を想定。
+    """
+
 
 @dataclass
 class WorkflowDef:
@@ -218,47 +230,78 @@ AAS = WorkflowDef(
         StepDef(id="1", title="アプリケーションリストの作成",
                 custom_agent="Arch-ApplicationAnalytics",
                 consumed_artifacts=["use_case_catalog"],
-                body_template_path="templates/aas/step-1.md"),
+                body_template_path="templates/aas/step-1.md",
+                output_paths=["docs/catalog/app-catalog.md"],
+                required_input_paths=["docs/catalog/use-case-catalog.md"]),
         StepDef(id="2", title="ソフトウェアアーキテクチャの推薦",
                 custom_agent="Arch-ArchitectureCandidateAnalyzer",
                 depends_on=["1"],
                 # docs/architectural-requirements-app-xx.md は既知 key なし → app_catalog のみ
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aas/step-2.md"),
+                body_template_path="templates/aas/step-2.md",
+                output_paths=["docs/catalog/app-arch-catalog.md"],
+                required_input_paths=["docs/catalog/app-catalog.md"]),
         StepDef(id="3.1", title="ドメイン分析",
                 custom_agent="Arch-Microservice-DomainAnalytics",
                 depends_on=["2"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-3.1.md"),
+                body_template_path="templates/aas/step-3.1.md",
+                output_paths=["docs/catalog/domain-analytics.md"],
+                required_input_paths=["docs/catalog/use-case-catalog.md",
+                                      "docs/catalog/app-catalog.md"]),
         StepDef(id="3.2", title="サービス一覧抽出",
                 custom_agent="Arch-Microservice-ServiceIdentify",
                 depends_on=["3.1"],
                 consumed_artifacts=["use_case_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-3.2.md"),
+                body_template_path="templates/aas/step-3.2.md",
+                output_paths=["docs/catalog/service-catalog.md"],
+                required_input_paths=["docs/catalog/use-case-catalog.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/app-catalog.md"]),
         StepDef(id="4", title="データモデル",
                 custom_agent="Arch-DataModeling",
                 depends_on=["3.2"],
                 consumed_artifacts=["domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-4.md"),
+                body_template_path="templates/aas/step-4.md",
+                output_paths=["docs/catalog/data-model.md",
+                              "src/data/sample-data.json"],
+                required_input_paths=["docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md",
+                                      "docs/catalog/app-catalog.md"]),
         StepDef(id="5", title="データカタログ作成",
                 custom_agent="Arch-DataCatalog",
                 depends_on=["4"],
                 skip_fallback_deps=["4"],
                 # service_catalog / service_catalog_matrix は optional 入力のため除外
                 consumed_artifacts=["data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-5.md"),
+                body_template_path="templates/aas/step-5.md",
+                output_paths=["docs/catalog/data-catalog.md"],
+                required_input_paths=["docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md"]),
         StepDef(id="6", title="サービスカタログ",
                 custom_agent="Arch-Microservice-ServiceCatalog",
                 depends_on=["5"],
                 skip_fallback_deps=["5"],
                 consumed_artifacts=["service_catalog", "data_model", "screen_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-6.md"),
+                body_template_path="templates/aas/step-6.md",
+                output_paths=["docs/catalog/service-catalog-matrix.md"],
+                required_input_paths=["docs/catalog/service-catalog.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/screen-catalog.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/app-catalog.md"]),
         StepDef(id="7", title="テスト戦略書",
                 custom_agent="Arch-TDD-TestStrategy",
                 depends_on=["6"],
                 skip_fallback_deps=["6"],
                 consumed_artifacts=["service_catalog_matrix", "data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-7.md"),
+                body_template_path="templates/aas/step-7.md",
+                output_paths=["docs/catalog/test-strategy.md"],
+                required_input_paths=["docs/catalog/service-catalog-matrix.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md",
+                                      "docs/catalog/app-catalog.md"]),
     ],
 )
 

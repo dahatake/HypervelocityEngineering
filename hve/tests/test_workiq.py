@@ -814,17 +814,46 @@ class TestDefaultPromptsNoWorkiqToolRef(unittest.TestCase):
             # 旧バージョンの曖昧表現「workiq ツールを使用して」が含まれていないこと
             self.assertNotIn("workiq ツールを使用して", prompt, f"{attr_name} に旧表現 'workiq ツールを使用して' が含まれています")
 
-    def test_default_prompts_include_actual_mcp_tool_names(self) -> None:
-        for mode, attr_name in self._PROMPTS:
-            prompt = getattr(workiq, attr_name)
-            # 少なくとも1つの実ツール名が含まれていること
-            has_tool = any(t in prompt for t in workiq.WORKIQ_MCP_TOOL_NAMES)
-            self.assertTrue(has_tool, f"{attr_name} に実ツール名が含まれていません")
+    def test_default_prompts_do_not_include_mcp_tool_names_or_args(self) -> None:
+        """プロンプト本文に MCP ツール名 (`ask_work_iq`) や引数名 (`question`) を書かない方針の検証。
 
-    def test_default_prompts_include_mcp_server_name(self) -> None:
+        SDK は MCP ツール schema を system prompt に自動注入するため、本文側で
+        ツール実装語彙を併記すると「合成語による外部環境説明」となり
+        Microsoft 365 Copilot のベストプラクティスに反する。再発防止の assertion。
+        """
+        forbidden_substrings = (
+            "`ask_work_iq`",   # ツール名のバッククォート表記
+            "ask_work_iq ツール",  # 「〜ツール」の併記
+            "引数 `question`",  # 引数名の併記
+            "`question` を",     # 引数名を行為主語として書く形
+        )
         for mode, attr_name in self._PROMPTS:
             prompt = getattr(workiq, attr_name)
-            self.assertIn(workiq.WORKIQ_MCP_SERVER_NAME, prompt, f"{attr_name} に MCP サーバー名が含まれていません")
+            for forbidden in forbidden_substrings:
+                self.assertNotIn(
+                    forbidden,
+                    prompt,
+                    f"{attr_name} に MCP 実装語彙 '{forbidden}' が含まれています。"
+                    "プロンプト本文には自然言語のみを書き、ツール名・引数名は SDK の "
+                    "system prompt 自動注入に委ねる方針です。",
+                )
+
+    def test_default_prompts_do_not_include_internal_mcp_server_alias(self) -> None:
+        """Work IQ プロンプト本文に内部エイリアス `_hve_workiq` が含まれないこと。
+
+        `_hve_workiq` はリポジトリ内部のセッション別名であり、
+        公式 Work IQ MCP サーバ名ではない（公式は `workiq`）。
+        SDK が system prompt にツール schema を自動注入するため、
+        本文で内部エイリアスに言及すると LLM に誤情報を与えるリスクがある。
+        """
+        for mode, attr_name in self._PROMPTS:
+            prompt = getattr(workiq, attr_name)
+            self.assertNotIn(
+                workiq.WORKIQ_MCP_SERVER_NAME,
+                prompt,
+                f"{attr_name} に内部 MCP エイリアス '{workiq.WORKIQ_MCP_SERVER_NAME}' が含まれています。"
+                "プロンプト本文には公式名以外のサーバー名を書かない方針です。",
+            )
 
     def test_default_prompts_preserve_target_content_placeholder(self) -> None:
         for mode, attr_name in self._PROMPTS:
@@ -836,6 +865,34 @@ class TestDefaultPromptsNoWorkiqToolRef(unittest.TestCase):
         self.assertIn("質問一覧", workiq.DEFAULT_WORKIQ_QA_PROMPT)
         self.assertIn("Knowledge 項目", workiq.DEFAULT_WORKIQ_KM_PROMPT)
         self.assertIn("ドキュメント概要", workiq.DEFAULT_WORKIQ_REVIEW_PROMPT)
+
+    def test_default_prompts_include_goal_context_source_structure(self) -> None:
+        """各プロンプトに Microsoft 365 Copilot 推奨の Goal/Context/Source 構造が含まれること。"""
+        for mode, attr_name in self._PROMPTS:
+            prompt = getattr(workiq, attr_name)
+            self.assertIn("### Goal", prompt, f"{attr_name} に Goal セクションがありません")
+            self.assertIn("### Context", prompt, f"{attr_name} に Context セクションがありません")
+            self.assertIn("### Source", prompt, f"{attr_name} に Source セクションがありません")
+
+    def test_default_prompts_explicitly_forbid_fabrication(self) -> None:
+        """各プロンプト（の役割プライミング部）で捏造禁止が明文化されていること。"""
+        for mode, attr_name in self._PROMPTS:
+            prompt = getattr(workiq, attr_name)
+            self.assertIn(
+                "作り出さない",
+                prompt,
+                f"{attr_name} に捏造禁止（'作り出さない'）の明文化がありません",
+            )
+
+    def test_default_prompts_include_self_review_directive(self) -> None:
+        """各プロンプトに取得後の自己レビュー指示が含まれること。"""
+        for mode, attr_name in self._PROMPTS:
+            prompt = getattr(workiq, attr_name)
+            self.assertIn(
+                "自己レビュー",
+                prompt,
+                f"{attr_name} に自己レビュー指示が含まれていません",
+            )
 
     def test_default_prompts_do_not_specify_time_range(self) -> None:
         """デフォルトプロンプトに時間スコープ表現（過去N日/週/か月/月 等）が
@@ -1705,7 +1762,7 @@ class TestBuildWorkIQMcpConfigToolsAll(unittest.TestCase):
             cfg = workiq.build_workiq_mcp_config()
         tools = cfg["_hve_workiq"]["tools"]
         self.assertNotIn("*", tools)
-        self.assertEqual(tools, ["ask_work_iq"])
+        self.assertEqual(set(tools), set(workiq.WORKIQ_MCP_TOOL_NAMES))
 
     def test_tools_all_true_returns_wildcard(self) -> None:
         """tools_all=True の場合、tools が ["*"] になること（診断用途）。"""
@@ -1760,9 +1817,18 @@ class TestWorkIQStructuredOutputPrompts(unittest.TestCase):
             self.assertIn("### 例1", text, attr)
             self.assertIn("### 例2", text, attr)
 
-    def test_search_strategy_directive(self) -> None:
+    def test_search_strategy_directive_removed(self) -> None:
+        """検索キーワード戦略（同義語/略称/英訳）の指示は削除されていること。
+
+        Work IQ MCP `ask_work_iq` は自然言語クエリ 1 個を引数にとるインターフェース。
+        検索クエリ展開はサーバ側 (Microsoft Graph) に委ねる方針のため、
+        プロンプトで同義語展開を強制しない。
+        """
         for attr in self._PROMPTS:
-            self.assertIn("同義語", getattr(workiq, attr), attr)
+            text = getattr(workiq, attr)
+            self.assertNotIn("同義語", text, attr)
+            self.assertNotIn("略称", text, attr)
+            self.assertNotIn("英訳", text, attr)
 
 
 class TestIsWorkiqErrorResponseStatusLabel(unittest.TestCase):
@@ -1802,6 +1868,78 @@ class TestIsWorkiqErrorResponseStatusLabel(unittest.TestCase):
     def test_status_label_with_trailing_content(self) -> None:
         # STATUS: FOUND ✅ のようにラベル後に余分な文字があっても先頭トークンで判定される
         self.assertFalse(workiq.is_workiq_error_response("STATUS: FOUND ✅\n| メール | ... |"))
+
+
+# ---------------------------------------------------------------------------
+# Wave 2-6: _filter_workiq_questions テスト
+# ---------------------------------------------------------------------------
+
+
+class TestFilterWorkiqQuestions(unittest.TestCase):
+    """runner._filter_workiq_questions() の単体テスト。"""
+
+    def _make_question(self, no: int, priority: str = "") -> mock.Mock:
+        q = mock.Mock()
+        q.no = no
+        q.question = f"Question {no}"
+        q.priority = priority
+        return q
+
+    def setUp(self) -> None:
+        from runner import _filter_workiq_questions
+        self._filter = _filter_workiq_questions
+
+    def test_no_filter_returns_all_up_to_max(self) -> None:
+        """priority_filter=False の場合、順番通りに max_questions 件を返す。"""
+        questions = [self._make_question(i) for i in range(1, 6)]
+        result = self._filter(questions, max_questions=3, priority_filter=False)
+        self.assertEqual([q.no for q in result], [1, 2, 3])
+
+    def test_filter_prioritizes_high_priority(self) -> None:
+        """priority_filter=True の場合、重要度 '最重要'/'高' を優先して選ぶ。"""
+        questions = [
+            self._make_question(1, priority="低"),
+            self._make_question(2, priority="高"),
+            self._make_question(3, priority=""),
+            self._make_question(4, priority="最重要"),
+            self._make_question(5, priority="中"),
+        ]
+        result = self._filter(questions, max_questions=3, priority_filter=True)
+        nos = [q.no for q in result]
+        # 最重要/高 (Q2, Q4) が先頭に来ていること
+        self.assertIn(2, nos[:2])
+        self.assertIn(4, nos[:2])
+        self.assertEqual(len(result), 3)
+
+    def test_filter_fills_with_lower_priority_when_not_enough_high(self) -> None:
+        """高優先度が max_questions より少ない場合は残りを低優先度で補う。"""
+        questions = [
+            self._make_question(1, priority="最重要"),
+            self._make_question(2, priority="低"),
+            self._make_question(3, priority="中"),
+        ]
+        result = self._filter(questions, max_questions=3, priority_filter=True)
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[0].no, 1)  # 最重要が先頭
+
+    def test_filter_empty_questions(self) -> None:
+        """質問なしの場合は空リストを返す。"""
+        result = self._filter([], max_questions=10, priority_filter=True)
+        self.assertEqual(result, [])
+
+    def test_filter_max_zero(self) -> None:
+        """max_questions=0 の場合は空リストを返す。"""
+        questions = [self._make_question(1, priority="最重要")]
+        result = self._filter(questions, max_questions=0, priority_filter=True)
+        self.assertEqual(result, [])
+
+    def test_filter_negative_max_treated_as_zero(self) -> None:
+        """負の max_questions は 0 として扱い空リストを返す。"""
+        questions = [self._make_question(1, priority="最重要")]
+        result = self._filter(questions, max_questions=-1, priority_filter=True)
+        self.assertEqual(result, [])
+        result2 = self._filter(questions, max_questions=-1, priority_filter=False)
+        self.assertEqual(result2, [])
 
 
 if __name__ == "__main__":

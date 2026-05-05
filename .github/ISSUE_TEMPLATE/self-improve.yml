@@ -47,8 +47,14 @@ body:
     id: target_scope
     attributes:
       label: "改善対象スコープ"
-      description: "改善するディレクトリ・ファイルのパスを指定します。空の場合はリポジトリ全体が対象になります。"
-      placeholder: "例: hve/ または src/api/ または（空 = 全体）"
+      description: |
+        改善するディレクトリ・ファイルのパスを指定します。
+        ⚠️ 以下の新仕様は **`HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER=1`** 環境変数が設定されている場合のみ有効です。未設定時は従来挙動（空=リポジトリ全体）になります。
+        - 未入力 : そのステップで生成された成果物が対象（`work/` 配下は自動除外）
+        - `*`    : 標準対象一括 (`data`, `docs`, `docs-generated`, `knowledge`, `src` のうち実在するもの。存在しないパスは警告ログを出してスキップ)
+        - 任意   : カンマまたは空白区切りで複数パス指定可（例: `src/ hve/`）
+        ※ `-` で始まるトークンは安全のため禁止されています。
+      placeholder: "（空 = ステップ成果物） / * / src/ docs/"
     validations:
       required: false
 

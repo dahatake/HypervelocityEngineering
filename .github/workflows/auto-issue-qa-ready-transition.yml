@@ -79,7 +79,96 @@ jobs:
 
           echo "is_answer=${is_answer}" >> "${GITHUB_OUTPUT}"
 
+      - name: QA 回答コンテキストを Issue body に注入（冪等性マーカー付き）
+        # QA 回答本文と URL をメインタスク開始前に Issue body へ直接注入する。
+        # Copilot が URL を読みに行く必要なく、QA 回答が確実に参照されるようにする。
+        # <!-- hve-qa-context-injected --> マーカーで重複注入を防ぐ。
+        # 旧マーカー <!-- hve-qa-summary-linked --> も確認し、後方互換を維持する。
+        if: >
+          steps.detect-qa-ready.outputs.qa_ready_label != ''
+          && steps.detect-answer.outputs.is_answer == 'true'
+        run: |
+          set -euo pipefail
+          NEW_MARKER="<!-- hve-qa-context-injected -->"
+          OLD_MARKER="<!-- hve-qa-summary-linked -->"
+
+          # 冪等性チェック: 新マーカーが既に存在すればスキップ
+          # 旧マーカー（URL のみ追記）が存在する場合は新セクションを追記する（本文注入にアップグレード）
+          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            --jq '.body // ""' 2>/dev/null) || {
+            echo "WARNING: Issue body の取得に失敗しました。QA コンテキスト注入をスキップします。"
+            exit 0
+          }
+          if printf '%s' "${current_body}" | grep -qF "${NEW_MARKER}"; then
+            echo "QA コンテキストは既に注入済みです（新マーカー）。スキップします。"
+            exit 0
+          fi
+          # 旧マーカーがある場合でも新マーカーがなければ注入を実行（本文注入へのアップグレード）
+          if printf '%s' "${current_body}" | grep -qF "${OLD_MARKER}"; then
+            echo "旧マーカーが存在しますが、新形式（本文注入）への追記を実行します。"
+          fi
+
+          # QA 回答コメントを取得（最新の <!-- auto-qa-default-answered --> または
+          # <!-- copilot-auto-pre-qa-posted --> コメント）
+          # --paginate はページごとに配列を出力するため --jq '.[]' で NDJSON 化し
+          # jq -rs で全ページを集約してから最後の一致を選択する。
+          qa_comment_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' \
+            2>/dev/null | jq -rs '
+              [
+                .[]
+                | select(
+                    ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
+                    or
+                    ((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->"))
+                  )
+              ]
+              | last
+              | {url: (.html_url // ""), body: (.body // "")}
+            ') || {
+            echo "WARNING: QA コメント一覧の取得に失敗しました。QA コンテキスト注入をスキップします。"
+            exit 0
+          }
+
+          qa_comment_url=$(printf '%s' "${qa_comment_json}" | jq -r '.url // ""')
+          qa_comment_body=$(printf '%s' "${qa_comment_json}" | jq -r '.body // ""')
+
+          if [ -z "${qa_comment_url}" ]; then
+            # QA 回答コメントが見つからない場合でも状態を明示して追記する
+            APPEND_TEXT=$(printf '\n\n---\n## 📋 Pre-execution QA context\n\n<!-- hve-qa-context-injected -->\n\n> ⚠️ QA 回答コメントが見つかりませんでした。QA がスキップされたか、まだ完了していない可能性があります。')
+            NEW_BODY="${current_body}${APPEND_TEXT}"
+            gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+              --field "body=${NEW_BODY}" \
+              --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
+            echo "WARNING: QA 回答コメントが見つかりませんでした。状態メッセージを Issue body に注入しました。"
+            exit 0
+          fi
+
+          # QA 回答本文が空または「質問なし」の場合の処理
+          qa_body_trimmed=$(printf '%s' "${qa_comment_body}" | sed 's/<!--[^>]*-->//g' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ -z "${qa_body_trimmed}" ] || printf '%s' "${qa_body_trimmed}" | grep -qi '質問なし\|no question\|N/A'; then
+            qa_display_body="> （QA 回答本文が空または「質問なし」です）"
+          else
+            qa_display_body="${qa_comment_body}"
+          fi
+
+          # Issue body に QA コンテキストセクションを注入（URL + 本文）
+          # 環境変数経由でユーザー制御コンテンツを渡し、printf で安全に構築する
+          APPEND_TEXT=$(printf '\n\n---\n## 📋 Pre-execution QA context\n\nThe following QA answers must be treated as required input for this task.\n\nSource comment:\n%s\n\n%s\n\n%s' \
+            "${qa_comment_url}" "${qa_display_body}" "${NEW_MARKER}") || {
+            echo "WARNING: QA セクション生成に失敗しました。フォールバックでシンプルな追記を行います。"
+            APPEND_TEXT=$(printf '\n\n---\n## 📋 Pre-execution QA context\n\nSource comment:\n%s\n\n%s' \
+              "${qa_comment_url}" "${NEW_MARKER}")
+          }
+          NEW_BODY="${current_body}${APPEND_TEXT}"
+          gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            --field "body=${NEW_BODY}" \
+            --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
+          echo "✅ QA 回答コンテキスト（URL + 本文）を Issue #${ISSUE_NUMBER} の body に注入しました。"
+
       - name: qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）
+        # QA 本文注入の後に実行する（注入完了後に Copilot をアサインするため）
         if: >
           steps.detect-qa-ready.outputs.qa_ready_label != ''
           && steps.detect-answer.outputs.is_answer == 'true'
@@ -137,62 +226,4 @@ jobs:
           else
             echo "WARNING: Issue #${ISSUE_NUMBER} への Copilot アサインに失敗しました。"
           fi
-
-      - name: QA 回答サマリーを Issue body に追記（冪等性マーカー付き）
-        # QA 回答が存在することをメインタスク開始前に Issue body で確認できるようにする。
-        # <!-- hve-qa-summary-linked --> マーカーで重複追記を防ぐ。
-        if: >
-          steps.detect-qa-ready.outputs.qa_ready_label != ''
-          && steps.detect-answer.outputs.is_answer == 'true'
-        run: |
-          set -euo pipefail
-          MARKER="<!-- hve-qa-summary-linked -->"
-
-          # 冪等性チェック: 既に追記済みならスキップ
-          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
-            --jq '.body // ""' 2>/dev/null) || {
-            echo "WARNING: Issue body の取得に失敗しました。QA サマリー追記をスキップします。"
-            exit 0
-          }
-          if printf '%s' "${current_body}" | grep -qF "${MARKER}"; then
-            echo "QA サマリー参照は既に追記済みです。スキップします。"
-            exit 0
-          fi
-
-          # QA 回答コメントの URL を取得（最新の <!-- auto-qa-default-answered --> または
-          # <!-- copilot-auto-pre-qa-posted --> コメント）
-          # --paginate はページごとに配列を出力するため --jq '.[]' で NDJSON 化し
-          # jq -rs で全ページを集約してから最後の一致を選択する。
-          qa_comment_url=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
-            --paginate \
-            --jq '.[]' \
-            2>/dev/null | jq -rs '
-              [
-                .[]
-                | select(
-                    ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
-                    or
-                    ((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->"))
-                  )
-              ]
-              | last
-              | .html_url // ""
-            ') || {
-            echo "WARNING: QA コメント一覧の取得に失敗しました。QA サマリー追記をスキップします。"
-            exit 0
-          }
-
-          if [ -z "${qa_comment_url}" ]; then
-            echo "QA 回答コメントが見つかりませんでした。追記をスキップします。"
-            exit 0
-          fi
-
-          # Issue body に QA サマリー参照セクションを追記
-          APPEND_TEXT=$(printf '\n\n---\n## 📋 QA 回答参照\n\n事前 QA の回答が完了しました。メインタスク実行時は下記コメントを参照してください。\n\n- QA 回答: %s\n\n%s' \
-            "${qa_comment_url}" "${MARKER}")
-          NEW_BODY="${current_body}${APPEND_TEXT}"
-          gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
-            --field "body=${NEW_BODY}" \
-            --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
-          echo "✅ QA 回答参照を Issue #${ISSUE_NUMBER} の body に追記しました。"
 

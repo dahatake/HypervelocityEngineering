@@ -1596,6 +1596,40 @@ class TestReuseContextFiltering(unittest.TestCase):
         )
 
     # ------------------------------------------------------------------
+    # Wave 2-2: consumed_artifacts=None 後方互換警告テスト
+    # ------------------------------------------------------------------
+
+    def test_none_consumed_emits_backward_compat_warning(self) -> None:
+        """Wave 2-2: consumed_artifacts=None のステップで後方互換警告が発行されること。"""
+        import warnings
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=None)
+        cfg = SDKConfig(reuse_context_filtering=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "base")
+        self.assertTrue(
+            any("後方互換モード" in str(w.message) or "consumed_artifacts=None" in str(w.message) for w in caught),
+            f"後方互換警告が発行されませんでした: {[str(w.message) for w in caught]}",
+        )
+
+    def test_empty_list_consumed_no_backward_compat_warning(self) -> None:
+        """Wave 2-2: consumed_artifacts=[] のステップでは後方互換警告が発行されないこと。"""
+        import warnings
+        from orchestrator import _compute_step_additional_prompt
+        from config import SDKConfig
+        step = self._make_step("1", consumed_artifacts=[])
+        cfg = SDKConfig(reuse_context_filtering=True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _compute_step_additional_prompt(step, self._make_artifacts(), cfg, "base")
+        self.assertFalse(
+            any("後方互換モード" in str(w.message) for w in caught),
+            f"不要な後方互換警告: {[str(w.message) for w in caught]}",
+        )
+
+    # ------------------------------------------------------------------
     # SDKConfig / 環境変数
     # ------------------------------------------------------------------
 
@@ -2101,7 +2135,8 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
         self.assertNotIn("自己改善ループ", phase_names)
 
     def test_scope_empty_runs_post_dag_backward_compat(self) -> None:
-        """scope='' (デフォルト) のとき後方互換で Post-DAG Self-Improve が実行される。"""
+        """scope='' (後方互換値) のとき Post-DAG Self-Improve が実行される。
+        Wave 2 以降のデフォルトは 'workflow' だが、'' を明示指定した場合は後方互換で動作する。"""
         si_called, phase_names = self._run_with_scope("")
         self.assertTrue(si_called, "後方互換: Post-DAG Self-Improve が呼ばれること")
         self.assertIn("自己改善ループ", phase_names)

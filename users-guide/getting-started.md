@@ -37,6 +37,12 @@
 
 ---
 
+## セットアップフロー
+
+![初期セットアップ フロー: Step.1〜5 + Copilot 有効化](./images/getting-started-setup-flow.svg)
+
+---
+
 ## Step.1. リポジトリの作成
 
 GitHub リポジトリを作成します。GitHub Copilot cloud agent が作業をするためのリポジトリです。
@@ -418,30 +424,7 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 
 ## knowledge/ ディレクトリについて
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。これらは `knowledge-management` ワークフロー（[km-guide.md](./km-guide.md) 参照）によって生成されます。ただし、**生成されるのは `qa/` の質問データに QA マッピングが存在する D クラスのみ**です（マッピングがない D クラスのファイルは生成されません）。
-
-| ドキュメント（生成されたもののみ存在） | 内容 |
-|--------------------------------------|------|
-| `knowledge/D01-事業意図-成功条件定義書.md` | 経営課題・KPI・成功条件・ROI仮説 |
-| `knowledge/D02-スコープ-対象境界定義書.md` | スコープ・対象境界 |
-| `knowledge/D04-業務プロセス仕様書.md` | 業務プロセス |
-| `knowledge/D05-ユースケース-シナリオカタログ.md` | ユースケース・シナリオ |
-| `knowledge/D06-業務ルール-判定表仕様書.md` | 業務ルール・判定表 |
-| `knowledge/D07-用語集-ドメインモデル定義書.md` | 用語・ドメインモデル |
-| `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` | データモデル・SoR/SoT |
-| `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md` | システムコンテキスト・責任境界 |
-| `knowledge/D10-API-Event-File-連携契約パック.md` | API/イベント/ファイル連携契約 |
-| `knowledge/D11-画面-UX-操作意味仕様書.md` | 画面UX・操作仕様 |
-| `knowledge/D12-権限-認可-職務分掌設計書.md` | 権限・認可・職務分掌 |
-| `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` | セキュリティ・プライバシー・監査 |
-| `knowledge/D14-国際化-地域差分仕様書.md` | 国際化・地域差分 |
-| `knowledge/D15-非機能-運用-監視-DR-仕様書.md` | 非機能・運用・監視・DR |
-| `knowledge/D16-移行-導入-ロールアウト計画書.md` | 移行・導入計画 |
-| `knowledge/D17-品質保証-UAT-受入パッケージ.md` | 品質保証・UAT |
-| `knowledge/D18-Prompt-ガバナンス-入力統制パック.md` | Promptガバナンス |
-| `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` | ソフトウェアアーキテクチャ・ADR |
-| `knowledge/D20-セキュア設計-実装ガードレール.md` | セキュア設計・実装ガードレール |
-| `knowledge/D21-CI-CD-ビルド-リリース-供給網管理仕様書.md` | CI/CD・ビルド・リリース |
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。詳細は [overview.md](./overview.md#knowledge-と-qa-と-original-docs-の関係) を参照してください。
 
 `knowledge/` ファイルが存在すると、設計・開発の各 Custom Agent が業務要件・制約のコンテキストとして自動参照します。アプリケーション設計・開発ワークフローを開始する前に、`knowledge-management` ワークフローを実行しておくことを推奨します。
 

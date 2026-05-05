@@ -6,7 +6,7 @@
 
 ## 目次
 
-- [AAD / ASDW 連携チェーン図](#aad--asdw-連携チェーン図)
+- [AAG / AAGD / ASDW 連携チェーン図](#aag--aagd--asdw-連携チェーン図)
 - [ツール](#ツール)
 - [Step 1. AI Agentのリストアップ](#step-1-ai-agentのリストアップ)
 - [Step 2. AI Agentの関連性の図式化](#step-2-ai-agentの関連性の図式化)

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="system-ui, -apple-system, sans-serif">
+  <title>AAD-WEB: Web Application 設計 データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="700" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAD-WEB: Web Application 設計 データフロー</text>
+  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+
+  <!-- ========== Step 1 ========== -->
+  <text x="600" y="75" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 1</text>
+
+  <!-- Input (step 1) -->
+  <rect x="20" y="82" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="102" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <text x="175" y="118" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+
+  <!-- Agent (step 1) -->
+  <rect x="430" y="80" width="270" height="60" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="103" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Arch-UI-List</text>
+  <text x="565" y="119" text-anchor="middle" font-size="10" fill="#586069">画面一覧・カタログ生成</text>
+  <text x="565" y="132" text-anchor="middle" font-size="9" fill="#959da5">画面リストと画面概要定義</text>
+
+  <!-- Output (step 1) -->
+  <rect x="800" y="88" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="111" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/screen-catalog.md</text>
+
+  <!-- Arrows step 1 -->
+  <line x1="330" y1="109" x2="430" y2="110" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="110" x2="800" y2="107" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Fork label -->
+  <text x="600" y="172" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行 ↓ (Fork)</text>
+
+  <!-- Fork arrows from step 1 output to step 2.1 and 2.2 -->
+  <!-- Arrow to left (2.1) -->
+  <path d="M 565 140 L 565 182 L 270 182 L 270 255" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <!-- Arrow to right (2.2) -->
+  <path d="M 565 140 L 565 182 L 900 182 L 900 255" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 2.1 (left) ========== -->
+  <text x="270" y="250" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.1</text>
+
+  <!-- Input (step 2.1) -->
+  <rect x="20" y="258" width="220" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="130" y="278" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/screen-catalog.md</text>
+  <text x="130" y="294" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+
+  <!-- Agent (step 2.1) -->
+  <rect x="260" y="258" width="220" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="370" y="281" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-UI-Detail</text>
+  <text x="370" y="297" text-anchor="middle" font-size="10" fill="#586069">画面詳細設計</text>
+
+  <!-- Output (step 2.1) -->
+  <rect x="500" y="258" width="200" height="55" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="600" y="278" text-anchor="middle" font-size="9" fill="#24292e">docs/screen/</text>
+  <text x="600" y="294" text-anchor="middle" font-size="9" fill="#24292e">&lt;画面-ID&gt;-description.md</text>
+
+  <!-- Arrows step 2.1 -->
+  <line x1="240" y1="285" x2="260" y2="285" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="480" y1="285" x2="500" y2="285" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 2.2 (right) ========== -->
+  <text x="900" y="250" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.2</text>
+
+  <!-- Input (step 2.2) -->
+  <rect x="720" y="258" width="220" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="830" y="278" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
+  <text x="830" y="294" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+
+  <!-- Agent (step 2.2) -->
+  <rect x="960" y="258" width="220" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="1070" y="274" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-Microservice-</text>
+  <text x="1070" y="288" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">ServiceDetail</text>
+  <text x="1070" y="304" text-anchor="middle" font-size="9" fill="#586069">サービス詳細設計</text>
+
+  <!-- Output (step 2.2) - will be noted separately since it's right-side -->
+  <rect x="760" y="340" width="220" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="870" y="358" text-anchor="middle" font-size="9" fill="#24292e">docs/services/</text>
+  <text x="870" y="370" text-anchor="middle" font-size="9" fill="#24292e">{serviceId}-description.md</text>
+
+  <!-- Arrows step 2.2 -->
+  <line x1="940" y1="285" x2="960" y2="285" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="1070" y1="313" x2="1070" y2="340" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="980" y1="359" x2="960" y2="359" stroke="#586069" stroke-width="1"/>
+
+  <!-- Join label -->
+  <text x="600" y="418" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">Join ↓</text>
+
+  <!-- Join arrows from 2.1 output and 2.2 output to 2.3 -->
+  <path d="M 600 313 L 600 435 L 440 435 L 440 463" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 870 378 L 870 435 L 720 435 L 720 463" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- ========== Step 2.3 (bottom) ========== -->
+  <text x="600" y="458" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.3</text>
+
+  <!-- Input (step 2.3) -->
+  <rect x="20" y="465" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="484" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/test-strategy.md</text>
+  <text x="175" y="500" text-anchor="middle" font-size="10" fill="#24292e">docs/services/*-description.md</text>
+  <text x="175" y="516" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/*-description.md</text>
+
+  <!-- Agent (step 2.3) -->
+  <rect x="430" y="465" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="488" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Arch-TDD-TestSpec</text>
+  <text x="565" y="504" text-anchor="middle" font-size="10" fill="#586069">TDDテスト仕様書生成</text>
+  <text x="565" y="520" text-anchor="middle" font-size="9" fill="#959da5">API・UI テスト仕様</text>
+
+  <!-- Output (step 2.3) -->
+  <rect x="800" y="465" width="360" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="488" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/</text>
+  <text x="980" y="504" text-anchor="middle" font-size="10" fill="#24292e">{serviceId}-test-spec.md</text>
+  <text x="980" y="520" text-anchor="middle" font-size="10" fill="#24292e">{screenId}-test-spec.md</text>
+
+  <!-- Arrows step 2.3 -->
+  <line x1="330" y1="497" x2="430" y2="497" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="497" x2="800" y2="497" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Legend -->
+  <rect x="20" y="565" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="260" y="582" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
+  <rect x="35" y="590" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="52" y="600" font-size="10" fill="#24292e">入力ファイル</text>
+  <rect x="145" y="590" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="162" y="600" font-size="10" fill="#24292e">Custom Agent</text>
+  <rect x="270" y="590" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="287" y="600" font-size="10" fill="#24292e">成果物</text>
+  <text x="390" y="600" font-size="10" fill="#e36209" font-weight="bold">並列実行: 2.1 と 2.2 は同時実行可</text>
+</svg>

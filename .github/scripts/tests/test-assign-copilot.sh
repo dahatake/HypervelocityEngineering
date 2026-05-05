@@ -24,9 +24,9 @@ echo "=== resolve_model tests ==="
 source "${SCRIPT_DIR}/assign-copilot.sh"
 assert_eq "$(resolve_model '')" "Auto" "empty → Auto"
 assert_eq "$(resolve_model 'Auto')" "Auto" "Auto passthrough"
-assert_eq "$(resolve_model 'claude-opus-4-7')" "claude-opus-4.7" "old format → new"
 assert_eq "$(resolve_model 'gpt-5.4')" "gpt-5.4" "passthrough"
 assert_eq "$(resolve_model 'claude-opus-4.6')" "claude-opus-4.6" "passthrough 4.6"
+assert_eq "$(resolve_model 'claude-opus-4.7')" "claude-opus-4.7" "passthrough 4.7"
 
 echo "=== extract-model.py tests ==="
 result=$(echo '### 使用するモデル

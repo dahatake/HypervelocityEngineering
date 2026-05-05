@@ -258,9 +258,65 @@ jobs:
             echo "already_approved=false" >> "${GITHUB_OUTPUT}"
           fi
 
+      - name: 検証実施確認（auto-approve 前提条件）
+        # .github/copilot-instructions.md §0 要件: 最低1つの検証を実施。
+        # PR body またはコメントに "Validation" / "検証" セクションが存在することを確認する。
+        # 存在しない場合は自動 Approve/Merge をスキップし、不足コメントを投稿する（冪等化）。
+        id: check-validation
+        if: steps.guard.outputs.already_done != 'true'
+        run: |
+          set -euo pipefail
+          VALIDATION_MARKER='<!-- auto-approve-validation-missing -->'
+
+          # PR body を取得
+          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '.body // ""' 2>/dev/null || echo '')
+
+          # PR body に "Validation" または "検証" のセクション・キーワードが存在するか確認
+          if printf '%s' "${pr_body}" | grep -qiE '(^#{1,6}\s+|^)(Validation|検証)'; then
+            echo "✅ PR body に検証実施記録を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # PR コメントも確認
+          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+
+          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE '(^#{1,6}\s+|^)(Validation|検証)'; then
+            echo "✅ PR コメントに検証実施記録を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "has_validation=false" >> "${GITHUB_OUTPUT}"
+          echo "⚠️ PR body・コメントに検証実施記録（Validation/検証 セクション）が見つかりません。"
+
+          # 冪等性チェック: 既に不足通知コメントが投稿済みならスキップ
+          existing_count=$(echo "${pr_comments}" \
+            | jq --arg marker "${VALIDATION_MARKER}" \
+              '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+          if [ "${existing_count:-0}" -gt 0 ]; then
+            echo "検証不足通知コメントは既に投稿済みです。スキップします。"
+            exit 0
+          fi
+
+          # 不足通知コメントを投稿
+          comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s' \
+            "${VALIDATION_MARKER}" \
+            "## ⚠️ 検証実施記録が確認できません" \
+            "PR body またはコメントに検証実施記録（\`Validation\` または \`検証\` セクション）が見つからないため、自動 Approve/Merge をスキップしました。" \
+            "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。" \
+            "> ℹ️ このコメントは \`auto-approve-and-merge.yml\` によって自動投稿されました。検証実施記録を PR body またはコメントに追記してください。")
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${comment_body}" || echo "WARNING: 検証不足通知コメントの投稿に失敗しました。"
+          echo "検証不足通知コメントを PR #${PR_NUMBER} に投稿しました。"
+
       - name: PR を Approve
         id: approve
-        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true'
+        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -279,7 +335,7 @@ jobs:
 
       - name: Auto-merge を有効化（squash）
         id: merge
-        if: steps.guard.outputs.already_done != 'true'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -307,7 +363,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
-        if: steps.guard.outputs.already_done != 'true'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}

@@ -21,9 +21,11 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
 
@@ -888,9 +890,155 @@ def _run_tool(cmd: List[str], cwd: Optional[str] = None, timeout: int = 120) -> 
         return f"[ERROR] {cmd[0]}: {exc}"
 
 
+# ---------------------------------------------------------------------------
+# 新スコープ解決ヘルパー（フィーチャーフラグ: HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER）
+# ---------------------------------------------------------------------------
+
+
+def _is_new_resolver_enabled() -> bool:
+    """フィーチャーフラグの判定。Phase 1 では opt-in。"""
+    try:
+        from .config import SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV
+    except ImportError:
+        from config import SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV  # type: ignore[no-redef]
+    return os.environ.get(SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV, "0") == "1"
+
+
+def _resolve_target_scope_paths(
+    target_scope: str,
+    step_output_paths: Optional[List[str]] = None,
+    workflow_default: str = "",
+    repo_root: str = ".",
+) -> List[str]:
+    """target_scope の入力値を実スキャン対象パスのリストへ正規化する。
+
+    解決ルール:
+      1. target_scope が "" → step_output_paths を採用。
+         空または None → workflow_default にフォールバック。
+         workflow_default も空 → 縮小フォールバック（[]）。
+      2. target_scope が "*" → SELF_IMPROVE_WILDCARD_PATHS のうち実在するもの。
+      3. それ以外 → カンマ/空白で分割した複数パス。
+
+    全ケース共通:
+      - 入力を NFKC 正規化（全角 → 半角）
+      - "-" で始まるトークンは ValueError
+      - 重複除去（順序保持）
+      - SELF_IMPROVE_EXCLUDED_TOP_DIRS（先頭セグメント "work"）を除外
+      - 存在しないパスは警告ログを出力してスキップ
+
+    Returns:
+        List[str]: 実スキャン対象パスのリスト。空 = スキャンスキップ。
+
+    Raises:
+        ValueError: 入力に "-" で始まる危険なトークンが含まれる場合。
+    """
+    try:
+        from .config import SELF_IMPROVE_WILDCARD_PATHS, SELF_IMPROVE_EXCLUDED_TOP_DIRS
+    except ImportError:
+        from config import SELF_IMPROVE_WILDCARD_PATHS, SELF_IMPROVE_EXCLUDED_TOP_DIRS  # type: ignore[no-redef]
+
+    raw = unicodedata.normalize("NFKC", target_scope or "").strip()
+
+    # ── パス候補の決定 ──
+    if raw == "":
+        if step_output_paths:
+            candidates: List[str] = list(step_output_paths)
+        elif workflow_default:
+            candidates = [workflow_default]
+        else:
+            candidates = []
+    elif raw == "*":
+        candidates = list(SELF_IMPROVE_WILDCARD_PATHS)
+    else:
+        candidates = [p for p in re.split(r"[,\s]+", raw) if p]
+
+    # ── 危険文字バリデーション ──
+    for token in candidates:
+        if token.startswith("-"):
+            raise ValueError(
+                f"target_scope に '-' で始まるトークンは指定できません: {token!r}"
+            )
+
+    # ── dedup（順序保持）──
+    candidates = list(dict.fromkeys(candidates))
+
+    # ── 正規化、work/ 除外、存在チェック ──
+    repo = Path(repo_root).resolve()
+    excluded_tops = set(SELF_IMPROVE_EXCLUDED_TOP_DIRS)
+
+    resolved: List[str] = []
+    for p in candidates:
+        normalized = p.strip().replace("\\", "/")
+
+        # leading "./" prefix を除去（"lstrip" は使わず 1 回だけ除去）
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+
+        if not normalized:
+            continue
+
+        # 絶対パスは拒否
+        if normalized.startswith("/"):
+            print(
+                f"[self-improve] target_scope: '{p}' は絶対パスのためスキップします",
+                flush=True,
+            )
+            continue
+
+        try:
+            parts = Path(normalized).parts
+        except (ValueError, OSError):
+            continue
+
+        # パストラバーサル（".." 含む）は拒否
+        if ".." in parts:
+            print(
+                f"[self-improve] target_scope: '{p}' はパストラバーサル（'..'）を含むためスキップします",
+                flush=True,
+            )
+            continue
+
+        if parts and parts[0] in excluded_tops:
+            print(
+                f"[self-improve] target_scope: '{p}' は除外対象（先頭セグメントが {', '.join(sorted(excluded_tops))} 内）",
+                flush=True,
+            )
+            continue
+
+        full = (repo / normalized).resolve()
+        if not full.exists():
+            print(
+                f"[self-improve] target_scope: '{p}' は存在しないためスキップします",
+                flush=True,
+            )
+            continue
+
+        resolved.append(normalized)
+
+    return resolved
+
+
+def _empty_scan_result(error_note: str = "") -> "ScanResult":
+    """スキャン対象なし時に返す空の ScanResult。"""
+    return ScanResult(
+        quality_score=100,
+        issues=[],
+        summary={
+            "lint_errors": 0,
+            "test_failures": 0,
+            "coverage_pct": 0.0,
+            "doc_issues": 0,
+        },
+        raw_output=f"[SCAN SKIPPED] {error_note}" if error_note else "[SCAN SKIPPED]",
+    )
+
+
+
 def scan_codebase(
     target_scope: str = "",
     repo_root: Optional[str] = None,
+    step_output_paths: Optional[List[str]] = None,
+    workflow_default: str = "",
 ) -> ScanResult:
     """Phase 4a: ruff / pytest --cov / markdownlint を subprocess 実行し、
     結果を構造化して返す。
@@ -899,34 +1047,80 @@ def scan_codebase(
     この関数は純粋にツール実行結果を収集する役割を担う。
 
     Args:
-        target_scope: 改善対象スコープ（空 = 全体）。
+        target_scope: 改善対象スコープ。
         repo_root: リポジトリルートディレクトリ。None の場合は現在のディレクトリ。
+        step_output_paths: ステップ成果物パス（新仕様フラグ ON 時・未入力時に使用）。
+        workflow_default: ワークフローデフォルトパス（フォールバック）。
 
     Returns:
         ScanResult 型の辞書。
     """
     cwd = repo_root or "."
-    scope_path = target_scope.strip() or "."
 
-    # ruff チェック
-    ruff_output = _run_tool(
-        ["ruff", "check", scope_path, "--output-format", "text"],
-        cwd=cwd,
-    )
+    if _is_new_resolver_enabled():
+        try:
+            scope_paths = _resolve_target_scope_paths(
+                target_scope,
+                step_output_paths=step_output_paths,
+                workflow_default=workflow_default,
+                repo_root=cwd,
+            )
+        except ValueError as e:
+            print(f"[self-improve] {e}", flush=True)
+            return _empty_scan_result(error_note=str(e))
 
-    # pytest --cov（dry_run 対応: pytest がなければ空出力）
-    # scope_path を --cov と収集対象の両方に指定してスコープを絞る
-    pytest_output = _run_tool(
-        ["pytest", scope_path, "--cov", scope_path, "--cov-report=term-missing", "-q", "--tb=short"],
-        cwd=cwd,
-        timeout=180,
-    )
+        if not scope_paths:
+            print("[self-improve] スキャン対象パスが空のためスキップします", flush=True)
+            return _empty_scan_result(error_note="no_scope")
 
-    # markdownlint（インストールされていない場合はスキップ）
-    md_output = _run_tool(
-        ["markdownlint", "**/*.md", "--ignore", "node_modules"],
-        cwd=cwd,
-    )
+        # ── 新仕様: ruff 複数パス + work/ 除外 ──
+        ruff_output = _run_tool(
+            ["ruff", "check", *scope_paths, "--output-format", "text", "--exclude", "work"],
+            cwd=cwd,
+        )
+
+        # ── 新仕様: pytest 複数パス + work/ 除外 ──
+        pytest_args: List[str] = list(scope_paths)
+        if scope_paths != ["."]:
+            for p in scope_paths:
+                pytest_args += ["--cov", p]
+            pytest_args += ["--cov-report=term-missing"]
+        pytest_args += ["-q", "--tb=short", "--ignore=work"]
+        pytest_output = _run_tool(["pytest", *pytest_args], cwd=cwd, timeout=180)
+
+        # ── 新仕様: markdownlint（ファイルはそのまま、ディレクトリは **/*.md） ──
+        md_targets: List[str] = []
+        for p in scope_paths:
+            full_p = (Path(cwd) / p).resolve()
+            if full_p.is_file():
+                md_targets.append(p)
+            else:
+                md_targets.append(f"{p.rstrip('/')}/**/*.md" if p != "." else "**/*.md")
+        if not md_targets:
+            md_targets = ["**/*.md"]
+        md_output = _run_tool(
+            ["markdownlint", *md_targets, "--ignore", "node_modules", "--ignore", "work"],
+            cwd=cwd,
+        )
+    else:
+        # ── 旧仕様（後方互換）: コマンド引数も元のまま維持 ──
+        scope_path = target_scope.strip() or "."
+
+        ruff_output = _run_tool(
+            ["ruff", "check", scope_path, "--output-format", "text"],
+            cwd=cwd,
+        )
+
+        pytest_output = _run_tool(
+            ["pytest", scope_path, "--cov", scope_path, "--cov-report=term-missing", "-q", "--tb=short"],
+            cwd=cwd,
+            timeout=180,
+        )
+
+        md_output = _run_tool(
+            ["markdownlint", "**/*.md", "--ignore", "node_modules"],
+            cwd=cwd,
+        )
 
     raw_output = "\n".join([
         "=== ruff ===",
@@ -1254,6 +1448,8 @@ def run_improvement_loop(
             scan = scan_codebase(
                 target_scope=config.self_improve_target_scope,
                 repo_root=repo_root,
+                step_output_paths=getattr(config, "_resolved_step_output_paths", None),
+                workflow_default=getattr(config, "_resolved_workflow_default", ""),
             )
             before_score = scan["quality_score"]
             current_score = before_score
@@ -1278,6 +1474,8 @@ def run_improvement_loop(
             after_scan = scan_codebase(
                 target_scope=config.self_improve_target_scope,
                 repo_root=repo_root,
+                step_output_paths=getattr(config, "_resolved_step_output_paths", None),
+                workflow_default=getattr(config, "_resolved_workflow_default", ""),
             )
             after_score = after_scan["quality_score"]
             final_goal_achievement_pct = _compute_goal_achievement(after_scan, effective_goal)

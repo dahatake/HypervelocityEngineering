@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1180" font-family="system-ui, -apple-system, sans-serif">
+  <title>AAS: アプリケーションアーキテクチャ設計 データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1180" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAS: アプリケーションアーキテクチャ設計 データフロー</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+
+  <!-- Column headers -->
+  <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- ==================== Step 1 ==================== -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1</text>
+  <!-- Input -->
+  <rect x="20" y="105" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="127" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="100" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="120" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-ApplicationAnalytics</text>
+  <text x="565" y="136" text-anchor="middle" font-size="10" fill="#586069">アプリ一覧・アーキタイプ選定</text>
+  <!-- Output -->
+  <rect x="800" y="105" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="127" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="124" x2="430" y2="124" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="124" x2="800" y2="124" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 2 ==================== -->
+  <text x="565" y="165" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2</text>
+  <!-- Dependency arrow -->
+  <line x1="565" y1="148" x2="565" y2="168" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="172" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="191" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <text x="175" y="207" text-anchor="middle" font-size="10" fill="#24292e">docs/architectural-requirements-app-xx.md</text>
+  <!-- Agent -->
+  <rect x="430" y="170" width="270" height="60" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="192" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-ArchitectureCandidateAnalyzer</text>
+  <text x="565" y="208" text-anchor="middle" font-size="10" fill="#586069">アーキテクチャ候補選定</text>
+  <text x="565" y="222" text-anchor="middle" font-size="9" fill="#959da5">各 APP への最良 SW アーキテクチャ選定</text>
+  <!-- Output -->
+  <rect x="800" y="180" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="202" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-arch-catalog.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="200" x2="430" y2="200" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="200" x2="800" y2="199" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 3.1 ==================== -->
+  <text x="565" y="252" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 3.1</text>
+  <line x1="565" y1="230" x2="565" y2="255" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="262" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="285" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="258" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="278" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Microservice-DomainAnalytics</text>
+  <text x="565" y="294" text-anchor="middle" font-size="10" fill="#586069">ドメイン分析</text>
+  <!-- Output -->
+  <rect x="800" y="265" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="288" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="282" x2="430" y2="282" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="282" x2="800" y2="284" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 3.2 ==================== -->
+  <text x="565" y="327" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 3.2</text>
+  <line x1="565" y1="306" x2="565" y2="330" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="338" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="357" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
+  <text x="175" y="373" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="389" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="340" width="270" height="60" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="362" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Microservice-ServiceIdentify</text>
+  <text x="565" y="378" text-anchor="middle" font-size="10" fill="#586069">サービス識別</text>
+  <text x="565" y="392" text-anchor="middle" font-size="9" fill="#959da5">マイクロサービス境界の定義</text>
+  <!-- Output -->
+  <rect x="800" y="352" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="375" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="370" x2="430" y2="370" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="370" x2="800" y2="371" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 4 ==================== -->
+  <text x="565" y="422" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 4</text>
+  <line x1="565" y1="400" x2="565" y2="425" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="432" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="451" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="467" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
+  <text x="175" y="483" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="432" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="455" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-DataModeling</text>
+  <text x="565" y="471" text-anchor="middle" font-size="10" fill="#586069">データモデル設計</text>
+  <text x="565" y="487" text-anchor="middle" font-size="9" fill="#959da5">エンティティ・リレーション定義</text>
+  <!-- Output -->
+  <rect x="800" y="435" width="360" height="55" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="457" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
+  <text x="980" y="475" text-anchor="middle" font-size="10" fill="#24292e">src/data/sample-data.json</text>
+  <!-- Arrows -->
+  <line x1="330" y1="464" x2="430" y2="464" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="464" x2="800" y2="464" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 5 ==================== -->
+  <text x="565" y="517" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 5</text>
+  <line x1="565" y1="497" x2="565" y2="520" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="527" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="546" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
+  <text x="175" y="562" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="578" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="527" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="550" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-DataCatalog</text>
+  <text x="565" y="566" text-anchor="middle" font-size="10" fill="#586069">データカタログ生成</text>
+  <text x="565" y="582" text-anchor="middle" font-size="9" fill="#959da5">データ項目・用語集定義</text>
+  <!-- Output -->
+  <rect x="800" y="537" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="560" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-catalog.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="560" x2="430" y2="560" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="560" x2="800" y2="556" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 6 ==================== -->
+  <text x="565" y="614" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 6</text>
+  <line x1="565" y1="592" x2="565" y2="617" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="624" width="310" height="75" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="643" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
+  <text x="175" y="659" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
+  <text x="175" y="675" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="691" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="624" width="270" height="75" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="648" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Microservice-ServiceCatalog</text>
+  <text x="565" y="664" text-anchor="middle" font-size="10" fill="#586069">サービスカタログマトリクス</text>
+  <text x="565" y="680" text-anchor="middle" font-size="9" fill="#959da5">API 一覧・依存関係整理</text>
+  <!-- Output -->
+  <rect x="800" y="635" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="658" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="660" x2="430" y2="660" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="660" x2="800" y2="654" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 7 ==================== -->
+  <text x="565" y="720" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 7</text>
+  <line x1="565" y1="699" x2="565" y2="723" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Input -->
+  <rect x="20" y="730" width="310" height="75" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="749" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <text x="175" y="765" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
+  <text x="175" y="781" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="797" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <!-- Agent -->
+  <rect x="430" y="730" width="270" height="75" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="753" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-TDD-TestStrategy</text>
+  <text x="565" y="769" text-anchor="middle" font-size="10" fill="#586069">テスト戦略策定</text>
+  <text x="565" y="785" text-anchor="middle" font-size="9" fill="#959da5">テストピラミッド・方針定義</text>
+  <!-- Output -->
+  <rect x="800" y="742" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="765" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/test-strategy.md</text>
+  <!-- Arrows -->
+  <line x1="330" y1="768" x2="430" y2="768" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="768" x2="800" y2="761" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Legend -->
+  <rect x="20" y="840" width="560" height="55" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="300" y="858" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
+  <rect x="35" y="865" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="52" y="875" font-size="10" fill="#24292e">入力ファイル</text>
+  <rect x="140" y="865" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="157" y="875" font-size="10" fill="#24292e">Custom Agent</text>
+  <rect x="265" y="865" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="282" y="875" font-size="10" fill="#24292e">成果物</text>
+  <line x1="360" y1="871" x2="390" y2="871" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="400" y="875" font-size="10" fill="#24292e">ステップ依存（縦方向）</text>
+</svg>

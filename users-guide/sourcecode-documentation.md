@@ -37,12 +37,20 @@
 
 ![ADOC: Doc-FileInventory → Doc-Migration の19ステップチェーン（並列4箇所含む）](./images/chain-adoc.svg)
 
+### データフロー図（ADOC）
+
+以下の図は、Wave 1〜6 の各 Doc-* Custom Agent が読み書きするファイルのデータフローを示します。
+
+![ADOC データフロー: Wave 1〜6 の Doc-* Custom Agent とファイル入出力](./images/orchestration-task-data-flow-adoc.svg)
+
 
 ## 前提条件
 
 - `hve` CLI が実行可能であること
 - GitHub Copilot cloud agent が利用可能であること
 - 出力先は `docs-generated/`（既存 `docs/` と分離）
+
+> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、ソースコードドキュメント生成で業務コンテキスト（要件・用語集・アーキテクチャ方針）として自動参照されます。
 
 ---
 

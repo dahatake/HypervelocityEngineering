@@ -282,11 +282,6 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
-          # Feature flag: USE_HVE_AAS=true でテンプレートファイル単一ソース方式を使用。
-          # デフォルト false = 旧 bash ハードコード方式（安全側）。
-          # GitHub Actions Repository Variables (vars.USE_HVE_AAS) で切り替え可能。
-          # ロールバック: vars.USE_HVE_AAS を削除または 'false' に設定するだけ。
-          USE_HVE_AAS: ${{ vars.USE_HVE_AAS || 'false' }}
         run: |
           set -euo pipefail
 
@@ -307,46 +302,8 @@ jobs:
 
           # ---- ユーティリティ関数 ----
 
-          # リトライ付き curl
-          api_call() {
-            local method="$1"; shift
-            local url="$1"; shift
-            local data="${1:-}"
-            local max_retry=5
-            local wait=1
-            local http_code response body
-
-            for i in $(seq 1 "${max_retry}"); do
-              if [[ -n "${data}" ]]; then
-                response=$(curl -s -w "\n%{http_code}" \
-                  -X "${method}" \
-                  -H "Authorization: Bearer ${GH_TOKEN}" \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  -H "Content-Type: application/json" \
-                  "${url}" \
-                  -d "${data}")
-              else
-                response=$(curl -s -w "\n%{http_code}" \
-                  -X "${method}" \
-                  -H "Authorization: Bearer ${GH_TOKEN}" \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  "${url}")
-              fi
-              http_code=$(echo "${response}" | tail -1)
-              body=$(echo "${response}" | head -n -1)
-              if [[ "${http_code}" =~ ^2 ]]; then
-                echo "${body}"
-                return 0
-              fi
-              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
-              sleep "${wait}"
-              wait=$((wait * 2))
-            done
-            echo "API 呼び出し失敗: ${method} ${url}" >&2
-            return 1
-          }
+          # リトライ付き curl（共通ライブラリ）
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/github-api.sh"
 
           # Issue 作成
           create_issue() {
@@ -654,9 +611,8 @@ jobs:
 
           rm -f "${REVIEW_TAG_FILE}"
 
-          # ---- Root Issue に aas:initialized を付与 ----
-          add_label "${ROOT_ISSUE}" "aas:initialized"
-          echo "aas:initialized を付与しました。"
+          # aas:initialized は step 2.5 で既に付与済みのため、ここでの再付与は不要。
+          # （Wave 4: 二重 API コール削減）
 
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-context-review"
@@ -699,7 +655,7 @@ jobs:
 
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
 
-          # hve テンプレートからボディを生成する関数（USE_HVE_AAS=true 時に使用）
+          # テンプレートからボディを生成する関数
           # テンプレートファイルを読み込み、プレースホルダを展開する。
           # 引数: $1=ステップ番号 (例: "3.1"), $2=ROOT_REF, $3=ADDITIONAL_SECTION
           render_aas_step_body() {
@@ -741,12 +697,7 @@ jobs:
 
           # ---- Step.1 ----
           if ! skip_step "1"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S1=$(render_aas_step_body "1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S1=$(printf '%s\n## 目的\nユースケース文書を根拠に、実装手段を仕分けし、アプリケーションリストを作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n\n## 出力\n- `docs/catalog/app-catalog.md`\n\n## Custom Agent\n`Arch-ApplicationAnalytics`\n\n## 依存\n- なし（最初に実行）\n\n## 完了条件\n- `docs/catalog/app-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S1=$(render_aas_step_body "1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.1: アプリケーションリストの作成" \
               "${BODY_S1}" \
@@ -759,12 +710,7 @@ jobs:
 
           # ---- Step.2 ----
           if ! skip_step "2"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S2=$(render_aas_step_body "2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S2=$(printf '%s\n## 目的\nアプリケーションリスト（docs/catalog/app-catalog.md）の各APPに対し、個別の入力ファイル（docs/architectural-requirements-app-xx.md）から非機能要件を読み取り、固定の候補リストからアーキテクチャを選定する。\n\n## 入力\n- `docs/catalog/app-catalog.md`\n- `docs/architectural-requirements-app-xx.md`（存在するもののみ）\n\n## 出力\n- `docs/catalog/app-arch-catalog.md`\n\n## 注意\n- 全APPの入力ファイルが揃っていなくても実行可能です\n- 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます\n- ユーザーが `docs/architectural-requirements-app-xx.md` を作成する手順は users-guide/02-app-architecture-design.md の Step 2 を参照してください\n\n## Custom Agent\n`Arch-ArchitectureCandidateAnalyzer`\n\n## 依存\n- Step.1（アプリケーションリストの作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/app-arch-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S2=$(render_aas_step_body "2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.2: ソフトウェアアーキテクチャの推薦" \
               "${BODY_S2}" \
@@ -777,12 +723,7 @@ jobs:
 
           # ---- Step.3.1 ----
           if ! skip_step "3.1"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S31=$(render_aas_step_body "3.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S31=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-Microservice-DomainAnalytics`\n\n## 依存\n- Step.2（ソフトウェアアーキテクチャの推薦）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S31=$(render_aas_step_body "3.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.3.1: ドメイン分析" \
               "${BODY_S31}" \
@@ -795,12 +736,7 @@ jobs:
 
           # ---- Step.3.2 ----
           if ! skip_step "3.2"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S32=$(render_aas_step_body "3.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S32=$(printf '%s\n## 目的\nドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceIdentify`\n\n## 依存\n- Step.3.1（ドメイン分析）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S32=$(render_aas_step_body "3.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.3.2: サービス一覧抽出" \
               "${BODY_S32}" \
@@ -813,12 +749,7 @@ jobs:
 
           # ---- Step.4 ----
           if ! skip_step "4"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S4=$(printf '%s\n## 目的\nサービス一覧を根拠に、データモデルを設計する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-model.md`\n\n## Custom Agent\n`Arch-DataModeling`\n\n## 依存\n- Step.3.2（サービス一覧抽出）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-model.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.4: データモデル" \
               "${BODY_S4}" \
@@ -831,12 +762,7 @@ jobs:
 
           # ---- Step.5 ----
           if ! skip_step "5"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S5=$(render_aas_step_body "5" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S5=$(printf '%s\n## 目的\n概念エンティティと物理テーブルのマッピングを記録するデータカタログを作成する。\n\n## 入力\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/data-catalog.md`\n\n## Custom Agent\n`Arch-DataCatalog`\n\n## 依存\n- Step.4（データモデル）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/data-catalog.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S5=$(render_aas_step_body "5" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.5: データカタログ作成" \
               "${BODY_S5}" \
@@ -849,12 +775,7 @@ jobs:
 
           # ---- Step.6 ----
           if ! skip_step "6"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S6=$(render_aas_step_body "6" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S6=$(printf '%s\n## 目的\n画面・機能・API・SoT データのマッピングを持つサービスカタログを作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/service-catalog-matrix.md`\n\n## Custom Agent\n`Arch-Microservice-ServiceCatalog`\n\n## 依存\n- Step.5（データカタログ作成）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/service-catalog-matrix.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S6=$(render_aas_step_body "6" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.6: サービスカタログ" \
               "${BODY_S6}" \
@@ -867,12 +788,7 @@ jobs:
 
           # ---- Step.7 ----
           if ! skip_step "7"; then
-            if [[ "${USE_HVE_AAS:-false}" == "true" ]]; then
-              BODY_S7=$(render_aas_step_body "7" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            else
-              BODY_S7=$(printf '%s\n## 目的\nプロジェクト全体の TDD テスト戦略書を作成する。\n\n## 入力\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n\n## 出力\n- `docs/catalog/test-strategy.md`\n\n## Custom Agent\n`Arch-TDD-TestStrategy`\n\n## 依存\n- Step.6（サービスカタログ）が `aas:done` であること\n\n## 完了条件\n- `docs/catalog/test-strategy.md` が作成されている\n- 完了時に自身に `aas:done` ラベルを付与すること%s' \
-                "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            fi
+            BODY_S7=$(render_aas_step_body "7" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAS] Step.7: テスト戦略書" \
               "${BODY_S7}" \
@@ -964,46 +880,8 @@ jobs:
             echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
           fi
 
-          # ---- ユーティリティ関数（再定義） ----
-          api_call() {
-            local method="$1"; shift
-            local url="$1"; shift
-            local data="${1:-}"
-            local max_retry=5
-            local wait=1
-            local http_code response body
-
-            for i in $(seq 1 "${max_retry}"); do
-              if [[ -n "${data}" ]]; then
-                response=$(curl -s -w "\n%{http_code}" \
-                  -X "${method}" \
-                  -H "Authorization: Bearer ${GH_TOKEN}" \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  -H "Content-Type: application/json" \
-                  "${url}" \
-                  -d "${data}")
-              else
-                response=$(curl -s -w "\n%{http_code}" \
-                  -X "${method}" \
-                  -H "Authorization: Bearer ${GH_TOKEN}" \
-                  -H "Accept: application/vnd.github+json" \
-                  -H "X-GitHub-Api-Version: 2022-11-28" \
-                  "${url}")
-              fi
-              http_code=$(echo "${response}" | tail -1)
-              body=$(echo "${response}" | head -n -1)
-              if [[ "${http_code}" =~ ^2 ]]; then
-                echo "${body}"
-                return 0
-              fi
-              echo "API エラー: HTTP ${http_code}、${wait}秒後にリトライ (${i}/${max_retry})" >&2
-              sleep "${wait}"
-              wait=$((wait * 2))
-            done
-            echo "API 呼び出し失敗: ${method} ${url}" >&2
-            return 1
-          }
+          # ---- ユーティリティ関数（共通ライブラリを source） ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/github-api.sh"
 
           add_label() {
             local issue_num="$1"
@@ -1056,6 +934,73 @@ jobs:
             else
               echo "WARNING: Issue #${issue_num} へのアサイン失敗。aas:running は付与しません。"
             fi
+          }
+
+          # ファイルの存在確認（GitHub API 経由でブランチを指定して確認）
+          # -f ref= でクエリパラメータを分離し、BRANCH に特殊文字が含まれても安全に扱う
+          check_file_exists() {
+            local file_path="$1"
+            local branch="${BRANCH:-main}"
+            gh api "/repos/${REPO}/contents/${file_path}" -f ref="${branch}" \
+              --jq '.name' >/dev/null 2>&1
+          }
+
+          # 必須入力ファイルの存在確認を行い、不足があれば blocked にする。
+          # 全ファイルが存在する場合のみ activate_issue を呼び出す。
+          # 引数: $1=issue_num, $2=step_id (冪等マーカー用), 以降=必須ファイルパス
+          activate_with_prereq_check() {
+            local issue_num="$1"
+            local step_id="$2"
+            shift 2
+            local required_files=("$@")
+            local missing=()
+            local BLOCKED_MARKER="<!-- aas-prereq-check-blocked: step-${step_id} -->"
+
+            for f in "${required_files[@]}"; do
+              if ! check_file_exists "${f}"; then
+                missing+=("${f}")
+              fi
+            done
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              activate_issue "${issue_num}"
+              return
+            fi
+
+            # 必須ファイルが不足している場合
+            echo "⚠️ Step ${step_id} の必須入力ファイルが不足しています。Issue #${issue_num} を blocked にします。"
+            echo "不足ファイル: ${missing[*]}"
+
+            add_label "${issue_num}" "aas:blocked"
+
+            # 冪等性チェック: 既に同じ blocked コメントが投稿済みならスキップ
+            existing_blocked=$(gh api "/repos/${REPO}/issues/${issue_num}/comments" \
+              --paginate --jq '.[]' 2>/dev/null \
+              | jq -rs --arg marker "${BLOCKED_MARKER}" \
+                '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+            if [ "${existing_blocked:-0}" -gt 0 ]; then
+              echo "blocked コメントは既に投稿済みです。スキップします。"
+              return
+            fi
+
+            # 不足ファイル一覧を含む blocked コメントを投稿
+            local missing_list=""
+            for f in "${missing[@]}"; do
+              missing_list="${missing_list}- \`${f}\`\n"
+            done
+
+            local comment_body
+            comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n%b\n%s\n\n%s' \
+              "${BLOCKED_MARKER}" \
+              "## ⛔ aas:blocked — 必須入力成果物が不足しています (Step ${step_id})" \
+              "このステップを実行するために必要な入力ファイルがリポジトリの \`${BRANCH:-main}\` ブランチに存在しません。" \
+              "**不足しているファイル:**" \
+              "${missing_list}" \
+              "前の Step の成果物が作成された後、または必要なファイルを手動で作成した後に、再度状態遷移をトリガーしてください。" \
+              "> ℹ️ このコメントは \`auto-app-selection-reusable.yml\` によって自動投稿されました。")
+
+            post_comment "${issue_num}" "${comment_body}"
+            echo "blocked コメントを Issue #${issue_num} に投稿しました。"
           }
 
           # ---- done Issue の title から Step 番号を特定 ----
@@ -1157,10 +1102,11 @@ jobs:
           # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
           case "${STEP_MATCH}" in
             "1")
-              # Step.1 完了 → Step.2 を ready + assign
+              # Step.1 完了 → Step.2 を ready + assign（前提: app-catalog.md が存在すること）
               S2_NUM=$(get_sub_issue_number '\[AAS\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
-                activate_issue "${S2_NUM}"
+                activate_with_prereq_check "${S2_NUM}" "2" \
+                  "docs/catalog/app-catalog.md"
               else
                 echo "Step.2 が存在しません。フェーズ1完了。"
                 add_label "${ROOT_ISSUE}" "aas:done"
@@ -1171,7 +1117,9 @@ jobs:
             "2")
               S31_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.1:')
               if [[ -n "${S31_NUM}" ]]; then
-                activate_issue "${S31_NUM}"
+                activate_with_prereq_check "${S31_NUM}" "3.1" \
+                  "docs/catalog/app-catalog.md" \
+                  "docs/catalog/use-case-catalog.md"
               else
                 add_label "${ROOT_ISSUE}" "aas:done"
               fi
@@ -1179,27 +1127,49 @@ jobs:
 
             "3.1")
               S32_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.2:')
-              [[ -n "${S32_NUM}" ]] && activate_issue "${S32_NUM}" || true
+              if [[ -n "${S32_NUM}" ]]; then
+                activate_with_prereq_check "${S32_NUM}" "3.2" \
+                  "docs/catalog/domain-analytics.md" \
+                  "docs/catalog/app-catalog.md"
+              fi
               ;;
 
             "3.2")
               S4_NUM=$(get_sub_issue_number '\[AAS\] Step\.4:')
-              [[ -n "${S4_NUM}" ]] && activate_issue "${S4_NUM}" || true
+              if [[ -n "${S4_NUM}" ]]; then
+                activate_with_prereq_check "${S4_NUM}" "4" \
+                  "docs/catalog/service-catalog.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
               ;;
 
             "4")
               S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
-              [[ -n "${S5_NUM}" ]] && activate_issue "${S5_NUM}" || true
+              if [[ -n "${S5_NUM}" ]]; then
+                activate_with_prereq_check "${S5_NUM}" "5" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
               ;;
 
             "5")
               S6_NUM=$(get_sub_issue_number '\[AAS\] Step\.6:')
-              [[ -n "${S6_NUM}" ]] && activate_issue "${S6_NUM}" || true
+              if [[ -n "${S6_NUM}" ]]; then
+                activate_with_prereq_check "${S6_NUM}" "6" \
+                  "docs/catalog/service-catalog.md" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
               ;;
 
             "6")
               S7_NUM=$(get_sub_issue_number '\[AAS\] Step\.7:')
-              [[ -n "${S7_NUM}" ]] && activate_issue "${S7_NUM}" || true
+              if [[ -n "${S7_NUM}" ]]; then
+                activate_with_prereq_check "${S7_NUM}" "7" \
+                  "docs/catalog/service-catalog-matrix.md" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
               ;;
 
             "7")
