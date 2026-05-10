@@ -36,6 +36,10 @@ if command -v shellcheck &>/dev/null; then
       shellcheck_ok=false
     fi
   done
+  if ! shellcheck -S warning "${SCRIPT_DIR}/../preflight-cloud-setup.sh"; then
+    fail "shellcheck: preflight-cloud-setup.sh"
+    shellcheck_ok=false
+  fi
   if $shellcheck_ok; then
     pass "shellcheck: all scripts clean"
   fi
@@ -284,6 +288,69 @@ if [[ "${output}" == $'12\n34' ]]; then
   pass "yaml-safe-helpers: parse closing issues unique order"
 else
   fail "yaml-safe-helpers: parse closing issues unique order — got: ${output}"
+fi
+
+# ===========================================================================
+# 9. prereq-file-check.sh — 前提ファイル確認ヘルパー
+# ===========================================================================
+echo ""
+echo "=== prereq-file-check.sh ==="
+
+if output=$(bash "${SCRIPT_DIR}/test-prereq-file-check.sh" 2>&1); then
+  pass "prereq-file-check: helper return contract"
+else
+  fail "prereq-file-check: helper return contract — got: ${output}"
+fi
+
+# ===========================================================================
+# 10. preflight-cloud-setup.sh — 基本スモークテスト
+# ===========================================================================
+echo ""
+echo "=== preflight-cloud-setup.sh ==="
+
+output=$(bash "${SCRIPT_DIR}/../preflight-cloud-setup.sh" --help 2>&1) || true
+if echo "${output}" | grep -q "Cloud setup preflight"; then
+  pass "preflight: help output"
+else
+  fail "preflight: help output — got: ${output}"
+fi
+
+output=$(bash "${SCRIPT_DIR}/../preflight-cloud-setup.sh" --unknown-option 2>&1) || true
+if echo "${output}" | grep -q "不明なオプション"; then
+  pass "preflight: rejects unknown option"
+else
+  fail "preflight: rejects unknown option — got: ${output}"
+fi
+
+output=$(bash "${SCRIPT_DIR}/../preflight-cloud-setup.sh" owner/repo --self-hosted-runner-label 2>&1) || true
+if echo "${output}" | grep -q "オプション引数不足"; then
+  pass "preflight: validates --self-hosted-runner-label argument"
+else
+  fail "preflight: validates --self-hosted-runner-label argument — got: ${output}"
+fi
+
+# NOTE: 認証の成否は評価せず、OWNER/REPO 引数の受理と表示のみを確認する。
+output=$(GH_TOKEN=invalid GITHUB_TOKEN=invalid bash "${SCRIPT_DIR}/../preflight-cloud-setup.sh" owner/repo 2>&1) || true
+if echo "${output}" | grep -q "Target repository: owner/repo"; then
+  if ! echo "${output}" | grep -q "GH_TOKEN=invalid\|GITHUB_TOKEN=invalid"; then
+    pass "preflight: parses OWNER/REPO argument"
+  else
+    fail "preflight: masks token values in output — got: ${output}"
+  fi
+else
+  fail "preflight: parses OWNER/REPO argument — got: ${output}"
+fi
+
+# ===========================================================================
+# 11. workflow prerequisite check safety
+# ===========================================================================
+echo ""
+echo "=== workflow prerequisite check safety ==="
+
+if output=$(bash "${SCRIPT_DIR}/test-workflow-prereq-checks.sh" 2>&1); then
+  pass "workflow prereq checks: no dangerous contents API patterns"
+else
+  fail "workflow prereq checks: no dangerous contents API patterns — got: ${output}"
 fi
 
 # ===========================================================================

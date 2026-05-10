@@ -20,7 +20,7 @@
 `QA-AzureArchitectureReview` を使用
 
 ## 依存
-- Step.3.2（Web アプリ Deploy）が `asdw-web:done` であること
+- Step.3.3（Playwright E2E テスト）が `asdw-web:done` であること
 - Step.4.2 と並列実行可能
 
 ## 完了条件

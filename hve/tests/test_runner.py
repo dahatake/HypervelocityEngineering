@@ -14,7 +14,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import SDKConfig
+from config import DEFAULT_CONTEXT_INJECTION_MAX_CHARS, SDKConfig
 from console import Console
 from runner import (
     StepRunner,
@@ -152,6 +152,25 @@ class TestStepRunnerConfig(unittest.TestCase):
         console = Console(verbose=False)
         runner = StepRunner(config=cfg, console=console)
         self.assertIs(runner.console, console)
+
+    def test_context_injection_max_chars_default(self) -> None:
+        cfg = SDKConfig()
+        console = Console(verbose=False)
+        runner = StepRunner(config=cfg, console=console)
+        self.assertEqual(
+            runner._get_context_injection_max_chars(),
+            DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+        )
+
+    def test_context_injection_max_chars_invalid_runtime_value_falls_back_to_default(self) -> None:
+        cfg = SDKConfig()
+        cfg.context_injection_max_chars = -1
+        console = Console(verbose=False)
+        runner = StepRunner(config=cfg, console=console)
+        self.assertEqual(
+            runner._get_context_injection_max_chars(),
+            DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+        )
 
 
 # -----------------------------------------------------------------------
@@ -626,815 +645,6 @@ class TestQaArtifactFallbackHelpers(unittest.TestCase):
             self.assertEqual(doc.questions[0].priority, "major")
 
 
-# -----------------------------------------------------------------------
-# run_step Phase 2: qa_prompt 呼び出し有無テスト
-# -----------------------------------------------------------------------
-
-class _FakeSdkSession:
-    """CopilotSession の最小モック。send_and_wait() に定形レスポンスを返す。"""
-
-    def __init__(self, responses: list):
-        self._responses = list(responses)
-        self._idx = 0
-
-    async def send_and_wait(self, *args, **kwargs):
-        if self._idx < len(self._responses):
-            resp = self._responses[self._idx]
-            self._idx += 1
-            return resp
-        return None
-
-    def on(self, handler):
-        pass
-
-    async def disconnect(self):
-        pass
-
-
-class _FakeSdkClient:
-    """CopilotClient の最小モック。create_session() で _FakeSdkSession を返す。"""
-
-    def __init__(self, session: "_FakeSdkSession"):
-        self._session = session
-
-    async def start(self):
-        pass
-
-    async def create_session(self, **kwargs):
-        return self._session
-
-    async def stop(self):
-        pass
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *_):
-        pass
-
-
-def _install_fake_sdk(session: "_FakeSdkSession") -> dict:
-    """fake_sdk モジュールを sys.modules に注入し、元の状態を返す。"""
-    import types
-
-    fake_module = types.ModuleType("copilot")
-
-    class _SubprocessConfig:
-        def __init__(self, **kw):
-            pass
-
-    class _ExternalServerConfig:
-        def __init__(self, **kw):
-            pass
-
-    class _PermissionHandler:
-        @staticmethod
-        async def approve_all(*a, **kw):
-            return True
-
-    fake_module.CopilotClient = lambda config=None: _FakeSdkClient(session)
-    fake_module.SubprocessConfig = _SubprocessConfig
-    fake_module.ExternalServerConfig = _ExternalServerConfig
-    fake_module.PermissionHandler = _PermissionHandler
-
-    fake_session_module = types.ModuleType("copilot.session")
-    fake_session_module.PermissionHandler = _PermissionHandler
-    fake_module.session = fake_session_module
-
-    originals = {
-        k: sys.modules.get(k, _SENTINEL)
-        for k in ["copilot", "copilot.session"]
-    }
-    sys.modules["copilot"] = fake_module
-    sys.modules["copilot.session"] = fake_session_module
-    return originals
-
-
-def _restore_sdk(originals: dict) -> None:
-    for k, v in originals.items():
-        if v is _SENTINEL:
-            sys.modules.pop(k, None)
-        else:
-            sys.modules[k] = v
-
-
-class TestRunStepPhase2QaPrompt(unittest.TestCase):
-    """run_step() の Phase 2 で qa_prompt() 呼び出し有無が正しいことを検証する。
-
-    パース成功時: qa_prompt() は呼ばれない（整形テーブルのみ表示）
-    パース失敗時: qa_prompt() が呼ばれる（生 Markdown フォールバック）
-    """
-
-    _VALID_QA_CONTENT = (
-        "| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 |\n"
-        "|-----|------|--------|----------|----------------|\n"
-        "| 1 | テスト？ | A) はい / B) いいえ | A) はい | 理由 |\n"
-    )
-
-    _LEGACY_QA_CONTENT = (
-        "| No. | 質問 | 選択肢 | デフォルトの回答案 | 選択理由 |\n"
-        "|-----|------|--------|-------------------|----------|\n"
-        "| 1 | テスト？ | A) はい / B) いいえ | A) はい | 理由 |\n"
-    )
-
-    def _make_runner(self, qa_content: str) -> "tuple[StepRunner, Console, list, list]":
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            auto_qa=True,
-            auto_contents_review=False,
-            auto_self_improve=False,
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-        return runner, console, qa_content
-
-    def _run_with_fake_sdk(self, qa_content: str) -> "tuple[list, list]":
-        """fake SDK を使って run_step() の Phase 2 を実行し、qa_prompt と questionnaire_table の
-        呼び出し回数を返す。"""
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            auto_qa=True,
-            qa_phase="post",
-            auto_contents_review=False,
-            auto_self_improve=False,
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        qa_prompt_calls: list = []
-        questionnaire_table_calls: list = []
-
-        # send_and_wait の応答順序:
-        #   1回目: Phase 1 メインタスク → None
-        #   2回目: Phase 2a QA生成 → qa_content 相当の文字列レスポンス
-        #   3回目以降: save/consolidate → None
-        class _FakeResponse:
-            def __init__(self, text: str):
-                self.data = type("D", (), {"content": text})()
-
-        session = _FakeSdkSession([
-            None,                            # Phase 1
-            _FakeResponse(qa_content),       # Phase 2a
-            None, None, None,                # Phase 2c save/consolidate / fallback
-        ])
-        originals = _install_fake_sdk(session)
-        try:
-            with unittest.mock.patch.object(
-                console, "qa_prompt",
-                side_effect=lambda *a, **kw: qa_prompt_calls.append(True),
-            ), unittest.mock.patch.object(
-                console, "questionnaire_table",
-                side_effect=lambda *a, **kw: questionnaire_table_calls.append(True),
-            ), unittest.mock.patch.object(
-                console, "answer_summary",
-            ), unittest.mock.patch.object(
-                console, "status",
-            ), unittest.mock.patch("runner._read_stdin_multiline", return_value=""),\
-            unittest.mock.patch("sys.stdin") as mock_stdin:
-                mock_stdin.isatty.return_value = False
-                asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-        finally:
-            _restore_sdk(originals)
-
-        return qa_prompt_calls, questionnaire_table_calls
-
-    def test_parse_success_no_qa_prompt(self) -> None:
-        """パース成功時: qa_prompt() は呼ばれず、questionnaire_table() が呼ばれる。"""
-        qa_calls, table_calls = self._run_with_fake_sdk(self._VALID_QA_CONTENT)
-        self.assertFalse(qa_calls, "パース成功時は qa_prompt() を呼ばないべき")
-        self.assertTrue(table_calls, "パース成功時は questionnaire_table() が呼ばれるべき")
-
-    def test_parse_failure_calls_qa_prompt(self) -> None:
-        """パース失敗時（空コンテンツ）: qa_prompt() が呼ばれる（生 Markdown フォールバック）。"""
-        qa_calls, table_calls = self._run_with_fake_sdk("")
-        self.assertTrue(qa_calls, "パース失敗時は qa_prompt() が呼ばれるべき")
-        self.assertFalse(table_calls, "パース失敗時は questionnaire_table() を呼ばないべき")
-
-    def test_legacy_format_parsed_as_success(self) -> None:
-        """旧形式（デフォルトの回答案/選択理由）はパース成功扱いになる。"""
-        qa_calls, table_calls = self._run_with_fake_sdk(self._LEGACY_QA_CONTENT)
-        self.assertFalse(qa_calls, "旧形式でもパース成功時は qa_prompt() を呼ばないべき")
-        self.assertTrue(table_calls, "旧形式でもパース成功時は questionnaire_table() が呼ばれるべき")
-
-    def _run_with_fake_sdk_and_config(
-        self,
-        qa_content: str,
-        *,
-        qa_auto_defaults: bool = False,
-        stdin_isatty: bool = False,
-        cwd: "Path | None" = None,
-    ) -> "tuple[bool, list, list, unittest.mock.AsyncMock]":
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            auto_qa=True,
-            qa_phase="post",
-            auto_contents_review=False,
-            auto_self_improve=False,
-            qa_auto_defaults=qa_auto_defaults,
-            run_id="testrun",
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        qa_prompt_calls: list = []
-        questionnaire_table_calls: list = []
-
-        class _FakeResponse:
-            def __init__(self, text: str):
-                self.data = type("D", (), {"content": text})()
-
-        session = _FakeSdkSession([
-            None,
-            _FakeResponse(qa_content),
-            None, None, None,
-        ])
-        originals = _install_fake_sdk(session)
-        read_mock = unittest.mock.AsyncMock(return_value="")
-        old_cwd = os.getcwd()
-        try:
-            if cwd is not None:
-                os.chdir(cwd)
-            with unittest.mock.patch.object(
-                console, "qa_prompt",
-                side_effect=lambda *a, **kw: qa_prompt_calls.append(True),
-            ), unittest.mock.patch.object(
-                console, "questionnaire_table",
-                side_effect=lambda *a, **kw: questionnaire_table_calls.append(True),
-            ), unittest.mock.patch.object(
-                console, "answer_summary",
-            ), unittest.mock.patch.object(
-                console, "status",
-            ), unittest.mock.patch("runner._read_stdin_multiline", new=read_mock), \
-                 unittest.mock.patch("sys.stdin") as mock_stdin:
-                mock_stdin.isatty.return_value = stdin_isatty
-                result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-        finally:
-            os.chdir(old_cwd)
-            _restore_sdk(originals)
-
-        return result, qa_prompt_calls, questionnaire_table_calls, read_mock
-
-    def test_artifact_summary_fallback_parses_referenced_qa_file(self) -> None:
-        """QA 応答本文が artifacts 参照だけでも参照先 [Qxx] 質問票をパースする。"""
-        helper_content = (
-            "[Q01]\n"
-            "- 問題種別: 不明瞭\n"
-            "- 重大度: major\n"
-            "- 質問内容: 代表SKUの定義はどれですか。\n"
-            "- 未回答時の既定値候補: TBD\n"
-            "- 既定値候補の理由: 根拠不足\n"
-            "- 未回答のまま進めた場合の影響: 設計判断が分岐する\n"
-        )
-        with tempfile.TemporaryDirectory() as td:
-            base = Path(td)
-            qa_dir = base / "qa"
-            qa_dir.mkdir()
-            (qa_dir / "QA-DocConsistency-20260101-120000.md").write_text(
-                helper_content,
-                encoding="utf-8",
-            )
-            qa_content = (
-                "## 成果物サマリー\n"
-                "- artifacts: qa/QA-DocConsistency-20260101-120000.md\n"
-            )
-
-            result, qa_calls, table_calls, read_mock = self._run_with_fake_sdk_and_config(
-                qa_content,
-                qa_auto_defaults=True,
-                stdin_isatty=True,
-                cwd=base,
-            )
-
-        self.assertTrue(result)
-        self.assertFalse(qa_calls, "artifacts フォールバック成功時は生 Markdown 入力待ちに落ちない")
-        self.assertTrue(table_calls, "参照先質問票をパースして questionnaire_table() が呼ばれるべき")
-        read_mock.assert_not_awaited()
-
-    def test_parse_failure_with_qa_auto_defaults_does_not_wait_for_stdin(self) -> None:
-        """qa_auto_defaults=True ではパース失敗時でも TTY 入力待ちに入らない。"""
-        result, qa_calls, table_calls, read_mock = self._run_with_fake_sdk_and_config(
-            "",
-            qa_auto_defaults=True,
-            stdin_isatty=True,
-        )
-
-        self.assertTrue(result)
-        self.assertTrue(qa_calls, "パース失敗時は生 QA 応答を表示する")
-        self.assertFalse(table_calls, "質問がないため questionnaire_table() は呼ばれない")
-        read_mock.assert_not_awaited()
-
-
-class TestRunStepWorkIqMcpHealthCheck(unittest.TestCase):
-    def test_main_session_excludes_workiq_mcp(self) -> None:
-        import types
-
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            workiq_enabled=True,
-            mcp_servers={WORKIQ_MCP_SERVER_NAME: {"command": "manual"}},
-            auto_qa=False,
-            auto_contents_review=False,
-            auto_self_improve=False,
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        mcp_list = unittest.mock.AsyncMock(
-            return_value=types.SimpleNamespace(
-                servers=[
-                    types.SimpleNamespace(
-                        name="_hve_workiq",
-                        status=types.SimpleNamespace(value="connected"),
-                        error=None,
-                    )
-                ]
-            )
-        )
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                self.rpc = types.SimpleNamespace(
-                    mcp=types.SimpleNamespace(list=mcp_list)
-                )
-
-            async def send_and_wait(self, *args, **kwargs):
-                return None
-
-            async def disconnect(self):
-                return None
-
-            def on(self, handler):
-                return None
-
-        class _FakeClient:
-            def __init__(self) -> None:
-                self.create_session_kwargs = []
-
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                self.create_session_kwargs.append(kwargs)
-                return _FakeSession()
-
-        fake_client = _FakeClient()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with unittest.mock.patch.dict(
-            sys.modules,
-            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
-        ), unittest.mock.patch(
-            "runner.is_workiq_available", return_value=True
-        ), unittest.mock.patch(
-            "runner.build_workiq_mcp_config", return_value={"_hve_workiq": {}}
-        ):
-            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-
-        self.assertTrue(result)
-        self.assertEqual(len(fake_client.create_session_kwargs), 1)
-        self.assertNotIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[0].get("mcp_servers", {}),
-        )
-        mcp_list.assert_not_awaited()
-        self.assertFalse(runner._workiq_mcp_connection_failed)
-
-    def test_qa_sub_session_adds_workiq_mcp(self) -> None:
-        import types
-
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            workiq_enabled=True,
-            auto_qa=True,
-            qa_phase="post",
-            qa_auto_defaults=True,
-            auto_contents_review=False,
-            auto_self_improve=False,
-            run_id="run-qa-workiq",
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        qa_content = (
-            "[Q01]\n"
-            "- 問題種別: 不明瞭\n"
-            "- 重大度: major\n"
-            "- 質問内容: 会議で決まった対象範囲はどれですか。\n"
-            "- 未回答時の既定値候補: TBD\n"
-            "- 既定値候補の理由: 根拠不足\n"
-            "- 未回答のまま進めた場合の影響: 設計判断が分岐する\n"
-        )
-
-        mcp_list = unittest.mock.AsyncMock(
-            return_value=types.SimpleNamespace(
-                servers=[
-                    types.SimpleNamespace(
-                        name=WORKIQ_MCP_SERVER_NAME,
-                        status=types.SimpleNamespace(value="connected"),
-                        error=None,
-                    )
-                ]
-            )
-        )
-
-        class _FakeSession:
-            def __init__(self, responses):
-                self._responses = list(responses)
-                self.rpc = types.SimpleNamespace(
-                    mcp=types.SimpleNamespace(list=mcp_list)
-                )
-
-            async def send_and_wait(self, *args, **kwargs):
-                if self._responses:
-                    return self._responses.pop(0)
-                return None
-
-            async def disconnect(self):
-                return None
-
-            def on(self, handler):
-                return None
-
-        class _FakeClient:
-            def __init__(self) -> None:
-                self.create_session_kwargs = []
-                self._sessions = [
-                    _FakeSession(["main output"]),
-                    _FakeSession([qa_content, "consolidated"]),
-                ]
-
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                self.create_session_kwargs.append(kwargs)
-                return self._sessions.pop(0)
-
-        fake_client = _FakeClient()
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with unittest.mock.patch.dict(
-            sys.modules,
-            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
-        ), unittest.mock.patch(
-            "runner.is_workiq_available", return_value=True
-        ), unittest.mock.patch(
-            "runner.build_workiq_mcp_config", return_value={WORKIQ_MCP_SERVER_NAME: {}}
-        ), unittest.mock.patch(
-            "runner.query_workiq", new=unittest.mock.AsyncMock(return_value="m365 context")
-        ) as mock_query_workiq, unittest.mock.patch(
-            "runner.save_workiq_result", return_value=None
-        ), unittest.mock.patch(
-            "runner.QAMerger.save_merged", return_value=True
-        ):
-            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-
-        self.assertTrue(result)
-        self.assertEqual(len(fake_client.create_session_kwargs), 2)
-        self.assertNotIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[0].get("mcp_servers", {}),
-        )
-        self.assertIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[1].get("mcp_servers", {}),
-        )
-        mcp_list.assert_awaited_once()
-        mock_query_workiq.assert_awaited_once()
-
-    def test_qa_phase_ignores_configured_workiq_mcp_when_workiq_disabled(self) -> None:
-        import types
-
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            workiq_enabled=False,
-            mcp_servers={WORKIQ_MCP_SERVER_NAME: {"command": "manual-workiq"}},
-            auto_qa=True,
-            qa_auto_defaults=True,
-            auto_contents_review=False,
-            auto_self_improve=False,
-            run_id="run-qa-workiq-disabled",
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        qa_content = (
-            "[Q01]\n"
-            "- 問題種別: 不明瞭\n"
-            "- 重大度: major\n"
-            "- 質問内容: 会議で決まった対象範囲はどれですか。\n"
-            "- 未回答時の既定値候補: TBD\n"
-            "- 既定値候補の理由: 根拠不足\n"
-            "- 未回答のまま進めた場合の影響: 設計判断が分岐する\n"
-        )
-        mcp_list = unittest.mock.AsyncMock()
-
-        class _FakeSession:
-            def __init__(self, responses):
-                self._responses = list(responses)
-                self.rpc = types.SimpleNamespace(
-                    mcp=types.SimpleNamespace(list=mcp_list)
-                )
-
-            async def send_and_wait(self, *args, **kwargs):
-                if self._responses:
-                    return self._responses.pop(0)
-                return None
-
-            async def disconnect(self):
-                return None
-
-            def on(self, handler):
-                return None
-
-        class _FakeClient:
-            def __init__(self) -> None:
-                self.create_session_kwargs = []
-                self._session = _FakeSession(["main output", qa_content, "consolidated"])
-
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                self.create_session_kwargs.append(kwargs)
-                return self._session
-
-        fake_client = _FakeClient()
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with unittest.mock.patch.dict(
-            sys.modules,
-            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
-        ), unittest.mock.patch(
-            "runner.is_workiq_available", return_value=True
-        ), unittest.mock.patch(
-            "runner.query_workiq", new=unittest.mock.AsyncMock(return_value="m365 context")
-        ) as mock_query_workiq, unittest.mock.patch(
-            "runner.QAMerger.save_merged", return_value=True
-        ):
-            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-
-        self.assertTrue(result)
-        self.assertEqual(len(fake_client.create_session_kwargs), 1)
-        self.assertNotIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[0].get("mcp_servers", {}),
-        )
-        mcp_list.assert_not_awaited()
-        mock_query_workiq.assert_not_awaited()
-
-    def test_qa_sub_session_allows_configured_workiq_mcp_without_cli_detection(self) -> None:
-        import types
-
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            workiq_enabled=True,
-            mcp_servers={WORKIQ_MCP_SERVER_NAME: {"command": "manual-workiq"}},
-            auto_qa=True,
-            qa_phase="post",
-            qa_auto_defaults=True,
-            auto_contents_review=False,
-            auto_self_improve=False,
-            run_id="run-qa-manual-workiq",
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        qa_content = (
-            "[Q01]\n"
-            "- 問題種別: 不明瞭\n"
-            "- 重大度: major\n"
-            "- 質問内容: 会議で決まった対象範囲はどれですか。\n"
-            "- 未回答時の既定値候補: TBD\n"
-            "- 既定値候補の理由: 根拠不足\n"
-            "- 未回答のまま進めた場合の影響: 設計判断が分岐する\n"
-        )
-
-        mcp_list = unittest.mock.AsyncMock(
-            return_value=types.SimpleNamespace(
-                servers=[
-                    types.SimpleNamespace(
-                        name=WORKIQ_MCP_SERVER_NAME,
-                        status=types.SimpleNamespace(value="connected"),
-                        error=None,
-                    )
-                ]
-            )
-        )
-
-        class _FakeSession:
-            def __init__(self, responses):
-                self._responses = list(responses)
-                self.rpc = types.SimpleNamespace(
-                    mcp=types.SimpleNamespace(list=mcp_list)
-                )
-
-            async def send_and_wait(self, *args, **kwargs):
-                if self._responses:
-                    return self._responses.pop(0)
-                return None
-
-            async def disconnect(self):
-                return None
-
-            def on(self, handler):
-                return None
-
-        class _FakeClient:
-            def __init__(self) -> None:
-                self.create_session_kwargs = []
-                self._sessions = [
-                    _FakeSession(["main output"]),
-                    _FakeSession([qa_content, "consolidated"]),
-                ]
-
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                self.create_session_kwargs.append(kwargs)
-                return self._sessions.pop(0)
-
-        fake_client = _FakeClient()
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with unittest.mock.patch.dict(
-            sys.modules,
-            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
-        ), unittest.mock.patch(
-            "runner.is_workiq_available", return_value=False
-        ), unittest.mock.patch(
-            "runner.build_workiq_mcp_config", return_value={WORKIQ_MCP_SERVER_NAME: {}}
-        ) as mock_build_workiq_mcp_config, unittest.mock.patch(
-            "runner.query_workiq", new=unittest.mock.AsyncMock(return_value="m365 context")
-        ) as mock_query_workiq, unittest.mock.patch(
-            "runner.save_workiq_result", return_value=None
-        ), unittest.mock.patch(
-            "runner.QAMerger.save_merged", return_value=True
-        ):
-            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-
-        self.assertTrue(result)
-        self.assertEqual(len(fake_client.create_session_kwargs), 2)
-        self.assertNotIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[0].get("mcp_servers", {}),
-        )
-        self.assertEqual(
-            fake_client.create_session_kwargs[1].get("mcp_servers", {}).get(WORKIQ_MCP_SERVER_NAME),
-            {"command": "manual-workiq"},
-        )
-        mock_build_workiq_mcp_config.assert_not_called()
-        mcp_list.assert_awaited_once()
-        mock_query_workiq.assert_awaited_once()
-
-    def test_review_sub_session_excludes_workiq_mcp(self) -> None:
-        import types
-
-        cfg = SDKConfig(
-            dry_run=False,
-            model="claude-opus-4.7",
-            review_model="gpt-5.4",
-            workiq_enabled=True,
-            mcp_servers={WORKIQ_MCP_SERVER_NAME: {"command": "manual"}},
-            auto_qa=False,
-            auto_contents_review=True,
-            auto_self_improve=False,
-        )
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        class _FakeSession:
-            def __init__(self, responses):
-                self._responses = list(responses)
-                self.rpc = types.SimpleNamespace(mcp=types.SimpleNamespace(list=unittest.mock.AsyncMock()))
-
-            async def send_and_wait(self, *args, **kwargs):
-                if self._responses:
-                    return self._responses.pop(0)
-                return None
-
-            async def disconnect(self):
-                return None
-
-            def on(self, handler):
-                return None
-
-        class _FakeClient:
-            def __init__(self) -> None:
-                self.create_session_kwargs = []
-                self._sessions = [
-                    _FakeSession(["main output"]),
-                    _FakeSession(["合格判定: ✅ PASS"]),
-                ]
-
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                self.create_session_kwargs.append(kwargs)
-                return self._sessions.pop(0)
-
-        fake_client = _FakeClient()
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with unittest.mock.patch.dict(
-            sys.modules,
-            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
-        ), unittest.mock.patch("runner.is_workiq_available", return_value=True):
-            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
-
-        self.assertTrue(result)
-        self.assertEqual(len(fake_client.create_session_kwargs), 2)
-        self.assertNotIn(
-            WORKIQ_MCP_SERVER_NAME,
-            fake_client.create_session_kwargs[1].get("mcp_servers", {}),
-        )
-
-
 class TestStepRunnerModelSwitchDryRun(unittest.TestCase):
     """レビュー/QA モデル切替判定のドライラン系テスト。"""
 
@@ -1628,161 +838,313 @@ class TestWorkIQCustomAgentToolsWarning(unittest.TestCase):
         self.assertNotIn("restricted tools", combined)
 
 
-class TestAqodWorkIQWarningSuppressionPhase1(unittest.TestCase):
-    """Phase 1 ではワークフロー種別を問わず Work IQ 未呼び出し警告を出さない。"""
+# ---------------------------------------------------------------------------
+# Phase 2: SDK セッション ID 安定化（Resume の前提条件）
+# ---------------------------------------------------------------------------
 
-    def _make_runner(self, **cfg_kwargs) -> StepRunner:
+class TestSessionIdPropagation(unittest.TestCase):
+    """`StepRunner.run_step()` 内の `client.create_session()` 呼び出しが
+    決定論的な `session_id` を kwargs に含めることを検証する。
+
+    Phase 2 (Resume) の中核要件: 同じ run_id × step_id × suffix の組み合わせで
+    常に同じ session_id が SDK に渡されること。
+    """
+
+    def _build_fake_sdk(self):
+        """create_session の kwargs を全て記録する Fake SDK モジュールを構築する。"""
+        import types
+
+        class _FakeSession:
+            async def send_and_wait(self, *args, **kwargs):
+                # メインタスク 1 回のみ応答する最小モック
+                return None
+
+            async def disconnect(self):
+                return None
+
+            def on(self, handler):
+                return None
+
+        class _FakeClient:
+            def __init__(self) -> None:
+                self.create_session_kwargs: list = []
+
+            async def start(self):
+                return None
+
+            async def stop(self):
+                return None
+
+            async def create_session(self, **kwargs):
+                self.create_session_kwargs.append(kwargs)
+                return _FakeSession()
+
+        fake_client = _FakeClient()
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot.CopilotClient = lambda config=None: fake_client
+        fake_copilot.SubprocessConfig = lambda **kwargs: object()
+        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+        return fake_client, fake_copilot, fake_copilot_session
+
+    def test_main_session_receives_deterministic_session_id(self) -> None:
+        """メインセッションに run_id + step_id 由来の決定論的 session_id が渡される。"""
         cfg = SDKConfig(
             dry_run=False,
             model="claude-opus-4.7",
-            auto_qa=True,
+            auto_qa=False,
             auto_contents_review=False,
             auto_self_improve=False,
-            **cfg_kwargs,
+            run_id="20260507T100000-test01",
         )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            result = asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
+
+        self.assertTrue(result)
+        self.assertEqual(len(fake_client.create_session_kwargs), 1)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertIn("session_id", kw)
+        # フォーマット: "hve-{run_id}-step-{step_id}"
+        self.assertEqual(kw["session_id"], "hve-20260507T100000-test01-step-1.1")
+
+    def test_session_id_is_deterministic_across_runs(self) -> None:
+        """同じ run_id + step_id で複数回 run_step() を呼ぶと常に同じ session_id が渡される。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="run-determ-001",
+        )
+        console = Console(verbose=False, quiet=True)
+
+        captured_ids: list = []
+        for _ in range(2):
+            runner = StepRunner(config=cfg, console=console)
+            fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+            with unittest.mock.patch.dict(
+                sys.modules,
+                {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+            ):
+                asyncio.run(runner.run_step("2.3", "テスト", "プロンプト"))
+            captured_ids.append(fake_client.create_session_kwargs[0]["session_id"])
+
+        self.assertEqual(captured_ids[0], captured_ids[1])
+
+    def test_session_id_uses_custom_prefix(self) -> None:
+        """SDKConfig.session_id_prefix が設定されている場合はその prefix が使われる。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="run-prefix-001",
+            session_id_prefix="myapp",
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
+
+        self.assertTrue(
+            fake_client.create_session_kwargs[0]["session_id"].startswith("myapp-")
+        )
+
+    def test_make_step_session_id_helper(self) -> None:
+        """`StepRunner._make_step_session_id` が make_session_id と同じ仕様を返す。"""
+        cfg = SDKConfig(model="claude-opus-4.7", run_id="run-helper-001")
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        main = runner._make_step_session_id("1.1")
+        qa = runner._make_step_session_id("1.1", suffix="qa")
+        review = runner._make_step_session_id("1.1", suffix="review")
+
+        self.assertEqual(main, "hve-run-helper-001-step-1.1")
+        self.assertEqual(qa, "hve-run-helper-001-step-1.1-qa")
+        self.assertEqual(review, "hve-run-helper-001-step-1.1-review")
+        # サブセッション ID は全て異なる
+        self.assertEqual(len({main, qa, review}), 3)
+
+    def test_qa_subsession_session_id_has_qa_suffix(self) -> None:
+        """`_build_sub_session_opts(step_id=..., suffix='qa')` が qa サフィックス付き ID を返す。"""
+        cfg = SDKConfig(
+            model="claude-opus-4.7",
+            run_id="run-qa-suffix-001",
+            qa_model="claude-opus-4.6",  # メインモデルと別モデルでサブセッション化
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        # PermissionHandler のために fake_copilot_session を一時注入
+        import types
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": fake_copilot_session}
+        ):
+            opts_qa = runner._build_sub_session_opts(
+                "claude-opus-4.6", step_id="1.1", suffix="qa"
+            )
+            opts_review = runner._build_sub_session_opts(
+                "claude-opus-4.6", step_id="1.1", suffix="review"
+            )
+
+        self.assertEqual(opts_qa.get("session_id"), "hve-run-qa-suffix-001-step-1.1-qa")
+        self.assertEqual(opts_review.get("session_id"), "hve-run-qa-suffix-001-step-1.1-review")
+        # 明示モデル指定時は reasoning_effort を付与しない契約を二重保証
+        self.assertNotIn("reasoning_effort", opts_qa)
+        self.assertNotIn("reasoning_effort", opts_review)
+
+    def test_sub_session_opts_without_step_id_omits_session_id(self) -> None:
+        """step_id を渡さない場合は session_id を含めない（後方互換）。"""
+        cfg = SDKConfig(model="claude-opus-4.7", run_id="run-back-compat")
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+
+        import types
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": fake_copilot_session}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.6")
+
+        self.assertNotIn("session_id", opts)
+
+
+class TestSubSessionOptsReasoningEffort(unittest.TestCase):
+    """Auto モデル時の reasoning_effort 付与契約を固定する。"""
+
+    def _make_runner_with_fake_permission(self) -> StepRunner:
+        cfg = SDKConfig(model="claude-opus-4.7", run_id="run-reasoning-effort")
         console = Console(verbose=False, quiet=True)
         return StepRunner(config=cfg, console=console)
 
-    def _run_with_mcp_connected(
-        self,
-        runner: StepRunner,
-        workflow_id: "Optional[str]" = None,
-    ) -> "tuple[list[str], list[str]]":
-        """Work IQ MCP が接続済みの状態をシミュレートして run_step() を実行し、
-        (logged_statuses, logged_warnings) を返す。
-
-        _install_fake_sdk の _FakeSdkSession を拡張して rpc.mcp.list() をサポートする。
-        """
+    @staticmethod
+    def _patched_modules():
         import types
 
-        _WORKIQ_SERVER_NAME = WORKIQ_MCP_SERVER_NAME
+        fake_copilot_session = types.ModuleType("copilot.session")
 
-        class _SrvStatus:
-            value = "connected"
-
-        class _FakeSrv:
-            name = _WORKIQ_SERVER_NAME
-            status = _SrvStatus()
-            error = None
-
-        class _FakeMcpList:
-            servers = [_FakeSrv()]
-
-        class _FakeMcp:
-            async def list(self):
-                return _FakeMcpList()
-
-        class _FakeRpc:
-            mcp = _FakeMcp()
-
-        class _SessionWithMcp(_FakeSdkSession):
-            rpc = _FakeRpc()
-
-            async def disconnect(self):
-                pass
-
-        session = _SessionWithMcp([None])  # Phase 1 → None
-
-        # copilot.session モジュールモック（PermissionHandler 提供）
-        fake_session_mod = types.ModuleType("copilot.session")
-
-        class _PH:
+        class _PermissionHandler:
             @staticmethod
-            async def approve_all(*a, **kw):
+            async def approve_all(*args, **kwargs):
                 return True
 
-        fake_session_mod.PermissionHandler = _PH
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+        return {"copilot.session": fake_copilot_session}
 
-        logged_statuses: list = []
-        logged_warnings: list = []
+    def test_auto_model_adds_reasoning_effort_high(self) -> None:
+        from config import MODEL_AUTO_VALUE
 
-        originals = {k: sys.modules.get(k, _SENTINEL) for k in ["copilot", "copilot.session"]}
-        originals.update(_install_fake_sdk(session))
-        sys.modules["copilot.session"] = fake_session_mod
-        try:
-            with unittest.mock.patch("runner.is_workiq_available", return_value=True), \
-                 unittest.mock.patch(
-                     "runner.build_workiq_mcp_config",
-                     return_value={_WORKIQ_SERVER_NAME: {}},
-                 ), \
-                 unittest.mock.patch("runner._read_stdin_multiline", return_value=""), \
-                 unittest.mock.patch("sys.stdin") as mock_stdin, \
-                 unittest.mock.patch.object(
-                     runner.console, "status", side_effect=logged_statuses.append,
-                 ), \
-                 unittest.mock.patch.object(
-                     runner.console, "warning", side_effect=logged_warnings.append,
-                 ), \
-                 _CaptureOutput():
-                mock_stdin.isatty.return_value = False
-                _run(runner.run_step("1", "Step", "プロンプト", workflow_id=workflow_id))
-        finally:
-            for k, v in originals.items():
-                if v is _SENTINEL:
-                    sys.modules.pop(k, None)
-                else:
-                    sys.modules[k] = v
+        runner = self._make_runner_with_fake_permission()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts(MODEL_AUTO_VALUE)
+        self.assertNotIn("model", opts)
+        self.assertEqual(opts.get("reasoning_effort"), "high")
 
-        return logged_statuses, logged_warnings
+    def test_explicit_model_omits_reasoning_effort(self) -> None:
+        runner = self._make_runner_with_fake_permission()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertEqual(opts.get("model"), "claude-opus-4.7")
+        self.assertNotIn("reasoning_effort", opts)
 
-    def test_aqod_workiq_draft_no_warning(self) -> None:
-        """AQOD + workiq_draft_mode では Work IQ 未呼び出し警告が出ない。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True, aqod_post_qa_enabled=True)
-        _statuses, warnings = self._run_with_mcp_connected(runner, workflow_id="aqod")
-        self.assertFalse(
-            any("Work IQ MCP ツールが1度も呼び出されませんでした" in w for w in warnings),
-            f"AQOD draft モードでは警告が出ないはず。実際の警告: {warnings}",
+    def test_empty_string_treated_as_auto(self) -> None:
+        runner = self._make_runner_with_fake_permission()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts("")
+        self.assertNotIn("model", opts)
+        self.assertEqual(opts.get("reasoning_effort"), "high")
+
+
+class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
+    """_create_session_with_auto_reasoning_fallback の TypeError 時挙動を検証する。"""
+
+    async def test_strips_reasoning_effort_on_typeerror(self) -> None:
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                if "reasoning_effort" in kwargs:
+                    raise TypeError(
+                        "create_session() got an unexpected keyword argument 'reasoning_effort'"
+                    )
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"model": "Auto", "reasoning_effort": "high", "streaming": True}
         )
+        self.assertEqual(result, "ok-session")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("reasoning_effort", calls[0])
+        self.assertNotIn("reasoning_effort", calls[1])
 
-    def test_aqod_workiq_draft_info_log(self) -> None:
-        """AQOD + workiq_draft_mode では QA セッションで Work IQ 接続確認を行う。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True, aqod_post_qa_enabled=True)
-        statuses, warnings = self._run_with_mcp_connected(runner, workflow_id="aqod")
-        self.assertTrue(
-            any("QA セッション" in s for s in statuses),
-            f"QA セッションでの接続確認ログが出るはず。実際の status ログ: {statuses}",
-        )
-        # Phase 1 警告（Work IQ 未呼び出し）が出ていないことを確認（Phase 2 の warnings は許容）
-        self.assertFalse(
-            any("Work IQ MCP ツールが1度も呼び出されませんでした" in w for w in warnings),
-            f"AQOD draft モードでは Work IQ 未呼び出し警告は出ないはず。実際: {warnings}",
-        )
+    async def test_passthrough_for_unrelated_typeerror(self) -> None:
+        from runner import _create_session_with_auto_reasoning_fallback
 
-    def test_non_aqod_no_phase1_warning(self) -> None:
-        """非 AQOD ワークフローでも Phase 1 の Work IQ 未呼び出し警告は出ない。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True)
-        _statuses, warnings = self._run_with_mcp_connected(runner, workflow_id="akm")
-        self.assertFalse(
-            any("Work IQ MCP ツールが1度も呼び出されませんでした" in w for w in warnings),
-            f"Phase 1 では Work IQ 未呼び出し警告は出ないはず。実際の警告: {warnings}",
-        )
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                raise TypeError("create_session() got an unexpected keyword argument 'foobar'")
 
-    def test_workflow_id_none_no_phase1_warning(self) -> None:
-        """workflow_id=None（デフォルト）の場合も Phase 1 の Work IQ 未呼び出し警告は出ない。"""
-        runner = self._make_runner(workiq_enabled=True, workiq_draft_mode=True)
-        _statuses, warnings = self._run_with_mcp_connected(runner, workflow_id=None)
-        self.assertFalse(
-            any("Work IQ MCP ツールが1度も呼び出されませんでした" in w for w in warnings),
-            f"Phase 1 では Work IQ 未呼び出し警告は出ないはず。実際の警告: {warnings}",
-        )
+        with self.assertRaises(TypeError):
+            await _create_session_with_auto_reasoning_fallback(
+                _FakeClient(), {"reasoning_effort": "high"}
+            )
 
-    def test_workflow_id_optional_default_does_not_break(self) -> None:
-        """workflow_id 省略（None）で run_step() が既存通り動作する（dry_run）。"""
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7")
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-        with _CaptureOutput():
-            result = _run(runner.run_step("1.1", "テスト", "プロンプト"))
-        self.assertTrue(result)
+    async def test_passthrough_for_value_validation_typeerror(self) -> None:
+        """SDK 側で reasoning_effort の値検証エラー（unexpected keyword 由来でない）の場合は剥がさず raise。"""
+        from runner import _create_session_with_auto_reasoning_fallback
 
-    def test_workflow_id_passed_does_not_break(self) -> None:
-        """workflow_id を明示指定しても run_step() が True を返す（dry_run）。"""
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7")
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-        with _CaptureOutput():
-            result = _run(runner.run_step("1.1", "テスト", "プロンプト", workflow_id="akm"))
-        self.assertTrue(result)
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                raise TypeError("reasoning_effort must be one of low/medium/high/xhigh")
+
+        with self.assertRaises(TypeError):
+            await _create_session_with_auto_reasoning_fallback(
+                _FakeClient(), {"reasoning_effort": "high"}
+            )
 
 
 class TestWorkIQCalledToolsTracking(unittest.TestCase):
@@ -2019,15 +1381,8 @@ class TestApplyMainArtifactImprovements(unittest.TestCase):
 
 
 class TestApplyMainArtifactImprovementsInspection(unittest.TestCase):
-    """Phase 2c / 3 / 4 の共通ヘルパー呼び出し確認（ソースインスペクション）。"""
-
-    def test_phase2c_calls_helper_when_enabled(self) -> None:
-        """Phase 2c: apply_qa_improvements_to_main=True のとき _apply_main_artifact_improvements が呼ばれる。"""
-        import inspect
-        source = inspect.getsource(StepRunner.run_step)
-        self.assertIn("apply_qa_improvements_to_main", source)
-        self.assertIn("_apply_main_artifact_improvements", source)
-        self.assertIn("Phase 2c QA Merge", source)
+    """Phase 3 / 4 の共通ヘルパー呼び出し確認（ソースインスペクション）。
+    Phase 2c (post-QA) は廃止済みのため該当テストは削除された。"""
 
     def test_phase3_calls_helper_when_fail(self) -> None:
         """Phase 3: review FAIL 時に _apply_main_artifact_improvements が呼ばれる。"""
@@ -2136,6 +1491,306 @@ class TestCheckDiffAfterImprovement(unittest.TestCase):
         self.assertIn("Phase 4 Self-Improve", source)
 
 
+# ---------------------------------------------------------------------------
+# Phase 6: サブセッション要否判定ヘルパーのテスト
+# ---------------------------------------------------------------------------
+
+class TestShouldUseSubSession(unittest.TestCase):
+    """Phase 6: _should_use_*_sub_session ヘルパーの判定ロジックを検証する。"""
+
+    def _make_runner(self, model: str = "claude-opus-4.7", **cfg_kwargs) -> StepRunner:
+        cfg = SDKConfig(model=model, **cfg_kwargs)
+        console = Console(verbose=False, quiet=True)
+        return StepRunner(config=cfg, console=console)
+
+    # --- Pre-QA ---
+
+    def test_pre_qa_same_model_no_workiq_uses_main_session(self) -> None:
+        """qa_model == main_model かつ WorkIQ 無効 → サブセッション不要。"""
+        runner = self._make_runner(model="claude-opus-4.7")
+        # qa_model 未設定 → get_qa_model() は model を返す
+        self.assertFalse(
+            runner._should_use_pre_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    def test_pre_qa_different_model_creates_sub_session(self) -> None:
+        """qa_model != main_model → サブセッション作成。"""
+        runner = self._make_runner(model="claude-opus-4.7", qa_model="gpt-5.4")
+        self.assertTrue(
+            runner._should_use_pre_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    def test_pre_qa_workiq_enabled_creates_sub_session_even_if_same_model(self) -> None:
+        """WorkIQ 有効 → モデルが同一でもサブセッション作成（WorkIQ は QA 専用）。"""
+        runner = self._make_runner(model="claude-opus-4.7")
+        self.assertTrue(
+            runner._should_use_pre_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=True,
+            )
+        )
+
+    def test_pre_qa_auto_model_same_as_main_no_sub_session(self) -> None:
+        """qa_model=Auto かつ main_model=Auto → 同一とみなしサブセッション不要。"""
+        from config import MODEL_AUTO_VALUE
+        runner = self._make_runner(model=MODEL_AUTO_VALUE)
+        # get_qa_model() は qa_model が None の場合 model を返す → AUTO 同士
+        self.assertFalse(
+            runner._should_use_pre_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    def test_pre_qa_auto_model_differs_from_fixed_model_creates_sub_session(self) -> None:
+        """qa_model=Auto、main_model=固定モデル → 差異あり → サブセッション作成。"""
+        from config import MODEL_AUTO_VALUE
+        runner = self._make_runner(model="claude-opus-4.7", qa_model=MODEL_AUTO_VALUE)
+        self.assertTrue(
+            runner._should_use_pre_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    # --- Post-QA ---
+
+    def test_post_qa_same_model_no_workiq_uses_main_session(self) -> None:
+        """Post-QA: qa_model == main_model かつ WorkIQ 無効 → サブセッション不要。"""
+        runner = self._make_runner(model="claude-opus-4.7")
+        self.assertFalse(
+            runner._should_use_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    def test_post_qa_different_model_creates_sub_session(self) -> None:
+        """Post-QA: qa_model != main_model → サブセッション作成。"""
+        runner = self._make_runner(model="claude-opus-4.7", qa_model="gpt-5.4")
+        self.assertTrue(
+            runner._should_use_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    def test_post_qa_workiq_enabled_creates_sub_session(self) -> None:
+        """Post-QA: WorkIQ 有効 → サブセッション作成。"""
+        runner = self._make_runner(model="claude-opus-4.7")
+        self.assertTrue(
+            runner._should_use_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=True,
+            )
+        )
+
+    def test_post_qa_auto_model_same_no_sub_session(self) -> None:
+        """Post-QA: qa_model=Auto かつ main_model=Auto → サブセッション不要。"""
+        from config import MODEL_AUTO_VALUE
+        runner = self._make_runner(model=MODEL_AUTO_VALUE)
+        self.assertFalse(
+            runner._should_use_qa_sub_session(
+                qa_model=runner.config.get_qa_model(),
+                workiq_available=False,
+            )
+        )
+
+    # --- Review ---
+
+    def test_review_same_model_uses_main_session(self) -> None:
+        """Review: review_model == main_model → サブセッション不要。"""
+        runner = self._make_runner(model="claude-opus-4.7")
+        # review_model 未設定 → get_review_model() は model を返す
+        self.assertFalse(
+            runner._should_use_review_sub_session(
+                review_model=runner.config.get_review_model(),
+            )
+        )
+
+    def test_review_different_model_creates_sub_session(self) -> None:
+        """Review: review_model != main_model → サブセッション作成。"""
+        runner = self._make_runner(model="claude-opus-4.7", review_model="gpt-5.4")
+        self.assertTrue(
+            runner._should_use_review_sub_session(
+                review_model=runner.config.get_review_model(),
+            )
+        )
+
+    def test_review_auto_model_same_no_sub_session(self) -> None:
+        """Review: review_model=Auto かつ main_model=Auto → サブセッション不要。"""
+        from config import MODEL_AUTO_VALUE
+        runner = self._make_runner(model=MODEL_AUTO_VALUE)
+        self.assertFalse(
+            runner._should_use_review_sub_session(
+                review_model=runner.config.get_review_model(),
+            )
+        )
+
+    def test_review_auto_model_differs_from_fixed_creates_sub_session(self) -> None:
+        """Review: review_model=Auto、main_model=固定モデル → サブセッション作成。"""
+        from config import MODEL_AUTO_VALUE
+        runner = self._make_runner(model="claude-opus-4.7", review_model=MODEL_AUTO_VALUE)
+        self.assertTrue(
+            runner._should_use_review_sub_session(
+                review_model=runner.config.get_review_model(),
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: _sub_sessions_created カウンターのテスト
+# ---------------------------------------------------------------------------
+
+class TestSubSessionsCreatedCounter(unittest.TestCase):
+    """Phase 6: _sub_sessions_created カウンターの初期値・リセット・インクリメントを検証する。"""
+
+    def _make_runner(self, **cfg_kwargs) -> StepRunner:
+        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7", **cfg_kwargs)
+        console = Console(verbose=False, quiet=True)
+        return StepRunner(config=cfg, console=console)
+
+    def test_initial_counter_is_zero(self) -> None:
+        """StepRunner 生成直後の _sub_sessions_created は 0。"""
+        runner = self._make_runner()
+        self.assertEqual(runner._sub_sessions_created, 0)
+
+    def test_counter_resets_on_dry_run(self) -> None:
+        """run_step() 開始時に _sub_sessions_created がリセットされる（dry_run で確認）。"""
+        runner = self._make_runner()
+        runner._sub_sessions_created = 99  # 意図的に汚染
+
+        with _CaptureOutput():
+            asyncio.run(runner.run_step("1.1", "テスト", "プロンプト"))
+
+        # dry_run なのでサブセッション作成はなく、run_step 冒頭でリセットされる
+        self.assertEqual(runner._sub_sessions_created, 0)
+
+    def test_helper_methods_exist(self) -> None:
+        """Phase 6 で追加した helper メソッドが StepRunner に存在すること。"""
+        runner = self._make_runner()
+        self.assertTrue(callable(getattr(runner, "_should_use_pre_qa_sub_session", None)))
+        self.assertTrue(callable(getattr(runner, "_should_use_qa_sub_session", None)))
+        self.assertTrue(callable(getattr(runner, "_should_use_review_sub_session", None)))
+        self.assertTrue(callable(getattr(runner, "_log_sub_session_reason", None)))
+        self.assertTrue(callable(getattr(runner, "_log_main_session_reuse", None)))
+
+    def test_log_sub_session_reason_does_not_leak_secrets(self) -> None:
+        """_log_sub_session_reason が token/secret 等のキーを含まないイベントを出力すること。"""
+        captured_events: list[str] = []
+        runner = self._make_runner()
+        original_event = runner.console.event
+        runner.console.event = lambda msg: captured_events.append(msg)  # type: ignore[method-assign]
+
+        runner._log_sub_session_reason(
+            "1.1", "Pre-QA",
+            qa_model="gpt-5.4",
+            workiq_available=True,
+        )
+        runner.console.event = original_event
+
+        self.assertTrue(len(captured_events) > 0, "イベントが出力されること")
+        msg = captured_events[0]
+        # モデル名は含んでよい（公開情報）
+        self.assertIn("gpt-5.4", msg)
+        # WorkIQ 有効の旨が含まれること
+        self.assertIn("WorkIQ", msg)
+        # 秘密情報キーワードが含まれないこと
+        for secret_token in ("token", "secret", "password", "api_key", "bearer", "credential"):
+            self.assertNotIn(secret_token, msg.lower(), f"'{secret_token}' は出力に含まれてはならない")
+
+    def test_log_sub_session_reason_does_not_include_actual_token_value(self) -> None:
+        """config に github_token が設定されていても、_log_sub_session_reason の出力に含まれないこと。"""
+        captured_events: list[str] = []
+        # 実際のトークンを模した値を config に設定する
+        _fake_token = "ghp_THIS_IS_A_FAKE_TOKEN_FOR_TESTING_1234"
+        cfg = SDKConfig(
+            model="claude-opus-4.7",
+            qa_model="gpt-5.4",
+            github_token=_fake_token,
+        )
+        console = Console(verbose=False, quiet=True)
+        runner = StepRunner(config=cfg, console=console)
+        runner.console.event = lambda msg: captured_events.append(msg)  # type: ignore[method-assign]
+
+        runner._log_sub_session_reason(
+            "1.1", "Pre-QA",
+            qa_model="gpt-5.4",
+            workiq_available=False,
+        )
+
+        for msg in captured_events:
+            self.assertNotIn(
+                _fake_token, msg,
+                "github_token の実値がログに出力されてはならない",
+            )
+
+    def test_log_main_session_reuse_emits_event(self) -> None:
+        """_log_main_session_reuse がイベントを出力すること。"""
+        captured_events: list[str] = []
+        runner = self._make_runner()
+        original_event = runner.console.event
+        runner.console.event = lambda msg: captured_events.append(msg)  # type: ignore[method-assign]
+
+        runner._log_main_session_reuse("1.1", "Post-QA")
+        runner.console.event = original_event
+
+        self.assertTrue(len(captured_events) > 0, "イベントが出力されること")
+        self.assertIn("Post-QA", captured_events[0])
+        self.assertIn("再利用", captured_events[0])
+
+    def test_source_inspection_sub_sessions_counter_reset_in_run_step(self) -> None:
+        """run_step() 内で _sub_sessions_created = 0 でリセットされることをソース検査。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("_sub_sessions_created = 0", source)
+
+    def test_source_inspection_counter_incremented_on_pre_qa_sub_session(self) -> None:
+        """_run_pre_execution_qa 内でカウンターがインクリメントされることをソース検査。"""
+        import inspect
+        source = inspect.getsource(StepRunner._run_pre_execution_qa)
+        self.assertIn("_sub_sessions_created += 1", source)
+
+    def test_source_inspection_counter_incremented_on_qa_sub_session(self) -> None:
+        """run_step 内 Review フェーズでカウンターがインクリメントされることをソース検査。
+        Post-QA は廃止済みのため Review の1箇所のみ出現する。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertGreaterEqual(source.count("_sub_sessions_created += 1"), 1)
+
+    def test_source_inspection_uses_helper_methods_in_pre_qa(self) -> None:
+        """_run_pre_execution_qa が _should_use_pre_qa_sub_session を使用することをソース検査。"""
+        import inspect
+        source = inspect.getsource(StepRunner._run_pre_execution_qa)
+        self.assertIn("_should_use_pre_qa_sub_session", source)
+
+    def test_source_inspection_uses_helper_methods_in_run_step(self) -> None:
+        """run_step が _should_use_review_sub_session を使用することをソース検査。
+        Post-QA 廃止に伴い _should_use_qa_sub_session は run_step で使用されなくなった。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("_should_use_review_sub_session", source)
+
+    def test_source_inspection_log_methods_called_in_pre_qa(self) -> None:
+        """_run_pre_execution_qa でサブセッション作成/再利用ログが呼ばれること。"""
+        import inspect
+        source = inspect.getsource(StepRunner._run_pre_execution_qa)
+        self.assertIn("_log_sub_session_reason", source)
+        self.assertIn("_log_main_session_reuse", source)
+
+    def test_source_inspection_log_methods_called_in_run_step(self) -> None:
+        """run_step で Review のサブセッション作成/再利用ログが呼ばれること。オフ）Post-QAは廃止された。"""
+        import inspect
+        source = inspect.getsource(StepRunner.run_step)
+        self.assertIn("_log_sub_session_reason", source)
+        self.assertIn("_log_main_session_reuse", source)
+
+
 if __name__ == "__main__":
     unittest.main()
-

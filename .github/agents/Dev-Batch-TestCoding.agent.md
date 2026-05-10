@@ -1,11 +1,15 @@
-﻿---
+---
 name: Dev-Batch-TestCoding
 description: "バッチTDDテスト仕様書に基づきTDD REDフェーズのテストコードを test/batch/{jobId}-{jobNameSlug}.Tests/ に生成（実装コード不可）"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Batch-TestCoding/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

@@ -6,7 +6,9 @@
 
 ## 目次
 
-- [AAG / AAGD / ASDW 連携チェーン図](#aag--aagd--asdw-連携チェーン図)
+- [対象読者・前提・次のステップ](#対象読者前提次のステップ)
+- [AAG / AAGD / ASDW 連携チェーン図（参照先）](#aag--aagd--asdw-連携チェーン図参照先)
+- [実行方法（実装準拠）](#実行方法実装準拠)
 - [ツール](#ツール)
 - [Step 1. AI Agentのリストアップ](#step-1-ai-agentのリストアップ)
 - [Step 2. AI Agentの関連性の図式化](#step-2-ai-agentの関連性の図式化)
@@ -15,18 +17,30 @@
 ---
 プロトタイピングのフェーズあるいはMVPの最初のフェーズでの利用を想定しています。
 
+## 対象読者・前提・次のステップ
+
+- 対象読者: まず AI Agent の候補整理と System Prompt 草案を短時間で作りたい方
+- 前提: 要求定義（ユースケース）が手元にあり、AAG（`ai-agent-design.yml` / `hve orchestrate -w aag`）を実行できること
+- 次のステップ: 本格設計・実装は [08-ai-agent.md](./08-ai-agent.md) を参照
+
 
 > 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、AI Agent 設計で業務コンテキスト（ユースケース: `D05`、業務ルール: `D06`、権限・認可: `D12`、Promptガバナンス: `D18`）として自動参照されます。
 
-## AAG / AAGD / ASDW 連携チェーン図
+## AAG / AAGD / ASDW 連携チェーン図（参照先）
 
-AI Agent 関連ステップ（AAG: 1〜3、AAGD: 1〜3）は以下のチェーン図で確認できます。
+チェーン図の実体は [08-ai-agent.md](./08-ai-agent.md#aag--aagd--asdw-連携チェーン図) に集約しています。
 
-- [AAG チェーン図（AI Agent 設計）](./images/chain-aag.svg)
-- [AAGD チェーン図（AI Agent 実装/Deploy）](./images/chain-aagd.svg)
-- [ASDW チェーン図（AI Agent 実装/Deploy を含む）](./images/chain-asdw.svg)
+## 実行方法（実装準拠）
 
-# ツール
+- Issue Template: `.github/ISSUE_TEMPLATE/ai-agent-design.yml`（ラベル: `auto-ai-agent-design`）
+- Workflow: `.github/workflows/auto-ai-agent-design-reusable.yml`（AAG 設計）
+- hve CLI: `hve orchestrate -w aag`
+- Step と Custom Agent の対応:
+  - Step 1: `Arch-AIAgentDesign-Step1`
+  - Step 2: `Arch-AIAgentDesign-Step2`
+  - Step 3: `Arch-AIAgentDesign-Step3`
+
+## ツール
 
 AI Agentの実装は、Microsoft 365 CopilotのChatでの、Agent Builderや、Microsoft Copilot Studio。あるいは、Microsoft Foundryでなどがお勧めです。
 
@@ -39,7 +53,7 @@ Microsoft 365 Copilot Chat:
 
   https://m365.cloud.microsoft/chat
 
-# Step 1. AI Agentのリストアップ
+## Step 1. AI Agentのリストアップ
 
 要求定義書などの任意のドキュメントを添付したうえで、以下のPromptを実行します。
 
@@ -107,7 +121,7 @@ C. 補足（任意だが有用なら）
 ※ここでもスコープ逸脱は禁止。要件に紐づく範囲のみ。
 ```
 
-# Step 2. AI Agentの関連性の図式化
+## Step 2. AI Agentの関連性の図式化
 
 複数のAI Agentが提示されることが多いです。それぞれのAI Agentの関連性を、図式化します。
 
@@ -136,11 +150,11 @@ Prompt:
 - 余計なエージェント追加、余計な機能提案、長い解説は禁止。図に必要な最小限のみ。
 
 # 出力形式（厳守）
-- 出力は Mermaid コードブロックと（```mermaid ... ```）、詳細な説明の文章を作成する。
+- 出力は Mermaid のコードブロック（言語指定 `mermaid`）と詳細な説明の文章を作成する。
 
 ```
 
-# Step 3. System Promptの作成
+## Step 3. System Promptの作成
 
 それぞれのAI Agent用の System Promptのドラフトを作成します。
 数が多い場合は、適時作成する量を減らしてください。

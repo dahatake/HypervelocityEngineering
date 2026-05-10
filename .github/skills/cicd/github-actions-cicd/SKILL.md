@@ -1,19 +1,10 @@
 ---
 name: github-actions-cicd
 description: >
-  GitHub Actions CI/CD ワークフローの共通仕様。OIDC 認証・workflow_dispatch トリガー・
-  Copilot push 制約対応・シークレット管理・デプロイ保護の原則を提供する。
-  USE FOR: GitHub Actions, CI/CD workflow, OIDC authentication,
-  workflow_dispatch, copilot push workaround, deploy protection.
-  DO NOT USE FOR: application code deployment
-  (use appropriate azure-platform/ deployment skill),
-  test execution (use harness-verification-loop),
-  infrastructure provisioning (use azure-cli-deploy-scripts).
-  WHEN: GitHub Actions ワークフローを作成する、CI/CD パイプラインを設計する、
-  OIDC 認証を設定する、Copilot push 制約を回避する。
+  GitHub Actions CI/CD ワークフローの共通仕様。OIDC 認証・workflow_dispatch トリガー・ Copilot push 制約対応・シークレット管理・デプロイ保護の原則を提供する。 USE FOR: GitHub Actions, CI/CD workflow, OIDC authentication. DO NOT USE FOR: application code deployment (use appropriate azure-skills/ deployment skill). WHEN: GitHub Actions ワークフローを作成する、CI/CD パイプラインを設計する。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # github-actions-cicd

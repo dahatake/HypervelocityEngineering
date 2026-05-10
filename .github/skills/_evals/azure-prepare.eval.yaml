@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: azure-prepare
-skill_path: .github/skills/azure-platform/azure-prepare/SKILL.md
+skill_path: .github/skills/azure-skills/azure-prepare/SKILL.md
 description: Prepare Azure apps for deployment (infra Bicep/Terraform, azure.yaml, Dockerfiles).
 
 test_cases:

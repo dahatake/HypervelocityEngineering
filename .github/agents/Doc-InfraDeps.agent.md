@@ -2,10 +2,14 @@
 name: Doc-InfraDeps
 description: "インフラ依存とベンダーロックイン度を分析する。"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Doc-InfraDeps/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - input-file-validation

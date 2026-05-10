@@ -1,22 +1,10 @@
 ---
 name: work-artifacts-layout
 description: >
-  work/ 配下の作業ディレクトリ構造を、後続タスクが確実に参照できるよう整備するスキル。
-  README.md の入口設計、contracts/artifacts の分離、qa/ の質問票構造、
-  ソースコードパスの標準定義を提供する。
-  USE FOR: work/ structure, artifacts path, qa/ structure,
-  README entry point, delete-then-create rule, source code path standard,
-  contracts/ management, artifacts/ management.
-  DO NOT USE FOR: docs/ format (use docs-output-format),
-  source code structure, quality review (use adversarial-review),
-  questionnaire content design (use task-questionnaire).
-  WHEN: work/ 配下にファイルを作成したい、作業ディレクトリを整備したい、
-  README.md の入口を設計したい、contracts/ に仕様を保存したい、
-  artifacts/ に生成物を保存したい、qa/ に質問票を作成したい、
-  ソースコードパスの標準を確認したい、既存ファイルを削除してから新規作成するルールを確認したい。
+  work/ 配下の作業ディレクトリ構造を、後続タスクが確実に参照できるよう整備するスキル。 USE FOR: work/ structure, artifacts path, qa/ structure. DO NOT USE FOR: docs/ format (use docs-output-format). WHEN: work/ 配下にファイルを作成したい、作業ディレクトリを整備したい。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # work-artifacts-layout
@@ -77,6 +65,22 @@ metadata:
 | ファイル | 内容 |
 |---------|------|
 | `references/directory-structure-detail.md` | §4.1 疑似コード全体、§4.3 qa/ の構造・命名規則・適用対象、§4.4 ソースコードパス標準定義テーブル |
+
+---
+
+## 成果物サマリーテンプレート（Observation Quality）
+
+全 Agent の成果物に以下 4 要素を含める（PR description 内に統合して記載する）:
+
+```
+## 成果物サマリー
+- status:       [成功/失敗/部分完了]
+- summary:      [何を行い何が変わったか（3行以内）]
+- next_actions: [後続で必要な作業（あれば Agent 名を推奨付き）]
+- artifacts:    [生成/変更したファイルの一覧]
+```
+
+§7 との関係: 本テンプレートは §7「目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub」の構造化補完版。PR description 内に統合して記載する。
 
 ---
 

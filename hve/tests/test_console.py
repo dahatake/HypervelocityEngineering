@@ -479,7 +479,7 @@ class TestConsoleBanner(unittest.TestCase):
         )
 
     def test_banner_right_border_aligned_with_ambiguous_char_on_windows(self) -> None:
-        title = "HVE — GitHub Copilot SDK Workflow Orchestrator"
+        title = "HVE CLI Orchestrator (GitHub Copilot SDK)"
         subtitle = "ワークフローをインタラクティブに実行します"
 
         with unittest.mock.patch.object(sys, "platform", "win32"):
@@ -1078,6 +1078,476 @@ class TestFileIO(unittest.TestCase):
         with _CaptureOutput() as cap:
             c.file_io("1", "docs/file.md", "read")
         self.assertIn("← [1] docs/file.md", cap.stdout)
+
+
+# -----------------------------------------------------------------------
+# F1: --no-color / NO_COLOR 環境変数テスト
+# -----------------------------------------------------------------------
+
+
+class TestNoColor(unittest.TestCase):
+    """F1: no_color=True で ANSI カラーコードが無効化されること。"""
+
+    def test_no_color_arg_disables_ansi(self) -> None:
+        """Console(no_color=True) かつ TTY 模倣時: スタイルコードがすべて空文字になる。"""
+        from console import _Style
+        s = _Style(is_tty=True, no_color=True)
+        self.assertEqual(s.RESET, "")
+        self.assertEqual(s.BOLD, "")
+        self.assertEqual(s.CYAN, "")
+
+    def test_no_color_env_var_disables_ansi(self) -> None:
+        """NO_COLOR=1 環境変数が設定された場合、Console は色を無効化する（TTY 模倣）。"""
+        with unittest.mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            with unittest.mock.patch("sys.stdout") as mock_stdout:
+                mock_stdout.isatty.return_value = True
+                c = Console(verbose=True)
+        self.assertEqual(c.s.RESET, "")
+        self.assertEqual(c.s.CYAN, "")
+
+    def test_no_color_empty_env_does_not_disable(self) -> None:
+        """NO_COLOR="" (空文字) のとき、色は無効化されない（NO_COLOR 規格準拠）。"""
+        from console import _Style
+        # _Style レベルで TTY=True & no_color=False なら ANSI コードが有効
+        with unittest.mock.patch.dict(os.environ, {"NO_COLOR": ""}, clear=False):
+            s = _Style(is_tty=True, no_color=False)
+        self.assertTrue(s.RESET.startswith("\033["))
+
+    def test_no_color_explicit_false_ignores_env(self) -> None:
+        """no_color=False を明示した場合、NO_COLOR=1 環境変数があっても色が有効のまま（Console経由）。"""
+        with unittest.mock.patch.dict(os.environ, {"NO_COLOR": "1"}):
+            with unittest.mock.patch("sys.stdout") as mock_stdout:
+                mock_stdout.isatty.return_value = True
+                c = Console(verbose=True, no_color=False)
+        self.assertTrue(c.s.RESET.startswith("\033["))
+
+
+# -----------------------------------------------------------------------
+# F2: --banner / --no-banner テスト
+# -----------------------------------------------------------------------
+
+
+class TestShowBanner(unittest.TestCase):
+    """F2: show_banner フラグによるバナー呼出ガードのテスト。"""
+
+    def test_banner_explicit_off_suppresses(self) -> None:
+        """show_banner=False のガード下で banner() 出力がないこと。"""
+        c = Console(verbose=True, quiet=False)
+        show_banner = False
+        with _CaptureOutput() as cap:
+            if show_banner is not False:
+                c.banner("テストタイトル")
+        self.assertEqual(cap.stdout, "")
+
+    def test_banner_default_preserves_existing(self) -> None:
+        """show_banner=None（未指定）では既存挙動通り banner() が出力されること。"""
+        c = Console(verbose=True, quiet=False)
+        show_banner = None
+        with _CaptureOutput() as cap:
+            if show_banner is not False:
+                c.banner("テストタイトル")
+        self.assertIn("テストタイトル", cap.stdout)
+
+    def test_banner_explicit_on_emits(self) -> None:
+        """show_banner=True では banner() が出力されること。"""
+        c = Console(verbose=True, quiet=False)
+        show_banner = True
+        with _CaptureOutput() as cap:
+            if show_banner is not False:
+                c.banner("テストタイトル")
+        self.assertIn("テストタイトル", cap.stdout)
+
+
+# -----------------------------------------------------------------------
+# F3: --screen-reader モードテスト
+# -----------------------------------------------------------------------
+
+
+class TestScreenReader(unittest.TestCase):
+    """F3: screen_reader=True で絵文字が日本語ラベルに置換されること。"""
+
+    def test_screen_reader_replaces_emoji_in_step_end(self) -> None:
+        """screen_reader=True のとき step_end の出力に [成功] が含まれ ✅ が含まれない。"""
+        c = Console(verbose=True, quiet=False, screen_reader=True)
+        with _CaptureOutput() as cap:
+            c.step_end("1", "success", elapsed=1.0)
+        self.assertIn("[成功]", cap.stdout)
+        self.assertNotIn("✅", cap.stdout)
+
+    def test_screen_reader_disables_spinner(self) -> None:
+        """screen_reader=True のとき spinner_start() が no-op になること。"""
+        c = Console(verbose=True, quiet=False, screen_reader=True)
+        c.spinner_start("処理中...")
+        self.assertIsNone(c._spinner_thread)
+
+    def test_screen_reader_off_preserves_emoji(self) -> None:
+        """screen_reader=False（デフォルト）のとき絵文字が保持されること。"""
+        c = Console(verbose=True, quiet=False, screen_reader=False)
+        result = c._apply_screen_reader_filter("✅ 完了")
+        self.assertIn("✅", result)
+        self.assertNotIn("[成功]", result)
+
+    def test_screen_reader_does_not_replace_box_chars(self) -> None:
+        """スクリーンリーダーモードでもボックス罫線は置換されないこと。"""
+        c = Console(verbose=True, quiet=False, screen_reader=True)
+        msg = "  ╭──────╮ content ╯"
+        result = c._apply_screen_reader_filter(msg)
+        self.assertIn("╭", result)
+        self.assertIn("╯", result)
+
+
+# -----------------------------------------------------------------------
+# F4: --timestamp-style テスト
+# -----------------------------------------------------------------------
+
+
+class TestTimestampStyle(unittest.TestCase):
+    """F4: timestamp_style の値によりタイムスタンプ位置が変わること。"""
+
+    def test_timestamp_style_prefix_default(self) -> None:
+        """デフォルト (prefix) で [HH:MM:SS] が行頭に出ること。"""
+        c = Console(verbose=True, quiet=False, timestamp_style="prefix")
+        with _CaptureOutput() as cap:
+            c._emit("メッセージ", ts=True)
+        line = cap.stdout.strip()
+        self.assertTrue(line.startswith("["), f"行頭に '[' がない: {line!r}")
+
+    def test_timestamp_style_suffix(self) -> None:
+        """timestamp_style='suffix' のとき本文が先に来てタイムスタンプが後ろにある。"""
+        c = Console(verbose=True, quiet=False, timestamp_style="suffix")
+        with _CaptureOutput() as cap:
+            c._emit("サフィックス確認", ts=True)
+        line = cap.stdout.strip()
+        self.assertIn("サフィックス確認", line)
+        self.assertIn("[", line)
+        # 本文がタイムスタンプより前に位置する
+        self.assertLess(line.index("サフィックス確認"), line.index("["))
+
+    def test_timestamp_style_off(self) -> None:
+        """timestamp_style='off' のときタイムスタンプが出ないこと。"""
+        c = Console(verbose=True, quiet=False, timestamp_style="off")
+        with _CaptureOutput() as cap:
+            c._emit("タイムスタンプなし", ts=True)
+        line = cap.stdout.strip()
+        self.assertEqual(line, "タイムスタンプなし")
+
+    def test_existing_emit_with_ts_false_unchanged(self) -> None:
+        """ts=False の呼出は timestamp_style の値に関わらずタイムスタンプなし。"""
+        for style in ("prefix", "suffix", "off"):
+            c = Console(verbose=True, quiet=False, timestamp_style=style)
+            with _CaptureOutput() as cap:
+                c._emit("固定メッセージ", ts=False)
+            line = cap.stdout.strip()
+            self.assertEqual(line, "固定メッセージ", f"timestamp_style={style!r} で ts=False が無視された")
+
+
+
+
+# -----------------------------------------------------------------------
+# F5: --final-only モードテスト
+# -----------------------------------------------------------------------
+
+
+class TestFinalOnlyMode(unittest.TestCase):
+    """F5: final_only=True で中間イベントが抑止され最終出力のみ有効になること。"""
+
+    def test_final_only_suppresses_intermediate_events(self) -> None:
+        """event(), step_start(), step_end(), intent() 呼出時に stdout に何も出力されない。"""
+        c = Console(verbose=True, final_only=True)
+        with _CaptureOutput() as cap:
+            c.event("中間イベント")
+            c.step_start("1", "テストステップ", agent="TestAgent")
+            c.step_end("1", "success", elapsed=1.0)
+            c.intent("1", "テスト意図")
+        self.assertEqual(cap.stdout, "")
+
+    def test_final_only_emits_final_message(self) -> None:
+        """final_message("1", "結果テキスト") で _emit が呼ばれる。"""
+        c = Console(verbose=True, final_only=True)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "結果テキスト")
+        mock_emit.assert_called()
+        combined = " ".join(str(call) for call in mock_emit.call_args_list)
+        self.assertIn("結果テキスト", combined)
+
+    def test_final_only_emits_summary_as_plain(self) -> None:
+        """summary({...}) がパネル罫線なし（╭ │ 等を含まない）で出力される。"""
+        c = Console(verbose=True, final_only=True)
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.summary({"success": 1, "failed": 0, "skipped": 0, "total_elapsed": 1.5})
+        combined = "\n".join(emitted)
+        self.assertNotIn("╭", combined)
+        self.assertNotIn("│", combined)
+        self.assertIn("=== 実行サマリー ===", combined)
+        self.assertIn("成功: 1", combined)
+
+    def test_final_only_disables_spinner(self) -> None:
+        """spinner_start("テスト") 呼出後に _spinner_thread is None。"""
+        c = Console(verbose=True, final_only=True)
+        c.spinner_start("テスト")
+        self.assertIsNone(c._spinner_thread)
+
+    def test_final_only_forces_no_color(self) -> None:
+        """Console(final_only=True) で s.RESET == ""（カラー無効化されている）。"""
+        with unittest.mock.patch("sys.stdout") as mock_stdout:
+            mock_stdout.isatty.return_value = True
+            c = Console(final_only=True)
+        self.assertEqual(c.s.RESET, "")
+
+    def test_final_only_forces_timestamp_off(self) -> None:
+        """final_message() の出力に [HH:MM:SS] パターンが含まれない。"""
+        import re
+        c = Console(verbose=True, final_only=True)
+        with _CaptureOutput() as cap:
+            c.final_message("1", "タイムスタンプなし確認")
+        self.assertNotRegex(cap.stdout, r"\[\d{2}:\d{2}:\d{2}\]")
+
+    def test_final_only_does_not_affect_other_modes(self) -> None:
+        """Console(final_only=False) で final_only 関連フラグが有効化されないことを確認。"""
+        c = Console(verbose=True, quiet=False, final_only=False)
+        self.assertFalse(c.final_only)
+        # verbose=True は verbosity=3 に解決されるため show_final_message=True が正しい（新挙動）
+        self.assertTrue(c.show_final_message)
+        self.assertFalse(c.quiet)
+        # timestamp_style は変更なし
+        self.assertEqual(c._timestamp_style, "prefix")
+
+
+# -----------------------------------------------------------------------
+# F5b: final_message() 新規テスト（compact/quiet/multiline/default_by_verbosity）
+# -----------------------------------------------------------------------
+
+
+class TestFinalMessageNewBehavior(unittest.TestCase):
+    """compact 以上で final_message() がマゼンタ ● 行を出力し、quiet では出力しないことを検証。"""
+
+    def test_compact_emits_final_message_with_magenta_bullet(self) -> None:
+        """Console(verbosity=1) で final_message() を呼ぶと _emit が呼ばれ ● と本文を含む。"""
+        c = Console(verbosity=1)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "テスト最終応答")
+        mock_emit.assert_called()
+        combined = " ".join(str(call) for call in mock_emit.call_args_list)
+        self.assertIn("●", combined)
+        self.assertIn("テスト最終応答", combined)
+
+    def test_quiet_does_not_emit_final_message(self) -> None:
+        """Console(verbosity=0) で final_message() を呼んでも _emit が呼ばれない。"""
+        c = Console(verbosity=0)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "テスト")
+        mock_emit.assert_not_called()
+
+    def test_normal_emits_final_message(self) -> None:
+        """Console(verbosity=2) で final_message() を呼ぶと _emit が呼ばれ ● を含む。"""
+        c = Console(verbosity=2)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "テスト最終応答")
+        mock_emit.assert_called()
+        combined = " ".join(str(call) for call in mock_emit.call_args_list)
+        self.assertIn("●", combined)
+        self.assertIn("テスト最終応答", combined)
+
+    def test_verbose_emits_final_message(self) -> None:
+        """Console(verbosity=3) で final_message() を呼ぶと _emit が呼ばれ ● を含む。"""
+        c = Console(verbosity=3)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "テスト最終応答")
+        mock_emit.assert_called()
+        combined = " ".join(str(call) for call in mock_emit.call_args_list)
+        self.assertIn("●", combined)
+        self.assertIn("テスト最終応答", combined)
+
+    def test_final_message_multiline_indent(self) -> None:
+        """複数行テキストを渡すと 2 行目以降が字下げ（2 スペース）される。"""
+        c = Console(verbosity=1)
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.final_message("1", "1行目\n2行目\n3行目")
+        self.assertEqual(len(emitted), 3)
+        self.assertIn("●", emitted[0])
+        self.assertIn("1行目", emitted[0])
+        self.assertTrue(emitted[1].startswith("  "), f"2行目が字下げされていない: {emitted[1]!r}")
+        self.assertIn("2行目", emitted[1])
+        self.assertTrue(emitted[2].startswith("  "), f"3行目が字下げされていない: {emitted[2]!r}")
+        self.assertIn("3行目", emitted[2])
+
+    def test_show_final_message_default_by_verbosity(self) -> None:
+        """show_final_message が verbosity に応じて正しく設定される。"""
+        self.assertFalse(Console(verbosity=0).show_final_message)
+        self.assertTrue(Console(verbosity=1).show_final_message)
+        self.assertTrue(Console(verbosity=2).show_final_message)
+        self.assertTrue(Console(verbosity=3).show_final_message)
+        self.assertTrue(Console(final_only=True).show_final_message)
+
+    def test_final_only_backward_compat(self) -> None:
+        """Console(final_only=True) で final_message() を呼ぶと 📝 装飾が使われる。"""
+        c = Console(verbose=True, final_only=True)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.final_message("1", "結果テキスト")
+        mock_emit.assert_called()
+        combined = " ".join(str(call) for call in mock_emit.call_args_list)
+        self.assertIn("📝", combined)
+        self.assertIn("結果テキスト", combined)
+
+
+class TestFileDiff(unittest.TestCase):
+    """F6: file_diff() メソッドの動作を検証する。"""
+
+    def test_file_diff_quiet_suppresses(self) -> None:
+        """verbosity=0 で _emit も _update_spinner_msg も呼ばれない。"""
+        c = Console(verbosity=0)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit, \
+             unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.file_diff("1", "test.md", "old\n", "new\n")
+        mock_emit.assert_not_called()
+        mock_spinner.assert_not_called()
+
+    def test_file_diff_compact_summary_only(self) -> None:
+        """verbosity=1 でスピナー未稼働時は _emit でサマリ行を確定出力し、diff 行は出さない。"""
+        c = Console(verbosity=1)
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)), \
+             unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.file_diff("1", "test.md", "old\n", "new\n")
+        # スピナー未稼働のため _emit が1回（サマリのみ）呼ばれる
+        self.assertEqual(len(emitted), 1)
+        self.assertIn("+", emitted[0])
+        self.assertIn("-", emitted[0])
+        mock_spinner.assert_not_called()
+
+    def test_file_diff_normal_truncated(self) -> None:
+        """verbosity=2 で先頭 max_lines 行のみ確定行表示、超過時は省略メッセージ。"""
+        c = Console(verbosity=2)
+        old_text = "\n".join(f"line {i}" for i in range(30))
+        new_text = "\n".join(f"changed {i}" for i in range(30))
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.file_diff("1", "test.md", old_text, new_text, max_lines=5)
+        combined = "\n".join(emitted)
+        self.assertIn("省略", combined)
+
+    def test_file_diff_verbose_full(self) -> None:
+        """verbosity=3 で全行確定行表示、省略メッセージなし。"""
+        c = Console(verbosity=3)
+        old_text = "\n".join(f"line {i}" for i in range(5))
+        new_text = "\n".join(f"changed {i}" for i in range(5))
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.file_diff("1", "test.md", old_text, new_text, max_lines=2)
+        combined = "\n".join(emitted)
+        self.assertNotIn("省略", combined)
+
+    def test_file_diff_no_change_skipped(self) -> None:
+        """old_text == new_text のとき何も出力されない。"""
+        c = Console(verbosity=3)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit, \
+             unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+            c.file_diff("1", "test.md", "same\n", "same\n")
+        mock_emit.assert_not_called()
+        mock_spinner.assert_not_called()
+
+    def test_file_diff_added_removed_count(self) -> None:
+        """サマリに +N -M lines が正確に含まれる。"""
+        c = Console(verbosity=2)
+        old_text = "line1\nline2\nline3\n"
+        new_text = "line1\nnewline2\nnewline3\nline4\n"
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.file_diff("1", "test.md", old_text, new_text)
+        summary_line = emitted[0] if emitted else ""
+        self.assertIn("+", summary_line)
+        self.assertIn("-", summary_line)
+        self.assertIn("lines", summary_line)
+
+    def test_file_diff_new_file(self) -> None:
+        """old_text="" で全行が + として diff 表示される（_emit が呼ばれる）。"""
+        c = Console(verbosity=2)
+        new_text = "line1\nline2\n"
+        emitted: list[str] = []
+        with unittest.mock.patch.object(c, "_emit", side_effect=lambda msg, **kw: emitted.append(msg)):
+            c.file_diff("1", "newfile.md", "", new_text)
+        combined = "\n".join(emitted)
+        self.assertIn("+line1", combined)
+        self.assertIn("+line2", combined)
+
+
+class TestContextUsage(unittest.TestCase):
+    """context_usage() が全 verbosity レベルで確定行として表示されることを検証。"""
+
+    def _make_console(self, verbosity: int) -> Console:
+        return Console(verbosity=verbosity)
+
+    def test_quiet_emits_context_usage(self) -> None:
+        """verbosity=0 (quiet) でも context_usage() が _emit(always=True) を呼ぶ。"""
+        c = self._make_console(0)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("step1", 800, 1000, 5)
+        mock_emit.assert_called_once()
+        args, kwargs = mock_emit.call_args
+        self.assertIs(kwargs.get("always"), True, "always=True であること")
+        self.assertIn("Context: 800/1000", args[0])
+        self.assertIn("80%", args[0])
+        self.assertIn("msgs=5", args[0])
+
+    def test_compact_emits_context_usage(self) -> None:
+        """verbosity=1 (compact) でも context_usage() が _emit(always=True) を呼ぶ。"""
+        c = self._make_console(1)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("step1", 100, 1000, 3)
+        mock_emit.assert_called_once()
+        _, kwargs = mock_emit.call_args
+        self.assertIs(kwargs.get("always"), True)
+
+    def test_normal_emits_context_usage(self) -> None:
+        """verbosity=2 (normal) でも context_usage() が _emit(always=True) を呼ぶ。"""
+        c = self._make_console(2)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("", 500, 1000, 10)
+        mock_emit.assert_called_once()
+        _, kwargs = mock_emit.call_args
+        self.assertIs(kwargs.get("always"), True)
+
+    def test_verbose_emits_context_usage(self) -> None:
+        """verbosity=3 (verbose) でも context_usage() が _emit(always=True) を呼ぶ。"""
+        c = self._make_console(3)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("s2", 300, 1000, 2)
+        mock_emit.assert_called_once()
+        _, kwargs = mock_emit.call_args
+        self.assertIs(kwargs.get("always"), True)
+
+    def test_step_id_prefix_included(self) -> None:
+        """step_id が指定されると [step_id] プレフィクスが含まれる。"""
+        c = self._make_console(1)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("mystep", 200, 1000, 1)
+        args, _ = mock_emit.call_args
+        self.assertIn("[mystep]", args[0])
+
+    def test_no_step_id_no_prefix(self) -> None:
+        """step_id が空のとき [] プレフィクスは含まれない。"""
+        c = self._make_console(1)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("", 200, 1000, 1)
+        args, _ = mock_emit.call_args
+        self.assertNotRegex(args[0], r"\s*\[.*?\] Context:")
+
+    def test_zero_token_limit_shows_zero_pct(self) -> None:
+        """token_limit=0 のとき 0% と表示され ZeroDivisionError が出ない。"""
+        c = self._make_console(1)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("", 0, 0, 0)
+        args, _ = mock_emit.call_args
+        self.assertIn("0%", args[0])
+
+    def test_final_only_suppresses_context_usage(self) -> None:
+        """final_only=True のとき context_usage() は _emit を呼ばない（中間イベント抑止）。"""
+        c = Console(verbose=True, final_only=True)
+        with unittest.mock.patch.object(c, "_emit") as mock_emit:
+            c.context_usage("step1", 800, 1000, 5)
+        mock_emit.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -80,6 +80,7 @@ jobs:
           echo "is_answer=${is_answer}" >> "${GITHUB_OUTPUT}"
 
       - name: QA 回答コンテキストを Issue body に注入（冪等性マーカー付き）
+        id: inject-qa-context
         # QA 回答本文と URL をメインタスク開始前に Issue body へ直接注入する。
         # Copilot が URL を読みに行く必要なく、QA 回答が確実に参照されるようにする。
         # <!-- hve-qa-context-injected --> マーカーで重複注入を防ぐ。
@@ -89,6 +90,7 @@ jobs:
           && steps.detect-answer.outputs.is_answer == 'true'
         run: |
           set -euo pipefail
+          echo "qa_comment_found=false" >> "${GITHUB_OUTPUT}"
           NEW_MARKER="<!-- hve-qa-context-injected -->"
           OLD_MARKER="<!-- hve-qa-summary-linked -->"
 
@@ -108,8 +110,8 @@ jobs:
             echo "旧マーカーが存在しますが、新形式（本文注入）への追記を実行します。"
           fi
 
-          # QA 回答コメントを取得（最新の <!-- auto-qa-default-answered --> または
-          # <!-- copilot-auto-pre-qa-posted --> コメント）
+          # QA 回答コメントを取得（最新の既定値回答コメント、または
+          # @copilot を含む人間ユーザーの回答コメント）
           # --paginate はページごとに配列を出力するため --jq '.[]' で NDJSON 化し
           # jq -rs で全ページを集約してから最後の一致を選択する。
           qa_comment_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
@@ -119,9 +121,29 @@ jobs:
               [
                 .[]
                 | select(
-                    ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
+                    (
+                      ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
+                    )
                     or
-                    ((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->"))
+                    (
+                      ((.body // "") | contains("@copilot"))
+                      and
+                      (((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->")) | not)
+                      and
+                      (
+                        (.author_association // "") == "OWNER"
+                        or (.author_association // "") == "MEMBER"
+                        or (.author_association // "") == "COLLABORATOR"
+                      )
+                      and
+                      ((.user.type // "") != "Bot")
+                      and
+                      ((.user.login // "") != "github-actions[bot]")
+                      and
+                      ((.user.login // "") != "copilot[bot]")
+                      and
+                      ((.user.login // "") != "copilot-swe-agent[bot]")
+                    )
                   )
               ]
               | last
@@ -135,13 +157,7 @@ jobs:
           qa_comment_body=$(printf '%s' "${qa_comment_json}" | jq -r '.body // ""')
 
           if [ -z "${qa_comment_url}" ]; then
-            # QA 回答コメントが見つからない場合でも状態を明示して追記する
-            APPEND_TEXT=$(printf '\n\n---\n## 📋 Pre-execution QA context\n\n<!-- hve-qa-context-injected -->\n\n> ⚠️ QA 回答コメントが見つかりませんでした。QA がスキップされたか、まだ完了していない可能性があります。')
-            NEW_BODY="${current_body}${APPEND_TEXT}"
-            gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
-              --field "body=${NEW_BODY}" \
-              --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
-            echo "WARNING: QA 回答コメントが見つかりませんでした。状態メッセージを Issue body に注入しました。"
+            echo "QA 回答未検出: 回答コメントがまだ投稿されていないため、Issue body への注入をスキップします。"
             exit 0
           fi
 
@@ -164,7 +180,11 @@ jobs:
           NEW_BODY="${current_body}${APPEND_TEXT}"
           gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
             --field "body=${NEW_BODY}" \
-            --silent || echo "WARNING: Issue body の更新に失敗しました（続行します）。"
+            --silent || {
+              echo "WARNING: Issue body の更新に失敗しました。qa-ready のまま維持します。"
+              exit 0
+            }
+          echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
           echo "✅ QA 回答コンテキスト（URL + 本文）を Issue #${ISSUE_NUMBER} の body に注入しました。"
 
       - name: qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）
@@ -172,6 +192,7 @@ jobs:
         if: >
           steps.detect-qa-ready.outputs.qa_ready_label != ''
           && steps.detect-answer.outputs.is_answer == 'true'
+          && steps.inject-qa-context.outputs.qa_comment_found == 'true'
         env:
           QA_READY_LABEL: ${{ steps.detect-qa-ready.outputs.qa_ready_label }}
         run: |
@@ -226,4 +247,3 @@ jobs:
           else
             echo "WARNING: Issue #${ISSUE_NUMBER} への Copilot アサインに失敗しました。"
           fi
-

@@ -2,19 +2,42 @@
 
 ← [README](../README.md)
 
+> **対象読者**: このリポジトリを初めて使うユーザー（Web UI 方式 / HVE CLI Orchestrator 方式のいずれも対象）  
+> **前提**: GitHub リポジトリへのアクセス権と、初期セットアップを実施できる権限があること  
+> **次のステップ**: セットアップ完了後は [web-ui-guide.md](./web-ui-guide.md) または [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) の利用手順へ進んでください
+
 ---
 
 ## 目次
 
+- [利用方式の選択（最初に確認）](#利用方式の選択最初に確認)
 - [前提条件](#前提条件)
 - [Step.1. リポジトリの作成](#step1-リポジトリの作成)
 - [Step.2. ファイルのコピー](#step2-ファイルのコピー)
 - [Step.3. MCP Server 設定](#step3-mcp-server-設定)
 - [Step.3.1. GitHub Copilot Skills 設定](#step31-github-copilot-skills-設定推奨)
 - [Step.4. 認証設定（COPILOT_PAT）](#step4-認証設定copilot_pat)
+- [認証・認可の用途一覧（Cloud / Local / Azure）](#認証認可の用途一覧cloud--local--azure)
 - [ワークフロー権限設定](#ワークフロー権限設定)
+- [HVE Cloud Agent Orchestrator 初回セットアップ チェックリスト](#hve-cloud-agent-orchestrator-初回セットアップ-チェックリスト)
+- [Step.4.5. Self-hosted Runner 設定（オプション）](#step45-self-hosted-runner-設定オプション)
 - [Step.5. ラベル設定](#step5-ラベル設定)
+- [初回疎通確認（HVE Cloud Agent Orchestrator）](#初回疎通確認hve-cloud-agent-orchestrator)
 - [Copilot 有効化](#copilot-有効化)
+
+---
+
+## 利用方式の選択（最初に確認）
+
+このリポジトリには **HVE Cloud Agent Orchestrator**（GitHub Actions）と **HVE CLI Orchestrator**（ローカル実行）の 2 つの実行方式があります。まず使いたい方式を選んでセットアップを進めてください。
+
+| 使いたい方式 | 進む先 |
+|---|---|
+| GitHub.com 上で Issue Template からワークフローを実行したい | このガイドの全ステップ → [web-ui-guide.md](./web-ui-guide.md) |
+| ローカル PC/Mac/Linux から `python -m hve` で実行したい | Step.1〜Step.4 の共通セットアップ → [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) |
+| 両方使いたい | Step.1〜Step.5 の共通セットアップ完了後、[web-ui-guide.md](./web-ui-guide.md) → [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) の順に進む |
+
+> **HVE Cloud Agent Orchestrator 初回チェックリスト**: セットアップ手順を進める前に、[HVE Cloud Agent Orchestrator 初回セットアップ チェックリスト](#hve-cloud-agent-orchestrator-初回セットアップ-チェックリスト) で必要な手順の全体像を確認しておくことを推奨します。
 
 ---
 
@@ -26,14 +49,14 @@
 | GitHub Copilot ライセンス | **必須** | Copilot cloud agent 利用 |
 | Git | **必須** | リポジトリのクローン |
 | Web ブラウザ | **必須** | GitHub.com の操作（Web UI 方式） |
-| Python 3.11+ | hve アプリケーション版のみ | hve アプリケーション版ワークフロー実行 |
+| Python 3.11+ | HVE CLI Orchestrator のみ | HVE CLI Orchestrator ワークフロー実行 |
 | GitHub Copilot CLI（外部 `copilot` コマンド） | オプション | SDK 同梱ではなく外部 CLI を明示利用する場合 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）/ Work IQ / npm 方式の外部 Copilot CLI 使用時 |
-| Microsoft Work IQ（`@microsoft/workiq`） | オプション | hve アプリケーション版で M365 補助情報を参照する場合（[詳細](./hve-app-guide.md#work-iq-mcp-連携オプション)） |
+| Microsoft Work IQ（`@microsoft/workiq`） | オプション | HVE CLI Orchestrator で M365 補助情報を参照する場合（[詳細](./hve-cli-orchestrator-guide.md#work-iq-mcp-連携オプション)） |
 
 > Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: GitHub が最適モデルを動的選択。0.9x 計上）または任意モデルを選択できます。公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
-> Work IQ のセットアップ手順は [hve-app-guide.md — Work IQ MCP 連携](./hve-app-guide.md#work-iq-mcp-連携オプション) を参照してください。
+> Work IQ のセットアップ手順は [hve-cli-orchestrator-guide.md — Work IQ MCP 連携](./hve-cli-orchestrator-guide.md#work-iq-mcp-連携オプション) を参照してください。
 
 ---
 
@@ -146,7 +169,7 @@ GitHub リポジトリの **Settings → Copilot → Cloud agent → MCP Servers
 - Azure MCP Server 設定: [Microsoft Learn](https://learn.microsoft.com/ja-jp/azure/developer/azure-mcp-server/how-to/github-copilot-coding-agent)
 - Microsoft Learn Docs MCP Server: [Qiita 解説記事](https://qiita.com/dahatake/items/4f6f0deb53333c0200ef)
 
-> hve アプリケーション版の MCP Server 設定については [hve アプリケーション ユーザーガイド 付録A](./hve-app-guide.md#付録a-mcp-server-設定ガイド) を参照してください。
+> HVE CLI Orchestrator の MCP Server 設定については [HVE CLI Orchestrator ユーザーガイド 付録A](./hve-cli-orchestrator-guide.md#付録a-mcp-server-設定ガイド) を参照してください。
 
 ---
 
@@ -241,6 +264,42 @@ bash infra/azure/create-azure-webui-resources.sh
 
 ---
 
+## 認証・認可の用途一覧（Cloud / Local / Azure）
+
+初回セットアップ時に使う主な認証情報と設定の役割を整理します。  
+**`COPILOT_PAT`（Cloud の Copilot 自動アサイン用）と `GH_TOKEN`（HVE CLI Orchestrator の Issue/PR 作成用）は用途が異なります。**
+
+| 認証情報 / 設定 | 主な使用場所 | 用途 |
+|---|---|---|
+| GitHub Copilot ライセンス | Cloud / Local | Copilot cloud agent / Copilot SDK の利用 |
+| Repository の Copilot Cloud agent 有効化 | Cloud | GitHub Issues から Copilot agent を動かす |
+| `COPILOT_PAT` | Cloud Orchestrator | `assign-copilot.sh` が Copilot を Issue にアサインするため |
+| `GITHUB_TOKEN` | GitHub Actions | ワークフロー内でラベル、Issue、コメント等を操作する自動付与トークン |
+| Actions Workflow permissions: Read and write | Cloud | `setup-labels.yml` などがラベル作成 API を呼ぶため |
+| `gh auth login` | HVE CLI Orchestrator | GitHub CLI の認証状態を利用する基本認証 |
+| `GH_TOKEN` | HVE CLI Orchestrator | `--create-issues` / `--create-pr` 等で Issue / PR を作成する場合に必要 |
+| `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` | Azure deploy | OIDC で Azure にログインするため |
+| MCP Servers 設定 | Cloud / Local | Azure Docs / Microsoft Learn / Work IQ 等の外部情報参照 |
+
+### Cloud Orchestrator 側の認証前提（初回推奨）
+
+- GitHub Copilot ライセンスが有効であること
+- Repository の **Settings → Copilot → Cloud agent** で有効化されていること
+- MCP Servers は **Settings → Copilot → Cloud agent → MCP Servers** で設定すること
+- `COPILOT_PAT` は Copilot 自動アサインに利用（未設定時は既存スクリプト設計で警告してスキップされる場合あり）
+- 初回セットアップでは `COPILOT_PAT` の設定を推奨（実運用では実質必須）
+- Workflow permissions は **Read and write permissions** が必要
+- `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（`GH_TOKEN` / `COPILOT_PAT` とは別物）
+
+### Static Web Apps / Azure 認証方針（正本）
+
+- Azure Static Web Apps デプロイは **OIDC 認証を基本方針** とします
+- 通常は `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` は不要です
+- 必要な Secrets は `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` です
+- 一部の Issue Template / reusable workflow 本文に旧トークン記述が残る場合がありますが、初期セットアップは本セクションの OIDC 方針を正本としてください（文言統一は後続 PR で対応予定）
+
+---
+
 ## ワークフロー権限設定
 
 > [!IMPORTANT]
@@ -248,6 +307,65 @@ bash infra/azure/create-azure-webui-resources.sh
 > `setup-labels.yml` ワークフローはラベル作成 API を呼び出すため、**Read and write permissions** でないとラベル作成が 403 エラーで失敗します。
 
 リポジトリの **Settings → Actions → General → Workflow permissions** を **Read and write permissions** に設定してください。
+
+---
+
+## HVE Cloud Agent Orchestrator 初回セットアップ チェックリスト
+
+HVE Cloud Agent Orchestrator（GitHub Actions + Issue Template）を初めて使う場合、以下のチェックリストで抜け漏れを確認してください。各項目はこのガイドの対応ステップで設定します。
+
+| # | チェック項目 | 参照ステップ | 必須 / オプション |
+|---|---|---|---|
+| 1 | リポジトリを作成した（テンプレートから `Use this template` または Clone） | [Step.1](#step1-リポジトリの作成) | **必須** |
+| 2 | GitHub Copilot Cloud agent を有効化した（Settings → Copilot → Cloud agent） | [Copilot 有効化](#copilot-有効化) | **必須** |
+| 3 | MCP Server を設定した（Settings → Copilot → Cloud agent → MCP Servers） | [Step.3](#step3-mcp-server-設定) | **必須** |
+| 4 | GitHub Copilot Skills を設定した（推奨） | [Step.3.1](#step31-github-copilot-skills-設定推奨) | 推奨 |
+| 5 | `COPILOT_PAT`（Fine-grained, Issues Read/Write）をリポジトリ Secret に登録した | [Step.4](#step4-認証設定copilot_pat) | **必須**（未設定時はアサインがスキップされ警告） |
+| 6 | Actions Workflow permissions を **Read and write permissions** に設定した | [ワークフロー権限設定](#ワークフロー権限設定) | **必須** |
+| 7 | Azure OIDC Secrets（`AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`）を登録した（Azure デプロイ時） | [Step.4 - Azure Secrets](#3-azure-static-web-apps-デプロイ用-secretsswa-デプロイ時) | Azure 利用時必須 |
+| 8 | Self-hosted Runner を設定した（GitHub-hosted runner を使う場合はスキップ可） | [Step.4.5](#step45-self-hosted-runner-設定オプション) | オプション |
+| 9 | Setup Labels workflow を Actions タブから**手動実行**した（初回必須） | [Step.5](#step5-ラベル設定) | **必須** |
+| 10 | 必要なラベル（`auto-app-selection`, `setup-labels` 等）が作成されたことを確認した | [Step.5 - 実行後の確認](#実行後の確認手順) | **必須** |
+| 11 | 初回疎通確認を実施した | [初回疎通確認](#初回疎通確認hve-cloud-agent-orchestrator) | 推奨 |
+| 12 | HVE Cloud Agent Orchestrator の利用手順（web-ui-guide.md）へ進む | [web-ui-guide.md](./web-ui-guide.md) | — |
+
+### （任意）Cloud setup preflight を実行する
+
+初回セットアップの抜け漏れをローカルから確認したい場合は、以下を実行してください。
+
+```bash
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO
+```
+
+Self-hosted runner の label も確認する場合:
+
+```bash
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO --self-hosted-runner-label <runner-label>
+```
+
+- 実行タイミングは **Setup Labels 実行前 / 実行後のどちらでも可** です。
+- `setup-labels` や `auto-app-selection` が未作成でも、初回セットアップ前なら正常な場合があります。`WARN` が出たら [Step.5. ラベル設定](#step5-ラベル設定) の手順で Setup Labels workflow を手動実行してください。
+- API 権限不足で取得できない項目は、未設定と断定せず手動確認に回してください。
+
+---
+
+## Step.4.5. Self-hosted Runner 設定（オプション）
+
+> [!NOTE]
+> **このステップは省略可能です。** GitHub-hosted runner（`ubuntu-latest` 等）を使う場合はスキップして [Step.5. ラベル設定](#step5-ラベル設定) に進んでください。
+
+組織のセキュリティ要件、閉域ネットワーク、固定 IP、専用ツール利用などの理由で、自前の実行環境でワークフローを動かしたい場合に設定します。**ラベル初期化（Step.5）や Orchestrator 実行前**に設定しておくことを推奨します。
+
+**設定が必要なケース（例）:**
+
+- 組織のネットワークポリシーで GitHub-hosted runner からのアクセスが制限されている
+- ワークフロー内で固定 IP が必要（Azure Firewall の IP 制限等）
+- Python や Azure CLI など特定ツールをイメージにプリインストールしておきたい
+
+**設定手順:** [setup-self-hosted-runner.md](./setup-self-hosted-runner.md) を参照してください。
+
+> [!IMPORTANT]
+> **runner label の整合性に注意してください。** Issue Template や workflow ファイルで `runs-on:` に指定する runner label（例: `[self-hosted, linux, x64, aca]`）は、Self-hosted Runner 側に設定したラベルと**一致している必要があります**。不一致の場合、ジョブが `Waiting for a runner...` のまま進まなくなります。
 
 ---
 
@@ -361,18 +479,25 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
 | `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
-**モデル選択系（8 個）**
+**モデル選択系（15 個 = main 5 + review 5 + qa 5）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `model/Auto` | `#6f42c1` | Copilot cloud agent モデル指定: Auto（GitHub が最適モデルを動的選択。0.9x 計上、1x 超モデルは対象外） |
-| `model/claude-opus-4-7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4-7（deprecated: `model/claude-opus-4.7` を推奨） |
 | `model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.7 |
 | `model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.6 |
-| `model/claude-sonnet-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-sonnet-4.6 |
+| `model/gpt-5.5` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.5 |
 | `model/gpt-5.4` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.4 |
-| `model/gpt-5.3-codex` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.3-codex |
-| `model/gemini-2.5-pro` | `#6f42c1` | Copilot cloud agent モデル指定: gemini-2.5-pro |
+| `review-model/Auto` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: Auto |
+| `review-model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: claude-opus-4.7 |
+| `review-model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: claude-opus-4.6 |
+| `review-model/gpt-5.5` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: gpt-5.5 |
+| `review-model/gpt-5.4` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: gpt-5.4 |
+| `qa-model/Auto` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: Auto |
+| `qa-model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: claude-opus-4.7 |
+| `qa-model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: claude-opus-4.6 |
+| `qa-model/gpt-5.5` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: gpt-5.5 |
+| `qa-model/gpt-5.4` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: gpt-5.4 |
 
 **セットアップ系（1 個）**
 
@@ -421,10 +546,47 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 
 ---
 
+## 初回疎通確認（HVE Cloud Agent Orchestrator）
+
+Step.5 のラベル設定完了後、以下の確認を順に実施してください。すべてパスすれば HVE Cloud Agent Orchestrator が正常に動作しています。
+
+### 1. Setup Labels ワークフローの確認
+
+- [ ] Actions タブで `Setup Labels` ワークフローの最新実行が **✅ 成功**（緑チェック）になっている
+
+### 2. 必要なラベルの存在確認
+
+- [ ] **Settings → Labels** を開き、以下のラベルが存在する
+  - `auto-app-selection`
+  - `setup-labels`
+  - `auto-app-detail-design-web`（その他のワークフロートリガー系ラベル）
+
+### 3. Issue Template からのテスト起動
+
+- [ ] **Issues → New issue** を開いて Issue Template の一覧が表示される
+- [ ] `Setup Labels: ラベル初期セットアップ` テンプレートを選択すると、Issue 作成時に `setup-labels` ラベルが自動付与される（2 回目以降の確認）
+- [ ] いずれかのワークフロー用テンプレート（例: `app-architecture-design.yml`）を選択すると、フォームが表示される
+
+### 4. Dispatcher ワークフローの起動確認
+
+- [ ] テスト Issue を作成後、Actions タブで `HVE Cloud Agent Orchestrator Dispatcher` ワークフローが起動している（数秒〜数十秒で表示されます）
+
+### 5. Reusable Workflow の呼び出し確認
+
+- [ ] Dispatcher が正常完了し、対応する reusable workflow（例: `AAS Orchestrator`）が起動している
+
+### 6. Copilot アサイン確認
+
+- [ ] Sub Issue に `@copilot` がアサインされている
+- [ ] `COPILOT_PAT` 未設定の場合は、ワークフローログに警告メッセージが表示されてアサインがスキップされる（既存設計どおりの動作）
+
+> トラブルが発生した場合は [troubleshooting.md](./troubleshooting.md) を参照してください。初期セットアップ中は特に [Setup Labels / ラベル初期化](./troubleshooting.md#2-setup-labels--ラベル初期化) と [Copilot 自動アサイン](./troubleshooting.md#3-copilot-自動アサイン) を優先して確認してください。
+
+---
 
 ## knowledge/ ディレクトリについて
 
-`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。詳細は [overview.md](./overview.md#knowledge-と-qa-と-original-docs-の関係) を参照してください。
+`knowledge/` フォルダーには業務要件ドキュメント（D01〜D21）が格納されます。詳細は [README.md](../README.md#knowledge-と-qa-と-original-docs-の関係) を参照してください。
 
 `knowledge/` ファイルが存在すると、設計・開発の各 Custom Agent が業務要件・制約のコンテキストとして自動参照します。アプリケーション設計・開発ワークフローを開始する前に、`knowledge-management` ワークフローを実行しておくことを推奨します。
 
@@ -432,9 +594,10 @@ GitHub リポジトリの **Settings → Labels** から上記を手動作成し
 
 セットアップが完了したら、まず全体像を把握してから方式を選んでください。
 
-- **全体像の把握**: まず [overview.md](./overview.md) で全体像と 3 つの使い方を把握してください
+- **全体像の把握**: まず [README.md](../README.md) で全体像と 3 つの使い方を把握してください
 - **Custom Agent エコシステム図**: [agent-ecosystem-overview.svg](./images/agent-ecosystem-overview.svg)
 - **方式1（個別 Issue + Custom Agent 手動実行）**: [web-ui-guide.md](./web-ui-guide.md#方式1-copilot-cloud-agent-手動実行)
 - **方式2（ワークフローオーケストレーション Web）**: [web-ui-guide.md](./web-ui-guide.md#方式2-ワークフローオーケストレーションweb)
-- **方式3（ローカル: hve アプリケーション版）**: [hve-app-guide.md](./hve-app-guide.md)
-- **フェーズ別ガイド**: [overview.md](./overview.md#フェーズ別ガイドナビゲーション)
+- **方式3（ローカル: HVE CLI Orchestrator）**: [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)
+- **中断と再開（Resume）**: [hve-cli-orchestrator-guide.md#中断と再開resume](./hve-cli-orchestrator-guide.md#中断と再開resume)
+- **フェーズ別ガイド**: [README.md](../README.md#実行フェーズ別ガイド)

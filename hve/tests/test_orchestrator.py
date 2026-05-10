@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import os
 import sys
 import tempfile
@@ -21,6 +22,33 @@ from orchestrator import run_workflow
 def _run(coro):
     return asyncio.run(coro)
 
+
+class TestContextInjectionMetricsOutput(unittest.TestCase):
+    def test_emit_context_injection_metrics_writes_stderr_and_summary(self) -> None:
+        from orchestrator import _emit_context_injection_metrics
+
+        console = unittest.mock.Mock()
+        with tempfile.TemporaryDirectory() as td:
+            summary_path = os.path.join(td, "step-summary.md")
+            stderr_buffer = io.StringIO()
+            with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": summary_path}, clear=False), \
+                    patch("sys.stderr", stderr_buffer):
+                _emit_context_injection_metrics(
+                    none_steps=1,
+                    total_chars=240000,
+                    max_chars=20000,
+                    self_improve_scope="workflow",
+                    phase_breakdown={"1": 120000, "2": 120000},
+                    console=console,
+                )
+
+            stderr_output = stderr_buffer.getvalue()
+            self.assertIn("context_injection", stderr_output)
+            self.assertIn("phase_breakdown=1=120000, 2=120000", stderr_output)
+            summary = Path(summary_path).read_text(encoding="utf-8")
+            self.assertIn("## Wave2 Context Injection Metrics", summary)
+            self.assertIn("- total_chars: 240000", summary)
+            self.assertIn("- phase_breakdown: 1=120000, 2=120000", summary)
 
 class TestPrefetchWorkIQ(unittest.TestCase):
     def test_returns_empty_when_copilot_sdk_missing(self) -> None:
@@ -286,7 +314,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd", "akm", "aqod", "adoc"]
+        valid_ids = ["ard", "aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd", "akm", "aqod", "adoc"]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
@@ -691,9 +719,14 @@ class TestAdditionalPrompt(unittest.TestCase):
 
         # セッションオプションに custom_agents が設定されていること
         agents = captured_session_opts.get("custom_agents", [])
-        self.assertEqual(len(agents), 1)
+        # Phase B (Critical No.1) 以降、`.github/agents/*.agent.md` から
+        # ファイルベースの定義もマージされるため件数は >= 1 となる。
+        # 明示設定された my-agent が含まれていること、かつ additional_prompt が
+        # 追記されていることを検証する。
+        my_agent = next((a for a in agents if a.get("name") == "my-agent"), None)
+        self.assertIsNotNone(my_agent, "explicit my-agent should be present in merged custom_agents")
         # additional_prompt が追記されていること
-        self.assertEqual(agents[0]["prompt"], "既存のプロンプト\n\n追加指示テキスト")
+        self.assertEqual(my_agent["prompt"], "既存のプロンプト\n\n追加指示テキスト")
 
         # 元の custom_agents_config が汚染されていないこと（deepcopy 検証）
         self.assertEqual(cfg.custom_agents_config, original_config_snapshot)
@@ -2000,8 +2033,11 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
         self.assertNotIn("自己改善ループ", phase_names)
 
     def test_self_improve_default_scope_per_workflow(self) -> None:
+        # workflows で output_paths が定義済みの場合、effective_si_scope は "" となり
+        # _resolved_step_output_paths にパス一覧が格納される（AAS が対象）。
+        # output_paths 未定義の workflow は SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS の値を使う。
         expected_scopes = {
-            "aas": "docs/",
+            "aas": "",        # output_paths 定義済み → scope="" でパス直指定
             "aad-web": "docs/",
             "asdw-web": ".",
             "abd": "docs/",
@@ -2027,6 +2063,7 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
 
                 def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
                     observed_scope["value"] = config.self_improve_target_scope
+                    observed_scope["resolved_paths"] = getattr(config, "_resolved_step_output_paths", None)
                     return {
                         "iterations_completed": 1,
                         "final_score": 80,
@@ -2049,6 +2086,10 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
 
                 self.assertIsNone(result.get("error"))
                 self.assertEqual(observed_scope.get("value"), expected_scope)
+                # output_paths 定義済みワークフローは _resolved_step_output_paths に非空リストが入る
+                if expected_scope == "":
+                    self.assertIsInstance(observed_scope.get("resolved_paths"), list)
+                    self.assertGreater(len(observed_scope.get("resolved_paths") or []), 0)
 
 
 class TestRunWorkflowSelfImproveScope(unittest.TestCase):
@@ -2727,26 +2768,6 @@ class TestPrefetchWorkIQDetailed(unittest.TestCase):
         self.assertEqual(result.content, llm_text)
         # 上位処理では safe_to_inject=False なのでプロンプト注入しない。
         console.warning.assert_called()
-
-
-class TestQaPhaseField(unittest.TestCase):
-    """SDKConfig.qa_phase フィールドが正しく機能することを確認する。"""
-
-    def test_qa_phase_field_exists(self) -> None:
-        cfg = SDKConfig()
-        self.assertTrue(hasattr(cfg, "qa_phase"))
-
-    def test_qa_phase_default_value(self) -> None:
-        cfg = SDKConfig()
-        self.assertEqual(cfg.qa_phase, "pre")
-
-    def test_qa_phase_can_be_set_to_post(self) -> None:
-        cfg = SDKConfig(qa_phase="post")
-        self.assertEqual(cfg.qa_phase, "post")
-
-    def test_qa_phase_can_be_set_to_both(self) -> None:
-        cfg = SDKConfig(qa_phase="both")
-        self.assertEqual(cfg.qa_phase, "both")
 
 
 if __name__ == "__main__":

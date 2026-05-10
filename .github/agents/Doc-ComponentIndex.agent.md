@@ -2,10 +2,14 @@
 name: Doc-ComponentIndex
 description: "レイヤー2成果物の要約インデックスを生成する。"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Doc-ComponentIndex/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - input-file-validation

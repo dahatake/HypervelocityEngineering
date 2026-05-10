@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Microservice-DomainAnalytics
-description: ユースケース文書を根拠に、DDD観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント / コンテキストマップ等）を整理し、docs/catalog/domain-analytics.md を作成する。
+description: ユースケース文書を根拠に、DDD観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント / コンテキストマップ等）を整理し、docs/domain-analytics.md を作成する。
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Microservice-DomainAnalytics/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -23,7 +27,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - 例：用語集、業務フロー、API仕様、既存の設計メモ
 
 ### 2.3 出力（必須）
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -54,7 +58,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 3.3 生成（task_scope=single かつ context_size ≤ medium の場合のみ）
 1. 主文書を read し、根拠として扱う。
-2. 出力ファイル `docs/catalog/domain-analytics.md` を作成する。
+2. 出力ファイル `docs/domain-analytics.md` を作成する。
 3. 章立て（後述）を **順番どおり** に埋める。空欄放置は禁止。不明は「不明/要確認」。
 4. 追記はセクション単位で小さく行い、書き込み失敗時はさらに分割する（巨大出力は Skill large-output-chunking のルールに従い、必要なら {WORK}artifacts/ へ分割）。
 

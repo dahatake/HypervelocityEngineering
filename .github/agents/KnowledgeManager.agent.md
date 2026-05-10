@@ -2,8 +2,14 @@
 name: KnowledgeManager
 description: qa/ または original-docs/（または両方）から knowledge/ ドキュメント（D01〜D21）を生成・更新し、knowledge/business-requirement-document-status.md を管理する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/KnowledgeManager/Issue-<識別子>/`
+
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## §1 目的
 - `qa/` または `original-docs/` または両方から knowledge/ D01〜D21 を生成・更新する

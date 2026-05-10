@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 DEFAULT_MODEL: str = "claude-opus-4.7"
+DEFAULT_CONTEXT_INJECTION_MAX_CHARS: int = 20_000
 
 # --- Self-Improve scope 定数 ---
 # self_improve_scope の許可値。
@@ -42,14 +43,22 @@ SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
 }
 
 MODEL_AUTO_VALUE: str = "Auto"
+MODEL_AUTO_REASONING_EFFORT: str = "high"
+"""Auto モデル選択時に明示する reasoning_effort 値。
+
+GitHub 側の Auto Model Selection が claude-opus-4.7-high 等の
+reasoning_effort='high' のみ許容するバリアントへ解決した場合の
+400 エラーを回避する目的で固定値 'high' を付与する。
+SDK README 上の許容値: 'low' | 'medium' | 'high' | 'xhigh'。
+
+参照: https://pypi.org/project/github-copilot-sdk/ （0.3.0 時点で確認）
+本 fallback 実装は SDK バージョン < 0.3.0 互換を _create_session_with_auto_reasoning_fallback で確保する。
+"""
 MODEL_CHOICES: tuple[str, ...] = (
-    "gpt-5.5",
     "claude-opus-4.7",
     "claude-opus-4.6",
-    "claude-sonnet-4.6",
+    "gpt-5.5",
     "gpt-5.4",
-    "gpt-5.3-codex",
-    "gemini-2.5-pro",
 )
 
 
@@ -63,10 +72,26 @@ def normalize_model(name: str) -> str:
 
 
 def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
-    """モデル名を正規化する（後方互換ラッパー）。"""
+    """モデル名を正規化する（後方互換ラッパー）。
+
+    許可リスト（MODEL_CHOICES + MODEL_AUTO_VALUE）に含まれない値が来た場合、
+    WARNING を発出して MODEL_AUTO_VALUE を返す。
+    これにより既存 Issue/PR の廃止モデル指定（claude-sonnet-4.6 等）は Auto にフォールバックされる。
+    """
     if name is None:
         return None
-    return normalize_model(name)
+    normalized = normalize_model(name)
+    allowed = set(MODEL_CHOICES) | {MODEL_AUTO_VALUE}
+    if normalized and normalized not in allowed:
+        import warnings
+        warnings.warn(
+            f"モデル '{normalized}' はサポートされていません。"
+            f"有効なモデル: {sorted(allowed)}。"
+            f"'{MODEL_AUTO_VALUE}' にフォールバックします。",
+            stacklevel=3,
+        )
+        return MODEL_AUTO_VALUE
+    return normalized
 
 
 def generate_run_id() -> str:
@@ -148,6 +173,11 @@ class SDKConfig:
     show_reasoning: bool = True             # 推論（Thinking）表示（デフォルト: 有効）
     log_level: str = "error"                # CLI ログレベル (none/error/warning/info/debug/all)
     verbosity: int = 1                      # Console verbosity: 0=quiet, 1=compact, 2=normal, 3=verbose
+    no_color: Optional[bool] = None         # F1: ANSI カラー出力を無効化（None=NO_COLOR 環境変数を参照）
+    show_banner: Optional[bool] = None      # F2: バナー表示制御（None=既存の自動判定, True=表示, False=抑止）
+    screen_reader: bool = False             # F3: スクリーンリーダーモード（絵文字→日本語ラベル置換、スピナー無効化）
+    timestamp_style: str = "prefix"        # F4: タイムスタンプ表示位置: prefix/suffix/off
+    final_only: bool = False                # F5: 最終出力のみ表示（DAG サマリ＋各 step の final_message）
 
     # --- SDK ---
     cli_args: List[str] = field(default_factory=list)
@@ -200,24 +230,13 @@ class SDKConfig:
     workiq_prompt_review: Optional[str] = None            # Review 用カスタムプロンプト（None = デフォルト）
     workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
     workiq_draft_output_dir: str = "qa"                   # Work IQ 補助レポート出力先ディレクトリ（互換のため設定名は据え置き）
-    workiq_per_question_timeout: float = 900.0            # QA: 質問ごとの Work IQ クエリタイムアウト秒数
+    workiq_per_question_timeout: float = 1200.0           # QA: 質問ごとの Work IQ クエリタイムアウト秒数（既定 20 分）
     workiq_max_draft_questions: int = 10                  # QA: ドラフト生成対象の最大質問数（Wave 2: 30→10 に削減）
     # Wave 2-6: デフォルトを 30 から 10 に削減。WORKIQ_MAX_DRAFT_QUESTIONS 環境変数で上書き可能。
     # 重要度フィルタ（workiq_priority_filter）により "最重要"/"高" の質問を優先し、不足分は残りの質問で補填する。
     workiq_priority_filter: bool = True                   # Work IQ: 高優先度の質問を優先して抽出し、最大件数に満たない分は他の質問で補填する
 
-    # --- QA フェーズ制御 ---
-    qa_phase: str = "pre"                                 # QA フェーズ: "pre"=実行前のみ, "post"=実行後のみ, "both"=前後両方
-    # 推奨デフォルト: "pre"（主タスク実行前の準備重視・トークン節約）
-    # 設定方法: HVE_QA_PHASE 環境変数（"pre"/"post"/"both"）または SDKConfig.from_env() 経由
-    # 不正値は from_env() で "pre" にフォールバックする
-    # AKM ワークフロー: 事前 QA は qa_phase の指定に従う / 事後 QA は常にスキップする
-    # AQOD ワークフロー: 事前 QA は常にスキップ / 事後 QA は aqod_post_qa_enabled で制御する
-
-    # --- AQOD 専用 ---
-    aqod_post_qa_enabled: bool = False                    # AQOD: メインタスク完了後の事後 QA をオプトイン実行する
-    # True: AQOD で事後 QA を実行する（qa_phase の値には依存しない）
-    # False (デフォルト): AQOD では事後 QA を実行しない
+    # 注: 旧 qa_phase / aqod_post_qa_enabled (post-QA モード) は廃止済み。事前 QA のみが提供される。
 
     # --- Self-Improve ---
     auto_self_improve: bool = False             # デフォルト: 無効。Issue Template / CLI --self-improve / HVE_AUTO_SELF_IMPROVE で有効化
@@ -245,12 +264,17 @@ class SDKConfig:
 
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
+    session_id_prefix: str = ""             # SDK session_id の prefix。Resume 時に固定値を強制したい場合のみ非空にする。
+    # 空文字（デフォルト）: hve.run_state.DEFAULT_SESSION_ID_PREFIX ("hve") を使用する。
+    # Phase 2 (Resume): make_session_id() に渡され、`{prefix}-{run_id}-step-{step_id}` 形式の
+    # 決定論的 session_id を生成する基底となる。HVE_SESSION_ID_PREFIX 環境変数で上書き可能。
 
     # --- その他 ---
     max_diff_chars: int = 80_000            # git diff の最大文字数（トークン上限対策）。HVE_MAX_DIFF_CHARS 環境変数で上書き可能
+    context_injection_max_chars: int = DEFAULT_CONTEXT_INJECTION_MAX_CHARS  # 各フェーズで注入するコンテキストの最大文字数。HVE_CONTEXT_INJECTION_MAX_CHARS で上書き可能
 
     # --- コンテキスト最適化 ---
-    reuse_context_filtering: bool = True    # True: ステップ依存関係ベースの reuse_context フィルタリング（HVE_REUSE_CONTEXT_FILTERING）
+    reuse_context_filtering: Optional[bool] = True    # True: ステップ依存関係ベースの reuse_context フィルタリング（HVE_REUSE_CONTEXT_FILTERING）
     # デフォルト true（consumed_artifacts アノテーション済みのステップのみフィルタリング）。
     # consumed_artifacts=None のステップは後方互換で全成果物を渡す。false にすると全ステップに全成果物を渡す（旧挙動）。
 
@@ -277,6 +301,24 @@ class SDKConfig:
     # --- その他 ---
     dry_run: bool = False                   # ドライラン
 
+    # --- Agentic Retrieval（Phase 2）---
+    # AAD-WEB / ASDW-WEB 向け Agentic Retrieval 設定
+    enable_agentic_retrieval: str = "auto"
+    # "auto": Arch-AgenticRetrieval-Detail Custom Agent の自動判定に従う（既定）
+    # "yes" : Agentic Retrieval を使用する
+    # "no"  : Agentic Retrieval を使用しない（関連ステップを生成しない）
+    agentic_data_source_modes: List[str] = field(default_factory=lambda: ["indexer"])
+    # データソース投入方式。"indexer" / "push" の組み合わせ。既定: ["indexer"]
+    foundry_mcp_integration: bool = True
+    # Microsoft Foundry 連携（Remote MCP Server）。True = する（既定）
+    agentic_data_sources_hint: str = ""
+    # 想定データソースのヒント（任意・自由記述）
+    agentic_existing_design_diff_only: bool = False
+    # True: 既存設計を上書きせず差分更新する
+    foundry_sku_fallback_policy: str = "standard_allowed"
+    # "standard_allowed" : Standard SKU へのフォールバックを許容（既定）
+    # "global_required"  : Global Standard 必須（Standard 拒否）
+
     def __post_init__(self) -> None:
         # SDKConfig は from_env() 以外（直接コンストラクタ呼び出し）でも利用されるため、
         # 空文字モデルはここでも Auto に寄せて挙動を統一する。
@@ -297,6 +339,10 @@ class SDKConfig:
             self.model_override = normalized  # 正規化後の値を self.model_override にも反映
             if normalized:
                 self.model = normalized
+        if self.reuse_context_filtering is None:
+            self.reuse_context_filtering = True
+        if not isinstance(self.context_injection_max_chars, int) or self.context_injection_max_chars <= 0:
+            self.context_injection_max_chars = DEFAULT_CONTEXT_INJECTION_MAX_CHARS
         # self_improve_scope は from_env() と同様に正規化してから検証し、
         # 直接コンストラクタ呼び出し時も挙動を統一する。
         self.self_improve_scope = (self.self_improve_scope or "").strip().lower()
@@ -329,10 +375,10 @@ class SDKConfig:
             env_model = _normalize_model_with_warning(raw_model) or MODEL_AUTO_VALUE
         try:
             env_workiq_per_question_timeout = float(
-                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "900.0")
+                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "1200.0")
             )
         except (TypeError, ValueError):
-            env_workiq_per_question_timeout = 900.0
+            env_workiq_per_question_timeout = 1200.0
         try:
             env_workiq_max_draft_questions = int(
                 os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "10")
@@ -340,16 +386,7 @@ class SDKConfig:
         except (TypeError, ValueError):
             env_workiq_max_draft_questions = 10
 
-        _valid_qa_phases = ("pre", "post", "both")
-        _raw_qa_phase = os.environ.get("HVE_QA_PHASE", "pre").strip().lower()
-        if _raw_qa_phase and _raw_qa_phase not in _valid_qa_phases:
-            import warnings
-            warnings.warn(
-                f"HVE_QA_PHASE='{_raw_qa_phase}' は無効な値です。"
-                f"有効な値: {_valid_qa_phases}。'pre' にフォールバックします。",
-                stacklevel=2,
-            )
-        env_qa_phase = _raw_qa_phase if _raw_qa_phase in _valid_qa_phases else "pre"
+        # 旧 HVE_QA_PHASE / HVE_AQOD_POST_QA 環境変数は廃止済み（post-QA モード削除）。
 
         _raw_si_scope = os.environ.get("HVE_SELF_IMPROVE_SCOPE", "").strip().lower()
         if _raw_si_scope and _raw_si_scope not in VALID_SELF_IMPROVE_SCOPES:
@@ -371,6 +408,12 @@ class SDKConfig:
             env_max_diff_chars = int(os.environ.get("HVE_MAX_DIFF_CHARS", "80000"))
         except (TypeError, ValueError):
             env_max_diff_chars = 80_000
+        try:
+            env_context_injection_max_chars = int(
+                os.environ.get("HVE_CONTEXT_INJECTION_MAX_CHARS", str(DEFAULT_CONTEXT_INJECTION_MAX_CHARS))
+            )
+        except (TypeError, ValueError):
+            env_context_injection_max_chars = DEFAULT_CONTEXT_INJECTION_MAX_CHARS
 
         def _env_bool_or_none(name: str) -> Optional[bool]:
             raw = os.environ.get(name)
@@ -398,11 +441,10 @@ class SDKConfig:
             workiq_per_question_timeout=env_workiq_per_question_timeout,
             workiq_max_draft_questions=env_workiq_max_draft_questions,
             workiq_priority_filter=_env_bool("WORKIQ_PRIORITY_FILTER", default=True),
-            qa_phase=env_qa_phase,
-            aqod_post_qa_enabled=os.environ.get("HVE_AQOD_POST_QA", "").lower() in ("true", "1", "yes"),
             auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),
             tdd_max_retries=int(os.environ.get("HVE_TDD_MAX_RETRIES", "5")),
             max_diff_chars=env_max_diff_chars,
+            context_injection_max_chars=env_context_injection_max_chars,
             reuse_context_filtering=_env_bool("HVE_REUSE_CONTEXT_FILTERING", default=True),
             model_override=_normalize_model_with_warning(os.environ.get("HVE_MODEL_OVERRIDE") or None),
             apply_qa_improvements_to_main=_env_bool("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", default=False),
@@ -410,6 +452,7 @@ class SDKConfig:
             apply_self_improve_to_main=_env_bool("HVE_APPLY_SELF_IMPROVE_TO_MAIN", default=True),
             self_improve_scope=env_si_scope,
             require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
+            session_id_prefix=os.environ.get("HVE_SESSION_ID_PREFIX", "").strip(),
         )
 
     def get_review_model(self) -> str:

@@ -259,10 +259,7 @@ def cmd_extract_model(_: list[str]) -> int:
         "gpt-5.5",
         "claude-opus-4.7",
         "claude-opus-4.6",
-        "claude-sonnet-4.6",
         "gpt-5.4",
-        "gpt-5.3-codex",
-        "gemini-2.5-pro",
     }
     print(value if value in allowed else "")
     return 0

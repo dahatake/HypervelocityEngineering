@@ -38,7 +38,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertIn("gpt-5.5", MODEL_CHOICES)
 
     def test_model_choices_gpt_5_5_before_claude(self) -> None:
-        self.assertLess(MODEL_CHOICES.index("gpt-5.5"), MODEL_CHOICES.index("claude-opus-4.7"))
+        self.assertLess(MODEL_CHOICES.index("claude-opus-4.7"), MODEL_CHOICES.index("gpt-5.5"))
 
     def test_default_model_constant(self) -> None:
         self.assertEqual(DEFAULT_MODEL, "claude-opus-4.7")
@@ -134,7 +134,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_workiq_draft_defaults(self) -> None:
         self.assertFalse(self.cfg.workiq_draft_mode)
         self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
-        self.assertEqual(self.cfg.workiq_per_question_timeout, 900.0)
+        self.assertEqual(self.cfg.workiq_per_question_timeout, 1200.0)
         self.assertEqual(self.cfg.workiq_max_draft_questions, 10)  # Wave 2: 30→10 に削減
 
     def test_auto_self_improve_default_false(self) -> None:
@@ -143,9 +143,12 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_max_diff_chars_default(self) -> None:
         self.assertEqual(self.cfg.max_diff_chars, 80_000)
 
-    def test_aqod_post_qa_enabled_default_false(self) -> None:
-        """aqod_post_qa_enabled のデフォルト値は False であること。"""
-        self.assertFalse(self.cfg.aqod_post_qa_enabled)
+    def test_context_injection_max_chars_default(self) -> None:
+        self.assertEqual(self.cfg.context_injection_max_chars, 20_000)
+
+    def test_reuse_context_filtering_none_falls_back_to_true(self) -> None:
+        cfg = SDKConfig(reuse_context_filtering=None)
+        self.assertTrue(cfg.reuse_context_filtering)
 
 
 class TestSDKConfigFromEnv(unittest.TestCase):
@@ -219,6 +222,17 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
             self.assertEqual(cfg.workiq_per_question_timeout, 45.0)
             self.assertEqual(cfg.workiq_max_draft_questions, 12)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_workiq_per_question_timeout_default_is_1200(self) -> None:
+        """環境変数 WORKIQ_PER_QUESTION_TIMEOUT 未設定時の既定値が 1200.0（20 分）であること。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ.pop("WORKIQ_PER_QUESTION_TIMEOUT", None)
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.workiq_per_question_timeout, 1200.0)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -318,39 +332,22 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_hve_aqod_post_qa_default_false(self) -> None:
-        """HVE_AQOD_POST_QA 未設定時は False であること。"""
+    def test_from_env_hve_context_injection_max_chars(self) -> None:
         env_backup = os.environ.copy()
         try:
-            os.environ.pop("HVE_AQOD_POST_QA", None)
+            os.environ["HVE_CONTEXT_INJECTION_MAX_CHARS"] = "12345"
             cfg = SDKConfig.from_env()
-            self.assertFalse(cfg.aqod_post_qa_enabled)
+            self.assertEqual(cfg.context_injection_max_chars, 12345)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_hve_aqod_post_qa_true_variants(self) -> None:
-        """HVE_AQOD_POST_QA=true/1/yes で aqod_post_qa_enabled=True になること。"""
+    def test_from_env_hve_context_injection_max_chars_invalid_fallback(self) -> None:
         env_backup = os.environ.copy()
         try:
-            for value in ("true", "1", "yes"):
-                with self.subTest(value=value):
-                    os.environ["HVE_AQOD_POST_QA"] = value
-                    cfg = SDKConfig.from_env()
-                    self.assertTrue(cfg.aqod_post_qa_enabled)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_hve_aqod_post_qa_false_variants(self) -> None:
-        """HVE_AQOD_POST_QA=false/0/no/"" で aqod_post_qa_enabled=False になること。"""
-        env_backup = os.environ.copy()
-        try:
-            for value in ("false", "0", "no", ""):
-                with self.subTest(value=value):
-                    os.environ["HVE_AQOD_POST_QA"] = value
-                    cfg = SDKConfig.from_env()
-                    self.assertFalse(cfg.aqod_post_qa_enabled)
+            os.environ["HVE_CONTEXT_INJECTION_MAX_CHARS"] = "invalid"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.context_injection_max_chars, 20_000)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -448,9 +445,9 @@ class TestSDKConfigModelOverride(unittest.TestCase):
     def test_model_override_takes_precedence_over_auto(self) -> None:
         """HVE_MODEL_OVERRIDE は Auto（未指定）より優先される。"""
         os.environ.pop("MODEL", None)
-        os.environ["HVE_MODEL_OVERRIDE"] = "gemini-2.5-pro"
+        os.environ["HVE_MODEL_OVERRIDE"] = "claude-opus-4.7"
         cfg = SDKConfig.from_env()
-        self.assertEqual(cfg.model, "gemini-2.5-pro")
+        self.assertEqual(cfg.model, "claude-opus-4.7")
 
     def test_model_override_unset_does_not_affect_model(self) -> None:
         """HVE_MODEL_OVERRIDE 未設定時は通常の MODEL 環境変数が使われる。"""
@@ -576,10 +573,10 @@ class TestSelfImproveWorkflowSdkConfig(unittest.TestCase):
 
     def test_from_env_provides_model_for_self_improve(self) -> None:
         """MODEL が set されている場合、from_env() が model を取得すること。"""
-        os.environ["MODEL"] = "claude-sonnet-4.6"
+        os.environ["MODEL"] = "claude-opus-4.6"
         cfg = SDKConfig.from_env()
         cfg.auto_self_improve = True
-        self.assertEqual(cfg.model, "claude-sonnet-4.6")
+        self.assertEqual(cfg.model, "claude-opus-4.6")
 
     def test_from_env_with_quality_threshold_override(self) -> None:
         """from_env() + quality_threshold 上書きが正しく動作すること。"""
@@ -592,11 +589,51 @@ class TestSelfImproveWorkflowSdkConfig(unittest.TestCase):
         self.assertEqual(cfg.self_improve_max_iterations, 5)
         self.assertEqual(cfg.github_token, "ghp_test")
 
-    def test_qa_phase_default_is_pre_for_self_improve(self) -> None:
-        """from_env() 経由での qa_phase デフォルトが 'pre' であること（QA 二重発火防止）。"""
-        os.environ.pop("HVE_QA_PHASE", None)
-        cfg = SDKConfig.from_env()
-        self.assertEqual(cfg.qa_phase, "pre")
+
+class TestNormalizeModelWithWarning(unittest.TestCase):
+    """_normalize_model_with_warning の動作を検証する（Phase 9+ 追加）。"""
+
+    def setUp(self) -> None:
+        from config import _normalize_model_with_warning  # type: ignore
+        self._normalize = _normalize_model_with_warning
+
+    def test_normalize_model_with_warning_falls_back_to_auto_for_unknown_model(self) -> None:
+        """未知モデル名 → WARNING + MODEL_AUTO_VALUE を返すこと。"""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = self._normalize("claude-sonnet-4.6")
+        self.assertEqual(result, MODEL_AUTO_VALUE)
+        self.assertEqual(len(w), 1)
+        self.assertIn("claude-sonnet-4.6", str(w[0].message))
+
+    def test_normalize_model_with_warning_passes_through_known_model(self) -> None:
+        """MODEL_CHOICES 内の値はそのまま返すこと。"""
+        import warnings
+        for model in MODEL_CHOICES:
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                result = self._normalize(model)
+            self.assertEqual(result, model, f"{model} should pass through")
+            self.assertEqual(len(w), 0, f"{model} should not warn")
+
+    def test_normalize_model_with_warning_passes_through_auto(self) -> None:
+        """Auto はそのまま返すこと。"""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = self._normalize(MODEL_AUTO_VALUE)
+        self.assertEqual(result, MODEL_AUTO_VALUE)
+        self.assertEqual(len(w), 0)
+
+    def test_post_init_falls_back_to_auto_for_legacy_claude_sonnet_4_6(self) -> None:
+        """SDKConfig(model='claude-sonnet-4.6') → 後方互換でフォールバック検証。"""
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = SDKConfig(model="claude-sonnet-4.6")
+        self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
+        self.assertTrue(any("claude-sonnet-4.6" in str(warning.message) for warning in w))
 
 
 if __name__ == "__main__":

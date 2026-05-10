@@ -22,4 +22,4 @@
 
 ## 完了条件
 - マイクロサービス定義書がサービスカタログに基づいて全て作成されている
-{completion_instruction}{additional_section}
+{completion_instruction}{remote_mcp_server_design_section}{additional_section}

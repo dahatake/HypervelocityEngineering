@@ -31,6 +31,12 @@ on:
         type: string
         default: '[]'
 
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
+
 permissions:
   issues: write
   contents: write
@@ -38,7 +44,7 @@ permissions:
 
 jobs:
   orchestrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
       group: aas-orchestrator-${{ inputs.issue_number }}
@@ -505,6 +511,11 @@ jobs:
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           MODEL_RAW=$(extract_model "${ISSUE_BODY}")
           SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
+          export SELECTED_MODEL SELECTED_REVIEW_MODEL SELECTED_QA_MODEL
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
@@ -631,6 +642,12 @@ jobs:
           if [[ -n "${SELECTED_MODEL}" ]]; then
             add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
           fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
+          fi
 
           # ---- Step Issue 生成 ----
           S1_NUM="" S1_ID=""
@@ -643,7 +660,7 @@ jobs:
           S7_NUM="" S7_ID=""
 
           # 各 Step Issue の body 先頭に埋め込む共通メタ情報
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- review-model: %s -->\n<!-- qa-model: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${SELECTED_REVIEW_MODEL}" "${SELECTED_QA_MODEL}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
           QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
@@ -693,6 +710,12 @@ jobs:
           fi
           if [[ -n "${SELECTED_MODEL}" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
           fi
 
           # ---- Step.1 ----
@@ -882,6 +905,7 @@ jobs:
 
           # ---- ユーティリティ関数（共通ライブラリを source） ----
           source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/github-api.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/prereq-file-check.sh"
 
           add_label() {
             local issue_num="$1"
@@ -936,15 +960,6 @@ jobs:
             fi
           }
 
-          # ファイルの存在確認（GitHub API 経由でブランチを指定して確認）
-          # -f ref= でクエリパラメータを分離し、BRANCH に特殊文字が含まれても安全に扱う
-          check_file_exists() {
-            local file_path="$1"
-            local branch="${BRANCH:-main}"
-            gh api "/repos/${REPO}/contents/${file_path}" -f ref="${branch}" \
-              --jq '.name' >/dev/null 2>&1
-          }
-
           # 必須入力ファイルの存在確認を行い、不足があれば blocked にする。
           # 全ファイルが存在する場合のみ activate_issue を呼び出す。
           # 引数: $1=issue_num, $2=step_id (冪等マーカー用), 以降=必須ファイルパス
@@ -954,13 +969,50 @@ jobs:
             shift 2
             local required_files=("$@")
             local missing=()
+            local check_errors=()
             local BLOCKED_MARKER="<!-- aas-prereq-check-blocked: step-${step_id} -->"
+            local target_ref="${BRANCH:-main}"
+            local run_id="${GITHUB_RUN_ID:-unknown}"
+            local workflow_name="${GITHUB_WORKFLOW:-unknown}"
+
+            echo "::notice::AAS前提ファイル確認開始 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref}"
 
             for f in "${required_files[@]}"; do
-              if ! check_file_exists "${f}"; then
-                missing+=("${f}")
-              fi
+              local file_status=0
+              local result_class="unknown"
+              check_prereq_file_status "${REPO}" "${target_ref}" "${f}" || file_status=$?
+              case "${file_status}" in
+                0)
+                  result_class="exists_file"
+                  ;;
+                1)
+                  result_class="missing_http_404"
+                  missing+=("${f}")
+                  echo "::warning::AAS前提ファイル確認不足確定 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}"
+                  echo "::warning::AAS前提ファイル確認不足詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class} note=github_contents_api_http_404_confirmed"
+                  ;;
+                2)
+                  result_class="check_error_non_404"
+                  check_errors+=("${f}")
+                  echo "::error::AAS前提ファイル確認失敗 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}" >&2
+                  echo "::error::AAS前提ファイル確認失敗詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} type=${PREREQ_CHECK_LAST_TYPE:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class} note=not_treated_as_missing_file error=${PREREQ_CHECK_LAST_ERROR:-}" >&2
+                  ;;
+                *)
+                  result_class="unexpected_status"
+                  check_errors+=("${f}")
+                  echo "::error::AAS前提ファイル確認失敗 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}" >&2
+                  echo "::error::AAS前提ファイル確認失敗詳細 http_status=unexpected_return_code reason=unexpected_status_${file_status} result=${result_class} note=not_treated_as_missing_file" >&2
+                  ;;
+              esac
+              echo "::notice::AAS前提ファイル確認結果 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f} file_status=${file_status}"
+              echo "::notice::AAS前提ファイル確認結果詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} type=${PREREQ_CHECK_LAST_TYPE:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class}"
             done
+
+            if [ "${#check_errors[@]}" -gt 0 ]; then
+              echo "::error::AAS前提ファイル確認中断 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref}"
+              echo "::error::AAS前提ファイル確認中断詳細 non_404_errors=${check_errors[*]} note=aas_blocked_comment_and_label_not_posted"
+              return 1
+            fi
 
             if [ "${#missing[@]}" -eq 0 ]; then
               activate_issue "${issue_num}"
@@ -990,12 +1042,13 @@ jobs:
             done
 
             local comment_body
-            comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n%b\n%s\n\n%s' \
+            comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n%b\n%s\n\n%s\n\n%s' \
               "${BLOCKED_MARKER}" \
               "## ⛔ aas:blocked — 必須入力成果物が不足しています (Step ${step_id})" \
-              "このステップを実行するために必要な入力ファイルがリポジトリの \`${BRANCH:-main}\` ブランチに存在しません。" \
-              "**不足しているファイル:**" \
+              "このステップを実行するために必要な入力ファイルがリポジトリの \`${target_ref}\` ブランチに存在しません（GitHub Contents API で HTTP 404 を確認済み）。" \
+              "**不足しているファイル（GitHub Contents API で HTTP 404 として確認）:**" \
               "${missing_list}" \
+              "この通知は API/通信/権限/レート制限等の確認失敗によるものではなく、HTTP 404 の確認結果に基づいています。" \
               "前の Step の成果物が作成された後、または必要なファイルを手動で作成した後に、再度状態遷移をトリガーしてください。" \
               "> ℹ️ このコメントは \`auto-app-selection-reusable.yml\` によって自動投稿されました。")
 
@@ -1276,7 +1329,7 @@ jobs:
   self-improve:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings
@@ -1394,4 +1447,3 @@ jobs:
           git add -A
           git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
           git push origin HEAD:${{ steps.parse.outputs.branch }}
-

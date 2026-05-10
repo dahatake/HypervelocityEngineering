@@ -17,7 +17,9 @@ from hve.template_engine import (
     _build_qa_review_context_section,
     _build_rg_section,
     _build_root_ref,
+    _build_remote_mcp_server_design_section,
     _load_template,
+    _normalize_bool,
     _TEMPLATES_BASE,
     build_root_issue_body,
     collect_params,
@@ -288,6 +290,77 @@ class TestRenderTemplate:
         assert "`lightweight`" in body
         assert "`データ整合性`" in body
 
+    def test_ard_placeholders_with_missing_values(self):
+        """ARD で company_name / target_business 未入力時も placeholder が残らないこと。"""
+        wf = get_workflow("ard")
+        body = render_template(
+            "templates/ard/step-2.md",
+            root_issue_num=71,
+            params={
+                "company_name": "",
+                "target_business": "",
+                "survey_period_years": 30,
+                "target_region": "グローバル全体",
+                "analysis_purpose": "中長期成長戦略の立案",
+                "attached_docs": [],
+            },
+            wf=wf,
+        )
+        assert "{company_name}" not in body
+        assert "{target_business}" not in body
+        assert "`未指定`" in body
+
+    def test_ard_step1_all_placeholders_expanded(self):
+        """Phase B (Major No.15): ARD step-1 で全プレースホルダが展開されること。"""
+        wf = get_workflow("ard")
+        body = render_template(
+            "templates/ard/step-1.md",
+            root_issue_num=72,
+            params={
+                "company_name": "テスト株式会社",
+                "survey_base_date": "2026-01-15",
+                "survey_period_years": 20,
+                "target_region": "日本国内",
+                "analysis_purpose": "新規事業検討",
+                "attached_docs": ["a.pdf", "b.xlsx"],
+            },
+            wf=wf,
+        )
+        for token in (
+            "{company_name}",
+            "{survey_base_date}",
+            "{survey_period_years}",
+            "{target_region}",
+            "{analysis_purpose}",
+            "{attached_docs}",
+        ):
+            assert token not in body, f"placeholder {token} not expanded"
+        assert "テスト株式会社" in body
+        assert "2026-01-15" in body
+        assert "20" in body
+        assert "日本国内" in body
+        assert "a.pdf, b.xlsx" in body
+
+    def test_ard_step1_defaults_when_params_missing(self):
+        """Phase B: ARD step-1 で任意パラメータが空でも既定値で展開されること。"""
+        wf = get_workflow("ard")
+        body = render_template(
+            "templates/ard/step-1.md",
+            root_issue_num=73,
+            params={"company_name": "X 社"},
+            wf=wf,
+        )
+        for token in (
+            "{survey_base_date}",
+            "{survey_period_years}",
+            "{target_region}",
+            "{attached_docs}",
+        ):
+            assert token not in body
+        assert "30" in body  # 既定 survey_period_years
+        assert "グローバル全体" in body  # 既定 target_region
+        assert "添付なし" in body  # 既定 attached_docs
+
     def test_completion_instruction_github_mode(self):
         wf = get_workflow("akm")
         body = render_template(
@@ -336,6 +409,7 @@ class TestCollectParams:
         inputs = iter([
             "main",                  # branch
             "APP-01, APP-02",        # app_ids
+            "",                      # create_remote_mcp_server (default=True)
             "",                      # selected_steps = all
             "n",                     # skip_review
             "n",                     # skip_qa
@@ -775,3 +849,483 @@ class TestRegistryTemplateConsistencyPhase5:
             "意図的な不一致は _CUSTOM_AGENT_ALLOWLIST に追加してください:\n"
             + "\n".join(mismatches)
         )
+
+
+# ---------------------------------------------------------------------------
+# Remote MCP Server セクション展開テスト
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteMcpServerSection:
+    """``{remote_mcp_server_section}`` プレースホルダの展開を検証する。"""
+
+    def test_placeholder_not_exposed_when_false(self):
+        """create_remote_mcp_server=False のとき {remote_mcp_server_section} が残らないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": False},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" not in body
+
+    def test_placeholder_not_exposed_when_true(self):
+        """create_remote_mcp_server=True のとき {remote_mcp_server_section} が残らないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": True},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" in body
+
+    def test_placeholder_not_exposed_default(self):
+        """create_remote_mcp_server が未指定（後方互換）のとき {remote_mcp_server_section} が残らないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main"},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        # デフォルト True なのでセクションが含まれる
+        assert "## Remote MCP Server 実装" in body
+
+    def test_mcp_section_content_when_true(self):
+        """create_remote_mcp_server=True のとき MCP セクションの主要コンテンツが含まれること。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": True},
+            wf=wf,
+        )
+        assert "### 基本方針" in body
+        assert "### 実装時の検討事項" in body
+        assert "疎結合" in body
+
+    def test_root_ref_includes_create_remote_mcp_server_true(self):
+        """_build_root_ref に create-remote-mcp-server: true が含まれること。"""
+        from hve.template_engine import _build_root_ref
+        root_ref = _build_root_ref(5, {"branch": "main", "create_remote_mcp_server": True})
+        assert "<!-- create-remote-mcp-server: true -->" in root_ref
+
+    def test_root_ref_includes_create_remote_mcp_server_false(self):
+        """_build_root_ref に create-remote-mcp-server: false が含まれること。"""
+        from hve.template_engine import _build_root_ref
+        root_ref = _build_root_ref(5, {"branch": "main", "create_remote_mcp_server": False})
+        assert "<!-- create-remote-mcp-server: false -->" in root_ref
+
+    def test_root_ref_default_true(self):
+        """create_remote_mcp_server 未指定のとき _build_root_ref に true が含まれること（後方互換）。"""
+        from hve.template_engine import _build_root_ref
+        root_ref = _build_root_ref(5, {"branch": "main"})
+        assert "<!-- create-remote-mcp-server: true -->" in root_ref
+
+    def test_build_root_issue_body_asdw_includes_metadata(self):
+        """asdw-web の build_root_issue_body に create-remote-mcp-server メタデータが含まれること。"""
+        wf = get_workflow("asdw-web")
+        body = build_root_issue_body(wf, {"branch": "main", "create_remote_mcp_server": False})
+        assert "<!-- create-remote-mcp-server: false -->" in body
+
+    def test_string_false_suppresses_mcp_section(self):
+        """create_remote_mcp_server が文字列 "false" のとき Remote MCP Server セクションが出力されないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": "false"},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" not in body
+
+    def test_string_true_includes_mcp_section(self):
+        """create_remote_mcp_server が文字列 "true" のとき Remote MCP Server セクションが出力されること。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": "true"},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" in body
+
+    def test_string_no_suppresses_mcp_section(self):
+        """create_remote_mcp_server が文字列 "no" のとき Remote MCP Server セクションが出力されないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": "no"},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" not in body
+
+    def test_string_sakusei_shinai_suppresses_mcp_section(self):
+        """create_remote_mcp_server が "作成しない" のとき Remote MCP Server セクションが出力されないこと。"""
+        wf = get_workflow("asdw-web")
+        body = render_template(
+            "templates/asdw-web/step-2.5.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": "作成しない"},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_section}" not in body
+        assert "## Remote MCP Server 実装" not in body
+
+    # --- AAD-WEB 設計フェーズ向けテスト ---
+
+    def test_aad_web_step22_includes_design_section_when_true(self):
+        """create_remote_mcp_server=True のとき step-2.2.md に設計観点セクションが含まれること。"""
+        wf = get_workflow("aad-web")
+        body = render_template(
+            "templates/aad-web/step-2.2.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": True},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_design_section}" not in body
+        assert "## Remote MCP Server 設計観点" in body
+        assert "adapter 層" in body
+        assert "設計で固定しないこと" in body
+
+    def test_aad_web_step22_suppresses_design_section_when_false(self):
+        """create_remote_mcp_server=False のとき step-2.2.md に設計観点セクションが含まれないこと。"""
+        wf = get_workflow("aad-web")
+        body = render_template(
+            "templates/aad-web/step-2.2.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": False},
+            wf=wf,
+        )
+        assert "{remote_mcp_server_design_section}" not in body
+        assert "## Remote MCP Server 設計観点" not in body
+
+    def test_aad_web_step22_default_true_includes_design_section(self):
+        """create_remote_mcp_server 未指定のとき step-2.2.md に設計観点セクションが含まれること（後方互換）。"""
+        wf = get_workflow("aad-web")
+        body = render_template(
+            "templates/aad-web/step-2.2.md",
+            root_issue_num=1,
+            params={"branch": "main"},
+            wf=wf,
+        )
+        assert "## Remote MCP Server 設計観点" in body
+
+    def test_aad_web_step22_sakusei_shinai_suppresses_design_section(self):
+        """create_remote_mcp_server が "作成しない" のとき step-2.2.md に設計観点セクションが含まれないこと。"""
+        wf = get_workflow("aad-web")
+        body = render_template(
+            "templates/aad-web/step-2.2.md",
+            root_issue_num=1,
+            params={"branch": "main", "create_remote_mcp_server": "作成しない"},
+            wf=wf,
+        )
+        assert "## Remote MCP Server 設計観点" not in body
+
+    def test_build_root_issue_body_aad_includes_metadata(self):
+        """aad-web の build_root_issue_body に create-remote-mcp-server メタデータが含まれること。"""
+        wf = get_workflow("aad-web")
+        body = build_root_issue_body(wf, {"branch": "main", "create_remote_mcp_server": True})
+        assert "<!-- create-remote-mcp-server: true -->" in body
+
+    def test_design_section_no_technology_specifics(self):
+        """設計観点セクションに特定技術（Azure Functions / SDK）を固定する記述が含まれないこと。"""
+        section = _build_remote_mcp_server_design_section(True)
+        assert "Azure Functions" not in section
+        assert "CI/CD" not in section
+
+
+class TestNormalizeBool:
+    """_normalize_bool() のテスト。"""
+
+    @pytest.mark.parametrize("value", [True, "true", "1", "yes", "y", "on", "作成する"])
+    def test_truthy_values(self, value):
+        """truthy な値はすべて True に正規化されること。"""
+        assert _normalize_bool(value) is True
+
+    @pytest.mark.parametrize("value", [False, "false", "0", "no", "n", "off", "作成しない"])
+    def test_falsy_values(self, value):
+        """falsy な値はすべて False に正規化されること。"""
+        assert _normalize_bool(value) is False
+
+    def test_none_returns_default_true(self):
+        """None は default=True を返すこと。"""
+        assert _normalize_bool(None, default=True) is True
+
+    def test_none_returns_default_false(self):
+        """None は default=False を返すこと。"""
+        assert _normalize_bool(None, default=False) is False
+
+    def test_unknown_string_returns_default(self):
+        """不明文字列は default を返すこと。"""
+        assert _normalize_bool("unknown", default=True) is True
+        assert _normalize_bool("unknown", default=False) is False
+
+    def test_bool_param_str_string_false_normalizes_correctly(self):
+        """_get_bool_param_str が文字列 "false" を正しく "false" に正規化すること。"""
+        from hve.template_engine import _get_bool_param_str
+        assert _get_bool_param_str({"key": "false"}, "key") == "false"
+
+    def test_bool_param_str_string_true_normalizes_correctly(self):
+        """_get_bool_param_str が文字列 "true" を正しく "true" に正規化すること。"""
+        from hve.template_engine import _get_bool_param_str
+        assert _get_bool_param_str({"key": "true"}, "key") == "true"
+
+    def test_bool_param_str_missing_key_defaults_to_true(self):
+        """_get_bool_param_str はキー未指定のとき default=True の "true" を返すこと。"""
+        from hve.template_engine import _get_bool_param_str
+        assert _get_bool_param_str({}, "missing_key") == "true"
+
+    def test_bool_param_str_missing_key_defaults_to_false(self):
+        """_get_bool_param_str はキー未指定のとき default=False の "false" を返すこと。"""
+        from hve.template_engine import _get_bool_param_str
+        assert _get_bool_param_str({}, "missing_key", default=False) == "false"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Agentic Retrieval 質問項目 - 静的サニティチェック
+# ---------------------------------------------------------------------------
+
+class TestAgenticRetrievalConstants:
+    """_AGENTIC_RETRIEVAL_QUESTIONS 定数と Issue Form YAML の整合性検証。
+
+    Phase 7 で同期テストを追加するための土台として、
+    最低限の構造チェックを行う。
+    """
+
+    _REPO_ROOT = Path(__file__).resolve().parents[2]
+    _TEMPLATE_DIR = _REPO_ROOT / ".github" / "ISSUE_TEMPLATE"
+
+    def test_questions_keys_are_snake_case(self):
+        """全キーが snake_case であること（Issue Form id との整合）。"""
+        from hve.template_engine import _AGENTIC_RETRIEVAL_QUESTIONS
+        import re
+        for key in _AGENTIC_RETRIEVAL_QUESTIONS:
+            assert re.match(r'^[a-z][a-z0-9_]*$', key), \
+                f"キー '{key}' は snake_case でありません"
+
+    def test_questions_required_fields(self):
+        """各質問に必須フィールドが存在すること。"""
+        from hve.template_engine import _AGENTIC_RETRIEVAL_QUESTIONS
+        required = {"label", "description", "kind", "default", "applies_to"}
+        for key, q in _AGENTIC_RETRIEVAL_QUESTIONS.items():
+            missing = required - set(q.keys())
+            assert not missing, f"質問 '{key}' に必須フィールドが不足: {missing}"
+
+    def test_questions_applies_to_valid_workflow_ids(self):
+        """applies_to に指定されるワークフロー ID が有効であること。"""
+        from hve.template_engine import _AGENTIC_RETRIEVAL_QUESTIONS
+        valid_ids = {"aad-web", "asdw-web"}
+        for key, q in _AGENTIC_RETRIEVAL_QUESTIONS.items():
+            for wf_id in q["applies_to"]:
+                assert wf_id in valid_ids, \
+                    f"質問 '{key}' の applies_to に無効なワークフロー ID: {wf_id}"
+
+    def test_aad_web_has_q1_and_q3_only(self):
+        """AAD-WEB 適用質問は Q1(enable_agentic_retrieval) と Q3(foundry_mcp_integration) のみ。"""
+        from hve.template_engine import _AGENTIC_RETRIEVAL_KEYS_FOR
+        aad_keys = _AGENTIC_RETRIEVAL_KEYS_FOR["aad-web"]
+        assert "enable_agentic_retrieval" in aad_keys
+        assert "foundry_mcp_integration" in aad_keys
+        # ASDW-WEB 専用キーは AAD-WEB に含まれないこと
+        asdw_only = {
+            "agentic_data_source_modes",
+            "agentic_data_sources_hint",
+            "agentic_existing_design_diff_only",
+            "foundry_sku_fallback_policy",
+        }
+        for key in asdw_only:
+            assert key not in aad_keys, f"AAD-WEB に ASDW-WEB 専用キー '{key}' が含まれています"
+
+    def test_asdw_web_has_all_six_questions(self):
+        """ASDW-WEB 適用質問は Q1〜Q6 の 6 つ全て。"""
+        from hve.template_engine import _AGENTIC_RETRIEVAL_KEYS_FOR, _AGENTIC_RETRIEVAL_QUESTIONS
+        asdw_keys = set(_AGENTIC_RETRIEVAL_KEYS_FOR["asdw-web"])
+        expected = {
+            "enable_agentic_retrieval",
+            "agentic_data_source_modes",
+            "foundry_mcp_integration",
+            "agentic_data_sources_hint",
+            "agentic_existing_design_diff_only",
+            "foundry_sku_fallback_policy",
+        }
+        assert asdw_keys == expected, \
+            f"ASDW-WEB キー不一致: 期待={expected} 実際={asdw_keys}"
+
+    def test_issue_form_yaml_contains_agentic_ids_aad_web(self):
+        """AAD-WEB Issue Template が Q1・Q3 の id を持つこと。"""
+        content = (self._TEMPLATE_DIR / "web-app-design.yml").read_text(encoding="utf-8")
+        assert "id: enable_agentic_retrieval" in content
+        assert "id: foundry_mcp_integration" in content
+
+    def test_issue_form_yaml_contains_agentic_ids_asdw_web(self):
+        """ASDW-WEB Issue Template が Q1〜Q6 の id を持つこと。"""
+        content = (self._TEMPLATE_DIR / "web-app-dev.yml").read_text(encoding="utf-8")
+        for field_id in [
+            "enable_agentic_retrieval",
+            "agentic_data_source_modes",
+            "foundry_mcp_integration",
+            "agentic_data_sources_hint",
+            "agentic_existing_design_diff_only",
+            "foundry_sku_fallback_policy",
+        ]:
+            assert f"id: {field_id}" in content, \
+                f"web-app-dev.yml に id: {field_id} が見つかりません"
+
+    def test_normalize_no_disables_foundry_fields(self):
+        """enable_agentic_retrieval=no（内部値）のとき Q3/Q6 が無効化されること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "no",
+            "foundry_mcp_integration": "する",
+            "foundry_sku_fallback_policy": "Global 必須（Standard 拒否）",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] is False
+        assert result["foundry_sku_fallback_policy"] == "standard_allowed"
+
+    def test_normalize_japanese_shinai_disables_foundry_fields(self):
+        """enable_agentic_retrieval=「しない」（UI 表示値）のとき Q3/Q6 が無効化されること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "しない",
+            "foundry_mcp_integration": "する",
+            "foundry_sku_fallback_policy": "Global 必須（Standard 拒否）",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] is False
+        assert result["foundry_sku_fallback_policy"] == "standard_allowed"
+
+    def test_normalize_auto_preserves_values(self):
+        """enable_agentic_retrieval=auto のとき Q3/Q6 はユーザー入力値を保持すること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "auto",
+            "foundry_mcp_integration": "する",
+            "foundry_sku_fallback_policy": "Global 必須（Standard 拒否）",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] == "する"
+        assert result["foundry_sku_fallback_policy"] == "Global 必須（Standard 拒否）"
+
+    def test_normalize_japanese_jidohantei_preserves_values(self):
+        """enable_agentic_retrieval=「自動判定に従う」（UI 表示値）のとき Q3/Q6 はユーザー入力値を保持すること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "自動判定に従う",
+            "foundry_mcp_integration": "する",
+            "foundry_sku_fallback_policy": "Global 必須（Standard 拒否）",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] == "する"
+        assert result["foundry_sku_fallback_policy"] == "Global 必須（Standard 拒否）"
+
+    def test_normalize_yes_preserves_values(self):
+        """enable_agentic_retrieval=yes のとき Q3/Q6 はユーザー入力値を保持すること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "yes",
+            "foundry_mcp_integration": "しない",
+            "foundry_sku_fallback_policy": "Standard 許容",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] == "しない"
+        assert result["foundry_sku_fallback_policy"] == "Standard 許容"
+
+    def test_normalize_japanese_suru_preserves_values(self):
+        """enable_agentic_retrieval=「する」（UI 表示値）のとき Q3/Q6 はユーザー入力値を保持すること。"""
+        from hve.template_engine import normalize_agentic_retrieval_answers
+        answers = {
+            "enable_agentic_retrieval": "する",
+            "foundry_mcp_integration": "しない",
+            "foundry_sku_fallback_policy": "Standard 許容",
+        }
+        result = normalize_agentic_retrieval_answers(answers)
+        assert result["foundry_mcp_integration"] == "しない"
+        assert result["foundry_sku_fallback_policy"] == "Standard 許容"
+
+    def test_config_has_agentic_fields(self):
+        """SDKConfig に 6 フィールドが存在し、デフォルト値が仕様通りであること。"""
+        from hve.config import SDKConfig
+        cfg = SDKConfig()
+        assert cfg.enable_agentic_retrieval == "auto"
+        assert cfg.agentic_data_source_modes == ["indexer"]
+        assert cfg.foundry_mcp_integration is True
+        assert cfg.agentic_data_sources_hint == ""
+        assert cfg.agentic_existing_design_diff_only is False
+        assert cfg.foundry_sku_fallback_policy == "standard_allowed"
+
+    def test_run_state_safe_config_fields_include_agentic(self):
+        """_SAFE_CONFIG_FIELDS に 6 フィールドが全て含まれること。"""
+        from hve.run_state import _SAFE_CONFIG_FIELDS
+        expected = {
+            "enable_agentic_retrieval",
+            "agentic_data_source_modes",
+            "foundry_mcp_integration",
+            "agentic_data_sources_hint",
+            "agentic_existing_design_diff_only",
+            "foundry_sku_fallback_policy",
+        }
+        for field in expected:
+            assert field in _SAFE_CONFIG_FIELDS, \
+                f"_SAFE_CONFIG_FIELDS に '{field}' が含まれていません"
+
+    def test_to_safe_config_dict_includes_agentic_fields(self):
+        """to_safe_config_dict が 6 フィールドを正しく snapshot に含めること。"""
+        from hve.config import SDKConfig
+        from hve.run_state import to_safe_config_dict
+        cfg = SDKConfig()
+        snapshot = to_safe_config_dict(cfg)
+        assert snapshot["enable_agentic_retrieval"] == "auto"
+        assert snapshot["agentic_data_source_modes"] == ["indexer"]
+        assert snapshot["foundry_mcp_integration"] is True
+        assert snapshot["agentic_data_sources_hint"] == ""
+        assert snapshot["agentic_existing_design_diff_only"] is False
+        assert snapshot["foundry_sku_fallback_policy"] == "standard_allowed"
+
+    def test_backward_compat_load_state_without_agentic_fields(self):
+        """既存 state.json（新フィールドなし）を読み込んでもクラッシュしないこと。"""
+        import json
+        import tempfile
+        from pathlib import Path
+        from hve.run_state import RunState
+        # 新フィールドを含まない古い state.json を模倣
+        old_state = {
+            "schema_version": "1.0",
+            "run_id": "20260101T000000-abc123",
+            "session_name": "test session",
+            "workflow_id": "aad-web",
+            "status": "paused",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "last_updated_at": "2026-01-01T00:00:00+00:00",
+            "pause_reason": None,
+            "host": {},
+            "config_snapshot": {
+                "model": "claude-opus-4.7",
+                # Agentic Retrieval フィールドは意図的に含めない
+            },
+            "params_snapshot": {},
+            "selected_step_ids": [],
+            "step_states": {},
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "20260101T000000-abc123"
+            run_dir.mkdir()
+            (run_dir / "state.json").write_text(
+                json.dumps(old_state), encoding="utf-8"
+            )
+            loaded = RunState.load("20260101T000000-abc123", work_dir=Path(tmpdir))
+            # config_snapshot は dict なので新フィールドが無い場合は .get() でデフォルト取得可能
+            snap = loaded.config_snapshot
+            assert snap.get("enable_agentic_retrieval", "auto") == "auto"
+            assert snap.get("agentic_data_source_modes", ["indexer"]) == ["indexer"]
+            assert snap.get("foundry_mcp_integration", True) is True

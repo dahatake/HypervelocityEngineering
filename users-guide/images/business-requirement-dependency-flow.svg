@@ -40,7 +40,7 @@
   <line class="line" x1="710" y1="155" x2="800" y2="155"/>
   <line class="line" x1="200" y1="220" x2="610" y2="340"/>
 
-  <text class="label" x="385" y="136" text-anchor="middle">docs/business-requirement.md</text>
+  <text class="label" x="385" y="136" text-anchor="middle">docs/company-business-requirement.md</text>
   <text class="label" x="755" y="136" text-anchor="middle">docs/catalog/use-case-catalog.md</text>
   <text class="label" x="420" y="262" text-anchor="middle">qa/* 質問票ファイル</text>
 </svg>

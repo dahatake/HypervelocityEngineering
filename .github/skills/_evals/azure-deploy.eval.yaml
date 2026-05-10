@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: azure-deploy
-skill_path: .github/skills/azure-platform/azure-deploy/SKILL.md
+skill_path: .github/skills/azure-skills/azure-deploy/SKILL.md
 description: Execute Azure deployments for ALREADY-PREPARED applications that have existing .azure/plan.md and infrastructure files.
 
 test_cases:

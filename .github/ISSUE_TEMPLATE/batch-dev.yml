@@ -25,7 +25,10 @@ body:
         - `docs/test-specs/{jobId}-test-spec.md`（TDD テスト仕様書）
 
         リポジトリに以下のシークレットが設定されていること:
-        - `COPILOT_PAT`
+        - `COPILOT_PAT`（HVE Cloud Agent Orchestrator の Copilot 自動アサイン用）
+        - `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（ユーザーによる Secret 作成は不要）
+        - HVE CLI Orchestrator 用の `GH_TOKEN` はこの Cloud 実行では必須ではありません
+        - 詳細方針: `users-guide/getting-started.md`（認証・認可）
 
         ### 実行されるステップ
         | ステップ | 内容 |
@@ -57,6 +60,23 @@ body:
       description: "コード/ドキュメントをコミットするブランチ名を入力してください"
       placeholder: "例: main, develop, feature/batch-impl-v1"
       value: "main"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      description: |
+        ワークフローを実行する Runner を選択します。
+        - **GitHub Hosted**: `ubuntu-latest`（GitHub 提供の標準ランナー）
+        - **Self-hosted (ACA)**: `[self-hosted, linux, x64, aca]`（Azure Container Apps 上のセルフホストランナー）
+        - Self-hosted runner はオプションです（GitHub Hosted を使う場合はスキップ可能）
+        - Self-hosted を選ぶ場合は runner が online であり、label が一致していることを確認してください（詳細: `users-guide/setup-self-hosted-runner.md`）
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
     validations:
       required: true
 
@@ -101,10 +121,49 @@ body:
     attributes:
       label: "使用するモデル"
       description: |
-        GitHub が自動的に最適なモデルを選択します（Auto）。
-        特定モデルを指定する場合は `HVE_MODEL_OVERRIDE` 環境変数を使用してください。
+        Copilot cloud agent が使用するモデルを選択します（hve CLI `--model` と同等）。
+        - `Auto`: GitHub が最適モデルを動的選択（プレミアムリクエスト 0.9x、推奨）
+        - その他: hve/config.py の `MODEL_CHOICES` と同一の選択肢
+        ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
       options:
         - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+  - type: dropdown
+    id: review_model
+    attributes:
+      label: "レビュー用モデル（任意）"
+      description: |
+        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: qa_model
+    attributes:
+      label: "QA 用モデル（任意）"
+      description: |
+        実行前 QA（auto-qa）の質問票生成で使用するモデル（hve CLI `--qa-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
       default: 0
     validations:
       required: false

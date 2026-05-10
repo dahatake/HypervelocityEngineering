@@ -100,9 +100,9 @@
     "description": "Copilot cloud agent モデル指定: claude-opus-4.6"
   },
   {
-    "name": "model/claude-sonnet-4.6",
+    "name": "model/gpt-5.5",
     "color": "6f42c1",
-    "description": "Copilot cloud agent モデル指定: claude-sonnet-4.6"
+    "description": "Copilot cloud agent モデル指定: gpt-5.5"
   },
   {
     "name": "model/gpt-5.4",
@@ -110,19 +110,59 @@
     "description": "Copilot cloud agent モデル指定: gpt-5.4"
   },
   {
-    "name": "model/gpt-5.3-codex",
-    "color": "6f42c1",
-    "description": "Copilot cloud agent モデル指定: gpt-5.3-codex"
-  },
-  {
-    "name": "model/gemini-2.5-pro",
-    "color": "6f42c1",
-    "description": "Copilot cloud agent モデル指定: gemini-2.5-pro"
-  },
-  {
     "name": "model/Auto",
     "color": "6f42c1",
     "description": "Copilot cloud agent モデル指定: Auto（GitHub が最適モデルを動的選択。0.9x 計上、1x 超モデルは対象外）"
+  },
+  {
+    "name": "review-model/Auto",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: Auto"
+  },
+  {
+    "name": "review-model/claude-opus-4.7",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: claude-opus-4.7"
+  },
+  {
+    "name": "review-model/claude-opus-4.6",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: claude-opus-4.6"
+  },
+  {
+    "name": "review-model/gpt-5.5",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: gpt-5.5"
+  },
+  {
+    "name": "review-model/gpt-5.4",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: gpt-5.4"
+  },
+  {
+    "name": "qa-model/Auto",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: Auto"
+  },
+  {
+    "name": "qa-model/claude-opus-4.7",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: claude-opus-4.7"
+  },
+  {
+    "name": "qa-model/claude-opus-4.6",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: claude-opus-4.6"
+  },
+  {
+    "name": "qa-model/gpt-5.5",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: gpt-5.5"
+  },
+  {
+    "name": "qa-model/gpt-5.4",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: gpt-5.4"
   },
   {
     "name": "setup-labels",
@@ -298,5 +338,230 @@
     "name": "adoc:qa-ready",
     "color": "C8E6C9",
     "description": "ADOC Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aas:human-required",
+    "color": "7B2FBE",
+    "description": "AAS TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aas:human-investigating",
+    "color": "E4AC07",
+    "description": "AAS 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aas:human-resolved",
+    "color": "1A7F37",
+    "description": "AAS 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aad:human-required",
+    "color": "7B2FBE",
+    "description": "AAD TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aad:human-investigating",
+    "color": "E4AC07",
+    "description": "AAD 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aad:human-resolved",
+    "color": "1A7F37",
+    "description": "AAD 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aad-web:human-required",
+    "color": "7B2FBE",
+    "description": "AAD-WEB TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aad-web:human-investigating",
+    "color": "E4AC07",
+    "description": "AAD-WEB 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aad-web:human-resolved",
+    "color": "1A7F37",
+    "description": "AAD-WEB 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "asdw:human-required",
+    "color": "7B2FBE",
+    "description": "ASDW TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "asdw:human-investigating",
+    "color": "E4AC07",
+    "description": "ASDW 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "asdw:human-resolved",
+    "color": "1A7F37",
+    "description": "ASDW 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "asdw-web:human-required",
+    "color": "7B2FBE",
+    "description": "ASDW-WEB TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "asdw-web:human-investigating",
+    "color": "E4AC07",
+    "description": "ASDW-WEB 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "asdw-web:human-resolved",
+    "color": "1A7F37",
+    "description": "ASDW-WEB 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "abd:human-required",
+    "color": "7B2FBE",
+    "description": "ABD TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "abd:human-investigating",
+    "color": "E4AC07",
+    "description": "ABD 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "abd:human-resolved",
+    "color": "1A7F37",
+    "description": "ABD 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "abdv:human-required",
+    "color": "7B2FBE",
+    "description": "ABDV TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "abdv:human-investigating",
+    "color": "E4AC07",
+    "description": "ABDV 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "abdv:human-resolved",
+    "color": "1A7F37",
+    "description": "ABDV 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aag:human-required",
+    "color": "7B2FBE",
+    "description": "AAG TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aag:human-investigating",
+    "color": "E4AC07",
+    "description": "AAG 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aag:human-resolved",
+    "color": "1A7F37",
+    "description": "AAG 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aagd:human-required",
+    "color": "7B2FBE",
+    "description": "AAGD TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aagd:human-investigating",
+    "color": "E4AC07",
+    "description": "AAGD 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aagd:human-resolved",
+    "color": "1A7F37",
+    "description": "AAGD 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "akm:human-required",
+    "color": "7B2FBE",
+    "description": "AKM TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "akm:human-investigating",
+    "color": "E4AC07",
+    "description": "AKM 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "akm:human-resolved",
+    "color": "1A7F37",
+    "description": "AKM 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aqod:human-required",
+    "color": "7B2FBE",
+    "description": "AQOD TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "aqod:human-investigating",
+    "color": "E4AC07",
+    "description": "AQOD 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "aqod:human-resolved",
+    "color": "1A7F37",
+    "description": "AQOD 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "adoc:human-required",
+    "color": "7B2FBE",
+    "description": "ADOC TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "adoc:human-investigating",
+    "color": "E4AC07",
+    "description": "ADOC 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "adoc:human-resolved",
+    "color": "1A7F37",
+    "description": "ADOC 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "ard:initialized",
+    "color": "FBCA04",
+    "description": "ARD 初期化完了"
+  },
+  {
+    "name": "ard:ready",
+    "color": "FFEB9C",
+    "description": "ARD 実行可能"
+  },
+  {
+    "name": "ard:running",
+    "color": "F9D71C",
+    "description": "ARD 実行中"
+  },
+  {
+    "name": "ard:done",
+    "color": "FBCA04",
+    "description": "ARD 完了"
+  },
+  {
+    "name": "ard:blocked",
+    "color": "B60205",
+    "description": "ARD ブロック中"
+  },
+  {
+    "name": "ard:qa-ready",
+    "color": "C8E6C9",
+    "description": "ARD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "ard:human-required",
+    "color": "7B2FBE",
+    "description": "ARD TDD リトライ上限到達 — 人間介入が必要"
+  },
+  {
+    "name": "ard:human-investigating",
+    "color": "E4AC07",
+    "description": "ARD 人間が原因調査・解決作業中"
+  },
+  {
+    "name": "ard:human-resolved",
+    "color": "1A7F37",
+    "description": "ARD 人間解決済み — :ready への自動復帰トリガー"
   }
 ]

@@ -48,61 +48,12 @@ class TestRunnerPreQaSourceInspection(unittest.TestCase):
         self.assertIn("事前確認済みの前提条件・補足情報", src)
         self.assertIn("_injected_prompt", src)
 
-
-class TestQaPhaseConfig(unittest.TestCase):
-    """SDKConfig.qa_phase フィールドの検証。"""
-
-    def test_qa_phase_default_is_pre(self) -> None:
-        cfg = SDKConfig()
-        self.assertEqual(cfg.qa_phase, "pre")
-
-    def test_qa_phase_accepts_post(self) -> None:
-        cfg = SDKConfig(qa_phase="post")
-        self.assertEqual(cfg.qa_phase, "post")
-
-    def test_qa_phase_accepts_both(self) -> None:
-        cfg = SDKConfig(qa_phase="both")
-        self.assertEqual(cfg.qa_phase, "both")
-
-    def test_qa_phase_from_env_pre(self) -> None:
-        import os
-        original = os.environ.get("HVE_QA_PHASE")
-        try:
-            os.environ["HVE_QA_PHASE"] = "pre"
-            cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.qa_phase, "pre")
-        finally:
-            if original is None:
-                os.environ.pop("HVE_QA_PHASE", None)
-            else:
-                os.environ["HVE_QA_PHASE"] = original
-
-    def test_qa_phase_from_env_post(self) -> None:
-        import os
-        original = os.environ.get("HVE_QA_PHASE")
-        try:
-            os.environ["HVE_QA_PHASE"] = "post"
-            cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.qa_phase, "post")
-        finally:
-            if original is None:
-                os.environ.pop("HVE_QA_PHASE", None)
-            else:
-                os.environ["HVE_QA_PHASE"] = original
-
-    def test_qa_phase_from_env_invalid_falls_back_to_pre(self) -> None:
-        import os
-        original = os.environ.get("HVE_QA_PHASE")
-        try:
-            os.environ["HVE_QA_PHASE"] = "invalid"
-            cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.qa_phase, "pre")
-        finally:
-            if original is None:
-                os.environ.pop("HVE_QA_PHASE", None)
-            else:
-                os.environ["HVE_QA_PHASE"] = original
+    def test_context_injection_uses_sdkconfig_limit(self) -> None:
+        src = self._get_runner_source()
+        self.assertIn("context_injection_max_chars", src)
+        self.assertNotIn("_MAX_CONTEXT_INJECTION_LENGTH", src)
 
 
 if __name__ == "__main__":
     unittest.main()
+

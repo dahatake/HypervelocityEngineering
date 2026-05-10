@@ -18,6 +18,16 @@ extract_model() {
   printf '%s' "${body}" | python3 "${_SCRIPT_DIR}/extract-model.py"
 }
 
+extract_review_model() {
+  local body="$1"
+  printf '%s' "${body}" | python3 "${_SCRIPT_DIR}/extract-review-model.py"
+}
+
+extract_qa_model() {
+  local body="$1"
+  printf '%s' "${body}" | python3 "${_SCRIPT_DIR}/extract-qa-model.py"
+}
+
 resolve_model() {
   local raw="$1"
   if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then
@@ -108,8 +118,15 @@ query(\$issueNumber: Int!) {
       continue
     fi
 
+    # JSON として不正な場合は生レスポンスの先頭をログ出力（真因切り分け用）
+    if ! printf '%s' "${query_result}" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+      echo "  DEBUG: GraphQL non-JSON response (head 800 chars):" >&2
+      printf '%s' "${query_result}" | head -c 800 >&2
+      echo "" >&2
+    fi
+
     local bot_id issue_node_id repo_node_id
-    IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(echo "${query_result}" | python3 "${_SCRIPT_DIR}/parse-graphql-ids.py") || true
+    IFS=$'\t' read -r bot_id issue_node_id repo_node_id < <(printf '%s' "${query_result}" | python3 "${_SCRIPT_DIR}/parse-graphql-ids.py") || true
 
     if [[ -z "${bot_id}" ]]; then
       echo "WARNING: copilot-swe-agent の Bot ID を取得できませんでした。試行 ${assign_attempt}/${max_assign_retry}" >&2
@@ -200,7 +217,14 @@ mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef
     gh_args+=(-f "query=${query}")
     result=$(GH_TOKEN="${COPILOT_PAT}" gh api graphql "${gh_args[@]}" 2>&1) || true
 
-    echo "  GraphQL mutation レスポンス: ${result}"
+    # JSON として不正な場合は生レスポンスの先頭をログ出力（真因切り分け用）
+    if ! printf '%s' "${result}" | python3 -c 'import sys,json; json.load(sys.stdin)' 2>/dev/null; then
+      echo "  DEBUG: GraphQL mutation non-JSON response (head 800 chars):" >&2
+      printf '%s' "${result}" | head -c 800 >&2
+      echo "" >&2
+    else
+      echo "  GraphQL mutation レスポンス: ${result}"
+    fi
 
     local has_errors
     has_errors=$(echo "${result}" | python3 "${_SCRIPT_DIR}/check-mutation-errors.py") || true

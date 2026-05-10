@@ -2,64 +2,89 @@
 
 ← [README](../README.md)
 
+> **対象読者**: GitHub Actions / Issue Template / `hve` CLI の関係を俯瞰したい利用者・運用担当者  
+> **前提**: `.github/workflows/`、`.github/ISSUE_TEMPLATE/`、`hve/workflow_registry.py`、`hve/__main__.py` を参照できること  
+> **次のステップ**: ローカル実行は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)、Self-hosted Runner の実運用は [setup-self-hosted-runner.md](./setup-self-hosted-runner.md) を参照してください
+
 ---
 
 ## 目次
 
 - [ワークフロー一覧](#ワークフロー一覧)
+- [HVE CLI Orchestrator ワークフロー ID（逆引き）](#hve-cli-orchestrator-ワークフロー-id逆引き)
+- [Cloud / Local 対応表（初回ユーザー向け）](#cloud--local-対応表初回ユーザー向け)
 - [ワークフロートリガー系ラベル](#ワークフロートリガー系ラベル)
 - [モデル選択ルール](#モデル選択ルール)
 - [Custom Agent 一覧](#custom-agent-一覧)
+- [knowledge/ ディレクトリとの関係](#knowledge-ディレクトリとの関係)
 - [Issue テンプレート一覧](#issue-テンプレート一覧)
+- [Skills 一覧と Agent-Skills 対応](#skills-一覧と-agent-skills-対応)
+- [APP-ID 指定方法](#app-id-指定方法)
 
 ---
 
 ## ワークフロー一覧
 
-`.github/workflows/` 配下の全ワークフローです。
+`.github/workflows/` 配下の **49** workflow ファイルを、実装から到達できる Workflow 名と trigger で一覧化します。
 
-| ファイル名 | 用途 | トリガー |
-|-----------|------|---------|
-| `auto-orchestrator-dispatcher.yml` | Issueイベント統合ディスパッチャー（AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/ADOC/AKM/AQOD/setup-labels） | `issues: [opened, labeled, closed]` |
-| `auto-app-selection-reusable.yml` | アプリケーションアーキテクチャ設計（AAS）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-app-detail-design-web-reusable.yml` | Web App Design（AAD-WEB）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-app-dev-microservice-web-reusable.yml` | Web App Dev & Deploy（ASDW-WEB）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-batch-design-reusable.yml` | バッチ設計（ABD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-batch-dev-reusable.yml` | バッチ実装（ABDV）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-ai-agent-design-reusable.yml` | AI Agent 設計（AAG）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-ai-agent-dev-reusable.yml` | AI Agent 実装（AAGD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-app-documentation-reusable.yml` | Source Codeからのドキュメント作成（ADOC）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-knowledge-management-reusable.yml` | Knowledge Management（AKM）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `auto-aqod.yml` | Original Docs Review 原本ドキュメント質問票生成（AQOD）オーケストレーター本体（reusable） | `workflow_call`（dispatcher 経由） |
-| `create-subissues-from-pr.yml` | `subissues.md` から Sub Issue を自動作成 | `create-subissues` ラベル付き PR |
-| `advance-subissues.yml` | Sub Issue の完了後に次の Sub Issue を Copilot に自動アサイン | PR クローズ |
-| `link-copilot-pr-to-issue.yml` | Copilot が作成した PR を親 Issue にリンク | PR オープン |
-| `copilot-auto-feedback.yml` | Copilot QA/レビュー指示を自動投稿（`auto-qa` / `auto-context-review`）。Issue の `*:qa-ready` ラベル付与時は事前 QA 質問票を投稿 | `pull_request_target: [labeled, ready_for_review]` / `issues: [labeled]` |
-| `auto-pr-transition-dispatcher.yml` | PR遷移ディスパッチャー（QA→Review→Approve/ create-subissues） | `pull_request_target: [synchronize]` / `issue_comment: [created]` |
-| `auto-qa-default-answer.yml` | QA 質問票への既定値回答を自動投稿（PR コメント・Issue コメント両対応） | Copilot 質問票コメント作成後（`issue_comment.created`） |
-| `auto-issue-qa-ready-transition.yml` | Issue の `*:qa-ready` → `*:ready` 遷移と Copilot アサイン | `issue_comment: [created]` — `<!-- auto-qa-default-answered -->` マーカーまたは @copilot メンション（OWNER/MEMBER/COLLABORATOR） |
-| `post-qa-to-pr-comment.yml` | QA 結果を PR コメントに投稿 | PR プッシュ（`pull_request_target.synchronize`）かつ `auto-qa` ラベル付き PR 等の条件 |
-| `auto-draft-to-ready.yml` | Copilot PR の Draft → Ready 自動遷移 | `auto-approve-ready` ラベル付き draft PR でデバウンス完了時 |
-| `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `auto-approve-ready` ラベル付き PR（非 draft, 非 split-mode） |
-| `sync-issue-labels-to-pr.yml` | 親 Issue のラベルを PR に同期 | Issue ラベル変更 |
-| `plan-validation-and-labeling.yml` | `plan.md` の検証（validate/check）と split-mode/plan-only ラベル付与を統合実行 | `pull_request`（`paths: work/**/plan.md`） |
-| `audit-plans.yml` | plan.md の監査（全 plan.md のメタデータ違反スキャン／Skill `task-dag-planning` 準拠チェック） | 毎週月曜 3:00 UTC / 手動 |
-| `validate-knowledge.yml` | knowledge ドキュメントの検証 | `knowledge/D??-*.md` の PR / push / 手動 |
-| `setup-labels.yml` | ラベル初期セットアップ（`.github/labels.json` から一括作成・更新） | `setup-labels` ラベル付き Issue / `workflow_dispatch` |
-| `auto-self-improve-close.yml` | Self-Improve Issue 自動クローズ（PR マージ時に `self-improve` ラベル付き Issue を対象に、`auto-merge` 有効かつ Sub Issue 全完了チェックなどの条件を満たす場合にクローズ） | PR マージ |
-| `sync-azure-skills.yml` | microsoft/skills から Azure Skills を定期同期 | 毎週月曜 9:00 UTC / 手動 |
-| `copilot-setup-steps.yml` | Copilot cloud agent の実行前セットアップ | Copilot cloud agent 起動時 |
-| `test-cli-scripts.yml` | `.github/scripts/` の CLI スクリプトをテスト | PR プッシュ |
-| `validate-agents.yml` | Agent ファイルの検証 | `push` / `pull_request` |
-| `validate-skills.yml` | Skills ファイルの検証 | `pull_request` |
-| `auto-qa-to-review-transition.yml` | reusable: QA完了判定→`auto-context-review` 付与（dispatcher から呼び出し） | `workflow_call` |
-| `auto-review-to-approve-transition.yml` | reusable: レビュー完了判定→`auto-approve-ready` 付与（dispatcher から呼び出し） | `workflow_call` |
-| `auto-create-subissues-transition.yml` | reusable: split-mode 完了判定→`create-subissues` 付与（dispatcher から呼び出し） | `workflow_call` |
-| `validate-subissues.yml` | `subissues.md` の `<!-- title: ... -->` 必須チェック（フォーマット検証） | 全 PR の `pull_request: [opened, synchronize, reopened]` で起動し、ジョブ内で `work/**/subissues.md` の変更有無を判定 |
-### hve アプリケーション版ワークフロー ID（逆引き）
+| ファイル名 | Workflow 名 | Trigger |
+|-----------|-------------|---------|
+| `aas-timeout-monitor.yml` | AAS Timeout Monitor | `schedule` / `workflow_dispatch` |
+| `advance-subissues.yml` | Advance Sub Issues | `pull_request: [closed]` / `issues: [labeled]` |
+| `audit-plans.yml` | Audit all plan.md (scheduled) | `schedule` / `workflow_dispatch` |
+| `auto-ai-agent-design-reusable.yml` | AAG: AI Agent Design (Reusable) | `workflow_call` |
+| `auto-ai-agent-dev-reusable.yml` | AAGD: AI Agent Dev & Deploy (Reusable) | `workflow_call` |
+| `auto-app-detail-design-web-reusable.yml` | AAD-WEB: Web App Design (Reusable) | `workflow_call` |
+| `auto-app-dev-microservice-web-reusable.yml` | ASDW-WEB: Web App Dev & Deploy (Reusable) | `workflow_call` |
+| `auto-app-documentation-reusable.yml` | ADOC Orchestrator | `workflow_call` |
+| `auto-app-selection-reusable.yml` | AAS Orchestrator | `workflow_call` |
+| `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `pull_request_target: [labeled, ready_for_review, synchronize]` |
+| `auto-aqod.yml` | Original Docs Review Orchestrator | `workflow_call` |
+| `auto-batch-design-reusable.yml` | ABD Orchestrator | `workflow_call` |
+| `auto-batch-dev-reusable.yml` | ABDV Orchestrator | `workflow_call` |
+| `auto-blocked-to-human-required.yml` | Auto Blocked to Human Required | `schedule` / `workflow_dispatch` |
+| `auto-create-subissues-transition.yml` | タスク完了 → create-subissues 自動付与（split-mode 専用） | `workflow_call` |
+| `auto-draft-to-ready.yml` | Draft PR 自動 Ready 化 | `pull_request_target: [synchronize, labeled]` |
+| `auto-human-resolved-to-ready.yml` | Human Resolved to Ready Transition | `issues: [labeled]` |
+| `auto-issue-qa-ready-transition.yml` | Issue QA-Ready to Ready Transition | `issue_comment: [created]` |
+| `auto-knowledge-management-reusable.yml` | AKM Orchestrator | `workflow_call` |
+| `auto-orchestrator-dispatcher.yml` | HVE Cloud Agent Orchestrator Dispatcher | `issues: [opened, labeled, closed]` |
+| `auto-pr-transition-dispatcher.yml` | PR Transition Dispatcher | `pull_request_target: [synchronize]` / `issue_comment: [created]` |
+| `auto-qa-default-answer.yml` | QA 質問票デフォルト回答の自動投稿 | `issue_comment: [created]` |
+| `auto-qa-to-review-transition.yml` | QA 完了 → auto-context-review 自動遷移 | `workflow_call` |
+| `auto-review-to-approve-transition.yml` | レビュー完了 → auto-approve-ready 自動遷移 | `workflow_call` |
+| `auto-self-improve-close.yml` | Self-Improve Auto Close | `pull_request: [closed]` |
+| `bats-tests.yml` | Bats Tests | `pull_request` |
+| `copilot-auto-feedback.yml` | Copilot Auto Feedback | `pull_request_target: [labeled, ready_for_review]` / `issues: [labeled]` |
+| `create-subissues-from-pr.yml` | Create Sub Issues from PR | `pull_request: [labeled]` |
+| `e2e-playwright-reusable.yml` | E2E Playwright (Reusable) | `workflow_call` |
+| `integration-tests-sample.yml` | Integration Tests Sample (Optional) | `workflow_dispatch` |
+| `link-copilot-pr-to-issue.yml` | Copilot PR body への Closes | `pull_request_target: [opened]` |
+| `plan-validation-and-labeling.yml` | Plan Validation and Labeling | `pull_request` |
+| `post-qa-to-pr-comment.yml` | QA 質問票 → PR コメント自動展開 | `pull_request_target: [synchronize]` |
+| `protect-readonly-paths.yml` | Protect Read-Only Paths | `pull_request` |
+| `rollback-drill.yml` | Rollback Drill | `workflow_dispatch` |
+| `scheduled-drift-detection.yml` | Scheduled Drift Detection | `schedule` / `workflow_dispatch` |
+| `scheduled-health-check.yml` | Scheduled Health Check | `schedule` / `workflow_dispatch` |
+| `self-hosted-runner-smoke-test.yml` | self-hosted-runner-smoke-test | `workflow_dispatch` |
+| `setup-labels.yml` | Setup Labels | `workflow_dispatch` / `workflow_call` |
+| `sync-azure-skills.yml` | Sync Azure Skills | `schedule` / `workflow_dispatch` |
+| `sync-issue-labels-to-pr.yml` | Issue ラベル → PR 自動同期 | `pull_request_target: [opened, ready_for_review]` |
+| `tdd-retry-metrics.yml` | TDD Retry Metrics Dashboard | `schedule` / `workflow_dispatch` |
+| `test-cli-scripts.yml` | Test CLI Scripts (Bash / PowerShell) | `push` / `pull_request` |
+| `test-hve-python.yml` | Test HVE Python | `push` / `pull_request` |
+| `validate-agents.yml` | Validate Agents | `push` / `pull_request` |
+| `validate-knowledge.yml` | Validate knowledge/ Files | `pull_request` / `push` / `workflow_dispatch` |
+| `validate-skills.yml` | Validate Skills | `pull_request` |
+| `validate-subissues.yml` | Validate subissues.md format | `pull_request: [opened, synchronize, reopened]` |
+
+> **運用メモ**: オーケストレーション系 reusable workflow は `workflow_call` で呼び出されます。少なくとも `auto-app-dev-microservice-web-reusable.yml` / `auto-batch-dev-reusable.yml` / `auto-ai-agent-dev-reusable.yml` では `runner_type` 入力により `ubuntu-latest` と `[self-hosted, linux, x64, aca]` を切り替えます。
+
+### HVE CLI Orchestrator ワークフロー ID（逆引き）
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
+| `ard` | Auto Requirement Definition | なし（`hve` ローカル実行専用） |
 | `aas` | App Architecture Design | `auto-app-selection-reusable.yml` |
 | `aad` / `aad-web` | Web App Design | `auto-app-detail-design-web-reusable.yml` |
 | `asdw` / `asdw-web` | Web App Dev & Deploy | `auto-app-dev-microservice-web-reusable.yml` |
@@ -71,9 +96,48 @@
 | `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
 | `aqod` | Original Docs Review | `auto-aqod.yml` |
 
-> **注意**: hve アプリケーション版コマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `aas` / `aad-web` / `asdw-web` / `abd` / `abdv` / `aag` / `aagd` / `akm` / `adoc` / `aqod` を使用してください（`aad`/`asdw` はエイリアスとして使用可能）。
+> **注意**: HVE CLI Orchestrator のコマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `ard` / `aas` / `aad-web` / `asdw-web` / `abd` / `abdv` / `aag` / `aagd` / `akm` / `adoc` / `aqod` を使用してください（`aad`/`asdw` はエイリアスとして使用可能）。
+>
+> `ard` は GitHub Actions ワークフローファイルを持たず、`python -m hve orchestrate --workflow ard` によるローカル実行専用です。
 >
 > `akm` / `aqod` / `adoc` は本リポジトリの中核的特徴（`knowledge/` を介した要求定義一元管理）を担うワークフローです。
+
+### Cloud / Local 対応表（初回ユーザー向け）
+
+- **HVE Cloud Agent Orchestrator**: GitHub Issue の label / state を起点に、`auto-orchestrator-dispatcher.yml`（`name: HVE Cloud Agent Orchestrator Dispatcher`）が対象を判定し、`workflow_call` の reusable workflow を呼び出す経路です。
+- **HVE CLI Orchestrator**: PC / Mac / 仮想マシン上で `python -m hve`（または `python -m hve orchestrate --workflow <id>`）から実行する経路です。
+
+| Workflow ID | HVE Cloud Agent Orchestrator | HVE CLI Orchestrator | 備考 |
+|---|---|---|---|
+| `ard` | ❌ | ✅ | `hve/workflow_registry.py` の canonical workflow。dispatcher の `trigger_map` / `done_map` / `closed_prefix_map` に含まれず、Issue label 経路では起動しません（local 専用）。 |
+| `aas` | ✅ | ✅ | Cloud では `auto-app-selection` ラベルで dispatcher が `AAS` を選択。 |
+| `aad-web` | ✅ | ✅ | Cloud では `auto-app-detail-design-web` ラベルで dispatcher が `AAD-WEB` を選択。 |
+| `asdw-web` | ✅ | ✅ | Cloud では `auto-app-dev-microservice-web` ラベルで dispatcher が `ASDW-WEB` を選択。 |
+| `abd` | ✅ | ✅ | Cloud では `auto-batch-design` ラベルで dispatcher が `ABD` を選択。 |
+| `abdv` | ✅ | ✅ | Cloud では `auto-batch-dev` ラベルで dispatcher が `ABDV` を選択。 |
+| `aag` | ✅ | ✅ | Cloud では `auto-ai-agent-design` ラベルで dispatcher が `AAG` を選択。 |
+| `aagd` | ✅ | ✅ | Cloud では `auto-ai-agent-dev` ラベルで dispatcher が `AAGD` を選択。 |
+| `akm` | ✅ | ✅ | Cloud では `knowledge-management` ラベルで dispatcher が `AKM` を選択。 |
+| `adoc` | ✅ | ✅ | Cloud では `auto-app-documentation` ラベルで dispatcher が `ADOC` を選択。 |
+| `aqod` | ✅ | ✅ | Cloud では `original-docs-review` ラベルで dispatcher が `AQOD` を選択。 |
+
+#### canonical workflow ID と alias（`hve/workflow_registry.py`）
+
+`hve/workflow_registry.py` の `_ALIASES` では、以下のみが実装されています。
+
+| alias | canonical workflow ID | 補足 |
+|---|---|---|
+| `aad` | `aad-web` | `get_workflow()` で canonical ID に解決して実行。Cloud 側の後方互換は一部のみで、`aad:qa-ready` / `aad:done` / タイトル接頭辞 `[AAD]` / 旧トリガーラベル `auto-app-detail-design` が対象です。 |
+| `asdw` | `asdw-web` | `get_workflow()` で canonical ID に解決して実行。Cloud 側の後方互換は一部のみで、`asdw:qa-ready` / `asdw:done` / タイトル接頭辞 `[ASDW]` / 旧トリガーラベル `auto-app-dev-microservice` が対象です。 |
+
+> このガイドでは、実装で確認できた alias のみ記載しています（未確認 alias は記載しません）。
+
+#### 初回ユーザー向け注意
+
+- GitHub.com の Issue Template から起動する場合は、**HVE Cloud Agent Orchestrator 対応 workflow**（上表で HVE Cloud Agent Orchestrator 列が ✅）を選択してください。
+- ローカルで `python -m hve` から起動する場合は、`hve/workflow_registry.py` に登録された workflow ID を使用してください。
+- `ard` は **HVE CLI Orchestrator 専用** です。HVE Cloud Agent Orchestrator の Issue label / dispatcher 経路では実行できません。
+- alias（`aad`, `asdw`）は HVE CLI Orchestrator で canonical ID（`aad-web`, `asdw-web`）に解決されます。workflow ID の記載時は canonical ID と混同しないでください。
 
 ### Work IQ 連携（オプション）
 
@@ -83,12 +147,33 @@
   - 通常モード: 質問票から要約した問いを一括で問い合わせ、`qa/{run_id}-{step_id}-workiq-qa.md` を生成
   - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-{step_id}-workiq-qa-draft.md` を生成
 - **AQOD（`aqod`）**: Work IQ は AQOD 本体の `original-docs/` 整合性レビューでは使用しません。
-  - wizard では、AQOD 選択時の対話プロンプトで post-QA を有効にした場合、`aqod` + `auto_qa=True` の組み合わせで `workiq_draft_mode` が自動 ON になります。
-  - CLI では、`aqod` + `auto_qa=True` に加えて `--aqod-post-qa` または `HVE_AQOD_POST_QA=true` を指定した場合、`workiq_draft_mode` が自動 ON になります。
 - wizard モード（`python -m hve`）では、QA 自動投入を有効にした場合のみ Work IQ 有効化メニューが表示されます。ログイン成功後に「Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト」を入力すると、QA フェーズの Work IQ プロンプトへ追記できます。
 
 利用ツール（読み取り専用）:
 - `ask_work_iq`
+
+---
+
+## ARD: Auto Requirement Definition（要求定義の自動化）
+
+| 項目 | 値 |
+|---|---|
+| ワークフロー ID | `ard` |
+| 略称 | `ARD` |
+| ラベルプレフィックス | `ard` |
+| ウィザード表示順 | 1 番目 |
+| ステップ数 | 3（直列。`target_business` 空 → Step 1 → 2 → 3、`target_business` 指定 → Step 2 → 3） |
+| 主な出力 | `docs/company-business-requirement.md`、`docs/catalog/use-case-catalog.md` |
+| Work IQ 連携 | Step 2 のみ（条件付き） |
+
+### ステップ DAG
+
+- Step 1: `target_business` 空のときのみ実行（Untargeted 事業分析）
+- Step 2: 常に実行（Targeted 事業分析）。Step 1 完了時は SR-ID 選択 → `target_business` 自動生成を経由
+- Step 3: Step 2 完了で起動（UseCase 作成）。Step 2 をスキップした場合は Step 1 完了で起動
+
+### 詳細
+詳細な使い方は [`01-business-requirement.md` の「要求定義の自動化（ARD: Auto Requirement Definition）」セクション](./01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) を参照してください。
 
 ---
 
@@ -99,16 +184,16 @@
 | ラベル名 | 役割 |
 |---------|------|
 | `auto-app-selection` | **アプリケーションアーキテクチャ設計ワークフロー（AAS）の起動トリガー**。Issue にこのラベルが付与されると、AAS オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする |
-| `auto-app-detail-design` | **アプリケーション設計ワークフロー（AAD）の起動トリガー**。Issue にこのラベルが付与されると、AAD オーケストレーターが起動し、Step.1〜8.3 の Sub Issue を自動生成して Copilot にアサインする |
-| `auto-app-dev-microservice` | **マイクロサービス開発ワークフローの起動トリガー**。Issue にこのラベルが付与されると、ASDW オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
+| `auto-app-detail-design-web` | **Web App Design（AAD-WEB）の起動トリガー**。Issue にこのラベルが付与されると、AAD-WEB オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする。旧ラベル `auto-app-detail-design` も dispatcher が後方互換で受け付けます。 |
+| `auto-app-dev-microservice-web` | **Web App Dev & Deploy（ASDW-WEB）の起動トリガー**。Issue にこのラベルが付与されると、ASDW-WEB オーケストレーターが起動し、Sub Issue を自動生成して Copilot にアサインする。旧ラベル `auto-app-dev-microservice` も dispatcher が後方互換で受け付けます。 |
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-documentation` | **Source Codeからのドキュメント作成ワークフロー（ADOC）の起動トリガー**。Issue にこのラベルが付与されると、ADOC オーケストレーターが起動し、Step.1〜6 の Sub Issue を自動生成して Copilot にアサインする |
 | `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/original-docs/both）は Issue Template で選択する。 |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
-| `split-mode` | **分割モード PR の識別ラベル**。`label-split-mode.yml` が `work/**/plan.md` に `SPLIT_REQUIRED` を検知した場合に PR に自動付与する。`check-split-mode.yml` がこのラベル付き PR の実装ファイル混入を検知・警告する。 |
-| `plan-only` | **plan.md のみの PR 識別ラベル**。`label-split-mode.yml` が `split-mode` と同時に付与する。plan.md + subissues.md のみを含む PR であることを示す。 |
+| `split-mode` | **分割モード PR の識別ラベル**。`plan-validation-and-labeling.yml` の `label-split-mode` job が、PR 差分に含まれる `work/**/plan.md` の `<!-- split_decision: SPLIT_REQUIRED -->` を検知した場合に自動付与します。`check-split-mode` job は同 PR に実装ファイルが混在していないかを検証します。 |
+| `plan-only` | **plan.md のみの PR 識別ラベル**。`plan-validation-and-labeling.yml` の `label-split-mode` job が `split-mode` と同時に付与します。plan.md / subissues.md 中心の PR であることを示します。 |
 | `auto-context-review` | **Copilot 敵対的レビューのトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に敵対的レビュー指示コメントを自動投稿する |
 | `auto-qa` | **Copilot 質問票作成のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に選択式の質問票作成指示コメントを自動投稿する |
 | `auto-approve-ready` | **PR 自動 Approve & Auto-merge のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft, 非 split-mode）になると、`auto-approve-and-merge.yml` が自動発火し、PR の Approve と squash merge を実行する。各オーケストレーターが `auto-merge: true` 設定時に自動付与する |
@@ -117,7 +202,7 @@
 
 > [!IMPORTANT]
 > GitHub の Issue Template の `labels:` フィールドは、**リポジトリに既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合、Issue 作成時にラベルの自動付与はサイレントにスキップされます。各ワークフローを使用する前に、必要なラベルを事前に作成してください。
-> 特に、`.github/workflows/label-split-mode.yml` で使用する `split-mode` / `plan-only` ラベルも事前に存在している必要があります。**Setup Labels ワークフロー**（Actions タブ → Setup Labels → Run workflow）を実行すると、これらを含む上記の全ラベルを自動作成できます。必要に応じて、リポジトリ設定画面の **Settings → Labels** から手動作成することも可能です。
+> 特に、`plan-validation-and-labeling.yml` で使用する `split-mode` / `plan-only` ラベルも事前に存在している必要があります。**Setup Labels ワークフロー**（Actions タブ → Setup Labels → Run workflow）を実行すると、これらを含む上記の全ラベルを自動作成できます。必要に応じて、リポジトリ設定画面の **Settings → Labels** から手動作成することも可能です。
 >
 > **⚠️ 初回セットアップ時の注意（鶏と卵問題）:** 新規リポジトリには `setup-labels` ラベル自体がまだ存在しないため、Issue テンプレートからではなく **Actions タブから `Setup Labels` ワークフローを手動実行**する必要があります（Actions タブ → 左サイドバーの「Setup Labels」→「Run workflow」）。手動実行の前に **Settings → Actions → General → Workflow permissions** を「**Read and write permissions**」に設定してください。
 >
@@ -152,29 +237,38 @@
 | `:ready` | 実行待ち（依存解決済み、Copilot アサイン前） |
 | `:running` | Copilot 実行中 |
 | `:done` | Step 完了（次 Step の起動トリガー） |
-| `:blocked` | 依存先未完了でブロック中 |
+| `:blocked` | 実行継続不能（依存先未完了 / TDD リトライ上限超過 / Deploy 検証上限超過 等）（Copilot が自動付与） |
+| `:human-required` | `:blocked` 付与から SLA（既定 24h）経過後に自動昇格。人間介入要請 |
+| `:human-investigating` | 人間が原因調査・解決作業中（手動付与） |
+| `:human-resolved` | 人間解決済み。付与すると `:ready` へ自動復帰（`auto-human-resolved-to-ready.yml` が起動） |
 
 ![各ワークフロー共通のステートラベル遷移（initialized→ready→running→done / blocked）](./images/orchestration-state-label-lifecycle.svg)
+
+詳細な事後 HITL フロー: [`docs/hitl/escalation-sla.md`](../docs/hitl/escalation-sla.md)
 
 ---
 
 ## モデル選択ルール
 
-- 選択肢: `Auto` / `gpt-5.5` / `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `gpt-5.4` / `gpt-5.3-codex` / `gemini-2.5-pro`
+- 選択肢: `Auto` / `claude-opus-4.7` / `claude-opus-4.6` / `gpt-5.5` / `gpt-5.4`（5 種）
 - `Auto` は GitHub が最適モデルを動的に選択（可用性・レイテンシ・レート制限・プラン/ポリシーを考慮）
 - `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）
 - プレミアム乗数 1x 超のモデルは `Auto` 対象外
 - 空文字の場合は `Auto` として扱う
-- 指定モデルが API 未対応の場合は `Auto`（既定）に戻して再実行
-- Sub-Issue には `model/*` ラベルでモデル指定を伝播
+- 廃止モデル（`claude-sonnet-4.6` / `gpt-5.3-codex` / `gemini-2.5-pro`）を指定した場合は `Auto` に自動フォールバック（WARNING ログあり）
+- Issue Template からも全モデル選択可（Phase 9+ で hve CLI `--model` とパリティ達成）
+- Sub-Issue には `model/*` / `review-model/*` / `qa-model/*` ラベルでモデル指定を伝播
+- `review_model` は hve CLI `--review-model` 相当。`Auto` 選択時は Copilot が最適モデルを自動選択（`SDKConfig.get_review_model()` は `Auto` をそのまま保持）
+- `qa_model` は hve CLI `--qa-model` 相当。`Auto` 選択時は Copilot が最適モデルを自動選択（`SDKConfig.get_qa_model()` は `Auto` をそのまま保持）
 - モデル ID は Copilot CLI の `/model` 表示に合わせてドット区切りを使用（例: `claude-opus-4.7`, `claude-opus-4.6`）
+- `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先される
 - 公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
 ---
 
 ## Custom Agent 一覧
 
-`.github/agents/` 配下の **65** Custom Agent を、以下にカテゴリ別で整理します。
+`.github/agents/` 配下の **76** Custom Agent を、ファイル名ベースのカテゴリと `hve/workflow_registry.py` の実際の割当で整理します。
 
 ### 全体俯瞰図
 
@@ -195,215 +289,43 @@
 - Self-Improve: [chain-self-improve.svg](./images/chain-self-improve.svg)
 - Workflow interconnection: [workflow-interconnection.svg](./images/workflow-interconnection.svg)
 
+### カテゴリ別件数（`.github/agents/*.agent.md` 実体ベース）
 
+| カテゴリ | 件数 |
+|---------|-----:|
+| ビジネス分析・要求定義 | 2 |
+| アーキテクチャ設計 | 27 |
+| 実装 | 21 |
+| ドキュメント生成 | 19 |
+| QA / レビュー | 6 |
+| Knowledge Management | 1 |
 
+### ワークフローごとの実行 Agent（`hve/workflow_registry.py` 抽出）
 
-### Custom Agent 入出力クイックマップ（定義ファイル抽出）
+| Workflow ID | 名称 | Step 数 | 実行 Agent |
+|-------------|------|--------:|------------|
+| `ard` | Auto Requirement Definition | 3 | `1`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`2`: `Arch-ARD-BusinessAnalysis-Targeted`<br>`3`: `Arch-ARD-UseCaseCatalog` |
+| `aas` | Architecture Design | 8 | `1`: `Arch-ApplicationAnalytics`<br>`2`: `Arch-ArchitectureCandidateAnalyzer`<br>`3.1`: `Arch-Microservice-DomainAnalytics`<br>`3.2`: `Arch-Microservice-ServiceIdentify`<br>`4`: `Arch-DataModeling`<br>`5`: `Arch-DataCatalog`<br>`6`: `Arch-Microservice-ServiceCatalog`<br>`7`: `Arch-TDD-TestStrategy` |
+| `aad-web` | Web App Design | 4 | `1`: `Arch-UI-List`<br>`2.1`: `Arch-UI-Detail`<br>`2.2`: `Arch-Microservice-ServiceDetail`<br>`2.3`: `Arch-TDD-TestSpec` |
+| `asdw-web` | Web App Dev & Deploy | 20 | `1.1`: `Dev-Microservice-Azure-DataDesign`<br>`1.2`: `Dev-Microservice-Azure-DataDeploy`<br>`2.1`: `Dev-Microservice-Azure-ComputeDesign`<br>`2.2`: `Dev-Microservice-Azure-AddServiceDesign`<br>`2.3`: `Dev-Microservice-Azure-AddServiceDeploy`<br>`2.3T`: `Arch-TDD-TestSpec`<br>`2.3TC`: `Dev-Microservice-Azure-ServiceTestCoding`<br>`2.4`: `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`<br>`2.5`: `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`<br>`3.0T`: `Arch-TDD-TestSpec`<br>`3.0TC`: `Dev-Microservice-Azure-UITestCoding`<br>`3.1`: `Dev-Microservice-Azure-UICoding`<br>`3.2`: `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`<br>`3.3`: `E2ETesting-Playwright`<br>`4.1`: `QA-AzureArchitectureReview`<br>`4.2`: `QA-AzureDependencyReview` |
+| `abd` | Batch Design | 9 | `1.1`: `Arch-Batch-DomainAnalytics`<br>`1.2`: `Arch-Batch-DataSourceAnalysis`<br>`2`: `Arch-Batch-DataModel`<br>`3`: `Arch-Batch-JobCatalog`<br>`4`: `Arch-Batch-ServiceCatalog`<br>`5`: `Arch-Batch-TestStrategy`<br>`6.1`: `Arch-Batch-JobSpec`<br>`6.2`: `Arch-Batch-MonitoringDesign`<br>`6.3`: `Arch-Batch-TDD-TestSpec` |
+| `abdv` | Batch Dev | 7 | `1.1`: `Dev-Batch-DataServiceSelect`<br>`1.2`: `Dev-Batch-DataDeploy`<br>`2.1`: `Dev-Batch-TestCoding`<br>`2.2`: `Dev-Batch-ServiceCoding`<br>`3`: `Dev-Batch-FunctionsDeploy`<br>`4.1`: `QA-AzureArchitectureReview`<br>`4.2`: `QA-AzureDependencyReview` |
+| `aag` | AI Agent Design | 3 | `1`: `Arch-AIAgentDesign-Step1`<br>`2`: `Arch-AIAgentDesign-Step2`<br>`3`: `Arch-AIAgentDesign-Step3` |
+| `aagd` | AI Agent Dev & Deploy | 5 | `1`: `Arch-AIAgentDesign-Step1`<br>`2.1`: `Arch-TDD-TestSpec`<br>`2.2`: `Dev-Microservice-Azure-AgentTestCoding`<br>`2.3`: `Dev-Microservice-Azure-AgentCoding`<br>`3`: `Dev-Microservice-Azure-AgentDeploy` |
+| `akm` | Knowledge Management | 1 | `1`: `KnowledgeManager` |
+| `aqod` | Original Docs Review | 1 | `1`: `QA-DocConsistency` |
+| `adoc` | Source Codeからのドキュメント作成 | 23 | `1`: `Doc-FileInventory`<br>`2.1`: `Doc-FileSummary`<br>`2.2`: `Doc-TestSummary`<br>`2.3`: `Doc-ConfigSummary`<br>`2.4`: `Doc-CICDSummary`<br>`2.5`: `Doc-LargeFileSummary`<br>`3.1`: `Doc-ComponentDesign`<br>`3.2`: `Doc-APISpec`<br>`3.3`: `Doc-DataModel`<br>`3.4`: `Doc-TestSpecSummary`<br>`3.5`: `Doc-TechDebt`<br>`4`: `Doc-ComponentIndex`<br>`5.1`: `Doc-ArchOverview`<br>`5.2`: `Doc-DependencyMap`<br>`5.3`: `Doc-InfraDeps`<br>`5.4`: `Doc-NFRAnalysis`<br>`6.1`: `Doc-Onboarding`<br>`6.2`: `Doc-Refactoring`<br>`6.3`: `Doc-Migration` |
 
-| Agent 名 | 区分 | 主入力 | 主出力 | knowledge/ 参照 |
-|---|---|---|---|---|
-| `Arch-AIAgentDesign` | Arch | `docs/catalog/use-case-catalog.md、docs/catalog/domain-analytics.md` | `docs/agent/agent-application-definition.md、docs/agent/agent-architecture.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-ApplicationAnalytics` | Arch | `docs/catalog/use-case-catalog.md、knowledge/D01-事業意図-成功条件定義書.md` | `docs/catalog/app-catalog.md` | `knowledge/D01-事業意図-成功条件定義書.md、knowledge/D02-スコープ-対象境界定義書.md` |
-| `Arch-ArchitectureCandidateAnalyzer` | Arch | `docs/catalog/app-catalog.md、docs/architectural-requirements-app-xx.md` | `docs/catalog/app-arch-catalog.md、{WORK}plan.md` | `knowledge/D01-事業意図-成功条件定義書.md、knowledge/D02-スコープ-対象境界定義書.md` |
-| `Arch-Batch-DataModel` | Arch | `docs/batch/batch-domain-analytics.md、docs/batch/batch-data-source-analysis.md` | `docs/batch/batch-domain-analytics.md、docs/batch/batch-data-source-analysis.md` | `knowledge/D07-用語集-ドメインモデル定義書.md、knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` |
-| `Arch-Batch-DataSourceAnalysis` | Arch | `docs/catalog/use-case-catalog.md、docs/catalog/data-model.md` | `docs/catalog/use-case-catalog.md、docs/catalog/data-model.md` | `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md、knowledge/D10-API-Event-File-連携契約パック.md` |
-| `Arch-Batch-DomainAnalytics` | Arch | `docs/catalog/use-case-catalog.md、docs/usecase/` | `docs/catalog/use-case-catalog.md、docs/usecase/` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D05-ユースケース-シナリオカタログ.md` |
-| `Arch-Batch-JobCatalog` | Arch | `docs/batch/batch-domain-analytics.md、docs/batch/batch-data-source-analysis.md` | `docs/batch/batch-domain-analytics.md、docs/batch/batch-data-source-analysis.md` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D05-ユースケース-シナリオカタログ.md` |
-| `Arch-Batch-JobSpec` | Arch | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D05-ユースケース-シナリオカタログ.md` |
-| `Arch-Batch-MonitoringDesign` | Arch | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md` |
-| `Arch-Batch-ServiceCatalog` | Arch | `docs/batch/batch-job-catalog.md、docs/batch/batch-data-model.md` | `docs/batch/batch-job-catalog.md、docs/batch/batch-data-model.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md` |
-| `Arch-Batch-TDD-TestSpec` | Arch | `docs/batch/batch-test-strategy.md、docs/batch/batch-service-catalog.md` | `docs/batch/batch-test-strategy.md、docs/batch/batch-service-catalog.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-Batch-TestStrategy` | Arch | `docs/batch/batch-service-catalog.md、docs/batch/batch-data-model.md` | `docs/batch/batch-service-catalog.md、docs/batch/batch-data-model.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-DataCatalog` | Arch | `docs/catalog/data-model.md、docs/catalog/domain-analytics.md` | `docs/catalog/data-catalog.md、{WORK}work-status.md` | `knowledge/D07-用語集-ドメインモデル定義書.md、knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` |
-| `Arch-DataModeling` | Arch | `docs/catalog/domain-analytics.md、docs/catalog/service-catalog.md` | `docs/catalog/data-model.md、data/sample-data.json` | `knowledge/D07-用語集-ドメインモデル定義書.md、knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` |
-| `Arch-ImprovementPlanner` | Arch | `{WORK}../QA-CodeQualityScan/artifacts/scan-result.json、knowledge/D15-非機能-運用-監視-DR-仕様書.md` | `{WORK}plan.md、.github/skills/planning/task-dag-planning/references/plan-template.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` |
-| `Arch-Microservice-DomainAnalytics` | Arch | `docs/catalog/use-case-catalog.md、docs/catalog/domain-analytics.md` | `docs/catalog/use-case-catalog.md、docs/catalog/domain-analytics.md` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D05-ユースケース-シナリオカタログ.md` |
-| `Arch-Microservice-ServiceCatalog` | Arch | `docs/catalog/service-catalog.md、docs/catalog/use-case-catalog.md、docs/catalog/domain-analytics.md` | `docs/catalog/service-catalog-matrix.md、docs/service-catalog-app-01.md、{WORK}plan.md（分割時のみ）、{WORK}subissues.md（分割時のみ）` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D07-用語集-ドメインモデル定義書.md` |
-| `Arch-Microservice-ServiceDetail` | Arch | `docs/catalog/service-catalog*.md` | `docs/services/{serviceId}-description.md、{WORK}work-status.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-Microservice-ServiceIdentify` | Arch | `docs/catalog/use-case-catalog.md、docs/catalog/domain-analytics.md` | `docs/catalog/service-catalog.md、{WORK}microservice-modeling-work-status.md` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D05-ユースケース-シナリオカタログ.md` |
-| `Arch-TDD-TestSpec` | Arch | `—` | `docs/test-specs/` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-TDD-TestStrategy` | Arch | `—` | `docs/catalog/test-strategy.md、knowledge/D05-ユースケース-シナリオカタログ.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-UI-Detail` | Arch | `docs/catalog/screen-catalog.md、docs/catalog/app-catalog.md` | `—` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Arch-UI-List` | Arch | `docs/catalog/domain-analytics.md、docs/catalog/service-catalog.md` | `docs/catalog/screen-catalog.md、{WORK}screen-modeling-work-status.md` | `knowledge/D05-ユースケース-シナリオカタログ.md、knowledge/D11-画面-UX-操作意味仕様書.md` |
-| `Dev-Batch-Deploy` | Dev | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `docs/batch/batch-service-catalog.md、docs/batch/batch-job-catalog.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D20-セキュア設計-実装ガードレール.md` |
-| `Dev-Batch-ServiceCoding` | Dev | `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md、docs/test-specs/{jobId}-test-spec.md` | `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md、docs/test-specs/{jobId}-test-spec.md` | `knowledge/D04-業務プロセス仕様書.md、knowledge/D06-業務ルール-判定表仕様書.md` |
-| `Dev-Batch-TestCoding` | Dev | `docs/test-specs/{jobId}-test-spec.md、docs/batch/batch-test-strategy.md` | `docs/test-specs/{jobId}-test-spec.md、docs/batch/batch-test-strategy.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` |
-| `Dev-Microservice-Azure-AddServiceDeploy` | Dev | `{WORK}plan.md、docs/azure/azure-services-additional.md` | `infra/azure/create-azure-additional-resources-prep.sh、infra/azure/create-azure-additional-resources/create.sh` | `knowledge/D10-API-Event-File-連携契約パック.md、knowledge/D15-非機能-運用-監視-DR-仕様書.md` |
-| `Dev-Microservice-Azure-AddServiceDesign` | Dev | `—` | `docs/azure/azure-services-additional.md` | `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md、knowledge/D10-API-Event-File-連携契約パック.md` |
-| `Dev-Microservice-Azure-AgentCoding` | Dev | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D10-API-Event-File-連携契約パック.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D10-API-Event-File-連携契約パック.md` |
-| `Dev-Microservice-Azure-AgentDeploy` | Dev | `—` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D18-Prompt-ガバナンス-入力統制パック.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D18-Prompt-ガバナンス-入力統制パック.md` |
-| `Dev-Microservice-Azure-AgentTestCoding` | Dev | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` |
-| `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` | Dev | `—` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` |
-| `Dev-Microservice-Azure-ComputeDesign` | Dev | `—` | `{WORK}artifacts/` | `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md、knowledge/D15-非機能-運用-監視-DR-仕様書.md` |
-| `Dev-Microservice-Azure-DataDeploy` | Dev | `.github/workflows/copilot-setup-steps.yml、{WORK}work-status.md` | `—` | `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md、knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` |
-| `Dev-Microservice-Azure-DataDesign` | Dev | `docs/catalog/data-model.md、docs/catalog/service-catalog.md` | `docs/azure/azure-services-data.md、{WORK}data-azure-design-work-status.md` | `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md、knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` |
-| `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` | Dev | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` |
-| `Dev-Microservice-Azure-ServiceTestCoding` | Dev | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D17-品質保証-UAT-受入パッケージ.md` |
-| `Dev-Microservice-Azure-UICoding` | Dev | `—` | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D11-画面-UX-操作意味仕様書.md` |
-| `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` | Dev | `—` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D20-セキュア設計-実装ガードレール.md` | `knowledge/D15-非機能-運用-監視-DR-仕様書.md、knowledge/D20-セキュア設計-実装ガードレール.md` |
-| `Dev-Microservice-Azure-UITestCoding` | Dev | `—` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D11-画面-UX-操作意味仕様書.md` | `knowledge/D06-業務ルール-判定表仕様書.md、knowledge/D11-画面-UX-操作意味仕様書.md` |
-| `Doc-APISpec` | Doc | `—` | `docs-generated/components/api-spec.md` | `—` |
-| `Doc-ArchOverview` | Doc | `—` | `docs-generated/architecture/overview.md` | `—` |
-| `Doc-CICDSummary` | Doc | `.github/workflows/*.yml` | `docs-generated/files/{relative-path}.md` | `—` |
-| `Doc-ComponentDesign` | Doc | `docs-generated/files/*.md` | `docs-generated/components/{component}.md` | `—` |
-| `Doc-ComponentIndex` | Doc | `docs-generated/components/*.md` | `docs-generated/component-index.md` | `—` |
-| `Doc-ConfigSummary` | Doc | `—` | `docs-generated/files/{relative-path}.md` | `—` |
-| `Doc-DataModel` | Doc | `—` | `docs-generated/components/data-model.md` | `—` |
-| `Doc-DependencyMap` | Doc | `—` | `docs-generated/architecture/dependency-map.md` | `—` |
-| `Doc-FileInventory` | Doc | `—` | `docs-generated/inventory.md` | `—` |
-| `Doc-FileSummary` | Doc | `docs-generated/inventory.md` | `docs-generated/files/{relative-path}.md` | `—` |
-| `Doc-InfraDeps` | Doc | `—` | `docs-generated/architecture/infra-deps.md` | `—` |
-| `Doc-LargeFileSummary` | Doc | `—` | `docs-generated/files/{relative-path}.md` | `—` |
-| `Doc-Migration` | Doc | `—` | `docs-generated/guides/migration-assessment.md` | `—` |
-| `Doc-NFRAnalysis` | Doc | `—` | `docs-generated/architecture/nfr-analysis.md` | `—` |
-| `Doc-Onboarding` | Doc | `—` | `docs-generated/guides/onboarding.md` | `—` |
-| `Doc-Refactoring` | Doc | `—` | `docs-generated/guides/refactoring.md` | `—` |
-| `Doc-TechDebt` | Doc | `—` | `docs-generated/components/tech-debt.md` | `—` |
-| `Doc-TestSpecSummary` | Doc | `—` | `docs-generated/components/test-spec-summary.md` | `—` |
-| `Doc-TestSummary` | Doc | `—` | `docs-generated/files/{relative-path}.md` | `—` |
-| `KnowledgeManager` | Knowledge | `qa/*.md、original-docs/*` | `knowledge/business-requirement-document-status.md、knowledge/D{NN}-*.md` | `knowledge/business-requirement-document-status.md、knowledge/D{NN}-*.md` |
-| `QA-AzureArchitectureReview` | QA | `docs/usecase-detail.md、docs/catalog/service-catalog-matrix.md` | `docs/azure/azure-architecture-review-report.md` | `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md、knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` |
-| `QA-AzureDependencyReview` | QA | `docs/catalog/service-catalog-matrix.md、docs/catalog/app-catalog.md` | `docs/azure/dependency-review-report.md` | `knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md、knowledge/D10-API-Event-File-連携契約パック.md` |
-| `QA-CodeQualityScan` | QA | `knowledge/D17-品質保証-UAT-受入パッケージ.md、knowledge/D20-セキュア設計-実装ガードレール.md` | `{WORK}artifacts/scan-result.json、{WORK}artifacts/scan-summary.md` | `knowledge/D17-品質保証-UAT-受入パッケージ.md、knowledge/D20-セキュア設計-実装ガードレール.md` |
-| `QA-DocConsistency` | QA | `knowledge/D07-用語集-ドメインモデル定義書.md` | `{WORK}artifacts/doc-consistency-report.md` | `knowledge/D07-用語集-ドメインモデル定義書.md` |
-| `QA-PostImproveVerify` | QA | `knowledge/D17-品質保証-UAT-受入パッケージ.md、knowledge/D20-セキュア設計-実装ガードレール.md` | `{WORK}verification-report.md` | `knowledge/D17-品質保証-UAT-受入パッケージ.md、knowledge/D20-セキュア設計-実装ガードレール.md` |
-### ビジネス分析・要求定義（2）
+### Self-Improve で使用する Agent（`self-improve.yml` / `hve/orchestrator.py`）
 
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-ApplicationAnalytics` | ユースケースから実装手段を仕分け・アプリリスト・MVP 選出 |
-| `Arch-ArchitectureCandidateAnalyzer` | 各アプリの非機能要件に基づき最良のアーキテクチャを選定 |
+| 役割 | Agent |
+|------|-------|
+| Phase 4a: コード品質スキャン | `QA-CodeQualityScan` |
+| Phase 4a: ドキュメント整合性 | `QA-DocConsistency` |
+| Phase 4b: 改善計画 | `Arch-ImprovementPlanner` |
+| Phase 4d: 改善後検証 | `QA-PostImproveVerify` |
 
-### アーキテクチャ設計 — 共通（2）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-DataModeling` | ユースケースから全エンティティ・サービス境界・データモデルを生成 |
-| `Arch-DataCatalog` | 概念データモデルと物理テーブルのマッピングを記録するデータカタログ生成 |
-
-### アーキテクチャ設計 — Microservice（4）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-Microservice-DomainAnalytics` | DDD 観点でドメイン分析（Bounded Context / ユビキタス言語 / 集約 / ドメインイベント）を実施 |
-| `Arch-Microservice-ServiceIdentify` | ドメイン分析からマイクロサービス候補を抽出し service-list.md を作成 |
-| `Arch-Microservice-ServiceCatalog` | 画面→機能→API→SoT データのマッピングを service-catalog.md に作成 |
-| `Arch-Microservice-ServiceDetail` | 全サービスのマイクロサービス詳細仕様（API / イベント / データ / セキュリティ）を作成 |
-
-### アーキテクチャ設計 — UI（2）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-UI-List` | 画面一覧（表）と画面遷移図（Mermaid）を設計し screen-list.md を作成 |
-| `Arch-UI-Detail` | 全画面の実装用画面定義書（UX / A11y / セキュリティ含む）を docs/screen/ に生成 |
-
-### アーキテクチャ設計 — Batch（7）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-Batch-DomainAnalytics` | バッチ DDD 観点ドメイン分析（BC / 冪等性 / チェックポイント）を作成 |
-| `Arch-Batch-DataSourceAnalysis` | バッチデータソース / デスティネーション分析（スキーマ / 変換 / SLA）を作成 |
-| `Arch-Batch-DataModel` | バッチ 4 層データモデル・冪等性キー・パーティション・ER 図を設計 |
-| `Arch-Batch-JobCatalog` | バッチジョブ設計（一覧 / 依存 DAG / スケジュール / リトライ）を作成 |
-| `Arch-Batch-JobSpec` | バッチジョブ詳細仕様書を docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md に作成 |
-| `Arch-Batch-ServiceCatalog` | バッチジョブサービスカタログを docs/batch/batch-service-catalog.md に作成 |
-| `Arch-Batch-MonitoringDesign` | バッチ処理監視・運用設計書を docs/batch/batch-monitoring-design.md に作成 |
-
-### アーキテクチャ設計 — AI Agent（1）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-AIAgentDesign` | AI Agent のアプリケーション定義・粒度設計・詳細設計を実施し、docs/ai-agent-catalog.md に出力 |
-
-### アーキテクチャ設計 — 改善（1）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-ImprovementPlanner` | コード品質スキャン結果を受け取り、改善計画（DAG + 見積）を策定する[^improvement-planner-phase4b] |
-
-### アーキテクチャ設計 — テスト（4）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Arch-TDD-TestStrategy` | サービスカタログ・データモデルから TDD テスト戦略書を docs/catalog/test-strategy.md に生成 |
-| `Arch-TDD-TestSpec` | テスト戦略書・画面/サービス定義書から TDD テスト仕様書を docs/test-specs/ に生成 |
-| `Arch-Batch-TestStrategy` | バッチ処理テスト戦略書（冪等性 / データ品質 / 障害注入）を docs/batch/batch-test-strategy.md に作成 |
-| `Arch-Batch-TDD-TestSpec` | バッチ TDD テスト仕様書をジョブごとに docs/test-specs/{jobId}-test-spec.md に生成 |
-
-### 実装 — Microservice（Azure）（11）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Dev-Microservice-Azure-ComputeDesign` | ユースケース内の全マイクロサービスについて最適な Azure コンピュート（ホスティング）を選定 |
-| `Dev-Microservice-Azure-DataDesign` | Polyglot Persistence に基づき全エンティティに対する最適 Azure データストアを選定し文書化 |
-| `Dev-Microservice-Azure-DataDeploy` | Azure CLI でデータ系サービスを作成し、サンプルデータを変換・一括登録して検証 |
-| `Dev-Microservice-Azure-AddServiceDesign` | サービス定義書の外部依存・統合要件から追加で必要な Azure サービスを選定 |
-| `Dev-Microservice-Azure-AddServiceDeploy` | Azure 追加サービスを Azure CLI で冪等作成し、AC 検証で完了判定 |
-| `Dev-Microservice-Azure-ServiceTestCoding` | TDD RED フェーズのテストコード（失敗するテスト）を test/api/{サービス名}.Tests/ に生成 |
-| `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` | マイクロサービス定義書から全サービスの Azure Functions を実装 |
-| `Dev-Microservice-Azure-UITestCoding` | 画面別テスト仕様書から TDD RED フェーズの UI テストコードを test/ui/ に生成 |
-| `Dev-Microservice-Azure-UICoding` | 画面定義書に基づき全画面の UI を実装し、API クライアント層を整備 |
-| `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` | Azure Static Web Apps へのデプロイと GitHub Actions による CD 構築 |
-| `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` | 全サービスを Azure Functions 用に作成・デプロイし、GitHub Actions で CI/CD 構築 |
-
-### 実装 — AI Agent（Azure）（3）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Dev-Microservice-Azure-AgentTestCoding` | テスト仕様書から TDD RED フェーズのテストコードを test/agent/{AgentName}.Tests/ に生成 |
-| `Dev-Microservice-Azure-AgentCoding` | AI Agent 詳細設計書から Azure AI Foundry Agent Service を使用して Agent を実装 |
-| `Dev-Microservice-Azure-AgentDeploy` | AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions で CI/CD 構築 |
-
-### 実装 — Batch（Azure）（3）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Dev-Batch-TestCoding` | バッチ TDD テスト仕様書から TDD RED フェーズのテストコードを test/batch/{jobId}-{jobNameSlug}.Tests/ に生成 |
-| `Dev-Batch-ServiceCoding` | バッチジョブ詳細仕様書と TDD テスト仕様書に基づき Azure Functions 実装で TDD GREEN を完了 |
-| `Dev-Batch-Deploy` | バッチサービスを Azure にデプロイし GitHub Actions CI/CD を構築、AC 検証まで実施 |
-
-### ドキュメント生成（Doc-*）（19）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `Doc-APISpec` | API 仕様書を生成 |
-| `Doc-ArchOverview` | アーキテクチャ概要図を生成 |
-| `Doc-CICDSummary` | CI/CD ワークフロー定義ファイルを要約 |
-| `Doc-ComponentDesign` | モジュール単位のコンポーネント設計書を作成 |
-| `Doc-ComponentIndex` | レイヤー2成果物の要約インデックスを生成 |
-| `Doc-ConfigSummary` | 設定・IaC ファイルの構成と依存を要約 |
-| `Doc-DataModel` | データモデル定義書を生成 |
-| `Doc-DependencyMap` | 依存関係マップを作成し循環依存を検出 |
-| `Doc-FileInventory` | 対象ファイルの列挙・言語判定・分割計画を作成 |
-| `Doc-FileSummary` | プロダクションコード1ファイルの責務・公開API・依存を要約 |
-| `Doc-InfraDeps` | インフラ依存とベンダーロックイン度を分析 |
-| `Doc-LargeFileSummary` | 大規模ファイルを分割要約し統合サマリーを作成 |
-| `Doc-Migration` | 移行アセスメントを生成 |
-| `Doc-NFRAnalysis` | 非機能要件の現状分析を作成 |
-| `Doc-Onboarding` | 新規参画者向けオンボーディングガイドを生成 |
-| `Doc-Refactoring` | リファクタリングガイドを生成 |
-| `Doc-TechDebt` | 技術的負債を集約・分類・優先度付け |
-| `Doc-TestSpecSummary` | テスト仕様サマリーを集約 |
-| `Doc-TestSummary` | テストコード1ファイルの対象・ケース・モックを要約 |
-
-### QA / レビュー（5）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `QA-AzureArchitectureReview` | デプロイ済み Azure リソースを棚卸しし、Azure WAF（5 本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ / セキュリティをレビュー |
-| `QA-AzureDependencyReview` | サービスカタログ準拠で Azure 依存（参照 / 設定 / IaC）を証跡付きで点検 |
-| `QA-CodeQualityScan` | コードベースの品質スキャンを実行。ruff / pytest --cov / markdownlint の結果を収集しコード品質スコアと改善候補リストを生成。自己改善ループの Phase 4a として使用 |
-| `QA-DocConsistency` | docs/ 配下の Markdown ファイルと既存コード・設計文書との整合性を検証し、矛盾・欠落・捏造を検出。自己改善ループの Phase 4a（ドキュメント整合性）として使用。AQOD ワークフロー（`aqod`）でも参照され、`original-docs/` から質問票を生成する（**質問票生成モード**）と、`qa/` / `docs/` 文書との整合性チェックを行う（**整合性チェックモード**）の 2 モードで動作する。**AQOD 本体成果物は `qa/QA-DocConsistency-*.md`（`qa/QA-DocConsistency-Issue-<N>.md` または `qa/QA-DocConsistency-<yyyymmdd-HHMMSS>.md`）であり、HVE Auto-QA の補助成果物 `qa/{run_id}-{step_id}-execution-qa-merged.md` とは別物** |
-| `QA-PostImproveVerify` | 自己改善実行後の品質検証を行う。Skill: harness-verification-loop Verification Loop（5 段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループの Phase 4d として使用 |
-
-### Knowledge Management（1）
-
-| Agent 名 | 用途 |
-|---------|------|
-| `KnowledgeManager` | AKM ワークフロー（`akm`）で参照される Agent。`qa/` / `original-docs/` / `custom_source_dir` を D01〜D21 に分類し、status/knowledge 更新を行う（`.github/agents/KnowledgeManager.agent.md`）。 |
-
----
-
+> **補足**: 各 Agent の詳細な入出力や `knowledge/` 参照は、対応する `.github/agents/*.agent.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
 
 ## knowledge/ ディレクトリとの関係
 
@@ -437,22 +359,22 @@
 
 `.github/ISSUE_TEMPLATE/` 配下の全テンプレートです。
 
-| ファイル名 | 用途 | トリガーラベル | 自己改善設定 |
-|-----------|------|-------------|-----------|
-| `app-architecture-design.yml` | アプリケーションアーキテクチャ設計ワークフロー起動 | `auto-app-selection` | ✅ あり |
-| `web-app-design.yml` | Web App Design（AAD-WEB）ワークフロー起動 | `auto-app-detail-design` | ✅ あり |
-| `web-app-dev.yml` | Web App Dev & Deploy（ASDW-WEB）ワークフロー起動 | `auto-app-dev-microservice` | ✅ あり |
-| `ai-agent-design.yml` | AI Agent Design（AAG）ワークフロー起動 | `auto-ai-agent-design` | ✅ あり |
-| `ai-agent-dev.yml` | AI Agent Dev & Deploy（AAGD）ワークフロー起動 | `auto-ai-agent-dev` | ✅ あり |
-| `batch-design.yml` | バッチ設計ワークフロー起動 | `auto-batch-design` | ✅ あり |
-| `batch-dev.yml` | バッチ実装ワークフロー起動 | `auto-batch-dev` | ✅ あり |
-| `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成ワークフロー起動 | `auto-app-documentation` | ✅ あり |
-| `knowledge-management.yml` | knowledge ドキュメント管理（qa/original-docs/both） | `knowledge-management` | ✅ あり |
-| `original-docs-review.yml` | AQOD 原本質問票生成ワークフロー起動 | `original-docs-review` | ✅ あり |
-| `self-improve.yml` | セルフ改善ループの直接起動（専用テンプレート） | `self-improve` | 自己改善そのもの（別経路） |
-| `setup-labels.yml` | ラベル初期セットアップ | `setup-labels` | ❌ 対象外 |
+| ファイル名 | name | labels | 主要 inputs（先頭6件） |
+|-----------|------|--------|------------------------|
+| `ai-agent-design.yml` | AI Agent Design | `auto-ai-agent-design` | `app_ids, usecase_id, branch, runner_type, steps, model` |
+| `ai-agent-dev.yml` | AI Agent Dev & Deploy | `auto-ai-agent-dev` | `app_ids, branch, runner_type, resource_group, usecase_id, steps` |
+| `app-architecture-design.yml` | Architecture Design（アーキテクチャ設計） | `auto-app-selection` | `branch, runner_type, steps, model, review_model, qa_model` |
+| `batch-design.yml` | Batch Design | `auto-batch-design` | `app_ids, branch, runner_type, steps, model, review_model` |
+| `batch-dev.yml` | Batch Dev | `auto-batch-dev` | `app_ids, branch, runner_type, resource_group, batch_job_ids, steps` |
+| `knowledge-management.yml` | knowledge/ ドキュメント生成・管理 | `knowledge-management` | `branch, runner_type, sources, target_files, force_refresh, enable_review` |
+| `original-docs-review.yml` | Original Docs Review | `original-docs-review` | `branch, runner_type, target_scope, depth, focus_areas, enable_review` |
+| `self-improve.yml` | Self-Improve: 自己改善ループ | `self-improve` | `target_scope, task_goal, max_iterations, quality_threshold, improvement_targets, additional_context` |
+| `setup-labels.yml` | Setup Labels: ラベル初期セットアップ | `setup-labels` | `confirm` |
+| `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成 | `auto-app-documentation` | `branch, runner_type, target_dirs, exclude_patterns, doc_purpose, max_file_lines` |
+| `web-app-design.yml` | Web App Design | `auto-app-detail-design-web` | `branch, runner_type, app_ids, steps, model, review_model` |
+| `web-app-dev.yml` | Web App Dev & Deploy | `auto-app-dev-microservice-web` | `app_ids, branch, runner_type, resource_group, steps, model` |
 
-> **自己改善設定について**: 上記テンプレートの `enable_self_improve` チェックボックスを ON にすると、全ステップ完了後に自己改善ループが実行されます（デフォルトは OFF）。`self-improve.yml` は自己改善専用テンプレートで別経路です。`setup-labels.yml` はラベル初期化用のため自己改善対象外です。
+> **自己改善設定について**: `setup-labels.yml` を除くテンプレートは、`enable_self_improve` / `self_improve_max_iterations` / `self_improve_quality_threshold` を持ちます。`self-improve.yml` は自己改善専用テンプレートです。
 
 > **hve CLI からの自己改善制御**: `hve orchestrate -w <workflow_id> --self-improve` で有効化、`--no-self-improve` で無効化（`--self-improve` より優先）、`HVE_AUTO_SELF_IMPROVE=true` 環境変数でも有効化できます。
 

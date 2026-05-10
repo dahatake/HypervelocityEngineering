@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any, Mapping
 
 from hve.dag_parity import (
     compare_step_definitions,
@@ -198,6 +201,36 @@ class TestCompareStepMetadata(unittest.TestCase):
         self.assertEqual(result["diffs"], [])
 
 
+class TestStepParityHelperBehavior(unittest.TestCase):
+    def test_parse_bash_workflow_raises_on_invalid_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "workflow-registry.sh"
+            path.write_text(
+                "_WORKFLOW_REGISTRY[aad]=$(cat <<'JSONEOF'\n"
+                "{invalid}\n"
+                "JSONEOF\n"
+                ")\n",
+                encoding="utf-8",
+            )
+            global _BASH_REGISTRY_PATH
+            original_path = _BASH_REGISTRY_PATH
+            try:
+                _BASH_REGISTRY_PATH = path
+                with self.assertRaisesRegex(AssertionError, "JSON parse failed"):
+                    TestStepParityWithRealFiles._parse_bash_workflow("aad")
+            finally:
+                _BASH_REGISTRY_PATH = original_path
+
+    def test_closure_map_raises_on_cycle(self) -> None:
+        with self.assertRaisesRegex(AssertionError, "cycle detected in dependency graph"):
+            TestStepParityWithRealFiles._closure_map(
+                {
+                    "1": {"depends_on": ["2"]},
+                    "2": {"depends_on": ["1"]},
+                }
+            )
+
+
 class TestStepParityWithRealFiles(unittest.TestCase):
     """Integration tests that compare actual bash and hve registries."""
 
@@ -229,6 +262,226 @@ class TestStepParityWithRealFiles(unittest.TestCase):
             result["in_sync"],
             f"aas step parity mismatch — bash_only={result['bash_only']}, "
             f"hve_only={result['hve_only']}",
+        )
+
+    @staticmethod
+    def _parse_bash_workflow(workflow_key: str) -> dict[str, Any] | None:
+        text = _BASH_REGISTRY_PATH.read_text(encoding="utf-8")
+        pattern = (
+            r"_WORKFLOW_REGISTRY\[" + re.escape(workflow_key) + r"\]=\$\(cat <<'JSONEOF'\n"
+            r"(.*?)\nJSONEOF"
+        )
+        match = re.search(pattern, text, re.DOTALL)
+        if not match:
+            return None
+        try:
+            parsed = json.loads(match.group(1))
+        except json.JSONDecodeError as exc:
+            raise AssertionError(
+                f"bash workflow '{workflow_key}' JSON parse failed: {exc}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise AssertionError(
+                f"bash workflow '{workflow_key}' payload must be object: got {type(parsed).__name__}"
+            )
+        return parsed
+
+    @staticmethod
+    def _resolve_bash_workflow(candidates: tuple[str, ...]) -> tuple[str, dict[str, Any]] | None:
+        for key in candidates:
+            parsed = TestStepParityWithRealFiles._parse_bash_workflow(key)
+            if parsed is not None:
+                return key, parsed
+        return None
+
+    @staticmethod
+    def _is_work_iq_step(step_data: Mapping[str, Any]) -> bool:
+        haystacks = [
+            str(step_data.get("id", "")),
+            str(step_data.get("title", "")),
+            str(step_data.get("custom_agent", "")),
+            str(step_data.get("type", "")),
+        ]
+        normalized = " ".join(haystacks).lower()
+        return "work iq" in normalized or "work_iq" in normalized or "work-iq" in normalized
+
+    @staticmethod
+    def _to_filtered_step_map(
+        raw_steps: list[Mapping[str, Any]],
+        *,
+        strip_work_iq: bool,
+    ) -> dict[str, dict[str, Any]]:
+        filtered: dict[str, dict[str, Any]] = {}
+        for step in raw_steps:
+            if step.get("is_container", False):
+                continue
+            step_id = step.get("id")
+            if not isinstance(step_id, str):
+                continue
+            if strip_work_iq and TestStepParityWithRealFiles._is_work_iq_step(step):
+                continue
+            filtered[step_id] = {
+                "id": step_id,
+                "depends_on": list(step.get("depends_on", [])),
+                "title": step.get("title"),
+                "custom_agent": step.get("custom_agent"),
+                "body_template_path": step.get("body_template_path"),
+                "skip_fallback_deps": sorted(
+                    dep for dep in step.get("skip_fallback_deps", [])
+                    if isinstance(dep, str)
+                ),
+                "block_unless": sorted(
+                    dep for dep in step.get("block_unless", [])
+                    if isinstance(dep, str)
+                ),
+            }
+        return filtered
+
+    @staticmethod
+    def _closure_map(step_map: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
+        deps_by_id: dict[str, set[str]] = {
+            step_id: {
+                dep for dep in step_data.get("depends_on", [])
+                if isinstance(dep, str) and dep in step_map
+            }
+            for step_id, step_data in step_map.items()
+        }
+        cache: dict[str, set[str]] = {}
+
+        def _closure(step_id: str, path: tuple[str, ...]) -> set[str]:
+            if step_id in cache:
+                return cache[step_id]
+            if step_id in path:
+                cycle_path = " -> ".join([*path, step_id])
+                raise AssertionError(
+                    f"cycle detected in dependency graph: {cycle_path}"
+                )
+            direct = deps_by_id.get(step_id, set())
+            all_deps = set(direct)
+            next_path = (*path, step_id)
+            for dep in direct:
+                all_deps.update(_closure(dep, next_path))
+            cache[step_id] = all_deps
+            return all_deps
+
+        return {
+            step_id: sorted(_closure(step_id, tuple()))
+            for step_id in sorted(step_map)
+        }
+
+    def _xfail(self, reason: str) -> None:
+        if "PYTEST_CURRENT_TEST" not in os.environ:
+            self.skipTest(f"XFAIL: {reason}")
+            return
+        import pytest
+
+        pytest.xfail(reason)
+
+    def _compare_dag_parity(
+        self,
+        *,
+        name: str,
+        bash_candidates: tuple[str, ...],
+        hve_workflow_key: str,
+    ) -> None:
+        resolved = self._resolve_bash_workflow(bash_candidates)
+        if resolved is None:
+            self._xfail(
+                f"{name}: bash workflow key not found in workflow-registry.sh "
+                f"(candidates={bash_candidates})"
+            )
+            return
+        bash_workflow_key, bash_workflow = resolved
+        from hve.workflow_registry import get_workflow
+
+        hve_workflow = get_workflow(hve_workflow_key)
+        if hve_workflow is None:
+            self._xfail(f"{name}: hve workflow '{hve_workflow_key}' not found")
+            return
+
+        bash_step_map = self._to_filtered_step_map(
+            [s for s in bash_workflow.get("steps", []) if isinstance(s, dict)],
+            strip_work_iq=False,
+        )
+        hve_step_map = self._to_filtered_step_map(
+            [
+                {
+                    "id": s.id,
+                    "depends_on": list(s.depends_on),
+                    "is_container": s.is_container,
+                    "title": s.title,
+                    "custom_agent": s.custom_agent,
+                    "body_template_path": s.body_template_path,
+                    "skip_fallback_deps": sorted(s.skip_fallback_deps),
+                    "block_unless": sorted(s.block_unless),
+                }
+                for s in hve_workflow.steps
+            ],
+            strip_work_iq=True,
+        )
+
+        id_diff = compare_step_definitions(
+            bash_workflow_key,
+            hve_workflow.id,
+            list(bash_step_map.keys()),
+            list(hve_step_map.keys()),
+        )
+        self.assertTrue(
+            id_diff["in_sync"],
+            f"{name}: step ID mismatch — bash_only={id_diff['bash_only']}, "
+            f"hve_only={id_diff['hve_only']}",
+        )
+
+        bash_closure = self._closure_map(bash_step_map)
+        hve_closure = self._closure_map(hve_step_map)
+        closure_diff: dict[str, dict[str, list[str]]] = {}
+        for step_id in sorted(set(bash_closure) & set(hve_closure)):
+            if bash_closure[step_id] != hve_closure[step_id]:
+                closure_diff[step_id] = {
+                    "bash": bash_closure[step_id],
+                    "hve": hve_closure[step_id],
+                }
+        self.assertEqual(
+            closure_diff,
+            {},
+            f"{name}: dependency closure mismatch — {closure_diff}",
+        )
+
+        attrs_diff: dict[str, dict[str, dict[str, Any]]] = {}
+        for step_id in sorted(set(bash_step_map) & set(hve_step_map)):
+            step_diff: dict[str, dict[str, Any]] = {}
+            for key in (
+                "id",
+                "title",
+                "custom_agent",
+                "body_template_path",
+                "skip_fallback_deps",
+                "block_unless",
+            ):
+                b = bash_step_map[step_id].get(key)
+                h = hve_step_map[step_id].get(key)
+                if b != h:
+                    step_diff[key] = {"bash": b, "hve": h}
+            if step_diff:
+                attrs_diff[step_id] = step_diff
+        self.assertEqual(
+            attrs_diff,
+            {},
+            f"{name}: shared attribute mismatch — {attrs_diff}",
+        )
+
+    def test_dag_parity_aad(self) -> None:
+        self._compare_dag_parity(
+            name="aad",
+            bash_candidates=("aad-web", "aad"),
+            hve_workflow_key="aad-web",
+        )
+
+    def test_dag_parity_asdw(self) -> None:
+        self._compare_dag_parity(
+            name="asdw",
+            bash_candidates=("asdw-web", "asdw"),
+            hve_workflow_key="asdw-web",
         )
 
 

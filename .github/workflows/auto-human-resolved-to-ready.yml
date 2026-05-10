@@ -1,0 +1,121 @@
+name: Human Resolved to Ready Transition
+
+# 目的: {wf}:human-resolved ラベルが付与された Issue を {wf}:ready に自動遷移させる。
+#
+# 設計メモ:
+#   - トリガー: issues.labeled — endsWith(':human-resolved') で該当ラベルを検出。
+#   - 遷移内容: :human-required / :blocked を剥がし → :ready を付与。
+#   - :blocked の自動剥離は「人間の :human-resolved 経由のみ」という要件に準拠。
+#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / abd / abdv / aag / aagd / akm / aqod / adoc
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  transition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # :human-resolved ラベルが付与された時のみ実行
+    if: endsWith(github.event.label.name, ':human-resolved')
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      LABEL_NAME: ${{ github.event.label.name }}
+
+    steps:
+      - name: ワークフロープレフィックスを抽出
+        id: extract-prefix
+        run: |
+          set -euo pipefail
+          # "{wf}:human-resolved" から "{wf}" を抽出
+          PREFIX="${LABEL_NAME/:human-resolved/}"
+          echo "prefix=${PREFIX}" >> "${GITHUB_OUTPUT}"
+          echo "Detected workflow prefix: ${PREFIX}"
+
+          # 許可プレフィックスの検証
+          VALID_PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+          VALID="false"
+          for P in ${VALID_PREFIXES}; do
+            if [ "${PREFIX}" = "${P}" ]; then
+              VALID="true"
+              break
+            fi
+          done
+          echo "valid=${VALID}" >> "${GITHUB_OUTPUT}"
+          if [ "${VALID}" = "false" ]; then
+            echo "WARN: 未知のワークフロープレフィックス '${PREFIX}' です。スキップします。"
+          fi
+
+      - name: human-resolved → ready 遷移
+        if: steps.extract-prefix.outputs.valid == 'true'
+        env:
+          PREFIX: ${{ steps.extract-prefix.outputs.prefix }}
+        run: |
+          set -euo pipefail
+
+          HUMAN_RESOLVED_LABEL="${PREFIX}:human-resolved"
+          HUMAN_REQUIRED_LABEL="${PREFIX}:human-required"
+          BLOCKED_LABEL="${PREFIX}:blocked"
+          READY_LABEL="${PREFIX}:ready"
+
+          # URL エンコード済みラベル名を事前計算（API パスで使用）
+          ENCODED_HUMAN_REQUIRED=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${HUMAN_REQUIRED_LABEL}")
+          ENCODED_BLOCKED=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${BLOCKED_LABEL}")
+          ENCODED_HUMAN_RESOLVED=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${HUMAN_RESOLVED_LABEL}")
+
+          echo "Issue #${ISSUE_NUMBER}: ${HUMAN_RESOLVED_LABEL} → ${READY_LABEL} 遷移開始"
+
+          # :human-required ラベルを削除（存在しない場合はスキップ）
+          gh api -X DELETE \
+            "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${ENCODED_HUMAN_REQUIRED}" \
+            --silent 2>/dev/null || true
+          sleep 1
+
+          # :blocked ラベルを削除（:human-resolved 経由のみ自動剥離）
+          gh api -X DELETE \
+            "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${ENCODED_BLOCKED}" \
+            --silent 2>/dev/null || true
+          sleep 1
+
+          # :human-resolved ラベルを削除（再実行可能にするため）
+          gh api -X DELETE \
+            "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${ENCODED_HUMAN_RESOLVED}" \
+            --silent 2>/dev/null || true
+          sleep 1
+
+          # :ready ラベルを付与
+          gh issue edit "${ISSUE_NUMBER}" \
+            --repo "${REPO}" \
+            --add-label "${READY_LABEL}" || true
+          sleep 1
+
+          echo "✅ Issue #${ISSUE_NUMBER} → ${READY_LABEL} 遷移完了"
+
+          # 遷移完了コメントを投稿
+          COMMENT=$(sed 's/^  //' <<COMMENT_EOF
+            ✅ **人間介入完了 — 実行再開**
+
+            \`${HUMAN_RESOLVED_LABEL}\` ラベルが付与されたため、以下の自動遷移を実施しました:
+
+            | 操作 | ラベル |
+            |---|---|
+            | 削除 | \`${HUMAN_REQUIRED_LABEL}\` |
+            | 削除 | \`${BLOCKED_LABEL}\` |
+            | 削除 | \`${HUMAN_RESOLVED_LABEL}\`（再実行可能にするため） |
+            | 追加 | \`${READY_LABEL}\` |
+
+            Issue は実行待ちキューに戻りました。Copilot が次回実行可能になると自動的に処理されます。
+
+            > このコメントは **Human Resolved to Ready Transition** ワークフローにより自動投稿されました。
+          COMMENT_EOF
+          )
+          if ! gh issue comment "${ISSUE_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${COMMENT}" 2>/dev/null; then
+            echo "WARN: コメント投稿に失敗しました (#${ISSUE_NUMBER})"
+          fi

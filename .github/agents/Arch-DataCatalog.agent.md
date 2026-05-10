@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-DataCatalog
 description: "概念データモデルと物理テーブルのマッピングを記録するデータカタログを生成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-DataCatalog/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 
@@ -13,7 +17,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ### 必須入力
 - `docs/catalog/data-model.md`
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — エンティティと APP-ID の紐付け判定根拠）
 
 ### 推奨入力（存在すれば読む）
@@ -48,7 +52,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 ## 3) 実行フロー（task_scope=multi または context_size=large は"実装開始前"に分割）
 
 ### 3.0 依存確認（必須・最初に実行）
-- `docs/catalog/data-model.md` と `docs/catalog/domain-analytics.md` の両方を `read` で確認する
+- `docs/catalog/data-model.md` と `docs/domain-analytics.md` の両方を `read` で確認する
 - いずれかが存在しない、空、または見出し構造が不完全な場合：
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と質問して **即座に停止** する
   - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）

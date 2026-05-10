@@ -1,19 +1,10 @@
 ---
 name: input-file-validation
 description: >
-  Custom Agent の入力ファイル（必読ファイル・推奨ファイル）の存在確認と欠損時の
-  デフォルト処理ルールを提供する。Agent が作業開始時に必読ファイル表を検証し、
-  欠損ファイルに対して TBD 記載で続行する。
-  Agent 固有の欠損時処理（停止/質問）は Agent 側でオーバーライドする。
-  USE FOR: input file check, missing file handling, required file validation,
-  file existence verification, TBD fallback for missing files.
-  DO NOT USE FOR: implementation, file content analysis,
-  file creation (use work-artifacts-layout).
-  WHEN: Agent 作業開始時の入力確認、ファイル欠損時の処理判断、
-  必読ファイルの存在確認、推奨ファイルの参照判定。
+  Custom Agent の入力ファイル（必読ファイル・推奨ファイル）の存在確認と欠損時の デフォルト処理ルールを提供する。Agent が作業開始時に必読ファイル表を検証し、 欠損ファイルに対して TBD 記載で続行する。 USE FOR: input file check, missing file handling, required file validation. DO NOT USE FOR: implementation. WHEN: Agent 作業開始時の入力確認、ファイル欠損時の処理判断。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # input-file-validation
@@ -63,11 +54,11 @@ Agent 側で以下をオーバーライドできる:
 ### 例1: 必読ファイルが全て存在する正常ケース
 
 **入力**: Agent 作業開始時に必読ファイル表を検証する。必読ファイルは以下:
-- `docs/business-requirement.md`
+- `docs/company-business-requirement.md`
 - `docs/catalog/service-catalog.md`
 
 **出力**:
-- `docs/business-requirement.md` — ✅ 存在確認済み
+- `docs/company-business-requirement.md` — ✅ 存在確認済み
 - `docs/catalog/service-catalog.md` — ✅ 存在確認済み
 - 結果: 全ての必読ファイルが存在するため、作業を続行する
 
@@ -76,7 +67,7 @@ Agent 側で以下をオーバーライドできる:
 **入力**: Agent 作業開始時に必読ファイル表を検証する。必読ファイルのうち `docs/catalog/app-catalog.md` が存在しない。
 
 **出力**:
-- `docs/business-requirement.md` — ✅ 存在確認済み
+- `docs/company-business-requirement.md` — ✅ 存在確認済み
 - `docs/catalog/app-catalog.md` — ❌ TBD（ファイル未検出: `docs/catalog/app-catalog.md`）
 - 結果: 欠損ファイルを `TBD（ファイル未検出: docs/catalog/app-catalog.md）` と明記し、仮定ベースで作業を続行する
 

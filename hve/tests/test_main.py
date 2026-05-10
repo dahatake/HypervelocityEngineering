@@ -13,6 +13,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from prompts import PRE_EXECUTION_QA_PROMPT_V2, render_pre_execution_qa_comment_body
+
 # __main__.py は Python の __main__ と名前が衝突するため importlib で直接ロードする
 _main_path = os.path.join(os.path.dirname(__file__), "..", "__main__.py")
 _spec = _ilu.spec_from_file_location("hve_main", os.path.abspath(_main_path))
@@ -29,6 +31,10 @@ _prompt_valid_doc_purpose = _main_mod._prompt_valid_doc_purpose
 _prompt_valid_aqod_depth = _main_mod._prompt_valid_aqod_depth
 _prompt_valid_max_file_lines = _main_mod._prompt_valid_max_file_lines
 _prompt_akm_params = _main_mod._prompt_akm_params
+_collect_generic_workflow_params = _main_mod._collect_generic_workflow_params
+_default_param_value = _main_mod._default_param_value
+_PARAM_DEFAULTS = _main_mod._PARAM_DEFAULTS
+_PARAM_PROMPT_LABELS = _main_mod._PARAM_PROMPT_LABELS
 main = _main_mod.main
 
 
@@ -88,6 +94,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.workiq_akm_review)
         self.assertEqual(args.timeout, 21600.0)
         self.assertEqual(args.log_level, "error")
+        self.assertIsNone(args.context_max_chars)
 
     def test_log_level_option(self) -> None:
         """--log-level オプションのテスト。"""
@@ -198,6 +205,10 @@ class TestParserBasic(unittest.TestCase):
         """--timeout オプションのテスト。"""
         args = _parse(["orchestrate", "-w", "aas", "--timeout", "600"])
         self.assertEqual(args.timeout, 600.0)
+
+    def test_context_max_chars_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--context-max-chars", "18000"])
+        self.assertEqual(args.context_max_chars, 18000)
 
     def test_review_timeout_default(self) -> None:
         """--review-timeout のデフォルト値が 7200.0 であることを確認。"""
@@ -520,6 +531,11 @@ class TestBuildParams(unittest.TestCase):
         self.assertTrue(cfg.workiq_draft_mode)
         self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
 
+    def test_build_config_context_max_chars_override(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--context-max-chars", "18000"])
+        cfg = _build_config(args)
+        self.assertEqual(cfg.context_injection_max_chars, 18000)
+
     def test_build_config_workiq_akm_review_can_be_enabled_without_qa(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
             args = _parse(["orchestrate", "-w", "akm", "--workiq-akm-review"])
@@ -681,6 +697,37 @@ class TestReviewModelCLI(unittest.TestCase):
         model, display = _resolve_model("")
         self.assertEqual(model, "Auto")
         self.assertEqual(display, "Auto")
+
+
+class TestEmitPromptCommand(unittest.TestCase):
+    """emit-prompt サブコマンドのテスト。"""
+
+    def test_emit_prompt_args(self) -> None:
+        args = _parse(["emit-prompt", "pre-qa", "--comment-body"])
+        self.assertEqual(args.prompt_name, "pre-qa")
+        self.assertTrue(args.comment_body)
+
+    def test_main_emit_prompt_pre_qa(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            exit_code = main(["emit-prompt", "pre-qa"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(buf.getvalue(), PRE_EXECUTION_QA_PROMPT_V2)
+
+    def test_main_emit_prompt_pre_qa_comment_body(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            exit_code = main(["emit-prompt", "pre-qa", "--comment-body"])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(buf.getvalue(), render_pre_execution_qa_comment_body())
 
 
 class TestLoadMCPConfig(unittest.TestCase):
@@ -1081,7 +1128,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
 
         captured_config = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured_config["cfg"] = config
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1121,6 +1168,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 5. repo_input (create_issues or create_pr の場合)
         # 6. Review タイムアウト (code_review=True 時のみ)
         # 7. 追加プロンプト → ""
+        # 8. セッション名（Phase 4 Resume）→ "" で既定使用
         input_answers = ["main", "15", "7200"]
         if create_issues:
             input_answers += ["", ""]
@@ -1129,6 +1177,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         if code_review:
             input_answers.append(review_timeout)
         input_answers.append("")  # 追加プロンプト
+        input_answers.append("")  # Phase 4: セッション名（既定値を使用）
 
         input_iter = iter(input_answers)
 
@@ -1145,7 +1194,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         if auto_qa and use_different_qa_model:
             menu_answers.append(model_options_for_test.index("gpt-5.4"))
         if auto_review and use_different_review_model:
-            menu_answers.append(model_options_for_test.index("claude-sonnet-4.6"))
+            menu_answers.append(model_options_for_test.index("claude-opus-4.6"))
         con.menu_select.side_effect = menu_answers
         con.prompt_multi_select.return_value = []  # 全ステップ
         con.prompt_yes_no.side_effect = lambda *a, **kw: next(yes_no_iter)
@@ -1239,14 +1288,14 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
     def test_interactive_keeps_review_model_from_env_when_not_selected(self) -> None:
         env_backup = os.environ.copy()
         try:
-            os.environ["REVIEW_MODEL"] = "claude-sonnet-4.6"
+            os.environ["REVIEW_MODEL"] = "claude-opus-4.6"
             cfg = self._run_interactive_with_inputs(
                 code_review=False,
                 auto_review=True,
                 use_different_review_model=False,
             )
             self.assertIsNotNone(cfg)
-            self.assertEqual(cfg.review_model, "claude-sonnet-4.6")
+            self.assertEqual(cfg.review_model, "claude-opus-4.6")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -1282,7 +1331,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             use_different_review_model=True,
         )
         self.assertIsNotNone(cfg)
-        self.assertEqual(cfg.review_model, "claude-sonnet-4.6")
+        self.assertEqual(cfg.review_model, "claude-opus-4.6")
 
 
 class TestInteractiveModeAutoExecModes(unittest.TestCase):
@@ -1303,7 +1352,7 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
 
         captured_config = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured_config["cfg"] = config
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1330,11 +1379,12 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             yes_no_answers = [False, False, False, False, auto_coding_agent_review]
             yes_no_answers += [False, False, True]  # dry_run, auto_self_improve, 実行確認
             con.prompt_yes_no.side_effect = yes_no_answers
-            # ブランチ, 並列数, タイムアウト, (review_timeout), 追加プロンプト
+            # ブランチ, 並列数, タイムアウト, (review_timeout), 追加プロンプト, セッション名（Phase 4）
             input_answers = ["main", "15", custom_timeout]
             if auto_coding_agent_review:
                 input_answers.append("7200")  # review timeout
             input_answers.append("")  # 追加プロンプト
+            input_answers.append("")  # Phase 4: セッション名（既定値を使用）
             con.prompt_input.side_effect = input_answers
 
         con.prompt_multi_select.return_value = []
@@ -1425,7 +1475,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
 
         captured_config = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured_config["cfg"] = config
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1442,7 +1492,8 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         # auto_qa=True, QAサブモデル利用確認=False, auto_review=False, issue=False, pr=False,
         # code_review=False, dry_run=False, auto_self_improve=False, 実行確認=True
         con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True]
-        con.prompt_input.side_effect = ["main", "15", "21600", ""]  # branch, parallel, timeout, addl prompt
+        # branch, parallel, timeout, addl prompt, session_name (Phase 4)
+        con.prompt_input.side_effect = ["main", "15", "21600", "", ""]
         con.prompt_multi_select.return_value = []
 
         mock_console_mod = mock.MagicMock()
@@ -1488,7 +1539,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
 
         captured = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured["cfg"] = config
             captured["params"] = params
             return {"completed": [], "failed": [], "skipped": []}
@@ -1512,6 +1563,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
             "",       # AKM target_files default
             "",       # custom_source_dir
             "",       # additional_prompt
+            "",       # Phase 4: セッション名（既定値を使用）
         ]
         con.prompt_multi_select.return_value = []
 
@@ -1558,7 +1610,7 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
 
         captured = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured["cfg"] = config
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1583,10 +1635,11 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
             "main",               # branch
             "21600",              # timeout
             "社内略語は使わない",  # workiq_additional_prompt
-            "600",                # workiq_per_question_timeout
+            "1200",               # workiq_per_question_timeout（20 分）
             "original-docs/",     # target_scope
             "",                   # focus_areas
             "",                   # additional_prompt
+            "",                   # Phase 4: セッション名（既定値を使用）
         ]
         con.prompt_multi_select.return_value = []
 
@@ -1642,7 +1695,7 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
 
         captured = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured["params"] = params
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1663,8 +1716,8 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             # workflow, model, exec_mode, verbosity, doc_purpose(onboarding=1, 0-indexed), max_file_lines(300=0, 0-indexed)
             con.menu_select.side_effect = [0, 0, 2, 1, 1, 0]
             con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
-            # branch, max_parallel, timeout, additional_prompt（doc_purpose/max_file_linesはmenu_selectで入力）
-            con.prompt_input.side_effect = ["main", "15", "7200", ""]
+            # branch, max_parallel, timeout, additional_prompt（doc_purpose/max_file_linesはmenu_selectで入力）, session_name (Phase 4)
+            con.prompt_input.side_effect = ["main", "15", "7200", "", ""]
 
         mock_console_mod = mock.MagicMock()
         mock_console_mod.Console = MockConsole
@@ -1714,7 +1767,7 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
 
         captured = {}
 
-        async def _fake_run_workflow(workflow_id, params, config):
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
             captured["params"] = params
             return {"completed": [], "failed": [], "skipped": []}
 
@@ -1737,7 +1790,7 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
         else:
             con.menu_select.side_effect = [0, 0, 2, 1]
             con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
-            con.prompt_input.side_effect = ["main", "15", "21600", "APP-01", "rg-prod", ""]
+            con.prompt_input.side_effect = ["main", "15", "21600", "APP-01", "rg-prod", "", ""]
 
         mock_console_mod = mock.MagicMock()
         mock_console_mod.Console = MockConsole
@@ -1785,6 +1838,67 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
         self.assertNotIn("app_id", params)
         self.assertEqual(params["resource_group"], "")
         con.prompt_input.assert_not_called()
+
+
+class TestCreateRemoteMcpServerParam(unittest.TestCase):
+    """create_remote_mcp_server パラメータの CLI / 収集 / デフォルト値テスト。"""
+
+    def test_param_default_is_true(self) -> None:
+        """_PARAM_DEFAULTS の create_remote_mcp_server デフォルトが True であること。"""
+        self.assertIs(_PARAM_DEFAULTS["create_remote_mcp_server"], True)
+
+    def test_param_prompt_label_exists(self) -> None:
+        """_PARAM_PROMPT_LABELS に create_remote_mcp_server の表示名が登録されていること。"""
+        self.assertIn("create_remote_mcp_server", _PARAM_PROMPT_LABELS)
+        self.assertTrue(_PARAM_PROMPT_LABELS["create_remote_mcp_server"])
+
+    def test_default_param_value_returns_true(self) -> None:
+        """_default_param_value('create_remote_mcp_server') が True を返すこと。"""
+        self.assertIs(_default_param_value("create_remote_mcp_server"), True)
+
+    def test_collect_generic_prompts_yes_no_for_create_remote_mcp_server(self) -> None:
+        """_collect_generic_workflow_params() が create_remote_mcp_server を yes/no prompt で収集すること。"""
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = ["create_remote_mcp_server"]
+        con = mock.MagicMock()
+        con.prompt_yes_no.return_value = False
+
+        params = _collect_generic_workflow_params(con, mock_wf, is_quick_auto=False)
+
+        con.prompt_yes_no.assert_called_once()
+        call_label = con.prompt_yes_no.call_args[0][0]
+        self.assertIn("Remote MCP Server", call_label)
+        self.assertFalse(params["create_remote_mcp_server"])
+
+    def test_collect_generic_quick_auto_returns_default_true(self) -> None:
+        """_collect_generic_workflow_params() の is_quick_auto=True で True が返ること。"""
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = ["create_remote_mcp_server"]
+        con = mock.MagicMock()
+
+        params = _collect_generic_workflow_params(con, mock_wf, is_quick_auto=True)
+
+        self.assertIs(params["create_remote_mcp_server"], True)
+        con.prompt_yes_no.assert_not_called()
+
+    def test_collect_generic_prompts_yes_no_default_is_true(self) -> None:
+        """_collect_generic_workflow_params() の yes/no デフォルトが True であること。"""
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = ["create_remote_mcp_server"]
+        con = mock.MagicMock()
+        con.prompt_yes_no.return_value = True
+
+        params = _collect_generic_workflow_params(con, mock_wf, is_quick_auto=False)
+
+        call_args = con.prompt_yes_no.call_args
+        call_kwargs = call_args[1] if call_args[1] else {}
+        call_positional = call_args[0] if call_args[0] else ()
+        call_default = call_kwargs.get("default") if "default" in call_kwargs else (call_positional[1] if len(call_positional) > 1 else None)
+        self.assertIs(call_default, True)
+        self.assertTrue(params["create_remote_mcp_server"])
 
 
 class TestDocPurposePrompt(unittest.TestCase):
@@ -1935,6 +2049,81 @@ class TestWorkIQDoctorSdkProbeArgs(unittest.TestCase):
         self.assertEqual(call_kwargs.get("sdk_tool_probe_timeout"), 90.0)
         self.assertTrue(call_kwargs.get("sdk_event_trace"))
         self.assertTrue(call_kwargs.get("sdk_tool_probe_tools_all"))
+
+
+# -----------------------------------------------------------------------
+# F1〜F4: 新 CLI フラグの argparse / _build_config 配線テスト
+# -----------------------------------------------------------------------
+
+
+class TestBuildConfigOutputFlags(unittest.TestCase):
+    """--no-color / --banner / --screen-reader / --timestamp-style が config に反映されること。"""
+
+    def test_no_color_flag_sets_config(self) -> None:
+        """--no-color が cfg.no_color=True に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--no-color"])
+        config = _build_config(args)
+        self.assertTrue(config.no_color)
+
+    def test_no_color_default_is_none(self) -> None:
+        """--no-color 未指定時は cfg.no_color=None（環境変数参照）。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertIsNone(config.no_color)
+
+    def test_banner_flag_sets_config_true(self) -> None:
+        """--banner が cfg.show_banner=True に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--banner"])
+        config = _build_config(args)
+        self.assertTrue(config.show_banner)
+
+    def test_no_banner_flag_sets_config_false(self) -> None:
+        """--no-banner が cfg.show_banner=False に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--no-banner"])
+        config = _build_config(args)
+        self.assertFalse(config.show_banner)
+
+    def test_banner_default_is_none(self) -> None:
+        """--banner/--no-banner 未指定時は cfg.show_banner=None。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertIsNone(config.show_banner)
+
+    def test_screen_reader_flag_sets_config(self) -> None:
+        """--screen-reader が cfg.screen_reader=True に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--screen-reader"])
+        config = _build_config(args)
+        self.assertTrue(config.screen_reader)
+
+    def test_screen_reader_default_is_false(self) -> None:
+        """--screen-reader 未指定時は cfg.screen_reader=False。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertFalse(config.screen_reader)
+
+    def test_timestamp_style_suffix(self) -> None:
+        """--timestamp-style suffix が cfg.timestamp_style='suffix' に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--timestamp-style", "suffix"])
+        config = _build_config(args)
+        self.assertEqual(config.timestamp_style, "suffix")
+
+    def test_timestamp_style_off(self) -> None:
+        """--timestamp-style off が cfg.timestamp_style='off' に反映される。"""
+        args = _parse(["orchestrate", "-w", "aas", "--timestamp-style", "off"])
+        config = _build_config(args)
+        self.assertEqual(config.timestamp_style, "off")
+
+    def test_timestamp_style_default_is_prefix(self) -> None:
+        """--timestamp-style 未指定時は cfg.timestamp_style='prefix'。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertEqual(config.timestamp_style, "prefix")
+
+    def test_timestamp_style_invalid_rejected(self) -> None:
+        """無効な --timestamp-style 値は argparse がエラーを返す。"""
+        parser = _build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["orchestrate", "-w", "aas", "--timestamp-style", "invalid"])
 
 
 if __name__ == "__main__":

@@ -1,18 +1,10 @@
 ---
 name: microservice-design-guide
 description: >
-  マイクロサービスの設計ガイドを提供する。サービス定義・API 設計・
-  境界コンテキストとの対応・デプロイ単位の決定手順を定義する。
-  USE FOR: microservice design, service definition, API design,
-  service boundary decision, bounded context mapping,
-  deployment unit decision.
-  DO NOT USE FOR: microservice implementation, deployment,
-  batch design (use batch-design-guide), testing.
-  WHEN: マイクロサービスを設計する、サービス定義書を作成する、
-  API 設計パターンを参照する、サービス境界を決定する。
+  マイクロサービスの設計ガイドを提供する。サービス定義・API 設計・ 境界コンテキストとの対応・デプロイ単位の決定手順を定義する。 USE FOR: microservice design, service definition, API design. DO NOT USE FOR: microservice implementation. WHEN: マイクロサービスを設計する、サービス定義書を作成する。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # microservice-design-guide

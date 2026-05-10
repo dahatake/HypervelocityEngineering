@@ -22,6 +22,7 @@ Copilot SDK でローカル実行するバージョン。
 from __future__ import annotations
 
 import asyncio
+import copy
 import functools
 import glob as _glob
 import json
@@ -30,26 +31,43 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 # -----------------------------------------------------------------------
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
 # -----------------------------------------------------------------------
 try:
-    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+    from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
     from .console import Console, timestamp_prefix
-    from .prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT
+    from .prompts import (
+        CODE_REVIEW_AGENT_FIX_PROMPT,
+        CODE_REVIEW_CLI_PROMPT,
+        AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT,
+        ARD_WORKIQ_USECASE_PROMPT,
+        ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
+    )
     from .runner import StepRunner, _is_review_fail, _extract_text
-    from .dag_executor import DAGExecutor
+    from .dag_executor import DAGExecutor, StepResult
     from .dag_planner import build_dag_plan
+    from .run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id
+    from .keybind import KEY_CTRL_R, KeybindMonitor
 except ImportError:
-    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
+    from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
-    from prompts import CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT  # type: ignore[no-redef]
+    from prompts import (  # type: ignore[no-redef]
+        CODE_REVIEW_AGENT_FIX_PROMPT,
+        CODE_REVIEW_CLI_PROMPT,
+        AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT,
+        ARD_WORKIQ_USECASE_PROMPT,
+        ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
+    )
     from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
-    from dag_executor import DAGExecutor  # type: ignore[no-redef]
+    from dag_executor import DAGExecutor, StepResult  # type: ignore[no-redef]
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
+    from run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id  # type: ignore[no-redef]
+    from keybind import KEY_CTRL_R, KeybindMonitor  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
@@ -81,6 +99,178 @@ from hve.app_arch_filter import resolve_app_arch_scope
 
 _VALID_WORKFLOWS = [wf.id for wf in list_workflows()]
 
+
+# -----------------------------------------------------------------------
+# SDK ヘルパー
+# -----------------------------------------------------------------------
+async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts: Dict[str, Any]) -> Any:
+    """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
+
+    SDK バージョン < 0.3.0 互換のための防御。reasoning_effort が opts に
+    含まれない場合は単純な create_session 呼び出しと等価。
+
+    検出条件は Python の組み込み TypeError 文言
+    (`got an unexpected keyword argument`) と `reasoning_effort` の両方が
+    含まれる場合に限定する。
+    """
+    try:
+        return await client.create_session(**session_opts)
+    except TypeError as exc:
+        msg = str(exc)
+        if (
+            "unexpected keyword argument" in msg
+            and "reasoning_effort" in msg
+            and "reasoning_effort" in session_opts
+        ):
+            _opts = {k: v for k, v in session_opts.items() if k != "reasoning_effort"}
+            return await client.create_session(**_opts)
+        raise
+
+
+# -----------------------------------------------------------------------
+# Context Injection 計測ログ
+# -----------------------------------------------------------------------
+def _format_context_injection_phase_breakdown(phase_breakdown: Dict[str, int]) -> str:
+    """context injection のフェーズ別内訳を整形する。"""
+    if not phase_breakdown:
+        return "(なし)"
+    ordered = sorted(phase_breakdown.items(), key=lambda item: item[0])
+    return ", ".join(f"{phase}={chars}" for phase, chars in ordered)
+
+
+def _emit_context_injection_metrics(
+    *,
+    none_steps: int,
+    total_chars: int,
+    max_chars: int,
+    self_improve_scope: str,
+    phase_breakdown: Dict[str, int],
+    console: "Console",
+) -> None:
+    """context injection 計測を console / stderr / GitHub summary に出力する。"""
+    phase_breakdown_str = _format_context_injection_phase_breakdown(phase_breakdown)
+    summary_line = (
+        f"[Wave2] context_injection: none_steps={none_steps}, "
+        f"total_chars={total_chars}, max_chars={max_chars}, "
+        f"phase_breakdown={phase_breakdown_str}, self_improve_scope={self_improve_scope!r}"
+    )
+    console.event(summary_line)
+    print(summary_line, file=sys.stderr, flush=True)
+
+    step_summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "").strip()
+    if not step_summary_path:
+        return
+
+    try:
+        with open(step_summary_path, "a", encoding="utf-8") as f:
+            f.write("## Wave2 Context Injection Metrics\n")
+            f.write(f"- none_steps: {none_steps}\n")
+            f.write(f"- total_chars: {total_chars}\n")
+            f.write(f"- max_chars: {max_chars}\n")
+            f.write(f"- phase_breakdown: {phase_breakdown_str}\n")
+            f.write(f"- self_improve_scope: `{self_improve_scope}`\n\n")
+    except OSError as exc:
+        console.warning(f"GITHUB_STEP_SUMMARY への書き込みに失敗しました: {exc}")
+
+
+# -----------------------------------------------------------------------
+# Phase 2 (Resume): orchestrator レベルの SDK セッション ID ヘルパー
+# -----------------------------------------------------------------------
+def _orchestrator_session_id(config: SDKConfig, step_id: str, suffix: str = "") -> str:
+    """orchestrator から作成する補助セッション用の決定論的 session_id を返す。
+
+    runner.py の `StepRunner._make_step_session_id` と同等仕様（同じ run_id +
+    step_id 区別 + suffix を持つ）。
+
+    補助セッション例:
+      step_id="orchestrator", suffix="workiq-prefetch"
+        → "hve-<run_id>-step-orchestrator-workiq-prefetch"
+      step_id="akm-verify", suffix="dxx"
+        → "hve-<run_id>-step-akm-verify-dxx"
+    """
+    prefix = (config.session_id_prefix or "").strip() or DEFAULT_SESSION_ID_PREFIX
+    return make_session_id(
+        run_id=config.run_id,
+        step_id=step_id,
+        suffix=suffix,
+        prefix=prefix,
+    )
+
+
+# -----------------------------------------------------------------------
+# Phase 3 (Resume): SDKConfig 復元ヘルパー
+# -----------------------------------------------------------------------
+def _restore_config_from_state(config: SDKConfig, state: RunState) -> None:
+    """`state.config_snapshot` から `SDKConfig` のフィールドを復元する。
+
+    Phase 3 (Resume): 別プロセス / 別 PC で resume する際、保存時の実行設定を
+    復元する。ただし以下のフィールドは復元しない（snapshot にも含まれない）:
+      - github_token : 機密情報。環境変数から再取得する。
+      - repo         : テナント混入防止。環境変数 REPO から再取得する。
+      - cli_path / cli_url : 環境固有のため現在値を尊重。
+      - mcp_servers  : API キーや絶対パスを含むため現在の `config` を尊重。
+
+    また、既に呼び出し側で明示的に設定された値（`generate_run_id()` を経由せず
+    `SDKConfig(run_id=...)` のように直接渡された値）は **上書きされる**。
+    Resume の本質は「保存時の実行コンテキストの厳密な再現」であるため。
+
+    snapshot に存在しないキーや、`SDKConfig` 側に存在しない属性は無視する
+    （schema バージョン差を吸収するため）。
+    """
+    snapshot = state.config_snapshot or {}
+    if not snapshot:
+        return
+    for key, value in snapshot.items():
+        if not hasattr(config, key):
+            continue
+        try:
+            setattr(config, key, value)
+        except (AttributeError, TypeError):
+            # frozen フィールドや setter 制約がある場合はスキップ
+            continue
+    # run_id は確実に復元する（snapshot に含まれていなくても state.run_id を採用）
+    config.run_id = state.run_id
+
+
+def _build_step_complete_callback(
+    state: RunState,
+    console: Console,
+) -> Callable[[StepResult], None]:
+    """`DAGExecutor.on_step_complete` 用のコールバックを構築する。
+
+    Phase 3 (Resume): 各ステップの完了/失敗/スキップ/blocked を state.json に
+    永続化する。コールバック内の例外は warn のみで握り潰し、DAG 実行を
+    止めない（state I/O 失敗で実行成果物を犠牲にしない）。
+    """
+    def _on_step_complete(result: StepResult) -> None:
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            kwargs: Dict[str, Any] = {
+                "completed_at": now,
+                "elapsed_seconds": float(result.elapsed or 0.0),
+            }
+            if result.skipped:
+                kwargs["status"] = "skipped"
+                kwargs["skip_reason"] = result.reason or "inactive"
+            elif result.state == "blocked":
+                kwargs["status"] = "blocked"
+                kwargs["skip_reason"] = result.reason or "blocked"
+            elif result.success:
+                kwargs["status"] = "completed"
+                kwargs["error_summary"] = None
+            else:
+                kwargs["status"] = "failed"
+                kwargs["error_summary"] = (
+                    (result.error or "")[:500] if result.error else None
+                )
+            state.update_step(result.step_id, **kwargs)
+        except Exception as exc:  # pragma: no cover - I/O 例外パスは E2E で確認
+            console.warning(
+                f"state.json への step 状態更新に失敗しました (step={result.step_id}): {exc}"
+            )
+
+    return _on_step_complete
+
 # Code Review Agent の GitHub ユーザー名候補
 _COPILOT_USERNAMES = (
     "copilot",
@@ -98,6 +288,11 @@ _AKM_DEFAULT_SOURCES = "qa"
 _AKM_DEFAULT_TARGET_FILES = "qa/*.md"
 _AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
 _AQOD_DEFAULT_DEPTH = "standard"
+
+# ARD デフォルト値
+_ARD_DEFAULT_SURVEY_PERIOD_YEARS = 30
+_ARD_DEFAULT_TARGET_REGION = "グローバル全体"
+_ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
 
 
 def _default_akm_target_files(sources: str) -> str:
@@ -124,6 +319,9 @@ def _collect_params_non_interactive(
     args = cli_args or {}
     # 'steps' (CLI側) と 'selected_steps' (orchestrate.py側) の両キーに対応
     steps_value = args.get("steps") or args.get("selected_steps") or []
+    if wf.id == "ard" and not steps_value:
+        target_business = args.get("target_business", "") or ""
+        steps_value = ["2", "3"] if target_business.strip() else ["1", "2", "3"]
     params: dict = {
         "branch": args.get("branch", "main"),
         "selected_steps": steps_value,
@@ -161,6 +359,17 @@ def _collect_params_non_interactive(
         params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
         params["focus_areas"] = args.get("focus_areas") or ""
+    elif wf.id == "ard":
+        from datetime import date
+        params["company_name"] = args.get("company_name", "") or ""
+        params["target_business"] = args.get("target_business", "") or ""
+        params["ard_workiq_enabled"] = bool(args.get("ard_workiq_enabled", False))
+        params["survey_base_date"] = args.get("survey_base_date") or date.today().isoformat()
+        params["survey_period_years"] = args.get("survey_period_years") or _ARD_DEFAULT_SURVEY_PERIOD_YEARS
+        params["target_region"] = args.get("target_region") or _ARD_DEFAULT_TARGET_REGION
+        params["analysis_purpose"] = args.get("analysis_purpose") or _ARD_DEFAULT_ANALYSIS_PURPOSE
+        attached = args.get("attached_docs")
+        params["attached_docs"] = attached if attached else []
     else:
         if args.get("sources"):
             params["sources"] = args["sources"]
@@ -741,6 +950,30 @@ def _check_workflow_input_artifacts(
         return {"should_abort": False, "error": None}
 
 
+def collect_workflow_output_paths(workflow_id: str) -> List[str]:
+    """ワークフローの全ステップの output_paths を集約して返す。
+
+    全 StepDef を走査して output_paths を収集し、重複除去・順序維持したリストを返す。
+    output_paths が未定義または空の Step が混在しても安全に動作する。
+    ワークフローが見つからない場合は空リストを返す。
+
+    Self-Improve の target scope 解決（run_workflow 内）から呼び出されるほか、
+    テストから直接インポートして利用することができる。
+    """
+    wf = get_workflow(workflow_id)
+    if wf is None:
+        return []
+    seen: dict = {}
+    result: List[str] = []
+    for step in wf.steps:
+        paths = getattr(step, "output_paths", None) or []
+        for p in paths:
+            if p not in seen:
+                seen[p] = True
+                result.append(p)
+    return result
+
+
 def _compute_step_additional_prompt(
     step,
     existing_artifacts: dict,
@@ -839,7 +1072,7 @@ async def _prefetch_workiq(
     config: SDKConfig,
     query: str,
     console: Console,
-    timeout: float = 900.0,
+    timeout: float = 1200.0,
 ) -> str:
     """Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。
 
@@ -855,7 +1088,7 @@ async def _prefetch_workiq_detailed(
     config: SDKConfig,
     query: str,
     console: Console,
-    timeout: float = 900.0,
+    timeout: float = 1200.0,
 ) -> "WorkIQPrefetchResult":
     """Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。
 
@@ -910,11 +1143,22 @@ async def _prefetch_workiq_detailed(
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
             "mcp_servers": _mcp,
+            # Phase 2 (Resume): 決定論的 session_id を付与
+            "session_id": _orchestrator_session_id(
+                config, "orchestrator", suffix="workiq-prefetch"
+            ),
         }
-        # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+        # Auto 選択時は明示的に DEFAULT_MODEL + reasoning_effort=high を指定する。
+        # CLI ユーザー設定 (~/.copilot/settings.json) で `claude-opus-4.7-high` 等の
+        # reasoning_effort 固定バリアントが設定されていると、SDK 経由で渡した
+        # reasoning_effort が CAPI 側で不整合となり 400 エラーになるため、
+        # 無印バリアントを明示してユーザー設定を上書きする。
         if config.model and config.model != MODEL_AUTO_VALUE:
             _session_opts["model"] = config.model
-        session = await client.create_session(**_session_opts)
+        else:
+            _session_opts["model"] = DEFAULT_MODEL
+            _session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        session = await _create_session_with_auto_reasoning_fallback(client, _session_opts)
 
         # ツール呼び出し追跡
         _called_tools: list = []
@@ -1241,11 +1485,19 @@ async def _run_akm_workiq_verification(
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
             "mcp_servers": _mcp,
+            # Phase 2 (Resume): 決定論的 session_id を付与
+            "session_id": _orchestrator_session_id(
+                config, "akm-verify", suffix="workiq"
+            ),
         }
+        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
         if config.model and config.model != MODEL_AUTO_VALUE:
             session_opts["model"] = config.model
+        else:
+            session_opts["model"] = DEFAULT_MODEL
+            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
 
-        session = await client.create_session(**session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
 
         try:
             # MCP 接続確認
@@ -1403,14 +1655,350 @@ async def _run_akm_workiq_verification(
     )
 
 
-# -----------------------------------------------------------------------
-# メインオーケストレーション
-# -----------------------------------------------------------------------
+async def _run_ard_workiq_usecase(
+    config: SDKConfig,
+    console: Console,
+    params: dict,
+    step2_issue_num: Optional[int],
+    repo: str,
+    token: str,
+) -> None:
+    """ARD Step.2: Work IQ 経由でユースケースカタログの参照情報を取得し、Step.2 Issue にコメントする。
+
+    AKM パターン（verification + 通常実行）に倣い、Work IQ 結果を Issue コメントとして注入する。
+    その後、通常の Custom Agent（Arch-ARD-UseCaseCatalog）が当該 Issue を参照しながら実行される。
+
+    Args:
+        config: SDKConfig インスタンス。
+        console: Console インスタンス。
+        params: ワークフローパラメータ（company_name 等）。
+        step2_issue_num: Step.2 の Sub-Issue 番号。None の場合は GitHub へのコメント投稿をスキップし、
+            Work IQ 結果はローカルログのみに出力する（Issue 未作成の dry_run なし実行等）。
+        repo: リポジトリ（owner/repo 形式）。
+        token: GitHub トークン。
+    """
+    try:
+        from .workiq import (
+            build_workiq_mcp_config, query_workiq,
+            is_workiq_available, is_workiq_error_response,
+            _escape_workiq_sandbox_tags,
+        )
+    except ImportError:
+        from workiq import (  # type: ignore[no-redef]
+            build_workiq_mcp_config, query_workiq,
+            is_workiq_available, is_workiq_error_response,
+            _escape_workiq_sandbox_tags,
+        )
+
+    if not is_workiq_available():
+        console.warning("Work IQ 利用条件未充足のため通常実行に委譲 (is_workiq_available=False)")
+        return
+
+    company_name = (params.get("company_name", "") or "").strip()
+    company_name_for_prompt = company_name or "未指定"
+
+    # docs/company-business-requirement.md を読み込む
+    business_req_path = Path("docs/company-business-requirement.md")
+    if business_req_path.exists():
+        try:
+            business_requirement_content = business_req_path.read_text(encoding="utf-8")
+        except Exception as read_err:
+            console.warning(f"ARD Work IQ: docs/company-business-requirement.md 読み取り失敗: {read_err}")
+            business_requirement_content = "(読み取り失敗)"
+    else:
+        console.warning("ARD Work IQ: docs/company-business-requirement.md が存在しません。")
+        business_requirement_content = "(ファイルなし)"
+
+    # Work IQ クエリ文を構築
+    if company_name:
+        workiq_query = (
+            f"対象企業「{company_name}」のユースケース作成に役立つ情報を教えてください。"
+            f"業務プロセス、顧客ニーズ、既存システム、利用シナリオ等に関する情報があればお知らせください。"
+        )
+    else:
+        workiq_query = (
+            "対象企業名は未指定です。"
+            "汎用的なユースケース作成に役立つ情報として、業務プロセス、顧客ニーズ、"
+            "既存システム、利用シナリオ等の観点で参照情報を提示してください。"
+        )
+
+    # SDK / セッション準備
+    try:
+        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
+        from copilot.session import PermissionHandler
+    except ImportError:
+        console.warning("Copilot SDK が利用できないため ARD Work IQ ユースケース取得をスキップします。")
+        return
+
+    if config.cli_url:
+        sdk_cfg = ExternalServerConfig(url=config.cli_url)
+    else:
+        sdk_cfg = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level="error",
+        )
+
+    client = CopilotClient(config=sdk_cfg)
+    await client.start()
+
+    try:
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        session_opts: dict = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            "mcp_servers": _mcp,
+            "session_id": _orchestrator_session_id(
+                config, "ard-workiq", suffix="usecase"
+            ),
+        }
+        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
+        if config.model and config.model != MODEL_AUTO_VALUE:
+            session_opts["model"] = config.model
+        else:
+            session_opts["model"] = DEFAULT_MODEL
+            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+
+        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+
+        try:
+            workiq_result = await query_workiq(
+                session, workiq_query,
+                timeout=config.workiq_per_question_timeout,
+            )
+        except Exception as wiq_err:
+            console.warning(f"ARD Work IQ クエリ失敗: {wiq_err}")
+            workiq_result = None
+        finally:
+            await session.disconnect()
+    except Exception as exc:
+        console.warning(f"ARD Work IQ セッション作成失敗: {exc}")
+        workiq_result = None
+    finally:
+        await client.stop()
+
+    if not workiq_result or not workiq_result.strip():
+        console.warning("ARD Work IQ: 応答が空のためスキップします。")
+        return
+
+    if is_workiq_error_response(workiq_result):
+        console.warning("ARD Work IQ: エラー応答を受信しました。スキップします。")
+        return
+
+    # ARD_WORKIQ_USECASE_PROMPT を構築して Step.2 Issue にコメント
+    # プロンプトインジェクション対策: workiq_result と business_requirement_content をエスケープ
+    safe_workiq_result = _escape_workiq_sandbox_tags(workiq_result) or workiq_result
+    safe_biz_req = _escape_workiq_sandbox_tags(business_requirement_content) or business_requirement_content
+    comment_body = ARD_WORKIQ_USECASE_PROMPT.format(
+        business_requirement_content=safe_biz_req,
+        company_name=company_name_for_prompt,
+        workiq_result=safe_workiq_result,
+    )
+
+    if step2_issue_num and repo and token:
+        try:
+            post_comment(
+                issue_num=step2_issue_num,
+                body=comment_body,
+                repo=repo,
+                token=token,
+            )
+            console.event(
+                f"ARD Work IQ: ユースケース参照情報を Step.2 Issue #{step2_issue_num} にコメントしました。"
+            )
+        except Exception as post_err:
+            console.warning(f"ARD Work IQ: Issue コメント投稿失敗: {post_err}")
+    else:
+        console.event(
+            "ARD Work IQ: Step.2 Issue 番号が不明のため、コメント投稿をスキップします（Work IQ 結果はローカルログのみ）。"
+        )
+        console.workiq_response(workiq_result, label="ARD Work IQ ユースケース参照情報")
+
+
+# --- ARD: Step 1 → Step 2 bridging hook ---
+def _select_recommendation(
+    recommendations: list,
+    config: SDKConfig,
+    params: dict,
+    console: Console,
+):
+    """ARD の Strategic Recommendation を 1 件選択する。"""
+    if not recommendations:
+        raise ValueError("recommendations must not be empty")
+
+    explicit_id = (params.get("target_recommendation_id", "") or "").strip().upper()
+    if explicit_id:
+        for rec in recommendations:
+            if str(getattr(rec, "id", "")).upper() == explicit_id:
+                return rec
+        console.warning(
+            f"target_recommendation_id='{explicit_id}' に一致する SR がないため、先頭 SR を採用します。"
+        )
+        return recommendations[0]
+
+    if getattr(config, "unattended", False):
+        return recommendations[0]
+
+    options = [f"{r.id}: {r.title}" for r in recommendations]
+    selected_index = console.menu_select(
+        "Step 2 で使用する Strategic Recommendation を選択してください",
+        options,
+        default_index=0,
+    )
+    if not (0 <= selected_index < len(recommendations)):
+        return recommendations[0]
+    return recommendations[selected_index]
+
+
+async def _generate_target_business_from_sr(
+    selected_sr,
+    md_path: Path,
+    config: SDKConfig,
+    params: dict,
+    console: Console,
+) -> str:
+    """選択 SR + Step1 出力から target_business 説明文を生成する。"""
+    sr_id = str(getattr(selected_sr, "id", "SR-UNKNOWN"))
+    sr_title = str(getattr(selected_sr, "title", "")).strip() or sr_id
+
+    if config.dry_run:
+        return f"[dry-run] target_business based on {sr_id}: {sr_title}"
+
+    try:
+        business_requirement_content = md_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        console.warning(f"Step 1 出力の読み込みに失敗したため SR タイトルで代替します: {exc}")
+        return sr_title
+
+    try:
+        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
+        from copilot.session import PermissionHandler
+    except ImportError:
+        console.warning("Copilot SDK が利用できないため SR タイトルで代替します。")
+        return sr_title
+
+    if config.cli_url:
+        sdk_cfg = ExternalServerConfig(url=config.cli_url)
+    else:
+        sdk_cfg = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level="error",
+            cli_args=config.cli_args,
+        )
+
+    client = CopilotClient(config=sdk_cfg)
+    await client.start()
+    try:
+        session_opts: dict = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            "session_id": _orchestrator_session_id(
+                config,
+                "ard-target-business",
+                suffix=sr_id.lower().replace(" ", "-"),
+            ),
+        }
+        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
+        if config.model and config.model != MODEL_AUTO_VALUE:
+            session_opts["model"] = config.model
+        else:
+            session_opts["model"] = DEFAULT_MODEL
+            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        try:
+            prompt = ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT.format(
+                company_name=params.get("company_name", ""),
+                selected_recommendation_id=sr_id,
+                selected_recommendation_title=sr_title,
+                business_requirement_content=business_requirement_content,
+            )
+            response = await session.send_and_wait(prompt, timeout=config.timeout_seconds)
+            generated = (_extract_text(response) or "").strip()
+            if generated:
+                return generated
+            console.warning("target_business 生成結果が空のため SR タイトルで代替します。")
+            return sr_title
+        finally:
+            await session.disconnect()
+    except Exception as exc:
+        console.warning(f"target_business 生成に失敗したため SR タイトルで代替します: {exc}")
+        return sr_title
+    finally:
+        await client.stop()
+
+
+async def _on_ard_step1_completed(
+    *,
+    config: SDKConfig,
+    params: dict,
+    console: Console,
+) -> None:
+    """ARD Step 1 完了直後: SR 抽出・選択・target_business 生成。"""
+    if (params.get("target_business", "") or "").strip():
+        console.status("target_business が指定済みのため、SR からの自動生成をスキップします。")
+        return
+
+    output_path = Path("docs/company-business-requirement.md")
+    if not output_path.exists():
+        console.warning("Step 1 出力ファイルが見つかりません。Step 2 は既存 target_business で継続します。")
+        return
+
+    try:
+        from .ard_recommendations import parse_recommendations, annotate_with_ids
+    except ImportError:
+        from ard_recommendations import parse_recommendations, annotate_with_ids  # type: ignore[no-redef]
+
+    parsed = parse_recommendations(output_path)
+    recommendations = annotate_with_ids(output_path)
+    if not recommendations:
+        recommendations = parsed
+    if not recommendations:
+        console.warning("Strategic Recommendations が抽出できなかったため target_business は変更しません。")
+        return
+
+    selected_sr = _select_recommendation(
+        recommendations=recommendations,
+        config=config,
+        params=params,
+        console=console,
+    )
+    params["target_business"] = await _generate_target_business_from_sr(
+        selected_sr=selected_sr,
+        md_path=output_path,
+        config=config,
+        params=params,
+        console=console,
+    )
+
+
+async def _resolve_target_business_paths(params: dict, console: Console) -> None:
+    """target_business がパス指定なら context テキストへ展開する。"""
+    raw = params.get("target_business", "") or ""
+    try:
+        from .ard_target_business_resolver import is_path_like, resolve, to_context_text
+    except ImportError:
+        from ard_target_business_resolver import is_path_like, resolve, to_context_text  # type: ignore[no-redef]
+
+    if not is_path_like(raw):
+        return
+    resolved = resolve(raw, base_dir=Path.cwd())
+    params["target_business"] = to_context_text(resolved)
+    console.status(
+        f"target_business をパス展開しました: {len(resolved.files)} ファイル, "
+        f"{resolved.total_size_bytes} bytes"
+    )
+
+
+
 
 async def run_workflow(
     workflow_id: str,
     params: Optional[dict] = None,
     config: Optional[SDKConfig] = None,
+    *,
+    resume_state: Optional[RunState] = None,
+    session_name: Optional[str] = None,
 ) -> dict:
     """ワークフローを SDK でローカル実行する。
 
@@ -1435,6 +2023,16 @@ async def run_workflow(
     8. Post-DAG 後処理（git push + PR 作成）
     9. サマリー表示
 
+    Phase 3 (Resume): `resume_state` を渡すと、その RunState の completed/skipped
+    ステップを事前登録した上で残ステップだけを実行する。`config.run_id` と
+    `params` は resume_state の値で上書きされる（途中までの実行コンテキストを
+    厳密に再現するため）。
+
+    Phase 4 (Resume): `session_name` を渡すと、新規 RunState 作成時の
+    `session_name` フィールドに設定する。Wizard でユーザーが入力した名前を
+    Resume 一覧の表示に使用するため。`resume_state` と併用された場合は
+    既存の `session_name` を尊重し、`session_name` 引数は無視される。
+
     Returns:
         結果情報の dict:
           workflow_id, completed, failed, skipped, elapsed_total,
@@ -1442,6 +2040,17 @@ async def run_workflow(
     """
     if config is None:
         config = SDKConfig()
+
+    # Phase 3 (Resume): resume_state があれば config と params を復元する。
+    # Resume 時は run_id を強制上書きし、params も snapshot を真とする
+    # （途中までの実行コンテキストを破壊しないため）。
+    if resume_state is not None:
+        _restore_config_from_state(config, resume_state)
+        if params is None:
+            params = {}
+        merged_params: dict = dict(resume_state.params_snapshot or {})
+        merged_params.update(params)
+        params = merged_params
 
     # run_id が未設定の場合、ワークフロー実行開始時に1回生成する（並列安全性）
     if not config.run_id:
@@ -1453,6 +2062,10 @@ async def run_workflow(
         show_stream=config.show_stream,
         show_reasoning=config.show_reasoning,
         verbosity=config.verbosity,
+        no_color=getattr(config, "no_color", None),
+        screen_reader=getattr(config, "screen_reader", False),
+        timestamp_style=getattr(config, "timestamp_style", "prefix"),
+        final_only=getattr(config, "final_only", False),
     )
     start_total = time.time()
 
@@ -1478,12 +2091,18 @@ async def run_workflow(
         _phases.append("ブランチ作成")
     if config.create_issues:
         _phases.append("Issue 作成")
-    if config.auto_qa and config.qa_phase in ("pre", "both"):
+    if config.auto_qa:
         _phases.append("実行計画 → DAG 実行（事前 QA + Work IQ → 各ステップ実行）")
     else:
         _phases.append("実行計画 → DAG 実行")
     if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
         _phases.append("AKM Work IQ 検証")
+    if workflow_id == "ard" and config.is_workiq_qa_enabled() and not config.dry_run:
+        # ARD Work IQ は pre-DAG（Issue 作成後・Step.2 実行前）に挿入するため _phases への追加も DAG の前
+        _ard_wiq_phase_idx = next(
+            (i for i, ph in enumerate(_phases) if "DAG 実行" in ph), len(_phases) - 1
+        )
+        _phases.insert(_ard_wiq_phase_idx, "ARD Work IQ ユースケース参照")
     _si_scope = config.self_improve_scope
     _workflow_si_allowed = _si_scope in ("", "workflow")
     if config.auto_self_improve and not config.self_improve_skip and not config.dry_run and _workflow_si_allowed:
@@ -1619,20 +2238,41 @@ async def run_workflow(
 
     selected_step_ids: List[str] = effective_params.get("selected_steps") or []
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
+    _ard_force_serial = (
+        workflow_id == "ard"
+        and "1" in active_steps
+        and "2" in active_steps
+        and not (effective_params.get("target_business", "") or "").strip()
+    )
+    effective_max_parallel = 1 if _ard_force_serial else config.max_parallel
+    wf_for_dag = wf
+    if _ard_force_serial:
+        try:
+            wf_for_dag = copy.deepcopy(wf)
+            _step2 = wf_for_dag.get_step("2")
+            if _step2 is not None and "1" not in (_step2.depends_on or []):
+                _step2.depends_on = list(_step2.depends_on or []) + ["1"]
+        except Exception as exc:
+            console.warning(f"ARD 直列DAGの構築に失敗したため通常DAGで続行します: {exc}")
+            wf_for_dag = wf
+            _ard_force_serial = False
+            effective_max_parallel = config.max_parallel
 
     console.event(f"実行対象ステップ数: {len(active_steps)}")
+    if _ard_force_serial:
+        console.event("ARD bridge mode: Step 1 → Step 2 → Step 3 を直列実行します。")
     console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
     dry_run_plan = build_dag_plan(
-        wf,
+        wf_for_dag,
         active_steps,
-        max_parallel=config.max_parallel,
-        max_parallel_source="config",
+        max_parallel=effective_max_parallel,
+        max_parallel_source="ard-serial" if _ard_force_serial else "config",
     )
 
     # --- dry_run: 実行計画表示のみ ---
     if config.dry_run:
-        _print_dry_run_plan(wf, active_steps, config, console, dry_run_plan)
+        _print_dry_run_plan(wf_for_dag, active_steps, config, console, dry_run_plan)
         elapsed = time.time() - start_total
         return {
             "workflow_id": workflow_id,
@@ -1684,6 +2324,44 @@ async def run_workflow(
 
     if config.create_issues:
         console.phase_end(p, _total_phases, "Issue 作成", time.time() - phase_start_issue)
+
+    # --- 4.6. ARD Work IQ ユースケース参照（Issue 作成後・Step.2 実行前）---
+    # Step.2 の Issue にコメントを注入しておくことで、Custom Agent が参照できるようにする。
+    _ard_workiq_enabled = bool(effective_params.get("ard_workiq_enabled", False))
+    if (
+        workflow_id == "ard"
+        and "2" in active_steps
+        and (_ard_workiq_enabled or config.is_workiq_qa_enabled())
+        and not config.dry_run
+    ):
+        try:
+            from .workiq import is_workiq_available
+        except ImportError:
+            from workiq import is_workiq_available  # type: ignore[no-redef]
+
+        if is_workiq_available():
+            p = _next_phase()
+            phase_start_ard_wiq = time.time()
+            console.phase_start(p, _total_phases, "ARD Work IQ ユースケース参照")
+            _ard_step2_issue_num = step_issue_map.get("2") if step_issue_map else None
+            _ard_repo = config.repo or ""
+            _ard_token = config.resolve_token() or ""
+            try:
+                await _run_ard_workiq_usecase(
+                    config=config,
+                    console=console,
+                    params=effective_params,
+                    step2_issue_num=_ard_step2_issue_num,
+                    repo=_ard_repo,
+                    token=_ard_token,
+                )
+            except Exception as ard_wiq_exc:
+                console.warning(
+                    f"ARD Work IQ ユースケース参照中にエラーが発生しました（無視して続行）: {ard_wiq_exc}"
+                )
+            console.phase_end(p, _total_phases, "ARD Work IQ ユースケース参照", time.time() - phase_start_ard_wiq)
+        else:
+            console.warning("Work IQ 利用条件未充足のため通常実行に委譲 (is_workiq_available=False)")
 
     # --- 5. StepRunner 準備 + DAG 実行 ---
     p = _next_phase()
@@ -1749,7 +2427,45 @@ async def run_workflow(
                         "error": msg,
                     }
 
-    runner = StepRunner(config=config, console=console)
+    # --- Phase 3 (Resume): RunState の確保と running 状態への遷移 ---
+    # resume_state が None なら新規作成し、既存があれば最新の active_steps を反映する。
+    # いずれの場合も status="running" にして即座に save する（クラッシュ時の resume の起点）。
+    if resume_state is None:
+        # Phase 4 (Resume): wizard / CLI から渡された session_name を優先し、
+        # 未指定なら default_session_name() でワークフロー表示名 + 時刻を生成する。
+        try:
+            from .run_state import default_session_name
+        except ImportError:
+            from run_state import default_session_name  # type: ignore[no-redef]
+        _wf_disp = _WORKFLOW_DISPLAY_NAMES.get(workflow_id, workflow_id)
+        _effective_session_name = (session_name or "").strip() or default_session_name(
+            workflow_id=workflow_id,
+            params=effective_params,
+            workflow_display_name=_wf_disp,
+        )
+        resume_state = RunState.new(
+            run_id=config.run_id,
+            workflow_id=workflow_id,
+            config=config,
+            params=effective_params,
+            selected_step_ids=sorted(active_steps),
+            session_name=_effective_session_name,
+        )
+    else:
+        # 既存 resume_state を再開: active_steps の差分を吸収する
+        # （DAG 構成変更や新規 step 追加にも追随）
+        resume_state.selected_step_ids = sorted(active_steps)
+        for sid in active_steps:
+            if sid not in resume_state.step_states:
+                resume_state.step_states[sid] = StepState(status="pending")
+    resume_state.status = "running"
+    resume_state.pause_reason = None
+    try:
+        resume_state.save()
+    except Exception as exc:
+        console.warning(f"state.json の初期保存に失敗しました: {exc}")
+
+    runner = StepRunner(config=config, console=console, resume_state=resume_state)
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
     existing_artifacts = _detect_existing_artifacts(workflow_id, effective_params)
@@ -1791,6 +2507,7 @@ async def run_workflow(
     _w2_none_steps: int = 0          # consumed_artifacts=None のステップ数
     _w2_injection_total: int = 0     # context injection 合計文字数
     _w2_injection_max: int = 0       # context injection 最大文字数（1 step あたり）
+    _w2_injection_phase_breakdown: Dict[str, int] = {}  # context injection フェーズ別内訳
     for step in wf.steps:
         if step.is_container or step.id not in active_steps:
             continue
@@ -1816,6 +2533,8 @@ async def run_workflow(
         _w2_injection_total += _injection_chars
         if _injection_chars > _w2_injection_max:
             _w2_injection_max = _injection_chars
+        _phase = step.id.split(".", 1)[0]
+        _w2_injection_phase_breakdown[_phase] = _w2_injection_phase_breakdown.get(_phase, 0) + _injection_chars
         step_prompts[step.id] = _build_step_prompt(
             step=step,
             params=effective_params,
@@ -1827,11 +2546,11 @@ async def run_workflow(
         )
 
     dag_plan = build_dag_plan(
-        wf,
+        wf_for_dag,
         active_steps,
         step_prompts=step_prompts,
-        max_parallel=config.max_parallel,
-        max_parallel_source="config",
+        max_parallel=effective_max_parallel,
+        max_parallel_source="ard-serial" if _ard_force_serial else "config",
     )
 
     # --- 6-7. DAGExecutor 実行 ---
@@ -1841,30 +2560,205 @@ async def run_workflow(
         prompt: str,
         custom_agent: Optional[str] = None,
     ) -> bool:
-        return await runner.run_step(
+        _prompt = prompt
+
+        # --- ARD: Step 1 → Step 2 bridging hook ---
+        if workflow_id == "ard" and step_id == "2":
+            await _resolve_target_business_paths(effective_params, console)
+            step = wf.get_step(step_id)
+            if step is not None:
+                step_additional = _compute_step_additional_prompt(
+                    step=step,
+                    existing_artifacts=existing_artifacts,
+                    config=config,
+                    base_additional_prompt=effective_additional_prompt,
+                )
+                _prompt = _build_step_prompt(
+                    step=step,
+                    params=effective_params,
+                    root_issue_num=root_issue_num,
+                    render_template_fn=render_template,
+                    wf=wf,
+                    additional_prompt=step_additional,
+                    execution_mode=execution_mode,
+                )
+
+        success = await runner.run_step(
             step_id=step_id,
             title=title,
-            prompt=prompt,
+            prompt=_prompt,
             custom_agent=custom_agent,
             workflow_id=workflow_id,
         )
+        if workflow_id == "ard" and step_id == "1" and success:
+            await _on_ard_step1_completed(
+                config=config,
+                params=effective_params,
+                console=console,
+            )
+        return success
 
     executor = DAGExecutor(
-        workflow=wf,
+        workflow=wf_for_dag,
         run_step_fn=run_step_fn,
         active_step_ids=active_steps,
-        max_parallel=config.max_parallel,
+        max_parallel=effective_max_parallel,
         console=console,
         step_prompts=step_prompts,
         dag_plan=dag_plan,
+        on_step_complete=_build_step_complete_callback(resume_state, console),
     )
+
+    # Phase 3 (Resume): 完了/スキップ済みステップを事前登録し、再実行を回避する。
+    # DAG の next_steps 走査が completed/skipped を「依存解決済み」とみなすため、
+    # ここで状態を流し込むだけで残ステップから自動で再開できる。
+    _resume_completed_count = 0
+    _resume_skipped_count = 0
+    for sid, st in resume_state.step_states.items():
+        if sid not in active_steps:
+            continue
+        if st.status == "completed":
+            executor.completed.add(sid)
+            _resume_completed_count += 1
+        elif st.status == "skipped":
+            executor.skipped.add(sid)
+            _resume_skipped_count += 1
+    if _resume_completed_count or _resume_skipped_count:
+        _remaining = len(active_steps) - _resume_completed_count - _resume_skipped_count
+        console.event(
+            f"  ↻ Resume mode: 完了済み={_resume_completed_count} / "
+            f"スキップ済み={_resume_skipped_count} / "
+            f"残り実行={_remaining}"
+        )
 
     # 実行計画を事前表示
     waves = executor.compute_waves()
     if waves:
-        console.execution_plan(waves, len(active_steps), config.max_parallel)
+        console.execution_plan(waves, len(active_steps), effective_max_parallel)
 
-    results = await executor.execute()
+    # Phase 6 (Resume): Ctrl+R で graceful pause を可能にする。
+    # KeybindMonitor は別スレッドで stdin を監視し、Ctrl+R 検出時に pause_event を
+    # 立てる。メインループは executor.execute() と pause_event.wait() を競合させ、
+    # pause が先に発火したら executor をキャンセルして state を paused に保存する。
+    # 監視は実行中のみ有効にし、必ず finally で stop する（端末モード復元）。
+    pause_event = asyncio.Event()
+    monitor = KeybindMonitor()  # __init__ で env 判定（pytest / non-tty で自動無効化）
+
+    if monitor.enabled:
+        console.event(
+            "  💡 実行中に Ctrl+R で state を保存して中断できます "
+            "（再開は次回起動時の Resume プロンプトから）"
+        )
+
+    async def _on_ctrl_r() -> None:
+        """Ctrl+R 検出時のハンドラー（asyncio ループ上で実行される）。"""
+        if pause_event.is_set():
+            return  # 二重押し防止
+        pause_event.set()
+        try:
+            console.event(
+                "\n  ⏸ Ctrl+R 検出: 実行中ステップの完了を待たず state を保存して中断します..."
+            )
+        except Exception:  # pragma: no cover
+            pass
+
+    monitor.register(KEY_CTRL_R, _on_ctrl_r)
+
+    paused_by_user: bool = False
+    try:
+        monitor.start()
+        executor_task = asyncio.create_task(executor.execute(), name="hve-executor")
+        pause_task = asyncio.create_task(pause_event.wait(), name="hve-pause-wait")
+        try:
+            done, _pending = await asyncio.wait(
+                [executor_task, pause_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        except asyncio.CancelledError:
+            # 親（asyncio.run の cancel 等）から送られた場合は通常の cancel として伝播
+            executor_task.cancel()
+            pause_task.cancel()
+            raise
+
+        if pause_task in done and not executor_task.done():
+            paused_by_user = True
+            executor_task.cancel()
+            try:
+                await executor_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                # キャンセル / 実行中例外いずれも握り潰す（state 保存を優先）
+                pass
+            results = dict(getattr(executor, "_results", {}) or {})
+        else:
+            # 通常完了（または executor 側で例外）
+            pause_task.cancel()
+            try:
+                await pause_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+            results = await executor_task
+    finally:
+        monitor.stop()
+
+    # Phase 6 (Resume): Ctrl+R で中断された場合は state を paused にして早期 return。
+    if paused_by_user:
+        # 実行中だったステップは failed にマークする（次回 resume で再実行対象）
+        for sid in sorted(executor.running):
+            try:
+                resume_state.update_step(
+                    sid,
+                    status="failed",
+                    error_summary="ユーザーにより Ctrl+R で中断",
+                )
+            except Exception as exc:  # pragma: no cover
+                console.warning(
+                    f"中断ステップ {sid} の state 更新に失敗しました: {exc}"
+                )
+        resume_state.status = "paused"
+        resume_state.pause_reason = "ctrl+r"
+        try:
+            resume_state.save()
+        except Exception as exc:
+            console.warning(f"state.json の paused 保存に失敗しました: {exc}")
+
+        completed_ids_paused = sorted(executor.completed)
+        failed_ids_paused = sorted(executor.failed)
+        skipped_ids_paused = sorted(executor.skipped)
+        console.event(
+            f"  ✅ state.json 保存完了: {resume_state.state_path}"
+        )
+        console.event(
+            f"  📊 中断時点: 完了={len(completed_ids_paused)} / "
+            f"失敗={len(failed_ids_paused)} / "
+            f"スキップ={len(skipped_ids_paused)} / "
+            f"残り={len(active_steps) - len(completed_ids_paused) - len(skipped_ids_paused)}"
+        )
+        console.phase_end(p, _total_phases, "実行計画 → DAG 実行 (paused)", time.time() - phase_start_dag)
+        return {
+            "workflow_id": workflow_id,
+            "paused": True,
+            "run_id": resume_state.run_id,
+            "completed": completed_ids_paused,
+            "failed": failed_ids_paused,
+            "skipped": skipped_ids_paused,
+            "blocked": [],
+            "elapsed_total": time.time() - phase_start_dag,
+            "code_review_error": None,
+            "pr_number": None,
+            "root_issue_num": None,
+            "working_branch": None,
+            "error": None,
+            "aqod_validation": None,
+        }
+
+    # Phase 3 (Resume): DAG 実行完了後に status を確定する。
+    # 失敗が 1 件でもあれば failed、全て成功 / skip ならば completed とする。
+    # この後の Self-Improve や PR 作成は status に影響しない（あくまで DAG の達成度を反映）。
+    resume_state.status = "failed" if executor.failed else "completed"
+    try:
+        resume_state.save()
+    except Exception as exc:
+        console.warning(f"state.json の最終保存に失敗しました: {exc}")
     if config.create_issues and step_issue_map:
         token = config.resolve_token()
         repo = config.repo
@@ -1937,6 +2831,8 @@ async def run_workflow(
             )
         console.phase_end(p, _total_phases, "AKM Work IQ 検証", time.time() - phase_start_akm_wiq)
 
+    # --- ARD Work IQ ユースケース参照は Phase 4.6（DAG 実行前）に移動済み ---
+
     # PR 作成フェーズで参照するため事前初期化（auto_self_improve=False 時の NameError 防止）
     si_task_goal: Optional["TaskGoal"] = None
     si_disc_sources: List[str] = []
@@ -1963,16 +2859,12 @@ async def run_workflow(
         # ワークフロー種別に応じたデフォルト target_scope（config.py の定数を使用）
         _si_scope_defaults = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
 
-        def _collect_workflow_output_paths(wf_id: str) -> List[str]:
-            """ワークフローの全ステップの output_paths を集約する。
-            現状 Step に output_paths 属性はないため空リストを返す。
-            """
-            return []
-
-        _workflow_outputs = _collect_workflow_output_paths(workflow_id)
+        _workflow_outputs = collect_workflow_output_paths(workflow_id)
         _workflow_default = _si_scope_defaults.get(workflow_id, "")
 
-        # 既存挙動互換: target_scope が空かつ outputs も取れない場合は _si_scope_defaults を使う
+        # target_scope が明示指定されている場合はそれを優先する。
+        # 未指定かつ output_paths が集約できた場合は scope 文字列は不要（パス直指定）。
+        # output_paths が空の場合（output_paths 未設定ワークフロー）は workflow_default へフォールバック。
         effective_si_scope = (
             config.self_improve_target_scope
             or (_workflow_default if not _workflow_outputs else "")
@@ -2129,10 +3021,13 @@ async def run_workflow(
 
     # Wave 2-7: 計測サマリーをログ出力
     _w2_si_scope = config.self_improve_scope or "(後方互換: step+workflow)"
-    console.event(
-        f"[Wave2] context_injection: none_steps={_w2_none_steps}, "
-        f"total_chars={_w2_injection_total}, max_chars={_w2_injection_max}, "
-        f"self_improve_scope={_w2_si_scope!r}"
+    _emit_context_injection_metrics(
+        none_steps=_w2_none_steps,
+        total_chars=_w2_injection_total,
+        max_chars=_w2_injection_max,
+        self_improve_scope=_w2_si_scope,
+        phase_breakdown=_w2_injection_phase_breakdown,
+        console=console,
     )
 
     if root_issue_num:
@@ -2162,6 +3057,7 @@ async def run_workflow(
         "w2_none_steps": _w2_none_steps,
         "w2_injection_total_chars": _w2_injection_total,
         "w2_injection_max_chars": _w2_injection_max,
+        "w2_injection_phase_breakdown": _w2_injection_phase_breakdown,
         "w2_self_improve_scope": config.self_improve_scope,
     }
 
@@ -2361,13 +3257,24 @@ async def _request_code_review(
 
     session = None
     try:
-        session = await client.create_session(
-            model=config.get_review_model(),
-            on_permission_request=PermissionHandler.approve_all,
-            streaming=True,
-        )
-        if config.get_review_model() != config.model:
-            console.event(f"Code Review Agent モデル: {config.get_review_model()}")
+        _review_model = config.get_review_model()
+        _review_session_opts: Dict[str, Any] = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            # Phase 2 (Resume): 決定論的 session_id を付与
+            "session_id": _orchestrator_session_id(
+                config, "code-review", suffix="agent"
+            ),
+        }
+        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
+        if _review_model and _review_model != MODEL_AUTO_VALUE:
+            _review_session_opts["model"] = _review_model
+        else:
+            _review_session_opts["model"] = DEFAULT_MODEL
+            _review_session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        session = await _create_session_with_auto_reasoning_fallback(client, _review_session_opts)
+        if _review_model != config.model:
+            console.event(f"Code Review Agent モデル: {_review_model}")
 
         # session.log イベントを Console に転送（CLI ログを表示するため）
         def _review_session_event(event: Any) -> None:

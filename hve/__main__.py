@@ -57,6 +57,11 @@
     # AQOD（original-docs 横断分析質問票）
     python -m hve orchestrate --workflow aqod
     python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth lightweight
+
+    # ARD（要求定義の自動化）
+    python -m hve orchestrate --workflow ard --company-name "株式会社サンプル"
+    python -m hve orchestrate --workflow ard --company-name "株式会社サンプル" \\
+      --target-business "ロイヤルティプログラム事業"
 """
 
 from __future__ import annotations
@@ -66,6 +71,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
@@ -124,6 +130,11 @@ _ADOC_MAX_FILE_LINES_MENU_OPTIONS = (
 _ADOC_DEFAULT_MAX_FILE_LINES = 500
 _ADOC_DEFAULT_EXCLUDE_PATTERNS = "node_modules/,vendor/,dist/,*.lock,__pycache__/"
 
+# ARD デフォルト値
+_ARD_DEFAULT_SURVEY_PERIOD_YEARS = 30
+_ARD_DEFAULT_TARGET_REGION = "グローバル全体"
+_ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
+
 _APP_ID_AUTO_HINTS = {
     "aad-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
     "asdw-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
@@ -150,6 +161,15 @@ _PARAM_PROMPT_LABELS = {
     "enable_auto_merge": "PR 自動 Approve & Auto-merge",
     "doc_purpose": "ドキュメント主目的",
     "max_file_lines": "大規模ファイル分割閾値",
+    "create_remote_mcp_server": "Remote MCP Server を作成する",
+    # ARD 固有
+    "company_name": "対象企業名（Step 1 選択時は必須）",
+    "target_business": "対象業務名",  # サフィックスは _build_target_business_label で動的付与
+    "survey_base_date": "調査基準日（YYYY-MM-DD、任意）",
+    "survey_period_years": "調査期間年数（任意）",
+    "target_region": "対象地域（任意）",
+    "analysis_purpose": "分析目的（任意）",
+    "attached_docs": "添付資料のファイルパス（カンマ区切り・任意）",
 }
 
 _PARAM_DEFAULTS = {
@@ -160,6 +180,15 @@ _PARAM_DEFAULTS = {
     "focus_areas": "",
     "target_dirs": "",
     "exclude_patterns": _ADOC_DEFAULT_EXCLUDE_PATTERNS,
+    "create_remote_mcp_server": True,
+    # ARD 固有
+    "company_name": "",
+    "target_business": "",
+    "survey_base_date": "",  # 空 → orchestrator 側で today() を採用
+    "survey_period_years": _ARD_DEFAULT_SURVEY_PERIOD_YEARS,
+    "target_region": _ARD_DEFAULT_TARGET_REGION,
+    "analysis_purpose": _ARD_DEFAULT_ANALYSIS_PURPOSE,
+    "attached_docs": "",
 }
 
 
@@ -190,6 +219,20 @@ def _prompt_param_input(con, param_name: str) -> str:
     label = _PARAM_PROMPT_LABELS.get(param_name, param_name)
     default = _PARAM_DEFAULTS.get(param_name, "")
     return con.prompt_input(label, default=default, required=False)
+
+
+def _build_target_business_label(con, selected_steps) -> str:
+    """ARD ウィザードの target_business ラベルを Step 1 選択有無で切り替える。
+
+    - Step 1 選択時: 補足説明を灰色（DIM）で付記し任意入力。
+    - Step 1 非選択時: 必須マークは prompt_input 側の `required=True` で赤色付与。
+    """
+    s = getattr(con, "s", None)
+    if "1" in selected_steps:
+        if s is not None:
+            return f"対象業務名 {s.DIM}（Step 1で作成される最上位の戦略的提言を基に LLM 生成された対象業務説明文）{s.RESET}"
+        return "対象業務名（Step 1で作成される最上位の戦略的提言を基に LLM 生成された対象業務説明文）"
+    return "対象業務名"
 
 
 def _default_param_value(param_name: str):
@@ -230,6 +273,99 @@ def _step_options_with_groups(wf) -> tuple:
     return non_container_steps, options
 
 
+def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[str]]:
+    """ARD ワークフロー固有のパラメータ収集と selected_steps 計算。
+
+    Returns:
+        (params, selected_steps) のタプル。
+        - selected_steps: ウィザードでユーザーが選択した Step ID 一覧。
+          Enter 時の初期値は ["2", "3"]。
+    """
+    from datetime import date
+
+    params: dict = {}
+    _ard_step_ids = ["1", "2", "3"]
+    _ard_step_options = [
+        "[1] 事業分析（対象業務 未定）",
+        "[2] 事業分析（対象業務 指定済）",
+        "[3] ユースケース作成",
+    ]
+    selected_indices = con.prompt_multi_select(
+        "ARD で実行するステップを選択",
+        _ard_step_options,
+        default_indices=[1, 2],
+    )
+    selected_steps = [_ard_step_ids[i] for i in selected_indices if 0 <= i < len(_ard_step_ids)]
+    if not selected_steps:
+        selected_steps = ["2", "3"]
+
+    requires_company_name = "1" in selected_steps
+    requires_target_business = ("2" in selected_steps) and ("1" not in selected_steps)
+    target_business_label = _build_target_business_label(con, selected_steps)
+
+    if is_quick_auto:
+        # Step 1 を選択した場合のみ company_name を必須とする。
+        params["company_name"] = con.prompt_input(
+            _PARAM_PROMPT_LABELS["company_name"],
+            default="",
+            required=requires_company_name,
+        )
+        if "2" in selected_steps:
+            params["target_business"] = con.prompt_input(
+                target_business_label,
+                default="",
+                required=requires_target_business,
+            )
+        else:
+            params["target_business"] = ""
+        params["survey_base_date"] = date.today().isoformat()
+        params["survey_period_years"] = _ARD_DEFAULT_SURVEY_PERIOD_YEARS
+        params["target_region"] = _ARD_DEFAULT_TARGET_REGION
+        params["analysis_purpose"] = _ARD_DEFAULT_ANALYSIS_PURPOSE
+        params["attached_docs"] = []
+    else:
+        params["company_name"] = con.prompt_input(
+            _PARAM_PROMPT_LABELS["company_name"],
+            default="",
+            required=requires_company_name,
+        )
+        if "2" in selected_steps:
+            params["target_business"] = con.prompt_input(
+                target_business_label,
+                default="",
+                required=requires_target_business,
+            )
+        else:
+            params["target_business"] = ""
+        survey_base = con.prompt_input(
+            _PARAM_PROMPT_LABELS["survey_base_date"],
+            default=date.today().isoformat(), required=False,
+        )
+        params["survey_base_date"] = survey_base or date.today().isoformat()
+        survey_years = con.prompt_input(
+            _PARAM_PROMPT_LABELS["survey_period_years"],
+            default=str(_ARD_DEFAULT_SURVEY_PERIOD_YEARS), required=False,
+        )
+        try:
+            params["survey_period_years"] = int(survey_years)
+        except (TypeError, ValueError):
+            params["survey_period_years"] = _ARD_DEFAULT_SURVEY_PERIOD_YEARS
+        params["target_region"] = con.prompt_input(
+            _PARAM_PROMPT_LABELS["target_region"],
+            default=_ARD_DEFAULT_TARGET_REGION, required=False,
+        )
+        params["analysis_purpose"] = con.prompt_input(
+            _PARAM_PROMPT_LABELS["analysis_purpose"],
+            default=_ARD_DEFAULT_ANALYSIS_PURPOSE, required=False,
+        )
+        attached_raw = con.prompt_input(
+            _PARAM_PROMPT_LABELS["attached_docs"], default="", required=False,
+        )
+        params["attached_docs"] = _split_csv(attached_raw or "")
+
+    return params, selected_steps
+
+
 def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
     """AKM/AQOD 以外のワークフロー固有パラメータを収集する。"""
     params: dict = {}
@@ -245,6 +381,11 @@ def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
             params[param_name] = _prompt_valid_doc_purpose(con)
         elif param_name == "max_file_lines":
             params[param_name] = _prompt_valid_max_file_lines(con)
+        elif param_name == "create_remote_mcp_server":
+            params[param_name] = con.prompt_yes_no(
+                _PARAM_PROMPT_LABELS["create_remote_mcp_server"],
+                default=_PARAM_DEFAULTS["create_remote_mcp_server"],
+            )
         else:
             params[param_name] = _prompt_param_input(con, param_name)
     return params
@@ -293,6 +434,80 @@ def _prompt_valid_max_file_lines(con) -> int:
         default_index=default_idx,
     )
     return _ADOC_MAX_FILE_LINES_CHOICES[default_idx if selected_idx == -1 else selected_idx]
+
+
+def _collect_agentic_retrieval_wizard_answers(con, wf_id: str, *, is_quick_auto: bool) -> dict:
+    """Agentic Retrieval 関連の質問（Q1〜Q6）をウィザードで収集する。
+
+    AAD-WEB は Q1・Q3 のみ（設計フェーズ）。ASDW-WEB は Q1〜Q6 全て。
+    `is_quick_auto=True` のときは既定値をそのまま返す。
+
+    Returns:
+        ``normalize_agentic_retrieval_answers`` への入力に対応するキー辞書。
+    """
+    try:
+        from .template_engine import _AGENTIC_RETRIEVAL_QUESTIONS, _AGENTIC_RETRIEVAL_KEYS_FOR
+    except ImportError:
+        from template_engine import _AGENTIC_RETRIEVAL_QUESTIONS, _AGENTIC_RETRIEVAL_KEYS_FOR  # type: ignore[no-redef]
+
+    # 後方互換エイリアス解決
+    _wf_id = {"aad": "aad-web", "asdw": "asdw-web"}.get(wf_id, wf_id)
+    keys = _AGENTIC_RETRIEVAL_KEYS_FOR.get(_wf_id, [])
+    if not keys:
+        return {}
+
+    answers: dict = {}
+    if is_quick_auto:
+        for key in keys:
+            q = _AGENTIC_RETRIEVAL_QUESTIONS[key]
+            kind = q["kind"]
+            default = q["default"]
+            if kind == "dropdown":
+                opts = q["options"]
+                answers[key] = opts[default]
+            elif kind == "checkboxes":
+                answers[key] = list(default) if isinstance(default, list) else [default] if default else []
+            elif kind == "checkbox":
+                answers[key] = default
+            else:
+                answers[key] = default
+        return answers
+
+    con._print(
+        "\n  ─── Agentic Retrieval 設定 ───────────────────────────",
+        ts=False,
+    )
+    for key in keys:
+        q = _AGENTIC_RETRIEVAL_QUESTIONS[key]
+        label = q["label"]
+        desc = q["description"]
+        kind = q["kind"]
+        default = q["default"]
+        prompt_text = f"{label}\n  {desc}"
+
+        if kind == "dropdown":
+            opts = q["options"]
+            sel_idx = con.menu_select(prompt_text, opts, allow_empty=True, default_index=default)
+            if sel_idx == -1:
+                sel_idx = default
+            answers[key] = opts[sel_idx]
+        elif kind == "checkboxes":
+            opts = q["options"]
+            defaults_list = default if isinstance(default, list) else []
+            sel_indices = con.prompt_multi_select(prompt_text, opts)
+            if not sel_indices:
+                # 未選択時は既定値を使用
+                defaults_set = set(defaults_list)
+                sel_indices = [i for i, o in enumerate(opts) if o in defaults_set] or [0]
+            answers[key] = [opts[i] for i in sel_indices]
+        elif kind == "checkbox":
+            answers[key] = con.prompt_yes_no(prompt_text, default=default)
+        else:
+            answers[key] = con.prompt_input(prompt_text, default=str(default) if default else "")
+
+    return answers
+
+
 
 
 def _prompt_akm_params(
@@ -376,9 +591,16 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command")
 
     # --- run サブコマンド (インタラクティブモード) ---
-    sub.add_parser(
+    run_parser = sub.add_parser(
         "run",
         help="インタラクティブモードでワークフローを実行する (デフォルト)",
+    )
+    run_parser.add_argument(
+        "--banner",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="banner",
+        help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 表示)",
     )
 
     # --- orchestrate サブコマンド ---
@@ -532,17 +754,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         metavar="SECONDS",
-        help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（デフォルト: 600）",
-    )
-    orch.add_argument(
-        "--aqod-post-qa",
-        action="store_true",
-        default=False,
-        help=(
-            "AQOD ワークフローでメインタスク完了後の事後 QA を実行する（オプトイン）。"
-            "デフォルトは無効。auto_qa と併用して有効化される。"
-            "環境変数 HVE_AQOD_POST_QA=true でも有効化可能。"
-        ),
+        help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（未指定時: 環境変数/設定（既定 1200 秒 = 20 分））",
     )
 
     # Issue/PR 作成
@@ -613,6 +825,38 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["none", "error", "warning", "info", "debug", "all"],
         metavar="LEVEL",
         help="Copilot CLI のログレベル: none/error/warning/info/debug/all (デフォルト: error)",
+    )
+    orch.add_argument(
+        "--no-color",
+        action="store_true",
+        default=False,
+        help="ANSI カラー出力を無効化する。NO_COLOR 環境変数（no-color.org 規格）でも制御可能 (デフォルト: 無効)",
+    )
+    orch.add_argument(
+        "--banner",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="banner",
+        help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 既存の自動判定)",
+    )
+    orch.add_argument(
+        "--screen-reader",
+        action="store_true",
+        default=False,
+        help="スクリーンリーダー対応モード: 絵文字を日本語ラベルに置換し、スピナーを無効化する",
+    )
+    orch.add_argument(
+        "--timestamp-style",
+        choices=["prefix", "suffix", "off"],
+        default="prefix",
+        metavar="{prefix,suffix,off}",
+        help="タイムスタンプ表示位置: prefix=行頭（デフォルト）/ suffix=行末（DIM）/ off=非表示",
+    )
+    orch.add_argument(
+        "--final-only",
+        action="store_true",
+        default=False,
+        help="DAG 完了時のサマリと各ステップの最終応答のみを出力する（CI/スクリプト連携用）",
     )
 
     # MCP Server
@@ -786,6 +1030,65 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ADOC: 大規模ファイル分割閾値（行数。デフォルト: 500）",
     )
 
+    # ARD 固有
+    orch.add_argument(
+        "--company-name",
+        default=None,
+        metavar="NAME",
+        help="ARD: 対象企業名（Step 1 を実行する場合は必須）",
+    )
+    orch.add_argument(
+        "--target-business",
+        default=None,
+        metavar="NAME",
+        help=(
+            "ARD: 対象業務名（省略時は Step 1 (Untargeted) → Step 2 (Targeted, 自動生成) → Step 3、"
+            "指定時は Step 2 (Targeted) → Step 3）。"
+            "値は文章のほか、フォルダパスまたは複数ファイルパス（カンマ区切り）も指定可能。"
+        ),
+    )
+    orch.add_argument(
+        "--survey-base-date",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="ARD: 調査基準日（省略時は実行日）",
+    )
+    orch.add_argument(
+        "--survey-period-years",
+        type=int,
+        default=None,
+        metavar="N",
+        help="ARD: 調査期間年数（省略時は 30）",
+    )
+    orch.add_argument(
+        "--target-region",
+        default=None,
+        metavar="REGION",
+        help="ARD: 対象地域（省略時は『グローバル全体』）",
+    )
+    orch.add_argument(
+        "--analysis-purpose",
+        default=None,
+        metavar="PURPOSE",
+        help="ARD: 分析目的（省略時は『中長期成長戦略の立案』）",
+    )
+    orch.add_argument(
+        "--target-recommendation-id",
+        default=None,
+        metavar="SR_ID",
+        help=(
+            "ARD: Step 1 完了後に採用する Strategic Recommendation の ID（例: SR-1）。"
+            "指定時は対話モードでもこのIDを優先して採用。"
+            "省略時は非対話モードでは最初の SR、対話モードではメニュー選択（既定: 先頭）を使用。"
+        ),
+    )
+    orch.add_argument(
+        "--attached-docs",
+        default=None,
+        metavar="PATHS",
+        help="ARD: 添付資料パス（カンマ区切り・省略可）",
+    )
+
     # repo / token
     orch.add_argument(
         "--repo",
@@ -800,6 +1103,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PROMPT",
         help="全 Custom Agent の prompt 末尾に追記する文字列 (省略可)",
+    )
+    orch.add_argument(
+        "--context-max-chars",
+        type=int,
+        default=None,
+        metavar="N",
+        help="各フェーズで注入するコンテキストの最大文字数（未指定時: SDKConfig 既定値 20,000）",
     )
 
     # 追加コメント
@@ -960,6 +1270,31 @@ def _build_parser() -> argparse.ArgumentParser:
         help="SDK tool probe の MCP 設定で tools=['*'] を使う（診断・切り分け用途のみ）",
     )
 
+    # --- emit-prompt サブコマンド ---
+    emit_prompt = sub.add_parser(
+        "emit-prompt",
+        help="hve/prompts.py を単一ソースとしてプロンプト本文を出力する",
+    )
+    emit_prompt.add_argument(
+        "prompt_name",
+        choices=("pre-qa",),
+        help="出力するプロンプト名",
+    )
+    emit_prompt.add_argument(
+        "--comment-body",
+        action="store_true",
+        default=False,
+        help="Issue/PR コメント投稿用の前置き込みで出力する",
+    )
+
+    # --- resume サブコマンド (Phase 5) ---
+    # `resume {list|show|rename|delete|continue}` を hve/resume_cli.py が定義する。
+    try:
+        from .resume_cli import add_resume_parser
+    except ImportError:
+        from resume_cli import add_resume_parser  # type: ignore[no-redef]
+    add_resume_parser(sub)
+
     return parser
 
 
@@ -1052,6 +1387,11 @@ def _build_config(args: argparse.Namespace):
     cfg.quiet = args.quiet
     cfg.show_stream = args.show_stream
     cfg.log_level = args.log_level
+    cfg.no_color = True if getattr(args, "no_color", False) else None
+    cfg.show_banner = getattr(args, "banner", None)
+    cfg.screen_reader = getattr(args, "screen_reader", False)
+    cfg.timestamp_style = getattr(args, "timestamp_style", "prefix")
+    cfg.final_only = getattr(args, "final_only", False)
 
     # --verbosity 明示指定 > --verbose/--quiet フラグ > デフォルト
     _verbosity_map = {"quiet": 0, "compact": 1, "normal": 2, "verbose": 3}
@@ -1068,6 +1408,8 @@ def _build_config(args: argparse.Namespace):
     cfg.base_branch = args.branch
     cfg.dry_run = args.dry_run
     cfg.additional_prompt = args.additional_prompt
+    if getattr(args, "context_max_chars", None) is not None:
+        cfg.context_injection_max_chars = args.context_max_chars
 
     # Self-Improve: 優先順位 --no-self-improve > --self-improve > HVE_AUTO_SELF_IMPROVE > デフォルト False
     if getattr(args, "no_self_improve", False):
@@ -1115,8 +1457,7 @@ def _build_config(args: argparse.Namespace):
     _workiq_pq_timeout = getattr(args, "workiq_per_question_timeout", None)
     if _workiq_pq_timeout is not None and _workiq_pq_timeout > 0:
         cfg.workiq_per_question_timeout = _workiq_pq_timeout
-    if getattr(args, "aqod_post_qa", False):
-        cfg.aqod_post_qa_enabled = True
+    # 旧 --aqod-post-qa / aqod_post_qa_enabled は廃止済み。
 
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
@@ -1178,6 +1519,63 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["target_scope"] = getattr(args, "target_scope", None) or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = getattr(args, "depth", None) or _AQOD_DEFAULT_DEPTH
         params["focus_areas"] = getattr(args, "focus_areas", None) or ""
+    elif getattr(args, "workflow", None) == "ard":
+        from datetime import date
+        company_name = getattr(args, "company_name", None)
+        target_business = getattr(args, "target_business", None) or ""
+        requested_steps = list(params.get("steps") or [])
+        normalized_steps = requested_steps
+        if requested_steps:
+            # ARD Step ID リネーム後の互換変換（旧指定: 1.1/1.2/2）
+            legacy_mode = any(s in {"1.1", "1.2"} for s in requested_steps)
+            mapped_steps: list[str] = []
+            for sid in requested_steps:
+                if sid == "1.1":
+                    mapped_steps.append("1")
+                elif sid == "1.2":
+                    mapped_steps.append("2")
+                elif sid == "2" and legacy_mode:
+                    mapped_steps.append("3")
+                else:
+                    mapped_steps.append(sid)
+
+            invalid_steps = [sid for sid in mapped_steps if sid not in {"1", "2", "3"}]
+            if invalid_steps:
+                raise SystemExit(
+                    f"ERROR: ARD の無効な --steps が指定されました: {', '.join(invalid_steps)} "
+                    "(有効値: 1,2,3)"
+                )
+            normalized_steps = mapped_steps
+            params["steps"] = mapped_steps
+        else:
+            normalized_steps = ["2", "3"] if target_business.strip() else ["1", "2", "3"]
+
+        if "1" in normalized_steps and not company_name:
+            raise SystemExit(
+                "ERROR: ARD Step 1 を実行する場合は --company-name が必須です"
+            )
+
+        params["company_name"] = company_name or ""
+        params["target_business"] = target_business
+        params["survey_base_date"] = (
+            getattr(args, "survey_base_date", None) or date.today().isoformat()
+        )
+        params["survey_period_years"] = (
+            getattr(args, "survey_period_years", None) or _ARD_DEFAULT_SURVEY_PERIOD_YEARS
+        )
+        params["target_region"] = (
+            getattr(args, "target_region", None) or _ARD_DEFAULT_TARGET_REGION
+        )
+        params["analysis_purpose"] = (
+            getattr(args, "analysis_purpose", None) or _ARD_DEFAULT_ANALYSIS_PURPOSE
+        )
+        target_recommendation_id = getattr(args, "target_recommendation_id", None)
+        if target_recommendation_id:
+            params["target_recommendation_id"] = target_recommendation_id
+        attached = getattr(args, "attached_docs", None)
+        params["attached_docs"] = _split_csv(attached) if attached else []
+        if not params.get("steps"):
+            params["steps"] = normalized_steps
     else:
         if getattr(args, "target_files", None):
             params["target_files"] = " ".join(args.target_files)
@@ -1228,8 +1626,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "workiq-doctor":
         return _cmd_workiq_doctor(args)
 
+    if args.command == "emit-prompt":
+        return _cmd_emit_prompt(args)
+
+    if args.command == "resume":
+        # Phase 5 (Resume): セッション管理 CLI ディスパッチャ
+        try:
+            from .resume_cli import dispatch as _resume_dispatch
+        except ImportError:
+            from resume_cli import dispatch as _resume_dispatch  # type: ignore[no-redef]
+        return _resume_dispatch(args)
+
     # "run" サブコマンド、または引数なし → インタラクティブモード
-    return _cmd_run_interactive()
+    return _cmd_run_interactive(args)
 
 
 def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKConfig") -> bool:
@@ -1267,7 +1676,385 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
     return True
 
 
-def _cmd_run_interactive() -> int:
+# -----------------------------------------------------------------------
+# Phase 4 (Resume): Wizard Resume プロンプト用ヘルパー
+# -----------------------------------------------------------------------
+
+def _resume_selected_run(con: Any, state: Any) -> int:
+    """選択された RunState を Resume 実行する。
+
+    Phase 4 (Resume): Wizard で「再開」を選ばれた場合に呼ばれる。
+    詳細を panel 表示 → 確認 → SDK バージョン警告 → 環境変数チェック → resume 実行。
+
+    Args:
+        con: Console インスタンス。
+        state: RunState インスタンス。
+
+    Returns:
+        終了コード。0=成功 / 1=失敗（環境変数不足、resume 失敗、ユーザーキャンセル等）。
+    """
+    try:
+        from .config import SDKConfig
+        from .orchestrator import run_workflow
+        from .run_state import (
+            get_current_sdk_version,
+            to_local_time_str,
+        )
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+    except ImportError:
+        from config import SDKConfig  # type: ignore[no-redef]
+        from orchestrator import run_workflow  # type: ignore[no-redef]
+        from run_state import (  # type: ignore[no-redef]
+            get_current_sdk_version,
+            to_local_time_str,
+        )
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+
+    s = con.s
+    wf_disp = _WORKFLOW_DISPLAY_NAMES.get(state.workflow_id, state.workflow_id)
+    progress = f"{state.completed_count}/{state.total_count or len(state.step_states)}"
+    summary_lines = [
+        f"セッション名 : {s.CYAN}{state.session_name or '(無名)'}{s.RESET}",
+        f"Run ID       : {state.run_id}",
+        f"ワークフロー : {wf_disp} ({state.workflow_id})",
+        f"進捗         : {progress} ステップ完了",
+        f"作成日時     : {to_local_time_str(state.created_at)}",
+        f"最終更新     : {to_local_time_str(state.last_updated_at)}",
+        f"ステータス   : {state.status}",
+        f"中断理由     : {state.pause_reason or '(不明)'}",
+        f"モデル       : {state.config_snapshot.get('model', '(snapshot に無し)')}",
+    ]
+    con.panel("再開するセッションの詳細", summary_lines)
+
+    # SDK バージョン警告
+    current_sdk = get_current_sdk_version()
+    saved_sdk = state.host.copilot_sdk_version or "(不明)"
+    if current_sdk != saved_sdk and saved_sdk != "(不明)":
+        con.warning(
+            f"SDK バージョン差異を検出: 保存時 {saved_sdk} → 現在 {current_sdk}\n"
+            "   セッション形式の互換性が保証されない可能性があります。"
+        )
+        if not con.prompt_yes_no("それでも再開しますか？", default=False):
+            con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
+            return 0
+
+    if not con.prompt_yes_no("このセッションを再開しますか？", default=True):
+        con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
+        return 0
+
+    # 環境変数の必須チェック（PR/Issue 作成が有効だった場合）
+    snap = state.config_snapshot or {}
+    if snap.get("create_pr") or snap.get("create_issues"):
+        if not os.environ.get("REPO"):
+            con.error("REPO 環境変数が設定されていません。Resume できません。")
+            return 1
+        if not (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")):
+            con.error("GH_TOKEN（または GITHUB_TOKEN）環境変数が設定されていません。Resume できません。")
+            return 1
+
+    # SDKConfig を環境から構築（_restore_config_from_state が snapshot を上書きする）
+    cfg = SDKConfig.from_env()
+
+    # ── 実行 ──────────────────────────────────────────────
+    con._print("", ts=False)
+    con._print(f"  {s.CYAN}↻ Resume mode: Run ID {state.run_id} を再開します...{s.RESET}", ts=False)
+    try:
+        result = asyncio.run(
+            run_workflow(
+                workflow_id=state.workflow_id,
+                params=None,  # snapshot から復元される
+                config=cfg,
+                resume_state=state,
+            )
+        )
+    except KeyboardInterrupt:
+        con._print(
+            f"\n  {s.YELLOW}中断されました（再度 hve を起動すると続きから再開できます）。{s.RESET}",
+            ts=False,
+        )
+        return 1
+
+    # ── 結果表示 ──────────────────────────────────────────
+    if result.get("error"):
+        con.error(str(result["error"]))
+        return 1
+    if result.get("code_review_error"):
+        con.error(f"Code Review Agent エラー: {result['code_review_error']}")
+        return 1
+    if result.get("paused"):
+        # Phase 6 (Resume): Ctrl+R による graceful pause
+        con._print(
+            f"\n  {s.YELLOW}⏸ セッションを一時停止しました。{s.RESET}\n"
+            f"  Run ID: {result.get('run_id', '(不明)')}\n"
+            f"  続きから再開するには `python -m hve` 起動時の Resume プロンプトを利用してください。\n",
+            ts=False,
+        )
+        return 0
+    if result.get("failed"):
+        return 1
+    con._print(f"\n  {s.GREEN}✓{s.RESET} Resume 完了\n")
+    return 0
+
+
+def _delete_run_interactive(con: Any, state: Any) -> bool:
+    """選択された RunState を対話的に削除する（セッション管理メニュー用ヘルパー）。
+
+    実体は `resume_cli._safe_remove_run_dir` / `_hard_delete_sdk_sessions` を再利用する。
+    SDK セッション ID が含まれる場合のみ「--hard 相当」削除の有無を確認する。
+
+    Returns:
+        True: 削除成功 / False: キャンセルまたは失敗
+    """
+    try:
+        from .resume_cli import _hard_delete_sdk_sessions, _safe_remove_run_dir
+        from .run_state import DEFAULT_RUNS_DIR, DEFAULT_SESSION_ID_PREFIX
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+    except ImportError:
+        from resume_cli import _hard_delete_sdk_sessions, _safe_remove_run_dir  # type: ignore[no-redef]
+        from run_state import DEFAULT_RUNS_DIR, DEFAULT_SESSION_ID_PREFIX  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+
+    s = con.s
+    wf_disp = _WORKFLOW_DISPLAY_NAMES.get(state.workflow_id, state.workflow_id)
+    con.panel("削除対象", [
+        f"セッション名 : {state.session_name or '(無名)'}",
+        f"Run ID       : {state.run_id}",
+        f"ワークフロー : {wf_disp} ({state.workflow_id})",
+        f"ステータス   : {state.status}",
+    ])
+
+    if not con.prompt_yes_no("本当に削除しますか？", default=False):
+        con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
+        return False
+
+    sdk_count = sum(
+        1 for st in state.step_states.values()
+        if st.session_id and st.session_id.startswith(DEFAULT_SESSION_ID_PREFIX)
+    )
+    hard = False
+    if sdk_count > 0:
+        hard = con.prompt_yes_no(
+            f"SDK 側セッション {sdk_count} 件も削除しますか？（--hard 相当）",
+            default=False,
+        )
+
+    if hard:
+        sdk_failed_unexpectedly = False
+        try:
+            failed = asyncio.run(_hard_delete_sdk_sessions(state))
+        except Exception as exc:  # pragma: no cover - asyncio 異常系
+            con.warning(f"SDK 側セッション削除中に例外: {exc}")
+            failed = []
+            sdk_failed_unexpectedly = True
+        for line in failed:
+            con.warning(f"SDK 削除失敗: {line}")
+        # SDK 側削除が完全に失敗した場合、work/runs/ を消すと
+        # SDK 側の orphan を追跡できなくなるため、ディスク削除を抓潰す。
+        if sdk_failed_unexpectedly:
+            if not con.prompt_yes_no(
+                "SDK 側削除が失敗しました。work/runs/ をそれでも削除しますか？",
+                default=False,
+            ):
+            
+                con._print(
+                    f"  {s.YELLOW}work/runs/ の削除を中止しました。{s.RESET}",
+                    ts=False,
+                )
+                return False
+
+    try:
+        _safe_remove_run_dir(state, DEFAULT_RUNS_DIR)
+    except RuntimeError as exc:
+        con.error(str(exc))
+        return False
+    except OSError as exc:
+        con.error(f"ディレクトリ削除に失敗: {exc}")
+        return False
+
+    con._print(
+        f"  {s.GREEN}✓{s.RESET} 削除しました (run_id={state.run_id})",
+        ts=False,
+    )
+    return True
+
+
+def _session_management_menu(con: Any) -> int:
+    """セッション管理メニュー（実行/削除）。
+
+    `is_resumable()` で絞込まれた Run（paused / running / failed）の一覧を表示し、
+    選択されたセッションに対して以下のいずれかを実行する:
+
+    - 実行（再開）: `_resume_selected_run` を呼ぶ。実行後の状態（完了 / 失敗 /
+      pause）に関わらず本メニューに戻る。pause された場合は一覧に同じ Run が
+      再表示される。
+    - 削除: `_delete_run_interactive` を呼ぶ。SDK セッション ID が含まれていれば
+      `--hard 相当` の追加削除を確認する。
+    - メニューを抜ける: トップメニューの「メニューを抜ける」で return 0。
+
+    一覧が空になった、もしくは「メニューを抜ける」が選ばれた時点で 0 を返す。
+    """
+    try:
+        from .run_state import is_resumable, list_resumable_runs, to_local_time_str
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+    except ImportError:
+        from run_state import is_resumable, list_resumable_runs, to_local_time_str  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+
+    s = con.s
+    while True:
+        all_runs = list_resumable_runs()
+        runs = [r for r in all_runs if is_resumable(r)]
+        if not runs:
+            if all_runs:
+                con._print(
+                    "  再開可能なセッションはありません（完了済みは表示しません）。",
+                    ts=False,
+                )
+            else:
+                con._print("  保存されているセッションはありません。", ts=False)
+            return 0
+
+        options: List[str] = []
+        for r in runs:
+            wf_disp = _WORKFLOW_DISPLAY_NAMES.get(r.workflow_id, r.workflow_id)
+            progress = f"{r.completed_count}/{r.total_count or len(r.step_states)}"
+            last_local = to_local_time_str(r.last_updated_at)
+            options.append(
+                f"{r.session_name or '(無名)'}  "
+                f"{s.DIM}({wf_disp} / status={r.status} / 進捗 {progress} / "
+                f"最終更新 {last_local}){s.RESET}"
+            )
+        back_idx = len(options)
+        options.append("↩️  メニューを抜ける")
+
+        idx = con.menu_select(
+            "管理するセッションを選択してください",
+            options,
+            default_index=back_idx,
+        )
+        if idx == back_idx or idx < 0 or idx >= len(runs):
+            return 0
+
+        state = runs[idx]
+        sub_options = [
+            "▶ このセッションを実行（再開）",
+            "🗑️  削除",
+            "↩️  セッション一覧へ戻る",
+        ]
+        sub_idx = con.menu_select(
+            f"'{state.session_name or state.run_id}' に対する操作",
+            sub_options,
+            default_index=2,
+        )
+        if sub_idx == 0:
+            _resume_selected_run(con, state)
+        elif sub_idx == 1:
+            _delete_run_interactive(con, state)
+        # sub_idx == 2 または想定外 → 一覧へ戻る（ループ継続）
+
+
+def _show_resume_menu(con: Any, runs: list, *, allow_cancel: bool = False) -> Optional[int]:
+    """再開可能 Run の一覧メニューを表示し、ユーザー選択をディスパッチする。"""
+    try:
+        from .run_state import to_local_time_str
+        from .template_engine import _WORKFLOW_DISPLAY_NAMES
+    except ImportError:
+        from run_state import to_local_time_str  # type: ignore[no-redef]
+        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
+
+    s = con.s
+    options: List[str] = []
+    for r in runs:
+        wf_disp = _WORKFLOW_DISPLAY_NAMES.get(r.workflow_id, r.workflow_id)
+        progress = f"{r.completed_count}/{r.total_count or len(r.step_states)}"
+        last_local = to_local_time_str(r.last_updated_at)
+        options.append(
+            f"{r.session_name or '(無名)'}  "
+            f"{s.DIM}({wf_disp} / 進捗 {progress} / 最終更新 {last_local}){s.RESET}"
+        )
+
+    if allow_cancel:
+        cancel_idx = len(options)
+        options.append("↩️  キャンセル（元の画面へ戻る）")
+        idx = con.menu_select(
+            "再開可能なセッションがあります。選択してください",
+            options,
+            default_index=0,
+        )
+        if 0 <= idx < len(runs):
+            return _resume_selected_run(con, runs[idx])
+        if idx == cancel_idx:
+            return None
+        return None
+
+    new_run_idx = len(options)
+    mgmt_menu_idx = new_run_idx + 1
+    options.append("➕ 新規実行を開始する")
+    options.append("⚙️  セッション管理（実行/削除）")
+
+    idx = con.menu_select(
+        "再開可能なセッションがあります。選択してください",
+        options,
+        default_index=0,
+    )
+
+    if 0 <= idx < len(runs):
+        return _resume_selected_run(con, runs[idx])
+    if idx == new_run_idx:
+        return None
+    if idx == mgmt_menu_idx:
+        return _session_management_menu(con)
+    return None
+
+
+def _show_resume_menu_on_demand(con: Any) -> Optional[int]:
+    """Ctrl+R 押下時に呼ばれる、wizard 中盤以降からの再開メニュー呼び出し。"""
+    try:
+        from .run_state import list_resumable_runs
+    except ImportError:
+        from run_state import list_resumable_runs  # type: ignore[no-redef]
+
+    try:
+        runs = list_resumable_runs()
+    except Exception as exc:  # pragma: no cover - I/O 異常系
+        con.warning(f"再開可能セッションの一覧取得に失敗しました: {exc}")
+        return None
+    runs = [r for r in runs if r.status in {"paused", "running", "failed"}]
+    if not runs:
+        con._print("\n  再開可能なセッションはありません。\n", ts=False)
+        return None
+    return _show_resume_menu(con, runs, allow_cancel=True)
+
+
+def _maybe_show_resume_prompt(con: Any) -> Optional[int]:
+    """Wizard 起動時に Resume プロンプトを表示する。
+
+    Phase 4 (Resume): `work/runs/` に再開可能な Run があれば、最初に
+    「再開する／新規実行／管理画面」を選択させる。
+
+    Returns:
+        - None : 「新規実行」が選ばれた場合（呼び出し元は通常フローへフォールスルー）
+        - int  : 「再開」または「管理画面」が選ばれた場合（呼び出し元は即座に return する）
+    """
+    try:
+        from .run_state import is_resumable, list_resumable_runs
+    except ImportError:
+        from run_state import is_resumable, list_resumable_runs  # type: ignore[no-redef]
+
+    try:
+        all_runs = list_resumable_runs()
+    except Exception as exc:  # pragma: no cover - I/O 異常系
+        con.warning(f"再開可能セッションの一覧取得に失敗しました: {exc}")
+        return None
+
+    resumable = [r for r in all_runs if is_resumable(r)]
+    if not resumable:
+        return None
+
+    return _show_resume_menu(con, resumable, allow_cancel=False)
+
+
+def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     """インタラクティブ wizard モードのハンドラー。
 
     GitHub Copilot CLI スタイルの対話型 UI でワークフローを選択・設定・実行する。
@@ -1282,6 +2069,7 @@ def _cmd_run_interactive() -> int:
         from .workflow_registry import list_workflows, get_workflow
         from .template_engine import _WORKFLOW_DISPLAY_NAMES
         from .orchestrator import run_workflow
+        from .keybind import KEY_CTRL_R, KeybindMonitor
         from .workiq import (
             get_workiq_prompt_template,
             is_workiq_available,
@@ -1293,6 +2081,7 @@ def _cmd_run_interactive() -> int:
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
         from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
+        from keybind import KEY_CTRL_R, KeybindMonitor  # type: ignore[no-redef]
         from workiq import (  # type: ignore[no-redef]
             get_workiq_prompt_template,
             is_workiq_available,
@@ -1302,10 +2091,124 @@ def _cmd_run_interactive() -> int:
     con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
 
     # ── ウェルカムバナー ──────────────────────────────────
-    con.banner(
-        "HVE — GitHub Copilot SDK Workflow Orchestrator",
-        "ワークフローをインタラクティブに実行します",
-    )
+    if getattr(args, "banner", None) is not False:
+        con.banner(
+            "HVE CLI Orchestrator (GitHub Copilot SDK)",
+            "ワークフローをインタラクティブに実行します",
+        )
+
+    # ── Phase 4 (Resume): 再開プロンプト ─────────────────
+    # work/runs/ に再開可能な Run があれば、最初に「再開／新規／管理」を選択させる。
+    # 「新規実行」が選ばれた場合のみ None が返り、通常フローへフォールスルーする。
+    _resume_result = _maybe_show_resume_prompt(con)
+    if _resume_result is not None:
+        return _resume_result
+
+    # ── Phase 8 (Resume): ウィザード中 Ctrl+R でオンデマンド再開メニュー ──
+    resume_invoked: dict = {"rc": None}
+    _resume_requested = threading.Event()
+    _monitor_probe = KeybindMonitor()
+    monitor = _monitor_probe
+    wizard_loop: Optional[asyncio.AbstractEventLoop] = None
+    wizard_loop_thread: Optional[threading.Thread] = None
+    _orig_console_methods: dict[str, Any] = {}
+    _keybind_cleaned_up = False
+
+    async def _on_ctrl_r_in_wizard() -> None:
+        _resume_requested.set()
+
+    def _cleanup_wizard_keybind() -> None:
+        nonlocal _keybind_cleaned_up
+        if _keybind_cleaned_up:
+            return
+        _keybind_cleaned_up = True
+        monitor.stop()
+        for name, fn in _orig_console_methods.items():
+            setattr(con, name, fn)
+        if wizard_loop is not None:
+            try:
+                wizard_loop.call_soon_threadsafe(wizard_loop.stop)
+            except RuntimeError:
+                # loop が既に停止/close 済みの場合があるため cleanup では握り潰す
+                pass
+        if wizard_loop_thread is not None and wizard_loop_thread.is_alive():
+            wizard_loop_thread.join(timeout=1.0)
+        if wizard_loop is not None:
+            try:
+                wizard_loop.close()
+            except RuntimeError:
+                # 既に close 済み、または別スレッド終了直後の競合時は no-op
+                pass
+
+    def _short_circuit_input_result(method_name: str, kwargs: dict[str, Any]) -> Any:
+        if method_name == "menu_select":
+            default_index = kwargs.get("default_index")
+            return 0 if default_index is None else default_index
+        if method_name == "prompt_yes_no":
+            return kwargs.get("default", False)
+        if method_name == "prompt_multi_select":
+            return []
+        return kwargs.get("default", "")
+
+    def _maybe_handle_resume_request() -> None:
+        if not _resume_requested.is_set():
+            return
+        _resume_requested.clear()
+        rc = _show_resume_menu_on_demand(con)
+        if rc is not None:
+            resume_invoked["rc"] = int(rc)
+
+    def _get_default_if_resumed(method_name: str, kwargs: dict[str, Any]) -> Optional[Any]:
+        if resume_invoked["rc"] is None:
+            return None
+        return _short_circuit_input_result(method_name, kwargs)
+
+    def _wrap_console_input_method(name: str) -> None:
+        fn = getattr(con, name, None)
+        if not callable(fn):
+            return
+        _orig_console_methods[name] = fn
+        method_name = name
+
+        def _wrapped(*args, **kwargs):
+            _short = _get_default_if_resumed(method_name, kwargs)
+            if _short is not None:
+                return _short
+            _maybe_handle_resume_request()
+            _short = _get_default_if_resumed(method_name, kwargs)
+            if _short is not None:
+                return _short
+            try:
+                result = fn(*args, **kwargs)
+            except Exception as exc:
+                con.warning(f"ウィザード入力中にエラーが発生しました ({method_name}): {exc}")
+                _cleanup_wizard_keybind()
+                raise
+            _maybe_handle_resume_request()
+            _short = _get_default_if_resumed(method_name, kwargs)
+            if _short is not None:
+                return _short
+            return result
+
+        setattr(con, name, _wrapped)
+
+    if _monitor_probe.enabled:
+        wizard_loop = asyncio.new_event_loop()
+        wizard_loop_thread = threading.Thread(
+            target=wizard_loop.run_forever,
+            name="hve-wizard-keybind-loop",
+            daemon=True,
+        )
+        wizard_loop_thread.start()
+        monitor = KeybindMonitor(wizard_loop)
+        monitor.register(KEY_CTRL_R, _on_ctrl_r_in_wizard)
+        monitor.start()
+        for _method_name in ("menu_select", "prompt_yes_no", "prompt_input", "prompt_multi_select", "input"):
+            _wrap_console_input_method(_method_name)
+        con._print(
+            "  💡 ウィザード中も Ctrl+R で保存済みセッションから再開できます",
+            ts=False,
+        )
 
     # ── ワークフロー選択 ──────────────────────────────────
     workflows = list_workflows()
@@ -1318,12 +2221,16 @@ def _cmd_run_interactive() -> int:
     wf = get_workflow(selected_wf.id)
     is_akm = (wf.id == "akm")
     is_aqod = (wf.id == "aqod")
+    is_ard = (wf.id == "ard")
     is_single_step_workflow = is_akm or is_aqod
 
     # ── ステップ選択 ──────────────────────────────────────
-    # AKM はステップが 1 つのみのため、自動で全選択
+    # AKM/AQOD はステップが 1 つのみのため、自動で全選択
+    # ARD はワークフロー固有入力で Step 1/2/3 を選択する
     if is_single_step_workflow:
         selected_step_ids = []  # 空 = 全ステップ
+    elif is_ard:
+        selected_step_ids = []  # ARD: _collect_ard_wizard_params で後から設定
     else:
         non_container_steps, step_options = _step_options_with_groups(wf)
         selected_indices = con.prompt_multi_select(
@@ -1356,6 +2263,7 @@ def _cmd_run_interactive() -> int:
     is_manual = (exec_mode_idx == 2)
     is_any_auto = is_quick_auto or is_custom_auto
     workiq_additional_prompt = ""
+    ard_workiq_enabled = False
 
     # ── オプション設定 ────────────────────────────────────
     if is_quick_auto:
@@ -1380,9 +2288,7 @@ def _cmd_run_interactive() -> int:
         workiq_qa_enabled = False
         workiq_akm_review_enabled = False
         workiq_draft_mode = False
-        workiq_per_question_timeout = 600.0
-        qa_phase = "pre"  # クイック全自動ではデフォルトの "pre" を使用
-        aqod_post_qa_enabled = False
+        workiq_per_question_timeout = 1200.0
         issue_title = ""
         issue_additional_comment = ""
         # ワークフロー固有パラメータ
@@ -1393,8 +2299,23 @@ def _cmd_run_interactive() -> int:
             params_extra["target_scope"] = _AQOD_DEFAULT_TARGET_SCOPE
             params_extra["depth"] = _AQOD_DEFAULT_DEPTH
             params_extra["focus_areas"] = ""
+        elif is_ard:
+            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=True)
+            params_extra.update(_ard_wf_params)
+            selected_step_ids = _ard_steps
+            ard_workiq_enabled = con.prompt_yes_no(
+                "ARD で Work IQ への接続を有効にする？",
+                default=False,
+            )
+            params_extra["ard_workiq_enabled"] = ard_workiq_enabled
+            workiq_enabled = ard_workiq_enabled
+            workiq_qa_enabled = ard_workiq_enabled
         elif wf.params:
             params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=True))
+        # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
+        _agentic_answers: dict = {}
+        if wf.id in ("aad-web", "asdw-web"):
+            _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=True)
         additional_prompt = None
         # クイック全自動: 自己改善はデフォルト OFF
         auto_self_improve = False
@@ -1453,9 +2374,7 @@ def _cmd_run_interactive() -> int:
             qa_answer_mode = None
             force_interactive = False
             auto_review = False
-            aqod_post_qa_enabled = False
             if is_akm:
-                qa_phase = "pre"  # AKM は事前 QA を qa_phase に従って実行（事後 QA は常にスキップ）
                 auto_qa = con.prompt_yes_no(
                     "AKM 実行前に QA（事前確認・質問票生成・回答）を実施する？",
                     default=False,
@@ -1463,37 +2382,16 @@ def _cmd_run_interactive() -> int:
                 if auto_qa:
                     qa_answer_mode = "all"
             elif is_aqod:
-                qa_phase = "post"  # AQOD は事前 QA をスキップ（事後 QA は aqod_post_qa_enabled で制御）
-                auto_qa = con.prompt_yes_no(
-                    "AQOD 完了後に QA（質問票生成・回答）を実施する？",
-                    default=False,
-                )
-                if auto_qa:
-                    qa_answer_mode = "all"
-                    aqod_post_qa_enabled = True
+                # AQOD は事前 QA スキップ・事後 QA (post-QA) 廃止のため、本体タスクのみ。
+                auto_qa = False
             else:
-                qa_phase = "pre"
                 auto_qa = False
         else:
-            aqod_post_qa_enabled = False
             auto_qa = con.prompt_yes_no(
                 "QA 自動投入を有効にする？（質問票はステップ実行の前に作成されます）",
                 default=False,
             )
             if auto_qa:
-                # QA タイミングの選択
-                _qa_phase_choices = [
-                    ("pre (実行前のみ・推奨)", "pre"),
-                    ("post (実行後のみ・旧挙動)", "post"),
-                    ("both (前後両方)", "both"),
-                ]
-                _qa_phase_idx = con.menu_select(
-                    "QA タイミングを選択",
-                    [opt for opt, _ in _qa_phase_choices],
-                    allow_empty=True,
-                    default_index=0,
-                )
-                qa_phase = _qa_phase_choices[_qa_phase_idx if _qa_phase_idx >= 0 else 0][1]
                 # QA 自動投入 ON 時は全問デフォルト値を自動採用する一択。
                 # Issue Template Workflow (auto-qa-default-answer.yml) と同じ動作。
                 # prompt_answer_mode() / force_interactive プロンプトは不要。
@@ -1513,7 +2411,6 @@ def _cmd_run_interactive() -> int:
             else:
                 qa_answer_mode = None
                 force_interactive = False
-                qa_phase = "pre"  # auto_qa=False の場合はデフォルト値
             auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
             if auto_review:
                 use_different_review_model = con.prompt_yes_no(
@@ -1533,11 +2430,17 @@ def _cmd_run_interactive() -> int:
         workiq_qa_enabled = False
         workiq_akm_review_enabled = False
         workiq_draft_mode = False
-        _show_workiq_option = auto_qa or is_akm
-        workiq_per_question_timeout = 600.0
+        _show_workiq_option = auto_qa or is_akm or is_ard
+        workiq_per_question_timeout = 1200.0
 
         if _show_workiq_option and is_workiq_available():
-            if is_akm:
+            if is_ard:
+                ard_workiq_enabled = con.prompt_yes_no(
+                    "ARD で Work IQ への接続を有効にする？",
+                    default=False,
+                )
+                workiq_qa_enabled = ard_workiq_enabled
+            elif is_akm:
                 if auto_qa:
                     workiq_qa_enabled = con.prompt_yes_no(
                         "QA フェーズで Work IQ 経由の情報確認を有効にする？",
@@ -1566,8 +2469,6 @@ def _cmd_run_interactive() -> int:
                     con.status("✅ Work IQ へのログインが完了しました")
                     if is_akm and not workiq_qa_enabled:
                         workiq_draft_mode = False
-                    elif is_aqod and auto_qa:
-                        workiq_draft_mode = True
                     elif auto_qa and workiq_qa_enabled:
                         workiq_draft_mode = con.prompt_yes_no(
                             "Work IQ で回答ドラフトを自動生成する？",
@@ -1578,17 +2479,17 @@ def _cmd_run_interactive() -> int:
                         default="",
                     )
                     _wiq_pq_timeout_str = con.prompt_input(
-                        "Work IQ タイムアウト（秒。デフォルト: 600）",
-                        default="600",
+                        "Work IQ タイムアウト（秒。デフォルト: 1200 = 20 分）",
+                        default="1200",
                     )
                     try:
-                        workiq_per_question_timeout = float(_wiq_pq_timeout_str or "600")
+                        workiq_per_question_timeout = float(_wiq_pq_timeout_str or "1200")
                     except ValueError:
-                        con.warning("無効な値のため、デフォルトの 600 秒を使用します。")
-                        workiq_per_question_timeout = 600.0
+                        con.warning("無効な値のため、デフォルトの 1200 秒（20 分）を使用します。")
+                        workiq_per_question_timeout = 1200.0
                     if workiq_per_question_timeout <= 0:
-                        con.warning("0 以下の値は無効なため、デフォルトの 600 秒を使用します。")
-                        workiq_per_question_timeout = 600.0
+                        con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
+                        workiq_per_question_timeout = 1200.0
 
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
@@ -1642,7 +2543,7 @@ def _cmd_run_interactive() -> int:
                 con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
                 review_timeout = 7200.0
 
-        dry_run = con.prompt_yes_no("ドライラン（実際の SDK 呼び出しをしない）？", default=False)
+        dry_run = con.prompt_yes_no("実行計画のプレビュー（実際の SDK 呼び出しをせず、DAG の実行計画のみ表示）？", default=False)
 
         # ── ワークフロー固有パラメータ ────────────────────────
         params_extra: dict = {}
@@ -1661,8 +2562,17 @@ def _cmd_run_interactive() -> int:
             )
             params_extra["depth"] = _prompt_valid_aqod_depth(con)
             params_extra["focus_areas"] = con.prompt_input(_PARAM_PROMPT_LABELS["focus_areas"], default="")
+        elif is_ard:
+            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=False)
+            params_extra.update(_ard_wf_params)
+            params_extra["ard_workiq_enabled"] = ard_workiq_enabled
+            selected_step_ids = _ard_steps
         else:
             params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=False))
+        # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
+        _agentic_answers: dict = {}
+        if wf.id in ("aad-web", "asdw-web"):
+            _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=False)
 
         if issue_title:
             params_extra["issue_title"] = issue_title
@@ -1756,7 +2666,6 @@ def _cmd_run_interactive() -> int:
     ]
     if auto_qa:
         summary_lines.append(f"QA モデル    : {qa_model_display or '(メインと同じ)'}")
-        summary_lines.append(f"QA タイミング : {qa_phase}")
         summary_lines.append(f"QA 回答モード : 全問デフォルト自動採用")
         # force_interactive は auto_qa=True 時は常に False のため表示不要
     if workiq_enabled:
@@ -1784,7 +2693,7 @@ def _cmd_run_interactive() -> int:
         ]
     summary_lines += [
         f"リポジトリ   : {repo_input or '(なし)'}",
-        f"ドライラン   : {'ON' if dry_run else 'OFF'}",
+        f"実行計画のプレビュー : {'ON' if dry_run else 'OFF'}",
         f"自己改善     : {'ON' if auto_self_improve else 'OFF'}",
     ]
     if auto_self_improve:
@@ -1834,11 +2743,34 @@ def _cmd_run_interactive() -> int:
     if additional_prompt:
         summary_lines.append(f"追加プロンプト（全Step）: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
 
+    # Phase 4 (Resume): セッション名入力（Resume 一覧に表示する識別名）。
+    # クイック全自動では既定（後で run_workflow が default_session_name で自動生成）。
+    # カスタム全自動 / 手動では Enter で既定使用、入力で上書き。
+    session_name_input: str = ""
+    if not is_quick_auto:
+        try:
+            from .run_state import default_session_name
+        except ImportError:
+            from run_state import default_session_name  # type: ignore[no-redef]
+        _wf_disp = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
+        _suggested = default_session_name(
+            workflow_id=wf.id,
+            params=params_extra,
+            workflow_display_name=_wf_disp,
+        )
+        session_name_input = con.prompt_input(
+            "セッション名（Resume 一覧の表示名）",
+            default=_suggested,
+        )
+    if session_name_input:
+        summary_lines.append(f"セッション名 : {session_name_input}")
+
     con.panel("実行設定", summary_lines)
 
     # ── 実行確認 ──────────────────────────────────────────
     if not con.prompt_yes_no("この設定で実行しますか？", default=True):
         con._print(f"\n  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
+        _cleanup_wizard_keybind()
         return 0
 
     if is_any_auto:
@@ -1853,8 +2785,6 @@ def _cmd_run_interactive() -> int:
         cfg.qa_model = qa_model
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
-    cfg.qa_phase = qa_phase
-    cfg.aqod_post_qa_enabled = aqod_post_qa_enabled
     cfg.workiq_enabled = workiq_enabled
     cfg.workiq_qa_enabled = workiq_qa_enabled
     cfg.workiq_akm_review_enabled = workiq_akm_review_enabled
@@ -1924,6 +2854,41 @@ def _cmd_run_interactive() -> int:
     if not is_any_auto and cfg.auto_qa:
         cfg.qa_auto_defaults = True
 
+    # ── Agentic Retrieval 設定を SDKConfig に反映 ─────────
+    if _agentic_answers:
+        try:
+            from .template_engine import normalize_agentic_retrieval_answers
+        except ImportError:
+            from template_engine import normalize_agentic_retrieval_answers  # type: ignore[no-redef]
+        _normalized = normalize_agentic_retrieval_answers(_agentic_answers)
+        # enable_agentic_retrieval: "する"→"yes", "しない"→"no", それ以外→"auto"
+        _enable_raw = _normalized.get("enable_agentic_retrieval", "自動判定に従う")
+        _enable_map = {"する": "yes", "しない": "no", "自動判定に従う": "auto"}
+        cfg.enable_agentic_retrieval = _enable_map.get(_enable_raw, "auto")
+        # agentic_data_source_modes: 選択肢テキスト→内部値に変換
+        _mode_raw = _normalized.get("agentic_data_source_modes", ["Indexer (Pull)"])
+        _mode_map = {"Indexer (Pull)": "indexer", "Push API": "push"}
+        cfg.agentic_data_source_modes = [
+            _mode_map.get(m, m.lower().replace(" ", "_")) for m in (_mode_raw if isinstance(_mode_raw, list) else [_mode_raw])
+        ] or ["indexer"]
+        # foundry_mcp_integration: "する"→True, それ以外→False
+        _fmi_raw = _normalized.get("foundry_mcp_integration", "する")
+        if isinstance(_fmi_raw, bool):
+            cfg.foundry_mcp_integration = _fmi_raw
+        else:
+            cfg.foundry_mcp_integration = (_fmi_raw == "する")
+        # agentic_data_sources_hint: str
+        cfg.agentic_data_sources_hint = str(_normalized.get("agentic_data_sources_hint", "") or "")
+        # agentic_existing_design_diff_only: bool
+        cfg.agentic_existing_design_diff_only = bool(_normalized.get("agentic_existing_design_diff_only", False))
+        # foundry_sku_fallback_policy: 選択肢テキスト→内部値に変換
+        _fskp_raw = _normalized.get("foundry_sku_fallback_policy", "Standard 許容")
+        _fskp_map = {
+            "Global 必須（Standard 拒否）": "global_required",
+            "Standard 許容": "standard_allowed",
+        }
+        cfg.foundry_sku_fallback_policy = _fskp_map.get(_fskp_raw, "standard_allowed")
+
     # params dict 構築
     params: dict = {
         "branch": branch,
@@ -1944,9 +2909,15 @@ def _cmd_run_interactive() -> int:
         if errors:
             for e in errors:
                 con.error(e)
+            _cleanup_wizard_keybind()
             return 1
 
+    if resume_invoked["rc"] is not None:
+        _cleanup_wizard_keybind()
+        return int(resume_invoked["rc"])
+
     # ── 実行 ──────────────────────────────────────────────
+    _cleanup_wizard_keybind()
     con._print("", ts=False)
     try:
         result = asyncio.run(
@@ -1954,6 +2925,7 @@ def _cmd_run_interactive() -> int:
                 workflow_id=wf.id,
                 params=params,
                 config=cfg,
+                session_name=session_name_input or None,
             )
         )
     except KeyboardInterrupt:
@@ -1967,6 +2939,15 @@ def _cmd_run_interactive() -> int:
     if result.get("code_review_error"):
         con.error(f"Code Review Agent エラー: {result['code_review_error']}")
         return 1
+    if result.get("paused"):
+        # Phase 6 (Resume): Ctrl+R による graceful pause
+        con._print(
+            f"\n  {s.YELLOW}⏸ セッションを一時停止しました。{s.RESET}\n"
+            f"  Run ID: {result.get('run_id', '(不明)')}\n"
+            f"  続きから再開するには `python -m hve` 起動時の Resume プロンプトを利用してください。\n",
+            ts=False,
+        )
+        return 0
     if result.get("failed"):
         return 1
     con._print(f"\n  {s.GREEN}✓{s.RESET} ワークフロー完了\n")
@@ -2306,6 +3287,18 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if result.get("code_review_error"):
         print(f"{_ts()} ⚠️  Code Review Agent でエラーが発生しました: {result['code_review_error']}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _cmd_emit_prompt(args: argparse.Namespace) -> int:
+    """emit-prompt サブコマンドのハンドラー。"""
+    try:
+        from .prompts import PRE_EXECUTION_QA_PROMPT_V2, render_pre_execution_qa_comment_body
+    except ImportError:
+        from prompts import PRE_EXECUTION_QA_PROMPT_V2, render_pre_execution_qa_comment_body  # type: ignore[no-redef]
+
+    output = render_pre_execution_qa_comment_body() if args.comment_body else PRE_EXECUTION_QA_PROMPT_V2
+    print(output, end="")
     return 0
 
 

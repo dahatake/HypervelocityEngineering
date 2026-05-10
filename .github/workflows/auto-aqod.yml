@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: '[]'
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
 
 permissions:
   issues: write
@@ -29,7 +34,7 @@ permissions:
 
 jobs:
   orchestrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
       group: aqod-orchestrator-${{ inputs.issue_number }}
@@ -65,12 +70,13 @@ jobs:
             exit 0
           fi
 
-          has_aqod=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          labels = json.load(sys.stdin)
-          import os
-          trigger_label = os.environ.get('LABEL_ORIGINAL_DOCS_REVIEW', 'original-docs-review')
-          print('true' if trigger_label in labels else 'false')
+          has_aqod=$(ISSUE_LABELS="${ISSUE_LABELS}" \
+            LABEL_ORIGINAL_DOCS_REVIEW="${LABEL_ORIGINAL_DOCS_REVIEW}" \
+            python3 - <<'PY'
+          import os, json
+          labels = json.loads(os.environ.get("ISSUE_LABELS", "[]"))
+          trigger_label = os.environ.get("LABEL_ORIGINAL_DOCS_REVIEW", "original-docs-review")
+          print("true" if trigger_label in labels else "false")
           PY
           )
           if [[ "${has_aqod}" != "true" ]]; then
@@ -78,9 +84,9 @@ jobs:
             exit 0
           fi
 
-          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
-          import sys, json
-          labels = json.load(sys.stdin)
+          has_init=$(ISSUE_LABELS="${ISSUE_LABELS}" python3 - <<'PY'
+          import os, json
+          labels = json.loads(os.environ.get("ISSUE_LABELS", "[]"))
           skip_labels = {'aqod:initialized', 'aqod:ready', 'aqod:running', 'aqod:done', 'aqod:blocked'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
@@ -144,8 +150,8 @@ jobs:
         run: |
           set -euo pipefail
           source "${GITHUB_WORKSPACE}/.github/scripts/akm-common.sh"
-
-          ISSUE_BODY=$(curl -s \
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+          ISSUE_BODY=$(curl -sf \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -221,6 +227,12 @@ jobs:
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['enable_self_improve'] else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['self_improve_max_iterations'])")
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('self_improve_quality_threshold','80'))")
+          MODEL_RAW=$(extract_model "${ISSUE_BODY}")
+          SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
           export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL BRANCH AUTO_QA AUTO_CONTEXT_REVIEW AUTO_MERGE ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
 
           # ---- Root Issue body に branch / auto-qa / auto-merge / self-improve タグを埋め込み ----
@@ -275,6 +287,15 @@ jobs:
             add_label "${ISSUE_NUMBER}" "auto-context-review"
             echo "Root Issue #${ISSUE_NUMBER} に auto-context-review ラベルを付与しました。"
           fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            add_label "${ISSUE_NUMBER}" "model/${SELECTED_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ISSUE_NUMBER}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ISSUE_NUMBER}" "qa-model/${SELECTED_QA_MODEL}" || true
+          fi
 
           STEP_TITLE="[AQOD] original-docs 質問票生成"
           STEP_BODY=$(python3 - <<'PYEOF'
@@ -328,6 +349,15 @@ jobs:
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-approve-ready"]')
           fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
+          fi
 
           STEP_RESPONSE=$(create_issue "${STEP_TITLE}" "${STEP_BODY}" "${LABELS}")
           STEP_NUM=$(echo "${STEP_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
@@ -343,7 +373,7 @@ jobs:
   self-improve:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 180
     permissions:
       contents: write
@@ -444,7 +474,7 @@ jobs:
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -c "
+          python3 - <<'PY'
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
@@ -454,8 +484,8 @@ jobs:
           config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
           config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
-          "
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          PY
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()
         run: |

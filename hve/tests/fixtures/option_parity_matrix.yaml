@@ -1,0 +1,364 @@
+# Option Parity Matrix — Issue Form / SDKConfig / CLI 対応表
+#
+# 目的: Issue Template 系フィールドと hve 系（SDKConfig フラグ / CLI 引数）の対応を
+#       一元管理し、乖離を自動検出するための SSoT fixture。
+#
+# applies_to 値:
+#   common        : Issue Form + SDKConfig の両系統に存在するオプション。
+#                   hve_cli_flag が非 null の場合は CLI にも存在することを検証する。
+#   issue_form_only: Issue Form のみに存在し、hve SDKConfig には対応フィールドがない。
+#   hve_only      : hve SDKConfig のみに存在し、Issue Form には露出しない。
+#
+# 根拠ファイル:
+#   hve/config.py:111-     (SDKConfig dataclass フィールド定義)
+#   hve/__main__.py:566-   (orchestrate サブコマンド CLI 引数定義)
+#   .github/ISSUE_TEMPLATE/*.yml  (Issue Form フィールド ID)
+#   docs/design-discussions/orchestration-route-diff-spec.md (差分仕様)
+#
+schema_version: "1.0"
+
+# SDKConfig フィールドのカバレッジチェック除外リスト。
+# 以下はインフラ設定・出力制御・実行時内部フラグであり Issue Form に露出しない。
+sdkconfig_internal_fields:
+  - additional_prompt               # CLI 経由のみ (--additional-prompt)
+  - auto_coding_agent_review_auto_approval  # hve 内部の自動承認フラグ
+  - cli_args                        # SDK 追加 CLI 引数（内部）
+  - cli_path                        # Copilot CLI パス（インフラ）
+  - cli_url                         # 外部 CLI サーバー URL（インフラ）
+  - create_issues                   # GitHub Issue 作成（hve 固有インフラ）
+  - create_pr                       # GitHub PR 作成（hve 固有インフラ）
+  - custom_agents_config            # SDK Custom Agent 設定（内部）
+  - dry_run                         # ドライランモード（テスト用）
+  - final_only                      # 最終出力のみ表示（出力制御）
+  - force_interactive               # TTY 判定バイパス（QA 内部）
+  - github_token                    # 認証トークン（インフラ）
+  - ignore_paths                    # git add 除外パス（ファイル管理）
+  - log_level                       # CLI ログレベル（出力制御）
+  - max_diff_chars                  # git diff 最大文字数（チューニング）
+  - max_parallel                    # 並列実行上限（チューニング）
+  - mcp_servers                     # MCP Server 設定（SDK 内部）
+  - model_override                  # 緊急回避用モデル上書き
+  - no_color                        # ANSI カラー無効化（出力制御）
+  - qa_answer_mode                  # QA 回答モード（QA 内部）
+  - qa_auto_defaults                # QA 全問デフォルト採用（QA 内部）
+  - qa_input_timeout_seconds        # QA 回答タイムアウト（タイムアウト）
+  - quiet                           # 出力抑制（レガシー互換）
+  - repo                            # リポジトリ指定（インフラ）
+  - require_input_artifacts         # strict モード（実行時内部）
+  - review_base_ref                 # git diff 基点（レビュー内部）
+  - review_timeout_seconds          # レビュータイムアウト（タイムアウト）
+  - run_id                          # 実行 ID（内部トラッキング）
+  - screen_reader                   # スクリーンリーダーモード（アクセシビリティ）
+  - self_improve_goal               # SI タスクゴール（SI 詳細設定）
+  - self_improve_max_requests       # SI リクエスト上限（コストリミット）
+  - self_improve_max_tokens         # SI トークン上限（コストリミット）
+  - self_improve_scope              # SI 実行単位（SI 内部）
+  - self_improve_skip               # SI 無効フラグ（SI 内部）
+  - self_improve_success_criteria   # SI 成功基準（SI 内部）
+  - self_improve_target_scope       # SI 対象パス（SI 内部）
+  - session_id_prefix               # Resume 用セッション prefix（内部）
+  - show_banner                     # バナー表示制御（出力制御）
+  - show_reasoning                  # 推論表示（出力制御）
+  - show_stream                     # トークンストリーム表示（出力制御）
+  - timeout_seconds                 # idle タイムアウト（タイムアウト）
+  - timestamp_style                 # タイムスタンプ表示位置（出力制御）
+  - unattended                      # 全自動モード（自動化用）
+  - verbose                         # 詳細出力（レガシー互換）
+  - verbosity                       # 出力レベル（出力制御）
+
+# Issue Form フィールド ID のカバレッジチェック除外リスト。
+# 以下はワークフロー固有パラメータ・UI 入力ゲート・テキスト入力で選択式オプションではない。
+issue_form_internal_fields:
+  - additional_comment      # ユーザー向けテキスト補足（UI 用、web-app-dev.yml 等）
+  - additional_context      # self-improve.yml 専用テキスト補足
+  - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
+  - batch_job_ids           # ワークフロー固有パラメータ（batch-dev.yml 専用）
+  - confirmation            # self-improve.yml UI 確認ゲート
+  - depth                   # AQOD 専用パラメータ（original-docs-review.yml）
+  - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）
+  - exclude_patterns        # ADOC 専用パラメータ
+  - focus_areas             # AQOD 専用パラメータ
+  - force_refresh           # AKM 専用パラメータ（knowledge-management.yml）
+  - improvement_targets     # self-improve.yml 専用
+  - max_file_lines          # ADOC 専用パラメータ
+  - max_iterations          # self-improve.yml 専用（self_improve_max_iterations の別名）
+  - quality_threshold       # self-improve.yml 専用（self_improve_quality_threshold の別名）
+  - resource_group          # ワークフロー固有パラメータ（Azure RG 名）
+  - sources                 # AKM 専用パラメータ（knowledge-management.yml）
+  - steps                   # ワークフロー固有パラメータ（ステップ選択）
+  - target_dirs             # ADOC 専用パラメータ
+  - target_files            # AKM 専用パラメータ
+  - target_scope            # AQOD / self-improve 専用パラメータ
+  - task_goal               # self-improve.yml 専用
+  - usecase_id              # ワークフロー固有パラメータ（APP-ID 系）
+
+options:
+  # ============================================================
+  # common: Issue Form と SDKConfig の両系統に存在するオプション
+  # ============================================================
+
+  - option_key: model
+    issue_form_field_id: model
+    hve_config_attr: model
+    hve_cli_flag: "--model"
+    applies_to: common
+    notes: "使用モデル選択。Auto + MODEL_CHOICES の5種。config.py:MODEL_CHOICES, __main__.py:590"
+
+  - option_key: review_model
+    issue_form_field_id: review_model
+    hve_config_attr: review_model
+    hve_cli_flag: "--review-model"
+    applies_to: common
+    notes: "レビュー専用モデル（省略時は model を継承）。config.py:115, __main__.py:596"
+
+  - option_key: qa_model
+    issue_form_field_id: qa_model
+    hve_config_attr: qa_model
+    hve_cli_flag: "--qa-model"
+    applies_to: common
+    notes: "QA 用モデル（省略時は model を継承）。config.py:116, __main__.py:605"
+
+  - option_key: branch
+    issue_form_field_id: branch
+    hve_config_attr: base_branch
+    hve_cli_flag: "--branch"
+    applies_to: common
+    notes: "ベースブランチ。Issue Form ID は branch、SDKConfig は base_branch。config.py:118, __main__.py:870"
+
+  - option_key: enable_qa
+    issue_form_field_id: enable_qa
+    hve_config_attr: auto_qa
+    hve_cli_flag: "--auto-qa"
+    applies_to: common
+    notes: "QA 自動投入。Issue Form: enable_qa → SDKConfig: auto_qa。config.py:128, __main__.py:622"
+
+  - option_key: enable_review
+    issue_form_field_id: enable_review
+    hve_config_attr: auto_contents_review
+    hve_cli_flag: "--auto-contents-review"
+    applies_to: common
+    notes: "レビュー自動投入。enable_review → auto_contents_review。config.py:129, __main__.py:637"
+
+  - option_key: enable_self_improve
+    issue_form_field_id: enable_self_improve
+    hve_config_attr: auto_self_improve
+    hve_cli_flag: "--self-improve"
+    applies_to: common
+    notes: "自己改善ループ。enable_self_improve → auto_self_improve。CLI は --self-improve。config.py:241, __main__.py:1091"
+
+  - option_key: tdd_max_retries
+    issue_form_field_id: tdd_max_retries
+    hve_config_attr: tdd_max_retries
+    hve_cli_flag: null
+    applies_to: common
+    notes: "TDD GREEN リトライ上限。CLI 直接フラグなし（環境変数 HVE_TDD_MAX_RETRIES / Issue タグ tdd-max-retries 経由）。config.py:243"
+
+  - option_key: self_improve_max_iterations
+    issue_form_field_id: self_improve_max_iterations
+    hve_config_attr: self_improve_max_iterations
+    hve_cli_flag: null
+    applies_to: common
+    notes: "自己改善最大イテレーション数。CLI 直接フラグなし（Wizard / Issue タグ経由）。config.py:242"
+
+  - option_key: self_improve_quality_threshold
+    issue_form_field_id: self_improve_quality_threshold
+    hve_config_attr: self_improve_quality_threshold
+    hve_cli_flag: null
+    applies_to: common
+    notes: "自己改善品質スコア目標値。CLI 直接フラグなし（Wizard / Issue タグ経由）。config.py:244"
+
+  - option_key: enable_agentic_retrieval
+    issue_form_field_id: enable_agentic_retrieval
+    hve_config_attr: enable_agentic_retrieval
+    hve_cli_flag: null
+    applies_to: common
+    notes: "Agentic Retrieval 有効化。CLI 直接フラグなし（Issue タグ経由）。config.py:304"
+
+  - option_key: agentic_data_source_modes
+    issue_form_field_id: agentic_data_source_modes
+    hve_config_attr: agentic_data_source_modes
+    hve_cli_flag: null
+    applies_to: common
+    notes: "データソース投入方式（indexer/push）。CLI 直接フラグなし（Issue タグ経由）。config.py:308"
+
+  - option_key: foundry_mcp_integration
+    issue_form_field_id: foundry_mcp_integration
+    hve_config_attr: foundry_mcp_integration
+    hve_cli_flag: null
+    applies_to: common
+    notes: "Microsoft Foundry 連携（Remote MCP Server）。CLI 直接フラグなし（Issue タグ経由）。config.py:310"
+
+  - option_key: agentic_data_sources_hint
+    issue_form_field_id: agentic_data_sources_hint
+    hve_config_attr: agentic_data_sources_hint
+    hve_cli_flag: null
+    applies_to: common
+    notes: "想定データソースヒント（任意テキスト）。CLI 直接フラグなし（Issue タグ経由）。config.py:312"
+
+  - option_key: agentic_existing_design_diff_only
+    issue_form_field_id: agentic_existing_design_diff_only
+    hve_config_attr: agentic_existing_design_diff_only
+    hve_cli_flag: null
+    applies_to: common
+    notes: "既存設計差分更新モード。CLI 直接フラグなし（Issue タグ経由）。config.py:314"
+
+  - option_key: foundry_sku_fallback_policy
+    issue_form_field_id: foundry_sku_fallback_policy
+    hve_config_attr: foundry_sku_fallback_policy
+    hve_cli_flag: null
+    applies_to: common
+    notes: "Foundry モデル SKU フォールバック方針。CLI 直接フラグなし（Issue タグ経由）。config.py:316"
+
+  # ============================================================
+  # issue_form_only: Issue Form にのみ存在し hve SDKConfig には対応フィールドがない
+  # ============================================================
+
+  - option_key: enable_auto_merge
+    issue_form_field_id: enable_auto_merge
+    hve_config_attr: null
+    hve_cli_flag: "--enable-auto-merge"
+    applies_to: issue_form_only
+    notes: >
+      PR 完全自動化（Approve & Auto-merge）。SDKConfig フィールドなし。
+      CLI フラグ --enable-auto-merge は AKM 専用ワークフローパラメータとして存在するが
+      SDKConfig には反映されない。hve への大規模 auto merge 実装は Phase 6 スコープ外。
+      diff-spec: docs/design-discussions/orchestration-route-diff-spec.md §3.2
+
+  - option_key: runner_type
+    issue_form_field_id: runner_type
+    hve_config_attr: null
+    hve_cli_flag: null
+    applies_to: issue_form_only
+    notes: "GitHub Actions Runner 種別（GitHub Hosted / Self-hosted）。hve ローカル実行では不要。SDKConfig フィールドなし。"
+
+  - option_key: create_remote_mcp_server
+    issue_form_field_id: create_remote_mcp_server
+    hve_config_attr: null
+    hve_cli_flag: null
+    applies_to: issue_form_only
+    notes: "Remote MCP Server 実装の有無。Issue 本文タグとしてワークフローに渡されるが SDKConfig フィールドなし。"
+
+  # ============================================================
+  # hve_only: hve SDKConfig にのみ存在し Issue Form には露出しないオプション
+  # ============================================================
+
+
+  - option_key: apply_qa_improvements_to_main
+    issue_form_field_id: null
+    hve_config_attr: apply_qa_improvements_to_main
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "QA 結果をメイン成果物へ反映。環境変数 HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN。デフォルト False。config.py:284, diff-spec §3.1"
+
+  - option_key: apply_review_improvements_to_main
+    issue_form_field_id: null
+    hve_config_attr: apply_review_improvements_to_main
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "レビュー指摘をメイン成果物へ反映。環境変数 HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN。デフォルト True。config.py:285, diff-spec §3.1"
+
+  - option_key: apply_self_improve_to_main
+    issue_form_field_id: null
+    hve_config_attr: apply_self_improve_to_main
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "Self-Improve 計画をメイン成果物へ反映。環境変数 HVE_APPLY_SELF_IMPROVE_TO_MAIN。デフォルト True。config.py:286, diff-spec §3.1"
+
+  - option_key: reuse_context_filtering
+    issue_form_field_id: null
+    hve_config_attr: reuse_context_filtering
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "依存関係ベースの reuse_context フィルタリング。環境変数 HVE_REUSE_CONTEXT_FILTERING。デフォルト True。config.py:275, diff-spec §3.1"
+
+  - option_key: auto_coding_agent_review
+    issue_form_field_id: null
+    hve_config_attr: auto_coding_agent_review
+    hve_cli_flag: "--auto-coding-agent-review"
+    applies_to: hve_only
+    notes: "Code Review Agent 呼び出し。Issue Form 経路では非公開。CLI フラグあり。config.py:137, diff-spec §3.1"
+
+
+  - option_key: workiq_enabled
+    issue_form_field_id: null
+    hve_config_attr: workiq_enabled
+    hve_cli_flag: "--workiq"
+    applies_to: hve_only
+    notes: "Work IQ 連携（hve 専用）。M365 データ参照。Issue Form 経路では選択肢なし。config.py:212, diff-spec §2"
+
+  - option_key: workiq_qa_enabled
+    issue_form_field_id: null
+    hve_config_attr: workiq_qa_enabled
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "QA フェーズ用 Work IQ 明示フラグ。環境変数 WORKIQ_QA_ENABLED。config.py:213"
+
+  - option_key: workiq_akm_review_enabled
+    issue_form_field_id: null
+    hve_config_attr: workiq_akm_review_enabled
+    hve_cli_flag: "--workiq-akm-review"
+    applies_to: hve_only
+    notes: "AKM 実行後レビュー Work IQ。環境変数 WORKIQ_AKM_REVIEW_ENABLED。config.py:214"
+
+  - option_key: workiq_draft_mode
+    issue_form_field_id: null
+    hve_config_attr: workiq_draft_mode
+    hve_cli_flag: "--workiq-draft"
+    applies_to: hve_only
+    notes: "Work IQ 質問ごとの回答ドラフト生成モード。config.py:219"
+
+  - option_key: workiq_tenant_id
+    issue_form_field_id: null
+    hve_config_attr: workiq_tenant_id
+    hve_cli_flag: "--workiq-tenant-id"
+    applies_to: hve_only
+    notes: "Work IQ Entra テナント ID（任意）。config.py:215"
+
+  - option_key: workiq_prompt_qa
+    issue_form_field_id: null
+    hve_config_attr: workiq_prompt_qa
+    hve_cli_flag: "--workiq-prompt-qa"
+    applies_to: hve_only
+    notes: "Work IQ QA 用プロンプト上書き。config.py:216"
+
+  - option_key: workiq_prompt_km
+    issue_form_field_id: null
+    hve_config_attr: workiq_prompt_km
+    hve_cli_flag: "--workiq-prompt-km"
+    applies_to: hve_only
+    notes: "Work IQ KM 用プロンプト上書き。config.py:217"
+
+  - option_key: workiq_prompt_review
+    issue_form_field_id: null
+    hve_config_attr: workiq_prompt_review
+    hve_cli_flag: "--workiq-prompt-review"
+    applies_to: hve_only
+    notes: "Work IQ レビュー用プロンプト上書き。config.py:218"
+
+  - option_key: workiq_draft_output_dir
+    issue_form_field_id: null
+    hve_config_attr: workiq_draft_output_dir
+    hve_cli_flag: "--workiq-draft-output-dir"
+    applies_to: hve_only
+    notes: "Work IQ 補助レポート出力先ディレクトリ。config.py:220"
+
+  - option_key: workiq_per_question_timeout
+    issue_form_field_id: null
+    hve_config_attr: workiq_per_question_timeout
+    hve_cli_flag: "--workiq-per-question-timeout"
+    applies_to: hve_only
+    notes: "Work IQ 質問ごとのタイムアウト秒数（既定 1200 秒）。config.py:221"
+
+  - option_key: workiq_max_draft_questions
+    issue_form_field_id: null
+    hve_config_attr: workiq_max_draft_questions
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "Work IQ ドラフト生成対象の最大質問数（既定 10）。環境変数 WORKIQ_MAX_DRAFT_QUESTIONS。config.py:222"
+
+  - option_key: workiq_priority_filter
+    issue_form_field_id: null
+    hve_config_attr: workiq_priority_filter
+    hve_cli_flag: null
+    applies_to: hve_only
+    notes: "Work IQ 高優先度質問を優先して抽出するフィルタ。環境変数 WORKIQ_PRIORITY_FILTER。デフォルト True。config.py:225"

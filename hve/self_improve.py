@@ -628,6 +628,32 @@ async def discover_task_goal_with_llm(
         # SDK 未インストール: 静的結果にフォールバック
         return static_result
 
+    # MODEL_AUTO_VALUE / MODEL_AUTO_REASONING_EFFORT を遅延 import する
+    # （相対 / 絶対の両方に対応）
+    try:
+        from .config import MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT
+    except ImportError:
+        from config import MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT  # type: ignore[no-redef]
+
+    async def _create_session_with_auto_reasoning_fallback(_client: Any, _opts: Dict[str, Any]) -> Any:
+        """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
+
+        検出条件は TypeError 文言 `unexpected keyword argument` と
+        `reasoning_effort` の両方を要求し、誤検出を防ぐ。
+        """
+        try:
+            return await _client.create_session(**_opts)
+        except TypeError as exc:
+            msg = str(exc)
+            if (
+                "unexpected keyword argument" in msg
+                and "reasoning_effort" in msg
+                and "reasoning_effort" in _opts
+            ):
+                _stripped = {k: v for k, v in _opts.items() if k != "reasoning_effort"}
+                return await _client.create_session(**_stripped)
+            raise
+
     client = None
     session = None
     try:
@@ -646,10 +672,15 @@ async def discover_task_goal_with_llm(
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": False,
         }
-        if model:
+        if model and model != MODEL_AUTO_VALUE:
             session_opts["model"] = model
+        else:
+            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
 
-        session = await client.create_session(**session_opts)
+        # Phase 2 (Resume): このセッションはワークフロー実行前のゴール探索専用で
+        # run_id 文脈を持たないため、決定論的 session_id は付与しない（SDK が自動採番する）。
+        # Resume 対象外（一回きりの診断的呼び出し）。
+        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
         response = await session.send_and_wait(prompt, timeout=timeout)
 
         # レスポンステキストを抽出

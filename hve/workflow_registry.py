@@ -311,7 +311,7 @@ AAD_WEB = WorkflowDef(
     name="Web App Design",
     label_prefix="aad-web",
     state_labels=_make_state_labels("aad-web"),
-    params=["app_ids", "app_id"],
+    params=["app_ids", "app_id", "create_remote_mcp_server"],
     steps=[
         StepDef(id="1", title="画面一覧と遷移図",
                 custom_agent="Arch-UI-List",
@@ -341,7 +341,7 @@ ASDW_WEB = WorkflowDef(
     name="Web App Dev & Deploy",
     label_prefix="asdw-web",
     state_labels=_make_state_labels("asdw-web"),
-    params=["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"],
+    params=["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries", "create_remote_mcp_server"],
     steps=[
         # コンテナ
         StepDef(id="1", title="データ（コンテナ）", custom_agent=None, is_container=True),
@@ -426,15 +426,20 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["3.1"],
                 consumed_artifacts=["app_catalog"],
                 body_template_path="templates/asdw-web/step-3.2.md"),
+        StepDef(id="3.3", title="UI E2E テスト (Playwright)",
+                custom_agent="E2ETesting-Playwright",
+                depends_on=["3.2"],
+                consumed_artifacts=["app_catalog", "service_catalog_matrix", "test_specs", "src_files"],
+                body_template_path="templates/asdw-web/step-3.3.md"),
         StepDef(id="4.1", title="WAF アーキテクチャレビュー",
                 custom_agent="QA-AzureArchitectureReview",
-                depends_on=["3.2"],
+                depends_on=["3.3"],
                 # docs/azure/azure-services-*.md は既知 key なし → スキップ
                 consumed_artifacts=["use_case_catalog", "service_catalog_matrix", "app_catalog"],
                 body_template_path="templates/asdw-web/step-4.1.md"),
         StepDef(id="4.2", title="整合性チェック",
                 custom_agent="QA-AzureDependencyReview",
-                depends_on=["3.2"],
+                depends_on=["3.3"],
                 # docs/azure/azure-services-*.md は既知 key なし、src/app/ src/api/ infra/ は src_files でカバー
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
                 body_template_path="templates/asdw-web/step-4.2.md"),
@@ -638,6 +643,55 @@ ADOC = WorkflowDef(
     ],
 )
 
+# --- ARD: Auto Requirement Definition ---
+ARD = WorkflowDef(
+    id="ard",
+    name="Auto Requirement Definition",
+    label_prefix="ard",
+    state_labels=_make_state_labels("ard"),
+    params=[
+        "company_name",
+        "target_business",
+        "survey_base_date",
+        "survey_period_years",
+        "target_region",
+        "analysis_purpose",
+        "attached_docs",
+    ],
+    steps=[
+        StepDef(
+            id="1",
+            title="事業分析（対象業務 未定）",
+            custom_agent="Arch-ARD-BusinessAnalysis-Untargeted",
+            output_paths=["docs/company-business-requirement.md"],
+            body_template_path="templates/ard/step-1.md",
+        ),
+        StepDef(
+            id="2",
+            title="事業分析（対象業務 指定済）",
+            custom_agent="Arch-ARD-BusinessAnalysis-Targeted",
+            output_paths=["docs/business-requirement.md"],
+            body_template_path="templates/ard/step-2.md",
+        ),
+        StepDef(
+            id="3",
+            title="ユースケース作成",
+            custom_agent="Arch-ARD-UseCaseCatalog",
+            depends_on=["2"],
+            skip_fallback_deps=["1"],  # 旧 OR セマンティクス相当: Step 1 のみ実行された場合も Step 3 起動可
+            output_paths=["docs/catalog/use-case-catalog.md"],
+            # NOTE: Step 3 入力は「いずれか/両方」を許容し、リストの順序で優先度を表現する。
+            #       両方存在時は先頭 (docs/business-requirement.md = Step 2 出力) を優先採用、
+            #       片方のみなら存在側を採用する（後方互換: docs/company-business-requirement.md は Step 1 出力）。
+            required_input_paths=[
+                "docs/business-requirement.md",
+                "docs/company-business-requirement.md",
+            ],
+            body_template_path="templates/ard/step-3.md",
+        ),
+    ],
+)
+
 
 FULL_PIPELINE = MetaWorkflowDef(
     id="full-pipeline",
@@ -724,7 +778,7 @@ FULL_PIPELINE = MetaWorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [AAS, AAD_WEB, ASDW_WEB, ABD, ABDV, AAG, AAGD, AKM, AQOD, ADOC]
+    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ABD, ABDV, AAG, AAGD, AKM, AQOD, ADOC]
 }
 
 _META_REGISTRY: Dict[str, MetaWorkflowDef] = {

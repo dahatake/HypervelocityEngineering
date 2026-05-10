@@ -1,6 +1,6 @@
 # S001 会員登録画面
 
-> **出典**: `docs/screen-list.md#S001`, `docs/app-list.md#APP-01`, `docs/service-list.md#SVC-01`, `docs/data-model.md#Member`  
+> **出典**: `docs/catalog/screen-catalog.md#S001`, `docs/catalog/app-catalog.md#APP-01`, `docs/catalog/service-catalog.md#SVC-01`, `docs/catalog/data-model.md#Member`  
 > **作成日**: 2026-03-31
 
 ---
@@ -106,7 +106,7 @@
 ### 出力データ
 
 * 登録後: `memberId`（UUID）を発行 → セッション/トークンに格納
-* 出典: `docs/data-model.md#Member`, `docs/data-model.md#ConsentRecord`
+* 出典: `docs/catalog/data-model.md#Member`, `docs/catalog/data-model.md#ConsentRecord`
 
 ### API 連携
 
@@ -159,7 +159,7 @@
 ## 8. 非機能要件
 
 * **パフォーマンス**: 登録 API のレスポンスタイム p95 < 1,000ms（TBD: SVC-01 SLA確定後に更新）
-* **可用性**: APP-01 の可用性 99.9%（`docs/app-list.md#APP-01`）
+* **可用性**: APP-01 の可用性 99.9%（`docs/catalog/app-catalog.md#APP-01`）
 * **ログ**: 登録成功/失敗を `AuditLog` に記録（eventType: `MEMBER_REGISTERED`）。PII はマスキング（TBD: マスキング要件、ブロッカー#11）
 
 ---

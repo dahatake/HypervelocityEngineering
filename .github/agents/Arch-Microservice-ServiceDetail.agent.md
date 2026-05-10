@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Microservice-ServiceDetail
 description: "全サービスのマイクロサービス詳細仕様（API/イベント/データ/セキュリティ）を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Microservice-ServiceDetail/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 
@@ -13,12 +17,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 1. 仕様テンプレ（本文構造の正）：`.github/skills/planning/microservice-design-guide/references/microservice-definition.md`
 2. サービス定義（必ず最初に読む）:
    - `docs/catalog/service-catalog.md`
-   - `docs/catalog/domain-analytics.md`
+   - `docs/domain-analytics.md`
    - `docs/catalog/service-catalog-matrix.md`
    - `docs/catalog/data-model.md`
    - `docs/catalog/app-catalog.md`（アプリケーション一覧 — サービスが属する APP-ID の判定根拠）
 3. テスト戦略（存在すれば読む — テスタビリティ観点の設計指針として参照。API 設計時にモック可能なインターフェース設計を考慮する）:
-   - `docs/catalog/test-strategy.md`
+   - `docs/test-strategy.md`
 4. サンプルデータ（値の転記は禁止。要約のみ）:
    - `data/sample-data.json`
 
@@ -90,6 +94,12 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
   - `{WORK}issue-prompt-<NNN>.md` を作り、
     次バッチの「対象serviceId一覧」「読むべき根拠」「成果物パス」「完了条件」を短く書く。
   - その時点で作業を止める（1タスク=1PR の制約と、task_scope=single・最小コンテキストの原則に従う）。
+
+## 3.6 Agentic Retrieval への委譲（任意）
+- 機能要件に Chat-Bot / AI Agent / RAG / 対話型応答が含まれる場合、
+  当該サービスの Agentic Retrieval 機能要件詳細は `Arch-AgenticRetrieval-Detail` Custom Agent に委譲する。
+- 出力先: `docs/services/{serviceId}-agentic-retrieval-spec.md`
+- 本 Agent（Arch-Microservice-ServiceDetail）は委譲した旨を `{WORK}work-status.md` に 1 行記録するのみで、spec.md は作らない。
 
 # 4) 品質チェック（軽量・必須）
 - すべての処理済みサービスについて:

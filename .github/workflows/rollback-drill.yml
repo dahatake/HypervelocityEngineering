@@ -1,0 +1,170 @@
+name: Rollback Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: '対象 Deploy（現状は ui のみサポート）'
+        required: true
+        default: 'ui'
+        type: choice
+        options:
+          - ui
+      resource_group:
+        description: '対象 Resource Group（staging/専用RG）'
+        required: true
+        type: string
+      confirm:
+        description: '本番RG実行時のみ PRODUCTION を指定'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rollback-drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: copilot
+    env:
+      DEPLOY: ${{ inputs.deploy }}
+      RESOURCE_GROUP: ${{ inputs.resource_group }}
+      CONFIRM: ${{ inputs.confirm }}
+      SWA_NAME: ${{ vars.SWA_NAME || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Guard production resource group
+        run: |
+          set -euo pipefail
+          rg_lower=$(echo "${RESOURCE_GROUP}" | tr '[:upper:]' '[:lower:]')
+          if [[ "${rg_lower}" == *"prod"* ]] && [[ "${CONFIRM}" != "PRODUCTION" ]]; then
+            echo "[ERROR] resource_group に 'prod' が含まれるため confirm=PRODUCTION が必須です。"
+            exit 1
+          fi
+
+      - name: Run rollback wrapper
+        id: rollback
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rollback-drill
+          LOG_FILE="/tmp/rollback-drill/rollback-${DEPLOY}.log"
+
+          set +e
+          cmd=(bash infra/azure/rollback/run-rollback.sh --deploy "${DEPLOY}" --rg "${RESOURCE_GROUP}")
+          if [[ -n "${CONFIRM}" ]]; then
+            cmd+=(--confirm "${CONFIRM}")
+          fi
+          "${cmd[@]}" >"${LOG_FILE}" 2>&1
+          rc=$?
+          set -e
+
+          echo "log_file=${LOG_FILE}" >> "${GITHUB_OUTPUT}"
+          echo "rollback_exit=${rc}" >> "${GITHUB_OUTPUT}"
+
+      - name: Re-run verify script
+        id: verify
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rollback-drill
+          LOG_FILE="/tmp/rollback-drill/verify-${DEPLOY}.log"
+          verify_script="infra/azure/verify-webui-resources.sh"
+
+          set +e
+          SWA_NAME="${SWA_NAME}" RESOURCE_GROUP="${RESOURCE_GROUP}" bash "${verify_script}" >"${LOG_FILE}" 2>&1
+          rc=$?
+          set -e
+
+          echo "verify_exit=${rc}" >> "${GITHUB_OUTPUT}"
+          echo "verify_log=${LOG_FILE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check service-catalog rollback confirmation
+        id: catalog
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rollback-drill
+          LOG_FILE="/tmp/rollback-drill/service-catalog-${DEPLOY}.log"
+
+          if [[ ! -f docs/catalog/service-catalog-matrix.md ]]; then
+            echo "[WARN] docs/catalog/service-catalog-matrix.md not found" > "${LOG_FILE}"
+            echo "catalog_exit=1" >> "${GITHUB_OUTPUT}"
+            echo "catalog_log=${LOG_FILE}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if grep -Ein "static web|staticwebapp|azurestaticapps" docs/catalog/service-catalog-matrix.md > "${LOG_FILE}"; then
+            echo "catalog_exit=0" >> "${GITHUB_OUTPUT}"
+          else
+            echo "catalog_exit=1" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "catalog_log=${LOG_FILE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate rollback drill report
+        id: report
+        run: |
+          set -euo pipefail
+          mkdir -p work/dashboards
+          DATE_UTC=$(date -u +%Y%m%d)
+          REPORT_FILE="work/dashboards/rollback-drill-${DATE_UTC}.md"
+
+          {
+            echo "# Rollback Drill Report (${DATE_UTC})"
+            echo
+            echo "- Deploy: ${DEPLOY}"
+            echo "- Resource Group: ${RESOURCE_GROUP}"
+            echo "- Rollback Exit: ${{ steps.rollback.outputs.rollback_exit }}"
+            echo "- Verify Exit: ${{ steps.verify.outputs.verify_exit }}"
+            echo "- Service Catalog Check Exit: ${{ steps.catalog.outputs.catalog_exit }}"
+            echo "- 実行時刻: $(date -u --iso-8601=seconds)"
+            echo
+            echo "## Logs"
+            echo
+            echo "- Rollback Log: \`${{ steps.rollback.outputs.log_file }}\`"
+            echo "- Verify Log: \`${{ steps.verify.outputs.verify_log }}\`"
+            echo "- Service-Catalog Check Log: \`${{ steps.catalog.outputs.catalog_log }}\`"
+            echo
+            echo "## Known limitations"
+            echo
+            echo "- \`infra/azure/rollback/run-rollback.sh\` は PR-4 README に基づく最小ラッパーです。"
+            echo "- rollback-drill workflow の対象 deploy は現状 ui のみです。"
+          } > "${REPORT_FILE}"
+
+          cat "${REPORT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "report_file=${REPORT_FILE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload rollback drill artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-drill-${{ github.run_id }}
+          path: |
+            ${{ steps.report.outputs.report_file }}
+            /tmp/rollback-drill/*.log
+          if-no-files-found: warn
+
+      - name: Fail when rollback/verify/catalog check failed
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.rollback.outputs.rollback_exit }}" != "0" ]]; then
+            echo "Rollback wrapper failed."
+            exit 1
+          fi
+          if [[ "${{ steps.verify.outputs.verify_exit }}" != "0" ]]; then
+            echo "Verify script failed."
+            exit 1
+          fi
+          if [[ "${{ steps.catalog.outputs.catalog_exit }}" != "0" ]]; then
+            echo "Service-catalog rollback confirmation failed."
+            exit 1
+          fi

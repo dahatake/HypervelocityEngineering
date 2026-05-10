@@ -1,10 +1,11 @@
 ---
 name: appinsights-instrumentation
-description: "Guidance for instrumenting webapps with Azure Application Insights. Provides telemetry patterns, SDK setup, and configuration references. WHEN: how to instrument app, App Insights SDK, telemetry patterns, what is App Insights, Application Insights guidance, instrumentation examples, APM best practices."
+description: >
+  Guidance for instrumenting webapps with Azure Application Insights. USE FOR: how to instrument app, App Insights SDK, telemetry patterns. DO NOT USE FOR: unrelated tasks. WHEN: how to instrument app、App Insights SDK。
 license: MIT
 metadata:
   author: Microsoft
-  version: "1.0.2"
+  version: 1.0.2
 ---
 
 # AppInsights Instrumentation Guide
@@ -70,3 +71,7 @@ No matter which option you choose, recommend the user to create the App Insights
 
 - **OpenTelemetry Distro**: [Python](references/sdk/azure-monitor-opentelemetry-py.md) | [TypeScript](references/sdk/azure-monitor-opentelemetry-ts.md)
 - **OpenTelemetry Exporter**: [Python](references/sdk/azure-monitor-opentelemetry-exporter-py.md) | [Java](references/sdk/azure-monitor-opentelemetry-exporter-java.md)
+
+## Platform-Specific Guides
+
+- **Container Apps**: [Observability Guide](references/container-apps.md)

@@ -25,16 +25,20 @@ body:
           - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー Step.2.3 の成果物。画面別テスト仕様書）
           - `docs/catalog/app-catalog.md`（アプリケーション一覧。Architecture Design の成果物。存在しない場合はアプリケーション名を直接入力可）
         - リポジトリに以下のシークレットが設定されていること:
-          - `COPILOT_PAT`
-          - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、`AZURE_STATIC_WEB_APPS_API_TOKEN` の GitHub Secret への手動設定は不要
+          - `COPILOT_PAT`（HVE Cloud Agent Orchestrator の Copilot 自動アサイン用）
+          - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`（SWA/Azure deploy の OIDC 用）
+          - `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（ユーザーによる Secret 作成は不要）
+          - HVE CLI Orchestrator 用の `GH_TOKEN` はこの Cloud 実行では必須ではありません
+          - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` の手動設定は不要
+          - 詳細方針: `users-guide/getting-started.md`（認証・認可 / Azure OIDC Secrets）, `users-guide/web-ui-guide.md`
 
         ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
         | ステップ | 内容 | サブステップ |
         |---------|------|------------|
         | **Step.1** | データ | 1.1 Azure データストア選定 → 1.2 Azure データサービス Deploy |
         | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → **2.3T テスト仕様書 (TDD RED)** → **2.3TC テストコード生成 (TDD RED)** → 2.4 サービスコード実装 (TDD GREEN) → 2.5 Azure Compute Deploy |
-        | **Step.3** | UI 作成 | **3.0T UI テスト仕様書 (TDD RED)** → **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) |
-        | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（並列実行） |
+        | **Step.3** | UI 作成 | **3.0T UI テスト仕様書 (TDD RED)** → **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) → 3.3 E2E テスト (Playwright) |
+        | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（Step.3.3 PASS 後に並列実行） |
 
         ℹ️ Step.2 のサブステップである Step.2.3T / Step.2.3TC は Dev フェーズで追加生成する TDD RED 成果物です。設計フェーズ（Web App Design Step.2.3）で作成したテスト仕様書を入力として利用します。
 
@@ -58,6 +62,23 @@ body:
       label: "対象ブランチ"
       description: "コード/ドキュメントをコミットするブランチ名を入力してください"
       placeholder: "例: main, develop, feature/dev-v2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      description: |
+        ワークフローを実行する Runner を選択します。
+        - **GitHub Hosted**: `ubuntu-latest`（GitHub 提供の標準ランナー）
+        - **Self-hosted (ACA)**: `[self-hosted, linux, x64, aca]`（Azure Container Apps 上のセルフホストランナー）
+        - Self-hosted runner はオプションです（GitHub Hosted を使う場合はスキップ可能）
+        - Self-hosted を選ぶ場合は runner が online であり、label が一致していることを確認してください（詳細: `users-guide/setup-self-hosted-runner.md`）
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
     validations:
       required: true
 
@@ -86,7 +107,7 @@ body:
       options:
         - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
         - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.5 + Step.2.3T, Step.2.3TC)"
-        - label: "Step.3 — UI 作成 (Step.3.0T, Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy)"
+        - label: "Step.3 — UI 作成 (Step.3.0T, Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy / Step.3.3 E2E)"
         - label: "Step.4 — アーキテクチャレビュー (Step.4.1 WAF レビュー / Step.4.2 整合性チェック)"
 
   - type: dropdown
@@ -94,10 +115,49 @@ body:
     attributes:
       label: "使用するモデル"
       description: |
-        GitHub が自動的に最適なモデルを選択します（Auto）。
-        特定モデルを指定する場合は `HVE_MODEL_OVERRIDE` 環境変数を使用してください。
+        Copilot cloud agent が使用するモデルを選択します（hve CLI `--model` と同等）。
+        - `Auto`: GitHub が最適モデルを動的選択（プレミアムリクエスト 0.9x、推奨）
+        - その他: hve/config.py の `MODEL_CHOICES` と同一の選択肢
+        ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
       options:
         - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+  - type: dropdown
+    id: review_model
+    attributes:
+      label: "レビュー用モデル（任意）"
+      description: |
+        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: qa_model
+    attributes:
+      label: "QA 用モデル（任意）"
+      description: |
+        実行前 QA（auto-qa）の質問票生成で使用するモデル（hve CLI `--qa-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
       default: 0
     validations:
       required: false
@@ -147,6 +207,97 @@ body:
         - "5 (デフォルト)"
         - "7"
         - "10"
+      default: 1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: create_remote_mcp_server
+    attributes:
+      label: Remote MCP Server 実装
+      description: |
+        API 作成時に Remote MCP Server として公開するための実装を追加するかを選択してください。
+        実装方式、SDK、Transport、Cloud 固有の構成は実装フェーズで最適なものを選定します。
+      options:
+        - 作成する
+        - 作成しない
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: enable_agentic_retrieval
+    attributes:
+      label: "Agentic Retrieval を使用する"
+      description: |
+        Chat-Bot / AI Agent を機能要件に含むアプリ向け。
+        `Arch-AgenticRetrieval-Detail` Custom Agent の自動判定結果に従います。明示的な上書きも可能です。
+        「しない」を選ぶと AAD-WEB / ASDW-WEB の Agentic Retrieval 関連ステップは生成されません。
+      options:
+        - する
+        - しない
+        - 自動判定に従う
+      default: 2
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: agentic_data_source_modes
+    attributes:
+      label: "データソース投入方式"
+      description: |
+        Indexer 対応データソースは保守性の観点から Indexer を優先します。
+        Indexer 非対応のデータは Push API。両方の併用も可。
+        対応一覧は実行時に Microsoft Learn MCP で確認します。
+      options:
+        - label: "Indexer (Pull)"
+          selected: true
+        - label: "Push API"
+
+  - type: dropdown
+    id: foundry_mcp_integration
+    attributes:
+      label: "Microsoft Foundry 連携（Remote MCP Server）"
+      description: |
+        「する」を選ぶと Foundry プロジェクトの新規作成・モデルの Global Deployment・
+        MCP 接続設定までを IaC が自動構成します。
+      options:
+        - する
+        - しない
+      default: 0
+    validations:
+      required: false
+
+  - type: textarea
+    id: agentic_data_sources_hint
+    attributes:
+      label: "想定データソース（任意）"
+      description: |
+        起点となるデータソース想定を 1 行 1 件で記述。空でも可。
+        例: `Blob: rg-xxx/sa-docs/raw`
+      placeholder: "例: Blob: rg-xxx/sa-docs/raw"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: agentic_existing_design_diff_only
+    attributes:
+      label: "既存設計の差分更新"
+      description: |
+        チェック時、`docs/azure/agentic-retrieval/` の既存設計を上書きせず差分更新します。
+      options:
+        - label: "既存設計を差分更新する（チェックなし＝上書き）"
+
+  - type: dropdown
+    id: foundry_sku_fallback_policy
+    attributes:
+      label: "Foundry モデル SKU フォールバック"
+      description: |
+        Global Standard クォータ枯渇時に Standard SKU へフォールバックを許容するか。
+        `cli-evidence.md` に根拠記録されます。
+      options:
+        - "Global 必須（Standard 拒否）"
+        - "Standard 許容"
       default: 1
     validations:
       required: false

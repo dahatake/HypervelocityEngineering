@@ -1,16 +1,20 @@
-﻿---
+---
 name: Arch-DataModeling
 description: "ユースケースから全エンティティ・サービス境界・データモデル（Mermaid）とJSONサンプルを生成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-DataModeling/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 ## 1) 入力（必読ソース）
 ユーザーからタスクを受け取ったら、まず以下を読む（存在しない場合は search で探し、見つからなければ質問へ）。
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — エンティティと APP-ID の紐付け判定根拠）
 
@@ -42,7 +46,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 3) 実行フロー（task_scope=multi または context_size=large は“実装開始前”に分割）
 ### 3.0 依存確認（必須・最初に実行）
-- `docs/catalog/domain-analytics.md` と `docs/catalog/service-catalog.md` の両方を `read` で確認する。
+- `docs/domain-analytics.md` と `docs/catalog/service-catalog.md` の両方を `read` で確認する。
 - いずれかが存在しない、空、または見出し構造が不完全な場合：
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と質問して **即座に停止** する。
   - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）。

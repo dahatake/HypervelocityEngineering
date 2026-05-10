@@ -1,6 +1,6 @@
 # S004 ポイント残高・明細照会画面
 
-> **出典**: `docs/screen-list.md#S004`, `docs/app-list.md#APP-04`, `docs/service-list.md#SVC-02`, `docs/data-model.md#LoyaltyAccount`, `docs/data-model.md#PointLedgerEntry`  
+> **出典**: `docs/catalog/screen-catalog.md#S004`, `docs/catalog/app-catalog.md#APP-04`, `docs/catalog/service-catalog.md#SVC-02`, `docs/catalog/data-model.md#LoyaltyAccount`, `docs/catalog/data-model.md#PointLedgerEntry`  
 > **作成日**: 2026-03-31
 
 ---
@@ -81,11 +81,11 @@
 
 | データ | 出典 | 備考 |
 |---|---|---|
-| balance | `LoyaltyAccount.balance` | `docs/data-model.md#LoyaltyAccount` |
+| balance | `LoyaltyAccount.balance` | `docs/catalog/data-model.md#LoyaltyAccount` |
 | rank | `LoyaltyAccount.rank` | |
 | totalEarned | `LoyaltyAccount.totalEarned` | |
 | totalRedeemed | `LoyaltyAccount.totalRedeemed` | |
-| entries | `PointLedgerEntry[]` | `docs/data-model.md#PointLedgerEntry` |
+| entries | `PointLedgerEntry[]` | `docs/catalog/data-model.md#PointLedgerEntry` |
 | entry.type | AWARD/REDEEM/EXPIRE/ADJUSTMENT | |
 | entry.amount | ポイント変動量 | 符号付き表示（+/-）|
 | entry.createdAt | 取引日時 | ローカルタイム表示（JST）|
@@ -129,7 +129,7 @@
 
 ## 8. 非機能要件
 
-* **パフォーマンス**: 台帳明細取得 p95 < 800ms（SVC-02、`docs/service-list.md#SVC-02`）
+* **パフォーマンス**: 台帳明細取得 p95 < 800ms（SVC-02、`docs/catalog/service-catalog.md#SVC-02`）
 * **更新時刻表示**: 残高の最終更新時刻を表示（取得元のサーバー時刻）
 * **ページサイズ**: デフォルト20件。最大100件（TBD: サービス仕様確定後）
 

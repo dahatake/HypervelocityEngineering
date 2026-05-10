@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: '[]'
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
 
 permissions:
   issues: write
@@ -38,7 +43,7 @@ permissions:
 
 jobs:
   orchestrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
       group: aagd-orchestrator-${{ inputs.issue_number }}
@@ -571,6 +576,10 @@ jobs:
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           MODEL_RAW=$(extract_model "${ISSUE_BODY}")
           SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
           APP_IDS_JSON=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('app_ids',[])))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
           APP_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('app_id',''))")
@@ -744,6 +753,12 @@ jobs:
           if [[ -n "${SELECTED_MODEL}" ]]; then
             add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
           fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
+          fi
 
           # skip_step helper: SKIP_STEPS に Step 番号が含まれていれば true
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
@@ -774,6 +789,12 @@ jobs:
           fi
           if [[ -n "${SELECTED_MODEL}" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
           fi
 
           # ---- Step Issue 生成 ----
@@ -1031,7 +1052,7 @@ jobs:
             sleep 3
 
             # ---- Step.3.2 ----
-            BODY_S32=$(printf '%s\n## 目的\nAzure Static Web Apps へのWebデプロイと、GitHub Actionsによる継続的デリバリー（CD）構築を実施する。\n\n## 入力\n- リソースグループ名: `%s`\n- デプロイブランチ: `main`\n- `app_location`: `src/app/`\n- `api_location`: `src/app/lib/api/`\n- リージョン優先: East Asia → Japan West → Southeast Asia\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-webui-resources-prep.sh`\n- `infra/azure/create-azure-webui-resources.sh`\n- `.github/workflows/` に SWA デプロイワークフロー（Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` 参照）\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step3-swa-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-webui-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` を使用\n\n## 依存\n- Step.3.1（UI 実装）が `aagd:done` であること\n\n## 完了条件\n- デプロイスクリプトと SWA ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+            BODY_S32=$(printf '%s\n## 目的\nAzure Static Web Apps へのWebデプロイと、GitHub Actionsによる継続的デリバリー（CD）構築を実施する。\n\n## 入力\n- リソースグループ名: `%s`\n- デプロイブランチ: `main`\n- `app_location`: `src/app/`\n- `api_location`: `src/app/lib/api/`\n- リージョン優先: East Asia → Japan West → Southeast Asia\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-webui-resources-prep.sh`\n- `infra/azure/create-azure-webui-resources.sh`\n- `.github/workflows/` に SWA デプロイワークフロー（OIDC: `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` を使用）\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## 認証メモ\n- SWA デプロイは OIDC を基本とし、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` は不要\n- 詳細方針: `users-guide/getting-started.md`（認証・認可 / Azure OIDC Secrets）\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step3-swa-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-webui-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `aagd:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` を使用\n\n## 依存\n- Step.3.1（UI 実装）が `aagd:done` であること\n\n## 完了条件\n- デプロイスクリプトと SWA ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[AAGD] Step.3.2: Web アプリ Deploy (Azure Static Web Apps)${APP_ID_SUFFIX}" \
@@ -1921,7 +1942,7 @@ jobs:
   self-improve:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings

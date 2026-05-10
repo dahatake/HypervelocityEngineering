@@ -1,7 +1,7 @@
 # Skill 開発コントリビューションガイド
 
 > **対象**: 本リポジトリ（`.github/skills/`）に新規 Skill を追加・変更する開発者向けガイド。
-> **優先順位**: `copilot-instructions.md` > Custom Agent > Skills（本ファイル）。本ガイドと上位ファイルが矛盾する場合は上位が優先される。
+> **優先順位**: `.github/copilot-instructions.md` > Custom Agent > Skills（本ファイル）。本ガイドと上位ファイルが矛盾する場合は上位が優先される。
 
 ---
 
@@ -33,7 +33,8 @@
   - `WHEN:` 日本語での発動条件
 - [ ] **`## Non-goals（このスキルの範囲外）` セクション** を SKILL.md に記載する
 - [ ] **詳細手順が多い場合は `references/` への分離を推奨する**（SKILL.md は概要・ルーティング・入出力例を中心に簡潔に保つ）
-- [ ] **`copilot-instructions.md` §2 ルーティングテーブルに追加する**（既存カテゴリへの追加の場合は §2 の該当カテゴリテーブルを更新する）
+- [ ] **`.github/skills/_routing/SKILL.md` のルーティングテーブルに追加する**（既存カテゴリへの追加の場合は該当カテゴリテーブルを更新する）
+- [ ] **変更後に `python3 .github/scripts/validate-skill-routing.py` を実行する**（ルーティング整合・重複・frontmatter 必須項目の自動検証）
 
 ### 推奨項目
 
@@ -41,11 +42,24 @@
 - [ ] **`## 入出力例` セクション**（具体的な入力 → 出力の例を 1 件以上）
 - [ ] **`.github/skills/_evals/` へのテストケース追加**（Eval フレームワーク導入済みの場合）
 
+### frontmatter スキーマ（確定）
+
+- **必須**
+  - `name`
+  - `description`
+  - `metadata.version`（SemVer: `MAJOR.MINOR.PATCH`、例: `1.0.0`）
+- **推奨**
+  - `category`
+  - `applies_to`
+- **廃止**
+  - `metadata.version` なしの旧 frontmatter 形式は受け入れない（互換 fallback なし）
+
 ---
 
 ## 2. description 言語方針
 
-`copilot-instructions.md` §0「出力は日本語」ルールに準拠し、以下の方針を適用する。
+`.github/copilot-instructions.md` §0「出力は日本語」ルールに準拠し、
+以下の方針を適用する。
 
 | 項目 | 言語 | 理由 |
 |------|------|------|
@@ -82,19 +96,31 @@
 └── assets/            ← テンプレート・フォーマット定義（必要な場合）
 ```
 
-### カテゴリ一覧（既存 7 カテゴリ）
+### カテゴリ一覧（ルーティング対象 7 カテゴリ）
 
 | カテゴリ | 用途 | 例 |
 |---------|------|-----|
 | `planning/` | 計画・コンテキスト収集・設計ガイド | `task-dag-planning`, `batch-design-guide` |
 | `harness/` | 検証・安全ガード・エラーリカバリ | `harness-verification-loop`, `adversarial-review` |
 | `output/` | 出力フォーマット・分割・可視化 | `large-output-chunking`, `svg-renderer` |
-| `azure-platform/` | Azure サービス固有のリファレンス | `azure-deploy`, `microsoft-foundry` |
+| `azure-skills/` | Azure サービス固有のリファレンス | `azure-deploy`, `microsoft-foundry` |
 | `cicd/` | GitHub Actions CI/CD | `github-actions-cicd` |
 | `observability/` | 監視・計装 | `appinsights-instrumentation` |
 | `testing/` | テスト戦略・テンプレート | `test-strategy-template` |
 
-> 既存カテゴリに当てはまらない場合は、新カテゴリを作成して `copilot-instructions.md` §2 のルーティングテーブルに追加する。
+> 既存カテゴリに当てはまらない場合は、新カテゴリを作成して
+> `.github/skills/_routing/SKILL.md` のルーティングテーブルに追加する。
+
+### カテゴリ外ディレクトリ（特別用途）
+
+- `_routing/`: **カテゴリ外（ルーティング定義専用）**。
+  `SKILL.md` でカテゴリ横断の参照先表を管理する。
+- `_evals/`: **カテゴリ外（評価専用）**。
+  Eval ケース格納用で、`SKILL.md` は不要。
+- `karpathy-guidelines/`: **カテゴリ外（単独 Skill）**。
+  実体 Skill として存在し、`_routing` 表で参照する。
+
+> カテゴリ外ディレクトリは、カテゴリ一覧の件数（7カテゴリ）には含めない。
 
 ---
 
@@ -105,7 +131,7 @@
 **ユーザーの意図によって処理フローが分岐する場合**に Sub-skill パターンを採用する。
 
 ```
-.github/skills/azure-platform/microsoft-foundry/models/deploy-model/
+.github/skills/azure-skills/microsoft-foundry/models/deploy-model/
 ├── SKILL.md           ← ルーター（intent detection → Sub-skill へのルーティング）
 ├── preset/
 │   └── SKILL.md       ← クイックデプロイ
@@ -307,23 +333,24 @@ metadata:
 
 新規 Skill を追加する前に、以下の既存パターンとの整合性を確認する。
 
-### 10.1 優先順位（`copilot-instructions.md` §5）
+### 10.1 優先順位（`.github/copilot-instructions.md` §5）
 
 ```
-copilot-instructions.md  ← 最優先（常に適用）
+.github/copilot-instructions.md  ← 最優先（常に適用）
         ↓
 Custom Agent（.github/agents/*.agent.md）
         ↓
 Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 ```
 
-- Skill の記述が `copilot-instructions.md` と矛盾する場合は `copilot-instructions.md` が優先される
+- Skill の記述が `.github/copilot-instructions.md` と矛盾する場合は
+  `.github/copilot-instructions.md` が優先される
 - Custom Agent 固有の指示が Skill と矛盾する場合は Custom Agent が優先される
 
 ### 10.2 agent-common-preamble のデフォルト継承モデル
 
 - 全 Custom Agent は作業開始時に `agent-common-preamble` Skill を参照する
-- 新規 Skill が全 Agent に適用される共通ルールを含む場合は、`agent-common-preamble` または `copilot-instructions.md` §2 ルーティングテーブルへの追加を検討する
+- 新規 Skill が全 Agent に適用される共通ルールを含む場合は、`agent-common-preamble` または `.github/skills/_routing/SKILL.md` への追加を検討する
 - `agent-common-preamble` を更新する場合は、全 Agent の挙動に影響することを考慮して慎重に変更する
 
 ### 10.3 work/ および qa/ 配下への書き込みルール
@@ -332,7 +359,7 @@ Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 
 ### 10.4 ルーティングテーブルへの追加
 
-新規 Skill を追加したら、必ず `copilot-instructions.md` §2 のルーティングテーブルに追記する。
+新規 Skill を追加したら、必ず `.github/skills/_routing/SKILL.md` のルーティングテーブルに追記する。
 
 ```markdown
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |

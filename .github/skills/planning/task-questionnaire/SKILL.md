@@ -1,26 +1,10 @@
 ---
 name: task-questionnaire
 description: >
-  タスクの不明点を洗い出し、重要度分類・既定値候補付きの優先順位付き質問票を作成するスキル。
-  PR連携モード（§1.1）と非PR連携モード（§1.2）の2つの動作モードを持つ。
-  質問は分類項目ごとに自動整理し、最重要/高/中/低の4段階で重要度を判定する。
-  新しいタスクに着手する前や、要件の曖昧さを解消したいとき、
-  設計判断に迷ったときに使用する。
-  PR へのアサイン / コメントリクエスト時は §1.1 PR連携プロトコルを適用し、
-  直接チャット / スタンドアロン実行時は §1.2 非PR連携プロトコルを適用する。
-  USE FOR: context gathering, questions, requirements clarification,
-  questionnaire creation, auto-context-review, PR assignment,
-  qa/ file creation, answer merge, consolidated document generation.
-  DO NOT USE FOR: implementation, DAG planning (use task-dag-planning),
-  testing (use harness-verification-loop), deployment.
-  WHEN: 不明点を確認したい、要件を整理したい、質問票を作成したい、
-  タスクの前提条件を確認したい、曖昧な点を明確にしたい、
-  ヒアリングシートを作りたい、要件定義の抜け漏れを確認したい、
-  PR にアサインされた、コンテキスト収集が必要、auto-context-review,
-  qa/ 配下に質問票を作成したい、回答マージ、統合ドキュメント生成。
+  タスクの不明点を洗い出し、重要度分類・既定値候補付きの優先順位付き質問票を作成するスキル。 USE FOR: context gathering, questions, requirements clarification. DO NOT USE FOR: implementation. WHEN: 不明点を確認したい、要件を整理したい。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # タスク質問票作成スキル

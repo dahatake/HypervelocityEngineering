@@ -79,6 +79,7 @@ class DAGExecutor:
         console: Any = None,
         step_prompts: Optional[Dict[str, str]] = None,
         dag_plan: Any = None,
+        on_step_complete: Optional[Callable[[StepResult], None]] = None,
     ) -> None:
         self.workflow = workflow
         self.dag_plan = dag_plan
@@ -91,6 +92,11 @@ class DAGExecutor:
         self._workflow_step_index: Dict[str, Any] = {
             getattr(step, "id", ""): step for step in getattr(workflow, "steps", [])
         }
+
+        # Phase 3 (Resume): ステップ完了/skip/blocked 通知の同期コールバック。
+        # state.json への永続化など、実行中継ぎ込みたい副作用をフックする。
+        # コールバック内の例外は実行を止めないよう warn ログのみで握り潰す。
+        self._on_step_complete = on_step_complete
 
         # 実行状態
         self.completed: Set[str] = set()
@@ -105,6 +111,22 @@ class DAGExecutor:
         # Wave / 進捗管理
         self._wave_counter: int = 0
         self._total_waves: int = 0
+
+    def _emit_step_complete(self, result: StepResult) -> None:
+        """`on_step_complete` フックを安全に呼ぶ。
+
+        Phase 3 (Resume): state.json 更新などの副作用を発火するための同期フック。
+        コールバック内の例外で DAG 実行が止まらないよう、warn を出して握り潰す。
+        """
+        if self._on_step_complete is None:
+            return
+        try:
+            self._on_step_complete(result)
+        except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
+            if self.console is not None:
+                self.console.warning(
+                    f"on_step_complete フックの実行に失敗しました (step={result.step_id}): {exc}"
+                )
 
     def compute_waves(self) -> List[List[Any]]:
         """DAG を事前走査して Wave 分割を計算する。
@@ -196,7 +218,7 @@ class DAGExecutor:
                     and s.id not in self.running
                 ):
                     self.skipped.add(s.id)
-                    self._results[s.id] = StepResult(
+                    _skip_result = StepResult(
                         s.id,
                         success=False,
                         elapsed=0.0,
@@ -204,6 +226,9 @@ class DAGExecutor:
                         state="skipped",
                         reason="inactive",
                     )
+                    self._results[s.id] = _skip_result
+                    # Phase 3 (Resume): skip も state.json に反映する
+                    self._emit_step_complete(_skip_result)
                     newly_skipped = True
 
             # 失敗ステップの後続を除外し、起動可能なステップを絞り込む
@@ -307,7 +332,10 @@ class DAGExecutor:
             else:
                 self.failed.add(step.id)
 
-            return StepResult(step.id, success, elapsed, error=error_msg)
+            result = StepResult(step.id, success, elapsed, error=error_msg)
+            # Phase 3 (Resume): completed / failed をフックで通知し state.json を更新する
+            self._emit_step_complete(result)
+            return result
 
     def _get_next_steps(
         self,
@@ -348,7 +376,7 @@ class DAGExecutor:
                 continue
             reason = self._blocked_reason(node)
             self.blocked.add(step_id)
-            self._results[step_id] = StepResult(
+            _blocked_result = StepResult(
                 step_id,
                 success=False,
                 elapsed=0.0,
@@ -356,6 +384,9 @@ class DAGExecutor:
                 state="blocked",
                 reason=reason,
             )
+            self._results[step_id] = _blocked_result
+            # Phase 3 (Resume): blocked も state.json に反映する
+            self._emit_step_complete(_blocked_result)
 
     def _blocked_reason(self, node: Any) -> str:
         if any(dep in self.failed for dep in getattr(node, "depends_on", ())):

@@ -1,0 +1,220 @@
+name: TDD Retry Metrics Dashboard
+
+# 目的: 過去 N 日間の TDD リトライ状況を集計し、work/dashboards/tdd-metrics.md に出力する。
+#
+# 設計メモ:
+#   - schedule: daily（UTC 02:00）+ workflow_dispatch で手動実行可能。
+#   - lookback_days は workflow_dispatch 入力で可変（デフォルト 30 日）。
+#   - 集計対象: 全ワークフロー（aas/aad/aad-web/asdw/asdw-web/abd/abdv/aag/aagd/akm/aqod/adoc）の
+#     :blocked / :human-required / :human-resolved ラベル付き Issue。
+#   - 出力: work/dashboards/tdd-metrics.md を commit。
+
+on:
+  schedule:
+    # 毎日 UTC 02:00 に実行
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: '集計対象日数（過去 N 日）。未指定時は 30 日。'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      LOOKBACK_DAYS: ${{ inputs.lookback_days || '30' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: TDD リトライメトリクス収集
+        run: |
+          set -euo pipefail
+
+          echo "集計期間: 過去 ${LOOKBACK_DAYS} 日"
+
+          # 集計開始日（updated: フィルタ用）
+          SINCE_DATE=$(date -u -d "${LOOKBACK_DAYS} days ago" "+%Y-%m-%d")
+          echo "集計開始日: ${SINCE_DATE}"
+
+          # 対象ワークフロープレフィックス一覧
+          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+
+          # データを CSV 形式で一時ファイルに書き出す（ヘッダー行）
+          METRICS_CSV="/tmp/tdd-metrics.csv"
+          echo "prefix,blocked_open,blocked_closed,human_required_open,human_required_closed,human_resolved" \
+            > "${METRICS_CSV}"
+
+          for PREFIX in ${PREFIXES}; do
+            BLOCKED_LABEL="${PREFIX}:blocked"
+            HUMAN_REQUIRED_LABEL="${PREFIX}:human-required"
+            HUMAN_RESOLVED_LABEL="${PREFIX}:human-resolved"
+
+            echo "=== ${PREFIX} 集計 ==="
+
+            BLOCKED_OPEN=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${BLOCKED_LABEL}" \
+              --state open \
+              --search "updated:>=${SINCE_DATE}" \
+              --json number \
+              --limit 1000 2>/dev/null | jq 'length' || echo 0)
+
+            BLOCKED_CLOSED=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${BLOCKED_LABEL}" \
+              --state closed \
+              --search "updated:>=${SINCE_DATE}" \
+              --json number \
+              --limit 1000 2>/dev/null | jq 'length' || echo 0)
+
+            HUMAN_REQUIRED_OPEN=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${HUMAN_REQUIRED_LABEL}" \
+              --state open \
+              --search "updated:>=${SINCE_DATE}" \
+              --json number \
+              --limit 1000 2>/dev/null | jq 'length' || echo 0)
+
+            HUMAN_REQUIRED_CLOSED=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${HUMAN_REQUIRED_LABEL}" \
+              --state closed \
+              --search "updated:>=${SINCE_DATE}" \
+              --json number \
+              --limit 1000 2>/dev/null | jq 'length' || echo 0)
+
+            HUMAN_RESOLVED=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${HUMAN_RESOLVED_LABEL}" \
+              --state all \
+              --search "updated:>=${SINCE_DATE}" \
+              --json number \
+              --limit 1000 2>/dev/null | jq 'length' || echo 0)
+
+            echo "  :blocked (open/closed): ${BLOCKED_OPEN}/${BLOCKED_CLOSED}"
+            echo "  :human-required (open/closed): ${HUMAN_REQUIRED_OPEN}/${HUMAN_REQUIRED_CLOSED}"
+            echo "  :human-resolved: ${HUMAN_RESOLVED}"
+
+            echo "${PREFIX},${BLOCKED_OPEN},${BLOCKED_CLOSED},${HUMAN_REQUIRED_OPEN},${HUMAN_REQUIRED_CLOSED},${HUMAN_RESOLVED}" \
+              >> "${METRICS_CSV}"
+          done
+
+          echo "CSV 出力完了: ${METRICS_CSV}"
+          cat "${METRICS_CSV}"
+
+      - name: ダッシュボード Markdown 生成
+        run: |
+          set -euo pipefail
+          mkdir -p work/dashboards
+
+          python3 - <<'PYEOF'
+          import csv, datetime, os
+
+          lookback = os.environ.get('LOOKBACK_DAYS', '30')
+          repo = os.environ.get('REPO', '')
+          now = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+          rows = []
+          with open('/tmp/tdd-metrics.csv', newline='') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  rows.append({k: (int(v) if k != 'prefix' else v) for k, v in row.items()})
+
+          lines = []
+          lines.append('# TDD リトライメトリクス ダッシュボード')
+          lines.append('')
+          lines.append(f'> 生成日時: {now}  ')
+          lines.append(f'> 集計期間: 過去 {lookback} 日  ')
+          lines.append(f'> リポジトリ: {repo}')
+          lines.append('')
+          lines.append('## ワークフロー別サマリー')
+          lines.append('')
+          lines.append('| ワークフロー | :blocked (open) | :blocked (総計) | :human-required (open) | :human-required (総計) | :human-resolved (総計) | エスカレーション率 |')
+          lines.append('|---|---:|---:|---:|---:|---:|---:|')
+
+          t_b_open = t_b_total = t_hr_open = t_hr_total = t_resolved = 0
+
+          for row in rows:
+              b_open  = row['blocked_open']
+              b_close = row['blocked_closed']
+              b_total = b_open + b_close
+              hr_open  = row['human_required_open']
+              hr_close = row['human_required_closed']
+              hr_total = hr_open + hr_close
+              resolved = row['human_resolved']
+              # エスカレーション率 = human_required_total / blocked_total * 100
+              # :blocked と :human-required は同一 Issue に付くため比率は通常 0–100%
+              # ただし :blocked が剥がれた後に再付与されるケースでは 100% を超える場合がある
+              esc_rate = f"{min(hr_total / b_total * 100, 100):.0f}%" if b_total > 0 else "—"
+              lines.append(f'| `{row["prefix"]}` | {b_open} | {b_total} | {hr_open} | {hr_total} | {resolved} | {esc_rate} |')
+              t_b_open  += b_open
+              t_b_total += b_total
+              t_hr_open  += hr_open
+              t_hr_total += hr_total
+              t_resolved += resolved
+
+          t_esc = f"{t_hr_total / t_b_total * 100:.0f}%" if t_b_total > 0 else "—"
+          lines.append(f'| **合計** | **{t_b_open}** | **{t_b_total}** | **{t_hr_open}** | **{t_hr_total}** | **{t_resolved}** | **{t_esc}** |')
+          lines.append('')
+          lines.append('## 凡例')
+          lines.append('')
+          lines.append('| ラベル | 説明 |')
+          lines.append('|---|---|')
+          lines.append('| `:blocked` | TDD リトライ上限（`tdd_max_retries`、既定 5）または Deploy TDD（最大 3 回）超過 |')
+          lines.append('| `:human-required` | `:blocked` 付与から SLA（既定 24h）経過後に自動昇格 |')
+          lines.append('| `:human-resolved` | 人間が解決済みと判断。付与すると `:ready` へ自動復帰 |')
+          lines.append('')
+          lines.append('## 参考リンク')
+          lines.append('')
+          lines.append('- SLA・介入基準: [`docs/hitl/escalation-sla.md`](../../docs/hitl/escalation-sla.md)')
+          lines.append('- エスカレーションワークフロー: [`.github/workflows/auto-blocked-to-human-required.yml`](../../.github/workflows/auto-blocked-to-human-required.yml)')
+          lines.append('- 復帰ワークフロー: [`.github/workflows/auto-human-resolved-to-ready.yml`](../../.github/workflows/auto-human-resolved-to-ready.yml)')
+          lines.append('')
+          lines.append('---')
+          lines.append('')
+          lines.append('*このファイルは `tdd-retry-metrics.yml` ワークフローにより自動生成されます。手動編集しないでください。*')
+
+          with open('work/dashboards/tdd-metrics.md', 'w', encoding='utf-8') as f:
+              f.write('\n'.join(lines) + '\n')
+
+          print("✅ work/dashboards/tdd-metrics.md を生成しました")
+          PYEOF
+
+      - name: ダッシュボードを commit & push
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add work/dashboards/tdd-metrics.md
+          if git diff --cached --quiet; then
+            echo "変更なし。コミットをスキップします。"
+          else
+            git commit -m "chore: update TDD retry metrics dashboard [skip ci]"
+            git push
+            echo "✅ work/dashboards/tdd-metrics.md をコミットしました"
+          fi
+
+          # GitHub Actions ステップサマリーに記録
+          {
+            echo "## TDD Retry Metrics — 実行結果"
+            echo ""
+            echo "| 項目 | 値 |"
+            echo "|---|---|"
+            echo "| 集計期間 | 過去 ${LOOKBACK_DAYS} 日 |"
+            echo "| 実行時刻 | $(date -u --iso-8601=seconds) |"
+            echo "| 出力ファイル | \`work/dashboards/tdd-metrics.md\` |"
+          } >> "${GITHUB_STEP_SUMMARY}"

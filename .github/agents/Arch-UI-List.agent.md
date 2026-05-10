@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-UI-List
 description: "画面一覧（表）と画面遷移図（Mermaid）を設計し screen-list.md を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-UI-List/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 
@@ -18,7 +22,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 ## 2) 入力（読む順序）
 最優先：
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/service-catalog.md`（機能/責務の補助）
 - `docs/catalog/data-model.md`（表示/入力項目の補助）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）

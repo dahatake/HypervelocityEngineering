@@ -2,10 +2,14 @@
 name: Dev-Microservice-Azure-DataDesign
 description: Polyglot Persistence に基づき、指定ユースケースの全エンティティに対する最適 Azure データストア選定と根拠、整合性/運用方針を docs/azure/azure-services-data.md に文書化する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -19,7 +23,7 @@ tools: ["*"]
 - 必読ファイル
   - `docs/catalog/data-model.md`
   - `docs/catalog/service-catalog.md`
-  - `docs/catalog/domain-analytics.md`
+  - `docs/domain-analytics.md`
   - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 任意（存在すれば参照）
   - `.github/skills/planning/agent-common-preamble/references/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）

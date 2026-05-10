@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from .workflow_registry import WorkflowDef
 
@@ -41,6 +41,7 @@ def _get_default_akm_target_files(sources: str) -> str:
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
+    "ard": "Auto Requirement Definition",
     "aas": "Architecture Design",
     "aad-web": "Web App Design",
     "asdw-web": "Web App Dev & Deploy",
@@ -58,6 +59,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
 
 # ワークフロー略称（Issue タイトルプレフィックス: [AAS], [AAD] 等）
 _WORKFLOW_PREFIX: Dict[str, str] = {
+    "ard": "ARD",
     "aas": "AAS",
     "aad-web": "AAD-WEB",
     "asdw-web": "ASDW-WEB",
@@ -72,6 +74,166 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "aad": "AAD-WEB",
     "asdw": "ASDW-WEB",
 }
+
+# ---------------------------------------------------------------------------
+# Agentic Retrieval 質問項目定義（Phase 2）
+# ---------------------------------------------------------------------------
+# 各エントリのキーは Issue Form YAML の `id` と一致させる（Phase 7 同期テスト前提）。
+# applies_to: 質問が対象となるワークフロー ID のリスト（正規 ID のみ）。
+# kind: dropdown / checkboxes / textarea / checkbox
+# options: dropdown/checkboxes の選択肢リスト（kind=textarea/checkbox では省略）
+# default: dropdown の場合は選択肢リストのインデックス（0-based）、
+#          checkboxes の場合は list[str]（既定で選択済みの選択肢リスト）、
+#          checkbox の場合は bool、textarea の場合は文字列。
+_AGENTIC_RETRIEVAL_QUESTIONS: Dict[str, Any] = {
+    "enable_agentic_retrieval": {
+        "label": "Agentic Retrieval を使用する",
+        "description": (
+            "Chat-Bot / AI Agent を機能要件に含むアプリ向け。"
+            "`Arch-AgenticRetrieval-Detail` Custom Agent の自動判定結果に従います。"
+            "明示的な上書きも可能です。"
+            "「しない」を選ぶと AAD-WEB / ASDW-WEB の Agentic Retrieval 関連ステップは生成されません。"
+        ),
+        "kind": "dropdown",
+        "options": ["する", "しない", "自動判定に従う"],
+        "default": 2,
+        "applies_to": ["aad-web", "asdw-web"],
+    },
+    "agentic_data_source_modes": {
+        "label": "データソース投入方式",
+        "description": (
+            "Indexer 対応データソースは保守性の観点から Indexer を優先します。"
+            "Indexer 非対応のデータは Push API。両方の併用も可。"
+            "対応一覧は実行時に Microsoft Learn MCP で確認します。"
+        ),
+        "kind": "checkboxes",
+        "options": ["Indexer (Pull)", "Push API"],
+        "default": ["Indexer (Pull)"],
+        "applies_to": ["asdw-web"],
+    },
+    "foundry_mcp_integration": {
+        "label": "Microsoft Foundry 連携（Remote MCP Server）",
+        "description": (
+            "「する」を選ぶと Foundry プロジェクトの新規作成・モデルの Global Deployment・"
+            "MCP 接続設定までを IaC が自動構成します。"
+        ),
+        "kind": "dropdown",
+        "options": ["する", "しない"],
+        "default": 0,
+        "applies_to": ["aad-web", "asdw-web"],
+    },
+    "agentic_data_sources_hint": {
+        "label": "想定データソース（任意）",
+        "description": (
+            "起点となるデータソース想定を 1 行 1 件で記述。空でも可。"
+            "例: `Blob: rg-xxx/sa-docs/raw`"
+        ),
+        "kind": "textarea",
+        "default": "",
+        "applies_to": ["asdw-web"],
+    },
+    "agentic_existing_design_diff_only": {
+        "label": "既存設計の差分更新",
+        "description": (
+            "チェック時、`docs/azure/agentic-retrieval/` の既存設計を上書きせず差分更新します。"
+        ),
+        "kind": "checkbox",
+        "default": False,
+        "applies_to": ["asdw-web"],
+    },
+    "foundry_sku_fallback_policy": {
+        "label": "Foundry モデル SKU フォールバック",
+        "description": (
+            "Global Standard クォータ枯渇時に Standard SKU へフォールバックを許容するか。"
+            "`cli-evidence.md` に根拠記録されます。"
+        ),
+        "kind": "dropdown",
+        "options": ["Global 必須（Standard 拒否）", "Standard 許容"],
+        "default": 1,
+        "applies_to": ["asdw-web"],
+    },
+}
+
+# _AGENTIC_RETRIEVAL_QUESTIONS に存在するキーのうち applies_to に含めるワークフロー毎のリスト
+_AGENTIC_RETRIEVAL_KEYS_FOR: Dict[str, List[str]] = {
+    "aad-web": [
+        k for k, v in _AGENTIC_RETRIEVAL_QUESTIONS.items()
+        if "aad-web" in v["applies_to"]
+    ],
+    "asdw-web": [
+        k for k, v in _AGENTIC_RETRIEVAL_QUESTIONS.items()
+        if "asdw-web" in v["applies_to"]
+    ],
+}
+
+
+def format_agentic_retrieval_block(workflow_id: str) -> str:
+    """指定ワークフローに適用される Agentic Retrieval 質問一覧を Markdown で返す。
+
+    Phase 7 の同期テストが将来追加可能な構造になっている。
+
+    Args:
+        workflow_id: "aad-web" または "asdw-web"（後方互換エイリアスも可）。
+
+    Returns:
+        Agentic Retrieval 質問ブロックの Markdown 文字列。
+        対象ワークフローでない場合は空文字列。
+    """
+    # 後方互換エイリアス解決
+    wf_id = {"aad": "aad-web", "asdw": "asdw-web"}.get(workflow_id, workflow_id)
+    keys = _AGENTIC_RETRIEVAL_KEYS_FOR.get(wf_id)
+    if not keys:
+        return ""
+    lines: List[str] = ["## Agentic Retrieval 設定\n"]
+    for key in keys:
+        q = _AGENTIC_RETRIEVAL_QUESTIONS[key]
+        label = q["label"]
+        desc = q["description"]
+        kind = q["kind"]
+        default = q["default"]
+        lines.append(f"### {label}\n")
+        lines.append(f"{desc}\n")
+        if kind == "dropdown":
+            opts = q["options"]
+            for i, opt in enumerate(opts):
+                marker = "**（既定）**" if i == default else ""
+                lines.append(f"- {opt}{marker}")
+        elif kind == "checkboxes":
+            opts = q["options"]
+            defaults_list = default if isinstance(default, list) else []
+            for opt in opts:
+                marker = "**（既定）**" if opt in defaults_list else ""
+                lines.append(f"- {opt}{marker}")
+        elif kind == "checkbox":
+            default_str = "✓（既定）" if default else "✗（既定）"
+            lines.append(f"デフォルト: {default_str}")
+        elif kind == "textarea":
+            lines.append(f"デフォルト: {default!r}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def normalize_agentic_retrieval_answers(answers: dict) -> dict:
+    """Agentic Retrieval 質問の回答を正規化する。
+
+    Q1（enable_agentic_retrieval）が "no" または日本語 UI 値 "しない" のとき、
+    Q3（foundry_mcp_integration）と Q6（foundry_sku_fallback_policy）を強制的に
+    無効化する。内部値（"no"）と UI 表示値（"しない"）の両方を受け付ける。
+
+    Args:
+        answers: hve CLI ウィザードまたは Issue Form から収集したフィールド辞書。
+                 すべてのキーが存在しなくてもよい。
+
+    Returns:
+        正規化後の辞書（元の辞書は変更しない）。
+    """
+    result = dict(answers)
+    enable = result.get("enable_agentic_retrieval", "auto")
+    # "no"（内部値）または "しない"（UI 表示値）のどちらでも無効化する
+    if enable in ("no", "しない"):
+        result["foundry_mcp_integration"] = False
+        result["foundry_sku_fallback_policy"] = "standard_allowed"
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +367,10 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
             import logging
             logging.warning(f"tdd_max_retries '{raw}' を整数変換できません。デフォルト 5 を使用します")
             params["tdd_max_retries"] = 5
+    if "create_remote_mcp_server" in wf.params:
+        params["create_remote_mcp_server"] = _prompt_yes_no(
+            "API 作成時に Remote MCP Server 実装を追加する？", default=True
+        )
 
     # AKM 固有パラメータ
     if "sources" in wf.params:
@@ -389,6 +555,9 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     tdd_max_retries = params.get("tdd_max_retries", 5)
     parts.append(f"<!-- tdd-max-retries: {tdd_max_retries} -->")
 
+    create_remote_mcp_server = _get_bool_param_str(params, "create_remote_mcp_server", default=True)
+    parts.append(f"<!-- create-remote-mcp-server: {create_remote_mcp_server} -->")
+
     return "\n".join(parts)
 
 
@@ -483,6 +652,151 @@ def _build_completion_instruction(label_prefix: str, execution_mode: str) -> str
     )
 
 
+def _normalize_bool(value, default: bool = True) -> bool:
+    """様々な型・文字列表現の値を Python の bool に正規化する。
+
+    対応する値:
+        - ``True`` / ``False``
+        - ``"true"`` / ``"false"``
+        - ``"1"`` / ``"0"``
+        - ``"yes"`` / ``"no"``
+        - ``"y"`` / ``"n"``
+        - ``"on"`` / ``"off"``
+        - ``"作成する"`` / ``"作成しない"``
+
+    未対応値・``None`` は ``default`` を返す。
+
+    Args:
+        value: 正規化する値。
+        default: 不明値のデフォルト。
+
+    Returns:
+        正規化された bool 値。
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    s = str(value).strip().lower()
+    if s in ("true", "1", "yes", "y", "on", "作成する"):
+        return True
+    if s in ("false", "0", "no", "n", "off", "作成しない"):
+        return False
+    return default
+
+
+def _get_bool_param_str(params: dict, key: str, default: bool = True) -> str:
+    """params から bool 値を取得し、小文字の ``"true"`` / ``"false"`` 文字列に変換する。
+
+    Args:
+        params: パラメータ辞書。
+        key: 取得するキー名。
+        default: キーが存在しない場合のデフォルト値。
+
+    Returns:
+        ``"true"`` または ``"false"`` のいずれかの文字列。
+    """
+    raw = params.get(key)
+    if raw is None:
+        return str(default).lower()
+    return str(_normalize_bool(raw, default=default)).lower()
+
+
+def _build_remote_mcp_server_section(create_remote_mcp_server: bool) -> str:
+    """Step.2.5 テンプレートの ``{remote_mcp_server_section}`` を展開する。
+
+    Args:
+        create_remote_mcp_server: ``True`` のとき Remote MCP Server 実装指示セクションを返す。
+            ``False`` のときは空文字を返す（プレースホルダを除去）。
+
+    Returns:
+        Remote MCP Server 実装指示セクションの Markdown 文字列。
+        ``create_remote_mcp_server=False`` のときは空文字列。
+    """
+    if not create_remote_mcp_server:
+        return ""
+    return (
+        "\n\n## Remote MCP Server 実装\n\n"
+        "この Step では、API を通常の REST API として実装・デプロイするだけでなく、"
+        "Remote MCP Server としても公開できるようにしてください。\n\n"
+        "### 基本方針\n\n"
+        "- REST API のビジネスロジックと MCP Server 公開層を疎結合にしてください。\n"
+        "- REST API の既存 contract を壊さないでください。\n"
+        "- MCP Server は API のユースケースを Tool / Resource / Prompt として公開してください。\n"
+        "- MCP 固有の入出力変換は adapter 層に閉じ込めてください。\n"
+        "- MCP SDK、Transport、Compute、追加 Cloud Service は実装対象の環境に応じて選定してください。\n\n"
+        "### 実装時の検討事項\n\n"
+        "- 対象 API のうち、どの操作を MCP Tool として公開するか\n"
+        "- MCP Tool の input schema / output schema\n"
+        "- 認証・認可方式\n"
+        "- CORS / network boundary / public endpoint の扱い\n"
+        "- ローカル実行と Cloud 実行の差分\n"
+        "- ログ、監視、エラーハンドリング\n"
+        "- CI/CD でのデプロイと smoke test\n"
+        "- 関連ドキュメントへの接続方法記載\n\n"
+        "### Azure 上で実装する場合の考慮事項\n\n"
+        "Azure に REST API がホスティングされる場合は、選択された Compute 環境に合わせて"
+        "最適な MCP 実装方式を選定してください。\n\n"
+        "例:\n\n"
+        "- Azure Functions の場合:\n"
+        "  - HTTP Trigger を使った MCP endpoint\n"
+        "  - 必要に応じて Azure Functions に適した MCP SDK または HTTP adapter を利用\n"
+        "- Azure App Service の場合:\n"
+        "  - Web アプリケーション内に MCP endpoint を追加\n"
+        "  - 既存 REST route と MCP route を分離\n"
+        "- Azure Container Apps の場合:\n"
+        "  - MCP Server を sidecar または同一 service 内 endpoint として構成\n"
+        "  - ingress / scaling / revision 管理を考慮\n"
+        "- API Management を利用する場合:\n"
+        "  - REST API と MCP endpoint の公開経路を整理\n"
+        "  - 認証、rate limit、logging policy を検討\n\n"
+        "### 完了条件\n\n"
+        "- REST API としての通常利用が可能である\n"
+        "- Remote MCP Server として接続可能である\n"
+        "- MCP Tool / Resource / Prompt の定義が実装されている\n"
+        "- REST API と MCP adapter が疎結合である\n"
+        "- 認証・認可・ログ・エラーハンドリングが整理されている\n"
+        "- 関連ドキュメントに MCP endpoint、利用方法、設定方法が記載されている"
+    )
+
+
+def _build_remote_mcp_server_design_section(create_remote_mcp_server: bool) -> str:
+    """Step.2.2 テンプレートの ``{remote_mcp_server_design_section}`` を展開する。
+
+    設計フェーズ向けの Remote MCP Server 設計観点セクションを生成する。
+    技術選定（SDK / Transport / Cloud Compute）は固定せず、設計観点のみを記述する。
+
+    Args:
+        create_remote_mcp_server: ``True`` のとき Remote MCP Server 設計観点セクションを返す。
+            ``False`` のときは空文字を返す（プレースホルダを除去）。
+
+    Returns:
+        Remote MCP Server 設計観点セクションの Markdown 文字列。
+        ``create_remote_mcp_server=False`` のときは空文字列。
+    """
+    if not create_remote_mcp_server:
+        return ""
+    return (
+        "\n\n## Remote MCP Server 設計観点\n\n"
+        "`create-remote-mcp-server` が `true` のため、対象 API を Remote MCP Server として公開するための設計観点を含めてください。\n\n"
+        "### 設計に含めること\n\n"
+        "- どの API ユースケースを MCP Tool / Resource / Prompt として公開するか\n"
+        "- MCP Tool の入力スキーマ、出力スキーマ\n"
+        "- REST API と MCP 公開層の責務分離\n"
+        "- MCP 固有の入出力変換を adapter 層に閉じ込める方針\n"
+        "- 認証・認可方針\n"
+        "- エラー応答方針\n"
+        "- ログ・監視方針\n"
+        "- 実行環境非依存のインターフェース定義\n"
+        "- 実装フェーズで SDK / Transport / Cloud Service を選定する前提\n\n"
+        "### 設計で固定しないこと\n\n"
+        "- 特定 MCP SDK\n"
+        "- 特定 Transport\n"
+        "- 特定 Cloud Compute\n"
+        "- 特定 Cloud Provider 固有サービス"
+    )
+
+
 def render_template(
     template_path: str,
     root_issue_num: int,
@@ -512,6 +826,20 @@ def render_template(
     body = body.replace("{resource_group}", params.get("resource_group", ""))
     body = body.replace("{usecase_id}", params.get("usecase_id", ""))
     body = body.replace("{tdd_max_retries}", str(params.get("tdd_max_retries", 5)))
+    body = body.replace(
+        "{remote_mcp_server_section}",
+        _build_remote_mcp_server_section(
+            _normalize_bool(params.get("create_remote_mcp_server"), default=True)
+        ),
+    )
+
+    # AAD-WEB 固有プレースホルダ
+    body = body.replace(
+        "{remote_mcp_server_design_section}",
+        _build_remote_mcp_server_design_section(
+            _normalize_bool(params.get("create_remote_mcp_server"), default=True)
+        ),
+    )
 
     # 推薦アーキテクチャ スコープセクション（aad-web / asdw-web / abd / abdv 共通）
     body = body.replace(
@@ -540,6 +868,41 @@ def render_template(
     body = body.replace("{aqod_target_scope}", params.get("target_scope", "original-docs/"))
     body = body.replace("{aqod_depth}", params.get("depth", "standard"))
     body = body.replace("{aqod_focus_areas}", params.get("focus_areas", ""))
+
+    # ARD 固有プレースホルダ（未入力時も placeholder が残らないようにする）
+    _ard_company_name = (params.get("company_name", "") or "").strip() or "未指定"
+    _ard_target_business = (params.get("target_business", "") or "").strip() or "未指定"
+    body = body.replace("{company_name}", _ard_company_name)
+    body = body.replace("{target_business}", _ard_target_business)
+
+    # ARD: orchestrator/__main__ で既定値が必ず設定されるが、
+    # 直接 render_template を呼ぶ単体テストや非ARDワークフローからの参照に備えて
+    # ここで防御的に既定値を埋める（既定値は ARD ウィザード/CLI 既定と一致）。
+    _ard_survey_period_years = str(
+        params.get("survey_period_years", "") or "30"
+    ).strip()
+    body = body.replace("{survey_period_years}", _ard_survey_period_years)
+
+    _ard_survey_base_date = (params.get("survey_base_date", "") or "").strip()
+    if not _ard_survey_base_date:
+        import datetime as _dt
+        _ard_survey_base_date = _dt.date.today().strftime("%Y-%m-%d")
+    body = body.replace("{survey_base_date}", _ard_survey_base_date)
+
+    body = body.replace(
+        "{target_region}",
+        (params.get("target_region", "") or "").strip() or "グローバル全体",
+    )
+    body = body.replace(
+        "{analysis_purpose}",
+        (params.get("analysis_purpose", "") or "").strip() or "中長期成長戦略の立案",
+    )
+
+    _ard_attached = params.get("attached_docs", "")
+    if isinstance(_ard_attached, list):
+        _ard_attached = ", ".join(str(x) for x in _ard_attached)
+    _ard_attached = (_ard_attached or "").strip() or "添付なし"
+    body = body.replace("{attached_docs}", _ard_attached)
 
     # ADOC 固有プレースホルダ
     body = body.replace("{target_dirs}", params.get("target_dirs", ""))
@@ -647,6 +1010,9 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     lines.append(f"<!-- auto-context-review: {auto_context_review} -->")
     lines.append(f"<!-- auto-qa: {auto_qa} -->")
     lines.append(f"<!-- auto-merge: {auto_merge} -->")
+    if "create_remote_mcp_server" in wf.params:
+        create_remote_mcp_server = _get_bool_param_str(params, "create_remote_mcp_server", default=True)
+        lines.append(f"<!-- create-remote-mcp-server: {create_remote_mcp_server} -->")
     lines.append("")
     lines.append(f"ワークフロー: **{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}**")
     lines.append(f"ブランチ: `{branch}`")

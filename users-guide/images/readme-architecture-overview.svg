@@ -1,182 +1,151 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" role="img" aria-labelledby="title desc">
-  <title id="title">README用アーキテクチャ概要図</title>
-  <desc id="desc">入力情報源、knowledgeを中核とした反復精緻化、3つの実行方式とDAG、Custom Agent群、出力成果物の関係図。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 960" role="img" aria-labelledby="title desc">
+  <title id="title">README 用アーキテクチャ概要図</title>
+  <desc id="desc">Issue Template と hve CLI を入口に、HVE Cloud Agent Orchestrator Dispatcher と workflow registry が Workflow を選択し、Custom Agent が knowledge、docs、src、qa、Azure、PR を生成する全体図。凡例と読み順を含む。</desc>
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
     </marker>
     <style>
-      text { font-family: system-ui, "Segoe UI", -apple-system, Arial, sans-serif; fill: #1f2937; }
+      text { font-family: "Noto Sans CJK JP", "Noto Sans JP", "IPAexGothic", "IPAGothic", "Hiragino Sans", "Yu Gothic", "Meiryo", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; fill: #1f2937; }
       .title { font-size: 30px; font-weight: 700; }
       .subtitle { font-size: 14px; fill: #475569; }
-      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.4; rx: 12; }
-      .node { stroke-width: 1.4; rx: 10; }
-      .file { fill: #95A5A6; stroke: #5d6d73; }
-      .arch { fill: #4A90D9; stroke: #1f3a5a; }
-      .dev { fill: #50C878; stroke: #1b5e20; }
-      .doc { fill: #9B59B6; stroke: #4a235a; }
-      .qa { fill: #E67E22; stroke: #7e3d00; }
-      .km { fill: #F39C12; stroke: #7a4f00; stroke-width: 2.2; }
-      .light { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; rx: 8; }
-      .h { font-size: 17px; font-weight: 700; }
-      .t { font-size: 12.5px; }
-      .t-bold { font-size: 12.5px; font-weight: 700; }
-      .light-text { fill: #ffffff; font-size: 12.5px; font-weight: 700; }
-      .link { stroke: #334155; stroke-width: 1.9; fill: none; marker-end: url(#arrow); }
-      .link-dash { stroke: #1d4ed8; stroke-width: 1.9; stroke-dasharray: 8 5; fill: none; marker-end: url(#arrow); }
-      .legend { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; rx: 10; }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 16; }
+      .card { rx: 12; ry: 12; stroke-width: 1.5; }
+      .entry { fill: #e0f2fe; stroke: #0369a1; }
+      .workflow { fill: #dbeafe; stroke: #1d4ed8; }
+      .store { fill: #fef3c7; stroke: #d97706; }
+      .agent { fill: #ede9fe; stroke: #7c3aed; }
+      .output { fill: #dcfce7; stroke: #15803d; }
+      .ops { fill: #fff7ed; stroke: #ea580c; }
+      .label { font-size: 17px; font-weight: 700; }
+      .body { font-size: 12.5px; }
+      .small { font-size: 11.5px; fill: #475569; }
+      .arrow { fill: none; stroke: #334155; stroke-width: 2.4; marker-end: url(#arrow); }
+      .arrow-dash { fill: none; stroke: #0f766e; stroke-width: 2.4; stroke-dasharray: 8 6; marker-end: url(#arrow); }
+      .legend { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; rx: 12; }
+      .order { fill: #0f172a; }
     </style>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="920" fill="transparent"/>
-  <text x="30" y="48" class="title">アーキテクチャ概要（入力 / 処理 / 出力）</text>
-  <text x="30" y="72" class="subtitle">knowledge/ を中核に、3方式の実行オーケストレーションと Custom Agent 群が docs/src/Azure/PR を生成</text>
+  <rect x="0" y="0" width="1280" height="960" fill="#ffffff"/>
+  <text x="32" y="48" class="title">HVE の全体像（入口 → Workflow → Custom Agent → 成果物）</text>
+  <text x="32" y="74" class="subtitle">README では実装確認済みの入口・Workflow ID・主要ディレクトリだけを要約しています</text>
 
-  <!-- Panels -->
-  <rect x="20" y="90" width="280" height="730" class="panel"/>
-  <text x="40" y="118" class="h">入力（情報源）</text>
+  <rect x="24" y="104" width="300" height="700" class="panel"/>
+  <text x="44" y="134" class="label">1. 入口 / 入力</text>
 
-  <rect x="320" y="90" width="560" height="730" class="panel"/>
-  <text x="340" y="118" class="h">処理（中核ストア + 実行方式 + DAG）</text>
+  <rect x="44" y="162" width="260" height="92" class="card entry"/>
+  <text x="62" y="190" class="label">Issue Template</text>
+  <text x="62" y="214" class="body">`.github/ISSUE_TEMPLATE/*.yml`</text>
+  <text x="62" y="234" class="small">12 種のフォームで Web 実行を開始</text>
 
-  <rect x="900" y="90" width="280" height="730" class="panel"/>
-  <text x="920" y="118" class="h">出力（成果物）</text>
+  <rect x="44" y="278" width="260" height="92" class="card entry"/>
+  <text x="62" y="306" class="label">hve CLI</text>
+  <text x="62" y="330" class="body">`run` / `orchestrate` / `resume`</text>
+  <text x="62" y="350" class="small">ローカル PC から同じ Workflow DAG を実行</text>
 
-  <!-- Input nodes -->
-  <rect x="40" y="150" width="240" height="86" class="node file"/>
-  <text x="58" y="184" class="t-bold">original-docs/</text>
-  <text x="58" y="206" class="t">既存の要求定義書・設計書（原本）</text>
+  <rect x="44" y="394" width="260" height="88" class="card store"/>
+  <text x="62" y="422" class="label">original-docs/</text>
+  <text x="62" y="446" class="body">既存の要求定義・設計原本</text>
 
-  <rect x="40" y="264" width="240" height="86" class="node file"/>
-  <text x="58" y="298" class="t-bold">qa/</text>
-  <text x="58" y="320" class="t">質問票（開発中 + aqod 自動生成）</text>
+  <rect x="44" y="506" width="260" height="88" class="card store"/>
+  <text x="62" y="534" class="label">qa/</text>
+  <text x="62" y="558" class="body">質問票・回答済み QA ドキュメント</text>
 
-  <rect x="40" y="378" width="240" height="86" class="node file"/>
-  <text x="58" y="412" class="t-bold">Work IQ / 外部データソース</text>
-  <text x="58" y="434" class="t">方式3のオプション（MCP経由参照）</text>
+  <rect x="44" y="618" width="260" height="112" class="card ops"/>
+  <text x="62" y="646" class="label">補助入力</text>
+  <text x="62" y="670" class="body">`docs/`, `src/`, `sample/`, `data/`</text>
+  <text x="62" y="692" class="small">Workflow に応じて既存成果物やサンプルを参照</text>
 
-  <!-- Core knowledge cycle -->
-  <rect x="340" y="154" width="172" height="70" class="node qa"/>
-  <text x="360" y="184" class="t-bold">aqod</text>
-  <text x="360" y="205" class="t">original-docs→qa</text>
+  <rect x="352" y="104" width="560" height="700" class="panel"/>
+  <text x="372" y="134" class="label">2. オーケストレーション</text>
 
-  <rect x="532" y="154" width="172" height="70" class="node km"/>
-  <text x="552" y="184" class="t-bold">akm</text>
-  <text x="552" y="205" class="t">qa/original-docs→knowledge</text>
+  <rect x="372" y="164" width="520" height="88" class="card workflow"/>
+  <text x="390" y="192" class="label">HVE Cloud Agent Orchestrator Dispatcher</text>
+  <text x="390" y="216" class="body">`auto-orchestrator-dispatcher.yml`</text>
+  <text x="390" y="236" class="small">Issue ラベルから対象 Workflow を選択して reusable workflow に振り分け</text>
 
-  <rect x="724" y="140" width="136" height="98" class="node km"/>
-  <text x="742" y="174" class="t-bold">knowledge/</text>
-  <text x="742" y="196" class="t">D01〜D21</text>
-  <text x="742" y="216" class="t">全Agent参照</text>
+  <rect x="372" y="278" width="520" height="114" class="card workflow"/>
+  <text x="390" y="306" class="label">Workflow registry（11 ID）</text>
+  <text x="390" y="330" class="body">`ard`, `aas`, `aad-web`, `asdw-web`, `abd`, `abdv`</text>
+  <text x="390" y="352" class="body">`aag`, `aagd`, `akm`, `aqod`, `adoc`</text>
+  <text x="390" y="374" class="small">`aad` / `asdw` は後方互換エイリアス</text>
 
-  <path d="M 280 193 C 305 193, 316 189, 340 189" class="link"/>
-  <path d="M 280 307 C 406 307, 470 257, 532 189" class="link"/>
-  <path d="M 512 189 C 520 189, 524 189, 532 189" class="link"/>
-  <path d="M 704 189 C 714 189, 716 189, 724 189" class="link"/>
-  <path d="M 860 189 C 870 189, 872 260, 356 260" class="link-dash"/>
-  <path d="M 340 224 C 250 248, 180 248, 160 264" class="link-dash"/>
-  <text x="546" y="274" class="t" fill="#1d4ed8">反復精緻化: aqod → qa → akm → knowledge</text>
+  <rect x="372" y="420" width="250" height="104" class="card store"/>
+  <text x="390" y="448" class="label">AQOD → AKM</text>
+  <text x="390" y="472" class="body">`original-docs/` と `qa/` を循環参照</text>
+  <text x="390" y="494" class="small">質問票生成 → 回答統合 → knowledge 更新</text>
 
-  <!-- 3 execution modes -->
-  <rect x="340" y="296" width="520" height="70" class="light"/>
-  <text x="356" y="325" class="t-bold">方式1: Copilot cloud agent 手動実行</text>
-  <text x="356" y="346" class="t">Issue → 手動 Agent assign</text>
+  <rect x="642" y="420" width="250" height="104" class="card store"/>
+  <text x="660" y="448" class="label">knowledge/</text>
+  <text x="660" y="472" class="body">D01〜D21 業務要件ドキュメント</text>
+  <text x="660" y="494" class="small">設計・実装 Agent の共通コンテキスト</text>
 
-  <rect x="340" y="376" width="520" height="70" class="light"/>
-  <text x="356" y="405" class="t-bold">方式2: ワークフローオーケストレーション Web</text>
-  <text x="356" y="426" class="t">Issue Template → Bootstrap → Sub Issues 自動生成 → Copilot 自動 assign</text>
+  <rect x="372" y="552" width="520" height="222" class="card agent"/>
+  <text x="390" y="580" class="label">Custom Agent 群</text>
+  <text x="390" y="604" class="body">`Arch-*`: 分析・設計</text>
+  <text x="390" y="626" class="body">`Dev-*`: 実装・デプロイ</text>
+  <text x="390" y="648" class="body">`Doc-*`: 技術文書生成</text>
+  <text x="390" y="670" class="body">`QA-*`: 品質確認・レビュー</text>
+  <text x="390" y="692" class="body">`KnowledgeManager`, `E2ETesting-Playwright`</text>
+  <text x="390" y="720" class="small">Workflow / Step ごとに `.github/agents/*.agent.md` を割り当て</text>
+  <text x="390" y="742" class="small">同じ Agent 定義を Web 実行と CLI 実行で共有</text>
 
-  <rect x="340" y="456" width="520" height="70" class="light"/>
-  <text x="356" y="485" class="t-bold">方式3: ワークフローオーケストレーション ローカル</text>
-  <text x="356" y="506" class="t">hve Python パッケージ → Copilot CLI SDK → DAG 並列実行</text>
+  <rect x="940" y="104" width="316" height="700" class="panel"/>
+  <text x="960" y="134" class="label">3. 成果物 / 出力先</text>
 
-  <path d="M 280 421 C 306 421, 318 491, 340 491" class="link-dash"/>
-  <text x="46" y="494" class="t" fill="#1d4ed8">方式3のみ外部データ参照</text>
+  <rect x="960" y="170" width="276" height="84" class="card output"/>
+  <text x="978" y="198" class="label">docs/</text>
+  <text x="978" y="222" class="body">設計ドキュメント</text>
 
-  <!-- Supporting workflows -->
-  <rect x="340" y="540" width="168" height="44" class="node km"/>
-  <text x="356" y="567" class="t-bold">補助: akm</text>
-  <rect x="520" y="540" width="168" height="44" class="node qa"/>
-  <text x="536" y="567" class="t-bold">補助: aqod</text>
-  <rect x="700" y="540" width="160" height="44" class="node doc"/>
-  <text x="716" y="567" class="light-text">補助: adoc</text>
+  <rect x="960" y="272" width="276" height="84" class="card output"/>
+  <text x="978" y="300" class="label">src/ / test/</text>
+  <text x="978" y="324" class="body">アプリ実装・テスト</text>
 
-  <!-- DAG steps -->
-  <rect x="340" y="598" width="520" height="210" class="light"/>
-  <text x="356" y="624" class="t-bold">ワークフロー（DAGステップ群）</text>
+  <rect x="960" y="374" width="276" height="84" class="card output"/>
+  <text x="978" y="402" class="label">knowledge/ / qa/</text>
+  <text x="978" y="426" class="body">要件知識・質問票</text>
 
-  <rect x="356" y="640" width="150" height="56" class="node arch"/>
-  <text x="374" y="664" class="light-text">01 要求定義</text>
-  <text x="374" y="682" class="light-text">（手動）</text>
+  <rect x="960" y="476" width="276" height="84" class="card output"/>
+  <text x="978" y="504" class="label">docs-generated/</text>
+  <text x="978" y="528" class="body">ソースコード由来の技術文書</text>
 
-  <rect x="530" y="640" width="180" height="56" class="node arch"/>
-  <text x="548" y="664" class="light-text">02 アプリ設計（aas）</text>
+  <rect x="960" y="578" width="276" height="84" class="card output"/>
+  <text x="978" y="606" class="label">Azure / infra/</text>
+  <text x="978" y="630" class="body">デプロイ・リソース定義</text>
 
-  <rect x="356" y="724" width="158" height="66" class="node arch"/>
-  <text x="374" y="750" class="light-text">03/05 Microservice</text>
-  <text x="374" y="770" class="light-text">aad / asdw</text>
+  <rect x="960" y="680" width="276" height="84" class="card output"/>
+  <text x="978" y="708" class="label">Issue / PR / レビュー</text>
+  <text x="978" y="732" class="body">GitHub 上の進捗管理とマージ</text>
 
-  <rect x="530" y="724" width="158" height="66" class="node arch"/>
-  <text x="548" y="750" class="light-text">04/06 Batch</text>
-  <text x="548" y="770" class="light-text">abd / abdv</text>
+  <circle cx="52" cy="150" r="14" class="order"/>
+  <text x="47" y="155" fill="#ffffff" font-size="12" font-weight="700">1</text>
+  <circle cx="380" cy="150" r="14" class="order"/>
+  <text x="375" y="155" fill="#ffffff" font-size="12" font-weight="700">2</text>
+  <circle cx="948" cy="150" r="14" class="order"/>
+  <text x="943" y="155" fill="#ffffff" font-size="12" font-weight="700">3</text>
 
-  <rect x="704" y="724" width="146" height="66" class="node arch"/>
-  <text x="722" y="750" class="light-text">07/08 AI Agent</text>
-  <text x="722" y="770" class="light-text">設計→実装（手動）</text>
+  <path d="M 304 208 C 330 208, 340 208, 372 208" class="arrow"/>
+  <path d="M 304 324 C 330 324, 340 324, 372 324" class="arrow"/>
+  <path d="M 304 438 C 334 438, 340 462, 372 462" class="arrow"/>
+  <path d="M 304 550 C 336 550, 340 476, 372 476" class="arrow"/>
+  <path d="M 622 472 C 632 472, 634 472, 642 472" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 212, 960 212" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 314, 960 314" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 416, 960 416" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 518, 960 518" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 620, 960 620" class="arrow"/>
+  <path d="M 892 334 C 926 334, 934 722, 960 722" class="arrow"/>
+  <path d="M 768 524 C 768 540, 768 540, 768 552" class="arrow-dash"/>
 
-  <path d="M 506 668 C 514 668, 522 668, 530 668" class="link"/>
-  <path d="M 620 696 C 620 708, 435 708, 435 724" class="link"/>
-  <path d="M 620 696 C 620 708, 609 708, 609 724" class="link"/>
-  <path d="M 620 696 C 620 708, 777 708, 777 724" class="link"/>
-
-  <!-- Custom Agent categories -->
-  <rect x="900" y="150" width="280" height="208" class="light"/>
-  <text x="916" y="176" class="t-bold">Custom Agent（64 + KnowledgeManager 1 = 65）</text>
-  <rect x="916" y="192" width="14" height="14" class="node arch"/><text x="938" y="204" class="t">Arch-*（23）: 設計 → docs/</text>
-  <rect x="916" y="218" width="14" height="14" class="node dev"/><text x="938" y="230" class="t">Dev-*（17）: 実装 → src/ + Azure</text>
-  <rect x="916" y="244" width="14" height="14" class="node doc"/><text x="938" y="256" class="t">Doc-*（19）: 文書生成 → docs-generated/</text>
-  <rect x="916" y="270" width="14" height="14" class="node qa"/><text x="938" y="282" class="t">QA-*（5）: 品質確認</text>
-  <rect x="916" y="296" width="14" height="14" class="node km"/><text x="938" y="308" class="t">KnowledgeManager（1）: knowledge管理</text>
-
-  <path d="M 860 491 C 880 491, 890 260, 900 260" class="link"/>
-  <path d="M 792 189 C 872 189, 880 188, 900 188" class="link-dash"/>
-
-  <!-- Outputs -->
-  <rect x="920" y="392" width="240" height="70" class="node file"/>
-  <text x="938" y="421" class="t-bold">docs/</text>
-  <text x="938" y="442" class="t">設計ドキュメント</text>
-
-  <rect x="920" y="472" width="240" height="70" class="node file"/>
-  <text x="938" y="501" class="t-bold">src/</text>
-  <text x="938" y="522" class="t">ソースコード</text>
-
-  <rect x="920" y="552" width="240" height="70" class="node file"/>
-  <text x="938" y="581" class="t-bold">docs-generated/</text>
-  <text x="938" y="602" class="t">ソースコード由来の技術文書</text>
-
-  <rect x="920" y="632" width="240" height="70" class="node dev"/>
-  <text x="938" y="661" class="light-text">Azure</text>
-  <text x="938" y="682" class="light-text">デプロイ / リソース作成</text>
-
-  <rect x="920" y="712" width="240" height="70" class="node qa"/>
-  <text x="938" y="741" class="t-bold">PR</text>
-  <text x="938" y="762" class="t">レビュー → マージ</text>
-
-  <path d="M 1180 204 C 1188 204, 1190 428, 1160 428" class="link"/>
-  <path d="M 1180 230 C 1188 230, 1190 508, 1160 508" class="link"/>
-  <path d="M 1180 256 C 1188 256, 1190 588, 1160 588" class="link"/>
-  <path d="M 1180 282 C 1188 282, 1190 748, 1160 748" class="link"/>
-  <path d="M 1180 230 C 1188 230, 1190 668, 1160 668" class="link"/>
-
-  <!-- Legend -->
-  <rect x="20" y="836" width="1160" height="68" class="legend"/>
-  <text x="38" y="862" class="t-bold">凡例</text>
-  <rect x="92" y="850" width="14" height="14" class="node arch"/><text x="112" y="862" class="t">Arch-*</text>
-  <rect x="172" y="850" width="14" height="14" class="node dev"/><text x="192" y="862" class="t">Dev-*</text>
-  <rect x="252" y="850" width="14" height="14" class="node doc"/><text x="272" y="862" class="t">Doc-*</text>
-  <rect x="332" y="850" width="14" height="14" class="node qa"/><text x="352" y="862" class="t">QA-*</text>
-  <rect x="404" y="850" width="14" height="14" class="node km"/><text x="424" y="862" class="t">KnowledgeManager</text>
-  <rect x="548" y="850" width="14" height="14" class="node file"/><text x="568" y="862" class="t">ファイル/ディレクトリ</text>
-  <line x1="730" y1="857" x2="770" y2="857" class="link"/><text x="778" y="862" class="t">Read/Write（実線）</text>
-  <line x1="920" y1="857" x2="960" y2="857" class="link-dash"/><text x="968" y="862" class="t">参照/反復（破線）</text>
+  <rect x="24" y="830" width="1232" height="106" class="legend"/>
+  <text x="42" y="858" class="label">凡例</text>
+  <rect x="110" y="844" width="18" height="18" class="card entry"/><text x="136" y="858" class="body">入口 / 実行開始点</text>
+  <rect x="296" y="844" width="18" height="18" class="card workflow"/><text x="322" y="858" class="body">Workflow / Dispatcher</text>
+  <rect x="518" y="844" width="18" height="18" class="card store"/><text x="544" y="858" class="body">共有ストア / 入力データ</text>
+  <rect x="756" y="844" width="18" height="18" class="card agent"/><text x="782" y="858" class="body">Custom Agent</text>
+  <rect x="932" y="844" width="18" height="18" class="card output"/><text x="958" y="858" class="body">成果物</text>
+  <line x1="110" y1="894" x2="170" y2="894" class="arrow"/><text x="180" y="899" class="body">主経路（入口 → Workflow → 出力）</text>
+  <line x1="540" y1="894" x2="600" y2="894" class="arrow-dash"/><text x="610" y="899" class="body">反復 / 参照（AQOD・AKM・knowledge 連携）</text>
+  <text x="1010" y="899" class="body">読み順: ①入口 → ②オーケストレーション → ③成果物</text>
 </svg>

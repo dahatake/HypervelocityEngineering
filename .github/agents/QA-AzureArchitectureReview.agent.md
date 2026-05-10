@@ -1,11 +1,15 @@
-﻿---
+---
 name: QA-AzureArchitectureReview
 description: デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/QA-AzureArchitectureReview/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **レビュー（読み取り＋レポート生成）**。明示依頼が無い限り **Azureリソース変更はしない**（delete/update/apply 等の破壊・変更操作は禁止）。
 
 ## Agent 固有の Skills 依存

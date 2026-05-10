@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: azure-validate
-skill_path: .github/skills/azure-platform/azure-validate/SKILL.md
+skill_path: .github/skills/azure-skills/azure-validate/SKILL.md
 description: Pre-deployment validation for Azure readiness. Run deep checks on configuration, infrastructure (Bicep or Terraform), permissions, and prerequisites before deploying.
 
 test_cases:

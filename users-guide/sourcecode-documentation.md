@@ -6,16 +6,35 @@
 
 ## 目次
 
+- [対象読者](#対象読者)
+- [前提](#前提)
+- [次のステップ](#次のステップ)
 - [概要（4層構造）](#概要4層構造)
 - [Agent チェーン図（ADOC）](#agent-チェーン図adoc)
 - [前提条件](#前提条件)
 - [方式1: Copilot cloud agent 手動実行](#方式1-copilot-cloud-agent-手動実行)
 - [方式2: ワークフローオーケストレーション（Web）](#方式2-ワークフローオーケストレーションweb)
-- [方式3: ワークフローオーケストレーション（ローカル hve）](#方式3-ワークフローオーケストレーションローカル-hve)
+- [方式3: ワークフローオーケストレーション（HVE CLI Orchestrator）](#方式3-ワークフローオーケストレーションhve-cli-orchestrator)
 - [成果物出力先](#成果物出力先)
 - [DAG 実行の Wave 計画](#dag-実行の-wave-計画)
 
 ---
+## 対象読者
+
+- `sourcecode-to-documentation.yml`（ADOC）でソースコード由来ドキュメントを生成する担当者
+- `docs-generated/` を保守・運用する担当者
+
+## 前提
+
+- Issue Template: `.github/ISSUE_TEMPLATE/sourcecode-to-documentation.yml`
+- Workflow: `.github/workflows/auto-orchestrator-dispatcher.yml` → `.github/workflows/auto-app-documentation-reusable.yml`
+- Workflow ID: `adoc`（`hve/workflow_registry.py`）
+
+## 次のステップ
+
+- `original-docs/` からの質問票運用は [original-docs-review.md](./original-docs-review.md) を参照
+- `knowledge/` への統合運用は [km-guide.md](./km-guide.md) を参照
+
 ## 概要（4層構造）
 
 `adoc` ワークフローは、Context Window を小さく保つために、前段の要約のみを後段へ渡す 4 層構造で実行します。`src/` 相当の既存コードを入力に技術文書（`docs-generated/`）を生成し、`knowledge/` との整合確認を進める際の補助資料として活用できます。
@@ -50,7 +69,7 @@
 - GitHub Copilot cloud agent が利用可能であること
 - 出力先は `docs-generated/`（既存 `docs/` と分離）
 
-> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、ソースコードドキュメント生成で業務コンテキスト（要件・用語集・アーキテクチャ方針）として自動参照されます。
+> 💡 `knowledge/` の更新運用は [km-guide.md](./km-guide.md) を参照してください。
 
 ---
 
@@ -66,7 +85,7 @@
 
 1. Issues → New issue で **Source Codeからのドキュメント作成** を選択
 2. `branch` / `target_dirs` / `doc_purpose` などを入力
-3. Submit 後、`auto-app-documentation` ラベルでオーケストレーションを開始
+3. Submit 後、`auto-app-documentation` ラベルで開始し、`auto-orchestrator-dispatcher.yml` から `auto-app-documentation-reusable.yml` が実行される
 
 ### Issue Template フィールド詳細
 
@@ -84,7 +103,7 @@
 
 ---
 
-## 方式3: ワークフローオーケストレーション（ローカル hve）
+## 方式3: ワークフローオーケストレーション（HVE CLI Orchestrator）
 
 ### CLI 実行例
 

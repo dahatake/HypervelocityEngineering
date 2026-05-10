@@ -30,6 +30,24 @@ on:
         required: false
         type: string
         default: '[]'
+      enable_agentic_retrieval:
+        required: false
+        type: string
+        default: 'auto'
+      agentic_data_source_modes:
+        required: false
+        type: string
+        default: 'indexer'
+      foundry_mcp_integration:
+        required: false
+        type: string
+        default: 'true'
+
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
 
 permissions:
   issues: write
@@ -38,7 +56,7 @@ permissions:
 
 jobs:
   orchestrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
       group: aad-web-orchestrator-${{ inputs.issue_number }}
@@ -273,6 +291,9 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+          INPUT_ENABLE_AGENTIC_RETRIEVAL: ${{ inputs.enable_agentic_retrieval }}
+          INPUT_AGENTIC_DATA_SOURCE_MODES: ${{ inputs.agentic_data_source_modes }}
+          INPUT_FOUNDRY_MCP_INTEGRATION: ${{ inputs.foundry_mcp_integration }}
         run: |
           set -euo pipefail
 
@@ -292,6 +313,7 @@ jobs:
 
           # ---- ユーティリティ関数 ----
           source "${GITHUB_WORKSPACE}/.github/scripts/aad-common.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
 
           # ERR トラップを関数にも継承させる
           set -E
@@ -448,7 +470,20 @@ jobs:
               if n:
                   self_improve_quality_threshold = n.group(1)
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
+          # Remote MCP Server 設定: "作成する" → True、"作成しない" → False、未指定 → True (後方互換)
+          create_remote_mcp_server = True
+          mcp_section = re.search(
+              r"###\s*Remote MCP Server 実装\s*\n+(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if mcp_section:
+              val = mcp_section.group(1).strip()
+              if "作成しない" in val:
+                  create_remote_mcp_server = False
+              elif "作成する" in val:
+                  create_remote_mcp_server = True
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold, "create_remote_mcp_server": create_remote_mcp_server}
           print(json.dumps(result))
           PYEOF
           )
@@ -463,12 +498,49 @@ jobs:
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
+          CREATE_REMOTE_MCP_SERVER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('create_remote_mcp_server', True) else 'false')")
+          ENABLE_AGENTIC_RETRIEVAL=$(python3 - "${INPUT_ENABLE_AGENTIC_RETRIEVAL:-auto}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "auto").strip().lower()
+          print(value if value in {"auto", "yes", "no"} else "auto")
+          PY
+          )
+          AGENTIC_DATA_SOURCE_MODES=$(python3 - "${INPUT_AGENTIC_DATA_SOURCE_MODES:-indexer}" <<'PY'
+          import re, sys
+          raw = (sys.argv[1] or "indexer").lower()
+          tokens = [t for t in re.split(r"[\s,]+", raw) if t]
+          values = []
+          for token in tokens:
+              if token in {"indexer", "push"} and token not in values:
+                  values.append(token)
+          if not values:
+              values = ["indexer"]
+          print(",".join(values))
+          PY
+          )
+          FOUNDRY_MCP_INTEGRATION=$(python3 - "${INPUT_FOUNDRY_MCP_INTEGRATION:-true}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "true").strip().lower()
+          print("false" if value == "false" else "true")
+          PY
+          )
+          if [[ "${ENABLE_AGENTIC_RETRIEVAL}" == "no" ]]; then
+            FOUNDRY_MCP_INTEGRATION="false"
+          fi
+
+          MODEL_RAW=$(extract_model "${ISSUE_BODY}")
+          SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
 
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+          echo "Agentic Retrieval: ${ENABLE_AGENTIC_RETRIEVAL}, data_source_modes=${AGENTIC_DATA_SOURCE_MODES}, foundry_mcp_integration=${FOUNDRY_MCP_INTEGRATION}"
           echo "対象 APP-IDs（フィルタ前）: ${APP_IDS:-（未指定 = 推薦アーキテクチャから自動選択）}"
 
           # ---- 推薦アーキテクチャ APP-ID フィルタ ----
@@ -559,7 +631,7 @@ jobs:
           fi
 
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${CREATE_REMOTE_MCP_SERVER}" "${ENABLE_AGENTIC_RETRIEVAL}" "${AGENTIC_DATA_SOURCE_MODES}" "${FOUNDRY_MCP_INTEGRATION}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
@@ -569,7 +641,11 @@ jobs:
           enable_si = sys.argv[4]
           si_max_iter = sys.argv[5]
           si_quality_threshold = sys.argv[6]
-          output_file = sys.argv[7]
+          create_remote_mcp_server = sys.argv[7]
+          enable_agentic_retrieval = sys.argv[8]
+          agentic_data_source_modes = sys.argv[9]
+          foundry_mcp_integration = sys.argv[10]
+          output_file = sys.argv[11]
 
           tags = [
               ("auto-context-review", auto_context_review),
@@ -578,6 +654,10 @@ jobs:
               ("enable-self-improve", enable_si),
               ("self-improve-max-iterations", si_max_iter),
               ("self-improve-quality-threshold", si_quality_threshold),
+              ("create-remote-mcp-server", create_remote_mcp_server),
+              ("enable-agentic-retrieval", enable_agentic_retrieval),
+              ("agentic-data-source-modes", agentic_data_source_modes),
+              ("foundry-mcp-integration", foundry_mcp_integration),
           ]
 
           for key, value in tags:
@@ -595,7 +675,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve / agentic-retrieval タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -617,6 +697,15 @@ jobs:
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-approve-ready"
             echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
           fi
 
           # ---- Step Issue 生成 ----
@@ -643,8 +732,8 @@ jobs:
             APP_IDS_TAG=$(printf '\n<!-- app-ids: %s -->' "${APP_IDS}")
           fi
 
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->%s\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
-            "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->%s\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- create-remote-mcp-server: %s -->\n<!-- enable-agentic-retrieval: %s -->\n<!-- agentic-data-source-modes: %s -->\n<!-- foundry-mcp-integration: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${CREATE_REMOTE_MCP_SERVER}" "${ENABLE_AGENTIC_RETRIEVAL}" "${AGENTIC_DATA_SOURCE_MODES}" "${FOUNDRY_MCP_INTEGRATION}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
           QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
@@ -678,6 +767,13 @@ jobs:
 
           skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
 
+          # Remote MCP Server 設計観点セクション（create_remote_mcp_server=true の場合のみ）
+          if [[ "${CREATE_REMOTE_MCP_SERVER}" == "true" ]]; then
+            REMOTE_MCP_DESIGN_SECTION=$(printf '\n\n## Remote MCP Server 設計観点\n\n`create-remote-mcp-server` が `true` のため、対象 API を Remote MCP Server として公開するための設計観点を含めてください。\n\n### 設計に含めること\n\n- どの API ユースケースを MCP Tool / Resource / Prompt として公開するか\n- MCP Tool の入力スキーマ、出力スキーマ\n- REST API と MCP 公開層の責務分離\n- MCP 固有の入出力変換を adapter 層に閉じ込める方針\n- 認証・認可方針\n- エラー応答方針\n- ログ・監視方針\n- 実行環境非依存のインターフェース定義\n- 実装フェーズで SDK / Transport / Cloud Service を選定する前提\n\n### 設計で固定しないこと\n\n- 特定 MCP SDK\n- 特定 Transport\n- 特定 Cloud Compute\n- 特定 Cloud Provider 固有サービス')
+          else
+            REMOTE_MCP_DESIGN_SECTION=""
+          fi
+
           if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS='["auto-app-detail-design-web","auto-context-review","auto-qa"]'
           elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
@@ -690,6 +786,15 @@ jobs:
 
           if [[ "${AUTO_MERGE}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
           fi
 
           # ---- Step.1 ----
@@ -879,8 +984,8 @@ jobs:
             fi
 
             # Step.7.2
-            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
-              "${ROOT_REF}" "${_S72_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            BODY_S72=$(printf '%s\n## 目的\nサービスカタログおよび各種成果物に基づき、マイクロサービス定義書を作成する。\n\n## 入力\n- テンプレート + 各種成果物（docs/catalog/service-catalog-matrix.md 等）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`（サービスごとに1ファイル）\n\n## Custom Agent\n`Arch-Microservice-ServiceDetail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各マイクロサービス定義書の「§1 サービスメタ情報」に「利用アプリケーション」（N:N）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- マイクロサービス定義書がサービスカタログに基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${_S72_DEP}" "${APP_ID_SECTION}" "${REMOTE_MCP_DESIGN_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD-WEB] Step.7.2: マイクロサービス定義書" \
               "${BODY_S72}" \
@@ -1719,7 +1824,7 @@ jobs:
   self-improve:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings

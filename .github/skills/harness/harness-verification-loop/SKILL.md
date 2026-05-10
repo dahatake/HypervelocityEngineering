@@ -1,21 +1,10 @@
 ---
 name: harness-verification-loop
 description: >
-  コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順。
-  各言語（C#/Python/Shell）の具体的コマンドライン、Phase 失敗時の対処法、
-  verification-report.md テンプレートを提供する。
-  USE FOR: build check, lint, test execution, security scan,
-  diff review, verification-report, PR submission quality check,
-  5-phase verification pipeline.
-  DO NOT USE FOR: error recovery (use harness-error-recovery),
-  safety guard (use harness-safety-guard),
-  test code creation or modification.
-  WHEN: コードを変更した後の検証、ビルド確認、lint チェック、
-  テスト実行、セキュリティスキャン、diff レビュー、
-  verification-report.md を作成したい、PR 提出前の品質確認。
+  コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順。 USE FOR: build check, lint, test execution. DO NOT USE FOR: error recovery (use harness-error-recovery). WHEN: コードを変更した後の検証、ビルド確認。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # harness-verification-loop
@@ -55,6 +44,17 @@ Phase 失敗時のエスカレーション: `references/verification-commands.md
 | ファイル | 内容 |
 |---------|------|
 | `references/verification-commands.md` | §1 Phase別コマンドリファレンス（Phase 1〜5）、§2 検証レポートテンプレート、§3 エスカレーション手順 |
+
+## 差分品質評価（Diff Quality Assessment）
+
+PR 提出前に以下を実施する:
+
+1. `git diff --stat` で変更サマリーを取得する
+2. 変更ファイルが Issue/AC の対象スコープ内か確認する
+3. 無関係な変更（整形のみ、コメント追加のみ等）が含まれていないか確認する
+4. 結果を `work-artifacts-layout` Skill で定義される作業ディレクトリ直下の `verification-report.md`（例: `work/Issue<識別子>/verification-report.md`）の Diff セクションに記録する
+
+---
 
 ## Related Skills
 

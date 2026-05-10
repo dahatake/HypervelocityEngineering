@@ -1,19 +1,10 @@
 ---
 name: test-strategy-template
 description: >
-  テスト戦略の共通テンプレート。テストピラミッド定義・テストダブル選択基準・
-  テストデータ戦略・カバレッジ方針を提供する。
-  USE FOR: test strategy, test pyramid, test doubles selection,
-  Azurite, Testcontainers, WireMock, test data strategy,
-  Faker, seed management, coverage policy.
-  DO NOT USE FOR: test code generation (agents do that),
-  individual test case design (Arch-TDD-TestSpec Agent が担当),
-  CI/CD pipeline integration (use github-actions-cicd).
-  WHEN: テスト戦略書を作成する、テストダブルの選択基準を参照する、
-  テストデータ戦略を定義する、カバレッジ方針を確認する。
+  テスト戦略の共通テンプレート。テストピラミッド定義・テストダブル選択基準・ テストデータ戦略・カバレッジ方針を提供する。 USE FOR: test strategy, test pyramid, test doubles selection. DO NOT USE FOR: test code generation (agents do that). WHEN: テスト戦略書を作成する、テストダブルの選択基準を参照する。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # test-strategy-template

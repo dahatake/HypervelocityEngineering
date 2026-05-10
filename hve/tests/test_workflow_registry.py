@@ -21,9 +21,10 @@ from hve.workflow_registry import (
 # ---------------------------------------------------------------------------
 
 EXPECTED_STEP_COUNTS = {
+    "ard": 3,
     "aas": 8,
     "aad-web": 4,
-    "asdw-web": 19,  # 4 containers + 15 real steps
+    "asdw-web": 20,  # 4 containers + 16 real steps
     "abd": 9,
     "abdv": 7,
     "aag": 3,
@@ -34,9 +35,10 @@ EXPECTED_STEP_COUNTS = {
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
+    "ard": 3,
     "aas": 8,
     "aad-web": 4,
-    "asdw-web": 15,
+    "asdw-web": 16,
     "abd": 9,
     "abdv": 7,
     "aag": 3,
@@ -133,9 +135,14 @@ class TestWorkflowDef:
         assert "resource_group" in wf.params
         assert "usecase_id" in wf.params
 
+    def test_params_asdw_web_includes_create_remote_mcp_server(self):
+        """ASDW-WEB の params に create_remote_mcp_server が含まれること。"""
+        wf = get_workflow("asdw-web")
+        assert "create_remote_mcp_server" in wf.params
+
     def test_params_aad_web(self):
         wf = get_workflow("aad-web")
-        assert wf.params == ["app_ids", "app_id"]
+        assert wf.params == ["app_ids", "app_id", "create_remote_mcp_server"]
 
     def test_params_aag(self):
         wf = get_workflow("aag")
@@ -216,6 +223,11 @@ class TestGetNextSteps:
         assert step_30t is not None
         assert step_30t.depends_on == ["2.5"]
         assert step_30t.skip_fallback_deps == ["2.5"]
+        step_33 = get_step("asdw-web", "3.3")
+        assert step_33 is not None
+        assert step_33.depends_on == ["3.2"]
+        assert get_step("asdw-web", "4.1").depends_on == ["3.3"]
+        assert get_step("asdw-web", "4.2").depends_on == ["3.3"]
 
         assert get_step("asdw-web", "2.6") is None
         assert get_step("asdw-web", "2.7") is None
@@ -224,6 +236,14 @@ class TestGetNextSteps:
         completed = ["1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5"]
         nexts = get_next_steps("asdw-web", completed_step_ids=completed)
         assert [s.id for s in nexts] == ["3.0T"]
+
+        completed_ui = completed + ["3.0T", "3.0TC", "3.1", "3.2"]
+        nexts = get_next_steps("asdw-web", completed_step_ids=completed_ui)
+        assert [s.id for s in nexts] == ["3.3"]
+
+        completed_e2e = completed_ui + ["3.3"]
+        nexts = get_next_steps("asdw-web", completed_step_ids=completed_e2e)
+        assert sorted(s.id for s in nexts) == ["4.1", "4.2"]
 
     def test_aag_dag_walk(self):
         assert [s.id for s in get_next_steps("aag", completed_step_ids=[])] == ["1"]

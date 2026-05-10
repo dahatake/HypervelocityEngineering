@@ -1,0 +1,197 @@
+name: Scheduled Health Check
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      workflow_prefix:
+        description: 'human-required ラベルのワークフロープレフィックス（例: asdw-web）'
+        required: false
+        default: 'asdw-web'
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: copilot
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      HEALTH_CHECK_CRON: ${{ vars.HEALTH_CHECK_CRON || '0 */6 * * *' }}
+      WORKFLOW_PREFIX: ${{ inputs.workflow_prefix || 'asdw-web' }}
+      RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || '' }}
+      SWA_NAME: ${{ vars.SWA_NAME || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Evaluate cron gate
+        id: cron-gate
+        run: |
+          set -euo pipefail
+          SHOULD_RUN=true
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            python3 -m pip install --quiet croniter
+            SHOULD_RUN=$(python3 -c 'from datetime import datetime, timedelta, timezone; from croniter import croniter; import os; expr=os.environ["HEALTH_CHECK_CRON"].strip(); now=datetime.now(timezone.utc).replace(second=0,microsecond=0); prev=now-timedelta(minutes=1); print("true" if croniter(expr, prev).get_next(datetime)==now else "false")')
+          fi
+          echo "should_run=${SHOULD_RUN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Skip (outside cron window)
+        if: steps.cron-gate.outputs.should_run != 'true'
+        run: |
+          {
+            echo "## Scheduled Health Check"
+            echo ""
+            echo "- 実行時刻: $(date -u --iso-8601=seconds)"
+            echo "- HEALTH_CHECK_CRON: \`${HEALTH_CHECK_CRON}\`"
+            echo "- 判定: cron 条件外のためスキップ"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Build health-check target inventory
+        if: steps.cron-gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp
+          catalog_text=""
+          for f in docs/catalog/service-catalog-matrix.md docs/catalog/service-catalog.md docs/catalog/service-catalog.yaml docs/catalog/service-catalog.yml; do
+            if [[ -f "$f" ]]; then
+              catalog_text+="$(cat "$f")\n"
+            fi
+          done
+
+          targets='[]'
+          if [[ -f infra/azure/verify-webui-resources.sh ]] && echo "$catalog_text" | grep -Eiq 'static web app|staticwebapp|azurestaticapps'; then
+            targets=$(jq -nc '[{"deploy":"ui","name":"UIDeploy-AzureStaticWebApps","verify_script":"infra/azure/verify-webui-resources.sh"}]')
+          fi
+
+          jq -nc --argjson t "$targets" '{targets:$t}' > /tmp/health-check-targets.json
+
+      - name: Run readonly health checks and issue escalation
+        if: steps.cron-gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/health-check-logs
+          REPORT_FILE="/tmp/health-check-report.md"
+          HEALTH_LABEL="${WORKFLOW_PREFIX}:human-required"
+          overall_exit=0
+
+          {
+            echo "# Scheduled Health Check Report"
+            echo
+            echo "- 実行時刻: $(date -u --iso-8601=seconds)"
+            echo "- Cron: ${HEALTH_CHECK_CRON}"
+            echo "- Workflow Prefix: ${WORKFLOW_PREFIX}"
+            echo "- Mode: HEALTH_CHECK_MODE=readonly"
+            echo
+            echo "## Results"
+            echo
+            echo "| Deploy | Verify Script | Result | HTTP Status (latest) | Issue |"
+            echo "|---|---|---|---|---|"
+          } > "${REPORT_FILE}"
+
+          create_or_update_issue() {
+            local deploy="$1"
+            local title="$2"
+            local body_file="$3"
+            local comment_file="$4"
+            local existing
+
+            existing=$(gh issue list --repo "${REPO}" --state open --label "${HEALTH_LABEL}" --search "\"[HealthCheck][${deploy}]\" in:title" --json number --limit 1 --jq '.[0].number // empty')
+            if [[ -n "${existing}" ]]; then
+              gh issue comment "${existing}" --repo "${REPO}" --body-file "${comment_file}" >/dev/null
+              echo "#${existing} (existing)"
+              return
+            fi
+
+            local url issue_no
+            url=$(gh issue create --repo "${REPO}" --title "${title}" --label "${HEALTH_LABEL}" --body-file "${body_file}")
+            issue_no=$(printf '%s' "${url}" | sed -nE 's#^.*/issues/([0-9]+)#\1#p')
+            if [[ -n "${issue_no}" ]]; then
+              gh issue comment "${issue_no}" --repo "${REPO}" --body-file "${comment_file}" >/dev/null
+              echo "#${issue_no}"
+            else
+              echo "(create-failed)"
+            fi
+          }
+
+          target_count=$(jq '.targets | length' /tmp/health-check-targets.json)
+          if [[ "${target_count}" == "0" ]]; then
+            printf '| (none) | - | ℹ️ SKIP | `N/A` | service-catalog上の対象なし |\n' >> "${REPORT_FILE}"
+          fi
+
+          while read -r row; do
+            deploy=$(echo "${row}" | jq -r '.deploy')
+            name=$(echo "${row}" | jq -r '.name')
+            script=$(echo "${row}" | jq -r '.verify_script')
+            log_file="/tmp/health-check-logs/${deploy}.log"
+
+            set +e
+            HEALTH_CHECK_MODE=readonly SWA_NAME="${SWA_NAME}" RESOURCE_GROUP="${RESOURCE_GROUP}" bash "${script}" >"${log_file}" 2>&1
+            rc=$?
+            set -e
+
+            latest_http=$(grep -Eo 'HTTP [0-9]{3}' "${log_file}" | tail -1 | awk '{print $2}' || true)
+            [[ -z "${latest_http}" ]] && latest_http="N/A"
+
+            if [[ ${rc} -eq 0 ]]; then
+              printf '| %s | `%s` | ✅ PASS | `%s` | - |\n' "${name}" "${script}" "${latest_http}" >> "${REPORT_FILE}"
+            else
+              overall_exit=1
+              issue_title="[HealthCheck][${deploy}] ${name} failed"
+              issue_body="/tmp/health-check-logs/${deploy}-issue.md"
+              issue_comment="/tmp/health-check-logs/${deploy}-comment.md"
+              {
+                echo "## ❌ Scheduled health-check failed"
+                echo
+                echo "- Deploy: ${name}"
+                echo "- Verify Script: \`${script}\`"
+                echo "- HEALTH_CHECK_MODE: \`readonly\`"
+                echo "- Latest HTTP Status: \`${latest_http}\`"
+                echo "- 実行時刻: \`$(date -u --iso-8601=seconds)\`"
+              } > "${issue_body}"
+              {
+                echo "### 失敗ログ（抜粋）"
+                echo
+                echo '```text'
+                tail -n 200 "${log_file}"
+                echo '```'
+              } > "${issue_comment}"
+              issue_ref=$(create_or_update_issue "${deploy}" "${issue_title}" "${issue_body}" "${issue_comment}")
+              printf '| %s | `%s` | ❌ FAIL | `%s` | %s |\n' "${name}" "${script}" "${latest_http}" "${issue_ref}" >> "${REPORT_FILE}"
+            fi
+          done < <(jq -c '.targets[]' /tmp/health-check-targets.json)
+
+          cp "${REPORT_FILE}" /tmp/health-check-report-for-artifact.md
+          {
+            echo "## Scheduled Health Check"
+            echo
+            cat "${REPORT_FILE}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ ${overall_exit} -ne 0 ]]; then
+            exit 1
+          fi
+
+      - name: Upload health-check report artifact
+        if: always() && steps.cron-gate.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-health-check-${{ github.run_id }}
+          path: |
+            /tmp/health-check-report-for-artifact.md
+            /tmp/health-check-logs/*.log
+          if-no-files-found: warn

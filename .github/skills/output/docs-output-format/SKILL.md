@@ -1,20 +1,10 @@
 ---
 name: docs-output-format
 description: >
-  docs/ 成果物フォーマットの共通原則。固定章立て（見出し固定順序・不足は TBD・
-  各表の各行に出典必須）と Mermaid erDiagram 記法指針を提供する。
-  USE FOR: docs/ format, fixed heading order, citation required per row,
-  TBD for missing items, Mermaid erDiagram notation guide,
-  document output standardization.
-  DO NOT USE FOR: work/ format (use work-artifacts-layout),
-  test specification format (use test-strategy-template),
-  agent-specific heading list definition.
-  WHEN: docs/ 配下の成果物を作成する、固定章立てを確認する、
-  出典必須ルールを確認する、Mermaid erDiagram を記述する、
-  ドキュメントフォーマットの共通原則を参照する。
+  docs/ 成果物フォーマットの共通原則。固定章立て（見出し固定順序・不足は TBD・ 各表の各行に出典必須）と Mermaid erDiagram 記法指針を提供する。 USE FOR: docs/ format, fixed heading order, citation required per row. DO NOT USE FOR: work/ format (use work-artifacts-layout). WHEN: docs/ 配下の成果物を作成する、固定章立てを確認する。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # docs-output-format
@@ -37,7 +27,7 @@ metadata:
 
 1. **見出しを固定順序で列挙する** — Agent 定義の順序を守る。順序の入れ替え・省略は禁止
 2. **不足は TBD** — 根拠が不足する項目は `TBD（要確認: {理由}）` と記載。空欄放置は禁止
-3. **各表の各行に出典必須** — 出典形式: `ファイルパス#見出し名`（例: `docs/catalog/domain-analytics.md#BC-01`）
+3. **各表の各行に出典必須** — 出典形式: `ファイルパス#見出し名`（例: `docs/domain-analytics.md#BC-01`）
 
 ---
 
@@ -53,7 +43,7 @@ metadata:
 
 > ※ 以下は説明用の架空例です
 
-**例1（出典付き表）**: 各行に `出典` 列を設け、`docs/catalog/domain-analytics.md#BC-03, docs/catalog/service-catalog.md#SVC-05` 形式で記載。不明な行は `TBD（要確認）`。
+**例1（出典付き表）**: 各行に `出典` 列を設け、`docs/domain-analytics.md#BC-03, docs/catalog/service-catalog.md#SVC-05` 形式で記載。不明な行は `TBD（要確認）`。
 
 **例2（Mermaid erDiagram）**: サービス単位で図を分割（10個以下のエンティティ）。エンティティ名は PascalCase、属性は `UUID campaign_id PK` 形式。
 

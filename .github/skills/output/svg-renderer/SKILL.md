@@ -1,21 +1,10 @@
 ---
 name: svg-renderer
 description: >
-  図やダイアグラムをSVGコードとして生成し、画面にレンダリング表示するスキル。
-  フローチャート、シーケンス図、アーキテクチャ図、ER図等をSVGで描画する。
-  USE FOR: SVG render, SVG draw, SVG diagram creation,
-  SVG visualize, SVG display, flowchart SVG, sequence diagram SVG,
-  architecture diagram SVG, ER diagram SVG.
-  DO NOT USE FOR: Mermaid diagrams, PlantUML diagrams,
-  non-SVG format diagram generation.
-  WHEN: SVGでレンダリングして、SVGで図を描いて、SVGで描画して、
-  SVGで作成して、SVGでダイアグラムを作成、SVGで可視化して、
-  SVGで表示して、SVGで図式化して、図を表示して、描いて、
-  render as SVG, draw SVG, create SVG diagram, visualize as SVG,
-  display as SVG, show diagram, render diagram。
+  図やダイアグラムをSVGコードとして生成し、画面にレンダリング表示するスキル。 USE FOR: SVG render, SVG draw, SVG diagram creation. DO NOT USE FOR: Mermaid diagrams. WHEN: SVGでレンダリングして、SVGで図を描いて。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # SVG ダイアグラム レンダリング スキル

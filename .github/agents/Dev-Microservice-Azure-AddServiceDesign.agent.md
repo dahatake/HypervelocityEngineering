@@ -2,10 +2,14 @@
 name: Dev-Microservice-Azure-AddServiceDesign
 description: サービス定義書の「外部依存・統合」要件から、追加で必要な Azure サービス（AI/認証/統合/運用等）を選定し、Microsoft Learn 根拠付きで設計書に記録する
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDesign/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存

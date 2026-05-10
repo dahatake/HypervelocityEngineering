@@ -1,6 +1,6 @@
 # SVC-01 マイクロサービス定義書：会員・同意管理サービス
 
-> **根拠**：`docs/service-list.md` §SVC-01、`docs/service-catalog.md` §SVC-01、`docs/domain-analytics.md` §BC-01、`docs/app-list.md` §APP-01  
+> **根拠**：`docs/catalog/service-catalog.md` §SVC-01、`docs/catalog/service-catalog-matrix.md` §SVC-01、`docs/catalog/domain-analytics.md` §BC-01、`docs/catalog/app-catalog.md` §APP-01  
 > **作成日**：2026-03-31  
 > **バージョン**：v1.1（2026-03-31 Copilot 推論デフォルト回答適用）
 
@@ -36,7 +36,7 @@
 - 監査ログ集約（SVC-16 の責務）
 - AI/ML 推論・配信制御（SVC-07/SVC-08 の責務）
 
-**根拠**：`docs/service-list.md` §SVC-01、`docs/app-list.md` §APP-01
+**根拠**：`docs/catalog/service-catalog.md` §SVC-01、`docs/catalog/app-catalog.md` §APP-01
 
 ---
 
@@ -67,7 +67,7 @@ GRANTED → REVOKED
 
 - 目的種別: MARKETING, AI_USAGE, THIRD_PARTY（TBD: 法域に応じた目的粒度 ブロッカー#1）
 
-**根拠**：`docs/domain-analytics.md` §エンティティ「Member」「ConsentRecord」
+**根拠**：`docs/catalog/domain-analytics.md` §エンティティ「Member」「ConsentRecord」
 
 ---
 
@@ -91,7 +91,7 @@ GRANTED → REVOKED
 - MCS-STATE-001: 状態不正（例: CLOSED 会員への更新）
 - MCS-EXT-001: 外部依存障害（CRM 連携エラー等）
 
-**根拠**：`docs/service-list.md` §SVC-01「提供 I/F」、`docs/service-catalog.md` §SVC-01
+**根拠**：`docs/catalog/service-catalog.md` §SVC-01「提供 I/F」、`docs/catalog/service-catalog-matrix.md` §SVC-01
 
 ---
 
@@ -121,7 +121,7 @@ channels:
 
 **互換性規約**: フィールド追加のみ許可（後方互換）。schemaVersion フィールド必須。
 
-**根拠**：`docs/service-list.md` §SVC-01「提供 I/F」
+**根拠**：`docs/catalog/service-catalog.md` §SVC-01「提供 I/F」
 
 ---
 
@@ -144,7 +144,7 @@ channels:
 
 **PII分類**: Member エンティティに個人情報含む（氏名・メール・電話番号）。TBD: 具体的な PII 分類・法域要件は ブロッカー#1
 
-**根拠**：`docs/domain-analytics.md` §エンティティ「Member」「ConsentRecord」、DEC-005
+**根拠**：`docs/catalog/domain-analytics.md` §エンティティ「Member」「ConsentRecord」、DEC-005
 
 ---
 
@@ -157,7 +157,7 @@ channels:
 | **監査** | 会員登録・同意変更・プロフィール更新は必ず監査ログ（SVC-16 へ非同期送信） |
 | **暗号化** | TBD（転送: TLS 必須。保存: PII フィールドは暗号化推奨。KMS 方針 TBD） |
 
-**根拠**：`docs/domain-analytics.md` §BC-01、`docs/app-list.md` §APP-01「キー NFR」
+**根拠**：`docs/catalog/domain-analytics.md` §BC-01、`docs/catalog/app-catalog.md` §APP-01「キー NFR」
 
 ---
 
@@ -170,7 +170,7 @@ channels:
 | SVC-15（アクセス制御） | 同意変更 → 配信/AI 制御フラグ更新 | 同意変更 Event は At-least-once 保証 |
 | SVC-16（監査ログ） | 操作ログ送信（非同期 Event） | ローカルバッファ後リトライ（TBD） |
 
-**根拠**：`docs/service-list.md` §SVC-01「依存先/連携」
+**根拠**：`docs/catalog/service-catalog.md` §SVC-01「依存先/連携」
 
 ---
 
@@ -191,7 +191,7 @@ SUSPENDED --> CLOSED: 強制退会
 - CLOSED 会員への同意変更: 拒否（MCS-STATE-001）
 - 同意撤回は即時反映（< 5 分で下流へ通知）
 
-**根拠**：`docs/domain-analytics.md` §集約「MemberAggregate」
+**根拠**：`docs/catalog/domain-analytics.md` §集約「MemberAggregate」
 
 ---
 
@@ -264,7 +264,7 @@ TBD（現行システム台帳の有無・名寄せキー未確定: ブロッカ
 | 同意変更テスト | ConsentChanged Event の発行タイミング・ペイロード正確性検証 |
 | 監査ログテスト | 登録・同意変更操作後に監査ログ Event が発行されることを検証 |
 
-**根拠**：`docs/test-strategy.md`
+**根拠**：`docs/catalog/test-strategy.md`
 
 ---
 
@@ -301,7 +301,7 @@ TBD（現行システム台帳の有無・名寄せキー未確定: ブロッカ
 | 同意撤回 | DELETE /members/{id}/consents/{purpose} | ConsentChanged | 即時下流通知 |
 | BFF 経由会員照会 | GET /members/{id} | — | SVC-05/SVC-10 から参照 |
 
-**根拠**：`docs/screen-list.md`（APP-01 対応画面）、`docs/service-catalog.md` §SVC-01
+**根拠**：`docs/catalog/screen-catalog.md`（APP-01 対応画面）、`docs/catalog/service-catalog-matrix.md` §SVC-01
 
 ---
 

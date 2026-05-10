@@ -2,10 +2,14 @@
 name: Dev-Batch-FunctionsDeploy
 description: "GitHub Actions CI/CD ワークフロー・README・スモークテストを作成し Azure Functions バッチジョブをデプロイする（Step 3: Azure Functions Deploy）"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Batch-FunctionsDeploy/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

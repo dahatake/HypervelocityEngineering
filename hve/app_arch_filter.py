@@ -3,7 +3,7 @@
 `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` を正本として、
 workflow に対応する推薦アーキテクチャの APP-ID のみを返す共通ロジック。
 
-hve アプリケーションと GitHub Actions の双方から利用可能。
+HVE CLI Orchestratorと GitHub Actions の双方から利用可能。
 """
 
 from __future__ import annotations

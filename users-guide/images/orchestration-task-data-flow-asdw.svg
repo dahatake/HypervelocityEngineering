@@ -1,313 +1,110 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 2500" font-family="system-ui, -apple-system, sans-serif">
-  <title>ASDW-WEB: Web Application 実装・デプロイ データフロー</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="980" viewBox="0 0 1700 980" role="img" aria-labelledby="title desc">
+  <title id="title">ASDW-WEB データフロー図</title>
+  <desc id="desc">入力ファイルからCustom Agentタスクを経由して出力ファイルへ到達する関係を示す。</desc>
+  <style>
+    text { font-family: "Trebuchet MS", Verdana, Arial, sans-serif; fill: #1f2937; }
+    .title { font-size: 28px; font-weight: 700; }
+    .subtitle { font-size: 15px; fill: #4b5563; }
+    .col-title { font-size: 18px; font-weight: 700; }
+    .card { rx: 9; ry: 9; stroke-width: 2; }
+    .input { fill: #e2e8f0; stroke: #475569; }
+    .agent { fill: #dcfce7; stroke: #15803d; }
+    .output { fill: #ede9fe; stroke: #6d28d9; }
+    .label { font-size: 13px; }
+    .step { font-size: 12px; fill: #334155; }
+    .arrow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+    .legend { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 10; ry: 10; }
+  </style>
   <defs>
-    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
     </marker>
   </defs>
 
-  <!-- Background -->
-  <rect width="1200" height="2500" fill="#f6f8fa" rx="12"/>
+  <text x="40" y="50" class="title">ASDW-WEB データフロー（入力 → Agent → 出力）</text>
+  <text x="40" y="78" class="subtitle">読み順: 上から下。各行は「1 Step の代表的なファイルフロー」を示す。</text>
 
-  <!-- Title -->
-  <text x="600" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ASDW-WEB: Web Application 実装・デプロイ データフロー</text>
-  <text x="600" y="54" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+  <text x="120" y="130" class="col-title">入力ファイル</text>
+  <text x="740" y="130" class="col-title">Custom Agent（タスク）</text>
+  <text x="1260" y="130" class="col-title">出力ファイル</text>
 
-  <!-- Column headers -->
-  <text x="175" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#0366d6">入力ファイル</text>
-  <text x="565" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#6f42c1">Custom Agent</text>
-  <text x="980" y="72" text-anchor="middle" font-size="12" font-weight="bold" fill="#28a745">成果物</text>
+  <!-- Row 1 -->
+  <rect class="card input" x="60" y="170" width="500" height="72"/>
+  <text class="label" x="80" y="198">docs/catalog/data-model.md</text>
+  <text class="label" x="80" y="220">docs/catalog/service-catalog.md / domain-analytics.md</text>
+  <rect class="card agent" x="650" y="170" width="420" height="72"/>
+  <text class="label" x="670" y="198">Dev-Microservice-Azure-DataDesign</text>
+  <text class="step" x="670" y="220">Step.1.1</text>
+  <rect class="card output" x="1160" y="170" width="500" height="72"/>
+  <text class="label" x="1180" y="210">docs/azure/azure-services-data.md</text>
 
-  <!-- ====== Section: Step.1 データ ====== -->
-  <rect x="0" y="84" width="1200" height="22" fill="#fff3e0" opacity="0.8"/>
-  <text x="600" y="99" text-anchor="middle" font-size="12" font-weight="bold" fill="#e36209">■ Step.1 データ</text>
+  <!-- Row 2 -->
+  <rect class="card input" x="60" y="270" width="500" height="72"/>
+  <text class="label" x="80" y="298">docs/test-specs/{serviceId}-test-spec.md</text>
+  <text class="label" x="80" y="320">docs/services/ / service-catalog-matrix.md</text>
+  <rect class="card agent" x="650" y="270" width="420" height="72"/>
+  <text class="label" x="670" y="298">Dev-Microservice-Azure-ServiceTestCoding</text>
+  <text class="step" x="670" y="320">Step.2.3TC</text>
+  <rect class="card output" x="1160" y="270" width="500" height="72"/>
+  <text class="label" x="1180" y="310">test/api/{ServiceName}.Tests/</text>
 
-  <!-- Step 1.1 -->
-  <text x="565" y="118" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 1.1</text>
-  <rect x="20" y="123" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="142" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
-  <text x="175" y="158" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
-  <text x="175" y="174" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
-  <rect x="430" y="120" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="143" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-DataDesign</text>
-  <text x="565" y="159" text-anchor="middle" font-size="9" fill="#586069">Azure データサービス設計</text>
-  <text x="565" y="173" text-anchor="middle" font-size="9" fill="#959da5">データストア選定・設計書</text>
-  <rect x="800" y="130" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="153" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/azure-services-data.md</text>
-  <line x1="330" y1="156" x2="430" y2="156" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="156" x2="800" y2="149" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Row 3 -->
+  <rect class="card input" x="60" y="370" width="500" height="72"/>
+  <text class="label" x="80" y="398">docs/catalog/service-catalog.md</text>
+  <text class="label" x="80" y="420">src/api/ / resource_group</text>
+  <rect class="card agent" x="650" y="370" width="420" height="72"/>
+  <text class="label" x="670" y="398">Dev-Microservice-Azure-ComputeDeploy-AzureFunctions</text>
+  <text class="step" x="670" y="420">Step.2.5</text>
+  <rect class="card output" x="1160" y="370" width="500" height="72"/>
+  <text class="label" x="1180" y="398">infra/azure/create-azure-api-resources-prep.sh</text>
+  <text class="label" x="1180" y="420">infra/azure/verify-api-resources.sh</text>
 
-  <!-- Step 1.2 -->
-  <text x="565" y="212" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 1.2</text>
-  <line x1="565" y1="192" x2="565" y2="215" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="220" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="239" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/azure-services-data.md</text>
-  <text x="175" y="255" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
-  <text x="175" y="271" text-anchor="middle" font-size="10" fill="#24292e">src/data/sample-data.json</text>
-  <rect x="430" y="217" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="240" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-DataDeploy</text>
-  <text x="565" y="256" text-anchor="middle" font-size="9" fill="#586069">Azure データリソースデプロイ</text>
-  <text x="565" y="270" text-anchor="middle" font-size="9" fill="#959da5">インフラ構築スクリプト生成</text>
-  <rect x="800" y="220" width="360" height="55" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="243" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/create-azure-data-resources*.sh</text>
-  <text x="980" y="259" text-anchor="middle" font-size="9" fill="#24292e">docs/test-specs/deploy-step1-data-test-spec.md</text>
-  <line x1="330" y1="253" x2="430" y2="253" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="253" x2="800" y2="248" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Row 4 -->
+  <rect class="card input" x="60" y="470" width="500" height="72"/>
+  <text class="label" x="80" y="498">docs/screen/ / service-catalog-matrix.md</text>
+  <text class="label" x="80" y="520">docs/catalog/test-strategy.md</text>
+  <rect class="card agent" x="650" y="470" width="420" height="72"/>
+  <text class="label" x="670" y="498">Arch-TDD-TestSpec</text>
+  <text class="step" x="670" y="520">Step.3.0T</text>
+  <rect class="card output" x="1160" y="470" width="500" height="72"/>
+  <text class="label" x="1180" y="510">docs/test-specs/{screenId}-test-spec.md</text>
 
-  <!-- ====== Section: Step.2 マイクロサービス作成 ====== -->
-  <rect x="0" y="310" width="1200" height="22" fill="#ede7f6" opacity="0.8"/>
-  <text x="600" y="325" text-anchor="middle" font-size="12" font-weight="bold" fill="#6f42c1">■ Step.2 マイクロサービス作成</text>
+  <!-- Row 5 -->
+  <rect class="card input" x="60" y="570" width="500" height="72"/>
+  <text class="label" x="80" y="598">src/app/ / service-catalog-matrix.md</text>
+  <text class="label" x="80" y="620">docs/test-specs/</text>
+  <rect class="card agent" x="650" y="570" width="420" height="72"/>
+  <text class="label" x="670" y="598">E2ETesting-Playwright</text>
+  <text class="step" x="670" y="620">Step.3.3</text>
+  <rect class="card output" x="1160" y="570" width="500" height="72"/>
+  <text class="label" x="1180" y="610">E2E 実行結果（artifact）</text>
 
-  <!-- Step 2.1 -->
-  <text x="565" y="346" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.1</text>
-  <rect x="20" y="352" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="371" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
-  <text x="175" y="387" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
-  <text x="175" y="403" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
-  <rect x="430" y="349" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="372" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-ComputeDesign</text>
-  <text x="565" y="388" text-anchor="middle" font-size="9" fill="#586069">コンピュートサービス設計</text>
-  <rect x="800" y="360" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="383" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/azure-services-compute.md</text>
-  <line x1="330" y1="385" x2="430" y2="385" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="385" x2="800" y2="379" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Row 6 -->
+  <rect class="card input" x="60" y="670" width="500" height="72"/>
+  <text class="label" x="80" y="698">docs/catalog/service-catalog-matrix.md</text>
+  <text class="label" x="80" y="720">src/ / infra/</text>
+  <rect class="card agent" x="650" y="670" width="420" height="72"/>
+  <text class="label" x="670" y="698">QA-AzureDependencyReview</text>
+  <text class="step" x="670" y="720">Step.4.2</text>
+  <rect class="card output" x="1160" y="670" width="500" height="72"/>
+  <text class="label" x="1180" y="710">docs/azure/dependency-review-report.md</text>
 
-  <!-- Step 2.2 -->
-  <text x="565" y="445" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.2</text>
-  <line x1="565" y1="421" x2="565" y2="448" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="452" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="471" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
-  <text x="175" y="487" text-anchor="middle" font-size="10" fill="#24292e">docs/services/</text>
-  <text x="175" y="503" text-anchor="middle" font-size="10" fill="#24292e">azure-services-compute.md</text>
-  <rect x="430" y="449" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="472" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-AddServiceDesign</text>
-  <text x="565" y="488" text-anchor="middle" font-size="9" fill="#586069">追加サービス設計</text>
-  <rect x="800" y="460" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="483" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/azure-services-additional.md</text>
-  <line x1="330" y1="485" x2="430" y2="485" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="485" x2="800" y2="479" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Arrows per row -->
+  <path class="arrow" d="M560 206 L650 206"/>
+  <path class="arrow" d="M1070 206 L1160 206"/>
+  <path class="arrow" d="M560 306 L650 306"/>
+  <path class="arrow" d="M1070 306 L1160 306"/>
+  <path class="arrow" d="M560 406 L650 406"/>
+  <path class="arrow" d="M1070 406 L1160 406"/>
+  <path class="arrow" d="M560 506 L650 506"/>
+  <path class="arrow" d="M1070 506 L1160 506"/>
+  <path class="arrow" d="M560 606 L650 606"/>
+  <path class="arrow" d="M1070 606 L1160 606"/>
+  <path class="arrow" d="M560 706 L650 706"/>
+  <path class="arrow" d="M1070 706 L1160 706"/>
 
-  <!-- Step 2.3 -->
-  <text x="565" y="545" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.3</text>
-  <line x1="565" y1="521" x2="565" y2="548" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="552" width="310" height="45" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="579" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/azure-services-additional.md</text>
-  <rect x="430" y="549" width="270" height="52" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="569" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-AddServiceDeploy</text>
-  <text x="565" y="585" text-anchor="middle" font-size="9" fill="#586069">追加リソースデプロイ</text>
-  <rect x="800" y="552" width="360" height="50" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="572" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/create-azure-additional-resources*</text>
-  <text x="980" y="588" text-anchor="middle" font-size="9" fill="#24292e">deploy-step2-additional-test-spec.md</text>
-  <line x1="330" y1="575" x2="430" y2="575" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="575" x2="800" y2="577" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.3TC -->
-  <text x="565" y="628" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.3TC</text>
-  <line x1="565" y1="601" x2="565" y2="631" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="638" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="658" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{serviceId}-test-spec.md</text>
-  <text x="175" y="674" text-anchor="middle" font-size="10" fill="#24292e">docs/services/</text>
-  <rect x="430" y="635" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="655" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-ServiceTestCoding</text>
-  <text x="565" y="671" text-anchor="middle" font-size="9" fill="#586069">サービス TDD テストコード生成</text>
-  <rect x="800" y="645" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="668" text-anchor="middle" font-size="10" fill="#24292e">test/api/{サービス名}.Tests/</text>
-  <line x1="330" y1="663" x2="430" y2="663" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="663" x2="800" y2="664" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.4 -->
-  <text x="565" y="720" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.4</text>
-  <line x1="565" y1="692" x2="565" y2="723" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="730" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="749" text-anchor="middle" font-size="10" fill="#24292e">docs/services/</text>
-  <text x="175" y="765" text-anchor="middle" font-size="10" fill="#24292e">test/api/{サービス名}.Tests/</text>
-  <text x="175" y="781" text-anchor="middle" font-size="10" fill="#24292e">{serviceId}-test-spec.md</text>
-  <rect x="430" y="727" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="748" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-ServiceCoding-AzureFunctions</text>
-  <text x="565" y="764" text-anchor="middle" font-size="9" fill="#586069">Azure Functions 実装 (TDD GREEN)</text>
-  <rect x="800" y="740" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="763" text-anchor="middle" font-size="10" fill="#24292e">src/api/{サービスID}-{サービス名}/</text>
-  <line x1="330" y1="762" x2="430" y2="762" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="763" x2="800" y2="759" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.5 -->
-  <text x="565" y="830" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.5</text>
-  <line x1="565" y1="799" x2="565" y2="833" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="840" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="860" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md</text>
-  <text x="175" y="876" text-anchor="middle" font-size="10" fill="#24292e">src/api/</text>
-  <rect x="430" y="837" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="858" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-ComputeDeploy-AzureFunctions</text>
-  <text x="565" y="874" text-anchor="middle" font-size="9" fill="#586069">Azure Functions デプロイ設定</text>
-  <rect x="800" y="845" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="863" text-anchor="middle" font-size="9" fill="#24292e">.github/workflows/</text>
-  <text x="980" y="879" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/create-azure-api-resources*.sh</text>
-  <line x1="330" y1="865" x2="430" y2="865" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="865" x2="800" y2="862" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.6 -->
-  <text x="565" y="918" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.6</text>
-  <line x1="565" y1="894" x2="565" y2="921" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="928" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="948" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
-  <text x="175" y="964" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/</text>
-  <rect x="430" y="925" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="946" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-AIAgentDesign</text>
-  <text x="565" y="962" text-anchor="middle" font-size="9" fill="#586069">AI Agent 設計（詳細設計書生成）</text>
-  <rect x="800" y="932" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="950" text-anchor="middle" font-size="9" fill="#24292e">docs/ai-agent-catalog.md</text>
-  <text x="980" y="966" text-anchor="middle" font-size="9" fill="#24292e">docs/agent/</text>
-  <line x1="330" y1="953" x2="430" y2="953" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="953" x2="800" y2="954" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.7T -->
-  <text x="565" y="1008" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.7T</text>
-  <line x1="565" y1="982" x2="565" y2="1011" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1018" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1037" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/test-strategy.md</text>
-  <text x="175" y="1053" text-anchor="middle" font-size="10" fill="#24292e">docs/ai-agent-catalog.md</text>
-  <text x="175" y="1069" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
-  <rect x="430" y="1015" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1038" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-TDD-TestSpec</text>
-  <text x="565" y="1054" text-anchor="middle" font-size="9" fill="#586069">Agent TDD テスト仕様書生成</text>
-  <rect x="800" y="1028" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1051" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{agentId}-test-spec.md</text>
-  <line x1="330" y1="1050" x2="430" y2="1051" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1051" x2="800" y2="1047" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.7TC -->
-  <text x="565" y="1110" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.7TC</text>
-  <line x1="565" y1="1087" x2="565" y2="1113" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1120" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1140" text-anchor="middle" font-size="10" fill="#24292e">{agentId}-test-spec.md</text>
-  <text x="175" y="1156" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
-  <rect x="430" y="1117" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1138" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-AgentTestCoding</text>
-  <text x="565" y="1154" text-anchor="middle" font-size="9" fill="#586069">Agent TDD テストコード生成</text>
-  <rect x="800" y="1127" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1150" text-anchor="middle" font-size="10" fill="#24292e">test/agent/{AgentName}.Tests/</text>
-  <line x1="330" y1="1145" x2="430" y2="1146" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1146" x2="800" y2="1146" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.7 -->
-  <text x="565" y="1198" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.7</text>
-  <line x1="565" y1="1174" x2="565" y2="1201" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1208" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1227" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
-  <text x="175" y="1243" text-anchor="middle" font-size="10" fill="#24292e">test/agent/{AgentName}.Tests/</text>
-  <text x="175" y="1259" text-anchor="middle" font-size="10" fill="#24292e">azure-services-additional.md</text>
-  <rect x="430" y="1205" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1228" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-AgentCoding</text>
-  <text x="565" y="1244" text-anchor="middle" font-size="9" fill="#586069">AI Agent 実装 (TDD GREEN)</text>
-  <rect x="800" y="1218" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1241" text-anchor="middle" font-size="10" fill="#24292e">src/agent/{AgentID}-{AgentName}/</text>
-  <line x1="330" y1="1240" x2="430" y2="1241" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1241" x2="800" y2="1237" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 2.8 -->
-  <text x="565" y="1298" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 2.8</text>
-  <line x1="565" y1="1277" x2="565" y2="1301" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1308" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1327" text-anchor="middle" font-size="10" fill="#24292e">src/agent/{AgentID}-{AgentName}/</text>
-  <text x="175" y="1343" text-anchor="middle" font-size="10" fill="#24292e">docs/ai-agent-catalog.md</text>
-  <text x="175" y="1359" text-anchor="middle" font-size="10" fill="#24292e">azure-services-additional.md</text>
-  <rect x="430" y="1305" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1328" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-AgentDeploy</text>
-  <text x="565" y="1344" text-anchor="middle" font-size="9" fill="#586069">AI Agent デプロイ</text>
-  <rect x="800" y="1318" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1336" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/create-azure-agent-resources*.sh</text>
-  <text x="980" y="1352" text-anchor="middle" font-size="9" fill="#24292e">.github/workflows/deploy-agent-*.yml</text>
-  <line x1="330" y1="1340" x2="430" y2="1340" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1341" x2="800" y2="1341" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ====== Section: Step.3 UI 作成 ====== -->
-  <rect x="0" y="1400" width="1200" height="22" fill="#e8f0fe" opacity="0.8"/>
-  <text x="600" y="1415" text-anchor="middle" font-size="12" font-weight="bold" fill="#0366d6">■ Step.3 UI 作成</text>
-
-  <!-- Step 3.0TC -->
-  <text x="565" y="1438" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 3.0TC</text>
-  <rect x="20" y="1445" width="310" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1465" text-anchor="middle" font-size="10" fill="#24292e">{screenId}-test-spec.md</text>
-  <text x="175" y="1481" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/</text>
-  <rect x="430" y="1442" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1463" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-UITestCoding</text>
-  <text x="565" y="1479" text-anchor="middle" font-size="9" fill="#586069">UI TDD テストコード生成</text>
-  <rect x="800" y="1452" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1475" text-anchor="middle" font-size="10" fill="#24292e">test/ui/</text>
-  <line x1="330" y1="1470" x2="430" y2="1470" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1470" x2="800" y2="1471" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 3.1 -->
-  <text x="565" y="1527" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 3.1</text>
-  <line x1="565" y1="1499" x2="565" y2="1530" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1537" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1556" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/</text>
-  <text x="175" y="1572" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/screen-catalog.md</text>
-  <text x="175" y="1588" text-anchor="middle" font-size="10" fill="#24292e">test/ui/</text>
-  <rect x="430" y="1534" width="270" height="72" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1557" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-UICoding</text>
-  <text x="565" y="1573" text-anchor="middle" font-size="9" fill="#586069">UI 実装 (TDD GREEN)</text>
-  <rect x="800" y="1547" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1570" text-anchor="middle" font-size="10" fill="#24292e">src/app/</text>
-  <line x1="330" y1="1570" x2="430" y2="1570" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1570" x2="800" y2="1566" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 3.2 -->
-  <text x="565" y="1640" text-anchor="middle" font-size="9" fill="#959da5" font-weight="bold">Step 3.2</text>
-  <line x1="565" y1="1606" x2="565" y2="1643" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <rect x="20" y="1650" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="1673" text-anchor="middle" font-size="10" fill="#24292e">src/app/</text>
-  <rect x="430" y="1647" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="1668" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps</text>
-  <text x="565" y="1684" text-anchor="middle" font-size="9" fill="#586069">Static Web Apps デプロイ設定</text>
-  <rect x="800" y="1653" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="1671" text-anchor="middle" font-size="9" fill="#24292e">.github/workflows/</text>
-  <text x="980" y="1687" text-anchor="middle" font-size="9" fill="#24292e">infra/azure/create-azure-webui-resources.sh</text>
-  <line x1="330" y1="1669" x2="430" y2="1671" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="1671" x2="800" y2="1676" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ====== Section: Step.4 アーキテクチャレビュー ====== -->
-  <rect x="0" y="1740" width="1200" height="22" fill="#e6ffe6" opacity="0.8"/>
-  <text x="600" y="1755" text-anchor="middle" font-size="12" font-weight="bold" fill="#28a745">■ Step.4 アーキテクチャレビュー（並列実行）</text>
-
-  <!-- Step 4.1 (left) -->
-  <text x="300" y="1778" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 4.1</text>
-  <rect x="20" y="1784" width="250" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="145" y="1804" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
-  <text x="145" y="1820" text-anchor="middle" font-size="10" fill="#24292e">docs/azure/</text>
-  <rect x="285" y="1784" width="210" height="50" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="390" y="1806" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">QA-AzureArchitectureReview</text>
-  <text x="390" y="1822" text-anchor="middle" font-size="9" fill="#586069">Azure アーキテクチャレビュー</text>
-  <rect x="510" y="1793" width="200" height="35" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="610" y="1810" text-anchor="middle" font-size="9" fill="#24292e">azure-architecture-</text>
-  <text x="610" y="1822" text-anchor="middle" font-size="9" fill="#24292e">review-report.md</text>
-  <line x1="270" y1="1809" x2="285" y2="1809" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="495" y1="1809" x2="510" y2="1811" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 4.2 (right) -->
-  <text x="870" y="1778" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 4.2</text>
-  <rect x="720" y="1784" width="210" height="50" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="825" y="1804" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
-  <text x="825" y="1820" text-anchor="middle" font-size="10" fill="#24292e">src/  infra/</text>
-  <rect x="945" y="1784" width="200" height="50" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="1045" y="1806" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">QA-AzureDependencyReview</text>
-  <text x="1045" y="1822" text-anchor="middle" font-size="9" fill="#586069">依存関係レビュー</text>
-  <rect x="800" y="1850" width="200" height="35" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="900" y="1867" text-anchor="middle" font-size="9" fill="#24292e">dependency-review-report.md</text>
-  <line x1="930" y1="1809" x2="945" y2="1809" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="1045" y1="1834" x2="1045" y2="1850" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="900" y1="1850" x2="900" y2="1885" stroke="#586069" stroke-width="1"/>
-
-  <!-- Legend -->
-  <rect x="20" y="1920" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
-  <text x="260" y="1938" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
-  <rect x="35" y="1946" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="52" y="1956" font-size="10" fill="#24292e">入力ファイル</text>
-  <rect x="150" y="1946" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="167" y="1956" font-size="10" fill="#24292e">Custom Agent</text>
-  <rect x="275" y="1946" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="292" y="1956" font-size="10" fill="#24292e">成果物</text>
-  <line x1="370" y1="1952" x2="400" y2="1952" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <text x="410" y="1956" font-size="10" fill="#24292e">ステップ依存</text>
+  <rect class="legend" x="60" y="790" width="1600" height="150"/>
+  <text class="label" x="90" y="828">凡例: 灰=入力ファイル、緑=Custom Agent タスク、紫=出力ファイル</text>
+  <text class="label" x="90" y="858">色のセマンティクス: ファイルと実行主体を視覚的に分離し、監査時の差分確認を容易化</text>
+  <text class="label" x="90" y="888">読み順: 上から下へ。各行で「入力 → Agent → 出力」の関係を追跡する</text>
 </svg>

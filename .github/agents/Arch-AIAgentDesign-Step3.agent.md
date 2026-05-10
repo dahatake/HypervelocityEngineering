@@ -2,10 +2,14 @@
 name: Arch-AIAgentDesign-Step3
 description: AI Agent 詳細設計（Step 3）を実施し、docs/agent/agent-detail-<Agent-ID>-<Agent名>.md および docs/ai-agent-catalog.md を作成する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-AIAgentDesign-Step3/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -22,7 +26,7 @@ tools: ["*"]
 |---|---------|------|---------------------------|
 | 1 | Issue body 記載のユースケース記述ファイル | Agent の目的・スコープの根拠 | Role, Goals, Scope |
 | 2 | `docs/catalog/use-case-catalog.md` | 全ユースケース俯瞰。Agent の対象/非対象の境界決定 | Non-Goals, Boundary Matrix |
-| 3 | `docs/catalog/domain-analytics.md` | Bounded Context 境界。Agent 分割判断の根拠 | Architecture Decision, Boundary Matrix |
+| 3 | `docs/domain-analytics.md` | Bounded Context 境界。Agent 分割判断の根拠 | Architecture Decision, Boundary Matrix |
 | 4 | `docs/catalog/data-model.md` | エンティティ定義。I/O Contract のスキーマ根拠 | Input/Output Contract, Knowledge Source |
 | 5 | `docs/catalog/service-catalog.md` | マイクロサービス一覧。Agent ↔ サービスのマッピング | Tool Catalog, Boundary Matrix |
 | 6 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング。Tool（Actions）定義の根拠 | **Tool Catalog（最重要）**, Procedure |

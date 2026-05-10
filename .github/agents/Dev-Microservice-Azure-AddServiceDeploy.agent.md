@@ -1,15 +1,19 @@
-﻿---
+---
 name: Dev-Microservice-Azure-AddServiceDeploy
 description: Azure追加サービスをAzure CLIで冪等作成し、service-catalog等を更新、AC検証で完了判定する
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDeploy/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
-- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
-- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
+- `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する（`.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md`）。
+- `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する（`.github/skills/azure-skills/azure-ac-verification/SKILL.md`）。
 
 ## 0.1) スコープ
 - `docs/azure/azure-services-additional.md` を根拠に、追加Azureサービスを **Azure CLI で冪等に作成**する。
@@ -39,6 +43,7 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - `infra/azure/create-azure-additional-resources-prep.sh`
 - `infra/azure/create-azure-additional-resources/create.sh`
 - （複数サービスの場合）`infra/azure/create-azure-additional-resources/services/<service>.sh`
+- （検証）`infra/azure/create-azure-additional-resources/verify-*.sh`（Secret 依存がある場合は `infra/azure/verify-secrets-expiry.sh` を呼び出す）
 
 ### 計画・根拠・出力（work）
 - `{WORK}plan.md`（DAG+見積+AC定義+検証+分割判定）
@@ -95,6 +100,10 @@ Issue に AC が部分的に記載されている場合は、Issue の AC を優
 | AC-6 | `infra/README.md` に実行手順と前提条件が記載されている | 必須 |
 | AC-7 | 秘密情報（鍵・トークン・パスワード等）が成果物に含まれていない | 必須 |
 | AC-8 | 破壊的変更（削除/置換）が行われていない | 必須 |
+| AC-9 | **ロールバック手順 README が存在する** — `infra/azure/rollback/addservice-rollback.md` が存在し、テンプレ（`docs/templates/rollback-readme-template.md`）に定義された 4 必須セクション（直前バージョン特定 / ロールバック実行 / 検証スクリプト再実行 / service-catalog 巻き戻し）を満たすこと。新規サービス/リソース追加時はこの README も更新する。 | 必須 |
+| AC-10 | NFR（性能/可用性/セキュリティ）のうち該当項目を `docs/templates/nfr-acceptance-template.md` から選択して検証する（非該当は N/A） | 必須 |
+| AC-11 | Key Vault Secret 依存がある場合、期限切れ検出を `verify-*.sh` へ組み込む（依存なしは N/A） | 必須 |
+| AC-12 | verify 項目と TestSpec の Test-ID が AC-ID で相互参照可能である | 必須 |
 
 AC 定義後の変更は禁止（追加・修正は Issue 本文の更新を通じてのみ許可）。
 

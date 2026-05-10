@@ -2,10 +2,14 @@
 name: Arch-ImprovementPlanner
 description: コード品質スキャン結果を受け取り、Skill task-dag-planning に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 1責務・最小コンテキスト単位に分割し、優先度付きで出力する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-ImprovementPlanner/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **改善計画策定（設計）**。明示依頼が無い限り **コードの変更はしない**（計画フェーズ専用）。
 - §2.2 分割判定を機械的に実行し、結果を plan.md の `## 分割判定` セクションに記録する。
 

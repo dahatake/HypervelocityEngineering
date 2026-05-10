@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Batch-DataSourceAnalysis
 description: "バッチデータソース/デスティネーション分析（スキーマ・変換・SLA）を docs/batch/batch-data-source-analysis.md に作成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Batch-DataSourceAnalysis/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 

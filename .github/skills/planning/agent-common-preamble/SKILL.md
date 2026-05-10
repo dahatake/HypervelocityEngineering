@@ -1,18 +1,10 @@
 ---
 name: agent-common-preamble
 description: >
-  全 Custom Agent が作業開始時に参照する共通プリアンブル。
-  copilot-instructions.md §0 の共通ルール参照、全 Agent 共通の Skills 参照リスト、
-  分割ルール・エラー対策・品質レビューの Skill 参照先を一元管理する。
-  USE FOR: agent start, common rules, preamble, skill reference list,
-  shared rules lookup, agent initialization.
-  DO NOT USE FOR: implementation, testing, deployment,
-  specific skill execution (use the specific skill directly).
-  WHEN: Custom Agent が作業を開始したとき、共通ルールを確認したいとき、
-  参照すべき Skills 一覧を知りたいとき。
+  全 Custom Agent が作業開始時に参照する共通プリアンブル。 USE FOR: agent start, common rules, preamble. DO NOT USE FOR: implementation. WHEN: Custom Agent が作業を開始したとき、共通ルールを確認したいとき。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # agent-common-preamble

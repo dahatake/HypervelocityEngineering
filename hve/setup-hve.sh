@@ -6,6 +6,7 @@ WITH_WORKIQ=false
 INSTALL_EXTERNAL_COPILOT_CLI=false
 FORCE_RECREATE_VENV=false
 WARNING_COUNT=0
+GH_AUTH_OK=false
 
 usage() {
   cat <<'USAGE'
@@ -14,7 +15,7 @@ Usage: ./hve/setup-hve.sh [options]
 Options:
   --check-only                    Report current state without changing files.
   --with-workiq                   Check Node.js/npm/npx prerequisites for Work IQ.
-  --install-external-copilot-cli  Install/check external copilot CLI via Homebrew when needed.
+  --install-external-copilot-cli  Install/check external copilot CLI when needed (uses Homebrew if available).
   --force-recreate-venv           Recreate .venv if it exists with an unsupported Python.
   -h, --help                      Show this help.
 USAGE
@@ -160,11 +161,28 @@ fi
 if command -v gh >/dev/null 2>&1; then
   step "Checking GitHub authentication"
   if gh auth status >/dev/null 2>&1; then
+    GH_AUTH_OK=true
     printf 'gh auth status: OK\n'
   else
     warn "gh auth status failed. Run 'gh auth login' before using GitHub operations."
   fi
 fi
+
+step "Next steps"
+if command -v gh >/dev/null 2>&1; then
+  if [[ "$GH_AUTH_OK" == true ]]; then
+    printf 'GitHub auth: OK (gh auth status)\n'
+  else
+    printf "Authenticate GitHub CLI if needed: gh auth login\n"
+    printf "Then verify: gh auth status\n"
+  fi
+fi
+if [[ -x "$VENV_PYTHON" ]]; then
+  printf 'Basic runtime check: %s -m hve --help\n' "$VENV_PYTHON"
+else
+  printf 'Create .venv first (run setup without --check-only), then run: .venv/bin/python -m hve --help\n'
+fi
+printf 'Optional: Node.js / npm / npx are only required when using Work IQ or Node-based MCP tools.\n'
 
 if [[ "$CHECK_ONLY" == true ]]; then
   printf '\nCheck-only completed with %s warning(s).\n' "$WARNING_COUNT"

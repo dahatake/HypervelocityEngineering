@@ -2,12 +2,16 @@
 name: Dev-Microservice-Azure-AgentDeploy
 description: AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions で CI/CD を構築する。デプロイ検証は最大 3 回反復。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AgentDeploy/Issue-<識別子>/`
 
 Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用Agent。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
@@ -87,6 +91,8 @@ A) スクリプト作成（prep + create + verify）
 - Azure AI Foundry エンドポイントへのヘルスチェック（HTTP 200 応答確認）
 - Agent が正常に登録されていることの確認
 - 代表クエリ（簡単なテストメッセージ）の送信と応答確認
+- NFR（性能）として `/health` の応答時間を計測し、しきい値は `NFR_P95_MAX_MS` / `NFR_P99_MAX_MS` / `NFR_SAMPLE_COUNT` 等の環境変数で管理する（ハードコード禁止）
+- Key Vault Secret 依存がある場合は `infra/azure/verify-secrets-expiry.sh` を呼び出して期限切れ検出を行う（検出のみ。自動ローテーション禁止）
 - exit code: 0=全 PASS, 非0=FAIL あり
 - **冪等性**: 何度実行しても副作用が発生しない（読み取り専用操作のみ使用すること）
 
@@ -134,6 +140,10 @@ A) スクリプト作成（prep + create + verify）
 | 4 | 代表クエリへの応答が正常 | Agent に簡単なテストメッセージを送信して応答が空でないことを確認 |
 | 5 | GitHub Actions ワークフローが存在する | `.github/workflows/deploy-agent-*.yml` の存在確認 |
 | 6 | サービスカタログに Agent エンドポイントが記録されている | `docs/azure/service-catalog.md` の内容確認 |
+| 7 | **ロールバック手順 README が存在する** — `infra/azure/rollback/agent-foundry-rollback.md` が存在し、テンプレ（`docs/templates/rollback-readme-template.md`）に定義された 4 必須セクション（直前バージョン特定 / ロールバック実行 / 検証スクリプト再実行 / service-catalog 巻き戻し）を満たすこと。新規サービス/リソース追加時はこの README も更新する。 | `infra/azure/rollback/agent-foundry-rollback.md` の存在確認と 4 必須セクション（§2〜§5）の記載確認 |
+| 8 | NFR（性能/可用性/セキュリティ）の該当項目を `docs/templates/nfr-acceptance-template.md` から選択し検証している | `verify-agent-resources.sh` で NFR 測定/確認を実行し、しきい値は環境変数で可変化されていること |
+| 9 | Key Vault Secret 依存がある場合、期限検出が実装されている（依存なしは N/A） | `verify-agent-resources.sh` から `infra/azure/verify-secrets-expiry.sh` を呼び出し、`SECRET_EXPIRY_WARN_DAYS` 未満は警告、期限切れは FAIL として扱う |
+| 10 | verify 項目と TestSpec が AC-ID ↔ Test-ID で双方向に追跡できる | TestSpec の AC-ID 列付きマトリクスと逆引き表（`docs/templates/traceability-matrix-template.md` 準拠）を確認 |
 
 # 9) サービスカタログ更新ガイドライン
 - `docs/azure/service-catalog.md`（存在する場合）または `docs/catalog/service-catalog-matrix.md` に Agent エンドポイントを追記する
@@ -164,7 +174,10 @@ A) スクリプト作成（prep + create + verify）
 ## 3つの異なる観点（AI Agent デプロイの場合）
 - **1回目：デプロイ完全性・AC 達成度**：全 AC が満たされているか、Agent エンドポイントが正常応答するか、CI/CD が正しく設定されているか
 - **2回目：セキュリティ・冪等性**：シークレットがハードコードされていないか、スクリプトが冪等に動作するか（再実行してもエラーにならないか）、OIDC 認証が正しく設定されているか
-- **3回目：運用性・保守性**：verify スクリプトが全ての AC をカバーしているか、デプロイ失敗時のロールバック手順が明記されているか、ドキュメントが保守可能な状態か
+- **3回目：運用性・保守性**：verify スクリプトが全ての AC をカバーしているか、`infra/azure/rollback/agent-foundry-rollback.md` が存在し、かつ最新のデプロイ内容を反映した状態か（4 必須セクション：直前バージョン特定 / ロールバック実行 / 検証スクリプト再実行 / service-catalog 巻き戻し）、ドキュメントが保守可能な状態か
+
+> **ロールバック手順の正本**: デプロイ失敗時のロールバック手順詳細は [`infra/azure/rollback/agent-foundry-rollback.md`](../../infra/azure/rollback/agent-foundry-rollback.md) を参照。  
+> 本セクション（§13）は正本 README へのリンクとサマリとして機能する。新規サービス/リソース追加時は正本 README も更新すること。
 
 ## 出力方法
 レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

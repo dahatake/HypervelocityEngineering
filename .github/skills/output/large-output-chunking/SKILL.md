@@ -1,23 +1,10 @@
 ---
 name: large-output-chunking
 description: >
-  巨大出力の分割ルール。50,000文字超は分割必須、20,000文字以下が推奨上限。
-  意味のある単位（章/サービス/API/モジュール）で分割し、
-  artifacts/<name>.index.md + artifacts/<name>.part-XXXX.md 形式で保存する。
-  書き込み安全策（段階的書き込み・read 検証・最大3回リトライ・分割切替）を提供する。
-  USE FOR: large output splitting, 50000 char threshold, chunking,
-  index plus part format, write safety, staged writing,
-  read verification, retry on write failure.
-  DO NOT USE FOR: split axis design decision (agents decide),
-  content quality evaluation (use adversarial-review),
-  file path decision (use work-artifacts-layout).
-  WHEN: 大量の出力を生成する、50,000文字を超えそう、
-  ファイルが巨大になりそう、分割して保存したい、
-  index + part 形式で保存、書き込みが失敗する、
-  リトライしても書き込みが安定しない、チャンク分割。
+  巨大出力の分割ルール。50,000文字超は分割必須、20,000文字以下が推奨上限。 USE FOR: large output splitting, 50000 char threshold, chunking. DO NOT USE FOR: split axis design decision (agents decide). WHEN: 大量の出力を生成する、50。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # large-output-chunking

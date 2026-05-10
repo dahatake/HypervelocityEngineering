@@ -2,6 +2,9 @@
 name: Dev-Microservice-Azure-ServiceCoding-AzureFunctions
 description: マイクロサービス定義書から全てのサービスの Azure Functions を実装し、テスト/最小ドキュメント/設定雛形まで揃える
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-<識別子>/`
 
@@ -10,7 +13,8 @@ tools: ["*"]
 - 目的は「定義書どおりに動く *最小の本実装*」＋「CIで決定的に通る単体テスト」＋「利用者が実行/検証できる最小ドキュメント」。
 - “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -60,7 +64,7 @@ tools: ["*"]
    - テストダブル設計（§4）に基づき、モック/スタブの構成を実装する。
    - テストデータ定義（§3）に基づき、テストデータを準備する。
    - 既存テスト（`test/api/` 配下）がある場合は保持し、仕様書ベースで不足分を追加する。
-   - モッキングライブラリは既存テストプロジェクトの慣習に従う。慣習がない場合は xUnit + Moq（または NSubstitute）を既定とする。テスト戦略書（`docs/catalog/test-strategy.md` §4 テストダブル戦略）で別ライブラリが指定されている場合はそちらを優先する。
+   - モッキングライブラリは既存テストプロジェクトの慣習に従う。慣習がない場合は xUnit + Moq（または NSubstitute）を既定とする。テスト戦略書（`docs/test-strategy.md` §4 テストダブル戦略）で別ライブラリが指定されている場合はそちらを優先する。
 
 4) **RED 確認（TDD RED フェーズ）**
    - テストコードをビルドし、コンパイルが成功することを確認する。
@@ -96,7 +100,7 @@ tools: ["*"]
 
 8) **ビルド/テストの実行と記録**
    - repo標準のコマンドで build/test を実行し、成功/失敗とコマンドを作業ログに残す。
-   - 依存導入が不安定/遅い場合、`copilot-setup-steps.yml` による事前導入（存在すれば更新/無ければ追加検討）を行う。
+   - 依存導入が不安定/遅い場合、`Azure MCP Server` または `az login`（必要なら `--use-device-code`）で認証確認後に導入を再実行する。
 
 # 完了条件（DoD）
 - `src/api/{サービスID}-{サービス名}/` がビルド可能

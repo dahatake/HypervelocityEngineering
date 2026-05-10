@@ -4,8 +4,27 @@
 # Migrated from:
 #   - .github/cli/lib/workflow_registry.py
 #
-# 6 workflows (AAS/AAD/ASDW/ABD/ABDV/ADOC) with step DAG definitions stored
-# as JSON and queried with jq.
+# This registry is the single source of truth for workflow DAG definitions used
+# by Bash orchestration. Definitions are stored as JSON and queried with jq.
+#
+# Registered workflow IDs:
+#   - aas   (App Architecture Design)       : step execution
+#   - abd   (Batch Design)                  : step execution
+#   - abdv  (Batch Dev)                     : step execution + QA/review feedback
+#   - aag   (AI Agent Design)               : step execution
+#   - aagd  (AI Agent Dev & Deploy)         : step execution (deploy step を含む)
+#   - adoc  (Source Codeからのドキュメント作成) : step execution
+#
+# Registry responsibilities:
+#   - Step execution: resolve root steps / next runnable steps from depends_on
+#   - PR state transitions: provide workflow-specific state labels
+#     (${workflow_id}:{initialized|ready|running|done|blocked})
+#   - QA/Review feedback flow: keep workflow-local feedback steps in DAG order
+#
+# Naming conventions (current registry):
+#   - workflow_id: lowercase identifier (e.g. aas, abdv, aagd)
+#   - step.id: "N" or "N.M" (dot-separated numeric segments)
+#   - state label prefix: equals workflow_id
 #
 # Prerequisites:
 #   - bash 4.0+ (associative arrays)
@@ -215,7 +234,7 @@ JSONEOF
 # Retrieve full workflow definition as JSON.
 #
 # Args:
-#   WORKFLOW_ID — Workflow identifier (aas, aad, asdw, abd, abdv, adoc)
+#   WORKFLOW_ID — Workflow identifier (aas, abd, abdv, aag, aagd, adoc)
 #
 # Output:
 #   Workflow JSON on stdout.

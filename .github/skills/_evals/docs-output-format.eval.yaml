@@ -9,7 +9,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: action
-        detail: "各表の各行に出典列を追加し、docs/catalog/domain-analytics.md#BC-01 形式で記載する"
+        detail: "各表の各行に出典列を追加し、docs/domain-analytics.md#BC-01 形式で記載する"
     reason: "USE FOR: citation required per row に該当する"
 
   - id: mermaid-erdiagram-notation

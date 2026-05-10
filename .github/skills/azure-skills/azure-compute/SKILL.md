@@ -1,10 +1,11 @@
 ---
 name: azure-compute
-description: "Azure VM and VMSS router for recommendations, pricing, autoscale, orchestration, connectivity troubleshooting, and capacity reservations. WHEN: Azure VM, VMSS, scale set, recommend, compare, server, website, burstable, lightweight, VM family, workload, GPU, learning, simulation, dev/test, backend, autoscale, load balancer, Flexible orchestration, Uniform orchestration, cost estimate, connect, refused, Linux, black screen, reset password, reach VM, port 3389, NSG, troubleshoot, capacity reservation, CRG, reserve VMs, guarantee capacity, pre-provision capacity, CRG association, CRG disassociation."
+description: >
+  Azure VM and VMSS router for recommendations, pricing, autoscale, orchestration, connectivity troubleshooting, and capacity reservations. USE FOR: Azure VM, VMSS, scale set. DO NOT USE FOR: unrelated tasks. WHEN: Azure VM、VMSS。
 license: MIT
 metadata:
   author: Microsoft
-  version: "2.4.1"
+  version: 2.4.1
 ---
 
 # Azure Compute Skill

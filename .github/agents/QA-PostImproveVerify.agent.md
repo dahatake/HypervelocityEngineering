@@ -1,11 +1,15 @@
 ---
 name: QA-PostImproveVerify
-description: 自己改善実行後の品質検証を行う。Skill `harness-verification-loop` Verification Loop（Build/Lint/Test/Security/Diff の5段階）を実行し、デグレード検知とスコア比較を行う。自己改善ループ（Self-Improve）の Phase 4d として使用される。
+description: 自己改善後に harness-verification-loop（Build/Lint/Test/Security/Diff）を実行しデグレード検知・スコア比較を行う。Self-Improve Phase 4d として使用される。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/QA-PostImproveVerify/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **改善後検証（読み取り＋検証）**。明示依頼が無い限り **コードの変更はしない**。
 - Skill harness-safety-guard: 破壊的操作は絶対に実行しない。
 

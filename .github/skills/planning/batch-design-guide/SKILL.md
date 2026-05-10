@@ -1,19 +1,10 @@
 ---
 name: batch-design-guide
 description: >
-  バッチ処理の設計ガイドを統合的に提供する。要件定義・ジョブ定義・データフロー・
-  非機能要件・ワークフロー仕様・テスト仕様・テスト戦略を references/ に集約し、
-  SKILL.md 本文から索引を提供する。
-  USE FOR: batch design, job definition, data flow design,
-  batch non-functional requirements, batch test strategy,
-  batch workflow specification, batch test specification.
-  DO NOT USE FOR: batch implementation, batch deployment,
-  real-time API design (use microservice-design-guide).
-  WHEN: バッチ処理を設計する、バッチジョブを定義する、バッチのデータフローを設計する、
-  バッチの非機能要件を定義する、バッチのテスト仕様を作成する。
+  バッチ処理の設計ガイドを統合的に提供する。要件定義・ジョブ定義・データフロー・ 非機能要件・ワークフロー仕様・テスト仕様・テスト戦略を references/ に集約し、 SKILL.md 本文から索引を提供する。 USE FOR: batch design, job definition, data flow design. DO NOT USE FOR: batch implementation. WHEN: バッチ処理を設計する、バッチジョブを定義する。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # batch-design-guide

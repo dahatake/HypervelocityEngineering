@@ -5,6 +5,12 @@ on:
     paths:
       - '.github/skills/**'
       - '.github/copilot-instructions.md'
+      - '.github/scripts/validate-skills.py'
+      - '.github/scripts/validate-skill-routing.py'
+      - '.github/scripts/add-frontmatter-version.py'
+      - '.github/skills/CONTRIBUTING.md'
+      - '.github/workflows/validate-skills.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,123 +23,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install yq
-        run: |
-          YQ_VERSION="v4.52.5"
-          YQ_URL="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}"
-          TMP_DIR="$(mktemp -d)"
-          trap 'rm -rf "$TMP_DIR"' EXIT
-
-          # -fsSL = -f(fail-on-error) -s(silent) -S(show-error) -L(follow-redirects)
-          # -sS の組み合わせにより、正常時はプログレスバー非表示、エラー時はメッセージ表示
-          curl -fsSL -o "$TMP_DIR/yq_linux_amd64" "$YQ_URL/yq_linux_amd64"
-          curl -fsSL -o "$TMP_DIR/checksums" "$YQ_URL/checksums"
-
-          EXPECTED_SUM=""
-
-          # 新形式 (v4.51.0+): "<filename>  <hash1>  <hash2>..." 形式の場合、
-          # checksums_hashes_order で SHA256 の列番号を特定してから抽出する
-          if curl -fsSL -o "$TMP_DIR/checksums_hashes_order" "$YQ_URL/checksums_hashes_order" 2>/dev/null \
-             && [ -s "$TMP_DIR/checksums_hashes_order" ]; then
-            SHA256_LINE=$(grep -nE '^SHA-?256$' "$TMP_DIR/checksums_hashes_order" | cut -d: -f1 | head -1 || true)
-            if [ -n "$SHA256_LINE" ]; then
-              SHA256_COL=$(( SHA256_LINE + 1 ))  # +1: 先頭のファイル名列分
-              EXPECTED_SUM=$(grep "^yq_linux_amd64[[:space:]]" "$TMP_DIR/checksums" \
-                | awk -v col="$SHA256_COL" '{print $col}' | sed 's/^sha256://' || true)
-            fi
-          fi
-
-          # 旧形式フォールバック (v4.50.x 以前): "sha256:<hash>  <filename>" のため sha256: プレフィックスを除去
-          # bash -e -o pipefail 環境でgrepがマッチしない場合にパイプラインが失敗しないよう || true を付加
-          if [ -z "$EXPECTED_SUM" ]; then
-            EXPECTED_SUM=$(grep ' yq_linux_amd64$' "$TMP_DIR/checksums" | awk '{print $1}' | sed 's/^sha256://' || true)
-          fi
-
-          if [ -z "$EXPECTED_SUM" ]; then
-            echo "::error::yq_linux_amd64 のチェックサムを取得できませんでした。"
-            echo "--- checksums file debug info ---"
-            echo "File size: $(wc -c < "$TMP_DIR/checksums") bytes"
-            echo "First 10 lines:"
-            head -10 "$TMP_DIR/checksums"
-            echo "---------------------------------"
-            exit 1
-          fi
-
-          printf '%s  %s\n' "$EXPECTED_SUM" "$TMP_DIR/yq_linux_amd64" | sha256sum -c -
-
-          sudo install -m 0755 "$TMP_DIR/yq_linux_amd64" /usr/local/bin/yq
-
-          YQ_VERSION_INSTALLED="$(yq --version)"
-          echo "Installed $YQ_VERSION_INSTALLED"
-          if ! echo "$YQ_VERSION_INSTALLED" | grep -Eq 'version v4\.'; then
-            echo "::error::想定外の yq バージョンです。v4 系が必要です: $YQ_VERSION_INSTALLED"
-            exit 1
-          fi
-
       - name: Validate SKILL.md frontmatter
         run: |
-          FAIL_COUNT=0
+          python3 .github/scripts/validate-skills.py
 
-          SKILL_COUNT=$(find .github/skills -name "SKILL.md" | wc -l)
-          if [ "$SKILL_COUNT" -eq 0 ]; then
-            echo "⚠️ WARN: SKILL.md が見つかりませんでした。(.github/skills 配下)"
-            exit 0
-          fi
+  validate-routing:
+    name: Validate skill routing consistency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # TODO(PR-14/PR-15 完了後): continue-on-error を外して必須ゲート化する。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
 
-          while IFS= read -r skill_file; do
-            HAS_FAIL=false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-            # 1. YAML frontmatter の存在チェック（先頭が --- で始まり、2つ目の --- で閉じられているか）
-            FIRST_LINE=$(head -1 "$skill_file")
-            if [ "$FIRST_LINE" != "---" ]; then
-              echo "❌ FAIL: frontmatter が存在しません (先頭が --- でない): $skill_file"
-              FAIL_COUNT=$((FAIL_COUNT + 1))
-              continue
-            fi
-
-            SECOND_DASH=$(tail -n +2 "$skill_file" | grep -n '^---$' | head -1 | cut -d: -f1)
-            if [ -z "$SECOND_DASH" ]; then
-              echo "❌ FAIL: frontmatter が閉じられていません (2番目の --- がない): $skill_file"
-              FAIL_COUNT=$((FAIL_COUNT + 1))
-              continue
-            fi
-
-            # frontmatter を抽出し、先頭と末尾の --- を除去して yq に渡す
-            # awk: 最初の --- を検出したら count=1、次の --- が来たら終了。count=1 の間の行を出力
-            FRONTMATTER=$(awk '/^---$/{if(++count==2) exit; if(count==1) next} count==1' "$skill_file")
-
-            # 2. name フィールドの存在チェック
-            NAME=$(printf '%s\n' "$FRONTMATTER" | yq -r '.name // ""')
-            if [ -z "$NAME" ]; then
-              echo "❌ FAIL: 'name' フィールドがありません: $skill_file"
-              FAIL_COUNT=$((FAIL_COUNT + 1))
-              HAS_FAIL=true
-            fi
-
-            # 3. description フィールドの存在チェック
-            DESC=$(printf '%s\n' "$FRONTMATTER" | yq -r '.description // ""')
-            if [ -z "$DESC" ]; then
-              echo "❌ FAIL: 'description' フィールドがありません: $skill_file"
-              FAIL_COUNT=$((FAIL_COUNT + 1))
-              HAS_FAIL=true
-            fi
-
-            # 4. metadata.version フィールドの存在チェック（警告のみ、FAIL にはしない）
-            VERSION=$(printf '%s\n' "$FRONTMATTER" | yq -r '.metadata.version // ""')
-            if [ -z "$VERSION" ]; then
-              echo "⚠️ WARN: 'metadata.version' がありません: $skill_file"
-            fi
-
-            if [ "$HAS_FAIL" = false ]; then
-              echo "✅ PASS: $skill_file"
-            fi
-          done < <(find .github/skills -name "SKILL.md" | sort)
-
-          if [ "$FAIL_COUNT" -gt 0 ]; then
-            echo ""
-            echo "::error::$FAIL_COUNT 件の FAIL が検出されました。SKILL.md の frontmatter を修正してください。"
-            exit 1
-          fi
-
-          echo ""
-          echo "✅ 全 SKILL.md の frontmatter 検証が完了しました（FAIL なし）"
+      - name: Validate skill routing consistency
+        run: |
+          python3 .github/scripts/validate-skill-routing.py

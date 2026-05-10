@@ -2,10 +2,14 @@
 name: Dev-Batch-DataServiceSelect
 description: "バッチサービスカタログを読み、必要な Azure データサービスを特定して infra/azure/batch/ スクリプトを作成する（Step 1.1: データサービス選定）"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Batch-DataServiceSelect/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

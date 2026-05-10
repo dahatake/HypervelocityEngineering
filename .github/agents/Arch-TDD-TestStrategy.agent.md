@@ -1,14 +1,21 @@
-﻿---
+---
 name: Arch-TDD-TestStrategy
-description: "サービスカタログ・データモデルからTDDテスト戦略書を docs/catalog/test-strategy.md に生成/更新"
+description: "サービスカタログ・データモデルからTDDテスト戦略書を docs/test-strategy.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-TDD-TestStrategy/Issue-<識別子>/`
 
 TDDテスト戦略専用Agent。
 このエージェントは **テスト戦略書（test-strategy.md）** に特化し、コード改変はしない。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+
+## 役割分離ルール（必読）
+- `docs/templates/testspec-vs-teststrategy.md` を参照し、**TestSpec を正本（SoT）**、**TestStrategy を方針サマリ**として扱うこと。
 
 ## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
@@ -19,6 +26,7 @@ TDDテスト戦略専用Agent。
 この戦略書は Step 7.1（画面定義書）・Step 7.2（サービス定義書）の作成時に
 「テスタビリティ」観点を設計に組み込むための前提情報として機能し、
 Step 7.3（テスト仕様書）の直接の入力文書となる。
+本書は方針サマリに限定し、AC-ID 単位の受け入れ条件・Given-When-Then・Test-ID マッピングは `docs/test-specs/` 側を正本とする。
 
 # 2) 変数
 - 対象スコープ: {対象スコープ（省略時はプロジェクト全体）}
@@ -27,7 +35,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 必須:
 - `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス・データ所有権）
 - `docs/catalog/data-model.md`（エンティティ・制約・Polyglot Persistence設計）
-- `docs/catalog/domain-analytics.md`（Bounded Context・ドメインイベント）
+- `docs/domain-analytics.md`（Bounded Context・ドメインイベント）
 
 推奨:
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — テスト戦略書でのアプリ単位サービス分類に使用）
@@ -40,7 +48,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
   - `test/ui/`（UI テスト資産 — 存在すれば確認）
 
 # 4) 出力（生成/更新するファイル）
-- 主要成果物（必須）: `docs/catalog/test-strategy.md`
+- 主要成果物（必須）: `docs/test-strategy.md`
 - 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
 
 # 5) 依存確認（必須・最初に実行）
@@ -50,7 +58,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 |---|---|---|
 | `docs/catalog/service-catalog-matrix.md` | 存在しない・空・見出し `## 2.` または `## 3.` がない | 「依存 Step 6（サービスカタログ）が未完了のため実行不可です」 |
 | `docs/catalog/data-model.md` | 存在しない・空 | 「依存 Step 4（データモデル）が未完了のため実行不可です」 |
-| `docs/catalog/domain-analytics.md` | 存在しない・空 | 「依存 Step 3.1（ドメイン分析）が未完了のため実行不可です」 |
+| `docs/domain-analytics.md` | 存在しない・空 | 「依存 Step 3.1（ドメイン分析）が未完了のため実行不可です」 |
 
 # 6) 実行フロー（必ずこの順で）
 
@@ -88,7 +96,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - 固有の分割粒度: 「出力セクション単位」で分割（§9 の `##` トップレベル見出し7セクション: `## 1. 概要` 〜 `## 7. 網羅性チェック` を各1単位とする）
 
 ## 6.4 生成（test-strategy.md）
-13. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/catalog/test-strategy.md` を生成/更新する。
+13. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/test-strategy.md` を生成/更新する。
     - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）
@@ -101,6 +109,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - テスト戦略書以外のドキュメント（`docs/services/` 等）を変更しない
 - コードファイル（`api/`・`test/`）を変更しない
 - サンプルデータ（`data/sample-data.json`）の具体値を転記しない（要約のみ）
+- AC-ID 単位の受け入れ条件・Given-When-Then・Test-ID 詳細を重複記述しない（`docs/templates/testspec-vs-teststrategy.md` に従い TestSpec 参照リンクのみ記載）
 
 # 9) 出力フォーマット（Markdown固定）
 
@@ -119,6 +128,17 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 ## 3. サービス別テスト対象サマリ（表）
 | サービスID | サービス名 | 主要API数 | Unit | Integration | Contract | E2E | Component | 既存テストプロジェクト | 特記事項 | 出典(ファイル#見出し) |
 |---|---|---|---|---|---|---|---|---|---|---|
+
+### 3.1 AI Agent テストカテゴリサマリ（必須）
+> 各セルは Agent が実行時に具体値を記入するプレースホルダ。
+
+| カテゴリ | 目的 | 主要観点 | 例 | 関連 Tool / Library |
+|---|---|---|---|---|
+| Agent I/O 契約テスト | {入出力スキーマ準拠の目的} | {入力 / 出力 JSON Schema の観点} | {シナリオ例} | {関連 Tool / Library 例} |
+| Tool モック統合テスト | {Tool 呼び出し検証の目的} | {モック差し替え時の挙動観点} | {シナリオ例} | {関連 Tool / Library 例} |
+| Guardrails テスト | {安全性・逸脱防止の目的} | {禁止トピック / PII 流出防止の観点} | {シナリオ例} | {関連 Tool / Library 例} |
+| 状態遷移テスト | {会話 / セッション状態検証の目的} | {期待される state machine の遷移観点} | {シナリオ例} | {関連 Tool / Library 例} |
+| プロンプト回帰テスト | {プロンプト変更時の品質維持目的} | {既知入力 → 期待応答の差分観点} | {シナリオ例} | {関連 Tool / Library 例} |
 
 ## 4. テストダブル戦略
 
@@ -169,7 +189,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 # 11) 完了条件
-- `docs/catalog/test-strategy.md` が §9 のスキーマで生成/更新され、
+- `docs/test-strategy.md` が §9 のスキーマで生成/更新され、
   出典・TBD・網羅性チェック・Questions が整っている。
 - サービス別サマリ（§9 `## 3.`）の行数が `service-catalog.md` のサービス数と一致する（または未反映理由を記載）。
 - テストダブル戦略（§9 `## 4.`）が `service-catalog.md` Table C の全依存パターンをカバーする。

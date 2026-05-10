@@ -1,0 +1,255 @@
+name: Scheduled Drift Detection
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      workflow_prefix:
+        description: 'human-required ラベルのワークフロープレフィックス（例: asdw-web）'
+        required: false
+        default: 'asdw-web'
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  id-token: write
+
+jobs:
+  drift-detection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: copilot
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      DRIFT_DETECTION_CRON: ${{ vars.DRIFT_DETECTION_CRON || '0 3 * * *' }}
+      WORKFLOW_PREFIX: ${{ inputs.workflow_prefix || 'asdw-web' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Evaluate cron gate
+        id: cron-gate
+        run: |
+          set -euo pipefail
+          SHOULD_RUN=true
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            python3 -m pip install --quiet croniter
+            SHOULD_RUN=$(python3 -c 'from datetime import datetime, timedelta, timezone; from croniter import croniter; import os; expr=os.environ["DRIFT_DETECTION_CRON"].strip(); now=datetime.now(timezone.utc).replace(second=0,microsecond=0); prev=now-timedelta(minutes=1); print("true" if croniter(expr, prev).get_next(datetime)==now else "false")')
+          fi
+          echo "should_run=${SHOULD_RUN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Skip (outside cron window)
+        if: steps.cron-gate.outputs.should_run != 'true'
+        run: |
+          {
+            echo "## Scheduled Drift Detection"
+            echo ""
+            echo "- 実行時刻: $(date -u --iso-8601=seconds)"
+            echo "- DRIFT_DETECTION_CRON: \`${DRIFT_DETECTION_CRON}\`"
+            echo "- 判定: cron 条件外のためスキップ"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Detect drift and generate report
+        if: steps.cron-gate.outputs.should_run == 'true'
+        id: drift
+        run: |
+          set -euo pipefail
+          mkdir -p work/dashboards /tmp/drift
+
+          REPORT_DATE=$(date -u +%Y%m%d)
+          REPORT_FILE="work/dashboards/drift-report-${REPORT_DATE}.md"
+          LATEST_FILE="work/dashboards/drift-report-latest.md"
+          SUMMARY_JSON="/tmp/drift/summary.json"
+          ROWS_JSON="/tmp/drift/rows.jsonl"
+          : > "${ROWS_JSON}"
+
+          EXPECTED_FILE=".github/config/drift-expected-resources.json"
+          if [[ ! -f "${EXPECTED_FILE}" ]]; then
+            EXPECTED_FILE=""
+          fi
+
+          mapfile -t RESOURCE_IDS < <(
+            {
+              [[ -f docs/catalog/service-catalog-matrix.md ]] && grep -oE '/subscriptions/[^`|) ]+' docs/catalog/service-catalog-matrix.md || true
+              [[ -f docs/catalog/service-catalog.md ]] && grep -oE '/subscriptions/[^`|) ]+' docs/catalog/service-catalog.md || true
+              [[ -f docs/catalog/service-catalog.yaml ]] && grep -oE '/subscriptions/[^`|) ]+' docs/catalog/service-catalog.yaml || true
+              [[ -f docs/catalog/service-catalog.yml ]] && grep -oE '/subscriptions/[^`|) ]+' docs/catalog/service-catalog.yml || true
+            } | sed 's/[.,;]$//' | sort -u
+          )
+
+          drift_found=false
+          for rid in "${RESOURCE_IDS[@]}"; do
+            [[ -z "${rid}" ]] && continue
+
+            if ! actual_raw=$(az resource show --ids "${rid}" --output json 2>/tmp/drift/az-error.log); then
+              drift_found=true
+              err_msg=$(head -c 1000 /tmp/drift/az-error.log | tr '\n' ' ')
+              jq -nc --arg rid "$rid" --arg err "$err_msg" '{resource_id:$rid,status:"UNAVAILABLE",details:{error:$err}}' >> "${ROWS_JSON}"
+              continue
+            fi
+
+            actual_subset=$(echo "${actual_raw}" | jq -c '
+              {
+                sku:(.sku // .properties.sku),
+                tags:(.tags // {}),
+                publicNetworkAccess:.properties.publicNetworkAccess,
+                networkRuleSet:(.properties.networkRuleSet // .properties.networkAcls),
+                identity:.identity
+              }
+              | walk(if type=="object" then del(.provisioningState,.lastModifiedTime,.etag) else . end)
+              | with_entries(select(.value != null))
+            ')
+
+            expected_subset=""
+            if [[ -n "${EXPECTED_FILE}" ]]; then
+              expected_subset=$(jq -c --arg rid "$rid" '.resources[$rid].attributes // empty' "${EXPECTED_FILE}" || true)
+            fi
+
+            if [[ -n "${expected_subset}" && "${expected_subset}" != "null" ]]; then
+              expected_clean=$(echo "${expected_subset}" | jq -c 'walk(if type=="object" then del(.provisioningState,.lastModifiedTime,.etag) else . end)')
+              diff_json=$(jq -nc --argjson e "${expected_clean}" --argjson a "${actual_subset}" '
+                reduce ($e | keys_unsorted[]) as $k ({};
+                  if $a[$k] != $e[$k] then .[$k] = {expected:$e[$k], actual:$a[$k]} else . end
+                )
+              ')
+              if [[ "${diff_json}" != "{}" ]]; then
+                drift_found=true
+                jq -nc --arg rid "$rid" --argjson d "$diff_json" '{resource_id:$rid,status:"DRIFT",details:$d}' >> "${ROWS_JSON}"
+              else
+                jq -nc --arg rid "$rid" '{resource_id:$rid,status:"OK",details:{}}' >> "${ROWS_JSON}"
+              fi
+            else
+              jq -nc --arg rid "$rid" '{resource_id:$rid,status:"EXPECTATION_MISSING",details:{note:"service-catalog / IaC metadata に期待値定義なし"}}' >> "${ROWS_JSON}"
+            fi
+          done
+
+          jq -s '.' "${ROWS_JSON}" > /tmp/drift/rows.json
+          jq -nc \
+            --argjson rows "$(cat /tmp/drift/rows.json)" \
+            --arg expected_file "${EXPECTED_FILE}" \
+            --arg drift_found "${drift_found}" \
+            '{
+              resource_count: ($rows | length),
+              drift_found: ($drift_found == "true"),
+              rows: $rows,
+              expectation_file: (if $expected_file == "" then null else $expected_file end),
+              important_attributes: ["sku","tags","publicNetworkAccess","networkRuleSet","identity"]
+            }' > "${SUMMARY_JSON}"
+
+          {
+            echo "# Drift Detection Latest Status"
+            echo
+            echo "- Expectation Source: $(jq -r '.expectation_file // "service-catalog metadata fallback"' "${SUMMARY_JSON}")"
+            echo "- Important Attributes: $(jq -r '.important_attributes | join(",")' "${SUMMARY_JSON}")"
+            echo "- Resource Count: $(jq -r '.resource_count' "${SUMMARY_JSON}")"
+            echo
+            if [[ "${drift_found}" == "true" ]]; then
+              echo "## ❌ Drift detected"
+            else
+              echo "## ✅ OK"
+            fi
+            echo
+            echo "| Resource ID | Status | Details |"
+            echo "|---|---|---|"
+            if [[ "$(jq 'length' /tmp/drift/rows.json)" == "0" ]]; then
+              echo "| (none) | INFO | \`service-catalog から Azure Resource ID を抽出できませんでした\` |"
+            else
+              jq -c '.[]' /tmp/drift/rows.json | while read -r row; do
+                rid=$(echo "$row" | jq -r '.resource_id')
+                st=$(echo "$row" | jq -r '.status')
+                det=$(echo "$row" | jq -c '.details' | cut -c1-200)
+                echo "| \`${rid}\` | ${st} | \`${det}\` |"
+              done
+            fi
+          } > "${LATEST_FILE}"
+
+          if [[ "${drift_found}" == "true" ]]; then
+            cp "${LATEST_FILE}" "${REPORT_FILE}"
+            sed -i "1s/.*/# Drift Detection Report ($(date -u +%Y-%m-%d))/" "${REPORT_FILE}"
+            echo "drift_found=true" >> "${GITHUB_OUTPUT}"
+            echo "report_file=${REPORT_FILE}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "drift_found=false" >> "${GITHUB_OUTPUT}"
+            echo "report_file=" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "latest_file=${LATEST_FILE}" >> "${GITHUB_OUTPUT}"
+
+      - name: Commit drift report
+        if: steps.cron-gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ "${{ steps.drift.outputs.drift_found }}" == "true" ]]; then
+            git add "${{ steps.drift.outputs.report_file }}" "${{ steps.drift.outputs.latest_file }}"
+          else
+            git add "${{ steps.drift.outputs.latest_file }}"
+          fi
+          if git diff --cached --quiet; then
+            echo "No report changes to commit."
+          else
+            git commit -m "chore: update drift detection reports [skip ci]"
+            git push
+          fi
+
+      - name: Open or update drift issue
+        if: steps.cron-gate.outputs.should_run == 'true' && steps.drift.outputs.drift_found == 'true'
+        run: |
+          set -euo pipefail
+          LABEL="${WORKFLOW_PREFIX}:human-required"
+          TITLE="[DriftDetection] Azure resource drift detected"
+          ISSUE_COMMENT_FILE="/tmp/drift/issue-comment.md"
+
+          {
+            echo "## ❌ Drift detected"
+            echo
+            echo "- 実行時刻: $(date -u --iso-8601=seconds)"
+            echo "- レポート: \`${{ steps.drift.outputs.report_file }}\`"
+            echo "- Label: \`${LABEL}\`"
+          } > /tmp/drift/issue-body.md
+
+          {
+            echo "### Drift summary (latest)"
+            echo
+            sed -n '1,220p' "${{ steps.drift.outputs.report_file }}"
+          } > "${ISSUE_COMMENT_FILE}"
+
+          ISSUE_NO=$(gh issue list --repo "${REPO}" --state open --label "${LABEL}" --search '"[DriftDetection]" in:title' --json number --limit 1 --jq '.[0].number // empty')
+          if [[ -n "${ISSUE_NO}" ]]; then
+            gh issue comment "${ISSUE_NO}" --repo "${REPO}" --body-file "${ISSUE_COMMENT_FILE}" >/dev/null
+          else
+            URL=$(gh issue create --repo "${REPO}" --title "${TITLE}" --label "${LABEL}" --body-file /tmp/drift/issue-body.md)
+            NEW_NO=$(printf '%s' "${URL}" | sed -nE 's#^.*/issues/([0-9]+)#\1#p')
+            if [[ -n "${NEW_NO}" ]]; then
+              gh issue comment "${NEW_NO}" --repo "${REPO}" --body-file "${ISSUE_COMMENT_FILE}" >/dev/null
+            fi
+          fi
+
+      - name: Upload drift artifacts
+        if: always() && steps.cron-gate.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduled-drift-detection-${{ github.run_id }}
+          path: |
+            /tmp/drift/summary.json
+            ${{ steps.drift.outputs.latest_file }}
+            ${{ steps.drift.outputs.report_file }}
+          if-no-files-found: warn
+
+      - name: Fail job when drift is detected
+        if: steps.cron-gate.outputs.should_run == 'true' && steps.drift.outputs.drift_found == 'true'
+        run: |
+          echo "Drift detected. See report and issue for details."
+          exit 1

@@ -1,17 +1,10 @@
 ---
 name: architecture-questionnaire
 description: >
-  アーキテクチャ候補選定時の質問票テンプレートと適合度表・判定ロジックを提供する。
-  非機能要件を収集し、クラウドアーキテクチャパターンの適合度を評価する。
-  USE FOR: architecture selection, non-functional requirements,
-  Q1-Q26 questionnaire, fitness evaluation, cloud architecture pattern.
-  DO NOT USE FOR: implementation, deployment, testing,
-  service-level design (use microservice-design-guide).
-  WHEN: アーキテクチャ候補を分析する、非機能要件を収集する、
-  APP単位のアーキテクチャを推薦する、適合度表を生成する。
+  アーキテクチャ候補選定時の質問票テンプレートと適合度表・判定ロジックを提供する。 USE FOR: architecture selection, non-functional requirements, Q1-Q26 questionnaire. DO NOT USE FOR: implementation. WHEN: アーキテクチャ候補を分析する、非機能要件を収集する。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # architecture-questionnaire

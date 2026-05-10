@@ -2,10 +2,14 @@
 name: Dev-Batch-ServiceCoding
 description: "バッチジョブ詳細仕様書とTDDテスト仕様書に基づきAzure Functions実装でTDD GREENを完了（1ジョブ分）"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Batch-ServiceCoding/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

@@ -33,7 +33,7 @@ test_cases:
     input: "Azure Container Apps に Docker イメージをデプロイしてほしい"
     expected_trigger: false
     expected_skill: null
-    reason: "DO NOT USE FOR: application code deployment (use appropriate azure-platform/ deployment skill) に該当する"
+    reason: "DO NOT USE FOR: application code deployment (use appropriate azure-skills/ deployment skill) に該当する"
 
   - id: not-for-test-execution
     input: "pytest のテストを実行して結果を確認してほしい"

@@ -1,17 +1,10 @@
 ---
 name: mcp-server-design
 description: >
-  MCP Server の設計指針を提供する。Skills と MCP Server の関係性、
-  MCP Server の責務分離、API 設計パターンを定義する。
-  USE FOR: MCP Server design, skills and MCP relationship,
-  MCP API design pattern, server configuration, .github/.mcp.json.
-  DO NOT USE FOR: MCP Server implementation, deployment,
-  skill content creation, testing.
-  WHEN: MCP Server を設計する、Skills と MCP Server の関係を整理する、
-  MCP Server の API 設計パターンを参照する。
+  MCP Server の設計指針を提供する。Skills と MCP Server の関係性、 MCP Server の責務分離、API 設計パターンを定義する。 USE FOR: MCP Server design, skills and MCP relationship, MCP API design pattern. DO NOT USE FOR: MCP Server implementation. WHEN: MCP Server を設計する、Skills と MCP Server の関係を整理する。
 metadata:
   origin: user
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # mcp-server-design
@@ -85,6 +78,6 @@ MCP Server の設計指針と、Skills との役割分担を定義する。
 **入力**: `azure` MCP Server を使って Azure リソース一覧を取得するパターンを設計したい。
 
 **出力**:
-- 呼び出し元: `.github/skills/azure-platform/azure-resource-lookup/SKILL.md` が担当
+- 呼び出し元: `.github/skills/azure-skills/azure-resource-lookup/SKILL.md` が担当
 - 呼び出しツール: `mcp_azure_mcp_group_list`（リソースグループ一覧）。リソース一覧の取得は `azure-resource-lookup` 側で実在する Azure CLI / Resource Graph 用ツール（例: `extension_cli_generate`）に委譲する
 - エラーハンドリング: 認証エラー時は `azure-rbac` Skill を参照してロール確認を促す

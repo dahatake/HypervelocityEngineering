@@ -103,7 +103,7 @@
 
   <!-- Input (step 2.3) -->
   <rect x="20" y="465" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="484" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/test-strategy.md</text>
+  <text x="175" y="484" text-anchor="middle" font-size="10" fill="#24292e">docs/test-strategy.md</text>
   <text x="175" y="500" text-anchor="middle" font-size="10" fill="#24292e">docs/services/*-description.md</text>
   <text x="175" y="516" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/*-description.md</text>
 

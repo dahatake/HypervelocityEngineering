@@ -9,7 +9,18 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import QA_APPLY_PROMPT, REVIEW_PROMPT, CODE_REVIEW_AGENT_FIX_PROMPT, ADVERSARIAL_RECHECK_PROMPT, QA_PROMPT_V2, AQOD_PROMPT, PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT
+from prompts import (
+    ADVERSARIAL_RECHECK_PROMPT,
+    AQOD_PROMPT,
+    CODE_REVIEW_AGENT_FIX_PROMPT,
+    MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
+    PRE_EXECUTION_QA_COMMENT_MARKER,
+    PRE_EXECUTION_QA_PROMPT_V2,
+    QA_APPLY_PROMPT,
+    QA_PROMPT_V2,
+    REVIEW_PROMPT,
+    render_pre_execution_qa_comment_body,
+)
 
 
 class TestPromptsNotEmpty(unittest.TestCase):
@@ -135,6 +146,19 @@ class TestPreExecutionQaPromptV2(unittest.TestCase):
     def test_different_from_qa_prompt_v2(self) -> None:
         self.assertNotEqual(PRE_EXECUTION_QA_PROMPT_V2, QA_PROMPT_V2)
 
+    def test_contains_issue_comment_replication_instruction(self) -> None:
+        self.assertIn("この Issue のコメントとしても投稿してください", PRE_EXECUTION_QA_PROMPT_V2)
+
+
+class TestPreExecutionQaCommentBody(unittest.TestCase):
+    def test_contains_marker_and_copilot_mention(self) -> None:
+        comment_body = render_pre_execution_qa_comment_body()
+        self.assertTrue(comment_body.startswith(f"{PRE_EXECUTION_QA_COMMENT_MARKER}\n@copilot\n\n"))
+
+    def test_contains_canonical_prompt_body(self) -> None:
+        comment_body = render_pre_execution_qa_comment_body()
+        self.assertIn(PRE_EXECUTION_QA_PROMPT_V2, comment_body)
+
 
 class TestMainArtifactImprovementApplyPrompt(unittest.TestCase):
     """MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT の検証。"""
@@ -225,7 +249,7 @@ class TestReviewPromptNoLowerBound(unittest.TestCase):
 class TestYamlWorkflowPromptDrift(unittest.TestCase):
     """copilot-auto-feedback.yml と hve/prompts.py のプロンプトドリフト検出テスト。
 
-    hve/prompts.py を canonical source とし、YAML 側に同等の制約が反映されていることを確認する。
+    hve/prompts.py を canonical source とし、YAML 側が取得経路のみを持つことを確認する。
     """
 
     _YAML_PATH = str(
@@ -255,14 +279,18 @@ class TestYamlWorkflowPromptDrift(unittest.TestCase):
                       "copilot-auto-feedback.yml に '0〜30' の表現が含まれていません。"
                       "問題がない場合は 0 件でよいことを明示してください。")
 
-    def test_yaml_pre_qa_contains_core_keywords(self) -> None:
-        """YAML auto-qa-on-issue の事前 QA プロンプトが PRE_EXECUTION_QA_PROMPT_V2 のコアキーワードを含むこと。"""
+    def test_yaml_pre_qa_uses_hve_prompt_emitter(self) -> None:
+        """YAML auto-qa-on-issue が hve CLI の prompt emitter を使うこと。"""
         content = self._read_yaml_content()
-        # PRE_EXECUTION_QA_PROMPT_V2 のコアキーワードが YAML 側にも存在することを確認
-        for keyword in ("成果物はまだ存在しません", "分類項目", "既定値候補", "回答優先ガイド", "捏造は絶対に禁止"):
-            self.assertIn(keyword, content,
-                          f"copilot-auto-feedback.yml に PRE_EXECUTION_QA_PROMPT_V2 のキーワード "
-                          f"'{keyword}' が含まれていません。プロンプトがドリフトしている可能性があります。")
+        self.assertIn("python3 -m hve emit-prompt pre-qa --comment-body", content)
+
+    def test_yaml_pre_qa_does_not_inline_prompt_body(self) -> None:
+        """YAML auto-qa-on-issue に pre-QA プロンプト本文が直書きされていないこと。"""
+        content = self._read_yaml_content()
+        self.assertNotIn(
+            "これから実行するタスクのプロンプトに対して、以下の手順で事前質問票を作成してください。",
+            content,
+        )
 
     def test_yaml_review_no_fabrication_rule(self) -> None:
         """YAML auto-review プロンプトに捏造禁止の記述が含まれること。"""
@@ -318,28 +346,24 @@ class TestYamlWorkflowPromptDriftPhase3(unittest.TestCase):
                       "既存の 'review-verdict: FAIL' マーカーが削除されています。後方互換を維持してください。")
 
     def test_qa_prompt_contains_qa_context_usage(self) -> None:
-        """auto-qa プロンプトに 'QA Context Usage' セクションが含まれること。"""
-        content = self._read_yaml_content()
-        self.assertIn("QA Context Usage", content,
-                      "copilot-auto-feedback.yml に 'QA Context Usage' セクションが含まれていません。")
+        """SSoT の comment body に 'QA Context Usage' セクションが含まれること。"""
+        content = render_pre_execution_qa_comment_body()
+        self.assertIn("QA Context Usage", content)
 
     def test_qa_prompt_contains_qa_dir_reference(self) -> None:
-        """auto-qa プロンプトに qa/ ディレクトリへの参照が含まれること。"""
-        content = self._read_yaml_content()
-        self.assertIn("qa/", content,
-                      "copilot-auto-feedback.yml に qa/ への参照が含まれていません。")
+        """SSoT の comment body に qa/ ディレクトリへの参照が含まれること。"""
+        content = render_pre_execution_qa_comment_body()
+        self.assertIn("qa/", content)
 
     def test_qa_prompt_contains_reflection_instruction(self) -> None:
-        """auto-qa プロンプトに QA 回答を成果物に反映する指示が含まれること。"""
-        content = self._read_yaml_content()
-        self.assertIn("成果物に反映", content,
-                      "copilot-auto-feedback.yml に QA 回答を成果物に反映する指示が含まれていません。")
+        """SSoT の comment body に QA 回答を成果物に反映する指示が含まれること。"""
+        content = render_pre_execution_qa_comment_body()
+        self.assertIn("成果物に反映", content)
 
     def test_qa_prompt_contains_reason_recording_instruction(self) -> None:
-        """auto-qa プロンプトに未反映理由の記録指示が含まれること。"""
-        content = self._read_yaml_content()
-        self.assertIn("理由を完了コメントまたは成果物内に記録", content,
-                      "copilot-auto-feedback.yml に未反映理由の記録指示が含まれていません。")
+        """SSoT の comment body に未反映理由の記録指示が含まれること。"""
+        content = render_pre_execution_qa_comment_body()
+        self.assertIn("理由を完了コメントまたは成果物内に記録", content)
 
 
 class TestPreExecutionQaPromptV2Phase5(unittest.TestCase):
@@ -389,16 +413,11 @@ class TestYamlWorkflowPromptDriftPhase5(unittest.TestCase):
         with open(path, encoding="utf-8") as f:
             return f.read()
 
-    def test_yaml_has_pre_execution_qa_sync_comment(self) -> None:
-        """YAML に PRE_EXECUTION_QA_PROMPT_V2 との同期義務コメントが含まれること。
-
-        この comment が存在することで、YAML と hve/prompts.py を
-        手動同期する義務が明文化されている。
-        """
+    def test_yaml_has_pre_execution_qa_cli_source(self) -> None:
+        """YAML が emit-prompt 経路を使い、手動同期コメントに依存しないこと。"""
         content = self._read_yaml_content()
-        self.assertIn("hve/prompts.py:PRE_EXECUTION_QA_PROMPT_V2", content,
-                      "copilot-auto-feedback.yml に 'hve/prompts.py:PRE_EXECUTION_QA_PROMPT_V2' "
-                      "同期コメントが含まれていません。同期義務の明文化が失われています。")
+        self.assertIn("python3 -m hve emit-prompt pre-qa --comment-body", content)
+        self.assertNotIn("hve/prompts.py:PRE_EXECUTION_QA_PROMPT_V2", content)
 
     def test_yaml_has_auto_qa_idempotency_marker(self) -> None:
         """YAML auto-qa ジョブに冪等化マーカー 'copilot-auto-qa-posted' が含まれること。"""

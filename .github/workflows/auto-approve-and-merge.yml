@@ -260,41 +260,88 @@ jobs:
 
       - name: 検証実施確認（auto-approve 前提条件）
         # .github/copilot-instructions.md §0 要件: 最低1つの検証を実施。
-        # PR body またはコメントに "Validation" / "検証" セクションが存在することを確認する。
+        # PR body またはコメントに検証実施記録（marker/見出し/箇条書き）が存在することを確認する。
         # 存在しない場合は自動 Approve/Merge をスキップし、不足コメントを投稿する（冪等化）。
         id: check-validation
         if: steps.guard.outputs.already_done != 'true'
         run: |
           set -euo pipefail
           VALIDATION_MARKER='<!-- auto-approve-validation-missing -->'
+          VALIDATION_CONFIRMED_MARKER='<!-- validation-confirmed -->'
+          HEADING_REGEX='^#{1,6}[[:space:]]+.*(検証|Validation|Verification)'
+          BULLET_REGEX='^[[:space:]*>-]*(\*\*|__)?(検証|Validation|Verification)(\*\*|__)?[[:space:]]*[:：]'
+          LEGACY_REGEX='(^#{1,6}[[:space:]]+|^)(Validation|検証)'
 
           # PR body を取得
           pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
             --jq '.body // ""' 2>/dev/null || echo '')
 
-          # PR body に "Validation" または "検証" のセクション・キーワードが存在するか確認
-          if printf '%s' "${pr_body}" | grep -qiE '(^#{1,6}\s+|^)(Validation|検証)'; then
+          # PR コメントを取得（検証不足通知コメントは判定対象から除外）
+          pr_comments_all=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+          pr_comments=$(echo "${pr_comments_all}" \
+            | jq --arg marker "${VALIDATION_MARKER}" '[.[] | select(.body | contains($marker) | not)]' \
+            2>/dev/null || echo '[]')
+
+          # 1) HTML コメントマーカー方式（最優先）
+          combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null)")
+          if printf '%s' "${combined_text}" | grep -qiF "${VALIDATION_CONFIRMED_MARKER}"; then
+            echo "✅ PR body/コメントに validation-confirmed マーカーを確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # 2) 見出し方式（PR body）
+          if printf '%s' "${pr_body}" | grep -qiE "${HEADING_REGEX}"; then
             echo "✅ PR body に検証実施記録を確認しました。"
             echo "has_validation=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          # PR コメントも確認
-          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+          # 3) 箇条書き/強調方式（PR body）
+          if printf '%s' "${pr_body}" | grep -qiE "${BULLET_REGEX}"; then
+            echo "✅ PR body に検証実施記録（箇条書き/強調）を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
 
+          # 互換フォールバック: 旧判定（行頭 Validation/検証）
+          if printf '%s' "${pr_body}" | grep -qiE "${LEGACY_REGEX}"; then
+            echo "✅ PR body に検証実施記録（互換フォールバック）を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # 4) 見出し方式（PR コメント）
           if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE '(^#{1,6}\s+|^)(Validation|検証)'; then
+              | grep -qiE "${HEADING_REGEX}"; then
             echo "✅ PR コメントに検証実施記録を確認しました。"
             echo "has_validation=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
+          # 5) 箇条書き/強調方式（PR コメント）
+          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE "${BULLET_REGEX}"; then
+            echo "✅ PR コメントに検証実施記録（箇条書き/強調）を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # 互換フォールバック: 旧判定（行頭 Validation/検証）
+          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE "${LEGACY_REGEX}"; then
+            echo "✅ PR コメントに検証実施記録（互換フォールバック）を確認しました。"
+            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # 6) 全不一致
           echo "has_validation=false" >> "${GITHUB_OUTPUT}"
-          echo "⚠️ PR body・コメントに検証実施記録（Validation/検証 セクション）が見つかりません。"
+          echo "⚠️ PR body・コメントに検証実施記録（marker/見出し/箇条書き）が見つかりません。"
 
           # 冪等性チェック: 既に不足通知コメントが投稿済みならスキップ
-          existing_count=$(echo "${pr_comments}" \
+          existing_count=$(echo "${pr_comments_all}" \
             | jq --arg marker "${VALIDATION_MARKER}" \
               '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
           if [ "${existing_count:-0}" -gt 0 ]; then
@@ -303,12 +350,40 @@ jobs:
           fi
 
           # 不足通知コメントを投稿
-          comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n\n%s' \
-            "${VALIDATION_MARKER}" \
-            "## ⚠️ 検証実施記録が確認できません" \
-            "PR body またはコメントに検証実施記録（\`Validation\` または \`検証\` セクション）が見つからないため、自動 Approve/Merge をスキップしました。" \
-            "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。" \
-            "> ℹ️ このコメントは \`auto-approve-and-merge.yml\` によって自動投稿されました。検証実施記録を PR body またはコメントに追記してください。")
+          comment_body="$(
+            {
+              printf '%s\n' "${VALIDATION_MARKER}"
+              printf '\n'
+              printf '%s\n' "## ⚠️ 検証実施記録が確認できません"
+              printf '\n'
+              printf '%s\n' "PR body またはコメントに検証実施記録（\`validation-confirmed\` マーカー / \`Validation\`・\`検証\` 見出し / \`検証:\` 形式）が見つからないため、自動 Approve/Merge をスキップしました。"
+              printf '\n'
+              printf '%s\n' "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。"
+              printf '\n'
+              printf '%s\n' "### 対処方法"
+              printf '\n'
+              printf '%s\n' "以下いずれかを PR body またはコメントに追記してください（推奨順）:"
+              printf '\n'
+              printf '%s\n' "1. HTML コメントマーカー（推奨）"
+              printf '%s\n' "   - \`<!-- validation-confirmed -->\`"
+              printf '%s\n' "2. 見出し方式"
+              printf '%s\n' "   - \`## 検証\`"
+              printf '%s\n' "   - \`## 検証結果\`"
+              printf '%s\n' "   - \`## Validation\`"
+              printf '%s\n' "3. 箇条書き / 強調方式"
+              printf '%s\n' "   - \`- 検証: pytest 実行済\`"
+              printf '%s\n' "   - \`**検証**: ビルド成功\`"
+              printf '%s\n' "   - \`> Validation: lint OK\`"
+              printf '\n'
+              printf '%s\n' "### 再実行手順"
+              printf '\n'
+              printf '%s\n' "1. PR body またはコメントへ検証実施記録を追記する"
+              printf '%s\n' "2. \`auto-approve-ready\` ラベルを一度外す"
+              printf '%s\n' "3. \`auto-approve-ready\` ラベルを再付与してワークフローを再実行する"
+              printf '\n'
+              printf '%s\n' "> ℹ️ このコメントは \`auto-approve-and-merge.yml\` によって自動投稿されました。"
+            }
+          )"
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "${comment_body}" || echo "WARNING: 検証不足通知コメントの投稿に失敗しました。"

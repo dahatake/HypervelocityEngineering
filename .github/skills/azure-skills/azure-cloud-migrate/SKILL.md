@@ -1,10 +1,11 @@
 ---
 name: azure-cloud-migrate
-description: "Assess and migrate cross-cloud workloads to Azure with reports and code conversion. Supports Lambda→Functions, Beanstalk/Heroku/App Engine→App Service, Fargate/Kubernetes/Cloud Run→Container Apps. WHEN: migrate Lambda to Functions, AWS to Azure, migrate Beanstalk, migrate Heroku, migrate App Engine, Cloud Run migration, Fargate to ACA, ECS/Kubernetes/GKE/EKS to Container Apps, cross-cloud migration."
+description: >
+  Assess and migrate cross-cloud workloads to Azure with reports and code conversion. USE FOR: migrate Lambda to Functions, AWS to Azure, migrate Beanstalk. DO NOT USE FOR: unrelated tasks. WHEN: migrate Lambda to Functions、AWS to Azure。
 license: MIT
 metadata:
   author: Microsoft
-  version: "1.1.5"
+  version: 1.1.5
 ---
 
 # Azure Cloud Migrate

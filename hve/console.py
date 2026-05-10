@@ -114,7 +114,7 @@ class _Style:
     _STD_OUTPUT_HANDLE = -11
     _ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004  # VTP フラグのみ
 
-    def __init__(self, is_tty: bool) -> None:
+    def __init__(self, is_tty: bool, no_color: bool = False) -> None:
         # Windows: ANSI エスケープシーケンスを有効化
         # 既存のコンソールモードを取得して ENABLE_VIRTUAL_TERMINAL_PROCESSING を OR してから設定する
         # （他フラグを上書きしないよう GetConsoleMode で現在値を読み取る）
@@ -131,7 +131,7 @@ class _Style:
                     )
             except Exception:
                 pass
-        if is_tty:
+        if is_tty and not no_color:
             self.RESET = "\033[0m"
             self.BOLD = "\033[1m"
             self.DIM = "\033[2m"
@@ -164,14 +164,46 @@ class Console:
     """タスク実行中の Console 出力を制御するクラス。
 
     verbosity レベル (0〜3):
-      0 (quiet)  : error のみ表示
+      0 (quiet)  : error および context_usage を表示（他の中間イベントは抑止）
       1 (compact): 重要イベントのみ確定行 + 中間イベントはスピナーで上書き（デフォルト）
       2 (normal) : compact + intent/subagent_completed/failed を確定行で表示
       3 (verbose): 全イベントを確定行で表示（旧 verbose=True と同等）
 
     後方互換:
       verbose=True/False, quiet=True/False パラメータは verbosity 未指定時に使用される。
+
+    final_only=True: 最終出力（final_message/summary）のみ有効化。中間イベント（context_usage 含む）は抑止。
     """
+
+    # F3: スクリーンリーダー向け絵文字→日本語ラベル置換辞書
+    # ラベル訳語は提案値（Copilot CLI 実機未確認）
+    _SCREEN_READER_LABELS: Dict[str, str] = {
+        "✅": "[成功]",
+        "❌": "[失敗]",
+        "⏭️": "[スキップ]",
+        "🔧": "[ツール]",
+        "📂": "[ファイル]",
+        "📝": "[応答]",
+        "💡": "[意図]",
+        "🤖": "[エージェント]",
+        "📚": "[スキル]",
+        "📊": "[トークン使用量]",
+        "📏": "[コンテキスト]",
+        "📦": "[圧縮]",
+        "🔐": "[権限]",
+        "🏁": "[タスク完了]",
+        "🔄": "[ターン]",
+        "💬": "[応答概要]",
+        "⏱": "[経過]",
+        "▶": "[開始]",
+        "●": "[実行]",
+        "○": "[活動]",
+        "✓": "[OK]",
+        "✗": "[NG]",
+        "⚠️": "[警告]",
+        "←": "[読込]",
+        "→": "[書込]",
+    }
 
     def __init__(
         self,
@@ -180,17 +212,41 @@ class Console:
         show_stream: bool = False,
         show_reasoning: bool = True,
         verbosity: Optional[int] = None,
+        no_color: Optional[bool] = None,
+        screen_reader: bool = False,
+        timestamp_style: str = "prefix",
+        final_only: bool = False,
     ) -> None:
         self.show_stream = show_stream
         self.show_reasoning = show_reasoning
         self._start_time = time.time()
         self._is_tty = sys.stdout.isatty()
-        self.s = _Style(self._is_tty)
+
+        # F5: final_only モード
+        self.final_only = final_only
+        if final_only:
+            # pipe 前提: no_color を常に True に強制（明示 False でも上書き）
+            no_color = True
+
+        # F1: no_color 解決ロジック (None = 環境変数 NO_COLOR を参照)
+        if no_color is None:
+            no_color = bool(os.environ.get("NO_COLOR", ""))
+        self.s = _Style(self._is_tty, no_color=no_color)
+
+        # F3: スクリーンリーダーモード
+        self._screen_reader = screen_reader
+
+        # F4: タイムスタンプ表示スタイル
+        self._timestamp_style = "off" if final_only else timestamp_style
+
         self._step_start_times: Dict[str, float] = {}
         self._reasoning_buffer: Dict[str, str] = {}
 
         # --- Verbosity レベル解決 (後方互換) ---
-        if verbosity is not None:
+        if final_only:
+            # final_only=True: 中間イベントを抑止し、最終出力のみ有効化する
+            self._verbosity = 0
+        elif verbosity is not None:
             self._verbosity = verbosity
         elif quiet:
             self._verbosity = 0
@@ -203,6 +259,10 @@ class Console:
         # 後方互換プロパティ
         self.verbose = self._verbosity >= 3
         self.quiet = self._verbosity == 0
+
+        # F5: show_final_message 属性（__init__ で明示初期化）
+        # quiet (verbosity=0) のみ非表示。compact/normal/verbose では既定で表示。
+        self.show_final_message = True if (final_only or self._verbosity >= 1) else False
 
         # --- スピナー状態管理 ---
         self._spinner_thread: Optional[threading.Thread] = None
@@ -234,6 +294,14 @@ class Console:
     # 内部ヘルパー
     # ------------------------------------------------------------------
 
+    def _apply_screen_reader_filter(self, msg: str) -> str:
+        """screen_reader=True のとき絵文字を日本語ラベルに置換する。"""
+        if not self._screen_reader:
+            return msg
+        for emoji, label in self._SCREEN_READER_LABELS.items():
+            msg = msg.replace(emoji, label)
+        return msg
+
     def _emit(self, msg: str, always: bool = False, ts: bool = True) -> None:
         """確定行を出力する。スピナー実行中は自動的に pause/resume する。
 
@@ -243,11 +311,17 @@ class Console:
         """
         if not always and self.quiet:
             return
+        msg = self._apply_screen_reader_filter(msg)
         with self._output_lock:
             self._pause_spinner()
             try:
                 if ts:
-                    print(f"{timestamp_prefix()} {msg}", flush=True)
+                    if self._timestamp_style == "prefix":
+                        print(f"{timestamp_prefix()} {msg}", flush=True)
+                    elif self._timestamp_style == "suffix":
+                        print(f"{msg} {self._styled(timestamp_prefix(), self.s.DIM)}", flush=True)
+                    else:  # "off"
+                        print(msg, flush=True)
                 else:
                     print(msg, flush=True)
             finally:
@@ -543,11 +617,30 @@ class Console:
             return default
         return answer in ("y", "yes")
 
-    def prompt_multi_select(self, title: str, options: List[str]) -> List[int]:
-        """複数番号のカンマ区切り選択。空入力で空リスト（＝全選択）を返す。"""
+    def prompt_multi_select(
+        self,
+        title: str,
+        options: List[str],
+        default_indices: Optional[List[int]] = None,
+    ) -> List[int]:
+        """複数番号のカンマ区切り選択。
+
+        Args:
+            title: プロンプト見出し。
+            options: 選択肢。
+            default_indices: Enter 押下時に採用する 0-based 既定インデックス。
+                未指定時は空リスト（= 全選択）を返す既存挙動を維持する。
+        """
         s = self.s
         self._print(f"\n  {s.BOLD}{title}{s.RESET}", ts=False)
-        self._print(f"  {s.DIM}カンマ区切りで番号を入力（Enter = 全選択）{s.RESET}", ts=False)
+        if default_indices:
+            _disp = ",".join(str(i + 1) for i in default_indices)
+            self._print(
+                f"  {s.DIM}カンマ区切りで番号を入力（Enter = {_disp}）{s.RESET}",
+                ts=False,
+            )
+        else:
+            self._print(f"  {s.DIM}カンマ区切りで番号を入力（Enter = 全選択）{s.RESET}", ts=False)
         self._print(f"  {s.DIM}{'─' * 50}{s.RESET}", ts=False)
         for i, opt in enumerate(options, 1):
             self._print(f"  {s.CYAN}{i:>3}{s.RESET})  {opt}", ts=False)
@@ -558,9 +651,9 @@ class Console:
                 answer = input(f"  {s.GREEN}>{s.RESET} ").strip()
             except (EOFError, KeyboardInterrupt):
                 self._print("", ts=False)
-                return []
+                return list(default_indices or [])
             if not answer:
-                return []
+                return list(default_indices or [])
             selected: List[int] = []
             valid = True
             for part in answer.split(","):
@@ -587,7 +680,7 @@ class Console:
 
     def spinner_start(self, msg: str) -> None:
         """バックグラウンドスピナーを開始する。既に動作中の場合はメッセージのみ更新。"""
-        if self.quiet or not self._is_tty:
+        if self.quiet or not self._is_tty or self._screen_reader or self.final_only:
             return
         with self._spinner_msg_lock:
             self._spinner_msg = msg
@@ -995,28 +1088,38 @@ class Console:
         self._emit(msg, ts=ts)
 
     def final_message(self, step_id: str, content: str) -> None:
-        """アシスタントの最終応答本文をタイムスタンプ付き確定行で出力する。
+        """アシスタントの最終応答本文を確定行で出力する。
 
-        show_final_message=True かつ verbosity > 0 のときのみ表示。
-        端末幅に合わせて折り返し、各行に `📝 [step_id] |` プレフィックスを付ける。
+        show_final_message=True かつ content が非空のときのみ表示。
+        - 通常モード（final_only=False）: Copilot CLI 風にマゼンタの ● で始まる行を出力。
+        - final_only=True: 後方互換のため既存の 📝 装飾を維持。
 
         Args:
             step_id: ステップ ID。
             content: 最終応答の本文。
         """
-        if self._verbosity == 0 or not self.show_final_message or not content:
+        should_suppress = not self.show_final_message or not content
+        if should_suppress:
             return
         s = self.s
-        prefix_label = f"📝 [{step_id}]" if step_id else "📝"
-        try:
-            term_width = max(40, (os.get_terminal_size().columns if self._is_tty else 100))
-        except (OSError, ValueError):
-            term_width = 100
-        body_width = max(60, term_width - 20)
-        for raw_line in (content.splitlines() or [""]):
-            wrapped = self._wrap_text(raw_line, body_width)
-            for line in wrapped:
-                self._emit(f"  {prefix_label} {s.DIM}|{s.RESET} {line}")
+        if self.final_only:
+            # final_only 後方互換: 既存の 📝 装飾を維持
+            prefix_label = f"📝 [{step_id}]" if step_id else "📝"
+            try:
+                term_width = max(40, (os.get_terminal_size().columns if self._is_tty else 100))
+            except (OSError, ValueError):
+                term_width = 100
+            body_width = max(60, term_width - 20)
+            for raw_line in (content.splitlines() or [""]):
+                wrapped = self._wrap_text(raw_line, body_width)
+                for line in wrapped:
+                    self._emit(f"  {prefix_label} {s.DIM}|{s.RESET} {line}")
+        else:
+            # Copilot CLI 風マゼンタ ● 行
+            lines = content.splitlines() or [""]
+            self._emit(f"{s.MAGENTA}●{s.RESET} {lines[0]}")
+            for line in lines[1:]:
+                self._emit(f"  {line}")
 
     def turn_start(self, step_id: str, turn_id: str = "") -> None:
         """ターン開始。Level 3 で確定行、Level 1-2 でスピナー更新。"""
@@ -1138,19 +1241,13 @@ class Console:
         self._print(f"  ⚠️  Session error [{error_type}]: {message}", always=True)
 
     def context_usage(self, step_id: str, current_tokens: int, token_limit: int, msgs: int) -> None:
-        """コンテキストウィンドウ使用率。80%以上は Level 1+ で警告、それ以外は Level 3 のみ。"""
-        if self._verbosity == 0:
+        """コンテキストウィンドウ使用率。全ログ出力レベルで確定行として表示する（final_only 時は抑止）。"""
+        if self.final_only:
             return
         prefix = f"[{step_id}] " if step_id else ""
         pct = (current_tokens / token_limit * 100) if token_limit else 0
         msg = f"📏 {prefix}Context: {current_tokens}/{token_limit} ({pct:.0f}%) msgs={msgs}"
-        if pct >= _CONTEXT_WARNING_THRESHOLD_PCT and self._verbosity >= 1:
-            # 80%以上は Level 1+ で確定行警告
-            self._print(f"  {msg}")
-        elif self._verbosity >= 3:
-            self._print(f"  {msg}")
-        else:
-            self._update_spinner_msg(msg)
+        self._emit(f"  {msg}", always=True)
 
     def compaction(self, step_id: str, phase: str, pre_tokens: int = 0, post_tokens: int = 0) -> None:
         """コンテキスト圧縮。Level 3 で確定行、Level 1-2 でスピナー更新。"""
@@ -1703,6 +1800,21 @@ class Console:
         skipped = results.get("skipped", 0)
         total = success + failed + skipped
         elapsed = results.get("total_elapsed", self._elapsed())
+
+        if self.final_only:
+            # final_only=True: 機械可読性のためパネル罫線なしのプレーンテキストで出力
+            lines = [
+                "=== 実行サマリー ===",
+                f"合計ステップ: {total}",
+                f"成功: {success}",
+                f"失敗: {failed}",
+                f"スキップ: {skipped}",
+                f"合計時間: {_format_elapsed_ja(elapsed)}",
+            ]
+            for line in lines:
+                self._emit(line, always=True, ts=False)
+            return
+
         self.panel("実行サマリー", [
             f"合計ステップ : {s.BOLD}{total}{s.RESET}",
             f"{s.GREEN}✅ 成功{s.RESET}      : {success}",
@@ -1710,6 +1822,85 @@ class Console:
             f"{s.YELLOW}⏭️  スキップ{s.RESET}  : {skipped}",
             f"⏱️  合計時間  : {_format_elapsed_ja(elapsed)}",
         ], ts=True)
+
+    def file_diff(
+        self,
+        step_id: str,
+        path: str,
+        old_text: str,
+        new_text: str,
+        max_lines: int = 20,
+    ) -> None:
+        """hve 自身がファイル編集を行ったときの diff を表示する。
+
+        Copilot CLI 経由の編集は cli_log() でパススルーされるため、本メソッドは
+        hve コードが直接ファイル書き込みを行う箇所（qa_merger.save_merged 等）
+        からのみ呼び出す。
+
+        verbosity に応じた制御:
+          0 (quiet)  : 非表示
+          1 (compact): スピナー更新（「diff: +N -M lines」のサマリのみ）
+          2 (normal) : サマリ + 確定行（先頭 max_lines 行のみ）
+          3 (verbose): 全文確定行
+
+        Args:
+            step_id: ステップ ID。空文字可。
+            path: ファイルパス（表示用）。
+            old_text: 編集前テキスト。新規ファイルの場合は空文字。
+            new_text: 編集後テキスト。
+            max_lines: 確定行表示時の最大行数（既定 20）。
+        """
+        if self._verbosity == 0:
+            return
+
+        import difflib
+
+        diff_lines = list(difflib.unified_diff(
+            old_text.splitlines(keepends=False),
+            new_text.splitlines(keepends=False),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm="",
+        ))
+
+        if not diff_lines:
+            return
+
+        # 追加・削除行数のカウント（unified diff ヘッダー行 "+++ b/" / "--- a/" は除外）
+        added = sum(1 for ln in diff_lines if ln.startswith("+") and not ln.startswith("+++ "))
+        removed = sum(1 for ln in diff_lines if ln.startswith("-") and not ln.startswith("--- "))
+
+        s = self.s
+        prefix = f"[{step_id}] " if step_id else ""
+        summary = f"📝 {prefix}{path}: +{added} -{removed} lines"
+
+        if self._verbosity == 1:
+            # スピナー稼働中はスピナー更新、未稼働時は確定行として出力
+            if self._spinner_thread is not None and self._spinner_thread.is_alive():
+                self._update_spinner_msg(summary)
+            else:
+                self._emit(f"  {s.DIM}┊{s.RESET} {summary}")
+            return
+
+        # Level 2+: サマリ確定行
+        self._emit(f"  {s.DIM}┊{s.RESET} {summary}")
+
+        # Level 2: 先頭 max_lines 行のみ / Level 3: 全文
+        show_lines = diff_lines if self._verbosity >= 3 else diff_lines[:max_lines]
+
+        for ln in show_lines:
+            if ln.startswith("+") and not ln.startswith("+++ "):
+                self._emit(f"  {s.DIM}┊{s.RESET} {s.GREEN}{ln}{s.RESET}", ts=False)
+            elif ln.startswith("-") and not ln.startswith("--- "):
+                self._emit(f"  {s.DIM}┊{s.RESET} {s.RED}{ln}{s.RESET}", ts=False)
+            elif ln.startswith("@@"):
+                self._emit(f"  {s.DIM}┊{s.RESET} {s.CYAN}{ln}{s.RESET}", ts=False)
+            else:
+                self._emit(f"  {s.DIM}┊{s.RESET} {s.DIM}{ln}{s.RESET}", ts=False)
+
+        if self._verbosity == 2 and len(diff_lines) > max_lines:
+            omitted = len(diff_lines) - max_lines
+            self._emit(f"  {s.DIM}┊  ...（以降 {omitted} 行省略）{s.RESET}", ts=False)
 
     # ------------------------------------------------------------------
     # 公開メソッド — ワークフローフェーズ / DAG 進捗 / ステップ内フェーズ

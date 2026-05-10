@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Batch-TDD-TestSpec
 description: "バッチTDDテスト仕様書をジョブごとに docs/test-specs/{jobId}-test-spec.md に生成（推測禁止）"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Batch-TDD-TestSpec/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§2 テストダブル選択基準・§3 テストデータ戦略）を参照する。テスト戦略書からの抽出時に選択基準の根拠として使用する。

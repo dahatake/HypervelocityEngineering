@@ -24,7 +24,7 @@
   <rect x="20" y="97" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="120" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-service-catalog.md</text>
   <rect x="430" y="94" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="114" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-DataServiceSelect</text>
   <text x="565" y="130" text-anchor="middle" font-size="9" fill="#586069">Azure データ/コンピュート準備</text>
   <rect x="800" y="100" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="980" y="123" text-anchor="middle" font-size="10" fill="#24292e">infra/azure/ (データ準備成果物)</text>
@@ -38,7 +38,7 @@
   <text x="175" y="195" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-service-catalog.md</text>
   <text x="175" y="211" text-anchor="middle" font-size="10" fill="#24292e">Step 1.1 成果物 (infra/azure/)</text>
   <rect x="430" y="172" width="270" height="57" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="192" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="192" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-DataDeploy</text>
   <text x="565" y="208" text-anchor="middle" font-size="9" fill="#586069">Azure リソース構築</text>
   <text x="565" y="221" text-anchor="middle" font-size="9" fill="#959da5">コンピュート・ストレージ</text>
   <rect x="800" y="182" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
@@ -80,7 +80,7 @@
   <rect x="20" y="435" width="310" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="458" text-anchor="middle" font-size="10" fill="#24292e">src/batch/</text>
   <rect x="430" y="432" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="452" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-Deploy</text>
+  <text x="565" y="452" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Dev-Batch-FunctionsDeploy</text>
   <text x="565" y="468" text-anchor="middle" font-size="9" fill="#586069">バッチジョブ デプロイ</text>
   <rect x="800" y="438" width="360" height="45" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="980" y="456" text-anchor="middle" font-size="9" fill="#24292e">.github/workflows/</text>

@@ -1,9 +1,14 @@
-name: Copilot PR ↔ Issue リンク自動設定
+name: Copilot PR body への Closes #N 自動補完
 
-# Copilot cloud agent が PR を作成した際に、元 Issue との紐付けを自動で行う。
+# Copilot cloud agent が PR を作成した際に、PR body への Closes #N 補完を自動で行う。
+#
+# 注意: GitHub 公式機能が Issue 側に PR リンクコメントを自動投稿するため、
+#   本ワークフローは PR body の `Closes #N` 補完を主目的とする。
+#   （GitHub 公式機能は Issue クローズ連動のため PR body に `Closes #N` を書かない。
+#    本ワークフローがその補完を担っている。）
 #
 # 問題: Copilot cloud agent は PR body に Closes #N / Fixes #N を記載しないため、
-#   Issue の Development セクションに PR リンクが表示されない。
+#   PR マージ時に Issue が自動クローズされない。
 #
 # 処理フロー:
 #   1. PR 作成者が Copilot かどうか確認（copilot-swe-agent[bot] / Copilot Bot）
@@ -19,7 +24,7 @@ name: Copilot PR ↔ Issue リンク自動設定
 #   4. Issue が特定できた場合:
 #      - PR body に既に Closes/Fixes/Resolves がない場合: PR body 先頭に
 #        <!-- parent-issue: #N --> を補完し、Closes #N を追記
-#      - Issue に「Copilot が PR を作成しました」コメントを投稿
+#      - 冪等化マーカー <!-- link-copilot-pr-to-issue-done --> を PR にコメント投稿
 #
 # 注意:
 #   - pull_request_target を使用（Copilot が作成した PR のブランチには
@@ -146,7 +151,7 @@ jobs:
           gh pr edit "${PR_NUMBER}" --repo "${REPO}" --body "${NEW_BODY}"
           echo "✅ PR body に parent-issue マーカーと Closes #${ISSUE_NUMBER} を追記しました。"
 
-      - name: Issue に PR リンクコメントを投稿（冪等化マーカーも PR に付与）
+      - name: Issue 特定成功時に冪等化マーカーを PR に投稿
         if: >
           steps.check-copilot.outputs.is_copilot == 'true' &&
           steps.guard.outputs.done != 'true' &&
@@ -157,17 +162,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          ISSUE_COMMENT=$(printf '🔗 **Copilot が PR を作成しました**: #%s\n\n> ℹ️ このコメントは `link-copilot-pr-to-issue.yml` によって自動投稿されました。' \
-            "${PR_NUMBER}")
-          gh issue comment "${ISSUE_NUMBER}" \
-            --repo "${REPO}" \
-            --body "${ISSUE_COMMENT}"
-          echo "✅ Issue #${ISSUE_NUMBER} にコメントを投稿しました。"
-
           # 冪等化マーカーを PR に投稿
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "<!-- link-copilot-pr-to-issue-done -->"
+          echo "✅ 冪等化マーカーを PR #${PR_NUMBER} に投稿しました。"
 
       - name: Issue が特定できない場合の警告コメントを PR に投稿
         if: >

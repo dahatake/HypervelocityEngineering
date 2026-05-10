@@ -1,11 +1,15 @@
-﻿---
+---
 name: Dev-Microservice-Azure-ComputeDesign
 description: ユースケース内の全マイクロサービスについて、最適な Azure コンピュート（ホスティング）を選定し、根拠・代替案・前提・未決事項を設計書に記録する（ドキュメント作成特化）
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
 

@@ -869,7 +869,7 @@ def build_workiq_mcp_config(tenant_id: Optional[str] = None, *, tools_all: bool 
 async def query_workiq_detailed(
     session: Any,
     query: str,
-    timeout: float = 900.0,
+    timeout: float = 1200.0,
 ) -> WorkIQQueryResult:
     """Work IQ 経由で M365 データを問い合わせ、詳細結果を返す。
 
@@ -911,7 +911,7 @@ async def query_workiq_detailed(
 async def query_workiq(
     session: Any,
     query: str,
-    timeout: float = 900.0,
+    timeout: float = 1200.0,
 ) -> str:
     """Work IQ 経由で M365 データを問い合わせる。
 
@@ -926,7 +926,7 @@ async def query_workiq_per_question(
     session: Any,
     questions: list[tuple[int, str]],
     prompt_template: str,
-    timeout: float = 900.0,
+    timeout: float = 1200.0,
     max_questions: int = 30,
 ) -> dict[int, str]:
     """質問ごとに Work IQ クエリを実行して結果を返す。"""
@@ -1421,6 +1421,8 @@ async def probe_workiq_copilot_session(
         # 3. create_session
         try:
             _mcp = build_workiq_mcp_config(tenant_id=tenant_id)
+            # Phase 2 (Resume): probe_workiq は診断専用セッションで run_id 文脈を持たないため、
+            # 決定論的 session_id は付与しない（SDK が自動採番する）。Resume 対象外。
             session = await asyncio.wait_for(
                 client.create_session(
                     on_permission_request=PermissionHandler.approve_all,
@@ -1591,6 +1593,7 @@ async def probe_workiq_copilot_tool_invocation(
     try:
         try:
             _mcp = build_workiq_mcp_config(tenant_id=tenant_id, tools_all=tools_all)
+            # Phase 2 (Resume): tool probe も診断専用セッションのため決定論的 session_id は付与しない。
             session = await asyncio.wait_for(
                 client.create_session(
                     on_permission_request=PermissionHandler.approve_all,

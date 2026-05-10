@@ -2,10 +2,14 @@
 name: QA-CodeQualityScan
 description: コードベースの品質スキャンを実行する。ruff / pytest --cov / markdownlint のツール実行結果を収集し、LLM 統合評価でコード品質スコアと改善候補リストを生成する。自己改善ループ（Self-Improve）の Phase 4a として使用される。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/QA-CodeQualityScan/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **コード品質スキャン（読み取り＋評価）**。明示依頼が無い限り **コードの変更はしない**。
 - Skill harness-safety-guard: `rm -rf`・`git push --force`・`az delete` 系は絶対に実行しない。
 

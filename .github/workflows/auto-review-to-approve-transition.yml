@@ -9,11 +9,12 @@ name: レビュー完了 → auto-approve-ready 自動遷移
 #   3. PR が draft でない（job if の pull_request_target 分岐で `&& !github.event.pull_request.draft` を判定。issue_comment 分岐では判定しない）
 #   4. <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在する（レビュー指示済み）
 #   5. レビュー指示後の Copilot コメントの <!-- review-verdict: --> マーカーを確認:
-#      - PASS マーカー発見 → 即完了
+#      - PASS マーカー発見:
+#        - 初回 PASS（FAIL 履歴なし）→ 通過
+#        - FAIL 履歴あり → `review-verdict-after-fix: PASS` と
+#          `Modified Artifacts ∩ FAIL 後 changed files >= 1` を必須化
 #      - FAIL マーカー発見 → ブロック（修正完了待ち）
-#      - マーカーなし → 条件 6 のフォールバック判定を使用
-#   6. synchronize イベントの場合: 最新コミット日時がレビュー指示日時より後（フォールバック）
-#      issue_comment イベントの場合: Bot の回答コメントが存在する（フォールバック）
+#      - マーカーなし → ブロック（fail-closed）
 #
 # トリガー: pull_request_target: [synchronize], issue_comment: [created]
 #   - synchronize = PR へのコミット push（Copilot がタスク完了後に push する）
@@ -207,7 +208,7 @@ jobs:
           # PR コメント一覧を取得（以降の条件チェックで使用）
           pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate \
-            --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
+            --jq '.[]' | jq -s '.')
 
           # 条件 4: レビュー指示コメント（初回 or 再レビュー）が存在するか
           review_posted_count=$(echo "${pr_comments}" \
@@ -234,11 +235,9 @@ jobs:
           echo "レビュー指示日時: ${review_instruction_at}"
 
           # 条件 5: レビュー指示後の Copilot コメントの review-verdict マーカーを確認
-          # copilot-auto-review.yml の指示で Copilot は結果末尾に以下のいずれかを出力する:
+          # copilot-auto-feedback.yml の指示で Copilot は結果末尾に以下のいずれかを出力する:
           #   <!-- review-verdict: PASS -->  (Critical = 0)
           #   <!-- review-verdict: FAIL -->  (Critical > 0)
-          # 最新の verdict マーカーが FAIL なら修正完了待ちでブロック
-          # PASS なら条件 6 に進む。マーカーなし（旧形式）はフォールバック判定を使用。
           bot_comments_after_review=$(echo "${pr_comments}" \
             | jq --arg review_at "${review_instruction_at}" \
               '[.[] | select(
@@ -263,41 +262,69 @@ jobs:
             ')
           echo "最新の review-verdict: ${latest_verdict}"
 
-          # review-verdict マーカーがない旧形式コメント向けフォールバック判定
-          if [ "${latest_verdict}" = "none" ]; then
-            bot_comment_count=$(echo "${bot_comments_after_review}" | jq 'length')
-            fallback_verdict="none"
-            if [ "${bot_comment_count}" -gt 0 ] 2>/dev/null; then
-              for i in $(seq $((bot_comment_count - 1)) -1 0); do
-                body=$(echo "${bot_comments_after_review}" | jq -r ".[$i].body")
-                if echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "✅" && echo "${body}" | grep -qi "PASS"; then
-                  fallback_verdict="PASS"
-                  break
-                elif echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "❌" && echo "${body}" | grep -qi "FAIL"; then
-                  fallback_verdict="FAIL"
-                  break
-                fi
-              done
-            fi
-            if [ "${fallback_verdict}" != "none" ]; then
-              latest_verdict="${fallback_verdict}"
-              echo "フォールバック判定の review-verdict: ${latest_verdict}"
-            fi
+          after_fix_verdict=$(echo "${bot_comments_after_review}" \
+            | jq -r '
+              [ .[] | select(
+                  (.body | contains("<!-- review-verdict-after-fix: PASS -->"))
+                  or (.body | contains("<!-- review-verdict-after-fix: FAIL -->"))
+                )
+              ] | .[-1] |
+              if . == null then "none"
+              elif (.body | contains("<!-- review-verdict-after-fix: FAIL -->")) then "FAIL"
+              else "PASS"
+              end
+            ')
+          after_fix_marker_present="false"
+          if [ "${after_fix_verdict}" != "none" ]; then
+            after_fix_marker_present="true"
+          fi
+          echo "review_verdict_after_fix_present=${after_fix_marker_present}"
+          echo "review_verdict_after_fix_value=${after_fix_verdict}"
+
+          # FAIL 履歴は「最新レビュー指示以降」に限定せず PR 全コメントから取得する。
+          # 再レビュー指示コメント（copilot-auto-recheck-posted）を挟むケースでも
+          # 直前サイクルの FAIL を見落とさないため。
+          fail_comment_json=$(echo "${pr_comments}" \
+            | jq -c '[ .[] | select(
+                (.body | contains("<!-- review-verdict: FAIL -->"))
+                and (.user.type == "Bot")
+                and ((.user.login | startswith("copilot-swe-agent")) or .user.login == "Copilot")
+              ) ] | .[-1] // {}')
+          fail_at_for_diff_gate=$(echo "${fail_comment_json}" | jq -r '.created_at // ""')
+          if [ -n "${fail_at_for_diff_gate}" ] && [ "${fail_at_for_diff_gate}" != "null" ]; then
+            echo "FAIL_AT=${fail_at_for_diff_gate}"
+          else
+            echo "FAIL_AT=none"
+            fail_at_for_diff_gate=""
           fi
 
           if [ "${latest_verdict}" = "FAIL" ]; then
-            fail_comment_at=$(echo "${bot_comments_after_review}" \
-              | jq -r '[ .[] | select(.body | contains("<!-- review-verdict: FAIL -->")) ] | .[-1].created_at')
-            if [ -z "${fail_comment_at}" ] || [ "${fail_comment_at}" = "null" ]; then
-              fail_comment_at=$(echo "${bot_comments_after_review}" | jq -r '.[-1].created_at // ""')
+            if [ -z "${fail_at_for_diff_gate}" ]; then
+              reason="review-verdict: FAIL ですが FAIL コメント時刻を取得できないため遷移ブロック（fail-closed）"
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=FAIL" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
             fi
             latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
               --paginate \
-              --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
+              --jq '.[-1].commit.committer.date' | tail -1)
 
-            if [ -n "${latest_commit_at}" ] && [ -n "${fail_comment_at}" ] \
+            if [ -n "${latest_commit_at}" ] && [ -n "${fail_at_for_diff_gate}" ] \
               && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" \
-                -gt "$(date -d "${fail_comment_at}" +%s 2>/dev/null || echo 0)" ]; then
+                -gt "$(date -d "${fail_at_for_diff_gate}" +%s 2>/dev/null || echo 0)" ]; then
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=FAIL 後に修正コミットを検知。再レビューを実行します。"
               echo "review_complete=false" >> "${GITHUB_OUTPUT}"
               echo "needs_recheck=true" >> "${GITHUB_OUTPUT}"
               echo "latest_verdict=FAIL" >> "${GITHUB_OUTPUT}"
@@ -305,6 +332,11 @@ jobs:
               echo "reason=FAIL 後に修正コミットを検知。再レビューを実行します。" >> "${GITHUB_OUTPUT}"
             else
               reason="review-verdict: FAIL。Copilot の修正完了を待っています。"
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=${reason}"
               echo "${reason}"
               echo "review_complete=false" >> "${GITHUB_OUTPUT}"
               echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
@@ -315,47 +347,145 @@ jobs:
             exit 0
           fi
 
-          # PASS 判定の場合は条件 6 をスキップして即完了
+          # PASS 判定の場合:
+          # - FAIL コメントが存在しない（初回 PASS）→ 従来どおり完了
+          # - FAIL コメントが存在する → after-fix PASS + 主タスクファイル交差 >= 1 を必須化
           if [ "${latest_verdict}" = "PASS" ]; then
-            echo "✅ review-verdict: PASS マーカーを検知しました。レビュー完了と判定します。"
-            echo "review_complete=true" >> "${GITHUB_OUTPUT}"
-            echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
-            echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
-            echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
-            echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました。" >> "${GITHUB_OUTPUT}"
+            if [ -z "${fail_at_for_diff_gate}" ]; then
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "✅ review-verdict: PASS マーカーを検知しました。レビュー完了と判定します。"
+              echo "review_complete=true"
+              echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました（FAIL 履歴なし）。"
+              echo "review_complete=true" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=レビュー完了: review-verdict: PASS マーカーが確認されました（FAIL 履歴なし）。" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            if [ "${after_fix_verdict}" != "PASS" ]; then
+              reason="FAIL 履歴ありのため review-verdict-after-fix: PASS が必須です。"
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            fail_comment_body=$(echo "${fail_comment_json}" | jq -r '.body // ""')
+            if ! printf '%s\n' "${fail_comment_body}" | grep -q '^### Modified Artifacts[[:space:]]*$'; then
+              reason="FAIL コメントの ### Modified Artifacts セクションを抽出できないため遷移ブロック（fail-closed）"
+              echo "target_count=0"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            target_files=$(printf '%s\n' "${fail_comment_body}" \
+              | awk '
+                BEGIN { in_section=0 }
+                /^### Modified Artifacts[[:space:]]*$/ { in_section=1; next }
+                in_section && /^### [^#]/ { exit }
+                in_section { print }
+              ' \
+              | sed -E 's/\r$//; s/^[[:space:]]*-[[:space:]]+//; s/^[[:space:]]+//; s/[[:space:]]+$//' \
+              | sed '/^$/d' \
+              | sed '/^<!--/d' \
+              | sed '/^変更なし$/d' \
+              | sed '/^なし$/d' \
+              | sort -u)
+            target_count=$(printf '%s\n' "${target_files}" | sed '/^$/d' | wc -l | tr -d ' ')
+            echo "target_count=${target_count}"
+
+            if [ "${target_count}" -eq 0 ]; then
+              reason="FAIL コメントの ### Modified Artifacts が空のため遷移ブロック（fail-closed）"
+              echo "changed_count=0"
+              echo "matched_count=0"
+              echo "review_complete=false"
+              echo "reason=${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            commits_after_fail_json=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
+              --paginate \
+              --jq '.[]' \
+              | jq -cs --arg fail_at "${fail_at_for_diff_gate}" '[ .[] | select(.commit.committer.date > $fail_at) ]')
+            commits_after_fail_count=$(echo "${commits_after_fail_json}" | jq 'length')
+            changed_files=""
+            changed_count=0
+            if [ "${commits_after_fail_count}" -ge 1 ]; then
+              compare_base_sha=$(echo "${commits_after_fail_json}" | jq -r '.[0].parents[0].sha // ""')
+              compare_head_sha=$(echo "${commits_after_fail_json}" | jq -r '.[-1].sha // ""')
+
+              if [ -n "${compare_base_sha}" ] && [ -n "${compare_head_sha}" ]; then
+                changed_files=$(gh api "/repos/${REPO}/compare/${compare_base_sha}...${compare_head_sha}" \
+                  --jq '.files[]?.filename' \
+                  | sed '/^$/d' \
+                  | sort -u)
+                changed_count=$(printf '%s\n' "${changed_files}" | sed '/^$/d' | wc -l | tr -d ' ')
+              fi
+            fi
+
+            matched_count=0
+            if [ "${changed_count}" -gt 0 ]; then
+              matched_count=$(comm -12 \
+                <(printf '%s\n' "${target_files}" | sed '/^$/d' | sort -u) \
+                <(printf '%s\n' "${changed_files}" | sed '/^$/d' | sort -u) \
+                | sed '/^$/d' | wc -l | tr -d ' ')
+            fi
+            echo "changed_count=${changed_count}"
+            echo "matched_count=${matched_count}"
+
+            if [ "${matched_count}" -ge 1 ]; then
+              echo "✅ review-verdict: PASS / review-verdict-after-fix: PASS / 主タスク交差 ${matched_count} 件を検知しました。レビュー完了と判定します。"
+              echo "review_complete=true"
+              echo "reason=レビュー完了: FAIL 履歴ありケースで after-fix PASS かつ主タスク交差 ${matched_count} 件を確認。"
+              echo "review_complete=true" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=レビュー完了: FAIL 履歴ありケースで after-fix PASS かつ主タスク交差 ${matched_count} 件を確認。" >> "${GITHUB_OUTPUT}"
+            else
+              reason="FAIL 履歴ありケースで主タスクファイルとの交差が 0 件のため遷移ブロック"
+              echo "review_complete=false"
+              echo "reason=${reason}"
+              echo "review_complete=false" >> "${GITHUB_OUTPUT}"
+              echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
+              echo "latest_verdict=PASS" >> "${GITHUB_OUTPUT}"
+              echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
+              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            fi
             exit 0
           fi
 
-          # マーカーなし（フォールバック）: 旧形式またはまだ verdict が出ていない場合
-          if [ "${EVENT_NAME}" = "pull_request_target" ]; then
-            # synchronize イベント: 最新コミット日時がレビュー指示日時より後であれば完了
-            latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
-              --paginate \
-              --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
-            echo "最新コミット日時: ${latest_commit_at}"
-
-            if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${review_instruction_at}" +%s 2>/dev/null || echo 0)" ]; then
-              echo "✅ レビュー指示後にコミットが存在します。レビュー完了と判定します。"
-              review_complete="true"
-              reason="レビュー完了: レビュー指示後に Copilot がコミットを push しました（verdict マーカーなしフォールバック）。"
-            else
-              reason="レビュー指示後にコミットがまだありません。Copilot の修正完了待ちです。"
-              echo "${reason}"
-            fi
-          elif [ "${EVENT_NAME}" = "issue_comment" ]; then
-            # issue_comment イベント: Bot の回答コメントが存在すれば完了
-            bot_reply_count=$(echo "${bot_comments_after_review}" | jq 'length')
-            if [ "${bot_reply_count:-0}" -gt 0 ]; then
-              echo "✅ レビュー指示後に Copilot の回答コメントが存在します。レビュー完了と判定します。"
-              review_complete="true"
-              reason="レビュー完了: Copilot がレビュー指示に対して回答しました（verdict マーカーなしフォールバック）。"
-            else
-              reason="レビュー指示後に Copilot の回答コメントがまだありません。"
-              echo "${reason}"
-            fi
-          fi
-
-          echo "review_complete=${review_complete}" >> "${GITHUB_OUTPUT}"
+          reason="review-verdict マーカーを検知できないため遷移ブロック（fail-closed）"
+          echo "target_count=0"
+          echo "changed_count=0"
+          echo "matched_count=0"
+          echo "review_complete=false"
+          echo "reason=${reason}"
+          echo "review_complete=false" >> "${GITHUB_OUTPUT}"
           echo "needs_recheck=false" >> "${GITHUB_OUTPUT}"
           echo "latest_verdict=none" >> "${GITHUB_OUTPUT}"
           echo "issue_auto_merge=${issue_auto_merge}" >> "${GITHUB_OUTPUT}"
@@ -381,12 +511,14 @@ jobs:
             前回レビューで `review-verdict: FAIL` が検出されましたが、その後に修正コミットを検知しました。
             最新コミットを対象に再レビューを実行してください。
 
-            ### 要件
-            1. 5軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
-            2. 最終サマリーの合格判定直後に、必ず次のいずれかを出力すること。
-               - `<!-- review-verdict: PASS -->`（残存 Critical = 0）
-               - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
-            3. 捏造は絶対に禁止です。
+             ### 要件
+             1. 5軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
+             2. 最終サマリーの合格判定直後に、必ず次のいずれかを出力すること。
+                - `<!-- review-verdict: PASS -->`（残存 Critical = 0）
+                - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
+             3. レビュー結果の末尾に `Review Improvement Application` セクションを出力し、`### Modified Artifacts` と
+                `### Verdict After Fix`（`<!-- review-verdict-after-fix: PASS/FAIL -->`）を必ず記載すること。
+             4. 捏造は絶対に禁止です。
         run: |
           set -euo pipefail
 

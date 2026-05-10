@@ -2,10 +2,25 @@
 
 ← [README](../README.md)
 
+> **対象読者**: Web UI 方式または HVE CLI Orchestrator 方式で実行時エラーに遭遇したユーザー  
+> **前提**: 失敗した Issue / Workflow / CLI 実行ログを確認できる状態であること  
+> **次のステップ**: 解決しない場合は [prompt-examples.md](./prompt-examples.md) のエラー対応プロンプトを使って追加調査してください
+
 ---
 
 ## 目次
 
+- [初期セットアップで詰まったとき](#初期セットアップで詰まったとき)
+  - [1) HVE Cloud Agent Orchestrator 初期セットアップ](#1-hve-cloud-agent-orchestrator-初期セットアップ)
+  - [2) Setup Labels / ラベル初期化](#2-setup-labels--ラベル初期化)
+  - [3) Copilot 自動アサイン](#3-copilot-自動アサイン)
+  - [4) GitHub Actions / Workflow permissions](#4-github-actions--workflow-permissions)
+  - [5) Azure OIDC / Static Web Apps deploy](#5-azure-oidc--static-web-apps-deploy)
+  - [6) MCP Servers / GitHub Copilot Skills](#6-mcp-servers--github-copilot-skills)
+  - [7) Self-hosted runner（オプション）](#7-self-hosted-runnerオプション)
+  - [8) HVE CLI Orchestrator Pythonアプリケーション](#8-hve-cli-orchestrator-pythonアプリケーション)
+  - [9) `GH_TOKEN` / `REPO` / `gh auth login`](#9-gh_token--repo--gh-auth-login)
+  - [10) Cloud preflight スクリプト](#10-cloud-preflight-スクリプト)
 - [Web UI 方式のトラブル](#web-ui-方式のトラブル)
   - [Bootstrap ワークフローが起動しない](#bootstrap-ワークフローが起動しない)
   - [Sub Issue API が失敗する](#sub-issue-api-が失敗する)
@@ -13,7 +28,172 @@
   - [ワークフローがエラーで終了する](#ワークフローがエラーで終了する)
   - [Azure Static Web Apps デプロイエラー](#azure-static-web-apps-デプロイエラー)
   - [Copilot cloud agent のタスク実行エラー](#copilot-cloud-agent-のタスク実行エラー)
-- [hve アプリケーションのトラブル](#hve-アプリケーションのトラブル)
+- [HVE CLI Orchestrator のトラブル](#hve-cli-orchestrator-のトラブル)
+
+---
+
+## 初期セットアップで詰まったとき
+
+HVE Cloud Agent Orchestrator と HVE CLI Orchestrator は、前提設定と認証情報が異なります。まず利用方式を切り分けてから確認してください。
+
+### 1) HVE Cloud Agent Orchestrator 初期セットアップ
+
+**症状例**:
+
+- Issue Template から Issue を作成したが workflow が起動しない
+- dispatcher workflow が起動しない
+- reusable workflow が呼び出されない
+- Setup Labels workflow が失敗する
+- ラベルが付与されない
+- Copilot が Issue にアサインされない
+- workflow が queued のまま進まない
+
+**確認観点（上から順に）**:
+
+1. `Setup Labels` workflow を初回に Actions タブから手動実行したか
+2. `setup-labels`, `auto-app-selection`, `auto-app-detail-design-web` など必要ラベルが存在するか
+3. Issue Template 作成時に想定ラベルが実際に付与されているか
+4. Settings → Actions → General → Workflow permissions が **Read and write permissions** か
+5. `COPILOT_PAT` が repository secret に設定されているか（未設定時は設計上スキップ警告になる場合あり）
+6. Settings → Copilot → Cloud agent で Cloud agent が有効か
+7. self-hosted runner を使う場合は runner が online で、workflow 側 label と一致しているか
+8. `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` の結果を確認したか
+
+---
+
+### 2) Setup Labels / ラベル初期化
+
+初回セットアップでは、Issue Template 起点ではなく **Actions タブから `Setup Labels` を手動実行** してください。
+
+- `setup-labels` ラベルが存在しない初回状態では、Issue Template 起点のラベル付与・workflow 起動が期待どおりに動かない場合があります
+- 403 エラー時は Settings → Actions → General → Workflow permissions が **Read and write permissions** か確認してください
+- ラベルが作成されない場合は `.github/labels.json` と `.github/workflows/setup-labels.yml` の存在を確認してください
+- 詳細手順は [getting-started.md Step.5](./getting-started.md#step5-ラベル設定) を参照してください
+
+---
+
+### 3) Copilot 自動アサイン
+
+- `COPILOT_PAT` は HVE Cloud Agent Orchestrator で Copilot を Issue に自動アサインするための repository secret です
+- `COPILOT_PAT` 未設定時は既存スクリプト設計上、警告してスキップされる場合があります
+- 初回セットアップでは `COPILOT_PAT` 設定を推奨（Cloud自動運用では実質必須）
+- Settings → Copilot → Cloud agent で対象リポジトリが有効化されているか確認してください
+- `GH_TOKEN` は HVE CLI Orchestrator の Issue / PR 作成向けであり、Cloud 側の Copilot 自動アサイン用途ではありません
+
+---
+
+### 4) GitHub Actions / Workflow permissions
+
+- `Setup Labels` や dispatcher/reusable workflow のラベル操作には Workflow permissions の設定が影響します
+- Settings → Actions → General → Workflow permissions を **Read and write permissions** に設定してください
+- workflow が起動しない・失敗する場合は、対象 workflow が有効であることとジョブログを確認してください
+
+---
+
+### 5) Azure OIDC / Static Web Apps deploy
+
+- Azure Static Web Apps / Azure deploy は **OIDC 認証を基本方針** とします
+- 通常、`AZURE_STATIC_WEB_APPS_API_TOKEN` や `GITHUB_PAT` は不要です
+- Azure deploy を行う場合は `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` を設定してください
+- workflow により `id-token: write` 権限が必要になる場合があります
+- Azure deploy を使わない場合、Azure OIDC Secrets は必須ではありません
+
+---
+
+### 6) MCP Servers / GitHub Copilot Skills
+
+- HVE Cloud Agent Orchestrator の MCP Servers は GitHub UI の Settings → Copilot → Cloud agent → MCP Servers で設定します
+- HVE CLI Orchestrator の MCP は `--mcp-config`（または hve 側設定ファイル）で指定します
+- Cloud と Local の MCP 設定は混同しないでください
+- GitHub Copilot Skills は Azure 関連タスクを効率化する推奨設定です。必要時に有効化状態を確認してください
+
+---
+
+### 7) Self-hosted runner（オプション）
+
+Self-hosted runner は **オプション** です。GitHub-hosted runner を使う場合はこの確認はスキップできます。
+
+**症状例**:
+
+- workflow が queued のまま進まない
+- self-hosted runner が使われない
+- runner label を指定した workflow が実行されない
+- runner 上で必要ツールが見つからない
+- GitHub / Azure / npm / PyPI へ到達できない
+
+**確認観点**:
+
+1. self-hosted runner が online か
+2. workflow / Issue Template 側の runner label と runner 側 label が一致しているか
+3. runner が対象リポジトリまたは組織に登録されているか
+4. runner に必要ツールがインストール済みか
+5. ネットワーク制限下では GitHub / Azure / npm / PyPI への到達性があるか
+
+詳細は [setup-self-hosted-runner.md](./setup-self-hosted-runner.md) を参照してください。
+
+---
+
+### 8) HVE CLI Orchestrator Pythonアプリケーション
+
+**症状例**:
+
+- `python -m hve` が起動しない
+- Python バージョンが不足している
+- `github-copilot-sdk` が見つからない
+- `gh auth status` が失敗する
+- Issue / PR 作成で失敗する
+- MCP / Work IQ が動かない
+
+**確認観点**:
+
+1. Python 3.11+ を使っているか
+2. `.venv` が有効化されているか
+3. `github-copilot-sdk` がインストールされているか
+4. `gh auth login` 済みで `gh auth status` が成功するか
+5. `--create-issues` / `--create-pr` を使う場合は `GH_TOKEN` と `REPO` が設定されているか
+6. `GH_TOKEN` と Cloud 側の `COPILOT_PAT` を混同していないか
+7. Work IQ を使う場合は Node.js / npx / `@microsoft/workiq` が利用可能か
+
+詳細は [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) も参照してください。
+
+---
+
+### 9) `GH_TOKEN` / `REPO` / `gh auth login`
+
+用途の混同を避けるため、次を分けて確認してください。
+
+- `gh auth login` / `gh auth status`: HVE CLI Orchestrator の基本認証
+- `GH_TOKEN` + `REPO`: HVE CLI Orchestrator で `--create-issues` / `--create-pr` を使うときに必要
+- `COPILOT_PAT`: HVE Cloud Agent Orchestrator の Copilot 自動アサイン用途
+- `GITHUB_TOKEN`: GitHub Actions が workflow 実行時に自動付与するトークン
+- このリポジトリの既存 Copilot 自動アサイン処理は `COPILOT_PAT` 前提です
+
+---
+
+### 10) Cloud preflight スクリプト
+
+実行例:
+
+```bash
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO --self-hosted-runner-label <runner-label>
+```
+
+**よくある失敗と確認ポイント**:
+
+- `OWNER/REPO` 引数がない: 引数を `owner/repo` 形式で再指定
+- `gh` が見つからない: GitHub CLI をインストール
+- `gh auth status` が失敗: `gh auth login` を実行して再認証
+- workflow が見つからない: `Setup Labels` と workflow ファイル配置を確認
+- labels が見つからない: 初回なら `Setup Labels` 手動実行前のため `WARN` になり得る
+- secrets を確認できない: 権限不足の可能性があるため UI で手動確認（未設定と断定しない）
+
+**WARN / FAIL の解釈**:
+
+- `FAIL`: 必須チェック失敗（終了コード non-zero）
+- `WARN`: 権限不足・API 制約・任意項目未実施・初回状態の可能性あり
+- API 権限不足による `WARN` と、実際に設定が未完了の状態は混同しないでください
+- secret は名前の存在のみ確認し、値は表示されません
 
 ---
 
@@ -58,7 +238,9 @@
 3. `COPILOT_PAT` シークレットが正しく設定されているか確認してください
    - **Settings → Secrets and variables → Actions** で `COPILOT_PAT` が存在するか確認
    - PAT の有効期限が切れていないか確認
-4. **手動アサインする場合**: Issue 右サイドバーの「Assignees」から `@copilot` を選択
+4. リポジトリで Copilot Cloud agent が有効化されているか確認してください
+   - **Settings → Copilot → Cloud agent** を確認
+5. **手動アサインする場合**: Issue 右サイドバーの「Assignees」から `@copilot` を選択
 
 ---
 
@@ -72,6 +254,20 @@
 2. `GITHUB_TOKEN` の権限が `issues: write` になっているか確認してください
    - **Settings → Actions → General → Workflow permissions** で確認
 3. ワークフロー権限が **Read and write** になっているか確認
+
+---
+
+### preflight-cloud-setup.sh で FAIL / WARN が出る
+
+**症状**: `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` の結果で `FAIL` または `WARN` が表示される。
+
+**確認事項（チェック順）**:
+
+1. `gh` がインストール済みで `gh auth status` が成功するか
+2. `OWNER/REPO` が正しいか、`gh repo view OWNER/REPO` が成功するか
+3. `Setup Labels` workflow が存在するか（なければテンプレートコピー漏れを確認）
+4. ラベル不足の `WARN` は初回状態なら正常な場合があるため、[getting-started.md Step.5](./getting-started.md#step5-ラベル設定) に従って Setup Labels を手動実行する
+5. secret / runner の確認で取得失敗した場合は、権限不足の可能性があるため GitHub UI で手動確認する（未設定と断定しない）
 
 ---
 
@@ -112,7 +308,7 @@
 - `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）です
 - 公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
-> **モデル ID の命名規則**: Copilot CLI が受理するモデル ID はすべてドット区切りです（例: `claude-opus-4.7` / `claude-opus-4.6` / `claude-sonnet-4.6` / `claude-haiku-4.5` / `gpt-5.4` / `gpt-5.3-codex`）。`copilot` コマンドで `/model` を実行すると利用可能な正確な ID が確認できます。旧表記 `claude-opus-4-7`（ハイフン区切り）を環境変数や `--model` で指定した場合、SDK 側で自動的に `claude-opus-4.7` に正規化されます（WARNING ログあり）。ワークフロー YAML 側でも同様に正規化されます。
+> **モデル ID の命名規則**: Copilot CLI が受理するモデル ID はすべてドット区切りです（例: `claude-opus-4.7` / `claude-opus-4.6` / `gpt-5.5` / `gpt-5.4`）。`copilot` コマンドで `/model` を実行すると利用可能な正確な ID が確認できます。廃止モデル（`claude-sonnet-4.6` / `gpt-5.3-codex` / `gemini-2.5-pro`）や未サポートのモデル ID を指定した場合は `Auto` に自動フォールバックします（WARNING ログあり）。
 
 ---
 
@@ -133,7 +329,7 @@ SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WE
    - `AZURE_TENANT_ID`
    - `AZURE_SUBSCRIPTION_ID`
    
-   未設定の場合は [getting-started.md Step.4.3](./getting-started.md#step43-シークレット設定) を参照してください。
+   未設定の場合は [getting-started.md Step.4（認証設定）](./getting-started.md#step4-認証設定copilot_pat) を参照してください。
 
 2. **Azure リソースが存在するか確認**
    ```bash
@@ -144,38 +340,9 @@ SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WE
 3. **`AZURE_CLIENT_ID` のサービスプリンシパルに SWA 権限があるか確認**
    - サービスプリンシパルに `Contributor` ロールが付与されているか確認してください
 
-<details>
-<summary>旧方式（<code>AZURE_STATIC_WEB_APPS_API_TOKEN</code> トークン認証）をご利用の場合</summary>
-
-> **注意**: 現在の推奨方式は OIDC 認証です。以下の手順は、過去互換目的で残しています。
-
-1. **`AZURE_STATIC_WEB_APPS_API_TOKEN` が設定されているか確認**
-   ```bash
-   gh secret list --repo <owner>/<repo>
-   ```
-   - `AZURE_STATIC_WEB_APPS_API_TOKEN` が一覧に表示されない場合、Secret 未設定です
-   - **対処法**: `create-azure-webui-resources.sh` を `GITHUB_PAT` 付きで実行するか、手動で設定:
-     ```bash
-     # トークン取得
-     TOKEN=$(az staticwebapp secrets list --name <SWA_NAME> -g <RESOURCE_GROUP> --query "properties.apiKey" -o tsv)
-     # Secret 設定
-     GH_TOKEN=$GITHUB_PAT gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN --repo <owner>/<repo> --body "$TOKEN"
-     ```
-
-2. **デプロイトークンの期限切れ**
-   - SWA のデプロイトークンは Azure リソース側で管理されます
-   - トークンをリセットする場合:
-     ```bash
-     az staticwebapp secrets reset-api-key --name <SWA_NAME> -g <RESOURCE_GROUP>
-     ```
-   - リセット後は `AZURE_STATIC_WEB_APPS_API_TOKEN` を再設定してください
-
-3. **`GITHUB_PAT` の権限不足（`gh secret set` が 403 エラー）**
-   - Fine-grained PAT の場合: Repository Permission に **Secrets: Read and write** が必要
-   - Classic PAT の場合: `repo` スコープが必要
-   - PAT の有効期限が切れていないか確認
-
-</details>
+> [!NOTE]
+> 初期セットアップの正本方針は OIDC です（`AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`）。  
+> 一部の Issue Template / workflow 本文に旧トークン記述が残る場合がありますが、認証設定は [getting-started.md の認証・認可の用途一覧](./getting-started.md#認証認可の用途一覧cloud--local--azure) を優先してください。
 
 ---
 
@@ -194,20 +361,47 @@ SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WE
 
 ---
 
-## hve アプリケーションのトラブル
+## HVE CLI Orchestrator のトラブル
 
-hve アプリケーション（ローカル実行方式）のトラブルシューティングは [hve-app-guide.md 付録D](./hve-app-guide.md#付録d-トラブルシューティング) を参照してください。
+HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティングは [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) を参照してください。
+
+### HVE CLI Orchestrator で Issue / PR 作成に失敗する
+
+`--create-issues` / `--create-pr` を使う場合は、次をこの順で確認してください。
+
+1. `gh auth status` で GitHub CLI の認証状態を確認
+2. `GH_TOKEN` が設定されているか確認
+3. `REPO`（`owner/repo`）または `--repo` が指定されているか確認
+4. `GH_TOKEN` は Cloud の `COPILOT_PAT` とは別用途であることを確認
 
 主なトラブルと対応:
 
 | 症状 | 参照箇所 |
 |------|---------|
-| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./hve-app-guide.md#copilot-cli-が見つからない) |
-| `ModuleNotFoundError: No module named 'copilot'` | [付録D: github-copilot-sdk がインストールされていない](./hve-app-guide.md#github-copilot-sdk-がインストールされていない--python--m-hve-が動かない) |
-| セッションタイムアウト | [付録D: セッションタイムアウト](./hve-app-guide.md#セッションタイムアウト) |
-| MCP Server が接続できない | [付録D: MCP Server が接続できない](./hve-app-guide.md#mcp-server-が接続できない) |
-| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./hve-app-guide.md#並列実行でメモリ不足) |
-| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./hve-app-guide.md#pr-作成時に-http-422-エラー) |
+| `copilot: command not found` | [付録D: Copilot CLI が見つからない](./hve-cli-orchestrator-guide.md#copilot-cli-が見つからない) |
+| `ModuleNotFoundError: No module named 'copilot'` | [付録D: github-copilot-sdk がインストールされていない](./hve-cli-orchestrator-guide.md#github-copilot-sdk-がインストールされていない--python--m-hve-が動かない) |
+| セッションタイムアウト | [付録D: セッションタイムアウト](./hve-cli-orchestrator-guide.md#セッションタイムアウト) |
+| MCP Server が接続できない | [付録D: MCP Server が接続できない](./hve-cli-orchestrator-guide.md#mcp-server-が接続できない) |
+| 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./hve-cli-orchestrator-guide.md#並列実行でメモリ不足) |
+| PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./hve-cli-orchestrator-guide.md#pr-作成時に-http-422-エラー) |
+
+### Resume 関連のよくある質問
+
+#### Q. 実行を中断したら続きから再開したい
+
+**A.** 実行中に `Ctrl+R` で保存し、次回 `python -m hve` 起動時の Resume プロンプト、または `python -m hve resume continue <run_id>` を使って再開してください。
+
+#### Q. SDK バージョン差異の警告が出る
+
+**A.** 保存時と実行時で Copilot SDK の major version が異なる可能性があります。厳密に止めたい場合は `python -m hve resume continue <run_id> --abort-on-sdk-mismatch` を利用してください。
+
+#### Q. `Ctrl+R` を押しても反応しない
+
+**A.** 非 TTY 環境（リダイレクト/CI）や VS Code 統合ターミナルで keybind が安定しない場合があります。`HVE_DISABLE_KEYBIND=1` を設定し、`hve resume ...` の CLI サブコマンドを使用してください。
+
+#### Q. `state.json not found` で Resume できない
+
+**A.** 実行時の CWD が保存時と違う可能性があります。保存時と同じディレクトリで起動するか、`--work-dir` に `work/runs` の絶対パスを指定してください。
 
 ## knowledge/ ドキュメント関連のトラブル
 

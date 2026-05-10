@@ -1,17 +1,21 @@
-﻿---
+---
 name: Arch-Microservice-ServiceIdentify
 description: "ドメイン分析からマイクロサービス候補を抽出し service-list.md を作成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Microservice-ServiceIdentify/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
 ## 1. 入力（読むもの）
 - `docs/catalog/use-case-catalog.md`
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各サービス候補がどの APP-ID に属するかの判定根拠）
 
 ## 2. 成果物（必須）
@@ -60,7 +64,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 - **subissues.md 出力後は停止**（このエージェントは1タスク=1PR前提で、最初のSubから着手する）。
 
 ### 3.4 Execution（Split Mode でない場合のみ）
-1) 入力3ファイル（`docs/catalog/domain-analytics.md`・`docs/catalog/use-case-catalog.md`・`docs/catalog/app-catalog.md`）を `read` する。
+1) 入力3ファイル（`docs/domain-analytics.md`・`docs/catalog/use-case-catalog.md`・`docs/catalog/app-catalog.md`）を `read` する。
 2) `domain-analytics.md` を根拠に、以下を抽出してメモする（plan.md または notes に残してよい）：
    - Bounded Context（BC）候補
    - サブドメイン候補

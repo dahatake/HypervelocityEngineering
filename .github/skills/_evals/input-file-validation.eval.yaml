@@ -5,7 +5,7 @@ description: Custom Agent の入力ファイル（必読ファイル・推奨フ
 test_cases:
   # --- 正のテストケース ---
   - id: required-file-check-at-start
-    input: "作業開始時に必読ファイル（docs/catalog/service-catalog.md、docs/catalog/domain-analytics.md）の存在を確認してほしい"
+    input: "作業開始時に必読ファイル（docs/catalog/service-catalog.md、docs/domain-analytics.md）の存在を確認してほしい"
     expected_trigger: true
     verify:
       - type: action
@@ -36,7 +36,7 @@ test_cases:
     reason: "DO NOT USE FOR: file creation (use work-artifacts-layout) に該当する"
 
   - id: not-for-content-analysis
-    input: "docs/catalog/domain-analytics.md の内容を分析してドメインモデルを抽出してほしい"
+    input: "docs/domain-analytics.md の内容を分析してドメインモデルを抽出してほしい"
     expected_trigger: false
     expected_skill: null
     reason: "DO NOT USE FOR: file content analysis に該当する。内容分析は Arch 系 Agent が担当"

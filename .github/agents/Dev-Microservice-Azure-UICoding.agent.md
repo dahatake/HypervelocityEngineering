@@ -1,7 +1,10 @@
-﻿---
+---
 name: Dev-Microservice-Azure-UICoding
 description: 画面定義書に基づき、全ての画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-UICoding/Issue-<識別子>/`
 
@@ -10,7 +13,8 @@ tools: ["*"]
 - `docs/catalog/service-catalog-matrix.md` に基づき、UIから呼ぶ **APIクライアント層** を整備する（base URLの注入・フォールバック含む）。
 - 進捗を `{WORK}work-status.md` に更新する（同一画面IDは重複追記しない）。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存

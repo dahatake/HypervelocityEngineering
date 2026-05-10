@@ -60,6 +60,38 @@ gpt-5.5
 ### 他' | python3 "${SCRIPT_DIR}/extract-model.py")
 assert_eq "${result}" "gpt-5.5" "extract gpt-5.5"
 
+echo "=== extract-review-model.py tests ==="
+result=$(printf '### レビュー用モデル（任意）\n\nclaude-opus-4.7\n\n### 他' | python3 "${SCRIPT_DIR}/extract-review-model.py")
+assert_eq "${result}" "claude-opus-4.7" "extract review claude-opus-4.7"
+
+result=$(printf '### レビュー用モデル（任意）\n\nAuto\n\n### 他' | python3 "${SCRIPT_DIR}/extract-review-model.py")
+assert_eq "${result}" "Auto" "extract review Auto"
+
+result=$(printf '### レビュー用モデル（任意）\n\nGPT-5.5\n\n### 他' | python3 "${SCRIPT_DIR}/extract-review-model.py")
+assert_eq "${result}" "gpt-5.5" "extract review GPT-5.5 → gpt-5.5 (normalize)"
+
+result=$(printf '### レビュー用モデル（任意）\n\nclaude-sonnet-4.6\n\n### 他' | python3 "${SCRIPT_DIR}/extract-review-model.py")
+assert_eq "${result}" "" "extract review claude-sonnet-4.6 → empty (removed model)"
+
+result=$(echo 'no review model section here' | python3 "${SCRIPT_DIR}/extract-review-model.py")
+assert_eq "${result}" "" "review no section → empty"
+
+echo "=== extract-qa-model.py tests ==="
+result=$(printf '### QA 用モデル（任意）\n\nclaude-opus-4.7\n\n### 他' | python3 "${SCRIPT_DIR}/extract-qa-model.py")
+assert_eq "${result}" "claude-opus-4.7" "extract qa claude-opus-4.7"
+
+result=$(printf '### QA 用モデル（任意）\n\nAuto\n\n### 他' | python3 "${SCRIPT_DIR}/extract-qa-model.py")
+assert_eq "${result}" "Auto" "extract qa Auto"
+
+result=$(printf '### QA 用モデル（任意）\n\nGPT-5.5\n\n### 他' | python3 "${SCRIPT_DIR}/extract-qa-model.py")
+assert_eq "${result}" "gpt-5.5" "extract qa GPT-5.5 → gpt-5.5 (normalize)"
+
+result=$(printf '### QA 用モデル（任意）\n\nclaude-sonnet-4.6\n\n### 他' | python3 "${SCRIPT_DIR}/extract-qa-model.py")
+assert_eq "${result}" "" "extract qa claude-sonnet-4.6 → empty (removed model)"
+
+result=$(echo 'no qa model section here' | python3 "${SCRIPT_DIR}/extract-qa-model.py")
+assert_eq "${result}" "" "qa no section → empty"
+
 echo "=== check-assignees.py tests ==="
 result=$(echo '{"assignees":[{"login":"copilot-swe-agent"}]}' | python3 "${SCRIPT_DIR}/check-assignees.py")
 assert_eq "${result}" "true" "copilot assigned"

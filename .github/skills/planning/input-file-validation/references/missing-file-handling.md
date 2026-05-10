@@ -34,7 +34,7 @@ TBD（ファイル未検出: docs/catalog/service-catalog.md）
 | ファイル | 状態 | 対応 |
 |---------|------|------|
 | docs/catalog/service-catalog.md | ✅ 存在 | 参照 |
-| docs/catalog/domain-analytics.md | ❌ 欠損 | TBD記載 |
+| docs/domain-analytics.md | ❌ 欠損 | TBD記載 |
 ```
 
 ## 推奨ファイルの参照可否

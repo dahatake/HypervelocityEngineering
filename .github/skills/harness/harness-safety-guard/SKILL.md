@@ -1,23 +1,10 @@
 ---
 name: harness-safety-guard
 description: >
-  破壊的操作を事前に検出・阻止する安全ガードの詳細パターンリストと判定フロー。
-  危険操作の正規表現一覧、Azure 固有の破壊的コマンド一覧（本リポジトリ特化）、
-  ホワイトリスト（誤検知回避）、停止レベル別判定フローを提供する。
-  USE FOR: destructive operation detection, rm -rf detection,
-  DROP TABLE detection, az delete detection, git push --force detection,
-  secret hardcode detection, safety check before command execution,
-  CRITICAL/HIGH/MEDIUM level classification.
-  DO NOT USE FOR: error recovery after failure (use harness-error-recovery),
-  code modification or fix, permission granting,
-  comprehensive security vulnerability scanning.
-  WHEN: コマンドを実行する前の安全確認、破壊的操作の検出、
-  rm -rf や DROP TABLE の検出、Azure リソース削除の検出、
-  秘密情報のハードコード検出、git push --force の検出、
-  安全ガードの判定フローを確認したい。
+  破壊的操作を事前に検出・阻止する安全ガードの詳細パターンリストと判定フロー。 USE FOR: destructive operation detection, rm -rf detection, DROP TABLE detection. DO NOT USE FOR: error recovery after failure (use harness-error-recovery). WHEN: コマンドを実行する前の安全確認、破壊的操作の検出。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # harness-safety-guard

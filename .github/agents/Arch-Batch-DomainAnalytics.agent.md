@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Batch-DomainAnalytics
 description: "バッチDDD観点ドメイン分析（BC・冪等性・チェックポイント）を docs/batch/batch-domain-analytics.md に作成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Batch-DomainAnalytics/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 

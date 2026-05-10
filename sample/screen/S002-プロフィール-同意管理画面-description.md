@@ -1,6 +1,6 @@
 # S002 プロフィール・同意管理画面
 
-> **出典**: `docs/screen-list.md#S002`, `docs/app-list.md#APP-01`, `docs/service-list.md#SVC-01`, `docs/data-model.md#Member`, `docs/data-model.md#ConsentRecord`  
+> **出典**: `docs/catalog/screen-catalog.md#S002`, `docs/catalog/app-catalog.md#APP-01`, `docs/catalog/service-catalog.md#SVC-01`, `docs/catalog/data-model.md#Member`, `docs/catalog/data-model.md#ConsentRecord`  
 > **作成日**: 2026-03-31
 
 ---
@@ -94,10 +94,10 @@
 
 | フィールド | 出典 | 備考 |
 |---|---|---|
-| name | `Member.name` | `docs/data-model.md#Member` |
+| name | `Member.name` | `docs/catalog/data-model.md#Member` |
 | email | `Member.email` | 読み取り専用 |
 | phone | `Member.phone` | 任意 |
-| consent.MARKETING | `ConsentRecord.status` | `docs/data-model.md#ConsentRecord` |
+| consent.MARKETING | `ConsentRecord.status` | `docs/catalog/data-model.md#ConsentRecord` |
 | consent.AI_USAGE | `ConsentRecord.status` | |
 | consent.THIRD_PARTY | `ConsentRecord.status` | |
 
@@ -161,7 +161,7 @@
 
 * **パフォーマンス**: プロフィール取得 p95 < 500ms（TBD: SVC-01 SLA）
 * **同意変更即時反映**: 変更後 < 5分以内に全配信制御に反映（推論: リアルタイム反映は技術的難易度高のため5分以内を許容範囲と設定。この回答はCopilot推論をしたものです。）
-* **可用性**: APP-01 99.9%（`docs/app-list.md#APP-01`）
+* **可用性**: APP-01 99.9%（`docs/catalog/app-catalog.md#APP-01`）
 
 ---
 

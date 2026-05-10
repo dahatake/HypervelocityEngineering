@@ -24,7 +24,7 @@
 | パス | 説明 |
 |------|------|
 | `docs/catalog/service-catalog.md` | 全サービス（SVC-01〜SVC-16）の概要・API 仕様・リソース一覧 |
-| `docs/catalog/domain-analytics.md` | DDD ドメイン分析（BC・集約・ドメインイベント） |
+| `docs/domain-analytics.md` | DDD ドメイン分析（BC・集約・ドメインイベント） |
 | `AGENTS.md` | 全 Agent に適用される強制ルール（§1〜§10） |
 | `.github/agents/` | Custom Agent 定義（30+個） |
 | `.github/skills/` | Skill 定義（36+個） |

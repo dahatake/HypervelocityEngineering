@@ -1,4 +1,4 @@
-name: Issue Orchestrator Dispatcher
+name: HVE Cloud Agent Orchestrator Dispatcher
 
 on:
   issues:
@@ -20,6 +20,13 @@ jobs:
       event_action: ${{ steps.detect.outputs.event_action }}
       label_name: ${{ steps.detect.outputs.label_name }}
       issue_labels: ${{ steps.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ steps.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ steps.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ steps.detect.outputs.foundry_mcp_integration }}
+      agentic_data_sources_hint: ${{ steps.detect.outputs.agentic_data_sources_hint }}
+      agentic_existing_design_diff_only: ${{ steps.detect.outputs.agentic_existing_design_diff_only }}
+      foundry_sku_fallback_policy: ${{ steps.detect.outputs.foundry_sku_fallback_policy }}
+      runner_type: ${{ steps.detect.outputs.runner_type }}
     steps:
       - name: Detect target orchestrator
         id: detect
@@ -30,15 +37,17 @@ jobs:
           LABEL_NAME: ${{ github.event.label.name || '' }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
         run: |
           python3 <<'PY'
-          import json, os
+          import json, os, re
 
           labels = json.loads(os.environ.get('ISSUE_LABELS', '[]') or '[]')
           title = os.environ.get('ISSUE_TITLE', '')
           action = os.environ.get('EVENT_ACTION', '')
           label_name = os.environ.get('LABEL_NAME', '')
           author_association = os.environ.get('AUTHOR_ASSOCIATION', '')
+          body = os.environ.get('ISSUE_BODY', '') or ''
           allowed_associations = {'OWNER', 'MEMBER', 'COLLABORATOR'}
 
           trigger_map = [
@@ -95,6 +104,70 @@ jobs:
 
           target = 'none'
           mode = 'skip'
+          enable_agentic_retrieval = 'auto'
+          agentic_data_source_modes = 'indexer'
+          foundry_mcp_integration = 'true'
+          agentic_data_sources_hint = ''
+          agentic_existing_design_diff_only = 'false'
+          foundry_sku_fallback_policy = 'standard_allowed'
+          runner_type = 'github-hosted'
+
+          def section_text(pattern: str) -> str:
+              m = re.search(pattern, body, re.DOTALL)
+              if not m:
+                  return ''
+              value = m.group(1).strip()
+              if value == '_No response_':
+                  return ''
+              return value
+
+          enable_section = section_text(r"###\s*Agentic Retrieval を使用する\s*\n(.*?)(?=###|\Z)")
+          if 'しない' in enable_section:
+              enable_agentic_retrieval = 'no'
+          elif 'する' in enable_section:
+              enable_agentic_retrieval = 'yes'
+          elif '自動判定に従う' in enable_section:
+              enable_agentic_retrieval = 'auto'
+
+          data_source_section = section_text(r"###\s*データソース投入方式\s*\n(.*?)(?=###|\Z)")
+          if data_source_section:
+              has_indexer = bool(re.search(r"-\s*\[[xX]\]\s*Indexer\s*\(Pull\)", data_source_section))
+              has_push = bool(re.search(r"-\s*\[[xX]\]\s*Push\s*API", data_source_section))
+              selected = []
+              if has_indexer:
+                  selected.append('indexer')
+              if has_push:
+                  selected.append('push')
+              agentic_data_source_modes = ','.join(selected) if selected else 'indexer'
+
+          foundry_section = section_text(r"###\s*Microsoft Foundry 連携（Remote MCP Server）\s*\n(.*?)(?=###|\Z)")
+          if 'しない' in foundry_section:
+              foundry_mcp_integration = 'false'
+          elif 'する' in foundry_section:
+              foundry_mcp_integration = 'true'
+
+          agentic_data_sources_hint = section_text(r"###\s*想定データソース（任意）\s*\n(.*?)(?=###|\Z)")
+          agentic_data_sources_hint = agentic_data_sources_hint.replace('\r', ' ').replace('\n', ' / ')
+
+          diff_only_section = section_text(r"###\s*既存設計の差分更新\s*\n(.*?)(?=###|\Z)")
+          if diff_only_section:
+              agentic_existing_design_diff_only = 'true' if re.search(r"-\s*\[[xX]\]", diff_only_section) else 'false'
+
+          sku_fallback_section = section_text(r"###\s*Foundry モデル SKU フォールバック\s*\n(.*?)(?=###|\Z)")
+          if 'Global 必須' in sku_fallback_section:
+              foundry_sku_fallback_policy = 'global_required'
+          elif 'Standard 許容' in sku_fallback_section:
+              foundry_sku_fallback_policy = 'standard_allowed'
+
+          runner_section = section_text(r"###\s*実行 Runner\s*\n(.*?)(?=###|\Z)")
+          if 'Self-hosted' in runner_section or 'self-hosted' in runner_section:
+              runner_type = 'self-hosted'
+          elif 'GitHub Hosted' in runner_section or 'GitHub hosted' in runner_section:
+              runner_type = 'github-hosted'
+
+          if enable_agentic_retrieval == 'no':
+              foundry_mcp_integration = 'false'
+              foundry_sku_fallback_policy = 'standard_allowed'
 
           if action == 'opened':
             if author_association in allowed_associations:
@@ -151,6 +224,13 @@ jobs:
             f.write(f'event_action={action}\n')
             f.write(f'label_name={label_name}\n')
             f.write('issue_labels=' + json.dumps(labels) + '\n')
+            f.write(f'enable_agentic_retrieval={enable_agentic_retrieval}\n')
+            f.write(f'agentic_data_source_modes={agentic_data_source_modes}\n')
+            f.write(f'foundry_mcp_integration={foundry_mcp_integration}\n')
+            f.write(f'agentic_data_sources_hint={agentic_data_sources_hint}\n')
+            f.write(f'agentic_existing_design_diff_only={agentic_existing_design_diff_only}\n')
+            f.write(f'foundry_sku_fallback_policy={foundry_sku_fallback_policy}\n')
+            f.write(f'runner_type={runner_type}\n')
           PY
 
   aad-web:
@@ -163,6 +243,10 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   asdw-web:
@@ -175,6 +259,13 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}
+      agentic_data_sources_hint: ${{ needs.detect.outputs.agentic_data_sources_hint }}
+      agentic_existing_design_diff_only: ${{ needs.detect.outputs.agentic_existing_design_diff_only }}
+      foundry_sku_fallback_policy: ${{ needs.detect.outputs.foundry_sku_fallback_policy }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   aag:
@@ -187,6 +278,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   aagd:
@@ -199,6 +291,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   adoc:
@@ -211,6 +304,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   aas:
@@ -223,6 +317,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   abd:
@@ -235,6 +330,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   abdv:
@@ -247,6 +343,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   akm:
@@ -259,6 +356,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   setup_labels:
@@ -280,6 +378,7 @@ jobs:
       event_action: ${{ needs.detect.outputs.event_action }}
       label_name: ${{ needs.detect.outputs.label_name }}
       issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   suggest-next:

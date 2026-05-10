@@ -2,12 +2,16 @@
 name: Dev-Microservice-Azure-AgentCoding
 description: AI Agent 詳細設計書から Azure AI Foundry Agent Service を使用して Agent を実装し、test/agent/ のテストが全て PASS するまで反復する（TDD GREEN フェーズ）。Issue body 記載の回数（未指定時 5 回）反復。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AgentCoding/Issue-<識別子>/`
 
 Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フェーズ）専用Agent。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存

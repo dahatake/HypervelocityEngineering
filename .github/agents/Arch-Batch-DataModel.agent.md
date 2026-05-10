@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Batch-DataModel
 description: "バッチ4層データモデル・冪等性キー・パーティション・ER図を設計し docs/batch/batch-data-model.md 作成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Batch-DataModel/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 ## 1) 役割（このエージェントがやること）

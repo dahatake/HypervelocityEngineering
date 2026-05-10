@@ -1,0 +1,95 @@
+name: E2E Playwright (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      e2e_base_url:
+        description: "E2E テスト対象のベース URL（未指定時は service_catalog_path から抽出）"
+        required: false
+        type: string
+        default: ""
+      service_catalog_path:
+        description: "SWA URL 抽出元の service catalog パス"
+        required: false
+        type: string
+        default: "docs/catalog/service-catalog-matrix.md"
+      working_directory:
+        description: "Playwright プロジェクトのディレクトリ"
+        required: false
+        type: string
+        default: "tests/e2e/playwright"
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-e2e:
+    name: Playwright E2E (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ${{ inputs.working_directory }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install Playwright browsers
+        working-directory: ${{ inputs.working_directory }}
+        run: npx playwright install --with-deps chromium
+
+      - name: Resolve E2E base URL
+        id: resolve-base-url
+        env:
+          INPUT_BASE_URL: ${{ inputs.e2e_base_url }}
+          SERVICE_CATALOG_PATH: ${{ inputs.service_catalog_path }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${INPUT_BASE_URL}"
+          if [ -z "${BASE_URL}" ]; then
+            BASE_URL=$(python3 -c 'import os,re,pathlib; p=pathlib.Path(os.environ["SERVICE_CATALOG_PATH"]); c=p.read_text(encoding="utf-8", errors="ignore") if p.exists() else ""; m=re.search(r"https://[a-zA-Z0-9.-]+\\.azurestaticapps\\.net", c); print(m.group(0) if m else "")')
+          fi
+          if [ -z "${BASE_URL}" ]; then
+            echo "::error::E2E_BASE_URL を解決できません。workflow input か service catalog を確認してください。"
+            exit 1
+          fi
+          echo "E2E_BASE_URL=${BASE_URL}" >> "${GITHUB_ENV}"
+          echo "base_url=${BASE_URL}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved E2E_BASE_URL=${BASE_URL}"
+
+      - name: Run Playwright E2E
+        working-directory: ${{ inputs.working_directory }}
+        env:
+          E2E_BASE_URL: ${{ env.E2E_BASE_URL }}
+        run: npx playwright test
+
+      - name: Upload Playwright HTML report (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: ${{ inputs.working_directory }}/playwright-report
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Playwright traces (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: ${{ inputs.working_directory }}/test-results
+          if-no-files-found: warn
+          retention-days: 7

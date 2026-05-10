@@ -40,15 +40,24 @@ def _safe_run_id(run_id: str) -> str:
     return rid or generate_run_id()
 
 try:
-    from .config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+    from .config import (
+        DEFAULT_MODEL,
+        MODEL_AUTO_VALUE,
+        MODEL_AUTO_REASONING_EFFORT,
+        SDKConfig,
+        generate_run_id,
+        SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
+        DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+    )
     from .console import Console, _ACTION_DISPLAY, timestamp_prefix
     from .prompts import (
-        QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
-        QA_PROMPT_V2, AQOD_QA_PROMPT, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
+        REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
+        QA_PROMPT_V2,
         SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from .qa_merger import QADocument, QAMerger
+    from .run_state import DEFAULT_SESSION_ID_PREFIX, RunState, make_session_id
     from .self_improve import (
         scan_codebase, record_learning, get_learning_summary,
         ImprovementRecord, VerificationResult,
@@ -56,7 +65,7 @@ try:
     )
     from .workiq import (
         is_workiq_available, build_workiq_mcp_config,
-        query_workiq, query_workiq_detailed, enrich_prompt_with_workiq,
+        query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
         WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
         is_workiq_error_response,
@@ -64,15 +73,24 @@ try:
         extract_workiq_tool_name_from_event,
     )
 except ImportError:
-    from config import MODEL_AUTO_VALUE, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
+    from config import (  # type: ignore[no-redef]
+        DEFAULT_MODEL,
+        MODEL_AUTO_VALUE,
+        MODEL_AUTO_REASONING_EFFORT,
+        SDKConfig,
+        generate_run_id,
+        SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
+        DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+    )
     from console import Console, _ACTION_DISPLAY, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
-        QA_APPLY_PROMPT, REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
-        QA_PROMPT_V2, AQOD_QA_PROMPT, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
+        REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
+        QA_PROMPT_V2,
         SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from qa_merger import QADocument, QAMerger  # type: ignore[no-redef]
+    from run_state import DEFAULT_SESSION_ID_PREFIX, RunState, make_session_id  # type: ignore[no-redef]
     from self_improve import (  # type: ignore[no-redef]
         scan_codebase, record_learning, get_learning_summary,
         ImprovementRecord, VerificationResult,
@@ -80,7 +98,7 @@ except ImportError:
     )
     from workiq import (  # type: ignore[no-redef]
         is_workiq_available, build_workiq_mcp_config,
-        query_workiq, query_workiq_detailed, enrich_prompt_with_workiq,
+        query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
         WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
         is_workiq_error_response,
@@ -92,7 +110,6 @@ except ImportError:
 _MAX_SCAN_OUTPUT_LENGTH: int = 8000
 _MAX_PLAN_SCAN_LENGTH: int = 4000
 _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
-_MAX_CONTEXT_INJECTION_LENGTH: int = 50_000
 _ACTION_DETAIL_MAX_LENGTH: int = 120
 _ACTION_RESULT_SINGLE_LINE_MAX_LENGTH: int = 100
 
@@ -218,6 +235,33 @@ def _parse_qa_content_with_artifact_fallback(
             return candidate, artifact_path
 
     return parsed, None
+
+
+async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts: Dict[str, Any]) -> Any:
+    """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
+
+    SDK バージョン < 0.3.0 互換のための防御。reasoning_effort が opts に
+    含まれない場合は単純な create_session 呼び出しと等価。
+
+    検出条件は Python の組み込み TypeError 文言
+    (`got an unexpected keyword argument`) と `reasoning_effort` の両方が
+    含まれる場合に限定する。これにより、SDK 側の値検証エラー
+    (例: `reasoning_effort must be one of ...`) や、別キーワードの
+    エラーメッセージに `reasoning_effort` が偶然含まれるケースで
+    誤って引数を剥がして再試行することを防ぐ。
+    """
+    try:
+        return await client.create_session(**session_opts)
+    except TypeError as exc:
+        msg = str(exc)
+        if (
+            "unexpected keyword argument" in msg
+            and "reasoning_effort" in msg
+            and "reasoning_effort" in session_opts
+        ):
+            _opts = {k: v for k, v in session_opts.items() if k != "reasoning_effort"}
+            return await client.create_session(**_opts)
+        raise
 
 
 def _truncate_context(text: str, max_length: int) -> str:
@@ -444,7 +488,7 @@ class StepRunner:
     ┌──────────────────────────────────────────────────┐
     │ CopilotSession (同一セッション = コンテキスト保持)   │
     │                                                    │
-    │  [auto_qa=True かつ qa_phase in ("pre","both") の場合 / ただし AQOD は常時スキップ / AKM は qa_phase に従う]  │
+    │  [auto_qa=True かつ AQOD でない場合]                │
     │  Phase 0: 事前 QA                                  │
     │    0a: session.send_and_wait(PRE_EXECUTION_QA_PROMPT_V2)│
     │       → Agent が実行前質問票を生成（成果物なし）    │
@@ -458,22 +502,9 @@ class StepRunner:
     │       pre_qa_context を注入してから実行             │
     │    → Agent がメインタスク実行                        │
     │                                                    │
-    │  [事後 QA の実行条件]                               │
-    │  通常: auto_qa=True かつ qa_phase in ("post","both") │
-    │  AKM: 常に実行しない（事前 QA → Phase 1 注入で要件充足）│
-    │  AQOD: auto_qa=True かつ aqod_post_qa_enabled=True  │
-    │  Phase 2a: session.send_and_wait(QA_PROMPT_V2)     │
-    │    → Agent が構造化形式の質問票を生成                │
-    │  Phase 2b: CLI stdin で複数行回答入力               │
-    │    → "番号: 選択肢" 形式 / 空行で終了               │
-    │    → skip/空 入力で既定値候補適用                    │
-    │  Phase 2c: QA 回答マージ + qa/ ファイル永続化        │
-    │    → QAMerger でパース → マージ → Markdown 生成     │
-    │    → session.send_and_wait(QA_MERGE_SAVE_PROMPT)   │
-    │       Agent がマージ済みファイルを qa/ に保存        │
-    │    → session.send_and_wait(QA_CONSOLIDATE_PROMPT)  │
-    │       Agent が統合ドキュメント(-consolidated.md)生成 │
-    │    → 失敗時: QA_APPLY_PROMPT にフォールバック        │
+    │  注: Phase 2（事後 QA / post-QA モード）は廃止済み。 │
+    │     旧 qa_phase="post"/"both" および                │
+    │     aqod_post_qa_enabled は削除されました。         │
     │                                                    │
     │  [auto_contents_review=True の場合]                 │
     │  Phase 3: session.send_and_wait(REVIEW_PROMPT)     │
@@ -493,28 +524,86 @@ class StepRunner:
     └──────────────────────────────────────────────────┘
     """
 
-    def __init__(self, config: SDKConfig, console: Console) -> None:
+    def __init__(
+        self,
+        config: SDKConfig,
+        console: Console,
+        *,
+        resume_state: Optional["RunState"] = None,
+    ) -> None:
         self.config = config
         self.console = console
+        # Phase 3 (Resume): 完了済みステップの skip / 失敗ステップの resume_session 分岐に使用する。
+        # None の場合は新規実行モード（resume 機能を使わない既存挙動と完全互換）。
+        self._resume_state = resume_state
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
+        # Phase 6: サブセッション作成回数カウンター（observability）。
+        # run_step() 開始時にリセットされる。テストから参照可能。
+        self._sub_sessions_created: int = 0
 
-    def _build_sub_session_opts(self, model: str, *, include_workiq: bool = False) -> Dict[str, Any]:
+    def _session_id_prefix(self) -> str:
+        """SDKConfig.session_id_prefix が空ならデフォルト ("hve") を返す。"""
+        prefix = (self.config.session_id_prefix or "").strip()
+        return prefix or DEFAULT_SESSION_ID_PREFIX
+
+    def _get_context_injection_max_chars(self) -> int:
+        """コンテキスト注入上限を返す。None/不正値は既定値 20,000 に正規化する。"""
+        value = getattr(self.config, "context_injection_max_chars", DEFAULT_CONTEXT_INJECTION_MAX_CHARS)
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError):
+            return DEFAULT_CONTEXT_INJECTION_MAX_CHARS
+        return normalized if normalized > 0 else DEFAULT_CONTEXT_INJECTION_MAX_CHARS
+
+    def _make_step_session_id(self, step_id: str, suffix: str = "") -> str:
+        """このステップ用の決定論的 session_id を生成する。
+
+        Phase 2 (Resume): 同 run_id × step_id × suffix の組み合わせは常に同じ
+        session_id を返すため、Phase 3 で `client.resume_session(session_id)` を
+        呼べる前提を作る。
+
+        Args:
+            step_id: ステップ識別子（"1.1" 等）
+            suffix: サブセッション種別（"qa" / "review" / "pre-qa" 等）。空ならメインセッション。
+        """
+        return make_session_id(
+            run_id=self.config.run_id,
+            step_id=step_id,
+            suffix=suffix,
+            prefix=self._session_id_prefix(),
+        )
+
+    def _build_sub_session_opts(
+        self,
+        model: str,
+        *,
+        include_workiq: bool = False,
+        step_id: Optional[str] = None,
+        suffix: str = "",
+    ) -> Dict[str, Any]:
         """レビュー/QA 用の別セッション構築オプションを生成する。
 
         メインセッションの custom_agent / custom_agents を除外した
         最小限のオプションセットを返す。Work IQ は QA フェーズ専用で、
         include_workiq=True の場合だけ追加する。
+
+        Phase 2 (Resume): step_id + suffix が指定された場合は決定論的 session_id を
+        付与する（make_session_id で生成）。後方互換のため step_id=None の場合は
+        session_id を付与しない（SDK 側で自動生成）。
         """
         from copilot.session import PermissionHandler
         opts: Dict[str, Any] = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
         }
-        # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
         if model and model != MODEL_AUTO_VALUE:
             opts["model"] = model
+        else:
+            opts["model"] = DEFAULT_MODEL
+            opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
         _mcp = {
             _k: _v
             for _k, _v in (self.config.mcp_servers or {}).items()
@@ -532,7 +621,196 @@ class StepRunner:
 
         if _mcp:
             opts["mcp_servers"] = _mcp
+
+        # Phase 2: 決定論的 session_id を付与（step_id + suffix が指定された場合のみ）
+        if step_id:
+            opts["session_id"] = self._make_step_session_id(step_id, suffix=suffix)
+
         return opts
+
+    # ------------------------------------------------------------------
+    # Phase 6: サブセッション要否の判定ヘルパー（テスト容易性のために分離）
+    # ------------------------------------------------------------------
+
+    def _should_use_pre_qa_sub_session(self, qa_model: str, workiq_available: bool) -> bool:
+        """事前 QA にサブセッションが必要かを判定する。
+
+        以下のいずれかが True の場合にサブセッションを作成する:
+        - qa_model が main_model と異なる（MODEL_AUTO_VALUE 同士なら同一とみなす）
+        - WorkIQ MCP が利用可能（QA 専用セッションに WorkIQ を含める必要があるため）
+        """
+        return (qa_model != self.config.model) or workiq_available
+
+    def _should_use_qa_sub_session(self, qa_model: str, workiq_available: bool) -> bool:
+        """事後 QA にサブセッションが必要かを判定する。
+
+        事前 QA と同一条件:
+        - qa_model が main_model と異なる
+        - WorkIQ MCP が利用可能
+        """
+        return (qa_model != self.config.model) or workiq_available
+
+    def _should_use_review_sub_session(self, review_model: str) -> bool:
+        """敵対的レビューにサブセッションが必要かを判定する。
+
+        review_model が main_model と異なる場合にのみサブセッションを作成する。
+        Review フェーズでは WorkIQ は使用しないためモデル差異のみを判定する。
+        """
+        return review_model != self.config.model
+
+    def _log_sub_session_reason(
+        self,
+        step_id: str,
+        phase: str,
+        qa_model: Optional[str] = None,
+        workiq_available: bool = False,
+    ) -> None:
+        """サブセッション作成理由を console.event() で記録する（secrets 非出力）。
+
+        呼び出し元は必ずサブセッション作成条件（モデル差異 or WorkIQ 有効）が
+        True のときのみ呼び出すこと。条件が全て False の状態で呼ばれた場合は
+        "(内部エラー: 理由不明)" と記録する（呼び出しバグの早期検知用）。
+
+        Args:
+            step_id: ステップ識別子（ログ識別用）
+            phase: フェーズ名（"Pre-QA" / "Post-QA" / "Review"）
+            qa_model: QA/Review 用モデル名（Noneの場合はモデル差異ログを省略）
+            workiq_available: WorkIQ が有効かどうか
+        """
+        _reasons: List[str] = []
+        if qa_model is not None and qa_model != self.config.model:
+            _reasons.append(
+                f"モデル差異 (sub={qa_model!r}, main={self.config.model!r})"
+            )
+        if workiq_available:
+            _reasons.append("WorkIQ 有効")
+        # 呼び出し元の責務: _reasons が空になるのは呼び出し側のバグ
+        _reason_str = "、".join(_reasons) if _reasons else "(内部エラー: 理由不明)"
+        self.console.event(
+            f"  ▶ [{step_id}] {phase} サブセッション作成 — 理由: {_reason_str}"
+        )
+
+    def _log_main_session_reuse(self, step_id: str, phase: str) -> None:
+        """メインセッション再利用を console.event() で記録する。"""
+        self.console.event(
+            f"  🔄 [{step_id}] {phase} メインセッションを再利用"
+        )
+
+    # ------------------------------------------------------------------
+    # Phase 3 (Resume): メインセッションの resume / create フォールバック
+    # ------------------------------------------------------------------
+
+    # `resume_session()` が受け付けるオプションのキー（SDK 仕様）。
+    # `agent` / `model` / `mcp_servers` / `custom_agents` / `streaming` /
+    # `on_permission_request` のみが伝搬可能で、`session_id` は位置引数で渡す。
+    #
+    # 注: `reasoning_effort` は意図的にここに含めない。Resume 経路では
+    # サーバ側がセッション継続情報を保持する想定で、Auto モデル選択時の
+    # reasoning_effort 制約 (claude-opus-4.7-high 等) は新規 create_session
+    # 経路でのみ付与する設計（hve/config.py MODEL_AUTO_REASONING_EFFORT 参照）。
+    # Resume 経由で 400 エラーが再発する場合は本セット見直しを検討する。
+    _RESUME_SESSION_KEYS: frozenset[str] = frozenset({
+        "on_permission_request",
+        "model",
+        "mcp_servers",
+        "custom_agents",
+        "agent",
+        "streaming",
+    })
+
+    def _should_resume_main_session(self, step_id: str, session_id: str) -> bool:
+        """resume_state に同 step が running/failed として記録されているか判定する。
+
+        - resume_state が None（新規実行）の場合は常に False。
+        - 該当 step が completed / skipped / blocked の場合は False（再実行不要）。
+        - session_id が一致しない場合は False（前回と SDK 側の紐付けが切れているため
+          新規 create のほうが安全）。
+        """
+        if self._resume_state is None:
+            return False
+        st = self._resume_state.step_states.get(step_id)
+        if st is None:
+            return False
+        if st.status not in ("running", "failed"):
+            return False
+        if not st.session_id or st.session_id != session_id:
+            return False
+        return True
+
+    async def _create_or_resume_main_session(
+        self,
+        *,
+        client: Any,
+        session_opts: Dict[str, Any],
+        step_id: str,
+    ) -> Any:
+        """メインセッションを resume_session または create_session で構築する。
+
+        Phase 3 (Resume): 完了/スキップ済みのステップは Resume 経路で
+        ここに到達せず、ここに来るのは「未着手 / running 中で中断 / 失敗」のいずれか。
+        前者は `create_session`、後二者は `resume_session` で再開を試みる。
+
+        フォールバック: `resume_session` が SDK 側の理由（セッション削除、
+        バージョン不整合など）で失敗した場合は新規 `create_session` に切り替える。
+
+        副作用: resume_state がある場合、ステップを `running` 状態に更新し、
+        `session_id` と `started_at` を記録する（後続のクラッシュ時に
+        次回 resume の判定材料となる）。
+        """
+        session_id = session_opts.get("session_id", "")
+        # Phase 3 (Resume): resume するか否かを判定 → その後 state を更新する。
+        # 判定より先に _mark_step_running で status を上書きすると、
+        # `_should_resume_main_session` の status 判定が常に "running" になってしまうバグになる。
+        should_resume = self._should_resume_main_session(step_id, session_id)
+
+        # state.json を "running" 状態にマーク（resume_state があるときのみ）。
+        # 判定の後に呼ぶことで、resume 判定の入力（保存時 status / session_id）が壊れない。
+        self._mark_step_running(step_id, session_id)
+
+        if not should_resume:
+            return await _create_session_with_auto_reasoning_fallback(client, session_opts)
+
+        # Resume 経路: resume_session に渡せるキーだけ抽出する
+        resume_opts = {
+            k: v for k, v in session_opts.items()
+            if k in self._RESUME_SESSION_KEYS
+        }
+        try:
+            session = await client.resume_session(session_id, **resume_opts)
+            self.console.event(
+                f"  ↻ Step.{step_id} を session_id={session_id} から再開しました"
+            )
+            return session
+        except Exception as exc:
+            self.console.warning(
+                f"resume_session 失敗 ({type(exc).__name__}): {exc}"
+                f" → 新規 create_session にフォールバックします (step={step_id})"
+            )
+            # 注: session_opts には Auto モデル時 reasoning_effort='high' が含まれるため、
+            # SDK バージョン < 0.3.0 環境では _create_session_with_auto_reasoning_fallback
+            # の内部リトライが追加で発生し SDK 呼び出しが最大 4 回（resume 1 + create 2 + 内部 retry 1）になる。
+            return await _create_session_with_auto_reasoning_fallback(client, session_opts)
+
+    def _mark_step_running(self, step_id: str, session_id: str) -> None:
+        """resume_state に step を `running` として記録する（resume_state なしなら no-op）。
+
+        失敗しても実行を止めない（warn のみ）。state.json への書き込みエラーで
+        ステップ実行をブロックすることは避ける（実行成功優先）。
+        """
+        if self._resume_state is None:
+            return
+        try:
+            from datetime import datetime, timezone
+            self._resume_state.update_step(
+                step_id,
+                status="running",
+                session_id=session_id,
+                started_at=datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception as exc:  # pragma: no cover - I/O 例外パスは E2E で確認
+            self.console.warning(
+                f"state.json への running 状態更新に失敗しました (step={step_id}): {exc}"
+            )
 
     # ------------------------------------------------------------------
     # メインタスク成果物改善ヘルパー（Phase 2c / Phase 3 / Phase 4 共通）
@@ -574,9 +852,10 @@ class StepRunner:
             return ""
 
         try:
-            _trunc_prompt = _truncate_context(original_prompt, _MAX_CONTEXT_INJECTION_LENGTH)
-            _trunc_output = _truncate_context(main_output, _MAX_CONTEXT_INJECTION_LENGTH)
-            _trunc_context = _truncate_context(improvement_context, _MAX_CONTEXT_INJECTION_LENGTH)
+            _max_context_chars = self._get_context_injection_max_chars()
+            _trunc_prompt = _truncate_context(original_prompt, _max_context_chars)
+            _trunc_output = _truncate_context(main_output, _max_context_chars)
+            _trunc_context = _truncate_context(improvement_context, _max_context_chars)
 
             _improve_prompt = MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT.format(
                 source_phase=source_phase,
@@ -898,29 +1177,41 @@ class StepRunner:
                 "Work IQ が検出できません。事前 QA フェーズの Work IQ 連携をスキップします。"
             )
 
-        _use_pre_qa_sub_session = (_qa_model != self.config.model) or _qa_workiq_available
+        _use_pre_qa_sub_session = self._should_use_pre_qa_sub_session(_qa_model, _qa_workiq_available)
         _pre_qa_session = None
         pre_qa_context = ""
         try:
             _effective_pre_qa_session = session
             # Phase 0a: 事前質問票生成 — 原プロンプトをコンテキストとして注入
-            _prompt_context = _truncate_context(original_prompt, _MAX_CONTEXT_INJECTION_LENGTH)
+            _max_context_chars = self._get_context_injection_max_chars()
+            _prompt_context = _truncate_context(original_prompt, _max_context_chars)
             _effective_pre_qa_prompt = (
                 "以下はこれから実行するタスクのプロンプトです。"
                 "成果物はまだ存在しません。このプロンプトを前提として事前質問票を作成してください。\n\n"
-                f"=== タスクプロンプト（最大{_MAX_CONTEXT_INJECTION_LENGTH:,}文字） ===\n"
+                f"=== タスクプロンプト（最大{_max_context_chars:,}文字） ===\n"
                 f"{_prompt_context}\n"
                 "=== タスクプロンプトここまで ===\n\n"
                 f"{PRE_EXECUTION_QA_PROMPT_V2}"
             )
 
             if _use_pre_qa_sub_session:
-                _pre_qa_session = await client.create_session(**self._build_sub_session_opts(
-                    _qa_model,
-                    include_workiq=_qa_workiq_available,
-                ))
+                self._log_sub_session_reason(
+                    step_id, "Pre-QA",
+                    qa_model=_qa_model,
+                    workiq_available=_qa_workiq_available,
+                )
+                _pre_qa_session = await _create_session_with_auto_reasoning_fallback(
+                    client,
+                    self._build_sub_session_opts(
+                        _qa_model,
+                        include_workiq=_qa_workiq_available,
+                        step_id=step_id,
+                        suffix="pre-qa",
+                    ),
+                )
                 _pre_qa_session.on(self._handle_session_event)
                 _effective_pre_qa_session = _pre_qa_session
+                self._sub_sessions_created += 1
                 _qa_workiq_mcp_enabled = False  # デフォルト False: loop で server が見つかれば True に更新
                 if _qa_workiq_available:
                     try:
@@ -933,6 +1224,7 @@ class StepRunner:
                         _qa_workiq_mcp_enabled = False
             else:
                 _qa_workiq_mcp_enabled = False
+                self._log_main_session_reuse(step_id, "Pre-QA")
 
             # Phase 0a: 質問票生成
             pre_qa_response = await _effective_pre_qa_session.send_and_wait(
@@ -1072,11 +1364,18 @@ class StepRunner:
                     _pre_qa_file_path = Path(
                         f"qa/{self.config.run_id}-{step_id}-{_PRE_EXECUTION_QA_SUFFIX}"
                     )
+                    _pre_qa_old_content = ""
+                    if _pre_qa_file_path.exists():
+                        try:
+                            _pre_qa_old_content = _pre_qa_file_path.read_text(encoding="utf-8")
+                        except OSError as _e:
+                            self.console.warning(f"事前 QA ファイルの旧コンテンツ読み込みに失敗しました ({_pre_qa_file_path}): {_e}。diff は全行追加として表示されます。")
                     _written = QAMerger.save_merged(merged_content, _pre_qa_file_path)
                     if _written:
                         self.console.status(
                             f"✅ 事前 QA 質問票を保存しました ({_pre_qa_file_path.as_posix()})"
                         )
+                        self.console.file_diff(step_id, _pre_qa_file_path.as_posix(), _pre_qa_old_content, merged_content)
 
                     # pre_qa_context を組み立てる
                     _context_lines = [
@@ -1127,6 +1426,8 @@ class StepRunner:
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools = []
+        # Phase 6: サブセッション作成回数カウンターをリセット
+        self._sub_sessions_created = 0
 
         # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）
         self.config.run_id = _safe_run_id(self.config.run_id)
@@ -1182,9 +1483,12 @@ class StepRunner:
                 "on_permission_request": PermissionHandler.approve_all,
                 "streaming": True,
             }
-            # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+            # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
             if self.config.model and self.config.model != MODEL_AUTO_VALUE:
                 session_opts["model"] = self.config.model
+            else:
+                session_opts["model"] = DEFAULT_MODEL
+                session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
 
             # MCP Servers
             if self.config.mcp_servers:
@@ -1197,8 +1501,24 @@ class StepRunner:
                     session_opts["mcp_servers"] = _main_mcp_servers
 
             # Custom Agents (グローバル定義)
-            custom_agents: List[Dict[str, Any]] = copy.deepcopy(
-                self.config.custom_agents_config or []
+            # 明示設定 (config.custom_agents_config) を最優先し、
+            # `.github/agents/*.agent.md` から読み込んだファイルベース定義をマージする。
+            # 同名 (name) がある場合は明示設定を優先し、ファイル側を破棄する。
+            try:
+                from .agent_loader import (
+                    load_agent_definitions,
+                    merge_with_explicit,
+                )
+            except ImportError:  # pragma: no cover
+                from agent_loader import (  # type: ignore[no-redef]
+                    load_agent_definitions,
+                    merge_with_explicit,
+                )
+            _explicit = copy.deepcopy(self.config.custom_agents_config or [])
+            _agents_dir = Path(__file__).resolve().parent.parent / ".github" / "agents"
+            _file_based = load_agent_definitions(_agents_dir)
+            custom_agents: List[Dict[str, Any]] = merge_with_explicit(
+                _explicit, _file_based
             )
 
             # additional_prompt をグローバル定義の各 agent の prompt に追記
@@ -1248,7 +1568,19 @@ class StepRunner:
             if custom_agents:
                 session_opts["custom_agents"] = custom_agents
 
-            session = await client.create_session(**session_opts)
+            # Phase 2 (Resume): メインセッションに決定論的 session_id を付与する。
+            # 既存値（呼び出し元が明示指定したケース）は尊重する。
+            if not session_opts.get("session_id"):
+                session_opts["session_id"] = self._make_step_session_id(step_id)
+
+            # Phase 3 (Resume): resume_state に同 step が running/failed として残っている場合、
+            # 同じ session_id で resume_session() を試みる。失敗時は新規 create_session に
+            # フォールバックする（セッション形式の不整合や SDK 側削除に耐えるため）。
+            session = await self._create_or_resume_main_session(
+                client=client,
+                session_opts=session_opts,
+                step_id=step_id,
+            )
 
             # イベント購読 (常に購読 — Console 側で出力レベルを制御)
             session.on(self._handle_session_event)
@@ -1258,7 +1590,7 @@ class StepRunner:
                 self.console.stream_start(step_id)
 
             # フェーズ総数を動的算出
-            # Phase 0 (事前 QA): auto_qa かつ qa_phase が pre/both かつ AQOD でない場合
+            # Phase 0 (事前 QA): auto_qa かつ AQOD でない場合
             _is_aqod_workflow = (
                 workflow_id == "aqod"
                 or (
@@ -1269,46 +1601,19 @@ class StepRunner:
             _is_akm_workflow = (workflow_id == "akm")
 
             # 事前 QA のスキップ判定:
-            #   AKM: 事前 QA を解禁（qa_phase の通常ロジックに従う） → メインタスクに pre_qa_context を注入
+            #   AKM: 事前 QA を実行（メインタスクに pre_qa_context を注入）
             #   AQOD: 事前 QA は引き続きスキップ（ワークフロー本体が事後の整合性チェック仕様のため）
             _skip_pre_qa = _is_aqod_workflow
 
             _run_pre_qa = (
                 self.config.auto_qa
-                and self.config.qa_phase in ("pre", "both")
                 and not _skip_pre_qa
             )
 
-            # 事後 QA の実行判定:
-            #   AKM: 事後 QA を恒久的に廃止（事前 QA → Phase 1 への注入で要件充足、
-            #         加えて DAG 終了後の AKM Work IQ レビューが別途実行されるため）
-            #   AQOD: aqod_post_qa_enabled=True のときのみ実行（オプトイン）
-            #   その他: qa_phase が post/both のとき実行（従来通り）
-            if _is_akm_workflow:
-                _run_post_qa = False
-            elif _is_aqod_workflow:
-                _run_post_qa = (
-                    self.config.auto_qa
-                    and self.config.aqod_post_qa_enabled
-                )
-            else:
-                _run_post_qa = (
-                    self.config.auto_qa
-                    and self.config.qa_phase in ("post", "both")
-                )
-            # Wave 2-4: qa_phase="post"/"both" を使う場合は warning を出す
-            # 事後 QA はトークン量・タスク回数を増やすため、標準は "pre" を推奨する。
-            if _run_post_qa and not _is_akm_workflow and not _is_aqod_workflow:
-                import warnings as _warnings
-                _warnings.warn(
-                    f"[{step_id}] qa_phase={self.config.qa_phase!r} — 事後 QA が有効です。"
-                    f"トークン量とタスク回数が増加します。標準は qa_phase='pre' を推奨します。",
-                    stacklevel=2,
-                )
+            # 事後 QA (post-QA モード) は廃止されました。
+            # 旧 qa_phase="post"/"both"、aqod_post_qa_enabled は削除済み。
             total_phases = 1  # Phase 1: メインタスク
             if _run_pre_qa:
-                total_phases += 1
-            if _run_post_qa:
                 total_phases += 1
             if self.config.auto_contents_review:
                 total_phases += 1
@@ -1317,6 +1622,9 @@ class StepRunner:
             if self.config.auto_self_improve and not self.config.self_improve_skip and _step_si_allowed:
                 total_phases += 1
             current_phase = 0
+
+            # final_message に渡す最終応答テキスト（各 Phase 完了後に非空なら上書き）
+            final_response_text: str = ""
 
             # Phase 0: 事前 QA（_run_pre_qa=True の場合）
             pre_qa_context = ""
@@ -1349,411 +1657,15 @@ class StepRunner:
                 _injected_prompt = prompt
             main_response = await session.send_and_wait(_injected_prompt, timeout=self.config.timeout_seconds)
             main_output = _extract_text(main_response)
+            if main_output and main_output.strip():
+                final_response_text = main_output
             self.console.step_phase_end(
                 step_id, current_phase, total_phases, "メインタスク",
                 elapsed=time.time() - phase1_start,
             )
 
-            # Phase 2: 事後 QA（_run_post_qa=True の場合）
-            if _run_post_qa:
-                current_phase += 1
-                phase2_start = time.time()
-                # Phase 2a: QA 質問票生成
-                # AQOD ワークフローの場合は AQOD_QA_PROMPT（内容整合性チェック専用）を使う。
-                # それ以外は QA_PROMPT_V2（汎用質問票）を使う。
-                _base_qa_prompt = AQOD_QA_PROMPT if _is_aqod_workflow else QA_PROMPT_V2
-                self.console.step_phase_start(step_id, current_phase, total_phases, "QA レビュー")
-                _qa_model = self.config.get_qa_model()
-                _qa_workiq_requested = self.config.is_workiq_qa_enabled()
-                _qa_workiq_configured = WORKIQ_MCP_SERVER_NAME in (self.config.mcp_servers or {})
-                _qa_workiq_available = (
-                    _qa_workiq_requested
-                    and (_qa_workiq_configured or is_workiq_available())
-                )
-                _qa_workiq_mcp_enabled = False
-                if _qa_workiq_requested and not _qa_workiq_available:
-                    self.console.warning(
-                        "Work IQ が検出できません。QA フェーズの Work IQ 連携をスキップします。"
-                    )
-                _use_qa_sub_session = (_qa_model != self.config.model) or _qa_workiq_available
-                _qa_session = None
-                try:
-                    _effective_qa_session = session
-                    _effective_qa_prompt = _base_qa_prompt
-                    if _use_qa_sub_session:
-                        _qa_session = await client.create_session(**self._build_sub_session_opts(
-                            _qa_model,
-                            include_workiq=_qa_workiq_available,
-                        ))
-                        _qa_session.on(self._handle_session_event)
-                        _qa_context = _truncate_context(main_output or "", _MAX_CONTEXT_INJECTION_LENGTH)
-                        _effective_qa_prompt = (
-                            "以下は同一ステップのメインタスク出力です。"
-                            "この内容を前提として QA 質問票を作成してください。\n\n"
-                            f"=== メインタスク出力（最大{_MAX_CONTEXT_INJECTION_LENGTH:,}文字） ===\n"
-                            f"{_qa_context}\n"
-                            "=== メインタスク出力ここまで ===\n\n"
-                            f"{_base_qa_prompt}"
-                        )
-                        _effective_qa_session = _qa_session
-                        if _qa_workiq_available:
-                            try:
-                                _mcp_list = await _qa_session.rpc.mcp.list()
-                                for _srv in _mcp_list.servers:
-                                    if _srv.name == WORKIQ_MCP_SERVER_NAME:
-                                        _srv_status = _srv.status.value if hasattr(_srv.status, "value") else str(_srv.status)
-                                        if _srv_status == "connected":
-                                            _qa_workiq_mcp_enabled = True
-                                            self.console.status(
-                                                "✅ Work IQ MCP サーバーを QA セッションに追加しました"
-                                            )
-                                        else:
-                                            self.console.warning(
-                                                f"Work IQ MCP サーバー状態: {_srv_status}"
-                                                + (f" — {_srv.error}" if _srv.error else "")
-                                            )
-                                            self._workiq_mcp_connection_failed = True
-                                        break
-                                else:
-                                    self.console.warning(
-                                        f"Work IQ MCP サーバー '{WORKIQ_MCP_SERVER_NAME}' が QA セッションのサーバー一覧に存在しません"
-                                    )
-                                    self._workiq_mcp_connection_failed = True
-                            except Exception as _mcp_err:
-                                self.console.warning(f"QA セッションの MCP サーバー一覧の取得に失敗: {_mcp_err}")
-                                self._workiq_mcp_connection_failed = True
-
-                    qa_response = await _effective_qa_session.send_and_wait(
-                        _effective_qa_prompt, timeout=self.config.timeout_seconds
-                    )
-                    qa_content = _extract_text(qa_response)
-                    if not qa_content:
-                        self.console.warning("QA 質問票の生成に失敗しました（LLM の応答が空）。")
-
-                    # Phase 2b: 回答収集（新フロー）
-                    # まず QADocument をパースして questions が存在するか確認する。
-                    # LLM が本文ではなく成果物サマリーのみ返した場合は、artifacts 参照先の qa/*.md を再パースする。
-                    parsed_qa_preview, _qa_artifact_fallback_path = _parse_qa_content_with_artifact_fallback(qa_content)
-                    _parse_succeeded = bool(parsed_qa_preview.questions)
-                    if _qa_artifact_fallback_path is not None:
-                        self.console.status(
-                            "✅ QA 質問票を artifacts 参照先から読み込みました "
-                            f"({_qa_artifact_fallback_path.as_posix()})"
-                        )
-                    if not _parse_succeeded:
-                        # パース失敗フォールバック: 旧フロー（生 Markdown を表示してから入力待ち）
-                        self.console.qa_prompt(qa_content)
-                        if self.config.qa_auto_defaults or self.config.unattended:
-                            self.console.warning(
-                                "QA 質問票のパースに失敗しましたが、全自動モードのため入力待ちは行わず、"
-                                "QA_APPLY_PROMPT フォールバックへ進みます。"
-                            )
-                            user_answers_raw = ""
-                            skip_input = True
-                        else:
-                            user_answers_raw = await _read_stdin_multiline(
-                                prompt_msg=(
-                                    f"[Step.{step_id}] QA 回答を入力してください\n"
-                                    "  形式: 「番号: 選択肢」を1行1問で入力（例: 1: A）\n"
-                                    "  空行で入力終了 / skip または何も入力せず Enter で既定値候補を採用:"
-                                ),
-                                console=self.console,
-                                timeout=self.config.qa_input_timeout_seconds,
-                            )
-                            skip_input = user_answers_raw.strip().lower() in ("", "skip")
-                    else:
-                        user_answers_raw, skip_input = await _collect_qa_answers(
-                            self.console, parsed_qa_preview, step_id, self.config
-                        )
-
-                    # Work IQ による補助情報取得（QA 質問票のデフォルト回答補強）
-                    # Work IQ は M365 補助情報であり、未接続でも AQOD 本体分析は継続する。
-                    _workiq_qa_context = ""
-                    _workiq_output_dir = (self.config.workiq_draft_output_dir or "").strip() or "qa"
-                    if (
-                        self.config.is_workiq_qa_enabled()
-                        and _qa_workiq_mcp_enabled
-                        and _parse_succeeded
-                        and parsed_qa_preview.questions
-                    ):
-                        async def _query_workiq_bulk_once() -> str:
-                            _questions_summary = "\n".join(
-                                f"- Q{q.no}: {q.question[:100]}"
-                                for q in parsed_qa_preview.questions[:30]
-                            )
-                            _wiq_template = get_workiq_prompt_template(
-                                "qa", self.config.workiq_prompt_qa
-                            )
-                            _wiq_query = _wiq_template.format(target_content=_questions_summary)
-                            self.console.workiq_prompt(_wiq_query, label="Work IQ プロンプト [QA 一括]")
-                            _bulk_context = await query_workiq(
-                                _effective_qa_session,
-                                _wiq_query,
-                                timeout=self.config.workiq_per_question_timeout,
-                            )
-                            if not self.console.show_stream:
-                                self.console.workiq_response(
-                                    _bulk_context or "", label="Work IQ 応答 [QA 一括]"
-                                )
-                            if _bulk_context:
-                                _bulk_is_error = is_workiq_error_response(_bulk_context)
-                                save_workiq_result(
-                                    self.config.run_id, step_id, "qa",
-                                    _bulk_context,
-                                    is_error=_bulk_is_error,
-                                    base_dir=_workiq_output_dir,
-                                )
-                                if _bulk_is_error:
-                                    self.console.warning(
-                                        "⚠️ Work IQ は補助情報ツールです。未接続/ツール未公開のため結果を取得できませんでした。\n"
-                                        "   Work IQ 失敗は AQOD 本体分析（original-docs/ 直接分析）の失敗ではありません。\n"
-                                        "   AQOD 本体の original-docs/ 直接分析は継続します。"
-                                    )
-                                    return ""
-                            return _bulk_context
-
-                        if self.config.workiq_draft_mode:
-                            _draft_start_msg = (
-                                "🔍 Work IQ: AQOD QA Draft フェーズで質問ごとの M365 調査を開始します"
-                                if workflow_id == "aqod"
-                                else "🔍 Work IQ: 質問ごとに回答ドラフトを生成中..."
-                            )
-                            self.console.status(_draft_start_msg)
-                            self.console.spinner_start("Work IQ 問い合わせ中...")
-                            try:
-                                _wiq_template = get_workiq_prompt_template(
-                                    "qa", self.config.workiq_prompt_qa
-                                )
-                                # Wave 2-6: 重要度フィルタ + 上限適用でクエリ数を削減
-                                _filtered_questions_post = _filter_workiq_questions(
-                                    parsed_qa_preview.questions,
-                                    self.config.workiq_max_draft_questions,
-                                    getattr(self.config, "workiq_priority_filter", True),
-                                )
-                                _question_items = [
-                                    (q.no, q.question) for q in _filtered_questions_post
-                                ]
-
-                                # 質問ごとに Work IQ を問い合わせ、ツール呼び出し有無で結果を分類する
-                                _per_question_results: Dict[int, str] = {}
-                                for _q_idx, (_q_no, _q_text) in enumerate(_question_items):
-                                    _before_count = len(self._workiq_called_tools)
-                                    if self.config.verbosity >= 2:
-                                        self.console.status(f"🔍 Work IQ: Q{_q_no} を調査中...")
-                                    try:
-                                        _target_content = f"Q{_q_no}: {_q_text}"
-                                        _query = _wiq_template.format(target_content=_target_content)
-                                        self.console.workiq_prompt(_query, label=f"Work IQ プロンプト [Q{_q_no}]")
-                                        _detail_result = await query_workiq_detailed(
-                                            _effective_qa_session,
-                                            _query,
-                                            timeout=self.config.workiq_per_question_timeout,
-                                        )
-                                        if not self.console.show_stream:
-                                            self.console.workiq_response(
-                                                _detail_result.content or "",
-                                                label=f"Work IQ 応答 [Q{_q_no}]",
-                                            )
-                                        _after_tools = self._workiq_called_tools[_before_count:]
-                                        _tool_called_for_q = bool(_after_tools)
-
-                                        if _detail_result.error:
-                                            _per_question_results[_q_no] = (
-                                                f"{_WORKIQ_RESULT_UNINVESTIGATED_PREFIX}（Work IQ 実行失敗: {_detail_result.error}）"
-                                            )
-                                        elif not _tool_called_for_q:
-                                            _per_question_results[_q_no] = (
-                                                f"{_WORKIQ_RESULT_UNINVESTIGATED_PREFIX}（Work IQ ツール未呼び出しのため、"
-                                                "Microsoft 365 データ検索は実行されていません）"
-                                            )
-                                            self.console.warning(
-                                                f"⚠️ Work IQ: Q{_q_no} はツール未呼び出しのため未調査として扱います"
-                                            )
-                                        elif is_workiq_error_response(_detail_result.content):
-                                            _per_question_results[_q_no] = (
-                                                f"{_WORKIQ_RESULT_UNINVESTIGATED_PREFIX}（Work IQ エラー応答のため、"
-                                                "Microsoft 365 データ検索結果として採用しません）"
-                                            )
-                                        elif _detail_result.content.strip():
-                                            _per_question_results[_q_no] = _detail_result.content.strip()
-                                            if self.config.verbosity >= 2 and _after_tools:
-                                                self.console.status(
-                                                    f"🔍 Work IQ: Q{_q_no} で {', '.join(_after_tools)} が呼び出されました"
-                                                )
-                                        else:
-                                            _per_question_results[_q_no] = _WORKIQ_RESULT_NO_DATA
-                                    except Exception as _q_exc:
-                                        _per_question_results[_q_no] = (
-                                            f"{_WORKIQ_RESULT_UNINVESTIGATED_PREFIX}（Work IQ 実行失敗: {_q_exc}）"
-                                        )
-
-                                    if _q_idx < len(_question_items) - 1:
-                                        await asyncio.sleep(_WORKIQ_DRAFT_QUERY_INTERVAL_SECONDS)
-
-                                # Work IQ 結果を QADocument に直接統合（ツール呼び出しあり + 実データのみ）
-                                _clean_results = {
-                                    _q_no: _content
-                                    for _q_no, _content in _per_question_results.items()
-                                    if not _content.startswith(_WORKIQ_RESULT_UNINVESTIGATED_PREFIX)
-                                    and _content != _WORKIQ_RESULT_NO_DATA
-                                }
-                                parsed_qa_preview = QAMerger.merge_workiq_results(
-                                    parsed_qa_preview, _clean_results
-                                )
-
-                                _raw_lines: List[str] = []
-                                for q in parsed_qa_preview.questions[:self.config.workiq_max_draft_questions]:
-                                    # _q_no が _question_items 範囲外（例: max_questions 超過）の場合の安全ガード
-                                    _ctx = _per_question_results.get(
-                                        q.no,
-                                        f"{_WORKIQ_RESULT_UNINVESTIGATED_PREFIX}（Work IQ 未実行）",
-                                    )
-                                    _raw_lines.extend([
-                                        f"### Q{q.no}: {q.question}",
-                                        _ctx,
-                                        "",
-                                    ])
-                                save_workiq_result(
-                                    self.config.run_id, step_id, "qa-draft",
-                                    "\n".join(_raw_lines).strip(),
-                                    base_dir=_workiq_output_dir,
-                                )
-                                self.console.status(
-                                    f"✅ Work IQ: {sum(1 for q in parsed_qa_preview.questions if q.workiq_answer)} 件の質問に回答案を統合しました"
-                                )
-                            except Exception as draft_exc:
-                                self.console.warning(
-                                    f"Work IQ ドラフト生成に失敗したため、一括問い合わせにフォールバックします: {draft_exc}"
-                                )
-                                _workiq_qa_context = await _query_workiq_bulk_once()
-                            finally:
-                                self.console.spinner_stop()
-                        else:
-                            self.console.status("🔍 Work IQ: M365 データから関連情報を調査中...")
-                            self.console.spinner_start("Work IQ 問い合わせ中...")
-                            _workiq_qa_context = await _query_workiq_bulk_once()
-                            self.console.spinner_stop()
-                            if _workiq_qa_context:
-                                self.console.status("✅ Work IQ: 関連情報を取得しました")
-                            else:
-                                self.console.status("ℹ️ Work IQ: 関連情報は見つかりませんでした")
-
-                    # Phase 2c: QA 回答マージ + qa/ ファイル永続化
-                    # パース失敗時は質問が 0 件のためマージ処理をスキップし、フォールバックに移行する。
-                    merge_succeeded = False
-                    if not _parse_succeeded:
-                        self.console.warning(
-                            "QA 質問票のパースに失敗したため、マージ処理をスキップします。"
-                            " QA_APPLY_PROMPT にフォールバックします。"
-                        )
-                    else:
-                        try:
-                            parsed_qa = parsed_qa_preview
-                            if skip_input:
-                                # 既定値候補を全問採用
-                                answers: Dict[int, str] = {}
-                                merged_qa = QAMerger.merge_answers(parsed_qa, answers, use_defaults=True)
-                            else:
-                                answers = QAMerger.parse_answers(user_answers_raw)
-                                merged_qa = QAMerger.merge_answers(parsed_qa, answers)
-                            merged_content = QAMerger.render_merged(merged_qa)
-
-                            # 元の質問票ファイルを更新（Work IQ 結果を含む）
-                            # Phase 2a で Agent が作成した qa/ ファイルのパスを特定
-                            # ファイル名: execution-qa-merged.md（HVE 実行補助 QA であることを明示）
-                            # AQOD 本体成果物は QA-DocConsistency-*.md であり、このファイルとは別物。
-                            _qa_file_path = Path(f"qa/{self.config.run_id}-{step_id}-{_EXECUTION_QA_MERGED_SUFFIX}")
-                            _qa_written = QAMerger.save_merged(merged_content, _qa_file_path)
-                            if _qa_written:
-                                self.console.status(
-                                    f"✅ QA 質問票を保存しました ({_qa_file_path.as_posix()})"
-                                )
-                            else:
-                                self.console.warning(
-                                    f"QA 質問票の保存に失敗しました ({_qa_file_path.as_posix()})。"
-                                    " Agent 経由でフォールバック保存を試みます。"
-                                )
-                                # フォールバック: Agent にファイル保存を指示
-                                save_prompt = QA_MERGE_SAVE_PROMPT.format(
-                                    merged_content=merged_content,
-                                    qa_file_path=_qa_file_path.as_posix(),
-                                )
-                                # Work IQ 結果をマージ保存プロンプトに注入
-                                if _workiq_qa_context:
-                                    save_prompt = enrich_prompt_with_workiq(
-                                        _workiq_qa_context,
-                                        save_prompt,
-                                        context_type="QA デフォルト回答の補強情報",
-                                    )
-                                save_response = await _effective_qa_session.send_and_wait(
-                                    save_prompt, timeout=self.config.timeout_seconds
-                                )
-                                if save_response is None:
-                                    self.console.warning(
-                                        "マージ済みファイルの保存指示に対する応答がありませんでした。"
-                                    )
-
-                            # 統合ドキュメント生成
-                            try:
-                                consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
-                                    merged_qa_content=merged_content,
-                                )
-                                consolidate_response = await _effective_qa_session.send_and_wait(
-                                    consolidate_prompt, timeout=self.config.timeout_seconds
-                                )
-                                if consolidate_response is None:
-                                    self.console.warning(
-                                        "統合ドキュメント生成の応答がありませんでした（マージ済みファイルは保存済み）。"
-                                    )
-                            except Exception as consolidate_exc:
-                                self.console.warning(
-                                    f"統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {consolidate_exc}"
-                                )
-
-                            merge_succeeded = True
-
-                            # Phase 2c+: メイン成果物改善（設定有効時のみ）
-                            if self.config.apply_qa_improvements_to_main:
-                                _qa_improvement_context = (
-                                    f"## マージ済み QA 質問票\n{merged_content}\n\n"
-                                    f"## Work IQ 一括調査結果\n"
-                                    f"{_workiq_qa_context if _workiq_qa_context and not is_workiq_error_response(_workiq_qa_context) else '(なし)'}"
-                                )
-                                await self._apply_main_artifact_improvements(
-                                    session=session,
-                                    step_id=step_id,
-                                    title=title,
-                                    workflow_id=workflow_id,
-                                    custom_agent=custom_agent,
-                                    original_prompt=prompt,
-                                    main_output=main_output or "",
-                                    source_phase="Phase 2c QA Merge",
-                                    improvement_context=_qa_improvement_context,
-                                    timeout=self.config.timeout_seconds,
-                                )
-                        except Exception as merge_exc:
-                            self.console.warning(
-                                f"QA マージ処理に失敗しました。従来の QA_APPLY_PROMPT にフォールバックします: {merge_exc}"
-                            )
-
-                    if not merge_succeeded:
-                        # フォールバック: 既存の QA_APPLY_PROMPT
-                        if skip_input:
-                            fallback_answers = "(既定値候補を採用)"
-                        else:
-                            fallback_answers = user_answers_raw
-                        apply_prompt = QA_APPLY_PROMPT.format(user_answers=fallback_answers)
-                        await _effective_qa_session.send_and_wait(
-                            apply_prompt, timeout=self.config.timeout_seconds
-                        )
-                finally:
-                    if _qa_session is not None:
-                        await _qa_session.disconnect()
-
-                self.console.step_phase_end(
-                    step_id, current_phase, total_phases, "QA レビュー",
-                    elapsed=time.time() - phase2_start,
-                )
+            # Phase 2 (post-QA / 事後 QA) は廃止されました。
+            # 旧 qa_phase="post"/"both" / aqod_post_qa_enabled / --aqod-post-qa は削除済み。
 
             # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
             if self.config.auto_contents_review:
@@ -1761,26 +1673,39 @@ class StepRunner:
                 phase3_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "敵対的レビュー")
                 _review_model = self.config.get_review_model()
-                _use_review_sub_session = (_review_model != self.config.model)
+                _use_review_sub_session = self._should_use_review_sub_session(_review_model)
                 _review_session = None
                 try:
                     _effective_review_session = session
                     _effective_review_prompt = REVIEW_PROMPT
                     if _use_review_sub_session:
-                        _review_session = await client.create_session(
-                            **self._build_sub_session_opts(_review_model)
+                        self._log_sub_session_reason(
+                            step_id, "Review",
+                            qa_model=_review_model,
+                        )
+                        _review_session = await _create_session_with_auto_reasoning_fallback(
+                            client,
+                            self._build_sub_session_opts(
+                                _review_model,
+                                step_id=step_id,
+                                suffix="review",
+                            ),
                         )
                         _review_session.on(self._handle_session_event)
-                        _review_context = _truncate_context(main_output or "", _MAX_CONTEXT_INJECTION_LENGTH)
+                        self._sub_sessions_created += 1
+                        _max_context_chars = self._get_context_injection_max_chars()
+                        _review_context = _truncate_context(main_output or "", _max_context_chars)
                         _effective_review_prompt = (
                             "以下は同一ステップのメインタスク出力です。"
                             "この内容を前提としてレビューしてください。\n\n"
-                            f"=== メインタスク出力（最大{_MAX_CONTEXT_INJECTION_LENGTH:,}文字） ===\n"
+                            f"=== メインタスク出力（最大{_max_context_chars:,}文字） ===\n"
                             f"{_review_context}\n"
                             "=== メインタスク出力ここまで ===\n\n"
                             f"{REVIEW_PROMPT}"
                         )
                         _effective_review_session = _review_session
+                    else:
+                        self._log_main_session_reuse(step_id, "Review")
 
                     # 1回目: 敵対的レビュー実行
                     review_response = await _effective_review_session.send_and_wait(
@@ -1807,7 +1732,7 @@ class StepRunner:
                             )
                             # FAIL 時: メイン成果物改善（設定有効時）
                             if self.config.apply_review_improvements_to_main:
-                                await self._apply_main_artifact_improvements(
+                                _phase3_result = await self._apply_main_artifact_improvements(
                                     session=session,
                                     step_id=step_id,
                                     title=title,
@@ -1819,6 +1744,8 @@ class StepRunner:
                                     improvement_context=review_content,
                                     timeout=self.config.timeout_seconds,
                                 )
+                                if _phase3_result and _phase3_result.strip():
+                                    final_response_text = _phase3_result
                                 self._check_diff_after_improvement(
                                     step_id, "Phase 3 Adversarial Review"
                                 )
@@ -1937,7 +1864,7 @@ class StepRunner:
                         f"  🔧 [{step_id}] 自己改善 {_iteration}/{_max_iter}: 改善実行中..."
                     )
                     if self.config.apply_self_improve_to_main:
-                        await self._apply_main_artifact_improvements(
+                        _phase4_result = await self._apply_main_artifact_improvements(
                             session=session,
                             step_id=step_id,
                             title=title,
@@ -1949,6 +1876,8 @@ class StepRunner:
                             improvement_context=_plan_content[:_MAX_PLAN_SCAN_LENGTH],
                             timeout=self.config.timeout_seconds,
                         )
+                        if _phase4_result and _phase4_result.strip():
+                            final_response_text = _phase4_result
                         self._check_diff_after_improvement(
                             step_id, f"Phase 4 Self-Improve iteration {_iteration}"
                         )
@@ -2062,6 +1991,7 @@ class StepRunner:
 
         elapsed = time.time() - start
         self.console.step_io_summary(step_id)
+        self.console.final_message(step_id, final_response_text or main_output or "")
         self.console.step_end(step_id, "success", elapsed=elapsed)
         return True
 

@@ -1,14 +1,18 @@
-﻿---
+---
 name: Arch-Microservice-ServiceCatalog
 description: "画面→機能→API→SoTデータのマッピングを docs/catalog/service-catalog-matrix.md に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Microservice-ServiceCatalog/Issue-<識別子>/`
 
 サービスカタログ生成専用Agent。
 このエージェントは **ドキュメント化（service-catalog.md）** に特化し、コード改変は最小限（原則しない）。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 
@@ -22,7 +26,7 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 # 3) 入力（優先順位順）
 原則として次の5ファイルを読む。無い場合は `search` で同等の資料を特定し、差分（不足・代替）を明記する。
 - `docs/catalog/service-catalog.md`
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/data-model.md`
 - `docs/catalog/screen-catalog.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各サービス・画面がどの APP-ID に属するかの判定根拠）

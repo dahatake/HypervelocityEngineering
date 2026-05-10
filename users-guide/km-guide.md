@@ -6,6 +6,9 @@
 
 ## 目次
 
+- [対象読者](#対象読者)
+- [前提](#前提)
+- [次のステップ](#次のステップ)
 - [概要](#概要)
 - [Agent チェーン図（AKM）](#agent-チェーン図akm)
 - [前提条件](#前提条件)
@@ -18,6 +21,23 @@
 - [セットアップ・トラブルシューティング](#セットアップトラブルシューティング)
 
 ---
+
+## 対象読者
+
+- `knowledge-management.yml`（AKM）を運用する担当者
+- `qa/` / `original-docs/` / `knowledge/` の更新フローを管理する担当者
+
+## 前提
+
+- Issue Template: `.github/ISSUE_TEMPLATE/knowledge-management.yml`
+- Workflow: `.github/workflows/auto-orchestrator-dispatcher.yml` → `.github/workflows/auto-knowledge-management-reusable.yml`
+- Workflow ID / Custom Agent: `akm` / `KnowledgeManager`（`hve/workflow_registry.py`）
+
+## 次のステップ
+
+- `original-docs/` から質問票を生成する場合は [original-docs-review.md](./original-docs-review.md) を参照
+- ソースコードから文書を段階生成する場合は [sourcecode-documentation.md](./sourcecode-documentation.md) を参照
+
 ## 概要
 AKM は `qa` / `original-docs` / `both` を選択して、`knowledge/` の D01〜D21 を生成・更新する統合フローです。
 
@@ -47,14 +67,18 @@ AKM は 1 回実行して終わりではなく、`aqod` で生成した質問票
 
 ## 反復精緻化サイクル
 
-AKM は一度きりではなく、初回作成 → 不足補完 → 開発中の気づき反映 → 既存資産取り込みを繰り返して `knowledge/` を継続的に精緻化します。
-詳細は [overview.md の反復精緻化サイクル](./overview.md#反復精緻化サイクル) を参照してください。
+AKM は一度きりではなく、初回作成 → 不足補完 → 開発中の気づき反映 → 既存資産取り込みを繰り返して `knowledge/` を継続的に精緻化します。全体像は [README.md](../README.md) を参照してください。
 
 ## Issue Template 入力
+
+- `branch`: 実行対象ブランチ
+- `runner_type`: `GitHub Hosted` / `Self-hosted (ACA)`
 - `sources`: `qa のみ` / `original-docs のみ` / `両方`
 - `target_files`: サブセット指定（任意）
-- `additional_comment`: `custom_source_dir: <path>` を指定可
+- `additional_comment`: `custom_source_dir: <path>` を 1 行ずつ指定可
 - `force_refresh`: 完全再生成
+- `enable_review` / `enable_qa` / `enable_self_improve` / `enable_auto_merge`
+- `model` / `review_model` / `qa_model`
 
 ## CLI 例
 ```bash
@@ -69,6 +93,9 @@ python -m hve orchestrate --workflow akm --sources qa --custom-source-dir docs/s
 - `Conflict` は original-docs を含む場合に利用
 
 ## 自動実行ガイド（ワークフロー）
+
+- 起点ラベル: `knowledge-management`
+- オーケストレーション: `auto-orchestrator-dispatcher.yml` が `AKM` を判定し、`auto-knowledge-management-reusable.yml` を呼び出し
 
 ### ラベル体系
 - `akm:initialized`
@@ -87,15 +114,6 @@ python -m hve orchestrate --workflow akm --sources qa --custom-source-dir docs/s
 3. `sources`（`qa` / `original-docs` / `both`）を選択
 4. **Submit** して実行
 
-## original-docs モード追加処理
-- STALENESS CHECK
-- 矛盾検出（同一 D / D 間 / qa vs original-docs / 用語）
-
-## トラブルシューティング
-- `custom_source_dir` は相対パスのみ（`/`, `..`, `~` を禁止）
-- `knowledge/` / `.github/` / `src/` など禁止パス配下は拒否
-
-
 ## セットアップ・トラブルシューティング
 
-共通手順は [getting-started.md](./getting-started.md) を参照してください。
+共通手順は [getting-started.md](./getting-started.md) を参照してください。問題切り分けは [troubleshooting.md](./troubleshooting.md) を参照してください。

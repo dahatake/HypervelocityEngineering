@@ -1,20 +1,10 @@
 ---
 name: repo-onboarding-fast
 description: >
-  初見のリポジトリで最小限の読解により入口・境界・標準コマンドを確定し、
-  onboarding.md に固定するスキル。"全部読む"を避け、作業に必要な最小限だけ確定する。
-  USE FOR: repository onboarding, first assignment, entry point discovery,
-  standard commands, boundary identification, similar implementation search,
-  onboarding.md creation.
-  DO NOT USE FOR: full code analysis, architecture design,
-  implementation, detailed domain analysis.
-  WHEN: リポジトリに初めてアサインされた、入口が不明、
-  どこから読めばよいか分からない、標準コマンドを確認したい、
-  境界（API/データ/責務）を特定したい、類似実装を探したい、
-  onboarding.md を作成したい。
+  初見のリポジトリで最小限の読解により入口・境界・標準コマンドを確定し、 onboarding.md に固定するスキル。"全部読む"を避け、作業に必要な最小限だけ確定する。 USE FOR: repository onboarding, first assignment, entry point discovery. DO NOT USE FOR: full code analysis. WHEN: リポジトリに初めてアサインされた、入口が不明。
 metadata:
   origin: user
-  version: "2.0.0"
+  version: 2.0.0
 ---
 
 # repo-onboarding-fast

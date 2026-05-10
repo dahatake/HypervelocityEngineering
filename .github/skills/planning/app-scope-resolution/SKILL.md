@@ -1,21 +1,10 @@
 ---
 name: app-scope-resolution
 description: >
-  APP-ID に基づくスコープ解決ルール。Issue body または <!-- app-id: XXX -->
-  HTML コメントから APP-ID を取得し、docs/catalog/app-catalog.md との紐付けで
-  対象サービス・画面・エンティティを特定する。
-  AAD-WEB / ASDW-WEB / ABD / ABDV では、APP-ID 未指定時に全対象とはしない。
-  `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` を参照し、
-  workflow に対応する推薦アーキテクチャの APP-ID のみを対象とする。
-  USE FOR: APP-ID scope resolution, service identification,
-  app-catalog lookup, screen identification, entity identification.
-  DO NOT USE FOR: service implementation, data modeling,
-  architecture design, deployment.
-  WHEN: APP-ID のスコープ解決、Issue body 解析、対象サービス特定、
-  app-catalog.md との紐付け。
+  APP-ID に基づくスコープ解決ルール。Issue body または <!-- app-id: XXX --> HTML コメントから APP-ID を取得し、docs/catalog/app-catalog.md との紐付けで 対象サービス・画面・エンティティを特定する。 USE FOR: APP-ID scope resolution, service identification, app-catalog lookup. DO NOT USE FOR: service implementation. WHEN: APP-ID のスコープ解決、Issue body 解析。
 metadata:
   origin: user
-  version: "1.1.0"
+  version: 1.1.0
 ---
 
 # app-scope-resolution
@@ -71,6 +60,16 @@ workflow に対応する推薦アーキテクチャの APP-ID のみを対象と
 3. 対象画面一覧を取得する（APP × 画面は 1:1）
 4. 対象エンティティ一覧を取得する
 5. 共有サービス（複数 APP で使われるサービス）も含める
+
+## 成果物ファイル分割基準
+
+スコープ確定後、成果物ファイルを APP-ID 単位で分割するか否かの基準:
+
+- 設計エージェントは `docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照し、成果物に APP-ID との紐付けを行う。
+- APP × サービス / APP × エンティティ: N:N 関係（カンマ区切りで記載、例: `APP-01, APP-03`）
+- APP × 画面: 1:1 関係（1画面は1つの APP-ID に所属）
+- 1つの APP のみ利用のサービス/エンティティ/画面 → 成果物ファイルのアプリケーション単位での分割を検討する。
+- 複数 APP で共有されるものは統一ファイルのまま「利用APP」列/項目をカンマ区切りで記載する。
 
 ## Related Skills
 

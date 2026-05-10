@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-UI-Detail
 description: "全画面の実装用画面定義書（UX/A11y/セキュリティ含む）を docs/screen/ に生成/更新"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-UI-Detail/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 - この agent は **docs/screen/** と **work/** 以外を原則変更しない（例外が必要なら理由を明記）。
 
 ## Agent 固有の Skills 依存
@@ -22,11 +26,11 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 
 推奨（存在すれば読む）:
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面の所属 APP-ID 確認に使用）
-- `docs/catalog/domain-analytics.md`
+- `docs/domain-analytics.md`
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/data-model.md`
 - `docs/catalog/service-catalog-matrix.md`
-- `docs/catalog/test-strategy.md`（テスト戦略書 — テスタビリティ観点の設計指針として参照。受け入れ基準 §9 の作成時にテスト種別・テストダブル方針を考慮する）
+- `docs/test-strategy.md`（テスト戦略書 — テスタビリティ観点の設計指針として参照。受け入れ基準 §9 の作成時にテスト種別・テストダブル方針を考慮する）
 - `data/sample-data.json`（存在しなければ付録は作らず Questions へ）
 
 ### knowledge/ 参照（任意・存在する場合のみ）

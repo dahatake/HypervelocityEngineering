@@ -30,6 +30,35 @@ on:
         required: false
         type: string
         default: '[]'
+      enable_agentic_retrieval:
+        required: false
+        type: string
+        default: 'auto'
+      agentic_data_source_modes:
+        required: false
+        type: string
+        default: 'indexer'
+      foundry_mcp_integration:
+        required: false
+        type: string
+        default: 'true'
+      agentic_data_sources_hint:
+        required: false
+        type: string
+        default: ''
+      agentic_existing_design_diff_only:
+        required: false
+        type: string
+        default: 'false'
+      foundry_sku_fallback_policy:
+        required: false
+        type: string
+        default: 'standard_allowed'
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
 
 permissions:
   issues: write
@@ -38,7 +67,7 @@ permissions:
 
 jobs:
   orchestrate:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
       group: asdw-web-orchestrator-${{ inputs.issue_number }}
@@ -281,6 +310,12 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         env:
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+          INPUT_ENABLE_AGENTIC_RETRIEVAL: ${{ inputs.enable_agentic_retrieval }}
+          INPUT_AGENTIC_DATA_SOURCE_MODES: ${{ inputs.agentic_data_source_modes }}
+          INPUT_FOUNDRY_MCP_INTEGRATION: ${{ inputs.foundry_mcp_integration }}
+          INPUT_AGENTIC_DATA_SOURCES_HINT: ${{ inputs.agentic_data_sources_hint }}
+          INPUT_AGENTIC_EXISTING_DESIGN_DIFF_ONLY: ${{ inputs.agentic_existing_design_diff_only }}
+          INPUT_FOUNDRY_SKU_FALLBACK_POLICY: ${{ inputs.foundry_sku_fallback_policy }}
         run: |
           set -euo pipefail
 
@@ -540,6 +575,20 @@ jobs:
           if si_section:
               enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
 
+          # Remote MCP Server 実装オプション: デフォルト True（後方互換）
+          create_remote_mcp_server = True
+          mcp_match = re.search(
+              r"###\s*Remote MCP Server 実装\s*\n(.*?)(?=###|\Z)",
+              body,
+              re.DOTALL,
+          )
+          if mcp_match:
+              value = mcp_match.group(1).strip()
+              if "作成しない" in value:
+                  create_remote_mcp_server = False
+              elif "作成する" in value:
+                  create_remote_mcp_server = True
+
           self_improve_max_iterations = "3"
           m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
           if m:
@@ -556,7 +605,7 @@ jobs:
               if n:
                   self_improve_quality_threshold = n.group(1)
 
-          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "app_id": app_id, "tdd_max_retries": tdd_max_retries, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
+          result = {"branch": branch, "resource_group": resource_group, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "usecase_id": usecase_id, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "app_id": app_id, "tdd_max_retries": tdd_max_retries, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold, "create_remote_mcp_server": create_remote_mcp_server}
           print(json.dumps(result))
           PYEOF
           )
@@ -572,13 +621,69 @@ jobs:
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
           SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
+          CREATE_REMOTE_MCP_SERVER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('create_remote_mcp_server', True) else 'false')")
           MODEL_RAW=$(extract_model "${ISSUE_BODY}")
           SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
           APP_IDS_JSON=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps(d.get('app_ids',[])))")
           APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(', '.join(d.get('app_ids',[])))")
           APP_ID=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('app_id',''))")
           TDD_MAX_RETRIES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tdd_max_retries','5'))")
           [[ -z "${TDD_MAX_RETRIES}" ]] && TDD_MAX_RETRIES="5"
+          ENABLE_AGENTIC_RETRIEVAL=$(python3 - "${INPUT_ENABLE_AGENTIC_RETRIEVAL:-auto}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "auto").strip().lower()
+          print(value if value in {"auto", "yes", "no"} else "auto")
+          PY
+          )
+          AGENTIC_DATA_SOURCE_MODES=$(python3 - "${INPUT_AGENTIC_DATA_SOURCE_MODES:-indexer}" <<'PY'
+          import re, sys
+          raw = (sys.argv[1] or "indexer").lower()
+          tokens = [t for t in re.split(r"[\s,]+", raw) if t]
+          values = []
+          for token in tokens:
+              if token in {"indexer", "push"} and token not in values:
+                  values.append(token)
+          if not values:
+              values = ["indexer"]
+          print(",".join(values))
+          PY
+          )
+          FOUNDRY_MCP_INTEGRATION=$(python3 - "${INPUT_FOUNDRY_MCP_INTEGRATION:-true}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "true").strip().lower()
+          print("false" if value == "false" else "true")
+          PY
+          )
+          AGENTIC_DATA_SOURCES_HINT=$(python3 - "${INPUT_AGENTIC_DATA_SOURCES_HINT:-}" <<'PY'
+          import re, sys
+          value = (sys.argv[1] or "").replace("\r", " ").replace("\n", " / ").strip()
+          value = " ".join(value.split())
+          value = value.replace("<", "＜").replace(">", "＞")
+          value = value.replace("-->", "→")
+          value = re.sub(r"--+", lambda m: "- " * (len(m.group()) - 1) + "-", value)
+          print(value)
+          PY
+          )
+          AGENTIC_EXISTING_DESIGN_DIFF_ONLY=$(python3 - "${INPUT_AGENTIC_EXISTING_DESIGN_DIFF_ONLY:-false}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "false").strip().lower()
+          print("true" if value == "true" else "false")
+          PY
+          )
+          FOUNDRY_SKU_FALLBACK_POLICY=$(python3 - "${INPUT_FOUNDRY_SKU_FALLBACK_POLICY:-standard_allowed}" <<'PY'
+          import sys
+          value = (sys.argv[1] or "standard_allowed").strip().lower()
+          print(value if value in {"standard_allowed", "global_required"} else "standard_allowed")
+          PY
+          )
+          if [[ "${ENABLE_AGENTIC_RETRIEVAL}" == "no" ]]; then
+            FOUNDRY_MCP_INTEGRATION="false"
+            FOUNDRY_SKU_FALLBACK_POLICY="standard_allowed"
+          fi
 
           echo "対象ブランチ: ${BRANCH}"
           echo "リソースグループ名: ${RESOURCE_GROUP}"
@@ -588,6 +693,7 @@ jobs:
           echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+          echo "Agentic Retrieval: ${ENABLE_AGENTIC_RETRIEVAL}, data_source_modes=${AGENTIC_DATA_SOURCE_MODES}, foundry_mcp_integration=${FOUNDRY_MCP_INTEGRATION}, diff_only=${AGENTIC_EXISTING_DESIGN_DIFF_ONLY}, sku_fallback=${FOUNDRY_SKU_FALLBACK_POLICY}"
 
           # ---- 推薦アーキテクチャ APP-ID フィルタ ----
           FILTER_RESULT=$(python3 -m hve.app_arch_filter \
@@ -629,6 +735,9 @@ jobs:
           fi
           ROOT_REF+=$(printf '\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
             "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF+=$(printf '\n<!-- create-remote-mcp-server: %s -->' "${CREATE_REMOTE_MCP_SERVER}")
+          ROOT_REF+=$(printf '\n<!-- enable-agentic-retrieval: %s -->\n<!-- agentic-data-source-modes: %s -->\n<!-- foundry-mcp-integration: %s -->\n<!-- agentic-data-sources-hint: %s -->\n<!-- agentic-existing-design-diff-only: %s -->\n<!-- foundry-sku-fallback-policy: %s -->' \
+            "${ENABLE_AGENTIC_RETRIEVAL}" "${AGENTIC_DATA_SOURCE_MODES}" "${FOUNDRY_MCP_INTEGRATION}" "${AGENTIC_DATA_SOURCES_HINT}" "${AGENTIC_EXISTING_DESIGN_DIFF_ONLY}" "${FOUNDRY_SKU_FALLBACK_POLICY}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
           QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
@@ -716,7 +825,7 @@ jobs:
 
           # ---- Root Issue に auto-context-review タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${CREATE_REMOTE_MCP_SERVER}" "${ENABLE_AGENTIC_RETRIEVAL}" "${AGENTIC_DATA_SOURCE_MODES}" "${FOUNDRY_MCP_INTEGRATION}" "${AGENTIC_DATA_SOURCES_HINT}" "${AGENTIC_EXISTING_DESIGN_DIFF_ONLY}" "${FOUNDRY_SKU_FALLBACK_POLICY}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
@@ -727,7 +836,14 @@ jobs:
           enable_si = sys.argv[5]
           si_max_iter = sys.argv[6]
           si_quality_threshold = sys.argv[7]
-          output_file = sys.argv[8]
+          create_remote_mcp_server = sys.argv[8]
+          enable_agentic_retrieval = sys.argv[9]
+          agentic_data_source_modes = sys.argv[10]
+          foundry_mcp_integration = sys.argv[11]
+          agentic_data_sources_hint = sys.argv[12]
+          agentic_existing_design_diff_only = sys.argv[13]
+          foundry_sku_fallback_policy = sys.argv[14]
+          output_file = sys.argv[15]
 
           tags = [
               ("auto-context-review", auto_context_review),
@@ -737,6 +853,13 @@ jobs:
               ("enable-self-improve", enable_si),
               ("self-improve-max-iterations", si_max_iter),
               ("self-improve-quality-threshold", si_quality_threshold),
+              ("create-remote-mcp-server", create_remote_mcp_server),
+              ("enable-agentic-retrieval", enable_agentic_retrieval),
+              ("agentic-data-source-modes", agentic_data_source_modes),
+              ("foundry-mcp-integration", foundry_mcp_integration),
+              ("agentic-data-sources-hint", agentic_data_sources_hint),
+              ("agentic-existing-design-diff-only", agentic_existing_design_diff_only),
+              ("foundry-sku-fallback-policy", foundry_sku_fallback_policy),
           ]
 
           for key, value in tags:
@@ -754,7 +877,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries / branch / self-improve / create-remote-mcp-server / agentic-retrieval タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -778,6 +901,12 @@ jobs:
           fi
           if [[ -n "${SELECTED_MODEL}" ]]; then
             add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
           fi
 
           # skip_step helper: SKIP_STEPS に Step 番号が含まれていれば true
@@ -810,6 +939,12 @@ jobs:
           if [[ -n "${SELECTED_MODEL}" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
           fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
+          fi
 
           # ---- Step Issue 生成 ----
           S1_NUM=""  S1_ID=""
@@ -819,6 +954,7 @@ jobs:
           S21_NUM="" S21_ID=""
           S22_NUM="" S22_ID=""
           S23_NUM="" S23_ID=""
+          S23T_NUM="" S23T_ID=""
           S23TC_NUM="" S23TC_ID=""
           S24_NUM="" S24_ID=""
           S25_NUM="" S25_ID=""
@@ -828,9 +964,11 @@ jobs:
           S27_NUM="" S27_ID=""
           S28_NUM="" S28_ID=""
           S3_NUM=""  S3_ID=""
+          S30T_NUM="" S30T_ID=""
           S30TC_NUM="" S30TC_ID=""
           S31_NUM="" S31_ID=""
           S32_NUM="" S32_ID=""
+          S33_NUM="" S33_ID=""
           S4_NUM=""  S4_ID=""
           S41_NUM="" S41_ID=""
           S42_NUM="" S42_ID=""
@@ -877,7 +1015,7 @@ jobs:
 
           # ---- Step.2 コンテナ + サブステップ ----
           if ! skip_step "2"; then
-            BODY_S2=$(printf '%s\n## Step.2 コンテナ\nStep.2 はコンテナ Issue。Sub Task（Step.2.1, 2.2, 2.3, 2.3TC, 2.4, 2.5, 2.6, 2.7T, 2.7TC, 2.7, 2.8）の完了を待つ。%s' \
+            BODY_S2=$(printf '%s\n## Step.2 コンテナ\nStep.2 はコンテナ Issue。Sub Task（Step.2.1, 2.2, 2.3, 2.3T, 2.3TC, 2.4, 2.5, 2.6, 2.7T, 2.7TC, 2.7, 2.8）の完了を待つ。%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.2: マイクロサービス作成（コンテナ）${APP_ID_SUFFIX}" \
@@ -924,8 +1062,20 @@ jobs:
             echo "Step.2.3 作成: #${S23_NUM}"
             sleep 3
 
+            # ---- Step.2.3T (TDD RED: サービス テスト仕様書) ----
+            BODY_S23T=$(printf '%s\n## 目的\nTDD RED フェーズ: サービス定義書・テスト戦略書に基づき、サービス用 TDD テスト仕様書を生成する（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/{serviceId}-*.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `test/api/`（既存テストパターン確認）\n\n## 出力\n- `docs/test-specs/{serviceId}-test-spec.md`（サービス別テスト仕様書）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.2.3（追加 Azure サービス Deploy）が `asdw-web:done` であること\n- `docs/catalog/test-strategy.md` が存在すること\n\n## 完了条件\n- `docs/test-specs/` 配下にサービス別テスト仕様書が生成されている\n- 生成したテスト仕様書へのリンクを Issue コメントに記載している\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ASDW-WEB] Step.2.3T: サービス テスト仕様書 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S23T}" \
+              "${STEP_LABELS}")
+            S23T_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S23T_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.3T 作成: #${S23T_NUM}"
+            sleep 3
+
             # ---- Step.2.3TC (TDD RED: サービス テストコード生成) ----
-            BODY_S23TC=$(printf '%s\n## 目的\nTDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）からテストコードのみを生成する（APP-ID 指定時はスコープ内のサービスのみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.2.4（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済みのサービス別テスト仕様書）\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-ServiceTestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. `cd test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する\n2. 移動先ディレクトリで `dotnet build` を実行し、コンパイル成功を確認する\n3. 同じディレクトリで `dotnet test` を実行し、そのテストプロジェクト内の全テストが FAIL であることを確認する（RED 状態）\n4. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 依存\n- Step.2.3（追加 Azure サービス Deploy）が `asdw-web:done` であること\n- `docs/test-specs/{serviceId}-test-spec.md` が存在すること（設計ワークフロー AAD Step.7.3 で作成済み）\n\n## 完了条件\n- `test/api/{サービス名}.Tests/` 配下にテストコードが生成されている\n- `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S23TC=$(printf '%s\n## 目的\nTDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）からテストコードのみを生成する（APP-ID 指定時はスコープ内のサービスのみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.2.4（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{serviceId}-test-spec.md`（Step.2.3T で生成済みのサービス別テスト仕様書）\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-ServiceTestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. `cd test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する\n2. 移動先ディレクトリで `dotnet build` を実行し、コンパイル成功を確認する\n3. 同じディレクトリで `dotnet test` を実行し、そのテストプロジェクト内の全テストが FAIL であることを確認する（RED 状態）\n4. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 依存\n- Step.2.3T（サービス テスト仕様書）が `asdw-web:done` であること\n\n## 完了条件\n- `test/api/{サービス名}.Tests/` 配下にテストコードが生成されている\n- `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.2.3TC: サービス テストコード生成 (TDD RED)${APP_ID_SUFFIX}" \
@@ -937,7 +1087,7 @@ jobs:
             sleep 3
 
             # ---- Step.2.4 ----
-            BODY_S24=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\nマイクロサービス定義書から対象サービスの Azure Functions を実装し、テスト/最小ドキュメント/設定雛形まで揃える（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- Azure Functions プログラミング言語: `C#（最新版のAzure Functionsでサポートされているもの）`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-*.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- TDD テストコード（RED状態）: `test/api/{サービス名}.Tests/`（Step.2.3TC の成果物）\n- テスト仕様書: `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/api/{サービスID}-{サービス名}/` 配下に Azure Functions を作成/更新\n- （任意推奨）`test/api/smoke-ui/index.html`\n\n## TDD GREEN フロー（反復）\n1. `dotnet test` で全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小実装を作成する\n3. `dotnet test` を実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `asdw-web:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは実装コードのみを修正する（`test/api/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-ServiceCoding-AzureFunctions` を使用\n\n## 依存\n- Step.2.3TC（サービス テストコード生成）が `asdw-web:done` であること\n\n## 完了条件\n- `src/api/` 配下に Azure Functions が実装されている\n- `dotnet test` の全テストが PASS であること（TDD GREEN 確認）\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S24=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\nマイクロサービス定義書から対象サービスの Azure Functions を実装し、テスト/最小ドキュメント/設定雛形まで揃える（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- `docs/services/{serviceId}-*.md`（サービス定義書）\n- Azure Functions プログラミング言語: `C#（最新版のAzure Functionsでサポートされているもの）`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-*.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- TDD テストコード（RED状態）: `test/api/{サービス名}.Tests/`（Step.2.3TC の成果物）\n- テスト仕様書: `docs/test-specs/{serviceId}-test-spec.md`（Step.2.3T で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/api/{サービスID}-{サービス名}/` 配下に Azure Functions を作成/更新\n- （任意推奨）`test/api/smoke-ui/index.html`\n\n## TDD GREEN フロー（反復）\n1. `dotnet test` で全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小実装を作成する\n3. `dotnet test` を実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `asdw-web:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは実装コードのみを修正する（`test/api/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-ServiceCoding-AzureFunctions` を使用\n\n## 依存\n- Step.2.3TC（サービス テストコード生成）が `asdw-web:done` であること\n\n## 完了条件\n- `src/api/` 配下に Azure Functions が実装されている\n- `dotnet test` の全テストが PASS であること（TDD GREEN 確認）\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.2.4: サービスコード実装 (Azure Functions)${APP_ID_SUFFIX}" \
@@ -949,8 +1099,13 @@ jobs:
             sleep 3
 
             # ---- Step.2.5 ----
-            BODY_S25=$(printf '%s\n## 目的\nサービスリストの対象サービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/api/{サービスID}-{サービス名}/`\n- リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `Southeast Asia`）\n\n## 出力\n- `infra/azure/create-azure-api-resources-prep.sh`\n- `.github/workflows/` にCI/CD（OIDC + azure/login 優先）\n- `docs/catalog/service-catalog-matrix.md` 更新\n- `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-compute-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `asdw-web:blocked` + FAIL 項目一覧を報告）\n\n## 注意\nCopilot が push しても workflow は自動実行されないことがある。PR 側でユーザーが実行承認できるよう説明を残す。\n\n## Custom Agent\n`Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` を使用\n\n## 依存\n- Step.2.4（サービスコード実装）が `asdw-web:done` であること\n\n## 完了条件\n- デプロイスクリプトと CI/CD ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
-              "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            if [[ "${CREATE_REMOTE_MCP_SERVER}" == "true" ]]; then
+              MCP_SECTION_S25=$(printf '\n\n## Remote MCP Server 実装\n\nこの Step では、API を通常の REST API として実装・デプロイするだけでなく、Remote MCP Server としても公開できるようにしてください。\n\n### 基本方針\n\n- REST API のビジネスロジックと MCP Server 公開層を疎結合にしてください。\n- REST API の既存 contract を壊さないでください。\n- MCP Server は API のユースケースを Tool / Resource / Prompt として公開してください。\n- MCP 固有の入出力変換は adapter 層に閉じ込めてください。\n- MCP SDK、Transport、Compute、追加 Cloud Service は実装対象の環境に応じて選定してください。\n\n### 実装時の検討事項\n\n- 対象 API のうち、どの操作を MCP Tool として公開するか\n- MCP Tool の input schema / output schema\n- 認証・認可方式\n- CORS / network boundary / public endpoint の扱い\n- ローカル実行と Cloud 実行の差分\n- ログ、監視、エラーハンドリング\n- CI/CD でのデプロイと smoke test\n- 関連ドキュメントへの接続方法記載\n\n### Azure 上で実装する場合の考慮事項\n\nAzure に REST API がホスティングされる場合は、選択された Compute 環境に合わせて最適な MCP 実装方式を選定してください。\n\n例:\n\n- Azure Functions の場合:\n  - HTTP Trigger を使った MCP endpoint\n  - 必要に応じて Azure Functions に適した MCP SDK または HTTP adapter を利用\n- Azure App Service の場合:\n  - Web アプリケーション内に MCP endpoint を追加\n  - 既存 REST route と MCP route を分離\n- Azure Container Apps の場合:\n  - MCP Server を sidecar または同一 service 内 endpoint として構成\n  - ingress / scaling / revision 管理を考慮\n- API Management を利用する場合:\n  - REST API と MCP endpoint の公開経路を整理\n  - 認証、rate limit、logging policy を検討\n\n### 完了条件\n\n- REST API としての通常利用が可能である\n- Remote MCP Server として接続可能である\n- MCP Tool / Resource / Prompt の定義が実装されている\n- REST API と MCP adapter が疎結合である\n- 認証・認可・ログ・エラーハンドリングが整理されている\n- 関連ドキュメントに MCP endpoint、利用方法、設定方法が記載されている')
+            else
+              MCP_SECTION_S25=""
+            fi
+            BODY_S25=$(printf '%s\n## 目的\nサービスリストの対象サービスを、Azure Functions用に作成/更新→デプロイ、GitHub Actions で CI/CD 構築、API スモークテスト（+手動UI）追加まで行う（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/api/{サービスID}-{サービス名}/`\n- リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `Southeast Asia`）\n\n## 出力\n- `infra/azure/create-azure-api-resources-prep.sh`\n- `.github/workflows/` にCI/CD（OIDC + azure/login 優先）\n- `docs/catalog/service-catalog-matrix.md` 更新\n- `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-compute-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `asdw-web:blocked` + FAIL 項目一覧を報告）\n\n## 注意\nCopilot が push しても workflow は自動実行されないことがある。PR 側でユーザーが実行承認できるよう説明を残す。\n\n## Custom Agent\n`Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` を使用\n\n## 依存\n- Step.2.4（サービスコード実装）が `asdw-web:done` であること%s\n\n## 完了条件\n- デプロイスクリプトと CI/CD ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${RESOURCE_GROUP}" "${MCP_SECTION_S25}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.2.5: Azure Compute Deploy${APP_ID_SUFFIX}" \
               "${BODY_S25}" \
@@ -1030,7 +1185,7 @@ jobs:
 
           # ---- Step.3 コンテナ + サブステップ ----
           if ! skip_step "3"; then
-            BODY_S3=$(printf '%s\n## Step.3 コンテナ\nStep.3 はコンテナ Issue。Sub Task（Step.3.0TC, Step.3.1, Step.3.2）の完了を待つ。\n\n> **前提**: Step.3.0TC で使用する画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）は設計ワークフロー AAD Step.7.3 で生成済みであることを確認してください。%s' \
+            BODY_S3=$(printf '%s\n## Step.3 コンテナ\nStep.3 はコンテナ Issue。Sub Task（Step.3.0T, Step.3.0TC, Step.3.1, Step.3.2, Step.3.3）の完了を待つ。%s' \
               "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.3: UI 作成（コンテナ）${APP_ID_SUFFIX}" \
@@ -1041,8 +1196,20 @@ jobs:
             echo "Step.3 作成: #${S3_NUM}"
             sleep 3
 
+            # ---- Step.3.0T (TDD RED: UI テスト仕様書) ----
+            BODY_S30T=$(printf '%s\n## 目的\nTDD RED フェーズ: 画面定義書・テスト戦略書に基づき、画面用 TDD テスト仕様書を生成する（APP-ID 指定時はスコープ内の画面のみ）。\n\n## 追加要件\n- UI テスト仕様書には **Jest 単体テスト** と **Playwright E2E テスト** の両カテゴリを含めること\n\n## 入力\n- `docs/catalog/test-strategy.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/screen/{screenId}-*.md`\n- `docs/catalog/data-model.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/test-specs/{screenId}-test-spec.md`（画面別テスト仕様書）\n\n## Custom Agent\n`Arch-TDD-TestSpec` を使用\n\n## 依存\n- Step.2.5（Azure Compute Deploy）が `asdw-web:done` であること\n- `docs/catalog/test-strategy.md` が存在すること\n\n## 完了条件\n- `docs/test-specs/` 配下に画面別テスト仕様書が生成されている\n- 生成したテスト仕様書へのリンクを Issue コメントに記載している\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ASDW-WEB] Step.3.0T: UI テスト仕様書 (TDD RED)${APP_ID_SUFFIX}" \
+              "${BODY_S30T}" \
+              "${STEP_LABELS}")
+            S30T_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S30T_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.0T 作成: #${S30T_NUM}"
+            sleep 3
+
             # ---- Step.3.0TC (TDD RED: UI テストコード生成) ----
-            BODY_S30TC=$(printf '%s\n## 目的\nTDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）から UI テストコードのみを生成する（APP-ID 指定時はスコープ内の画面のみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.3.1（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済みの画面別テスト仕様書）\n- `docs/screen/{screenId}-*.md`（画面定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-UITestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. Jest + jsdom テストを実行し、全テストが FAIL であることを確認する（RED 状態）\n2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 最小スタブの配置（RED 状態維持のため）\n- Jest テストを実行可能にするため、`src/app/` 配下に以下の最小スタブのみ配置してよい:\n  - 空の HTML エントリポイント（`index.html` 等）\n  - 空のモジュールファイル（`.js` 等）\n\n## 依存\n- Step.2（マイクロサービス作成コンテナ）が `asdw-web:done` であること\n- `docs/test-specs/{screenId}-test-spec.md` が存在すること（設計ワークフロー AAD Step.7.3 で作成済み）\n\n## 完了条件\n- `test/ui/` 配下に UI テストコードが生成されている\n- Jest テストで全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S30TC=$(printf '%s\n## 目的\nTDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-test-spec.md`）から UI テストコードのみを生成する（APP-ID 指定時はスコープ内の画面のみ）。\n全テストが FAIL（TDD RED 状態）であることを確認してから Step.3.1（GREEN フェーズ）へ進む。\n\n## 入力\n- `docs/test-specs/{screenId}-test-spec.md`（Step.3.0T で生成済みの画面別テスト仕様書）\n- `docs/screen/{screenId}-*.md`（画面定義書）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）\n\n## Custom Agent\n`Dev-Microservice-Azure-UITestCoding` を使用\n\n## TDD RED 確認手順（必須）\n1. Jest + jsdom テストを実行し、全テストが FAIL であることを確認する（RED 状態）\n2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する\n\n## 最小スタブの配置（RED 状態維持のため）\n- Jest テストを実行可能にするため、`src/app/` 配下に以下の最小スタブのみ配置してよい:\n  - 空の HTML エントリポイント（`index.html` 等）\n  - 空のモジュールファイル（`.js` 等）\n\n## 依存\n- Step.2（マイクロサービス作成コンテナ）が `asdw-web:done` であること\n- Step.3.0T（UI テスト仕様書）が `asdw-web:done` であること\n\n## 完了条件\n- `test/ui/` 配下に UI テストコードが生成されている\n- Jest テストで全テストが FAIL（RED 状態）であることが確認されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.3.0TC: UI テストコード生成 (TDD RED)${APP_ID_SUFFIX}" \
@@ -1054,7 +1221,7 @@ jobs:
             sleep 3
 
             # ---- Step.3.1 ----
-            BODY_S31=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\n画面定義書に基づき、対象画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する（APP-ID 指定時はスコープ内の画面のみ）。\n\n## 入力\n- `docs/screen/{画面ID}.md`（画面ID 例: `SCR-XXX-YYY`）\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- UI実装技術: `HTML5/CSS/JavaScript（リポジトリ既存規約に合わせる）`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/data/sample-data.json`\n- TDD テストコード（RED状態）: `test/ui/`（Step.3.0TC の成果物）\n- テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー AAD Step.7.3 で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/app/` 配下にUI実装\n\n## TDD GREEN フロー（反復）\n1. Jest テストで全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小 UI 実装を作成する\n3. Jest テストを実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `asdw-web:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは UI 実装コードのみを修正する（`test/ui/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-UICoding` を使用\n\n## 依存\n- Step.3.0TC（UI テストコード生成）が `asdw-web:done` であること\n\n## 完了条件\n- `src/app/` 配下にUI実装が完成している\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S31=$(printf '%s\n## 目的\nTDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しながらテストファーストで実装する。\n画面定義書に基づき、対象画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する（APP-ID 指定時はスコープ内の画面のみ）。\n\n## 入力\n- `docs/screen/{画面ID}.md`（画面ID 例: `SCR-XXX-YYY`）\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- UI実装技術: `HTML5/CSS/JavaScript（リポジトリ既存規約に合わせる）`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/data/sample-data.json`\n- TDD テストコード（RED状態）: `test/ui/`（Step.3.0TC の成果物）\n- テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（Step.3.0T で生成済み。TDD RED フェーズのテストケース定義）\n\n## 出力\n- `src/app/` 配下にUI実装\n\n## TDD GREEN フロー（反復）\n1. Jest テストで全テスト FAIL（RED 状態）を確認する\n2. テストケースを GREEN にするための最小 UI 実装を作成する\n3. Jest テストを実行する\n4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る\n5. 最大 %s 回反復する\n6. %s 回で全 PASS にならない場合: `asdw-web:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する\n\n## テストコード保護ルール\n- GREEN フェーズでは UI 実装コードのみを修正する（`test/ui/` のテストコードは原則変更禁止）\n\n## Custom Agent\n`Dev-Microservice-Azure-UICoding` を使用\n\n## 依存\n- Step.3.0TC（UI テストコード生成）が `asdw-web:done` であること\n\n## 完了条件\n- `src/app/` 配下にUI実装が完成している\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${TDD_MAX_RETRIES}" "${TDD_MAX_RETRIES}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.3.1: UI 実装${APP_ID_SUFFIX}" \
@@ -1066,7 +1233,7 @@ jobs:
             sleep 3
 
             # ---- Step.3.2 ----
-            BODY_S32=$(printf '%s\n## 目的\nAzure Static Web Apps へのWebデプロイと、GitHub Actionsによる継続的デリバリー（CD）構築を実施する。\n\n## 入力\n- リソースグループ名: `%s`\n- デプロイブランチ: `main`\n- `app_location`: `src/app/`\n- `api_location`: `src/app/lib/api/`\n- リージョン優先: East Asia → Japan West → Southeast Asia\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-webui-resources-prep.sh`\n- `infra/azure/create-azure-webui-resources.sh`\n- `.github/workflows/` に SWA デプロイワークフロー（Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` 参照）\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step3-swa-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-webui-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `asdw-web:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` を使用\n\n## 依存\n- Step.3.1（UI 実装）が `asdw-web:done` であること\n\n## 完了条件\n- デプロイスクリプトと SWA ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S32=$(printf '%s\n## 目的\nAzure Static Web Apps へのWebデプロイと、GitHub Actionsによる継続的デリバリー（CD）構築を実施する。\n\n## 入力\n- リソースグループ名: `%s`\n- デプロイブランチ: `main`\n- `app_location`: `src/app/`\n- `api_location`: `src/app/lib/api/`\n- リージョン優先: East Asia → Japan West → Southeast Asia\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `infra/azure/create-azure-webui-resources-prep.sh`\n- `infra/azure/create-azure-webui-resources.sh`\n- `.github/workflows/` に SWA デプロイワークフロー（OIDC: `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` を使用）\n- `docs/catalog/service-catalog-matrix.md` 更新\n\n## 認証メモ\n- SWA デプロイは OIDC を基本とし、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` は不要\n- 詳細方針: `users-guide/getting-started.md`（認証・認可 / Azure OIDC Secrets）\n\n## デプロイ TDD フロー（必須）\n1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step3-swa-test-spec.md`\n2. 検証スクリプトの生成: `infra/azure/verify-webui-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）\n3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）\n4. デプロイスクリプトの作成・実行\n5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `asdw-web:blocked` + FAIL 項目一覧を報告）\n\n## Custom Agent\n`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` を使用\n\n## 依存\n- Step.3.1（UI 実装）が `asdw-web:done` であること\n\n## 完了条件\n- デプロイスクリプトと SWA ワークフローが作成されている\n- 検証スクリプトで全項目 PASS であること\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.3.2: Web アプリ Deploy (Azure Static Web Apps)${APP_ID_SUFFIX}" \
@@ -1075,6 +1242,18 @@ jobs:
             S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
             S32_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.3.2 作成: #${S32_NUM}"
+            sleep 3
+
+            # ---- Step.3.3 ----
+            BODY_S33=$(printf '%s\n## 目的\nStep.3.2 でデプロイ済みの Web アプリ（SWA URL）に対して、Playwright による E2E テストを実行する。\n\n## 入力\n- `E2E_BASE_URL`（未指定時は `docs/catalog/service-catalog-matrix.md` から SWA URL を抽出）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/test-specs/{screenId}-test-spec.md`\n- `tests/e2e/playwright/`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- Playwright 実行ログ\n- 失敗時: HTML レポート / trace artifact\n\n## 必須シナリオ（Issue で増減可）\n1. ログイン / 認証導線（該当なしの場合は代表的な初期画面遷移）\n2. 主要 CRUD 操作（リソース別に最低 1 件）\n3. エラーハンドリング（不正入力 / 404 / API エラー）\n4. API 連携（フロント → バックエンド `/api/*`）\n5. レスポンシブ / アクセシビリティ最低限（viewport 切替で主要要素描画）\n\n## 実行\n- `.github/workflows/e2e-playwright-reusable.yml`（workflow_call）を呼び出して実行する\n\n## Custom Agent\n`E2ETesting-Playwright` を使用\n\n## 依存\n- Step.3.2（Web アプリ Deploy）が `asdw-web:done` であること\n\n## 完了条件\n- Playwright テストが全 PASS\n- 失敗時に HTML レポート / trace artifact が保存される\n- 失敗時は最大 3 回リトライし、超過時は `asdw-web:blocked` を付与する\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[ASDW-WEB] Step.3.3: E2E テスト (Playwright)${APP_ID_SUFFIX}" \
+              "${BODY_S33}" \
+              "${STEP_LABELS}")
+            S33_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S33_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.3 作成: #${S33_NUM}"
             sleep 3
           else
             echo "Step.3 はスキップされました。"
@@ -1094,7 +1273,7 @@ jobs:
             sleep 3
 
             # ---- Step.4.1 ----
-            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する（APP-ID 指定時はスコープ内のリソースのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/azure/azure-architecture-review-report.md`\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- Step.3（UI 作成コンテナ）が `asdw-web:done` であること\n- Step.4.2 と並列実行可能\n\n## 完了条件\n- `docs/azure/azure-architecture-review-report.md` が作成されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S41=$(printf '%s\n## 目的\nデプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する（APP-ID 指定時はスコープ内のリソースのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n\n## 出力\n- `docs/azure/azure-architecture-review-report.md`\n\n## Custom Agent\n`QA-AzureArchitectureReview` を使用\n\n## 依存\n- Step.3.3（Playwright E2E テスト）が `asdw-web:done` であること\n- Step.4.2 と並列実行可能\n\n## 完了条件\n- `docs/azure/azure-architecture-review-report.md` が作成されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.4.1: WAF アーキテクチャレビュー${APP_ID_SUFFIX}" \
@@ -1106,7 +1285,7 @@ jobs:
             sleep 3
 
             # ---- Step.4.2 ----
-            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、必要なら最小差分で修正する（APP-ID 指定時はスコープ内の依存のみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`\n\n## 出力\n- `docs/azure/dependency-review-report.md`\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.3（UI 作成コンテナ）が `asdw-web:done` であること\n- Step.4.1 と並列実行可能\n\n## 完了条件\n- `docs/azure/dependency-review-report.md` が作成されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+            BODY_S42=$(printf '%s\n## 目的\nサービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、必要なら最小差分で修正する（APP-ID 指定時はスコープ内の依存のみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/azure/azure-services-compute.md`\n- `docs/azure/azure-services-data.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）\n- `src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`\n\n## 出力\n- `docs/azure/dependency-review-report.md`\n\n## Custom Agent\n`QA-AzureDependencyReview` を使用\n\n## 依存\n- Step.3.3（Playwright E2E テスト）が `asdw-web:done` であること\n- Step.4.1 と並列実行可能\n\n## 完了条件\n- `docs/azure/dependency-review-report.md` が作成されている\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
               "[ASDW-WEB] Step.4.2: 整合性チェック${APP_ID_SUFFIX}" \
@@ -1133,10 +1312,11 @@ jobs:
           [[ -n "${S1_NUM}" && -n "${S11_ID}" ]] && { link_sub_issue "${S1_NUM}" "${S11_ID}"; echo "Step.1 → Step.1.1 紐付け完了"; }
           [[ -n "${S1_NUM}" && -n "${S12_ID}" ]] && { link_sub_issue "${S1_NUM}" "${S12_ID}"; echo "Step.1 → Step.1.2 紐付け完了"; }
 
-          # Step.2 → Step.2.1〜2.6 + Step.2.3TC
+          # Step.2 → Step.2.1〜2.6 + Step.2.3T/2.3TC
           [[ -n "${S2_NUM}" && -n "${S21_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S21_ID}"; echo "Step.2 → Step.2.1 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S22_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S22_ID}"; echo "Step.2 → Step.2.2 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S23_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S23_ID}"; echo "Step.2 → Step.2.3 紐付け完了"; }
+          [[ -n "${S2_NUM}" && -n "${S23T_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S23T_ID}"; echo "Step.2 → Step.2.3T 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S23TC_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S23TC_ID}"; echo "Step.2 → Step.2.3TC 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S24_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S24_ID}"; echo "Step.2 → Step.2.4 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S25_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S25_ID}"; echo "Step.2 → Step.2.5 紐付け完了"; }
@@ -1146,16 +1326,18 @@ jobs:
           [[ -n "${S2_NUM}" && -n "${S27_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S27_ID}"; echo "Step.2 → Step.2.7 紐付け完了"; }
           [[ -n "${S2_NUM}" && -n "${S28_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S28_ID}"; echo "Step.2 → Step.2.8 紐付け完了"; }
 
-          # Step.3 → Step.3.0TC, Step.3.1, Step.3.2
+          # Step.3 → Step.3.0T, Step.3.0TC, Step.3.1, Step.3.2, Step.3.3
+          [[ -n "${S3_NUM}" && -n "${S30T_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S30T_ID}"; echo "Step.3 → Step.3.0T 紐付け完了"; }
           [[ -n "${S3_NUM}" && -n "${S30TC_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S30TC_ID}"; echo "Step.3 → Step.3.0TC 紐付け完了"; }
           [[ -n "${S3_NUM}" && -n "${S31_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S31_ID}"; echo "Step.3 → Step.3.1 紐付け完了"; }
           [[ -n "${S3_NUM}" && -n "${S32_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S32_ID}"; echo "Step.3 → Step.3.2 紐付け完了"; }
+          [[ -n "${S3_NUM}" && -n "${S33_ID}" ]] && { link_sub_issue "${S3_NUM}" "${S33_ID}"; echo "Step.3 → Step.3.3 紐付け完了"; }
 
           # Step.4 → Step.4.1, Step.4.2
           [[ -n "${S4_NUM}" && -n "${S41_ID}" ]] && { link_sub_issue "${S4_NUM}" "${S41_ID}"; echo "Step.4 → Step.4.1 紐付け完了"; }
           [[ -n "${S4_NUM}" && -n "${S42_ID}" ]] && { link_sub_issue "${S4_NUM}" "${S42_ID}"; echo "Step.4 → Step.4.2 紐付け完了"; }
 
-          # ---- 最初の leaf Step を起動（Step.1.1 → Step.2.1 → Step.3.0TC → Step.3.1 → Step.4.1/4.2 の順でフォールバック）----
+          # ---- 最初の leaf Step を起動（Step.1.1 → Step.2.1 → Step.3.0T → Step.3.0TC → Step.3.1 → Step.3.2 → Step.3.3 → Step.4.1/4.2 の順でフォールバック）----
           if [[ -n "${S11_NUM}" ]]; then
             if [[ "${AUTO_QA}" == "true" ]]; then
               add_label "${S11_NUM}" "asdw-web:qa-ready"
@@ -1179,6 +1361,15 @@ jobs:
             else
               echo "WARNING: Step.2.1 へのアサイン失敗。asdw-web:running は付与しません。"
             fi
+          elif [[ -n "${S30T_NUM}" ]]; then
+            add_label "${S30T_NUM}" "asdw-web:ready"
+            CA=$(extract_custom_agent "${BODY_S30T}")
+            if assign_copilot "${S30T_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S30T_NUM}" "asdw-web:running"
+              echo "Step.1/2 がスキップ済み: Step.3.0T (#${S30T_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3.0T へのアサイン失敗。asdw-web:running は付与しません。"
+            fi
           elif [[ -n "${S30TC_NUM}" ]]; then
             add_label "${S30TC_NUM}" "asdw-web:ready"
             CA=$(extract_custom_agent "${BODY_S30TC}")
@@ -1196,6 +1387,24 @@ jobs:
               echo "Step.1/2 がスキップ済み: Step.3.1 (#${S31_NUM}) を起動しました。"
             else
               echo "WARNING: Step.3.1 へのアサイン失敗。asdw-web:running は付与しません。"
+            fi
+          elif [[ -n "${S32_NUM}" ]]; then
+            add_label "${S32_NUM}" "asdw-web:ready"
+            CA=$(extract_custom_agent "${BODY_S32}")
+            if assign_copilot "${S32_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S32_NUM}" "asdw-web:running"
+              echo "Step.1/2 がスキップ済み: Step.3.2 (#${S32_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3.2 へのアサイン失敗。asdw-web:running は付与しません。"
+            fi
+          elif [[ -n "${S33_NUM}" ]]; then
+            add_label "${S33_NUM}" "asdw-web:ready"
+            CA=$(extract_custom_agent "${BODY_S33}")
+            if assign_copilot "${S33_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S33_NUM}" "asdw-web:running"
+              echo "Step.1/2 がスキップ済み: Step.3.3 (#${S33_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.3.3 へのアサイン失敗。asdw-web:running は付与しません。"
             fi
           elif [[ -n "${S41_NUM}" ]] || [[ -n "${S42_NUM}" ]]; then
             if [[ -n "${S41_NUM}" ]]; then
@@ -1549,8 +1758,34 @@ jobs:
               ;;
 
             "2.3")
-              # Step.2.3 完了 → Step.2.3TC (TDD RED テストコード生成) を起動
-              # テスト仕様書 (docs/test-specs/{serviceId}-test-spec.md) は設計ワークフロー AAD Step.7.3 で生成済みとして前提
+              # Step.2.3 完了 → Step.2.3T (TDD RED テスト仕様書生成) を起動
+              S2_NUM=$(get_sub_issue_number '\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                S23T_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3T:')
+                if [[ -n "${S23T_NUM}" ]]; then
+                  activate_issue "${S23T_NUM}"
+                else
+                  echo "WARNING: Step.2.3T が見つかりません。Step.2.3TC にフォールバック。"
+                  S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3TC:')
+                  if [[ -n "${S23TC_NUM}" ]]; then
+                    activate_issue "${S23TC_NUM}"
+                  else
+                    echo "WARNING: Step.2.3TC が見つかりません。Step.2.4 にフォールバック。"
+                    S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.4:')
+                    if [[ -n "${S24_NUM}" ]]; then
+                      activate_issue "${S24_NUM}"
+                    else
+                      echo "WARNING: Step.2.4 も見つかりません。"
+                    fi
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.3T")
+              # Step.2.3T 完了 → Step.2.3TC (TDD RED テストコード生成) を起動
               S2_NUM=$(get_sub_issue_number '\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
                 S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3TC:')
@@ -1643,16 +1878,22 @@ jobs:
                         echo "Step.2 コンテナに asdw-web:done を付与しました。"
                         S3_NUM=$(get_sub_issue_number '\] Step\.3:')
                         if [[ -n "${S3_NUM}" ]]; then
-                          S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
-                          if [[ -n "${S30TC_NUM}" ]]; then
-                            activate_issue "${S30TC_NUM}"
+                          S30T_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0T:')
+                          if [[ -n "${S30T_NUM}" ]]; then
+                            activate_issue "${S30T_NUM}"
                           else
-                            echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
-                            S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.1:')
-                            if [[ -n "${S31_NUM}" ]]; then
-                              activate_issue "${S31_NUM}"
+                            echo "WARNING: Step.3.0T が見つかりません。Step.3.0TC にフォールバック。"
+                            S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
+                            if [[ -n "${S30TC_NUM}" ]]; then
+                              activate_issue "${S30TC_NUM}"
                             else
-                              echo "WARNING: Step.3.1 も見つかりません。"
+                              echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                              S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.1:')
+                              if [[ -n "${S31_NUM}" ]]; then
+                                activate_issue "${S31_NUM}"
+                              else
+                                echo "WARNING: Step.3.1 も見つかりません。"
+                              fi
                             fi
                           fi
                         else
@@ -1716,16 +1957,22 @@ jobs:
                   echo "Step.2 コンテナに asdw-web:done を付与しました。"
                   S3_NUM=$(get_sub_issue_number '\] Step\.3:')
                   if [[ -n "${S3_NUM}" ]]; then
-                    S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
-                    if [[ -n "${S30TC_NUM}" ]]; then
-                      activate_issue "${S30TC_NUM}"
+                    S30T_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0T:')
+                    if [[ -n "${S30T_NUM}" ]]; then
+                      activate_issue "${S30T_NUM}"
                     else
-                      echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
-                      S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.1:')
-                      if [[ -n "${S31_NUM}" ]]; then
-                        activate_issue "${S31_NUM}"
+                      echo "WARNING: Step.3.0T が見つかりません。Step.3.0TC にフォールバック。"
+                      S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
+                      if [[ -n "${S30TC_NUM}" ]]; then
+                        activate_issue "${S30TC_NUM}"
                       else
-                        echo "WARNING: Step.3.1 も見つかりません。"
+                        echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                        S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.1:')
+                        if [[ -n "${S31_NUM}" ]]; then
+                          activate_issue "${S31_NUM}"
+                        else
+                          echo "WARNING: Step.3.1 も見つかりません。"
+                        fi
                       fi
                     fi
                   else
@@ -1738,13 +1985,39 @@ jobs:
               ;;
 
             "2.8")
-              # Step.2.8 完了 → Step.2 コンテナに asdw-web:done → Step.3.0TC (TDD RED) を起動
-              # テスト仕様書 (docs/test-specs/{screenId}-test-spec.md) は設計ワークフロー AAD Step.7.3 で生成済みとして前提
+              # Step.2.8 完了 → Step.2 コンテナに asdw-web:done → Step.3.0T (TDD RED) を起動
               S2_NUM=$(get_sub_issue_number '\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
                 add_label "${S2_NUM}" "asdw-web:done"
                 echo "Step.2 コンテナに asdw-web:done を付与しました。"
               fi
+              S3_NUM=$(get_sub_issue_number '\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                S30T_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0T:')
+                if [[ -n "${S30T_NUM}" ]]; then
+                  activate_issue "${S30T_NUM}"
+                else
+                  echo "WARNING: Step.3.0T が見つかりません。Step.3.0TC にフォールバック。"
+                  S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
+                  if [[ -n "${S30TC_NUM}" ]]; then
+                    activate_issue "${S30TC_NUM}"
+                  else
+                    echo "WARNING: Step.3.0TC が見つかりません。Step.3.1 にフォールバック。"
+                    S31_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.1:')
+                    if [[ -n "${S31_NUM}" ]]; then
+                      activate_issue "${S31_NUM}"
+                    else
+                      echo "WARNING: Step.3.1 も見つかりません。"
+                    fi
+                  fi
+                fi
+              else
+                echo "WARNING: Step.3 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "3.0T")
+              # Step.3.0T 完了 → Step.3.0TC を起動
               S3_NUM=$(get_sub_issue_number '\] Step\.3:')
               if [[ -n "${S3_NUM}" ]]; then
                 S30TC_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.0TC:')
@@ -1795,7 +2068,43 @@ jobs:
               ;;
 
             "3.2")
-              # Step.3.2 完了 → Step.3 コンテナに asdw-web:done → Step.4.1 + Step.4.2 を並列起動
+              # Step.3.2 完了 → Step.3.3 を起動
+              S3_NUM=$(get_sub_issue_number '\] Step\.3:')
+              if [[ -n "${S3_NUM}" ]]; then
+                S33_NUM=$(get_sub_issue_number_from_parent "${S3_NUM}" '\] Step\.3\.3:')
+                if [[ -n "${S33_NUM}" ]]; then
+                  activate_issue "${S33_NUM}"
+                else
+                  echo "WARNING: Step.3.3 が見つかりません。"
+                  echo "Step.3.3 が未定義のため Step.3 コンテナを完了扱いにし、Step.4.1 / Step.4.2 を起動します。"
+                  add_label "${S3_NUM}" "asdw-web:done"
+                  S4_NUM=$(get_sub_issue_number '\] Step\.4:')
+                  if [[ -n "${S4_NUM}" ]]; then
+                    S41_NUM=$(get_sub_issue_number_from_parent "${S4_NUM}" '\] Step\.4\.1:')
+                    S42_NUM=$(get_sub_issue_number_from_parent "${S4_NUM}" '\] Step\.4\.2:')
+                    if [[ -n "${S41_NUM}" ]]; then
+                      activate_issue "${S41_NUM}"
+                      echo "Step.4.1 を起動しました（並列実行）。"
+                    else
+                      echo "WARNING: Step.4.1 が見つかりません。"
+                    fi
+                    if [[ -n "${S42_NUM}" ]]; then
+                      activate_issue "${S42_NUM}"
+                      echo "Step.4.2 を起動しました（並列実行）。"
+                    else
+                      echo "WARNING: Step.4.2 が見つかりません。"
+                    fi
+                  else
+                    echo "WARNING: Step.4 コンテナが見つかりません。"
+                  fi
+                fi
+              else
+                echo "WARNING: Step.3 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "3.3")
+              # Step.3.3 完了 → Step.3 コンテナに asdw-web:done → Step.4.1 + Step.4.2 を並列起動
               S3_NUM=$(get_sub_issue_number '\] Step\.3:')
               if [[ -n "${S3_NUM}" ]]; then
                 add_label "${S3_NUM}" "asdw-web:done"
@@ -1956,7 +2265,7 @@ jobs:
   self-improve:
     needs: orchestrate
     if: needs.orchestrate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 180
     steps:
       - name: Parse Self-Improve settings

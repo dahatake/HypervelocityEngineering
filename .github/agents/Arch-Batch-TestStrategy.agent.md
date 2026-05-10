@@ -1,11 +1,15 @@
-﻿---
+---
 name: Arch-Batch-TestStrategy
 description: "バッチ処理テスト戦略書（冪等性・データ品質・障害注入）を docs/batch/batch-test-strategy.md に作成"
 tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Arch-Batch-TestStrategy/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。

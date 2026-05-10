@@ -1,6 +1,6 @@
 # S003 顧客ポータル（ホーム）
 
-> **出典**: `docs/screen-list.md#S003`, `docs/app-list.md#APP-04`, `docs/service-list.md#SVC-05`, `docs/data-model.md#LoyaltyAccount`, `docs/data-model.md#Reward`  
+> **出典**: `docs/catalog/screen-catalog.md#S003`, `docs/catalog/app-catalog.md#APP-04`, `docs/catalog/service-catalog.md#SVC-05`, `docs/catalog/data-model.md#LoyaltyAccount`, `docs/catalog/data-model.md#Reward`  
 > **作成日**: 2026-03-31
 
 ---
@@ -138,7 +138,7 @@
 * **パフォーマンス**: ポータルサマリー取得 p95 < 800ms（SVC-05 BFF が並列集約）
 * **キャッシュ**: おすすめ特典は最大5分 TTL でキャッシュ可（SVC-05 判断）
 * **更新時刻表示**: 「最終更新: XX:XX」を常時表示（実装例: サーバー時刻）
-* **可用性**: APP-04 99.9%（`docs/app-list.md#APP-04`）
+* **可用性**: APP-04 99.9%（`docs/catalog/app-catalog.md#APP-04`）
 
 ---
 

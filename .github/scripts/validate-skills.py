@@ -8,6 +8,7 @@ from pathlib import Path
 SKILLS_BASE = Path(".github/skills")
 errors = 0
 warnings = 0
+SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 def extract_frontmatter(content):
     """Extract YAML frontmatter from markdown content."""
@@ -30,6 +31,17 @@ def get_description_length(fm_text):
     if m2:
         return len(m2.group(1).strip(' "\''))
     return 0
+
+def get_metadata_version(fm_text):
+    """Extract metadata.version from frontmatter text."""
+    metadata_match = re.search(r'^metadata:\s*\n((?:[ \t]+.*\n?)*)', fm_text, re.MULTILINE)
+    if not metadata_match:
+        return None
+    metadata_body = metadata_match.group(1)
+    version_match = re.search(r'^[ \t]+version:\s*["\']?([^"\n\']+)["\']?\s*$', metadata_body, re.MULTILINE)
+    if not version_match:
+        return None
+    return version_match.group(1).strip()
 
 for skill_file in sorted(SKILLS_BASE.rglob("SKILL.md")):
     folder_name = skill_file.parent.name
@@ -70,10 +82,16 @@ for skill_file in sorted(SKILLS_BASE.rglob("SKILL.md")):
         errors += 1
         file_errors += 1
 
-    # Check metadata.version exists (warning)
-    if not re.search(r'^\s+version:', fm, re.MULTILINE):
-        print(f"⚠️  Missing metadata.version: {skill_file}")
-        warnings += 1
+    # Check metadata.version exists and is valid SemVer (error)
+    version = get_metadata_version(fm)
+    if version is None:
+        print(f"❌ Missing 'metadata.version' in frontmatter: {skill_file}")
+        errors += 1
+        file_errors += 1
+    elif not SEMVER_RE.fullmatch(version):
+        print(f"❌ Invalid 'metadata.version' (SemVer MAJOR.MINOR.PATCH required): {skill_file} (value: {version})")
+        errors += 1
+        file_errors += 1
 
     # Check USE FOR exists (warning, skip Microsoft official Skills)
     if not re.search(r'author:\s*Microsoft', fm) and 'USE FOR:' not in content:

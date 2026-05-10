@@ -2,10 +2,14 @@
 name: Dev-Batch-DataDeploy
 description: "Step 1.1 で作成した Azure データリソーススクリプトを実行・検証し、バッチ用 Azure データリソースをデプロイする（Step 1.2: Azure データリソース Deploy）"
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Batch-DataDeploy/Issue-<識別子>/`
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

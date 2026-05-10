@@ -1,10 +1,11 @@
 ---
 name: preset
-description: "Intelligently deploys Azure OpenAI models to optimal regions by analyzing capacity across all available regions. Automatically checks current region first and shows alternatives if needed. USE FOR: quick deployment, optimal region, best region, automatic region selection, fast setup, multi-region capacity check, high availability deployment, deploy to best location. DO NOT USE FOR: custom SKU selection (use customize), specific version selection (use customize), custom capacity configuration (use customize), PTU deployments (use customize)."
+description: >
+  Intelligently deploys Azure OpenAI models to optimal regions by analyzing capacity across all available regions. USE FOR: quick deployment, optimal region, best region. DO NOT USE FOR: custom SKU selection (use customize). WHEN: Intelligently deploys Azure OpenAI models to optimal regions by analyzing capacity across all available regionsが必要なとき。
 license: MIT
 metadata:
   author: Microsoft
-  version: "1.0.1"
+  version: 1.0.1
 ---
 
 # Deploy Model to Optimal Region

@@ -2,13 +2,17 @@
 name: Dev-Microservice-Azure-AgentTestCoding
 description: テスト仕様書（docs/test-specs/{agentId}-test-spec.md）に基づき、TDD RED フェーズのテストコード（失敗するテスト）を test/agent/{AgentName}.Tests/ 配下に生成する。実装コードは作成しない。
 tools: ["*"]
+metadata:
+  version: "1.0.0"
+
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AgentTestCoding/Issue-<識別子>/`
 
 AI Agent TDD RED フェーズ テストコード生成専用Agent。
 このエージェントは **Agent テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
 
-## 共通ルール → Skill `agent-common-preamble` を参照
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -23,7 +27,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 # 2) 入力（優先順位順）
 必須:
 - `docs/test-specs/{agentId}-test-spec.md`（Agent 別テスト仕様書 — テストケース表・テストデータ定義・テストダブル設計）
-- `docs/catalog/test-strategy.md`（テスト戦略書）
+- `docs/test-strategy.md`（テスト戦略書）
 - `docs/ai-agent-catalog.md`（Agent 一覧 — Agent ID / 名前 / 対象ユースケースの確認）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
@@ -77,7 +81,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 | 確認対象 | 停止条件 | 報告メッセージ |
 |---|---|---|
 | `docs/test-specs/{agentId}-test-spec.md` | 存在しない・空・テストケース表がない | 「依存 Step.2.7T（Agent テスト仕様書）が未完了のため実行不可です」 |
-| `docs/catalog/test-strategy.md` | 存在しない・空 | 「依存 Step（テスト戦略書）が未完了のため実行不可です」 |
+| `docs/test-strategy.md` | 存在しない・空 | 「依存 Step（テスト戦略書）が未完了のため実行不可です」 |
 
 # 6) 実行手順（この順で）
 
@@ -106,7 +110,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 # 7) 禁止事項（このタスク固有）
 - `src/agent/` 配下の実装コードを作成・変更しない（これは後続の `Dev-Microservice-Azure-AgentCoding` が行う）。
 - テスト仕様書（`docs/test-specs/`）を変更しない。
-- テスト戦略書（`docs/catalog/test-strategy.md`）を変更しない。
+- テスト戦略書（`docs/test-strategy.md`）を変更しない。
 - Agent 詳細設計書（`docs/agent/`）を変更しない。
 - テスト仕様書から確認できない情報を断定・補完・推測しない。
 - 根拠のないテストケース・テストデータを捏造しない。

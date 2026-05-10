@@ -1,6 +1,6 @@
 # S009 AIチャットサポート画面
 
-> **出典**: `docs/screen-list.md#S009`, `docs/app-list.md#APP-08`, `docs/service-list.md#SVC-10`  
+> **出典**: `docs/catalog/screen-catalog.md#S009`, `docs/catalog/app-catalog.md#APP-08`, `docs/catalog/service-catalog.md#SVC-10`  
 > **作成日**: 2026-03-31
 
 ---

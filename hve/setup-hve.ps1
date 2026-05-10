@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $script:WarningCount = 0
+$script:GhAuthOk = $false
 
 function Write-Step {
     param([string]$Message)
@@ -196,8 +197,29 @@ if (Test-Path $venvPython) {
 if ($gh) {
     Write-Step "Checking GitHub authentication"
     $ghAuthExitCode = Invoke-Probe -FilePath $gh -Arguments @("auth", "status")
-    if ($ghAuthExitCode -eq 0) { Write-Host "gh auth status: OK" } else { Write-SetupWarning "gh auth status failed. Run 'gh auth login' before using GitHub operations." }
+    if ($ghAuthExitCode -eq 0) {
+        $script:GhAuthOk = $true
+        Write-Host "gh auth status: OK"
+    } else {
+        Write-SetupWarning "gh auth status failed. Run 'gh auth login' before using GitHub operations."
+    }
 }
+
+Write-Step "Next steps"
+if ($gh) {
+    if ($script:GhAuthOk) {
+        Write-Host "GitHub auth: OK (gh auth status)"
+    } else {
+        Write-Host "Authenticate GitHub CLI if needed: gh auth login"
+        Write-Host "Then verify: gh auth status"
+    }
+}
+if (Test-Path $venvPython) {
+    Write-Host "Basic runtime check: $venvPython -m hve --help"
+} else {
+    Write-Host "Create .venv first (run setup without -CheckOnly), then run: .venv\\Scripts\\python.exe -m hve --help"
+}
+Write-Host "Optional: Node.js / npm / npx are only required when using Work IQ or Node-based MCP tools."
 
 if ($CheckOnly) {
     Write-Host "`nCheck-only completed with $script:WarningCount warning(s)."

@@ -1,6 +1,6 @@
 # S005 ランク・ステータス確認画面
 
-> **出典**: `docs/screen-list.md#S005`, `docs/app-list.md#APP-04`, `docs/data-model.md#LoyaltyAccount`, `docs/data-model.md#RankRule`  
+> **出典**: `docs/catalog/screen-catalog.md#S005`, `docs/catalog/app-catalog.md#APP-04`, `docs/catalog/data-model.md#LoyaltyAccount`, `docs/catalog/data-model.md#RankRule`  
 > **作成日**: 2026-03-31
 
 ---
@@ -81,9 +81,9 @@
 
 | データ | 出典 |
 |---|---|
-| rank | `LoyaltyAccount.rank`（`docs/data-model.md#LoyaltyAccount`）|
+| rank | `LoyaltyAccount.rank`（`docs/catalog/data-model.md#LoyaltyAccount`）|
 | totalEarned | `LoyaltyAccount.totalEarned` |
-| nextRankThreshold | `RankRule.threshold`（`docs/data-model.md#RankRule`）|
+| nextRankThreshold | `RankRule.threshold`（`docs/catalog/data-model.md#RankRule`）|
 | rankExpiry | TBD（有効期限ロジック: ブロッカー#4）|
 | rankTiers | `RankRule[]`（BRONZE/SILVER/GOLD/PLATINUM の閾値一覧）|
 

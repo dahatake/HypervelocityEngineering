@@ -1,0 +1,180 @@
+name: Auto Blocked to Human Required
+
+# 目的: {wf}:blocked ラベルが付いた Open Issue のうち、SLA 時間以上経過したものを
+#       {wf}:human-required に自動昇格し、エスカレーションコメントを投稿する。
+#
+# 設計メモ:
+#   - SLA 閾値は vars.HITL_BLOCKED_SLA_HOURS で可変。未設定時 24 時間。
+#   - workflow_dispatch の sla_hours 入力が最優先（テスト・デバッグ用）。
+#   - 重複付与防止: 既に :human-required がある Issue はスキップ。
+#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / abd / abdv / aag / aagd / akm / aqod / adoc
+#   - schedule トリガーは fork 環境では動作しない。本リポジトリ上でのみ有効。
+
+on:
+  schedule:
+    # 毎時 0 分に実行
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      sla_hours:
+        description: 'SLA 閾値（時間）。未指定時は vars.HITL_BLOCKED_SLA_HOURS または 24。'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  escalate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      # 優先順位: workflow_dispatch 入力 > vars.HITL_BLOCKED_SLA_HOURS > 24
+      SLA_HOURS: ${{ inputs.sla_hours || vars.HITL_BLOCKED_SLA_HOURS || '24' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Escalate blocked issues to human-required
+        run: |
+          set -euo pipefail
+
+          echo "SLA 閾値: ${SLA_HOURS} 時間"
+
+          # 判定基準時刻（Unix epoch 秒）
+          # Note: `date -d` は GNU coreutils 構文。ubuntu-latest ランナーで動作。
+          CUTOFF_EPOCH=$(date -u -d "${SLA_HOURS} hours ago" "+%s")
+          echo "Cutoff epoch: ${CUTOFF_EPOCH} ($(date -u -d "@${CUTOFF_EPOCH}" --iso-8601=seconds))"
+
+          # 対象ワークフロープレフィックス一覧
+          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+
+          TOTAL_ESCALATED=0
+
+          for PREFIX in ${PREFIXES}; do
+            BLOCKED_LABEL="${PREFIX}:blocked"
+            HUMAN_REQUIRED_LABEL="${PREFIX}:human-required"
+
+            echo ""
+            echo "=== ${BLOCKED_LABEL} チェック ==="
+
+            # {wf}:blocked ラベルが付いた Open Issue を取得（最大 1000 件）
+            ISSUES=$(gh issue list \
+              --repo "${REPO}" \
+              --label "${BLOCKED_LABEL}" \
+              --state open \
+              --json number,title,labels,updatedAt,url \
+              --limit 1000 2>/dev/null) || {
+              echo "  WARN: ${BLOCKED_LABEL} の Issue 一覧取得に失敗しました。スキップします。"
+              continue
+            }
+
+            COUNT=$(echo "${ISSUES}" | jq 'length')
+            if [ "${COUNT}" -eq 0 ]; then
+              echo "  対象 Issue なし"
+              continue
+            fi
+
+            echo "  ${BLOCKED_LABEL} が付いた Issue: ${COUNT} 件"
+
+            # フィルタ条件:
+            #   1. updatedAt が SLA 閾値より古い
+            #      NOTE: updatedAt は Issue 全体の最終更新時刻であり :blocked ラベル付与時刻ではない。
+            #      Issue 本文・コメントが更新されると updatedAt がリセットされるため、SLA 判定が
+            #      遅延する可能性がある（aas-timeout-monitor.yml と同じアプローチ）。
+            #      より精確な判定には timeline API でラベルイベントを取得する必要があるが、
+            #      現実的な運用では updatedAt で十分と判断。
+            #   2. 既に :human-required が付いていない（重複防止）
+            ELIGIBLE=$(echo "${ISSUES}" | jq \
+              --argjson cutoff "${CUTOFF_EPOCH}" \
+              --arg hr_label "${HUMAN_REQUIRED_LABEL}" \
+              '[
+                .[] |
+                select((.updatedAt | fromdateiso8601) < $cutoff) |
+                select(.labels | map(.name) | contains([$hr_label]) | not)
+              ]')
+
+            ELIGIBLE_COUNT=$(echo "${ELIGIBLE}" | jq 'length')
+            echo "  エスカレーション対象: ${ELIGIBLE_COUNT} 件"
+
+            if [ "${ELIGIBLE_COUNT}" -eq 0 ]; then
+              continue
+            fi
+
+            while IFS= read -r issue; do
+              ISSUE_NUMBER=$(echo "${issue}" | jq -r '.number')
+              ISSUE_TITLE=$(echo "${issue}" | jq -r '.title')
+              UPDATED_AT=$(echo "${issue}" | jq -r '.updatedAt')
+              ISSUE_URL=$(echo "${issue}" | jq -r '.url')
+
+              echo "  Issue #${ISSUE_NUMBER} をエスカレーション: ${ISSUE_TITLE}"
+
+              # :human-required ラベルを付与
+              if ! gh issue edit "${ISSUE_NUMBER}" \
+                --repo "${REPO}" \
+                --add-label "${HUMAN_REQUIRED_LABEL}" 2>/dev/null; then
+                echo "  WARN: ${HUMAN_REQUIRED_LABEL} の付与に失敗しました (#${ISSUE_NUMBER})"
+                continue
+              fi
+
+              # エスカレーションコメントを投稿
+              COMMENT=$(sed 's/^    //' <<COMMENT_EOF
+              🚨 **TDD リトライ上限到達 — 人間介入が必要です**
+
+              この Issue は最終更新（\`updatedAt\`）から **${SLA_HOURS} 時間以上**経過しているため、自動エスカレーションを実施しました。
+
+              > ⚠️ SLA 判定は Issue の \`updatedAt\`（最終更新時刻）を基準としています。Issue への新たなコメントなどで更新時刻がリセットされると、SLA カウントが延伸される場合があります。
+
+              - 追加ラベル: \`${HUMAN_REQUIRED_LABEL}\`
+              - 最終更新日時: \`${UPDATED_AT}\`
+              - Issue URL: ${ISSUE_URL}
+
+              ## 📋 推奨アクション
+
+              1. **調査開始**: \`${PREFIX}:human-investigating\` ラベルを付与して調査中であることを示してください
+              2. **原因確認**: 直近の TDD 試行ログ・FAIL レポート・Sub Issue を確認してください
+              3. 以下のいずれかを実施してください:
+                 - **手動修正後に自動復帰**: 解決後に \`${PREFIX}:human-resolved\` ラベルを付与すると \`${PREFIX}:ready\` へ自動遷移します
+                 - **手動再開**: 問題を修正後、\`${BLOCKED_LABEL}\` を削除して \`${PREFIX}:ready\` を手動付与
+                 - **仕様見直し**: テスト仕様書・受け入れ条件を見直して Issue を更新してから再実行
+
+              ## 📊 参考情報
+
+              - TDD メトリクス: \`work/dashboards/tdd-metrics.md\`
+              - SLA ドキュメント: \`docs/hitl/escalation-sla.md\`
+              - \`tdd_max_retries\` 既定値: 5（Issue body の \`<!-- tdd-max-retries: N -->\` で変更可能）
+
+              > このコメントは **Auto Blocked to Human Required** ワークフローにより自動投稿されました。
+              > SLA 閾値: **${SLA_HOURS} 時間**（\`vars.HITL_BLOCKED_SLA_HOURS\` で変更可能）
+          COMMENT_EOF
+              )
+              if ! gh issue comment "${ISSUE_NUMBER}" \
+                --repo "${REPO}" \
+                --body "${COMMENT}" 2>/dev/null; then
+                echo "  WARN: コメント投稿に失敗しました (#${ISSUE_NUMBER})"
+              fi
+
+              echo "  ✅ Issue #${ISSUE_NUMBER} エスカレーション完了"
+              TOTAL_ESCALATED=$((TOTAL_ESCALATED + 1))
+
+            done < <(echo "${ELIGIBLE}" | jq -c '.[]')
+          done
+
+          echo ""
+          echo "=== 処理完了 ==="
+          echo "エスカレーション件数: ${TOTAL_ESCALATED}"
+
+          # GitHub Actions ステップサマリーに記録
+          {
+            echo "## Auto Blocked to Human Required — 実行結果"
+            echo ""
+            echo "| 項目 | 値 |"
+            echo "|---|---|"
+            echo "| SLA 閾値 | ${SLA_HOURS} 時間 |"
+            echo "| エスカレーション件数 | ${TOTAL_ESCALATED} |"
+            echo "| 実行時刻 | $(date -u --iso-8601=seconds) |"
+          } >> "${GITHUB_STEP_SUMMARY}"
