@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" font-family="system-ui, -apple-system, sans-serif">
+  <title>AKM: Knowledge Management データフロー（Work IQ 入力対応）</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+    <marker id="arrOrange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="330" fill="#f6f8fa" rx="12"/>
+
+  <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AKM: Knowledge Management データフロー（Work IQ 入力対応）</text>
+  <text x="600" y="50" text-anchor="middle" font-size="11" fill="#586069">sources は qa / original-docs / workiq のカンマ区切りマルチ選択。workiq 選択時は Pre-DAG ステージが先行（hve ローカル CLI のみ）。</text>
+
+  <text x="175" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル / ソース</text>
+  <text x="565" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">処理ステージ</text>
+  <text x="980" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- Pre-DAG: Work IQ ingest -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Pre-DAG（workiq 選択時のみ）</text>
+  <rect x="20" y="108" width="310" height="62" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <text x="175" y="130" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Work IQ (Microsoft 365)</text>
+  <text x="175" y="148" text-anchor="middle" font-size="9" fill="#9a3412">メール / チャット / 会議 / ファイル</text>
+  <text x="175" y="162" text-anchor="middle" font-size="9" fill="#586069">--workiq-dxx で対象 Dxx 絞り込み可</text>
+  <rect x="430" y="108" width="270" height="62" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+  <text x="565" y="130" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">_run_akm_workiq_ingest</text>
+  <text x="565" y="146" text-anchor="middle" font-size="9" fill="#586069">Copilot session が直接 Dxx を書き込み</text>
+  <text x="565" y="160" text-anchor="middle" font-size="9" fill="#586069">D01〜D21（または絞込）に対し起票/差分更新</text>
+
+  <line x1="330" y1="139" x2="430" y2="139" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
+  <line x1="700" y1="139" x2="800" y2="139" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
+
+  <!-- DAG step-1 -->
+  <text x="565" y="195" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">DAG Step 1（knowledge/ ドキュメント生成・管理）</text>
+  <rect x="20" y="205" width="310" height="100" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="225" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa を含む場合）</text>
+  <text x="175" y="240" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
+  <text x="175" y="258" text-anchor="middle" font-size="10" fill="#24292e">original-docs/*（sources に original-docs を含む場合）</text>
+  <text x="175" y="273" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
+  <text x="175" y="293" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: target_files / force_refresh</text>
+  <rect x="430" y="220" width="270" height="70" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="243" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">KnowledgeManager Agent</text>
+  <text x="565" y="261" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / original-docs セクション分割</text>
+  <text x="565" y="278" text-anchor="middle" font-size="9" fill="#9a3412">Work IQ 由来の既存 Dxx を保護しつつ差分マージ</text>
+
+  <!-- Output -->
+  <rect x="800" y="115" width="360" height="180" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="137" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D{NN}-*.md（D01〜D21）</text>
+  <text x="980" y="155" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D{NN}-*-ChangeLog.md</text>
+  <text x="980" y="173" text-anchor="middle" font-size="10" fill="#24292e">knowledge/business-requirement-</text>
+  <text x="980" y="187" text-anchor="middle" font-size="10" fill="#24292e">document-status.md</text>
+  <text x="980" y="220" text-anchor="middle" font-size="9" fill="#586069">Pre-DAG → DAG の二段階で</text>
+  <text x="980" y="234" text-anchor="middle" font-size="9" fill="#586069">同一 Dxx ファイルを差分マージ</text>
+  <text x="980" y="258" text-anchor="middle" font-size="9" fill="#9a3412">workiq による出典は KM Agent が保護</text>
+
+  <line x1="330" y1="255" x2="430" y2="255" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="255" x2="800" y2="255" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

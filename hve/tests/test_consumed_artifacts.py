@@ -138,6 +138,34 @@ class TestPhase4ConsumedArtifactsMinimized:
 
 
 # ---------------------------------------------------------------------------
+# テスト 3.5 (Sub-1 A-1): 全ワークフロー対象で consumed_artifacts=None を即時 reject
+# ---------------------------------------------------------------------------
+
+
+class TestAllWorkflowsConsumedArtifactsExplicit:
+    """全ワークフローの非コンテナ Step で consumed_artifacts が明示されていること。
+
+    Sub-1 (A-1) で導入: ALLOWED_NONE_STEPS に列挙されていない限り None を許容しない。
+    新規ワークフローを追加するときも consumed_artifacts=[] を必ず明示する。
+    """
+
+    @pytest.mark.parametrize("wf", list_workflows(), ids=lambda w: w.id)
+    def test_no_none_consumed_artifacts_any_workflow(self, wf) -> None:
+        allowed = ALLOWED_NONE_STEPS.get(wf.id, [])
+        none_steps = [
+            step.id
+            for step in wf.steps
+            if not step.is_container
+            and step.consumed_artifacts is None
+            and step.id not in allowed
+        ]
+        assert none_steps == [], (
+            f"Workflow '{wf.id}': consumed_artifacts=None の Step が残っています: {none_steps}. "
+            f"前提成果物がない Step は consumed_artifacts=[] を明示してください。"
+        )
+
+
+# ---------------------------------------------------------------------------
 # テスト 4: None を残す Step は allowlist で管理されていること
 # ---------------------------------------------------------------------------
 
@@ -230,8 +258,9 @@ class TestPhase4ConsumedArtifactsValues:
         assert "use_case_catalog" in step.consumed_artifacts
 
     def test_aas_step4_uses_service_catalog(self) -> None:
+        # Sub-4 (B-1): Step 4 を 4.1 (データモデル) / 4.2 (サンプルデータ) に分割
         wf = get_workflow("aas")
-        step = wf.get_step("4")
+        step = wf.get_step("4.1")
         assert step is not None
         assert "service_catalog" in step.consumed_artifacts
         assert "domain_analytics" in step.consumed_artifacts

@@ -120,6 +120,35 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("true", "1", "yes")
 
 
+def _parse_workiq_akm_ingest_dxx(value: str) -> List[str]:
+    """``WORKIQ_AKM_INGEST_DXX`` / ``--workiq-dxx`` 文字列を ``["D01","D04",...]`` に正規化する。
+
+    - 受理形式: ``D01,D04`` / ``D01 D04`` / 大文字小文字混在
+    - 不正パターン（``Dxx`` 形式でない、番号範囲外等）は除外する
+    - 空文字や空白のみ → 空リスト（= 全 Dxx を対象）
+    """
+    if not value or not str(value).strip():
+        return []
+    import re as _re
+    tokens = [t for t in _re.split(r"[,\s]+", str(value)) if t]
+    result: List[str] = []
+    seen: set = set()
+    for token in tokens:
+        t = token.strip().upper()
+        m = _re.fullmatch(r"D(\d{1,2})", t)
+        if not m:
+            continue
+        num = int(m.group(1))
+        if num < 1 or num > 99:
+            continue
+        canonical = f"D{num:02d}"
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        result.append(canonical)
+    return result
+
+
 @dataclass
 class SDKConfig:
     # --- 基本設定 ---
@@ -185,6 +214,17 @@ class SDKConfig:
     # ["--log-dir", "/path/to/logs"]  でログファイル永続化
     # ["--some-flag"]                 で診断オプション有効化
 
+    # --- ツール制限（GitHub Copilot SDK の available_tools / excluded_tools へ伝搬）---
+    # SDK 0.1.0 のシグネチャ:
+    #   create_session(..., available_tools: list[str] | None = None,
+    #                       excluded_tools: list[str] | None = None, ...)
+    # available_tools: 指定したツール名のみを許可（None = 全許可）
+    # excluded_tools:  指定したツール名を除外（available_tools 適用後に評価される想定）
+    # サブセッション (Pre-QA / Review) にも同じ値を伝搬する。
+    # Custom Agent 単位の `tools` フィールドは agent_loader.py 側で別途 SDK へ渡される。
+    available_tools: Optional[List[str]] = None
+    excluded_tools: Optional[List[str]] = None
+
     # --- MCP Servers ---
     mcp_servers: Optional[Dict[str, Any]] = None
     # Copilot SDK の mcp_servers 形式。例:
@@ -224,6 +264,11 @@ class SDKConfig:
     workiq_enabled: bool = False                          # Work IQ 連携の有効/無効（後方互換の総合フラグ）
     workiq_qa_enabled: Optional[bool] = None              # QA フェーズ用 Work IQ（None = workiq_enabled を継承）
     workiq_akm_review_enabled: Optional[bool] = None      # AKM 実行後レビュー用 Work IQ（None = workiq_enabled を継承）
+    # --- AKM 入力ソースとしての Work IQ（AKM Work IQ 取り込みフェーズ）---
+    # AKM メイン DAG の前で走り、Work IQ を使って knowledge/Dxx-*.md を起票・差分更新する。
+    # 既存の workiq_akm_review_enabled（DAG 後の妥当性検証）とは独立したフラグ。
+    workiq_akm_ingest_enabled: bool = False               # AKM Work IQ 取り込みフェーズの有効/無効
+    workiq_akm_ingest_dxx: List[str] = field(default_factory=list)  # 取り込み対象 Dxx のフィルタ（空 = 全件 D01〜D21）
     workiq_tenant_id: Optional[str] = None                # Entra テナント ID（任意）
     workiq_prompt_qa: Optional[str] = None                # QA 用カスタムプロンプト（None = デフォルト）
     workiq_prompt_km: Optional[str] = None                # KM 用カスタムプロンプト（None = デフォルト）
@@ -268,6 +313,13 @@ class SDKConfig:
     # 空文字（デフォルト）: hve.run_state.DEFAULT_SESSION_ID_PREFIX ("hve") を使用する。
     # Phase 2 (Resume): make_session_id() に渡され、`{prefix}-{run_id}-step-{step_id}` 形式の
     # 決定論的 session_id を生成する基底となる。HVE_SESSION_ID_PREFIX 環境変数で上書き可能。
+
+    # --- Fork-on-Retry (T2.7) ---
+    fork_on_retry: bool = False
+    """失敗ステップを 1 回だけフォーク (新 session_id) で自動リトライするかどうか。
+    既定: False（旧挙動と完全一致）。HVE_FORK_ON_RETRY 環境変数で上書き可能。
+    フォーク発火時は KPI ログ (`work/kpi/fork-kpi-<run_id>.jsonl`) を出力する。
+    """
 
     # --- その他 ---
     max_diff_chars: int = 80_000            # git diff の最大文字数（トークン上限対策）。HVE_MAX_DIFF_CHARS 環境変数で上書き可能
@@ -364,6 +416,14 @@ class SDKConfig:
         """AKM 実行後レビューで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
         return self.workiq_enabled if self.workiq_akm_review_enabled is None else self.workiq_akm_review_enabled
 
+    def is_workiq_akm_ingest_enabled(self) -> bool:
+        """AKM 入力フェーズとして Work IQ を使うかを返す。
+
+        フラグは独立フラグ。``sources`` に ``workiq`` が含まれる場合 or
+        ``--workiq-akm-ingest`` / ``WORKIQ_AKM_INGEST_ENABLED`` で True に設定される。
+        """
+        return bool(self.workiq_akm_ingest_enabled)
+
     @classmethod
     def from_env(cls) -> "SDKConfig":
         """環境変数から SDKConfig を構築する。"""
@@ -415,6 +475,18 @@ class SDKConfig:
         except (TypeError, ValueError):
             env_context_injection_max_chars = DEFAULT_CONTEXT_INJECTION_MAX_CHARS
 
+        def _parse_tool_list(value: str) -> Optional[List[str]]:
+            """HVE_AVAILABLE_TOOLS / HVE_EXCLUDED_TOOLS をパースしてリスト化する。
+
+            空 / 未設定時は None を返す（= SDK デフォルト = 制限なし）。
+            区切り文字: カンマ または 空白（既存 _parse_workiq_akm_ingest_dxx と同様の正規化）。
+            """
+            if not value or not value.strip():
+                return None
+            import re as _re
+            tokens = [t for t in _re.split(r"[,\s]+", value.strip()) if t]
+            return tokens or None
+
         def _env_bool_or_none(name: str) -> Optional[bool]:
             raw = os.environ.get(name)
             if raw is None or raw.strip() == "":
@@ -432,6 +504,8 @@ class SDKConfig:
             workiq_enabled=os.environ.get("WORKIQ_ENABLED", "").lower() in ("true", "1", "yes"),
             workiq_qa_enabled=_env_bool_or_none("WORKIQ_QA_ENABLED"),
             workiq_akm_review_enabled=_env_bool_or_none("WORKIQ_AKM_REVIEW_ENABLED"),
+            workiq_akm_ingest_enabled=os.environ.get("WORKIQ_AKM_INGEST_ENABLED", "").lower() in ("true", "1", "yes"),
+            workiq_akm_ingest_dxx=_parse_workiq_akm_ingest_dxx(os.environ.get("WORKIQ_AKM_INGEST_DXX", "")),
             workiq_tenant_id=os.environ.get("WORKIQ_TENANT_ID") or None,
             workiq_prompt_qa=os.environ.get("WORKIQ_PROMPT_QA") or None,
             workiq_prompt_km=os.environ.get("WORKIQ_PROMPT_KM") or None,
@@ -445,6 +519,8 @@ class SDKConfig:
             tdd_max_retries=int(os.environ.get("HVE_TDD_MAX_RETRIES", "5")),
             max_diff_chars=env_max_diff_chars,
             context_injection_max_chars=env_context_injection_max_chars,
+            available_tools=_parse_tool_list(os.environ.get("HVE_AVAILABLE_TOOLS", "")),
+            excluded_tools=_parse_tool_list(os.environ.get("HVE_EXCLUDED_TOOLS", "")),
             reuse_context_filtering=_env_bool("HVE_REUSE_CONTEXT_FILTERING", default=True),
             model_override=_normalize_model_with_warning(os.environ.get("HVE_MODEL_OVERRIDE") or None),
             apply_qa_improvements_to_main=_env_bool("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", default=False),
@@ -453,6 +529,7 @@ class SDKConfig:
             self_improve_scope=env_si_scope,
             require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
             session_id_prefix=os.environ.get("HVE_SESSION_ID_PREFIX", "").strip(),
+            fork_on_retry=_env_bool("HVE_FORK_ON_RETRY", default=False),
         )
 
     def get_review_model(self) -> str:

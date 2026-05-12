@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
       - name: Bootstrap create-subissues label
         run: |
@@ -609,6 +610,8 @@ jobs:
 
       - name: Commit and push work directories
         if: steps.idempotency.outputs.skip == 'false' && steps.find_files.outputs.found == 'true'
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -617,19 +620,30 @@ jobs:
             echo "No new work directories to commit."
           else
             git commit -m "chore: create work directories for sub-issues of PR #${PR_NUMBER}"
-            # Retry push with pull-rebase on race condition
+            # Retry push with fetch-rebase on race condition
+            head_branch="${HEAD_BRANCH}"
+            git check-ref-format --branch "${head_branch}" >/dev/null 2>&1 || {
+              echo "::error::Invalid branch name: ${head_branch}" >&2
+              exit 1
+            }
             pushed=false
             for attempt in 1 2 3; do
-              if git push; then
+              echo "Push attempt ${attempt}/3 to ${head_branch}"
+              if git push origin "HEAD:refs/heads/${head_branch}"; then
                 pushed=true
                 break
               fi
-              if [ "$attempt" -lt 3 ]; then
-                echo "Push attempt ${attempt} failed; pulling and retrying..."
-                git pull --rebase
+              if [ "${attempt}" -lt 3 ]; then
+                echo "Push failed. Fetching and rebasing onto origin/${head_branch}..."
+                git fetch origin "${head_branch}"
+                if ! git rebase "origin/${head_branch}"; then
+                  echo "::error::Rebase failed due to conflicts. Aborting rebase." >&2
+                  git rebase --abort || true
+                  exit 1
+                fi
               fi
             done
-            if [ "$pushed" = false ]; then
+            if [ "${pushed}" != "true" ]; then
               echo "::error::git push failed after 3 attempts." >&2
               exit 1
             fi

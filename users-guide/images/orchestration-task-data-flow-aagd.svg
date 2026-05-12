@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" font-family="system-ui, -apple-system, sans-serif">
+  <title>AAGD: AI Agent 実装・デプロイ データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="620" fill="#f6f8fa" rx="12"/>
+
+  <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAGD: AI Agent 実装・デプロイ データフロー</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+
+  <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- Step 1 -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1（AI Agent 構成設計）</text>
+  <rect x="20" y="105" width="310" height="80" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="123" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <text x="175" y="138" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <text x="175" y="153" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog.md / data-model.md</text>
+  <text x="175" y="168" text-anchor="middle" font-size="10" fill="#24292e">docs/domain-analytics.md</text>
+  <text x="175" y="183" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md / services/*.md</text>
+  <rect x="430" y="120" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="140" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-AIAgentDesign-Step1</text>
+  <text x="565" y="156" text-anchor="middle" font-size="10" fill="#586069">AAGD 文脈での Agent 構成設計</text>
+  <rect x="800" y="125" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="148" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-application-definition.md</text>
+  <line x1="330" y1="145" x2="430" y2="144" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="144" x2="800" y2="144" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2.1 -->
+  <text x="565" y="207" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2.1（テスト仕様書 / TDD RED）</text>
+  <line x1="565" y1="168" x2="565" y2="210" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="217" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="235" text-anchor="middle" font-size="10" fill="#24292e">docs/test-strategy.md</text>
+  <text x="175" y="250" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
+  <text x="175" y="265" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <text x="175" y="278" text-anchor="middle" font-size="10" fill="#24292e">docs/data-model.md / docs/catalog/app-catalog.md</text>
+  <rect x="430" y="227" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="247" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-TDD-TestSpec</text>
+  <text x="565" y="263" text-anchor="middle" font-size="10" fill="#586069">Agent テスト仕様書生成</text>
+  <rect x="800" y="234" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="257" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{agentId}-test-spec.md</text>
+  <line x1="330" y1="250" x2="430" y2="251" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="251" x2="800" y2="253" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2.2 -->
+  <text x="565" y="304" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2.2（テストコード生成 / TDD RED）</text>
+  <line x1="565" y1="275" x2="565" y2="307" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="314" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="332" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{agentId}-test-spec.md</text>
+  <text x="175" y="347" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
+  <text x="175" y="362" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
+  <rect x="430" y="320" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="338" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-</text>
+  <text x="565" y="352" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">AgentTestCoding</text>
+  <text x="565" y="365" text-anchor="middle" font-size="9" fill="#586069">RED フェーズのテストコード</text>
+  <rect x="800" y="328" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="351" text-anchor="middle" font-size="10" fill="#24292e">test/agent/{AgentName}.Tests/</text>
+  <line x1="330" y1="340" x2="430" y2="343" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="343" x2="800" y2="346" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 2.3 -->
+  <text x="565" y="395" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2.3（実装 / TDD GREEN）</text>
+  <line x1="565" y1="368" x2="565" y2="398" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="405" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="423" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-detail-*.md</text>
+  <text x="175" y="438" text-anchor="middle" font-size="10" fill="#24292e">test/agent/{AgentName}.Tests/</text>
+  <text x="175" y="453" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{agentId}-test-spec.md</text>
+  <text x="175" y="466" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md / app-catalog.md</text>
+  <rect x="430" y="415" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="433" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-</text>
+  <text x="565" y="447" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">AgentCoding</text>
+  <text x="565" y="460" text-anchor="middle" font-size="9" fill="#586069">テストを PASS させる Agent 実装</text>
+  <rect x="800" y="420" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="443" text-anchor="middle" font-size="10" fill="#24292e">src/agent/{AgentID}-{AgentName}/</text>
+  <line x1="330" y1="437" x2="430" y2="439" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="439" x2="800" y2="439" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Step 3 -->
+  <text x="565" y="492" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 3（AI Agent Deploy）</text>
+  <line x1="565" y1="463" x2="565" y2="495" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="502" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="520" text-anchor="middle" font-size="10" fill="#24292e">src/agent/{AgentID}-{AgentName}/</text>
+  <text x="175" y="535" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
+  <text x="175" y="550" text-anchor="middle" font-size="10" fill="#24292e">resource_group（パラメータ）</text>
+  <rect x="430" y="505" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="523" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Dev-Microservice-Azure-</text>
+  <text x="565" y="537" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">AgentDeploy</text>
+  <text x="565" y="550" text-anchor="middle" font-size="9" fill="#586069">Azure AI Foundry へデプロイ</text>
+  <rect x="800" y="495" width="360" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="514" text-anchor="middle" font-size="10" fill="#24292e">Azure AI Foundry Agent</text>
+  <text x="980" y="530" text-anchor="middle" font-size="10" fill="#24292e">.github/workflows/（CI/CD）</text>
+  <text x="980" y="546" text-anchor="middle" font-size="10" fill="#24292e">src/agent/{AgentID}-{AgentName}/README.md</text>
+  <line x1="330" y1="527" x2="430" y2="528" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="528" x2="800" y2="528" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

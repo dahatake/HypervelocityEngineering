@@ -86,15 +86,24 @@ class TestOrchestratorARD(unittest.TestCase):
         self.assertIn("SR-1", result)
 
     def test_run_workflow_dry_run_empty_target_business_is_serial(self):
+        # Sub-10 (ADR-0003): ARD は 7 step に再設計され、Step 1.1 / 3.2 は fan-out 子持ち。
+        # dry-run / fixture 不在の環境では fan-out 子の展開が 0 件 (fanout-empty) で skip され、
+        # 結果として実行 wave は 1 → (1.1 skip + 1.2) → 3.1 → 3.3 のように圧縮される。
+        # 旧 ARD は wave=3 だったが、Sub-10 では実際の wave=4。
         cfg = SDKConfig(dry_run=True, quiet=True)
         result = _run(
             run_workflow(
                 workflow_id="ard",
-                params={"branch": "main", "selected_steps": ["1", "2", "3"], "target_business": ""},
+                params={
+                    "branch": "main",
+                    "selected_steps": ["1", "1.1", "1.2", "3.1", "3.2", "3.3"],
+                    "target_business": "",
+                },
                 config=cfg,
             )
         )
-        self.assertEqual(result.get("dag_plan_waves"), 3)
+        # fan-out 空展開時の実 wave 数（直列 + skip 圧縮）
+        self.assertEqual(result.get("dag_plan_waves"), 4)
 
     def test_resolve_target_business_paths_text_unchanged(self):
         params = {"target_business": "ロイヤルティ事業の会員運用業務"}

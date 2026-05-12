@@ -7,7 +7,7 @@ name: QA 質問票 → PR コメント自動展開
 #   （Copilot がコミットを push した時に発火）
 #
 # 実行条件:
-#   - PR に auto-qa ラベルが付いている
+#   - PR に auto-qa または qa-questionnaire-pr ラベルが付いている
 #   - PR が draft でない
 #   - PR の変更ファイル一覧に qa/ 配下の .md ファイルが追加・変更として含まれている
 #   - PR コメントに <!-- qa-full-posted --> マーカーが存在しない（未投稿）
@@ -32,7 +32,8 @@ permissions:
 jobs:
   post-qa-comment:
     if: >
-      contains(github.event.pull_request.labels.*.name, 'auto-qa')
+      (contains(github.event.pull_request.labels.*.name, 'auto-qa')
+       || contains(github.event.pull_request.labels.*.name, 'qa-questionnaire-pr'))
       && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15

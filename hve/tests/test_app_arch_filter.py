@@ -175,6 +175,50 @@ class TestResolveAppArchScope(unittest.TestCase):
             resolve_app_arch_scope("aad-web", catalog_path=str(p))
         self.assertIn("サマリ表", str(ctx.exception))
 
+    def test_loose_section_heading_accepted(self):
+        """`## A) 選定結果一覧（サマリ表）` のような揺れ見出しも受理されること。"""
+        from hve.app_arch_filter import resolve_app_arch_scope
+        import io
+
+        p = self._tmp / "app-arch-catalog.md"
+        content = textwrap.dedent("""\
+            # カタログ
+
+            ## A) 選定結果一覧（サマリ表）
+
+            | APP-ID | APP名 | 推薦アーキテクチャ | Confidence | 入力ステータス |
+            |--------|-------|-------------------|-----------|-------------|
+            | APP-01 | Web App | Webフロントエンド + クラウド | 高 | ✅完了 |
+        """)
+        p.write_text(content, encoding="utf-8")
+
+        stderr_capture = io.StringIO()
+        with patch("sys.stderr", stderr_capture):
+            result = resolve_app_arch_scope("aad-web", catalog_path=str(p))
+        self.assertEqual(result.matched_app_ids, ["APP-01"])
+        self.assertIn("WARNING", stderr_capture.getvalue())
+        self.assertIn("選定結果一覧", stderr_capture.getvalue())
+
+    def test_canonical_section_heading_no_warning(self):
+        from hve.app_arch_filter import resolve_app_arch_scope
+        import io
+
+        cat = self._make_catalog([
+            ("APP-01", "Web App", "Webフロントエンド + クラウド"),
+        ], self._tmp)
+        stderr_capture = io.StringIO()
+        with patch("sys.stderr", stderr_capture):
+            resolve_app_arch_scope("aad-web", catalog_path=cat)
+        self.assertNotIn("WARNING", stderr_capture.getvalue())
+
+    def test_section_a_without_summary_keyword_raises(self):
+        from hve.app_arch_filter import resolve_app_arch_scope
+
+        p = self._tmp / "app-arch-catalog.md"
+        p.write_text("# カタログ\n\n## A) 概要\n\n本文\n", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            resolve_app_arch_scope("aad-web", catalog_path=str(p))
+
     # ------------------------------------------------------------------
     # 9. APP-ID 列不在
     # ------------------------------------------------------------------

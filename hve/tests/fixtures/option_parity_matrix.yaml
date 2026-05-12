@@ -22,15 +22,19 @@ schema_version: "1.0"
 sdkconfig_internal_fields:
   - additional_prompt               # CLI 経由のみ (--additional-prompt)
   - auto_coding_agent_review_auto_approval  # hve 内部の自動承認フラグ
+  - available_tools                 # SDK ツール許可リスト（内部、CLI/環境変数経由）
   - cli_args                        # SDK 追加 CLI 引数（内部）
   - cli_path                        # Copilot CLI パス（インフラ）
   - cli_url                         # 外部 CLI サーバー URL（インフラ）
+  - context_injection_max_chars     # 各フェーズの注入文字数上限（チューニング、HVE_CONTEXT_INJECTION_MAX_CHARS）
   - create_issues                   # GitHub Issue 作成（hve 固有インフラ）
   - create_pr                       # GitHub PR 作成（hve 固有インフラ）
   - custom_agents_config            # SDK Custom Agent 設定（内部）
   - dry_run                         # ドライランモード（テスト用）
   - final_only                      # 最終出力のみ表示（出力制御）
   - force_interactive               # TTY 判定バイパス（QA 内部）
+  - fork_on_retry                   # Sub-11: Fork-integration の失敗時自動フォーク（内部、HVE_FORK_ON_RETRY）
+  - excluded_tools                  # SDK ツール除外リスト（内部、CLI/環境変数経由）
   - github_token                    # 認証トークン（インフラ）
   - ignore_paths                    # git add 除外パス（ファイル管理）
   - log_level                       # CLI ログレベル（出力制御）
@@ -65,6 +69,8 @@ sdkconfig_internal_fields:
   - unattended                      # 全自動モード（自動化用）
   - verbose                         # 詳細出力（レガシー互換）
   - verbosity                       # 出力レベル（出力制御）
+  - workiq_akm_ingest_dxx           # AKM Work IQ 取り込み Dxx フィルタ（内部、HVE_WORKIQ_AKM_INGEST_DXX）
+  - workiq_akm_ingest_enabled       # AKM Work IQ 取り込み有効フラグ（内部、HVE_WORKIQ_AKM_INGEST_ENABLED）
 
 # Issue Form フィールド ID のカバレッジチェック除外リスト。
 # 以下はワークフロー固有パラメータ・UI 入力ゲート・テキスト入力で選択式オプションではない。

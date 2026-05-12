@@ -94,7 +94,8 @@ def _ts() -> str:
 MODEL_AUTO = MODEL_AUTO_VALUE
 
 # AKM デフォルト値
-_AKM_DEFAULT_SOURCES = "qa"
+# Work IQ を入力ソースとして任意追加できるよう、既定は qa + original-docs のマルチ値（カンマ区切り）。
+_AKM_DEFAULT_SOURCES = "qa,original-docs"
 _AKM_DEFAULT_TARGET_FILES = "qa/*.md"
 _AKM_SOURCES_OPTIONS = [
     "qa のみ",
@@ -106,6 +107,13 @@ _AKM_SOURCES_MAP = {
     "original-docs のみ": "original-docs",
     "両方": "both",
 }
+# Work IQ を含むマルチ選択用のソース一覧（C-1 で使用）
+_AKM_SOURCES_MULTI_OPTIONS = [
+    "qa（質問票）",
+    "original-docs（原資料）",
+    "workiq（Microsoft 365 Copilot Work IQ）",
+]
+_AKM_SOURCES_MULTI_VALUES = ["qa", "original-docs", "workiq"]
 _AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
 _AQOD_DEFAULT_DEPTH = "standard"
 _AQOD_DEPTH_CHOICES = ("standard", "lightweight")
@@ -230,8 +238,8 @@ def _build_target_business_label(con, selected_steps) -> str:
     s = getattr(con, "s", None)
     if "1" in selected_steps:
         if s is not None:
-            return f"対象業務名 {s.DIM}（Step 1で作成される最上位の戦略的提言を基に LLM 生成された対象業務説明文）{s.RESET}"
-        return "対象業務名（Step 1で作成される最上位の戦略的提言を基に LLM 生成された対象業務説明文）"
+            return f"対象業務名 {s.DIM}既定値: Step 1で作成されたドキュメントの「戦略的提言」から、LLMで自動生成){s.RESET}"
+        return "対象業務名既定値: Step 1で作成されたドキュメントの「戦略的提言」から、LLMで自動生成)"
     return "対象業務名"
 
 
@@ -391,13 +399,29 @@ def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
     return params
 
 
-def _default_akm_target_files(sources: str) -> str:
-    """AKM の sources に応じた target_files 既定値を返す。"""
-    if sources == "original-docs":
-        return "original-docs/*"
-    if sources == "both":
-        return ""
-    return _AKM_DEFAULT_TARGET_FILES
+def _default_akm_target_files(sources) -> str:
+    """AKM の sources に応じた target_files 既定値を返す。
+
+    ``sources`` は文字列（カンマ/空白区切り）または ``list[str]`` を受け付ける。
+    Work IQ のみ、または非 Work IQ ソースが複数の場合は既定パターンなし（``""``）。
+
+    後方互換: 旧 ``"original-docs"`` / ``"both"`` 等の単一文字列も受理する。
+    """
+    # orchestrator 側の正規化／既定算出を再利用し、本モジュール内の重複ロジックを避ける。
+    try:
+        from .orchestrator import _default_akm_target_files as _impl  # type: ignore
+    except ImportError:
+        from orchestrator import _default_akm_target_files as _impl  # type: ignore[no-redef]
+    return _impl(sources)
+
+
+def _normalize_akm_sources(value) -> list:
+    """``orchestrator._normalize_akm_sources`` への薄いラッパー。"""
+    try:
+        from .orchestrator import _normalize_akm_sources as _impl  # type: ignore
+    except ImportError:
+        from orchestrator import _normalize_akm_sources as _impl  # type: ignore[no-redef]
+    return _impl(value)
 
 
 def _prompt_valid_doc_purpose(con) -> str:
@@ -532,17 +556,26 @@ def _prompt_akm_params(
         params["force_refresh"] = True
         params["custom_source_dir"] = ""
         params["enable_auto_merge"] = False
+        # Work IQ 入力フェーズはクイック全自動モードでは既定 OFF（明示要求がない限り）。
+        params["workiq_akm_ingest_dxx"] = []
         return params
 
-    sources_idx = con.menu_select(
-        "取り込みソースを選択してください",
-        _AKM_SOURCES_OPTIONS,
-        default_index=0,
+    # 取り込みソースをマルチ選択（qa / original-docs / workiq）。
+    # 既定は qa + original-docs。空選択は既定にフォールバックする。
+    _default_indices = [0, 1]  # qa, original-docs
+    selected_indices = con.prompt_multi_select(
+        "取り込みソースを選択してください（複数選択可）",
+        _AKM_SOURCES_MULTI_OPTIONS,
+        default_indices=_default_indices,
     )
-    sources_display = _AKM_SOURCES_OPTIONS[sources_idx]
-    params["sources"] = _AKM_SOURCES_MAP[sources_display]
+    if not selected_indices:
+        selected_indices = list(_default_indices)
+    selected_values = [_AKM_SOURCES_MULTI_VALUES[i] for i in selected_indices]
+    # _normalize_akm_sources を経由して順序固定化（workiq, qa, original-docs）。
+    normalized = _normalize_akm_sources(selected_values)
+    params["sources"] = ",".join(normalized)
 
-    default_target = _default_akm_target_files(params["sources"])
+    default_target = _default_akm_target_files(normalized)
     target_input = con.prompt_input(
         "対象ファイルパス（スペース区切り、省略時: デフォルト）",
         default=default_target,
@@ -559,6 +592,21 @@ def _prompt_akm_params(
         default="",
     )
     params["enable_auto_merge"] = False
+
+    # Work IQ が選択されている場合のみ、取り込み対象 Dxx の絞り込みを尋ねる（Sub-C-4）。
+    if "workiq" in normalized:
+        dxx_input = con.prompt_input(
+            "Work IQ 取り込み対象 Dxx（カンマ区切り、例: D01,D04。省略=全件 D01〜D21）",
+            default="",
+        )
+        # config 側のヘルパで正規化（無効パターンは除外、空 → []）。
+        try:
+            from .config import _parse_workiq_akm_ingest_dxx  # type: ignore
+        except ImportError:
+            from config import _parse_workiq_akm_ingest_dxx  # type: ignore[no-redef]
+        params["workiq_akm_ingest_dxx"] = _parse_workiq_akm_ingest_dxx(dxx_input or "")
+    else:
+        params["workiq_akm_ingest_dxx"] = []
 
     return params
 
@@ -712,6 +760,24 @@ def _build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="AKM 実行後レビューで Work IQ 検証を有効/無効化する（未指定時は --workiq / WORKIQ_ENABLED を継承）",
+    )
+    orch.add_argument(
+        "--workiq-akm-ingest",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "AKM の入力ソースとして Work IQ を有効/無効化する"
+            "（未指定時は --sources に 'workiq' が含まれるかで自動判定）"
+        ),
+    )
+    orch.add_argument(
+        "--workiq-dxx",
+        default=None,
+        metavar="DXX_LIST",
+        help=(
+            "AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。"
+            "省略時は全 D01〜D21 を対象とする。"
+        ),
     )
     orch.add_argument(
         "--workiq-draft",
@@ -956,9 +1022,12 @@ def _build_parser() -> argparse.ArgumentParser:
     # AKM 固有パラメータ
     orch.add_argument(
         "--sources",
-        choices=["qa", "original-docs", "both"],
-        default="qa",
-        help="AKM: 取り込みソース (qa / original-docs / both)",
+        default=None,
+        help=(
+            "AKM: 取り込みソース。qa / original-docs / workiq / both（後方互換）"
+            " のカンマ区切り組合せ（例: 'qa,original-docs', 'qa,original-docs,workiq', 'workiq'）。"
+            "省略時の既定は 'qa,original-docs'。"
+        ),
     )
     orch.add_argument(
         "--target-files",
@@ -1447,6 +1516,26 @@ def _build_config(args: argparse.Namespace):
             cfg.workiq_qa_enabled = False
         cfg.workiq_akm_review_enabled = args.workiq_akm_review
         cfg.workiq_enabled = cfg.is_workiq_qa_enabled() or cfg.is_workiq_akm_review_enabled()
+    # AKM 入力ソースとしての Work IQ（独立フラグ）。
+    # 明示指定（--workiq-akm-ingest / --no-workiq-akm-ingest）優先。
+    # 未指定時は --sources に 'workiq' が含まれているかで自動判定する。
+    _ingest_flag = getattr(args, "workiq_akm_ingest", None)
+    _sources_raw = getattr(args, "sources", None) or ""
+    _sources_has_workiq = "workiq" in [
+        t.strip().lower() for t in _sources_raw.replace(" ", ",").split(",") if t.strip()
+    ]
+    if _ingest_flag is not None:
+        cfg.workiq_akm_ingest_enabled = bool(_ingest_flag)
+    elif _sources_has_workiq:
+        cfg.workiq_akm_ingest_enabled = True
+    # --workiq-dxx の解析（config 側のヘルパを再利用）。
+    _dxx_raw = getattr(args, "workiq_dxx", None)
+    if _dxx_raw is not None:
+        try:
+            from .config import _parse_workiq_akm_ingest_dxx as _parse_dxx  # type: ignore
+        except ImportError:
+            from config import _parse_workiq_akm_ingest_dxx as _parse_dxx  # type: ignore[no-redef]
+        cfg.workiq_akm_ingest_dxx = _parse_dxx(_dxx_raw)
     workiq_draft_output_dir = getattr(args, "workiq_draft_output_dir", None)
     if workiq_draft_output_dir is not None:
         cfg.workiq_draft_output_dir = workiq_draft_output_dir
@@ -1515,6 +1604,11 @@ def _build_params(args: argparse.Namespace) -> dict:
         force_refresh = getattr(args, "force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
         params["enable_auto_merge"] = getattr(args, "enable_auto_merge", False)
+        # Work IQ 取り込み対象 Dxx（--workiq-dxx）。
+        # 文字列が渡された場合は orchestrator 側で正規化される。
+        _dxx_raw = getattr(args, "workiq_dxx", None)
+        if _dxx_raw:
+            params["workiq_akm_ingest_dxx"] = _dxx_raw
     elif getattr(args, "workflow", None) == "aqod":
         params["target_scope"] = getattr(args, "target_scope", None) or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = getattr(args, "depth", None) or _AQOD_DEFAULT_DEPTH
@@ -2242,16 +2336,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         else:
             selected_step_ids = []  # 空 = 全ステップ
 
-    # ── モデル選択 ────────────────────────────────────────
-    model_options = [MODEL_AUTO, *MODEL_CHOICES]
-    model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
-    model, model_display = _resolve_model(model_options[model_idx])
-    review_model = None
-    review_model_display = None
-    qa_model = None
-    qa_model_display = None
-
-    # ── 実行モード選択 ────────────────────────────────────
+    # ── 実行モード選択（Phase B: 早期分岐） ─────────────────
     _exec_mode_options = [
         "クイック全自動  — デフォルト値で即実行（確認あり）",
         "カスタム全自動  — 全設定を手動入力後に自動実行",
@@ -2262,12 +2347,27 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     is_custom_auto = (exec_mode_idx == 1)
     is_manual = (exec_mode_idx == 2)
     is_any_auto = is_quick_auto or is_custom_auto
+
+    # モデル選択 (Phase C) は分岐内でそれぞれ実行する:
+    #   - クイック全自動: メインモデルのみ即座に選択 (QA/Review 別モデルは既定 OFF)
+    #   - カスタム全自動 / 手動: Phase A' (機能要件詳細) の後にメイン/QA/Review をまとめて選択
+    model_options = [MODEL_AUTO, *MODEL_CHOICES]
+    model = None
+    model_display = None
+    review_model = None
+    review_model_display = None
+    qa_model = None
+    qa_model_display = None
+
     workiq_additional_prompt = ""
     ard_workiq_enabled = False
 
     # ── オプション設定 ────────────────────────────────────
     if is_quick_auto:
         # クイック全自動: ステップ5〜7aをデフォルト値で自動設定
+        # ── Phase C (クイック全自動): メインモデルのみ選択 ────
+        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
+        model, model_display = _resolve_model(model_options[model_idx])
         branch = "main"
         max_parallel = 1 if is_single_step_workflow else 15
         verbosity_key = "normal"
@@ -2287,6 +2387,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         workiq_enabled = False
         workiq_qa_enabled = False
         workiq_akm_review_enabled = False
+        # クイック全自動モードでは AKM 入力としての Work IQ も既定 OFF（明示要求なし）。
+        workiq_akm_ingest_enabled = False
+        workiq_akm_ingest_dxx: list = []
         workiq_draft_mode = False
         workiq_per_question_timeout = 1200.0
         issue_title = ""
@@ -2326,12 +2429,54 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         _disc_criteria = None
     else:
         # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
-        branch = con.prompt_input("ベースブランチ", default="main")
-        if is_single_step_workflow:
-            max_parallel = 1
-        else:
-            max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
+        # プロンプト順序は以下の Phase に再編済み:
+        #   Phase A': 機能要件 詳細（ワークフロー固有 / Agentic / 追加プロンプト）
+        #   Phase C : モデル群（メイン / QA 別モデル / Review 別モデル）
+        #   Phase D : 出力・リソース（verbosity / timeout / branch / max_parallel）
+        #   Phase E : 自動化補助（QA / Review / Work IQ / Code Review / 自己改善）
+        #   Phase F : GitHub 連携（Issue / PR / repo / auto-merge）
+        #   Phase G : dry_run
 
+        # ── Phase A': 機能要件 詳細 ───────────────────────────
+        # ── ワークフロー固有パラメータ ────────────────────────
+        # PR 作成有無に依存する AKM の auto-merge プロンプトは Phase F で個別に扱う。
+        params_extra: dict = {}
+        if is_akm:
+            params_extra.update(
+                _prompt_akm_params(
+                    con,
+                    is_quick_auto=False,
+                    will_create_pr=False,
+                )
+            )
+        elif is_aqod:
+            params_extra["target_scope"] = con.prompt_input(
+                _PARAM_PROMPT_LABELS["target_scope"], default=_AQOD_DEFAULT_TARGET_SCOPE
+            )
+            params_extra["depth"] = _prompt_valid_aqod_depth(con)
+            params_extra["focus_areas"] = con.prompt_input(_PARAM_PROMPT_LABELS["focus_areas"], default="")
+        elif is_ard:
+            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=False)
+            params_extra.update(_ard_wf_params)
+            selected_step_ids = _ard_steps
+        else:
+            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=False))
+        # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
+        _agentic_answers: dict = {}
+        if wf.id in ("aad-web", "asdw-web"):
+            _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=False)
+
+        # ── 追加プロンプト ────────────────────────────────────
+        additional_prompt = con.prompt_input("全てのステップでの Prompt の末尾に追加するプロンプト（省略可）")
+
+        # ── Phase C: メインモデル選択のみ ─────────────────────
+        # QA 用 / Review 用の別モデル選択は Phase E に移動し、
+        # 各機能（auto_qa / auto_review / auto_coding_agent_review）が ON のときだけ尋ねる。
+        # OFF のときは Phase 冒頭の初期値（qa_model = None, review_model = None; 行 2357-2360）が維持される。
+        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
+        model, model_display = _resolve_model(model_options[model_idx])
+
+        # ── Phase D: 出力・リソース ────────────────────────────
         # ── 出力レベル選択（verbosity）────────────────────────
         _verbosity_options = [
             "quiet   — エラーのみ",
@@ -2370,6 +2515,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             con.warning(f"0 以下のタイムアウト値は無効なため、デフォルトの {_timeout_default} 秒を使用します。")
             timeout_val = _timeout_fallback
 
+        branch = con.prompt_input("ベースブランチ", default="main")
+        if is_single_step_workflow:
+            max_parallel = 1
+        else:
+            max_parallel = int(con.prompt_input("並列実行数", default="15") or "15")
+
+        # ── Phase E: 自動化補助 ────────────────────────────────
         if is_single_step_workflow:
             qa_answer_mode = None
             force_interactive = False
@@ -2381,6 +2533,17 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 )
                 if auto_qa:
                     qa_answer_mode = "all"
+                    # QA 有効時のみ QA 用モデルを尋ねる（Phase C から移設）。
+                    use_different_qa_model = con.prompt_yes_no(
+                        "QA にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 QA_MODEL を使用）",
+                        default=False,
+                    )
+                    if use_different_qa_model:
+                        qa_model_idx = con.menu_select("QA 用モデルを選択", model_options)
+                        qa_model, qa_model_display = _resolve_model(model_options[qa_model_idx])
+                        if qa_model == model:
+                            qa_model = None
+                            qa_model_display = None
             elif is_aqod:
                 # AQOD は事前 QA スキップ・事後 QA (post-QA) 廃止のため、本体タスクのみ。
                 auto_qa = False
@@ -2397,38 +2560,35 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 # prompt_answer_mode() / force_interactive プロンプトは不要。
                 qa_answer_mode = "all"
                 force_interactive = False
+                # QA 有効時のみ QA 用モデルを尋ねる（Phase C から移設）。
                 use_different_qa_model = con.prompt_yes_no(
                     "QA にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 QA_MODEL を使用）",
                     default=False,
                 )
                 if use_different_qa_model:
-                    _sub_model_options = model_options
-                    qa_model_idx = con.menu_select("QA 用モデルを選択", _sub_model_options)
-                    qa_model, qa_model_display = _resolve_model(_sub_model_options[qa_model_idx])
+                    qa_model_idx = con.menu_select("QA 用モデルを選択", model_options)
+                    qa_model, qa_model_display = _resolve_model(model_options[qa_model_idx])
                     if qa_model == model:
                         qa_model = None
                         qa_model_display = None
             else:
                 qa_answer_mode = None
                 force_interactive = False
+            # Review 自動投入 ON/OFF のみ Phase E で尋ねる。Review 用モデルは
+            # Code Review Agent ブロックの直後で（いずれかが y のときだけ）まとめて尋ねる。
             auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
-            if auto_review:
-                use_different_review_model = con.prompt_yes_no(
-                    "Review にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 REVIEW_MODEL を使用）",
-                    default=False,
-                )
-                if use_different_review_model:
-                    _sub_model_options = model_options
-                    review_model_idx = con.menu_select("レビュー用モデルを選択", _sub_model_options)
-                    review_model, review_model_display = _resolve_model(_sub_model_options[review_model_idx])
-                    if review_model == model:
-                        review_model = None
-                        review_model_display = None
 
         # ── Work IQ 連携 ──────────────────────────────────────
         workiq_enabled = False
         workiq_qa_enabled = False
         workiq_akm_review_enabled = False
+        # Sub-C-2: AKM 入力ソースとしての Work IQ。
+        # params_extra["sources"] に "workiq" が含まれていれば自動 ON とする。
+        # （独立フラグ。`workiq_akm_review_enabled`（DAG 後検証）とは別軸。）
+        workiq_akm_ingest_enabled = bool(
+            is_akm and "workiq" in (params_extra.get("sources", "") or "").split(",")
+        )
+        workiq_akm_ingest_dxx = list(params_extra.get("workiq_akm_ingest_dxx", []) or [])
         workiq_draft_mode = False
         _show_workiq_option = auto_qa or is_akm or is_ard
         workiq_per_question_timeout = 1200.0
@@ -2455,7 +2615,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     "QA フェーズで Work IQ 経由の情報確認を有効にする？",
                     default=False,
                 )
-            workiq_enabled = workiq_qa_enabled or workiq_akm_review_enabled
+            workiq_enabled = (
+                workiq_qa_enabled or workiq_akm_review_enabled or workiq_akm_ingest_enabled
+            )
             if workiq_enabled:
                 con.spinner_start("Work IQ へのログイン中...")
                 login_ok = workiq_login(con)
@@ -2465,6 +2627,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                         "Work IQ へのログインに失敗しました。Work IQ 連携を無効にします。"
                     )
                     workiq_enabled = False
+                    # 入力フェーズも login 失敗時は OFF にする（独立フラグだが Work IQ 認証が必須のため）。
+                    workiq_akm_ingest_enabled = False
                 else:
                     con.status("✅ Work IQ へのログインが完了しました")
                     if is_akm and not workiq_qa_enabled:
@@ -2491,33 +2655,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                         con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
                         workiq_per_question_timeout = 1200.0
 
-        create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
-        create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
-        issue_title = ""
-        issue_additional_comment = ""
-        if create_issues:
-            issue_title = con.prompt_input(
-                _PARAM_PROMPT_LABELS["issue_title"],
-                default="",
-            )
-            issue_additional_comment = con.prompt_input(
-                _PARAM_PROMPT_LABELS["additional_comment"],
-                default="",
-            )
-
-        # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
-        repo_input = ""
-        if create_issues or create_pr:
-            repo_default = os.environ.get("REPO", "")
-            repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
-
-        akm_enable_auto_merge = False
-        if is_akm and (create_issues or create_pr):
-            akm_enable_auto_merge = con.prompt_yes_no(
-                "PR の自動 Approve & Auto-merge を有効にする？",
-                default=False,
-            )
-
         # ── Code Review Agent ─────────────────────────────
         auto_coding_agent_review = con.prompt_yes_no(
             "GitHub Copilot Code Review Agent（ローカル実行）を有効にする？", default=False
@@ -2543,44 +2680,20 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 con.warning("0 以下の値は無効なため、デフォルトの 7200 秒を使用します。")
                 review_timeout = 7200.0
 
-        dry_run = con.prompt_yes_no("実行計画のプレビュー（実際の SDK 呼び出しをせず、DAG の実行計画のみ表示）？", default=False)
-
-        # ── ワークフロー固有パラメータ ────────────────────────
-        params_extra: dict = {}
-        if is_akm:
-            params_extra.update(
-                _prompt_akm_params(
-                    con,
-                    is_quick_auto=False,
-                    will_create_pr=(create_issues or create_pr),
-                )
+        # ── Review 用モデル選択（Phase C から移設）────────────
+        # auto_review（敵対的レビュー）と auto_coding_agent_review は SDKConfig.review_model を共有する。
+        # いずれか一方でも y のときだけ 1 回だけ尋ねる。両方 n なら初期値（None）を維持。
+        if auto_review or auto_coding_agent_review:
+            use_different_review_model = con.prompt_yes_no(
+                "Review / Code Review Agent にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 REVIEW_MODEL を使用）",
+                default=False,
             )
-            params_extra["enable_auto_merge"] = akm_enable_auto_merge
-        elif is_aqod:
-            params_extra["target_scope"] = con.prompt_input(
-                _PARAM_PROMPT_LABELS["target_scope"], default=_AQOD_DEFAULT_TARGET_SCOPE
-            )
-            params_extra["depth"] = _prompt_valid_aqod_depth(con)
-            params_extra["focus_areas"] = con.prompt_input(_PARAM_PROMPT_LABELS["focus_areas"], default="")
-        elif is_ard:
-            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=False)
-            params_extra.update(_ard_wf_params)
-            params_extra["ard_workiq_enabled"] = ard_workiq_enabled
-            selected_step_ids = _ard_steps
-        else:
-            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=False))
-        # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
-        _agentic_answers: dict = {}
-        if wf.id in ("aad-web", "asdw-web"):
-            _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=False)
-
-        if issue_title:
-            params_extra["issue_title"] = issue_title
-        if issue_additional_comment:
-            params_extra["additional_comment"] = issue_additional_comment
-
-        # ── 追加プロンプト ────────────────────────────────────
-        additional_prompt = con.prompt_input("全てのステップでの Prompt の末尾に追加するプロンプト（省略可）")
+            if use_different_review_model:
+                review_model_idx = con.menu_select("レビュー用モデルを選択", model_options)
+                review_model, review_model_display = _resolve_model(model_options[review_model_idx])
+                if review_model == model:
+                    review_model = None
+                    review_model_display = None
 
         # ── 自己改善ループ ────────────────────────────────────
         auto_self_improve = con.prompt_yes_no("自己改善ループを有効にする？", default=False)
@@ -2645,6 +2758,47 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 _disc_goal = _disc_result["task_goal"]
                 _disc_criteria = _disc_goal.get("success_criteria") or None
 
+        # ── Phase F: GitHub 連携 ──────────────────────────────
+        create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
+        create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
+        issue_title = ""
+        issue_additional_comment = ""
+        if create_issues:
+            issue_title = con.prompt_input(
+                _PARAM_PROMPT_LABELS["issue_title"],
+                default="",
+            )
+            issue_additional_comment = con.prompt_input(
+                _PARAM_PROMPT_LABELS["additional_comment"],
+                default="",
+            )
+
+        # ── リポジトリ入力（Issue/PR 作成時のみ） ─────────────
+        repo_input = ""
+        if create_issues or create_pr:
+            repo_default = os.environ.get("REPO", "")
+            repo_input = con.prompt_input("リポジトリ (owner/repo)", default=repo_default, required=True)
+
+        akm_enable_auto_merge = False
+        if is_akm and (create_issues or create_pr):
+            akm_enable_auto_merge = con.prompt_yes_no(
+                "PR の自動 Approve & Auto-merge を有効にする？",
+                default=False,
+            )
+
+        # Phase F の選択結果を params_extra に反映
+        if is_akm:
+            params_extra["enable_auto_merge"] = akm_enable_auto_merge
+        if is_ard:
+            params_extra["ard_workiq_enabled"] = ard_workiq_enabled
+        if issue_title:
+            params_extra["issue_title"] = issue_title
+        if issue_additional_comment:
+            params_extra["additional_comment"] = issue_additional_comment
+
+        # ── Phase G: 実行計画プレビュー ────────────────────────
+        dry_run = con.prompt_yes_no("実行計画のプレビュー（実際の SDK 呼び出しをせず、DAG の実行計画のみ表示）？", default=False)
+
 
     # ── 確認パネル ────────────────────────────────────────
     s = con.s
@@ -2672,6 +2826,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         if is_akm:
             summary_lines.append(f"Work IQ QA   : {'ON' if workiq_qa_enabled else 'OFF'}")
             summary_lines.append(f"Work IQ 検証 : {'ON' if workiq_akm_review_enabled else 'OFF'}")
+            summary_lines.append(f"Work IQ 取込 : {'ON' if workiq_akm_ingest_enabled else 'OFF'}")
+            if workiq_akm_ingest_enabled and workiq_akm_ingest_dxx:
+                summary_lines.append(
+                    f"Work IQ 取込 Dxx: {','.join(workiq_akm_ingest_dxx)}"
+                )
+            elif workiq_akm_ingest_enabled:
+                summary_lines.append("Work IQ 取込 Dxx: 全件（D01〜D21）")
         else:
             summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
             summary_lines.append(f"Work IQ Draft: {'ON' if workiq_draft_mode else 'OFF'}")
@@ -2788,6 +2949,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     cfg.workiq_enabled = workiq_enabled
     cfg.workiq_qa_enabled = workiq_qa_enabled
     cfg.workiq_akm_review_enabled = workiq_akm_review_enabled
+    cfg.workiq_akm_ingest_enabled = workiq_akm_ingest_enabled
+    cfg.workiq_akm_ingest_dxx = list(workiq_akm_ingest_dxx or [])
     cfg.workiq_draft_mode = workiq_draft_mode
     cfg.workiq_draft_output_dir = "qa"
     cfg.workiq_per_question_timeout = workiq_per_question_timeout

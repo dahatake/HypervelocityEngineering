@@ -21,30 +21,30 @@ from hve.workflow_registry import (
 # ---------------------------------------------------------------------------
 
 EXPECTED_STEP_COUNTS = {
-    "ard": 3,
-    "aas": 8,
-    "aad-web": 4,
+    "ard": 7,
+    "aas": 9,
+    "aad-web": 5,
     "asdw-web": 20,  # 4 containers + 16 real steps
     "abd": 9,
     "abdv": 7,
     "aag": 3,
     "aagd": 5,
-    "akm": 1,
-    "aqod": 1,
+    "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
+    "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
-    "ard": 3,
-    "aas": 8,
-    "aad-web": 4,
+    "ard": 7,
+    "aas": 9,
+    "aad-web": 5,
     "asdw-web": 16,
     "abd": 9,
     "abdv": 7,
     "aag": 3,
     "aagd": 5,
-    "akm": 1,
-    "aqod": 1,
+    "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
+    "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
     "adoc": 19,
 }
 
@@ -197,14 +197,66 @@ class TestGetNextSteps:
     """get_next_steps() のテスト — DAG 走査ロジック。"""
 
     def test_aas_expanded_dag_walk(self):
+        # Sub-4 (B-1): Step 4 → 4.1 / 4.2 に分割
         assert [s.id for s in get_next_steps("aas", completed_step_ids=[])] == ["1"]
         assert [s.id for s in get_next_steps("aas", completed_step_ids=["1"])] == ["2"]
         assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2"])] == ["3.1"]
         assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1"])] == ["3.2"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2"])] == ["4"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4"])] == ["5"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4", "5"])] == ["6"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2", "4", "5", "6"])] == ["7"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2"])] == ["4.1"]
+        # Step 4.1 完了後は 4.2 と 5 が並列起動可能（5 は depends_on=["4.1"]）
+        nexts = sorted(s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1"]
+        ))
+        assert nexts == ["4.2", "5"]
+        # 4.2 と 5 が完了したら 6 が走り、その後 7
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5"]
+        )] == ["6"]
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6"]
+        )] == ["7"]
+
+    def test_aas_step42_and_step5_are_parallel(self):
+        """Sub-5 (C-1 部分): Step 4.2 (サンプルデータ) と Step 5 (データカタログ) が
+        Step 4.1 完了後に並列起動可能であることを保証する。
+
+        Sub-4 で導入された並列性が将来の DAG 変更で失われないことを回帰防止する。
+        """
+        step_42 = get_step("aas", "4.2")
+        step_5 = get_step("aas", "5")
+        # 両方とも 4.1 のみに依存（互いに依存しない）
+        assert step_42.depends_on == ["4.1"]
+        assert step_5.depends_on == ["4.1"]
+        # get_next_steps 経由でも並列に取得できる
+        nexts = sorted(
+            s.id for s in get_next_steps(
+                "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1"]
+            )
+        )
+        assert "4.2" in nexts and "5" in nexts
+
+    def test_abd_step61_and_step62_are_parallel(self):
+        """Sub-6 (C-3 確認): ABD の Step 6.1 (ジョブ詳細仕様) と Step 6.2 (監視・運用設計) が
+        Step 5 完了後に並列起動可能であることを保証する（既存挙動の回帰防止）。
+
+        Sub-6 当初プランでは Step 6.3 も並列化する案だったが、Step 6.3 は consumed_artifacts に
+        ``batch_job_specs`` (= Step 6.1 fan-out 子の出力) を含むため、現状の AND 結合
+        (depends_on=["6.1", "6.2"]) を維持する。
+        """
+        step_61 = get_step("abd", "6.1")
+        step_62 = get_step("abd", "6.2")
+        step_63 = get_step("abd", "6.3")
+        assert step_61.depends_on == ["5"]
+        assert step_62.depends_on == ["5"]
+        # 6.3 は 6.1 と 6.2 の両方に依存（batch_job_specs が必須）
+        assert sorted(step_63.depends_on) == ["6.1", "6.2"]
+        # 6.1 / 6.2 は同 wave で並列起動可能
+        nexts = sorted(
+            s.id for s in get_next_steps(
+                "abd", completed_step_ids=["1.1", "1.2", "2", "3", "4", "5"]
+            )
+        )
+        assert "6.1" in nexts and "6.2" in nexts
 
     def test_aad_web_dag_walk(self):
         assert [s.id for s in get_next_steps("aad-web", completed_step_ids=[])] == ["1"]
@@ -217,6 +269,23 @@ class TestGetNextSteps:
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2"])
         assert [s.id for s in nexts] == ["2.3"]
+
+        # Sub-7 (C-4): 2.1/2.2/2.3 完了後に Step 3（整合性レビュー join）が起動可能
+        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2", "2.3"])
+        assert [s.id for s in nexts] == ["3"]
+
+    def test_aad_web_step3_is_consistency_review_join(self):
+        """Sub-7 (C-4): AAD-WEB Step 3 が screen ↔ service 整合性レビュー join step として
+        正しく定義されていること。"""
+        step = get_step("aad-web", "3")
+        assert step is not None
+        assert step.custom_agent == "QA-DocConsistency"
+        # AND join: 2.1, 2.2, 2.3 が全て完了して初めて起動
+        assert sorted(step.depends_on) == ["2.1", "2.2", "2.3"]
+        assert step.output_paths == ["docs/catalog/screen-service-consistency-report.md"]
+        # 整合性レビューは fan-out しない（join step）
+        assert step.fanout_static_keys is None
+        assert step.fanout_parser is None
 
     def test_asdw_web_dag_walk_and_bypass_agent_chain(self):
         step_30t = get_step("asdw-web", "3.0T")
@@ -375,10 +444,16 @@ class TestAKMWorkflow:
         assert sources in ["qa", "original-docs", "both"]
 
     def test_akm_single_step(self):
+        # ADR-0002: AKM は fan-out base (Step 1) + 横断レビュー (Step 2) の 2 ステップ構成
         wf = get_workflow("akm")
         assert wf is not None
-        assert len(wf.steps) == 1
+        assert len(wf.steps) == 2
         assert wf.steps[0].id == "1"
+        assert wf.steps[1].id == "2"
+        # fan-out 設定
+        assert wf.steps[0].fanout_static_keys is not None
+        assert len(wf.steps[0].fanout_static_keys) == 21
+        assert wf.max_parallel == 21
 
 
 class TestAQODWorkflow:
@@ -390,10 +465,15 @@ class TestAQODWorkflow:
         assert wf.params == ["target_scope", "depth", "focus_areas"]
 
     def test_aqod_single_step(self):
+        # ADR-0002 T4H: AQOD は fan-out base (Step 1) + 横断レビュー (Step 2) の 2 ステップ構成
         wf = get_workflow("aqod")
         assert wf is not None
-        assert len(wf.steps) == 1
+        assert len(wf.steps) == 2
         assert wf.steps[0].id == "1"
+        assert wf.steps[1].id == "2"
+        assert wf.steps[0].fanout_static_keys is not None
+        assert len(wf.steps[0].fanout_static_keys) == 21
+        assert wf.max_parallel == 21
 
 
 class TestADOCWorkflow:
@@ -421,8 +501,9 @@ class TestStepDefFields:
         assert step.body_template_path == "templates/aas/step-1.md"
 
     def test_skip_fallback_deps(self):
+        # Sub-4 (B-1): Step 5 の skip_fallback_deps は 4 → 4.1 に更新
         step = get_step("aas", "5")
-        assert step.skip_fallback_deps == ["4"]
+        assert step.skip_fallback_deps == ["4.1"]
 
     def test_block_unless_empty(self):
         step = get_step("aas", "1")
@@ -453,3 +534,69 @@ class TestABDVAgentNames:
 
     def test_abdv_step3_uses_new_agent(self):
         assert get_step("abdv", "3").custom_agent == "Dev-Batch-FunctionsDeploy"
+
+
+# ---------------------------------------------------------------------------
+# Sub-3 (Q3=b): output_paths / output_paths_template CI assertion
+# ---------------------------------------------------------------------------
+
+# Sub-3 時点で output_paths も output_paths_template も未設定の Step を allowlist 管理。
+# 移行期間中の暫定措置。後続 Sub で 1 件ずつ allowlist から外す方針。
+# キー = workflow id、値 = step id のリスト。
+ALLOWED_EMPTY_OUTPUT_PATHS_STEPS: dict[str, list[str]] = {
+    "aad-web": ["1", "2.1", "2.2", "2.3"],
+    "asdw-web": [
+        "1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5",
+        "3.0T", "3.0TC", "3.1", "3.2", "3.3", "4.1", "4.2",
+    ],
+    "abd": ["1.1", "1.2", "2", "3", "4", "5", "6.1", "6.2", "6.3"],
+    "abdv": ["1.1", "1.2", "2.1", "2.2", "3", "4.1", "4.2"],
+    "aag": ["1", "2", "3"],
+    "aagd": ["1", "2.1", "2.2", "2.3", "3"],
+    "akm": ["1", "2"],
+    "aqod": ["1", "2"],
+    "adoc": [
+        "1", "2.1", "2.2", "2.3", "2.4", "2.5",
+        "3.1", "3.2", "3.3", "3.4", "3.5",
+        "4", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3",
+    ],
+}
+
+
+class TestOutputPathsExplicit:
+    """全 Step が output_paths または output_paths_template を明示しているか検証する。
+
+    Sub-3 時点では ALLOWED_EMPTY_OUTPUT_PATHS_STEPS の allowlist で移行期間を吸収。
+    後続 Sub で allowlist の Step を 1 件ずつ実値設定 → 除外する。
+    """
+
+    @pytest.mark.parametrize("wf", list_workflows(), ids=lambda w: w.id)
+    def test_all_non_container_steps_have_output_paths_or_template(self, wf):
+        allowed = set(ALLOWED_EMPTY_OUTPUT_PATHS_STEPS.get(wf.id, []))
+        empty_steps = [
+            s.id for s in wf.steps
+            if not s.is_container
+            and not s.output_paths
+            and not s.output_paths_template
+            and s.id not in allowed
+        ]
+        assert empty_steps == [], (
+            f"Workflow '{wf.id}': 以下の Step に output_paths も output_paths_template も "
+            f"設定されていません: {empty_steps}. "
+            f"明示するか、移行期間中は ALLOWED_EMPTY_OUTPUT_PATHS_STEPS に追加してください。"
+        )
+
+    def test_step_def_has_output_paths_template_field(self):
+        """StepDef に output_paths_template フィールドが存在し、デフォルトが None であること。"""
+        step = StepDef(id="x", title="t", custom_agent=None, consumed_artifacts=[])
+        assert hasattr(step, "output_paths_template")
+        assert step.output_paths_template is None
+
+    def test_output_paths_template_default_factory_safe(self):
+        """output_paths_template を指定して StepDef を作成できること。"""
+        step = StepDef(
+            id="x", title="t", custom_agent=None,
+            consumed_artifacts=[],
+            output_paths_template=["docs/{key}.md"],
+        )
+        assert step.output_paths_template == ["docs/{key}.md"]

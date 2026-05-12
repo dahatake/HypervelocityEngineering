@@ -48,7 +48,8 @@ jobs:
           pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>/dev/null) || pr_data='{}'
           has_auto_qa=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | if contains(["auto-qa"]) then "true" else "false" end')
           has_auto_approve_ready=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | if contains(["auto-approve-ready"]) then "true" else "false" end')
-          if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_approve_ready}" = "true" ]; then
+          has_qa_questionnaire_pr=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | if contains(["qa-questionnaire-pr"]) then "true" else "false" end')
+          if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_approve_ready}" = "true" ] || [ "${has_qa_questionnaire_pr}" = "true" ]; then
             echo "skip=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -189,7 +190,7 @@ jobs:
       TRIGGER_COMMENT_BODY: ${{ github.event.comment.body }}
 
     steps:
-      - name: Issue ラベル確認（*:qa-ready あり）
+      - name: Issue ラベル確認（*:qa-ready / *:qa-drafting あり）
         id: labels
         run: |
           set -euo pipefail
@@ -198,7 +199,7 @@ jobs:
           has_qa_ready=$(echo "${issue_labels}" | python3 -c "
           import sys, json
           labels = json.loads(sys.stdin.read())
-          qa_ready = [l for l in labels if l.endswith(':qa-ready')]
+          qa_ready = [l for l in labels if l.endswith(':qa-ready') or l.endswith(':qa-drafting')]
           print('true' if qa_ready else 'false')
           " 2>/dev/null || echo 'false')
           if [ "${has_qa_ready}" != "true" ]; then

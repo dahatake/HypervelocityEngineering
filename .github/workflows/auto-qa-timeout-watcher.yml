@@ -1,0 +1,234 @@
+name: Auto QA Timeout Watcher
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      target_issue:
+        description: '特定 Issue のみ検査（任意。空なら全件巡回）'
+        required: false
+        type: string
+        default: ''
+      dry_run:
+        description: 'ドライラン（ラベル付与・コメント投稿をスキップ）'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+
+jobs:
+  watch:
+    if: ${{ vars.ENABLE_QA_TIMEOUT_WATCHER != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      QA_TIMEOUT_HOURS: ${{ vars.QA_PHASE_TIMEOUT_HOURS || '72' }}
+      TARGET_ISSUE: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || '' }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+
+    steps:
+      - name: Detect and notify timed-out QA issues
+        run: |
+          set -euo pipefail
+
+          TARGET_LABELS=(
+            "aas:qa-ready" "aas:qa-drafting"
+            "aad:qa-ready" "aad:qa-drafting"
+            "aad-web:qa-ready" "aad-web:qa-drafting"
+            "asdw:qa-ready" "asdw:qa-drafting"
+            "asdw-web:qa-ready" "asdw-web:qa-drafting"
+            "abd:qa-ready" "abd:qa-drafting"
+            "abdv:qa-ready" "abdv:qa-drafting"
+            "aag:qa-ready" "aag:qa-drafting"
+            "aagd:qa-ready" "aagd:qa-drafting"
+            "akm:qa-ready" "akm:qa-drafting"
+            "aqod:qa-ready" "aqod:qa-drafting"
+            "adoc:qa-ready" "adoc:qa-drafting"
+          )
+
+          timeout_hours="${QA_TIMEOUT_HOURS:-72}"
+          if ! [[ "${timeout_hours}" =~ ^[0-9]+$ ]] || [ "${timeout_hours}" -le 0 ]; then
+            echo "WARN: QA_TIMEOUT_HOURS=${timeout_hours} は無効なため 72 を使用します。"
+            timeout_hours="72"
+          fi
+          threshold_seconds=$((timeout_hours * 3600))
+          now_epoch=$(date -u +%s)
+
+          echo "QA timeout threshold: ${timeout_hours} hours"
+          echo "DRY_RUN=${DRY_RUN}"
+          if [ -n "${TARGET_ISSUE}" ]; then
+            echo "target_issue=${TARGET_ISSUE}"
+          fi
+
+          is_target_label() {
+            local candidate="$1"
+            for label in "${TARGET_LABELS[@]}"; do
+              if [ "${label}" = "${candidate}" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          issue_stream() {
+            if [ -n "${TARGET_ISSUE}" ]; then
+              local issue_json
+              issue_json=$(gh api "/repos/${REPO}/issues/${TARGET_ISSUE}" 2>/dev/null || true)
+              if [ -z "${issue_json}" ]; then
+                echo "WARN: target_issue=${TARGET_ISSUE} の取得に失敗しました。"
+                return 0
+              fi
+              if printf '%s' "${issue_json}" | jq -e '.pull_request' >/dev/null 2>&1; then
+                echo "WARN: target_issue=${TARGET_ISSUE} は PR のためスキップします。"
+                return 0
+              fi
+              if [ "$(printf '%s' "${issue_json}" | jq -r '.state // ""')" != "open" ]; then
+                echo "Issue #${TARGET_ISSUE} は open ではないためスキップします。"
+                return 0
+              fi
+              printf '%s\n' "${issue_json}"
+              return 0
+            fi
+
+            declare -A seen=()
+            for qa_label in "${TARGET_LABELS[@]}"; do
+              query="repo:${REPO} is:issue is:open label:\"${qa_label}\""
+              while IFS= read -r encoded; do
+                [ -z "${encoded}" ] && continue
+                issue_json=$(printf '%s' "${encoded}" | base64 --decode)
+                issue_number=$(printf '%s' "${issue_json}" | jq -r '.number // ""')
+                [ -z "${issue_number}" ] && continue
+                if [ -n "${seen[${issue_number}]:-}" ]; then
+                  continue
+                fi
+                seen["${issue_number}"]=1
+                printf '%s\n' "${issue_json}"
+              done < <(gh api "/search/issues" \
+                -f q="${query}" \
+                -f per_page=100 \
+                --paginate \
+                --jq '.items[] | @base64' \
+                2>/dev/null || true)
+            done
+          }
+
+          while IFS= read -r issue_json; do
+            [ -z "${issue_json}" ] && continue
+
+            issue_number=$(printf '%s' "${issue_json}" | jq -r '.number // ""')
+            issue_title=$(printf '%s' "${issue_json}" | jq -r '.title // ""')
+            issue_labels=$(printf '%s' "${issue_json}" | jq -r '[.labels[].name] | .[]?' 2>/dev/null || true)
+            if [ -z "${issue_number}" ]; then
+              continue
+            fi
+
+            qa_label=""
+            while IFS= read -r candidate; do
+              if is_target_label "${candidate}"; then
+                qa_label="${candidate}"
+                break
+              fi
+            done <<< "${issue_labels}"
+
+            if [ -z "${qa_label}" ]; then
+              echo "Issue #${issue_number} は QA 対象ラベルなしのためスキップします。"
+              continue
+            fi
+
+            prefix="${qa_label%%:*}"
+            timeout_label="${prefix}:qa-timeout"
+            if printf '%s\n' "${issue_labels}" | grep -Fxq "${timeout_label}"; then
+              echo "Issue #${issue_number} は ${timeout_label} 付与済みのためスキップします。"
+              continue
+            fi
+
+            if ! last_labeled_at=$(gh api \
+              "/repos/${REPO}/issues/${issue_number}/timeline?per_page=100" \
+              --paginate \
+              --jq '.[]' \
+              2>/dev/null | jq -rs --arg label "${qa_label}" '
+                map(
+                  select(
+                    .event == "labeled"
+                    and ((.label.name // "") == $label)
+                    and ((.created_at // "") != "")
+                  )
+                  | .created_at
+                )
+                | max // ""
+              ' 2>/dev/null); then
+              echo "WARN: Issue #${issue_number} の timeline 解析に失敗したためスキップします。"
+              continue
+            fi
+
+            if [ -z "${last_labeled_at}" ]; then
+              echo "WARN: Issue #${issue_number} の ${qa_label} 最終付与時刻を取得できずスキップします。"
+              continue
+            fi
+
+            labeled_epoch=$(date -u -d "${last_labeled_at}" +%s 2>/dev/null || true)
+            if [ -z "${labeled_epoch}" ]; then
+              echo "WARN: Issue #${issue_number} の時刻変換に失敗したためスキップします。"
+              continue
+            fi
+
+            elapsed_seconds=$((now_epoch - labeled_epoch))
+            if [ "${elapsed_seconds}" -le "${threshold_seconds}" ]; then
+              elapsed_hours=$((elapsed_seconds / 3600))
+              echo "Issue #${issue_number} (${qa_label}) は ${elapsed_hours}h 経過で閾値未満です。"
+              continue
+            fi
+            elapsed_hours=$((elapsed_seconds / 3600))
+
+            has_notification="false"
+            if gh api \
+              "/repos/${REPO}/issues/${issue_number}/comments?per_page=100" \
+              --paginate \
+              --jq '.[] | select((.body // "") | contains("<!-- qa-timeout-notified -->")) | .id' \
+              2>/dev/null | grep -q .; then
+              has_notification="true"
+            fi
+
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "[DRY RUN] would label/comment: #${issue_number} ${qa_label} -> ${timeout_label} (${elapsed_hours}h)"
+              continue
+            fi
+
+            if ! gh issue edit "${issue_number}" --repo "${REPO}" --add-label "${timeout_label}"; then
+              echo "WARN: Issue #${issue_number} への ${timeout_label} 付与に失敗しました。"
+              continue
+            fi
+            echo "Issue #${issue_number} (${issue_title}) に ${timeout_label} を付与しました。"
+
+            if [ "${has_notification}" = "true" ]; then
+              echo "Issue #${issue_number} は通知済みマーカーがあるためコメントをスキップします。"
+              continue
+            fi
+
+            comment_body=$(cat <<EOF
+          ## ⏰ QA フェーズタイムアウト通知
+
+          このIssueは \`${qa_label}\` 状態で **${elapsed_hours} 時間** 経過しました（閾値: ${timeout_hours} 時間）。
+
+          **次のアクション**:
+          - QA 質問票の作成または回答が滞っている場合、Issue 作成者または親 Issue の担当者にご確認ください。
+          - QA をスキップして実装に進める場合は、\`${qa_label}\` ラベルを除去し \`${prefix}:ready\` ラベルを付与してください。
+          - 検証期間を延長する場合は \`${timeout_label}\` ラベルを除去すれば再度監視対象になります（タイマーはリセットされません）。
+
+          **閾値変更**: リポジトリ変数 \`QA_PHASE_TIMEOUT_HOURS\` を変更してください。
+
+          <!-- qa-timeout-notified -->
+          EOF
+            )
+
+            if ! gh issue comment "${issue_number}" --repo "${REPO}" --body "${comment_body}"; then
+              echo "WARN: Issue #${issue_number} へのタイムアウト通知コメント投稿に失敗しました。"
+              continue
+            fi
+            echo "Issue #${issue_number} にタイムアウト通知コメントを投稿しました。"
+          done < <(issue_stream)

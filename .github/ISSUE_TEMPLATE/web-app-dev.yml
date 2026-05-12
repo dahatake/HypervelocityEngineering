@@ -179,6 +179,7 @@ body:
       description: |
         チェックを入れると、Copilot がステップ実行前に選択式の質問票（事前 QA）を作成します。回答後に実行が開始されます。
         デフォルト（チェックなし）では質問票は作成されません。
+        詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
 
@@ -241,7 +242,7 @@ body:
     validations:
       required: false
 
-  - type: checkboxes
+  - type: dropdown
     id: agentic_data_source_modes
     attributes:
       label: "データソース投入方式"
@@ -249,10 +250,13 @@ body:
         Indexer 対応データソースは保守性の観点から Indexer を優先します。
         Indexer 非対応のデータは Push API。両方の併用も可。
         対応一覧は実行時に Microsoft Learn MCP で確認します。
+      multiple: true
       options:
-        - label: "Indexer (Pull)"
-          selected: true
-        - label: "Push API"
+        - "Indexer (Pull)"
+        - "Push API"
+      default: 0
+    validations:
+      required: false
 
   - type: dropdown
     id: foundry_mcp_integration

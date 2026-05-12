@@ -32,16 +32,18 @@ class TestMakeSessionIdBasic(unittest.TestCase):
 
     def test_basic_format(self) -> None:
         sid = make_session_id("20260507T153012-abc123", "1.1")
-        self.assertEqual(sid, "hve-20260507T153012-abc123-step-1.1")
+        # SDK バリデーション `^[A-Za-z0-9_-]+$` に合わせ、step_id の `.` は `-` に正規化される
+        self.assertEqual(sid, "hve-20260507T153012-abc123-step-1-1")
 
     def test_default_prefix(self) -> None:
         sid = make_session_id("run-1", "1.1")
         self.assertTrue(sid.startswith(f"{DEFAULT_SESSION_ID_PREFIX}-"))
 
-    def test_step_id_with_dots_preserved(self) -> None:
-        """step_id の "1.1.2" のような階層ドットが保持されること。"""
+    def test_step_id_dots_normalized(self) -> None:
+        """step_id の `.` は SDK 互換のため `-` に正規化される。"""
         sid = make_session_id("run-1", "1.1.2")
-        self.assertIn("step-1.1.2", sid)
+        self.assertIn("step-1-1-2", sid)
+        self.assertNotIn(".", sid)
 
     def test_step_id_with_underscore(self) -> None:
         sid = make_session_id("run-1", "step_alpha")
@@ -56,8 +58,8 @@ class TestMakeSessionIdBasic(unittest.TestCase):
     def test_no_suffix_omits_trailing_dash(self) -> None:
         sid = make_session_id("run-1", "1.1", suffix="")
         self.assertFalse(sid.endswith("-"), f"末尾に余計なダッシュ: {sid}")
-        # `-step-1.1` で終了するはず
-        self.assertTrue(sid.endswith("-step-1.1"))
+        # `-step-1-1` で終了するはず（ドットは `-` に正規化される）
+        self.assertTrue(sid.endswith("-step-1-1"))
 
 
 class TestMakeSessionIdDeterminism(unittest.TestCase):
@@ -121,10 +123,11 @@ class TestMakeSessionIdSecurity(unittest.TestCase):
         self.assertNotIn("\x00", sid)
 
     def test_only_ascii_safe_chars(self) -> None:
-        """生成された ID は英数字・ハイフン・アンダースコア・ドットのみで構成される。"""
+        """生成された ID は SDK バリデーション `^[A-Za-z0-9_-]+$` に適合する。"""
         import re
         sid = make_session_id("run-A_1.0", "1.1.2", suffix="qa-extra")
-        self.assertRegex(sid, r"^[A-Za-z0-9\-_.]+$")
+        # SDK の sessionId バリデーション仕様（ドット不許可）に一致すること
+        self.assertRegex(sid, r"^[A-Za-z0-9_\-]+$")
 
 
 class TestMakeSessionIdEdgeCases(unittest.TestCase):

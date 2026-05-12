@@ -16,7 +16,7 @@
 `Arch-DataCatalog` を使用
 
 ## 依存
-- Step.4（データモデル）が `aas:done` であること
+- Step.4.1（データモデル設計）が `aas:done` であること
 
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Entity-Table Mapping および Ownership Matrix に「利用APP」（N:N）を記載すること。

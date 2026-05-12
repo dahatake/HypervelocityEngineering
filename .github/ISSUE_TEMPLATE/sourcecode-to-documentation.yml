@@ -171,6 +171,7 @@ body:
       description: |
         チェックを入れると、Copilot がステップ実行前に選択式の質問票（事前 QA）を作成します。回答後に実行が開始されます。
         デフォルト（チェックなし）では質問票は作成されません。
+        詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
 

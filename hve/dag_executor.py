@@ -18,6 +18,18 @@ import traceback
 from datetime import datetime
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
 
+# Fork-integration (M12): ホットパスでの動的 import を避けるため、モジュールトップで一度だけ解決する
+try:
+    from .run_state import make_session_id as _make_session_id  # type: ignore
+    from .run_state import DEFAULT_SESSION_ID_PREFIX as _DEFAULT_SESSION_ID_PREFIX  # type: ignore
+except ImportError:  # pragma: no cover
+    try:
+        from run_state import make_session_id as _make_session_id  # type: ignore[no-redef]
+        from run_state import DEFAULT_SESSION_ID_PREFIX as _DEFAULT_SESSION_ID_PREFIX  # type: ignore[no-redef]
+    except ImportError:
+        _make_session_id = None  # type: ignore[assignment]
+        _DEFAULT_SESSION_ID_PREFIX = "hve"  # type: ignore[assignment]
+
 
 class StepResult:
     """ステップ実行結果。"""
@@ -31,6 +43,9 @@ class StepResult:
         error: Optional[str] = None,
         state: Optional[str] = None,
         reason: Optional[str] = None,
+        retry_count: int = 0,
+        tokens: int = 0,
+        forked_session_id: Optional[str] = None,
     ) -> None:
         self.step_id = step_id
         self.success = success
@@ -39,11 +54,16 @@ class StepResult:
         self.error = error  # 失敗時の例外メッセージ（デバッグ用）
         self.state = state or ("skipped" if skipped else "success" if success else "failed")
         self.reason = reason
+        # Fork-integration (T2.3): KPI フィールド（既定値で既存呼び出し互換を維持）
+        self.retry_count = retry_count if isinstance(retry_count, int) and retry_count >= 0 else 0
+        self.tokens = tokens if isinstance(tokens, int) and tokens >= 0 else 0
+        self.forked_session_id = forked_session_id
 
     def __repr__(self) -> str:
         return (
             f"StepResult(step_id={self.step_id!r}, "
-            f"success={self.success}, skipped={self.skipped}, state={self.state!r}, elapsed={self.elapsed:.1f}s)"
+            f"success={self.success}, skipped={self.skipped}, state={self.state!r}, "
+            f"elapsed={self.elapsed:.1f}s, retry_count={self.retry_count})"
         )
 
 
@@ -80,23 +100,76 @@ class DAGExecutor:
         step_prompts: Optional[Dict[str, str]] = None,
         dag_plan: Any = None,
         on_step_complete: Optional[Callable[[StepResult], None]] = None,
+        repo_root: Optional[Any] = None,
+        enable_fanout: bool = True,
+        fork_on_retry: bool = False,
+        fork_kpi_logger: Any = None,
+        on_fork_retry: Optional[Callable[[str, int], None]] = None,
     ) -> None:
         self.workflow = workflow
         self.dag_plan = dag_plan
         self.run_step_fn = run_step_fn
+
+        # ADR-0002: Fan-out 展開（既定で有効。リポジトリルートから動的解決パーサを呼ぶ）
+        self._fanout_map: Dict[str, List[str]] = {}
+        self._fanout_empty_ids: List[str] = []
+        self._fanout_child_to_parent: Dict[str, str] = {}
+        self._fanout_parent_remaining: Dict[str, Set[str]] = {}
+        self._fanout_parent_failed: Set[str] = set()
+        if enable_fanout and dag_plan is None:
+            # dag_plan を併用する経路では事前展開で plan が壊れるため fan-out をスキップ
+            try:
+                from pathlib import Path as _Path
+                from .fanout_expander import expand_workflow_fanout  # type: ignore[import]
+            except ImportError:  # pragma: no cover
+                try:
+                    from fanout_expander import expand_workflow_fanout  # type: ignore[no-redef]
+                except ImportError:
+                    expand_workflow_fanout = None  # type: ignore[assignment]
+            if expand_workflow_fanout is not None:
+                _root = repo_root if repo_root is not None else _Path.cwd()
+                expanded = expand_workflow_fanout(workflow, _root)
+                self._fanout_map = dict(expanded.fanout_map)
+                self._fanout_empty_ids = list(expanded.empty_fanout_ids)
+                # 元 workflow.steps を差し替えるのではなく、ローカルに保持
+                self._expanded_steps = expanded.steps
+                # active_step_ids も展開: ベース ID が active なら全子もを active に
+                _active = set(getattr(dag_plan, "active_step_ids", active_step_ids))
+                for base_id, child_ids in self._fanout_map.items():
+                    if base_id in _active and child_ids:
+                        _active.update(child_ids)
+                active_step_ids = _active
+                # 親 → 残り子の管理
+                for base_id, child_ids in self._fanout_map.items():
+                    if child_ids:
+                        self._fanout_parent_remaining[base_id] = set(child_ids)
+                        for cid in child_ids:
+                            self._fanout_child_to_parent[cid] = base_id
+                if expanded.max_parallel:
+                    max_parallel = expanded.max_parallel
+            else:
+                self._expanded_steps = list(getattr(workflow, "steps", []))
+        else:
+            self._expanded_steps = list(getattr(workflow, "steps", []))
+
         self.active_step_ids = set(getattr(dag_plan, "active_step_ids", active_step_ids))
         plan_max_parallel = getattr(dag_plan, "max_parallel", max_parallel)
         self._semaphore = asyncio.Semaphore(max(1, plan_max_parallel))
         self.console = console
         self._step_prompts: Dict[str, str] = self._freeze_prompts(step_prompts, dag_plan)
         self._workflow_step_index: Dict[str, Any] = {
-            getattr(step, "id", ""): step for step in getattr(workflow, "steps", [])
+            getattr(step, "id", ""): step for step in self._expanded_steps
         }
 
         # Phase 3 (Resume): ステップ完了/skip/blocked 通知の同期コールバック。
         # state.json への永続化など、実行中継ぎ込みたい副作用をフックする。
         # コールバック内の例外は実行を止めないよう warn ログのみで握り潰す。
         self._on_step_complete = on_step_complete
+
+        # Fork-integration (T2.5/T2.6): フォーク機構
+        self._fork_on_retry: bool = bool(fork_on_retry)
+        self._fork_kpi_logger = fork_kpi_logger
+        self._on_fork_retry = on_fork_retry
 
         # 実行状態
         self.completed: Set[str] = set()
@@ -192,6 +265,25 @@ class DAGExecutor:
         Returns:
             step_id → StepResult のマップ。
         """
+        # ADR-0002 K-1: fan-out が 0 件で展開されたベース ID を自動 skip
+        for empty_id in self._fanout_empty_ids:
+            if empty_id in self.skipped or empty_id in self.completed:
+                continue
+            self.skipped.add(empty_id)
+            _result = StepResult(
+                empty_id, success=True, elapsed=0.0,
+                skipped=True, state="skipped", reason="fanout-empty",
+            )
+            self._results[empty_id] = _result
+            self._emit_step_complete(_result)
+            if self.console is not None:
+                try:
+                    self.console.warning(
+                        f"  ⏭️  [Step.{empty_id}] fan-out 展開キー 0 件のため skip (reason=fanout-empty)"
+                    )
+                except Exception:
+                    pass
+
         # Wave 事前計算
         waves = self.compute_waves()
         self._total_waves = len(waves)
@@ -299,17 +391,36 @@ class DAGExecutor:
         return self._results
 
     async def _run_with_semaphore(self, step: Any) -> StepResult:
-        """Semaphore で並列数を制御しつつ 1 ステップを実行する。"""
+        """Semaphore で並列数を制御しつつ 1 ステップを実行する。
+
+        Fork-integration (T2.5): `fork_on_retry=True` かつ初回失敗時、`on_fork_retry`
+        フックで runner にフォーク回数を通知してから `run_step_fn` を 1 回だけ再実行する。
+        """
         async with self._semaphore:
             start = time.time()
             error_msg: Optional[str] = None
+            # ADR-0002: fan-out 子ステップは追加メタ (fanout_key / base_step_id /
+            # additional_prompt_template_path / per_key_mcp_servers) を渡す
+            fanout_meta: Optional[Dict[str, Any]] = None
+            if getattr(step, "fanout_key", "") and getattr(step, "base_step_id", ""):
+                fanout_meta = {
+                    "fanout_key": step.fanout_key,
+                    "base_step_id": step.base_step_id,
+                    "additional_prompt_template_path": getattr(step, "additional_prompt_template_path", None),
+                    "per_key_mcp_servers": getattr(step, "per_key_mcp_servers", None),
+                }
+            _kwargs: Dict[str, Any] = dict(
+                step_id=step.id,
+                title=step.title,
+                prompt=self._step_prompts.get(step.id, ""),
+                custom_agent=step.custom_agent,
+            )
+            if fanout_meta is not None:
+                _kwargs["fanout_meta"] = fanout_meta
+
+            # 初回試行
             try:
-                success: bool = await self.run_step_fn(
-                    step_id=step.id,
-                    title=step.title,
-                    prompt=self._step_prompts.get(step.id, ""),
-                    custom_agent=step.custom_agent,
-                )
+                success = await self.run_step_fn(**_kwargs)
             except Exception as exc:
                 success = False
                 error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -324,6 +435,65 @@ class DAGExecutor:
                         file=_sys.stderr,
                         flush=True,
                     )
+
+            # Fork-integration (T2.5): フラグ ON かつ初回失敗時に 1 回だけリトライ
+            retry_count = 0
+            forked_session_id: Optional[str] = None
+            if (
+                not success
+                and self._fork_on_retry
+                and not getattr(step, "is_container", False)
+            ):
+                retry_count = 1
+                # runner にフォーク回数を通知（次の _make_step_session_id で `-fork1` suffix が付与される）
+                fork_hook_failed = False
+                if self._on_fork_retry is not None:
+                    try:
+                        self._on_fork_retry(step.id, retry_count)
+                    except Exception as hook_exc:
+                        fork_hook_failed = True
+                        if self.console is not None:
+                            self.console.warning(
+                                f"on_fork_retry フック失敗 (step={step.id}): {hook_exc}。"
+                                "リトライをスキップして初回失敗を最終結果とします（C19 対応）。"
+                            )
+                if fork_hook_failed:
+                    # C19: フック失敗時は session_id が初回と同一になるためリトライをスキップ
+                    retry_count = 0
+                else:
+                    if self.console is not None:
+                        self.console.event(
+                            f"  🔁 [Step.{step.id}] フォークリトライを実行します (fork_index=1)"
+                        )
+                    # C3: 同時並列発火を緩和するため軽微なジッターを入れる（最大 0.5 秒）
+                    try:
+                        import random as _random
+                        await asyncio.sleep(_random.uniform(0.0, 0.5))
+                    except Exception:
+                        pass
+                    error_msg = None
+                    try:
+                        success = await self.run_step_fn(**_kwargs)
+                    except Exception as exc:
+                        success = False
+                        error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+                        if self.console is not None:
+                            self.console.error(
+                                f"Step.{step.id} フォークリトライで例外が発生しました: {exc}"
+                            )
+                    # フォーク session_id を推測（runner._make_fork_session_id と等価フォーマット）
+                    forked_session_id = self._guess_forked_session_id(step.id, retry_count)
+                    # C1: リトライ完了後は必ず fork_index をリセットし、後続の QA/Review 等の
+                    # サブセッション ID に fork suffix が漏れないようにする
+                    if self._on_fork_retry is not None:
+                        try:
+                            self._on_fork_retry(step.id, 0)
+                        except Exception as reset_exc:  # pragma: no cover
+                            if self.console is not None:
+                                self.console.warning(
+                                    f"on_fork_retry リセット失敗 (step={step.id}): {reset_exc}"
+                                )
+
             elapsed = time.time() - start
 
             self.running.discard(step.id)
@@ -332,10 +502,63 @@ class DAGExecutor:
             else:
                 self.failed.add(step.id)
 
-            result = StepResult(step.id, success, elapsed, error=error_msg)
+            result = StepResult(
+                step.id, success, elapsed,
+                error=error_msg,
+                retry_count=retry_count,
+                forked_session_id=forked_session_id,
+            )
+            # Fork-integration (T2.4): KPI ロガーへ追記（enabled=False なら no-op）
+            if self._fork_kpi_logger is not None:
+                try:
+                    self._fork_kpi_logger.log_step(
+                        step_id=step.id,
+                        session_id=self._guess_main_session_id(step.id),
+                        forked_session_id=forked_session_id,
+                        success=success,
+                        retry_count=retry_count,
+                        elapsed_seconds=elapsed,
+                        tokens=0,  # SDK からトークン取得は将来拡張
+                        fork_on_retry_enabled=self._fork_on_retry,
+                    )
+                except Exception as log_exc:  # pragma: no cover - ロガー例外は実行を止めない
+                    if self.console is not None:
+                        self.console.warning(
+                            f"fork_kpi_logger 失敗 (step={step.id}): {log_exc}"
+                        )
             # Phase 3 (Resume): completed / failed をフックで通知し state.json を更新する
             self._emit_step_complete(result)
             return result
+
+    def _guess_main_session_id(self, step_id: str) -> Optional[str]:
+        """KPI ログ用にメイン session_id を推測する。
+
+        Fork-integration (T2.4): runner.py の `_make_step_session_id` と等価フォーマット
+        を再現する。run_id / prefix が取得できない場合は None を返す。
+        """
+        return self._build_session_id_token(step_id, suffix="")
+
+    def _guess_forked_session_id(self, step_id: str, fork_index: int) -> Optional[str]:
+        """KPI ログ用に fork session_id を推測する。"""
+        if fork_index < 1:
+            return None
+        return self._build_session_id_token(step_id, suffix=f"fork{fork_index}")
+
+    def _build_session_id_token(self, step_id: str, suffix: str) -> Optional[str]:
+        """runner._make_step_session_id と等価フォーマットを再現する内部ヘルパー。"""
+        runner = getattr(self.run_step_fn, "__self__", None)
+        if runner is None:
+            return None
+        config = getattr(runner, "config", None)
+        if config is None:
+            return None
+        run_id = getattr(config, "run_id", "")
+        if not run_id:
+            return None
+        if _make_session_id is None:  # pragma: no cover - import 失敗フォールバック
+            return None
+        prefix = (getattr(config, "session_id_prefix", "") or "").strip() or DEFAULT_SESSION_ID_PREFIX
+        return make_session_id(run_id=run_id, step_id=step_id, suffix=suffix, prefix=prefix)
 
     def _get_next_steps(
         self,
@@ -343,7 +566,8 @@ class DAGExecutor:
         skipped_step_ids: Optional[List[str]] = None,
     ) -> List[Any]:
         if self.dag_plan is None:
-            return self.workflow.get_next_steps(completed_step_ids, skipped_step_ids)
+            # ADR-0002: fan-out 展開済みステップから次に起動可能なものを返す
+            return self._get_next_steps_from_expanded(completed_step_ids, skipped_step_ids)
 
         completed = set(completed_step_ids)
         skipped = set(skipped_step_ids or [])
@@ -404,6 +628,38 @@ class DAGExecutor:
             if node is not None:
                 return node
         raise KeyError(f"unknown DAG step id: {step_id}")
+
+    # ------------------------------------------------------------------
+    # ADR-0002: fan-out 展開済みステップに対する _get_next_steps 実装
+    # ------------------------------------------------------------------
+    def _get_next_steps_from_expanded(
+        self,
+        completed_step_ids: List[str],
+        skipped_step_ids: Optional[List[str]] = None,
+    ) -> List[Any]:
+        completed = set(completed_step_ids)
+        skipped = set(skipped_step_ids or [])
+        effective_done = completed | skipped
+        existing_ids = set(self._workflow_step_index.keys())
+
+        result: List[Any] = []
+        for step in self._expanded_steps:
+            if getattr(step, "is_container", False):
+                continue
+            sid = step.id
+            if sid in completed or sid in skipped or sid in self.failed or sid in self.blocked:
+                continue
+            deps = list(getattr(step, "depends_on", []) or [])
+            if not deps:
+                result.append(step)
+                continue
+            deps_satisfied = all(
+                dep in effective_done or dep not in existing_ids
+                for dep in deps
+            )
+            if deps_satisfied:
+                result.append(step)
+        return result
 
     @staticmethod
     def _freeze_prompts(step_prompts: Optional[Dict[str, str]], dag_plan: Any = None) -> Dict[str, str]:

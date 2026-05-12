@@ -100,6 +100,7 @@ _SAFE_CONFIG_FIELDS: frozenset[str] = frozenset({
     "timestamp_style", "final_only",
     # Work IQ（テナント ID は含めない方針）
     "workiq_enabled", "workiq_qa_enabled", "workiq_akm_review_enabled",
+    "workiq_akm_ingest_enabled", "workiq_akm_ingest_dxx",
     "workiq_draft_mode", "workiq_draft_output_dir",
     "workiq_per_question_timeout", "workiq_max_draft_questions",
     "workiq_priority_filter",
@@ -122,6 +123,8 @@ _SAFE_CONFIG_FIELDS: frozenset[str] = frozenset({
     "run_id",
     # Phase 2: Resume 時に固定 prefix を強制するため snapshot に含める
     "session_id_prefix",
+    # Fork-integration (T2.7): フォーク機能フラグ
+    "fork_on_retry",
     # Agentic Retrieval（Phase 2）
     "enable_agentic_retrieval",
     "agentic_data_source_modes",
@@ -267,6 +270,12 @@ class StepState:
     error_summary: Optional[str] = None
     artifact_paths: List[str] = field(default_factory=list)
     skip_reason: Optional[str] = None
+    # Fork-integration (T2.2): フォーク親子リンク。
+    # 旧 state.json には存在しないが `_from_dict` で既定値で復元される（後方互換）。
+    retry_count: int = 0
+    """このステップが自動リトライされた回数（0 = リトライなし）。"""
+    forked_session_id: Optional[str] = None
+    """リトライ時に使われた fork session_id。リトライ未発火なら None。"""
 
     def __post_init__(self) -> None:
         if self.status not in _STEP_STATUSES:
@@ -276,6 +285,9 @@ class StepState:
             )
         if self.error_summary is not None and len(self.error_summary) > _ERROR_SUMMARY_MAX:
             self.error_summary = self.error_summary[:_ERROR_SUMMARY_MAX]
+        # Fork-integration (T2.2): 不正値の正規化
+        if not isinstance(self.retry_count, int) or self.retry_count < 0:
+            self.retry_count = 0
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +424,9 @@ class RunState:
                     error_summary=st.get("error_summary"),
                     artifact_paths=list(st.get("artifact_paths") or []),
                     skip_reason=st.get("skip_reason"),
+                    # Fork-integration (T2.2): 後方互換のため get with default
+                    retry_count=int(st.get("retry_count") or 0),
+                    forked_session_id=st.get("forked_session_id"),
                 )
             except ValueError:
                 # 無効 status は pending として復元
@@ -676,11 +691,15 @@ def make_session_id(
     形式:
       `{prefix}-{run_id}-step-{step_id}[-{suffix}]`
 
+    注意:
+      Copilot SDK の sessionId バリデーションは `^[A-Za-z0-9_-]+$` のみ許可する
+      （ドット `.` 不許可）。そのため step_id 中の `.` は `-` に正規化する。
+
     例:
       make_session_id("20260507T153012-abc123", "1.1")
-        -> "hve-20260507T153012-abc123-step-1.1"
+        -> "hve-20260507T153012-abc123-step-1-1"
       make_session_id("20260507T153012-abc123", "1.1", suffix="qa")
-        -> "hve-20260507T153012-abc123-step-1.1-qa"
+        -> "hve-20260507T153012-abc123-step-1-1-qa"
 
     Args:
         run_id: Run 識別子（_safe_session_id_token で正規化される）。空の場合は
@@ -695,8 +714,10 @@ def make_session_id(
         通常 60〜120 文字程度。
     """
     safe_prefix = _safe_session_id_token(prefix or DEFAULT_SESSION_ID_PREFIX, allow_underscore_dot=False) or DEFAULT_SESSION_ID_PREFIX
-    safe_run = _safe_session_id_token(run_id or "")[:_SESSION_ID_MAX_RUN_ID] or "unknown"
-    safe_step = _safe_session_id_token(step_id or "")[:_SESSION_ID_MAX_STEP_ID] or "unknown"
+    # SDK の sessionId バリデーション `^[A-Za-z0-9_-]+$` はドット不許可のため、
+    # run_id / step_id / suffix 内のドットを `-` に置換する（アンダースコアは許可）。
+    safe_run = _safe_session_id_token(run_id or "").replace(".", "-")[:_SESSION_ID_MAX_RUN_ID] or "unknown"
+    safe_step = _safe_session_id_token(step_id or "").replace(".", "-")[:_SESSION_ID_MAX_STEP_ID] or "unknown"
     base = f"{safe_prefix}-{safe_run}-step-{safe_step}"
     if suffix:
         safe_suffix = _safe_session_id_token(suffix, allow_underscore_dot=False)[:_SESSION_ID_MAX_SUFFIX]

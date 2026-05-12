@@ -7,7 +7,7 @@
   {
     "name": "auto-app-detail-design",
     "color": "0E8A16",
-    "description": "run app detail design workflow (application detail design document generation)"
+    "description": "旧 AAD トリガー（後方互換エイリアス）"
   },
   {
     "name": "auto-app-detail-design-web",
@@ -22,7 +22,7 @@
   {
     "name": "auto-app-dev-microservice",
     "color": "1D76DB",
-    "description": "run full microservice app development workflow on Azure"
+    "description": "旧 ASDW トリガー（後方互換エイリアス）"
   },
   {
     "name": "auto-app-dev-microservice-web",
@@ -58,6 +58,16 @@
     "name": "auto-qa",
     "color": "BFD4F2",
     "description": "auto QA trigger for copilot-auto-qa workflow"
+  },
+  {
+    "name": "qa-force-regenerate",
+    "color": "D93F0B",
+    "description": "Force re-generation of QA questionnaire even if existing QA files are detected."
+  },
+  {
+    "name": "qa-questionnaire-pr",
+    "color": "FFE082",
+    "description": "QA 質問票専用 PR（メインタスク用 auto-qa PR には自動付与されない。専用 PR は本文先頭に <!-- qa-questionnaire-pr: opt-in --> を記載すること）"
   },
   {
     "name": "create-subissues",
@@ -275,9 +285,164 @@
     "description": "AAGD ブロック中"
   },
   {
+    "name": "aas:initialized",
+    "color": "C5DEF5",
+    "description": "AAS 初期化完了"
+  },
+  {
+    "name": "aas:ready",
+    "color": "0075CA",
+    "description": "AAS 実行可能"
+  },
+  {
+    "name": "aas:running",
+    "color": "E4E669",
+    "description": "AAS 実行中"
+  },
+  {
+    "name": "aas:done",
+    "color": "0E8A16",
+    "description": "AAS 完了"
+  },
+  {
+    "name": "aas:blocked",
+    "color": "D73A4A",
+    "description": "AAS ブロック中"
+  },
+  {
+    "name": "abd:initialized",
+    "color": "C5DEF5",
+    "description": "ABD 初期化完了"
+  },
+  {
+    "name": "abd:ready",
+    "color": "0075CA",
+    "description": "ABD 実行可能"
+  },
+  {
+    "name": "abd:running",
+    "color": "E4E669",
+    "description": "ABD 実行中"
+  },
+  {
+    "name": "abd:done",
+    "color": "0E8A16",
+    "description": "ABD 完了"
+  },
+  {
+    "name": "abd:blocked",
+    "color": "D73A4A",
+    "description": "ABD ブロック中"
+  },
+  {
+    "name": "abdv:initialized",
+    "color": "C5DEF5",
+    "description": "ABDV 初期化完了"
+  },
+  {
+    "name": "abdv:ready",
+    "color": "0075CA",
+    "description": "ABDV 実行可能"
+  },
+  {
+    "name": "abdv:running",
+    "color": "E4E669",
+    "description": "ABDV 実行中"
+  },
+  {
+    "name": "abdv:done",
+    "color": "0E8A16",
+    "description": "ABDV 完了"
+  },
+  {
+    "name": "abdv:blocked",
+    "color": "D73A4A",
+    "description": "ABDV ブロック中"
+  },
+  {
+    "name": "akm:initialized",
+    "color": "C5DEF5",
+    "description": "AKM 初期化完了"
+  },
+  {
+    "name": "akm:ready",
+    "color": "0075CA",
+    "description": "AKM 実行可能"
+  },
+  {
+    "name": "akm:running",
+    "color": "E4E669",
+    "description": "AKM 実行中"
+  },
+  {
+    "name": "akm:done",
+    "color": "0E8A16",
+    "description": "AKM 完了"
+  },
+  {
+    "name": "akm:blocked",
+    "color": "D73A4A",
+    "description": "AKM ブロック中"
+  },
+  {
+    "name": "aqod:initialized",
+    "color": "C5DEF5",
+    "description": "AQOD 初期化完了"
+  },
+  {
+    "name": "aqod:ready",
+    "color": "0075CA",
+    "description": "AQOD 実行可能"
+  },
+  {
+    "name": "aqod:running",
+    "color": "E4E669",
+    "description": "AQOD 実行中"
+  },
+  {
+    "name": "aqod:done",
+    "color": "0E8A16",
+    "description": "AQOD 完了"
+  },
+  {
+    "name": "aqod:blocked",
+    "color": "D73A4A",
+    "description": "AQOD ブロック中"
+  },
+  {
+    "name": "adoc:initialized",
+    "color": "C5DEF5",
+    "description": "ADOC 初期化完了"
+  },
+  {
+    "name": "adoc:ready",
+    "color": "0075CA",
+    "description": "ADOC 実行可能"
+  },
+  {
+    "name": "adoc:running",
+    "color": "E4E669",
+    "description": "ADOC 実行中"
+  },
+  {
+    "name": "adoc:done",
+    "color": "0E8A16",
+    "description": "ADOC 完了"
+  },
+  {
+    "name": "adoc:blocked",
+    "color": "D73A4A",
+    "description": "ADOC ブロック中"
+  },
+  {
     "name": "aas:qa-ready",
     "color": "C8E6C9",
     "description": "AAS Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aas:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AAS Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
     "name": "aas:timeout",
@@ -290,9 +455,19 @@
     "description": "AAD Step が事前 QA 完了待ち"
   },
   {
+    "name": "aad:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AAD Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "aad-web:qa-ready",
     "color": "C8E6C9",
     "description": "AAD-WEB Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aad-web:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AAD-WEB Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
     "name": "asdw:qa-ready",
@@ -300,9 +475,19 @@
     "description": "ASDW Step が事前 QA 完了待ち"
   },
   {
+    "name": "asdw:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ASDW Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "asdw-web:qa-ready",
     "color": "C8E6C9",
     "description": "ASDW-WEB Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "asdw-web:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ASDW-WEB Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
     "name": "abd:qa-ready",
@@ -310,9 +495,19 @@
     "description": "ABD Step が事前 QA 完了待ち"
   },
   {
+    "name": "abd:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ABD Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "abdv:qa-ready",
     "color": "C8E6C9",
     "description": "ABDV Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "abdv:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ABDV Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
     "name": "aag:qa-ready",
@@ -320,9 +515,19 @@
     "description": "AAG Step が事前 QA 完了待ち"
   },
   {
+    "name": "aag:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AAG Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "aagd:qa-ready",
     "color": "C8E6C9",
     "description": "AAGD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "aagd:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AAGD Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
     "name": "akm:qa-ready",
@@ -330,14 +535,89 @@
     "description": "AKM Step が事前 QA 完了待ち"
   },
   {
+    "name": "akm:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AKM Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "aqod:qa-ready",
     "color": "C8E6C9",
     "description": "AQOD Step が事前 QA 完了待ち"
   },
   {
+    "name": "aqod:qa-drafting",
+    "color": "C8E6C9",
+    "description": "AQOD Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
     "name": "adoc:qa-ready",
     "color": "C8E6C9",
     "description": "ADOC Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "adoc:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ADOC Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
+    "name": "aas:qa-timeout",
+    "color": "B60205",
+    "description": "AAS Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "aad:qa-timeout",
+    "color": "B60205",
+    "description": "AAD Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "aad-web:qa-timeout",
+    "color": "B60205",
+    "description": "AAD-WEB Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "asdw:qa-timeout",
+    "color": "B60205",
+    "description": "ASDW Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "asdw-web:qa-timeout",
+    "color": "B60205",
+    "description": "ASDW-WEB Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "abd:qa-timeout",
+    "color": "B60205",
+    "description": "ABD Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "abdv:qa-timeout",
+    "color": "B60205",
+    "description": "ABDV Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "aag:qa-timeout",
+    "color": "B60205",
+    "description": "AAG Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "aagd:qa-timeout",
+    "color": "B60205",
+    "description": "AAGD Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "akm:qa-timeout",
+    "color": "B60205",
+    "description": "AKM Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "aqod:qa-timeout",
+    "color": "B60205",
+    "description": "AQOD Step が QA フェーズでタイムアウト"
+  },
+  {
+    "name": "adoc:qa-timeout",
+    "color": "B60205",
+    "description": "ADOC Step が QA フェーズでタイムアウト"
   },
   {
     "name": "aas:human-required",
@@ -518,50 +798,5 @@
     "name": "adoc:human-resolved",
     "color": "1A7F37",
     "description": "ADOC 人間解決済み — :ready への自動復帰トリガー"
-  },
-  {
-    "name": "ard:initialized",
-    "color": "FBCA04",
-    "description": "ARD 初期化完了"
-  },
-  {
-    "name": "ard:ready",
-    "color": "FFEB9C",
-    "description": "ARD 実行可能"
-  },
-  {
-    "name": "ard:running",
-    "color": "F9D71C",
-    "description": "ARD 実行中"
-  },
-  {
-    "name": "ard:done",
-    "color": "FBCA04",
-    "description": "ARD 完了"
-  },
-  {
-    "name": "ard:blocked",
-    "color": "B60205",
-    "description": "ARD ブロック中"
-  },
-  {
-    "name": "ard:qa-ready",
-    "color": "C8E6C9",
-    "description": "ARD Step が事前 QA 完了待ち"
-  },
-  {
-    "name": "ard:human-required",
-    "color": "7B2FBE",
-    "description": "ARD TDD リトライ上限到達 — 人間介入が必要"
-  },
-  {
-    "name": "ard:human-investigating",
-    "color": "E4AC07",
-    "description": "ARD 人間が原因調査・解決作業中"
-  },
-  {
-    "name": "ard:human-resolved",
-    "color": "1A7F37",
-    "description": "ARD 人間解決済み — :ready への自動復帰トリガー"
   }
 ]

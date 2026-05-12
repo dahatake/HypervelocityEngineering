@@ -58,7 +58,7 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 - `docs/business-requirement.md`（事業レベルの事業分析レポート）
 - `docs/catalog/use-case-catalog.md`（ユースケース一覧）
 - `knowledge/business-requirement-document-status.md`（要求定義ドキュメントのステータス・qa/分類）
-- （Step.1.3 で必要文書クラスを作成した場合）`docs/D01-*.md` 〜 `docs/D21-*.md` のうち作成対象としたファイル
+- （Step.1.3 で必要文書クラスを作成した場合）`knowledge/D01-*.md` 〜 `knowledge/D21-*.md` のうち作成対象としたファイル
 
 ---
 
@@ -98,18 +98,27 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 ![要求定義ステップ依存フロー](./images/business-requirement-dependency-flow.svg)
 
+### ARD オーケストレーション タスク／データフロー
+
+各 Custom Agent の入出力ファイルを示します（`hve/workflow_registry.py` の ARD 定義に準拠）。
+
+![ARD: 要求定義の自動化 データフロー](./images/orchestration-task-data-flow-ard.svg)
+
 ### 各ステップの入出力
 
 | Step | タイトル | 使用ツール | 入力 | 出力 | 依存 |
 |------|---------|-----------|------|------|------|
 | Step.1.1 / 1.2 | 事業分析ドキュメントの作成 | Microsoft 365 Copilot 等 | 社内文書・メール・プロジェクトプラン等 | `docs/company-business-requirement.md` | なし |
-| Step.1.3 | （任意）必要文書クラス D01〜D21 の新規作成 | Microsoft 365 Copilot（Researcher 推奨） | 事業分析レポート・既存規程・既存設計 等 | `docs/D{NN}-*.md`（作成対象とした文書クラスのみ） | Step.1.1 / 1.2 |
+| Step.1.3 | （任意）必要文書クラス D01〜D21 の新規作成 | Microsoft 365 Copilot（Researcher 推奨） | 事業分析レポート・既存規程・既存設計 等 | `knowledge/D{NN}-*.md`（作成対象とした文書クラスのみ。AKM ワークフローと同じ保存先） | Step.1.1 / 1.2 |
 | Step.2 | ビジネスドキュメントの一覧の作成 | Microsoft 365 Copilot 等 | `docs/company-business-requirement.md`、各種既存文書 | 不足文書一覧・追加文書（`docs/` 配下） | Step.1 |
 | Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 | `docs/company-business-requirement.md`、各種文書 | `docs/catalog/use-case-catalog.md` | Step.1 |
 | Step.4 | qa/ 質問票ベースの要求定義プロセス | `KnowledgeManager` | `qa/` 質問票ファイル | `knowledge/business-requirement-document-status.md` | なし |
 
 > [!NOTE]
 > 旧版では Step.3 の依存先を `Step.2` と記載していましたが、これは誤りです。Step.3 は `docs/company-business-requirement.md`（Step.1 の出力）のみに依存し、Step.2（ビジネスドキュメントの一覧）には依存しません。
+
+> [!NOTE]
+> **Step.1.3 は ARD オーケストレーターの自動化対象外** です。`knowledge/D01〜D21-*.md` を自動生成・差分更新したい場合は AKM ワークフロー（`KnowledgeManager`）を使用してください（詳細: [km-guide.md](./km-guide.md)）。Step.1.3 と AKM の保存先は同じ `knowledge/` ディレクトリのため、Step.1.3 で手動作成したファイルは AKM 実行時に差分マージされます。
 
 ---
 
@@ -976,14 +985,19 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 `template/business-requirement-document-master-list.md` で定義された **D01〜D21 の必要文書クラス** を、Microsoft 365 Copilot Researcher で 1 件ずつ作成するための Prompt を提供します。Step.2 の「保有文書の棚卸し」を行う前に、**そもそも D01〜D21 のうちまだ存在しない文書**を新規作成したい場合や、**既存ドキュメントの形式を D01〜D21 の標準に揃え直したい場合**に使います。
 
+> [!IMPORTANT]
+> **Step.1.3 は ARD オーケストレーターでは自動化されません**。ARD ワークフロー（`hve/workflow_registry.py` の `ARD` 定義）が自動化するのは Step.1.1 / 1.2（事業分析）と Step.3（ユースケース作成）のみです。`knowledge/D01〜D21-*.md` の自動生成・差分更新は **AKM ワークフロー（`KnowledgeManager`）** が担当します（[km-guide.md](./km-guide.md) 参照）。
+>
+> Step.1.3（本節の手動 Prompt）と AKM（自動）の **保存先は同じ `knowledge/` ディレクトリ** です。Step.1.3 で先に作成しておくと、後で AKM を実行した際に既存ファイルに対して **差分マージ動作** となります（同名ファイルを完全上書きするわけではなく、ChangeLog ファイル `knowledge/D{NN}-*-ChangeLog.md` に変更履歴が記録されます）。
+
 - 使用するツール: Microsoft 365 Copilot（Researcher 推奨）
 - 利用方法:
     1. 作成したい文書クラス（例: D01）の Prompt をコピーして Researcher のチャットに貼り付ける
     2. プロンプト中の `<...>` プレースホルダ（対象事業 / 対象アプリケーション / 対象リリース / 対象環境 / 対象地域・法人・テナント など）を置き換える
     3. 関連する添付資料（事業分析レポート、議事録、既存規程、既存設計、データ定義 等）を Researcher の同じチャットにアップロードする
-    4. 出力された Markdown を `応答のコピー` で **応答全体** をコピーし、`docs/D{NN}-<文書名>.md` として保存する
-- 出力先（保存時）: `docs/` ディレクトリ配下の Markdown ファイル
-- ファイル名の推奨: `docs/D01-business-intent-success-criteria.md` のような **半角英数ハイフン区切り** を推奨します（`docs/D01-事業意図・成功条件定義書.md` のような全角中黒や日本語ファイル名は OS / Git / CI で互換性問題が起きる可能性があります）
+    4. 出力された Markdown を `応答のコピー` で **応答全体** をコピーし、`knowledge/D{NN}-<文書名>.md` として保存する
+- 出力先（保存時）: `knowledge/` ディレクトリ配下の Markdown ファイル（AKM ワークフローの出力先と同じ。Step.1.3 で先に作成しておけば AKM 実行時は差分マージ動作となります）
+- ファイル名の推奨: `knowledge/D01-business-intent-success-criteria.md` のような **半角英数ハイフン区切り** を推奨します（`knowledge/D01-事業意図・成功条件定義書.md` のような全角中黒や日本語ファイル名は OS / Git / CI で互換性問題が起きる可能性があります）
 
 > [!IMPORTANT]
 > 以下のすべての Prompt は、次の方針で統一しています：
@@ -996,6 +1010,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: なぜ作るのか、何を成功とみなすかを固定する
 - 該当しやすい既存文書名: 企画書 / 事業計画 / 案件起案書 / 投資対効果試算 / スポンサー説明資料
+- **推奨保存先**: `knowledge/D01-<slug>.md`（AKM ワークフローと同じ保存先）
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1116,6 +1131,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: どこまで作り、どこを触らないかを確定する
 - 該当しやすい既存文書名: スコープ定義書 / 対象範囲表 / 境界図 / フェーズ計画
+- **推奨保存先**: `knowledge/D02-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1225,6 +1241,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 誰が決め、誰が責任を負い、誰が例外を許可するかを固定する
 - 該当しやすい既存文書名: RACI 表 / 承認マトリクス / 責任分担表 / 会議体定義
+- **推奨保存先**: `knowledge/D03-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1319,6 +1336,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 業務の流れ・分岐・引き継ぎ・時間依存条件を誤実装させない
 - 該当しやすい既存文書名: 業務フロー / BPMN / 業務手順書 / 運用フロー図
+- **推奨保存先**: `knowledge/D04-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1425,6 +1443,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 実装優先度と試験対象を利用者目線で整理する
 - 該当しやすい既存文書名: ユースケース一覧 / ユーザーストーリー / シナリオ定義 / オペレーション例
+- **推奨保存先**: `knowledge/D05-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1514,6 +1533,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: AI や実装者が推測で条件分岐を作らないようにする
 - 該当しやすい既存文書名: ルール定義書 / 判定表 / 料金規程 / 承認基準表
+- **推奨保存先**: `knowledge/D06-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1601,6 +1621,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 言葉の意味とモデル境界を固定する
 - 該当しやすい既存文書名: 用語集 / ドメインモデル / 状態遷移図 / ER 前段整理
+- **推奨保存先**: `knowledge/D07-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1688,6 +1709,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 既存データと新実装の接続点を定義する
 - 該当しやすい既存文書名: ER 図 / DDL / データ定義書 / データマッピング表 / データ品質基準書
+- **推奨保存先**: `knowledge/D08-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1805,6 +1827,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 周辺システムとの関係と責任境界を定義する
 - 該当しやすい既存文書名: システム関連図 / 責任分界図 / 連携全体図 / 現新比較図
+- **推奨保存先**: `knowledge/D09-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1897,6 +1920,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 連携仕様を契約として固定する
 - 該当しやすい既存文書名: API 仕様書 / OpenAPI / イベント仕様書 / IF 定義書 / CSV レイアウト
+- **推奨保存先**: `knowledge/D10-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1999,6 +2023,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 画面が業務上何を意味するかを固定する
 - 該当しやすい既存文書名: 画面仕様書 / Figma / ワイヤーフレーム / UI 要件書
+- **推奨保存先**: `knowledge/D11-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2086,6 +2111,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 誰が何をできるか、何をしてはいけないかを固定する
 - 該当しやすい既存文書名: 権限設計書 / 認可マトリクス / SoD 表 / IAM 連携仕様
+- **推奨保存先**: `knowledge/D12-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2190,6 +2216,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 規制 / 監査 / 情報保護の要件を実装制約に落とす
 - 該当しやすい既存文書名: セキュリティ要件書 / DPIA / 監査要件表 / 法規対応表
+- **推奨保存先**: `knowledge/D13-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2297,6 +2324,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 地域差分を「例外」ではなく設計前提にする
 - 該当しやすい既存文書名: ローカライズ要件 / 各国差分表 / 税制要件 / 通知翻訳表
+- **推奨保存先**: `knowledge/D14-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2397,6 +2425,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 性能・信頼性・運用継続性を実装前提にする
 - 該当しやすい既存文書名: NFR 定義 / SRE 運用設計 / 監視設計書 / DR 計画 / Runbook
+- **推奨保存先**: `knowledge/D15-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2507,6 +2536,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 切替・移行・教育・安定化を計画可能にする
 - 該当しやすい既存文書名: カットオーバー計画 / 移行計画 / 展開計画 / 教育計画
+- **推奨保存先**: `knowledge/D16-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2608,6 +2638,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 何をもって受け入れるかを固定する
 - 該当しやすい既存文書名: 総合試験計画 / UAT 計画 / 受入条件書 / 検証マトリクス
+- **推奨保存先**: `knowledge/D17-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2707,6 +2738,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: AI に何を渡してよいか / どの資料を真実源泉とみなすかを統制する
 - 該当しやすい既存文書名: Prompt pack / AI 入力統制ルール / 参照資料優先順位表
+- **推奨保存先**: `knowledge/D18-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2810,6 +2842,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 「何を作るか」ではなく「どういう構造で作るか」を固定する
 - 該当しやすい既存文書名: アーキテクチャ設計書 / コンテナ図 / コンポーネント図 / ADR / 技術方針書
+- **推奨保存先**: `knowledge/D19-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -2917,6 +2950,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: セキュリティ要件を設計・実装規約へ落とす
 - 該当しやすい既存文書名: Threat model / Secure coding guideline / Security architecture note
+- **推奨保存先**: `knowledge/D20-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>
@@ -3031,6 +3065,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 
 - 目的: 生成コードを含む開発物の品質と由来を管理する
 - 該当しやすい既存文書名: CI 設計書 / DevSecOps 標準 / Release engineering guideline / Supply-chain control doc
+- **推奨保存先**: `knowledge/D21-<slug>.md`
 
 <details>
 <summary>Prompt を表示</summary>

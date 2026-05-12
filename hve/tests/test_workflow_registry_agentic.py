@@ -393,6 +393,34 @@ class TestWorkflowYamlAgenticInputs:
                 f"dispatcher の asdw-web ジョブ with に '{input_name}' が見つかりません"
 
 
+class TestQaReadyLabelTokenFallback:
+    """qa-ready / labeled 連鎖トリガー用ラベル付与時のトークン設定を検証する。"""
+
+    def test_qa_ready_labeling_steps_use_copilot_pat_fallback_token(self):
+        targets = [
+            ("auto-app-selection-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-app-detail-design-web-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-app-dev-microservice-web-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-batch-design-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-batch-dev-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-ai-agent-design-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-ai-agent-dev-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-app-documentation-reusable.yml", "Issue 初期化と Step.1 生成"),
+        ]
+        expected = "${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}"
+        for workflow, step_name in targets:
+            step = _get_workflow_step(workflow, job_name="orchestrate", step_name=step_name)
+            assert step.get("env", {}).get("GH_TOKEN") == expected
+
+    def test_adoc_done_transition_step_uses_copilot_pat_fallback_token(self):
+        step = _get_workflow_step(
+            "advance-subissues.yml",
+            job_name="advance_adoc",
+            step_name="Advance ADOC sub issues",
+        )
+        assert step.get("env", {}).get("GH_TOKEN") == "${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}"
+
+
 class TestPlaywrightE2EReusableWorkflow:
     """Playwright E2E reusable workflow の静的構造検証。"""
 
@@ -417,7 +445,7 @@ class TestPlaywrightE2EReusableWorkflow:
 
 
 class TestIssueQaReadyTransitionWorkflow:
-    """Issue の qa-ready 遷移 workflow が QA 回答のみを注入することを静的検証する。"""
+    """Issue の qa-ready / qa-drafting 遷移 workflow を静的検証する。"""
 
     _WORKFLOW = "auto-issue-qa-ready-transition.yml"
 
@@ -457,3 +485,213 @@ class TestIssueQaReadyTransitionWorkflow:
             step_name="qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）",
         )
         assert "steps.inject-qa-context.outputs.qa_comment_found == 'true'" in transition_step.get("if", "")
+
+    def test_detect_step_accepts_qa_drafting_label(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "l.endswith(':qa-ready') or l.endswith(':qa-drafting')" in content
+
+    def test_ready_transition_maps_qa_drafting_to_ready(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert 'READY_LABEL="${READY_LABEL/:qa-drafting/:ready}"' in content
+
+    def test_transition_workflow_exports_copilot_pat(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "COPILOT_PAT: ${{ secrets.COPILOT_PAT }}" in content
+
+    def test_has_workflow_dispatch_inputs_for_dry_run(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
+        assert "target_issue" in inputs
+        assert "target_pr" in inputs
+        assert "dry_run" in inputs
+        assert "simulate_label" in inputs
+
+    def test_transition_workflow_contains_dry_run_guard(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "dry_run_guard()" in content
+        assert '[ "${DRY_RUN}" = "true" ]' in content
+        assert "[DRY RUN] would execute:" in content
+        assert "[DRY RUN] would execute: $*" not in content
+
+    def test_dispatch_run_guards_against_pull_request_target_issue(self):
+        dispatch_guard_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="transition",
+            step_name="workflow_dispatch 対象が PR でないことを確認",
+        )
+        assert dispatch_guard_step.get("if", "") == "github.event_name == 'workflow_dispatch'"
+        run_script = dispatch_guard_step.get("run", "")
+        assert "data.get('pull_request')" in run_script
+        assert "は PR です。Issue 番号を指定してください。" in run_script
+
+    def test_injects_qa_reference_instruction_section(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "<!-- qa-reference-instruction-start -->" in content
+        assert "<!-- qa-reference-instruction-end -->" in content
+        assert "<!-- qa-reference-start -->" in content
+        assert "<!-- qa-reference-end -->" in content
+        assert "## Referenced QA Files" in content
+        assert "参照なし: 理由 = <理由>" in content
+
+
+class TestVerifyQaReferenceInPrWorkflow:
+    """verify-qa-reference-in-pr workflow の静的検証。"""
+
+    _WORKFLOW = "verify-qa-reference-in-pr.yml"
+
+    def test_has_pull_request_target_triggers(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        pr_target_types = on_section.get("pull_request_target", {}).get("types", [])
+        assert "opened" in pr_target_types
+        assert "edited" in pr_target_types
+        assert "synchronize" in pr_target_types
+        assert "ready_for_review" in pr_target_types
+        assert "reopened" in pr_target_types
+        assert "labeled" in pr_target_types
+
+    def test_has_workflow_dispatch_inputs(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
+        assert "target_pr" in inputs
+        assert "dry_run" in inputs
+
+    def test_has_concurrency_group_by_pr_number(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        concurrency = yaml_data.get("concurrency", {})
+        group = concurrency.get("group", "")
+        assert "verify-qa-reference-in-pr-" in group
+        assert "inputs.target_pr" in group
+        assert "github.event.pull_request.number" in group
+        assert concurrency.get("cancel-in-progress") is False
+
+    def test_job_condition_scopes_target_prs(self):
+        job_if = _load_workflow_yaml(self._WORKFLOW).get("jobs", {}).get("verify", {}).get("if", "")
+        assert "vars.QA_REFERENCE_CHECK_MODE != 'disabled'" in job_if
+        assert "contains(github.event.pull_request.labels.*.name, 'auto-qa')" in job_if
+        assert "!contains(github.event.pull_request.labels.*.name, 'qa-questionnaire-pr')" in job_if
+        assert "!github.event.pull_request.draft" in job_if
+
+    def test_run_script_checks_required_markers_and_no_reference(self):
+        verify_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="verify",
+            step_name="Verify QA Reference section in PR body",
+        )
+        run_script = verify_step.get("run", "")
+        assert "<!-- qa-reference-start -->" in run_script
+        assert "<!-- qa-reference-end -->" in run_script
+        assert "参照なし" in run_script
+        assert "QA Reference セクションが PR 本文に存在しません" in run_script
+        assert "QA Reference セクションに参照ファイルまたは『参照なし: 理由 = ...』が記載されていません" in run_script
+
+    def test_run_script_checks_path_safety_and_file_existence(self):
+        verify_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="verify",
+            step_name="Verify QA Reference section in PR body",
+        )
+        run_script = verify_step.get("run", "")
+        assert "grep -qE '^qa/[a-zA-Z0-9_][a-zA-Z0-9_.-]*(/[a-zA-Z0-9_][a-zA-Z0-9_.-]*)*\\.md$'" in run_script
+        assert "grep -qE '(^|/)\\.\\.(/|$)'" in run_script
+        assert "grep -qE '(^|/)\\.(/|$)'" in run_script
+        assert '[[ "${qa_path}" == *"?"* ]]' in run_script
+        assert '[[ "${qa_path}" == *"#"* ]]' in run_script
+        assert '[[ "${qa_path}" == *"%"* ]]' in run_script
+        assert "/contents/${qa_path}?ref=${head_sha}" in run_script
+        assert "/contents/${qa_path}?ref=${base_sha}" in run_script
+
+    def test_run_script_generates_comment_file_on_pr_fetch_failure(self):
+        verify_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="verify",
+            step_name="Verify QA Reference section in PR body",
+        )
+        run_script = verify_step.get("run", "")
+        assert 'failures_json=\'["PR #' in run_script
+        assert "/tmp/qa_reference_check_comment.md" in run_script
+
+    def test_upserts_failure_comment_with_marker(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "<!-- qa-reference-check-result -->" in content
+        assert "gh api --method PATCH \"/repos/${REPO}/issues/comments/${comment_id}\"" in content
+        assert "gh pr comment \"${PR_NUMBER}\"" in content
+
+    def test_skips_comment_in_dry_run(self):
+        comment_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="verify",
+            step_name="Upsert PR comment on failure",
+        )
+        assert "env.DRY_RUN != 'true'" in comment_step.get("if", "")
+        skip_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="verify",
+            step_name="Skip comment posting in dry-run mode",
+        )
+        assert "env.DRY_RUN == 'true'" in skip_step.get("if", "")
+
+
+class TestCopilotAutoFeedbackWorkflow:
+    """copilot-auto-feedback workflow の dry-run 追加を静的検証する。"""
+
+    _WORKFLOW = "copilot-auto-feedback.yml"
+
+    def test_has_workflow_dispatch_inputs_for_dry_run(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
+        assert "target_issue" in inputs
+        assert "target_pr" in inputs
+        assert "dry_run" in inputs
+        assert "simulate_label" in inputs
+
+    def test_auto_qa_on_issue_supports_simulate_label(self):
+        job = _load_workflow_yaml(self._WORKFLOW).get("jobs", {}).get("auto-qa-on-issue", {})
+        condition = job.get("if", "")
+        assert "inputs.simulate_label" in condition
+        assert "workflow_dispatch" in condition
+
+    def test_write_steps_use_dry_run_guard(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "dry_run_guard()" in content
+        assert "[DRY RUN] would execute:" in content
+        assert "[DRY RUN] would execute: $*" not in content
+
+
+class TestAutoQaTimeoutWatcherWorkflow:
+    """QA フェーズタイムアウト監視 workflow の静的検証。"""
+
+    _WORKFLOW = "auto-qa-timeout-watcher.yml"
+
+    def test_has_schedule_cron_every_6_hours(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        schedule = on_section.get("schedule", [])
+        assert any(item.get("cron") == "0 */6 * * *" for item in schedule)
+
+    def test_has_workflow_dispatch_inputs(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
+        assert "target_issue" in inputs
+        assert "dry_run" in inputs
+
+    def test_job_has_enable_flag_guard(self):
+        watch_job = _load_workflow_yaml(self._WORKFLOW).get("jobs", {}).get("watch", {})
+        assert watch_job.get("if", "") == "${{ vars.ENABLE_QA_TIMEOUT_WATCHER != 'false' }}"
+
+    def test_uses_default_timeout_variable_and_notification_marker(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "QA_TIMEOUT_HOURS: ${{ vars.QA_PHASE_TIMEOUT_HOURS || '72' }}" in content
+        assert "<!-- qa-timeout-notified -->" in content
+
+    def test_handles_timeline_failure_without_failing_job(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "timeline 解析に失敗したためスキップします" in content
+        assert "/timeline?per_page=100" in content
+        assert "--jq '.[]'" in content
+        assert "jq -rs --arg label" in content
+        assert "| max // \"\"" in content

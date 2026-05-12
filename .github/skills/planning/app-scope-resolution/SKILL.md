@@ -51,6 +51,7 @@ workflow に対応する推薦アーキテクチャの APP-ID のみを対象と
 
 - `docs/catalog/app-arch-catalog.md` が存在しない場合 → fail-fast（非 dry-run）または warning 継続（dry-run）
 - APP-ID が `docs/catalog/app-arch-catalog.md` に存在しない場合 → unknown として除外
+- **見出し命名揺れの吸収**: `hve.app_arch_filter` は `## A) サマリ表（全APP横断）` を canonical とするが、`## A) 選定結果一覧（サマリ表）` 等の揺れも受理する（stderr に WARN を出力）。出力契約に従って canonical 見出しを使用することを推奨。
 - 上記以外の workflow では後方互換（全サービス/全画面対象）を維持する
 
 ## スコープ確定後のアクション

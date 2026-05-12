@@ -257,6 +257,19 @@ bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO --self-hosted-runner-la
 
 ---
 
+### `docs/catalog/app-arch-catalog.md` 関連エラー
+
+AAD-WEB / ASDW-WEB / ABD / ABDV ワークフローで以下のエラーが Issue にコメントされた場合の対処:
+
+| エラー文言（先頭） | 原因 | 対処 |
+|---|---|---|
+| `... が見つかりません。Architecture Design (AAS) を先に実行してください` | catalog ファイル自体が未生成 | AAS ワークフローを先に実行する |
+| `... の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません` | catalog の見出しが出力契約と大きく異なる（`サマリ表` / `選定結果一覧` を含まない） | `.github/skills/planning/architecture-questionnaire/assets/output-format.md` §7.2 に沿って見出しを `## A) サマリ表（全APP横断）` に修正、または AAS Step.2 を再実行（`選定結果一覧（サマリ表）` などの軽微な揺れは受理されるが WARN が出ます） |
+| `... のサマリ表に必要な列 ...` | テーブル列名（APP-ID / 推薦アーキテクチャ）の不在/誤表記 | サマリ表の列ヘッダを出力契約に揃える |
+| `... が予期せず失敗しました（exit 1, 詳細不明）` | Python 自体の起動失敗等 | ワークフローログで `python3 -m hve.app_arch_filter` のスタックトレースを確認 |
+
+---
+
 ### preflight-cloud-setup.sh で FAIL / WARN が出る
 
 **症状**: `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` の結果で `FAIL` または `WARN` が表示される。

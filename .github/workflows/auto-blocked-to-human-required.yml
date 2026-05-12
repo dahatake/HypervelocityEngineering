@@ -23,6 +23,7 @@ on:
         type: string
 
 permissions:
+  contents: read
   issues: write
 
 jobs:

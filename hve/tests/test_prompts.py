@@ -440,12 +440,59 @@ class TestYamlWorkflowPromptDriftPhase5(unittest.TestCase):
                       "copilot-auto-feedback.yml に 'copilot-auto-pre-qa-posted' マーカーがありません。"
                       "auto-qa-on-issue ジョブの冪等化が失われています。")
 
+    def test_yaml_sets_up_python_and_installs_hve_for_pre_qa_issue_job(self) -> None:
+        """auto-qa-on-issue ジョブが Python 3.11 と hve editable install を設定すること。"""
+        content = self._read_yaml_content()
+        self.assertIn("actions/setup-python@v5", content)
+        self.assertIn('python-version: "3.11"', content)
+        self.assertIn("python3 -m pip install -e .", content)
+
+    def test_yaml_assigns_copilot_to_issue_after_pre_qa_comment(self) -> None:
+        """auto-qa-on-issue ジョブが feature flag 下で Copilot アサインと qa-drafting 遷移を行うこと。"""
+        content = self._read_yaml_content()
+        self.assertIn("Diagnostic — トリガー条件確認", content)
+        self.assertIn("COMMENT_BODY preview (先頭500文字)", content)
+        self.assertIn("ENABLE_COPILOT_QA_ASSIGN", content)
+        self.assertIn("source \"${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh\"", content)
+        self.assertIn(':qa-drafting', content)
+
     def test_yaml_has_auto_context_review_opt_out_marker(self) -> None:
         """YAML auto-review ジョブに opt-out マーカー 'auto-context-review: false' の参照が含まれること。"""
         content = self._read_yaml_content()
         self.assertIn("auto-context-review: false", content,
                       "copilot-auto-feedback.yml に 'auto-context-review: false' opt-out マーカーの参照がありません。"
                       "レビューの opt-out 機能が失われています。")
+
+
+class TestQaDraftingLabels(unittest.TestCase):
+    """qa-drafting ラベル定義の静的検証。"""
+
+    _LABELS_PATH = str(
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / ".github" / "labels.json"
+    )
+
+    def test_labels_json_has_all_qa_drafting_labels(self) -> None:
+        path = os.path.normpath(self._LABELS_PATH)
+        if not os.path.exists(path):
+            self.fail(f"labels.json が見つかりません: {path}")
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        for label in [
+            "aas:qa-drafting",
+            "aad:qa-drafting",
+            "aad-web:qa-drafting",
+            "asdw:qa-drafting",
+            "asdw-web:qa-drafting",
+            "abd:qa-drafting",
+            "abdv:qa-drafting",
+            "aag:qa-drafting",
+            "aagd:qa-drafting",
+            "akm:qa-drafting",
+            "aqod:qa-drafting",
+            "adoc:qa-drafting",
+        ]:
+            self.assertIn(label, content)
 
 
 if __name__ == "__main__":

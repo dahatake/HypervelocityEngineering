@@ -15,6 +15,7 @@
 - [Cloud / Local 対応表（初回ユーザー向け）](#cloud--local-対応表初回ユーザー向け)
 - [ワークフロートリガー系ラベル](#ワークフロートリガー系ラベル)
 - [モデル選択ルール](#モデル選択ルール)
+- [SDK ツール制限（環境変数）](#sdk-ツール制限環境変数)
 - [Custom Agent 一覧](#custom-agent-一覧)
 - [knowledge/ ディレクトリとの関係](#knowledge-ディレクトリとの関係)
 - [Issue テンプレート一覧](#issue-テンプレート一覧)
@@ -25,7 +26,7 @@
 
 ## ワークフロー一覧
 
-`.github/workflows/` 配下の **49** workflow ファイルを、実装から到達できる Workflow 名と trigger で一覧化します。
+`.github/workflows/` 配下の **51** workflow ファイルを、実装から到達できる Workflow 名と trigger で一覧化します。
 
 | ファイル名 | Workflow 名 | Trigger |
 |-----------|-------------|---------|
@@ -51,6 +52,7 @@
 | `auto-orchestrator-dispatcher.yml` | HVE Cloud Agent Orchestrator Dispatcher | `issues: [opened, labeled, closed]` |
 | `auto-pr-transition-dispatcher.yml` | PR Transition Dispatcher | `pull_request_target: [synchronize]` / `issue_comment: [created]` |
 | `auto-qa-default-answer.yml` | QA 質問票デフォルト回答の自動投稿 | `issue_comment: [created]` |
+| `restore-auto-qa-label.yml` | Restore auto-qa label | `pull_request_target: [labeled, unlabeled, synchronize]` / `workflow_dispatch` |
 | `auto-qa-to-review-transition.yml` | QA 完了 → auto-context-review 自動遷移 | `workflow_call` |
 | `auto-review-to-approve-transition.yml` | レビュー完了 → auto-approve-ready 自動遷移 | `workflow_call` |
 | `auto-self-improve-close.yml` | Self-Improve Auto Close | `pull_request: [closed]` |
@@ -92,7 +94,7 @@
 | `abdv` | Batch Dev | `auto-batch-dev-reusable.yml` |
 | `aag` | AI Agent Design | `auto-ai-agent-design-reusable.yml`（dispatcher 経由） |
 | `aagd` | AI Agent Dev & Deploy | `auto-ai-agent-dev-reusable.yml`（dispatcher 経由） |
-| `akm` | Knowledge Management（QA + original-docs） | `auto-knowledge-management-reusable.yml` |
+| `akm` | Knowledge Management（QA + original-docs + Work IQ） | `auto-knowledge-management-reusable.yml` |
 | `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
 | `aqod` | Original Docs Review | `auto-aqod.yml` |
 
@@ -189,7 +191,7 @@
 | `auto-batch-design` | **バッチ設計ワークフロー（ABD）の起動トリガー**。Issue にこのラベルが付与されると、ABD オーケストレーターが起動し、Step.1.1〜6.3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-batch-dev` | **バッチ実装ワークフロー（ABDV）の起動トリガー**。Issue にこのラベルが付与されると、ABDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-documentation` | **Source Codeからのドキュメント作成ワークフロー（ADOC）の起動トリガー**。Issue にこのラベルが付与されると、ADOC オーケストレーターが起動し、Step.1〜6 の Sub Issue を自動生成して Copilot にアサインする |
-| `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/original-docs/both）は Issue Template で選択する。 |
+| `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/original-docs/both）は Issue Template で選択する（HVE Cloud Agent はこの 3 選択のみ）。`hve` ローカル CLI を使うと `workiq` をさらにマルチ選択で追加できる（例: `--sources qa,original-docs,workiq`）。 |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
 | `split-mode` | **分割モード PR の識別ラベル**。`plan-validation-and-labeling.yml` の `label-split-mode` job が、PR 差分に含まれる `work/**/plan.md` の `<!-- split_decision: SPLIT_REQUIRED -->` を検知した場合に自動付与します。`check-split-mode` job は同 PR に実装ファイルが混在していないかを検証します。 |
@@ -263,6 +265,123 @@
 - モデル ID は Copilot CLI の `/model` 表示に合わせてドット区切りを使用（例: `claude-opus-4.7`, `claude-opus-4.6`）
 - `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先される
 - 公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
+
+---
+
+## SDK ツール制限（環境変数）
+
+`hve` 起動時の環境変数で GitHub Copilot SDK の `available_tools` / `excluded_tools` を制御できる。
+未設定時は SDK のデフォルト（全ツール許可）が適用される。
+
+| 環境変数 | 形式 | 用途 |
+|---|---|---|
+| `HVE_AVAILABLE_TOOLS` | `tool1,tool2` または空白区切り | 指定したツールのみ許可（SDK `available_tools`） |
+| `HVE_EXCLUDED_TOOLS` | `tool1,tool2` または空白区切り | 指定したツールを除外（SDK `excluded_tools`） |
+
+- 区切り文字: カンマ (`,`) と空白の混在を許容（例: `"str_replace_editor, bash glob"` → 3 件）
+- 空文字 / 未設定: `None` → SDK デフォルト
+- 伝搬範囲: メインセッション・サブセッション（Pre-QA / Review）・`resume_session` の全経路
+- 設定値は `SDKConfig.available_tools` / `SDKConfig.excluded_tools` に格納される
+
+例:
+
+```powershell
+$env:HVE_AVAILABLE_TOOLS = "str_replace_editor,bash"
+$env:HVE_EXCLUDED_TOOLS  = "web_search"
+python -m hve aas --app-ids APP-01
+```
+
+---
+
+## Fan-out 並列実行（ADR-0002）
+
+並列度を最大化するため、各ステップを N 個のサブステップに自動展開する `fan-out` 機構を提供する（[ADR-0002](../template/decisions/ADR-0002-hve-fanout-architecture.md)）。
+
+### 動作概要
+
+- ベース StepDef に `fanout_static_keys` または `fanout_parser` を指定すると、`hve.dag_executor.DAGExecutor` が起動時に N 個の合成サブステップへ展開する。
+- 合成サブステップの `step_id` は `{base_id}/{key}` 形式（例: `1/D01`、`2/APP-01`、`2.2/SVC-billing`）。
+- 並列実行数は `WorkflowDef.max_parallel` でワークフロー単位に上書き可能（既定 `15`）。
+- 動的解決パーサが 0 件を返した場合は自動 skip（`state="skipped", reason="fanout-empty"`）。
+- 子ステップ 1 件でも失敗すると親 fan-out 元が `failed` とみなされ後続 DAG は起動しない。
+
+### 設定方法
+
+`hve/workflow_registry.py` の StepDef に以下を追加する:
+
+```python
+StepDef(
+    id="1",
+    title="...",
+    custom_agent="KnowledgeManager",
+    # --- fan-out 設定 ---
+    fanout_static_keys=["D01", "D02", ..., "D21"],   # 静的キー
+    # または
+    fanout_parser="app_catalog",                      # 動的解決（hve/catalog_parsers.py 登録名）
+    additional_prompt_template_path="hve/prompt/fanout/{wf}/_common.md",
+    per_key_mcp_servers={                             # キー別 MCP 上書き（任意）
+        "D08": {"sql-mcp": {"url": "..."}},
+    },
+)
+```
+
+### 登録済み動的解決パーサ（`hve/catalog_parsers.py`）
+
+| パーサ名 | 対象カタログ | 抽出する ID 形式 |
+|---|---|---|
+| `app_catalog` | `docs/catalog/app-catalog.md` | `APP-NN` |
+| `screen_catalog` | `docs/catalog/screen-catalog.md` | `SC-*` |
+| `service_catalog` | `docs/catalog/service-catalog.md` | `SVC-*` |
+| `batch_job_catalog` | `docs/batch/batch-job-catalog.md` | `JOB-*` |
+| `agent_catalog` | `docs/agent/agent-application-definition.md` | `AG-*` |
+
+### 適用済みワークフロー
+
+| WF | 対象ステップ | 並列数 | 横断レビュー（join） |
+|---|---|---|---|
+| AKM | `1` (knowledge/D01〜D21 生成) | 21 | Step `2`（`QA-DocConsistency`） |
+| AQOD | `1` (original-docs 質問票) | 21 | Step `2` |
+| AAS | `2` (Arch 候補解析) | APP 数 | — |
+| AAD-WEB | `2.1` / `2.2` / `2.3` | 画面/サービス数 | — |
+| ASDW-WEB | `2.3T` / `2.3TC` / `2.4` (per-service)、`3.0T` / `3.0TC` / `3.1` (per-screen) | サービス/画面数 | — |
+| ABD | `6.1` / `6.3` | ジョブ数 | — |
+| ABDV | `2.1` / `2.2` | ジョブ数 | — |
+| AAG | `2` / `3` | エージェント数 | — |
+| AAGD | `2.1` / `2.2` / `2.3` / `3` | エージェント数 | — |
+
+> **ARD / ADOC は fan-out 対象外**（ADR-0002 H-1 / O-1）。
+
+### per-key プロンプトテンプレート規約
+
+- パス規約: `hve/prompt/fanout/{workflow_id}/_common.md`
+- 本文中の `{{key}}` は実行時に fan-out キー（例 `D01`）に置換される。
+- ファイル不在時は警告のみ出してベースプロンプトをそのまま使用する。
+
+### サブタスク起動の可視化（stderr JSON）
+
+`Console._emit_structured()` により、verbosity / quiet 設定に関わらず **stderr** へ機械可読 JSON 1 行を必ず出力する。
+
+スキーマ:
+
+```json
+{
+  "event": "step_start",
+  "step_id": "1/D01",
+  "title": "knowledge/ ドキュメント生成・管理 (D01)",
+  "agent": "KnowledgeManager",
+  "ts": "2026-05-11T12:34:56.789Z",
+  "run_id": "hve-20260511-abc",
+  "parent_step_id": "1",
+  "fanout_key": "D01"
+}
+```
+
+イベント種別: `step_start` / `step_end` / `phase_start` / `phase_end` / `dag_wave_start` / `token_chunk`。
+
+### Resume との連携
+
+- 合成 step_id `1/D01` は `make_session_id()` 内で `/` → `-` に正規化され、決定論的 session_id `hve-{run_id}-step-1-D01` を生成する。
+- 既存 `--resume` 経路でそのまま `resume_session()` 可能（同一キーが再評価される）。
 
 ---
 

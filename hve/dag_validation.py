@@ -147,3 +147,80 @@ def _as_tuple(values: Any) -> Tuple[str, ...]:
     if values is None:
         return ()
     return tuple(str(value) for value in values)
+
+
+# ---------------------------------------------------------------------------
+# T-05: SPLIT_REQUIRED 機械検出 (Skill task-dag-planning §2.1.2 準拠)
+#
+# work/**/plan.md の冒頭 5 行に以下のメタデータが必須:
+#   - task_scope: <single|multi>
+#   - context_size: <small|medium|large>
+# task_scope=multi または context_size=large の場合は実装着手禁止。
+# ---------------------------------------------------------------------------
+
+_PLAN_META_HEAD_LINES: int = 5
+_PLAN_META_REQUIRED_KEYS: Tuple[str, ...] = ("task_scope", "context_size")
+
+
+def check_plan_md_metadata(plan_path: Path) -> list[str]:
+    """`work/**/plan.md` の冒頭 5 行メタデータを検証する。
+
+    違反メッセージのリストを返す。空リストなら問題なし。
+
+    検査内容:
+      1. ファイルが存在し読める
+      2. 冒頭 _PLAN_META_HEAD_LINES 行に `task_scope: ` と `context_size: ` を含む
+      3. `task_scope: multi` または `context_size: large` を検出した場合
+         「SPLIT_REQUIRED — 実装着手禁止」警告を返す
+
+    Args:
+        plan_path: plan.md ファイルへのパス（通常 `work/**/plan.md`）
+
+    Returns:
+        違反メッセージのリスト。空なら全条件 OK。
+    """
+    issues: list[str] = []
+    try:
+        text = plan_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        issues.append(f"{plan_path}: ファイルが存在しません")
+        return issues
+    except OSError as exc:
+        issues.append(f"{plan_path}: 読み取りエラー ({type(exc).__name__}: {exc})")
+        return issues
+
+    head_lines = text.splitlines()[:_PLAN_META_HEAD_LINES]
+    head_text = "\n".join(head_lines)
+
+    # 1) 必須キーが冒頭 5 行に存在するか
+    missing = [key for key in _PLAN_META_REQUIRED_KEYS if f"{key}:" not in head_text]
+    if missing:
+        issues.append(
+            f"{plan_path}: 冒頭 {_PLAN_META_HEAD_LINES} 行に必須メタデータが不足しています: "
+            f"{', '.join(missing)} (Skill task-dag-planning §2.1.2)"
+        )
+        return issues
+
+    # 2) 値の抽出（簡易パーサ）— `key: value` のみ対応
+    meta: dict[str, str] = {}
+    for line in head_lines:
+        for key in _PLAN_META_REQUIRED_KEYS:
+            prefix = f"{key}:"
+            if line.strip().startswith(prefix):
+                meta[key] = line.split(":", 1)[1].strip().lower()
+
+    # 3) SPLIT_REQUIRED 判定
+    task_scope = meta.get("task_scope", "")
+    context_size = meta.get("context_size", "")
+    if task_scope == "multi" or context_size == "large":
+        triggers = []
+        if task_scope == "multi":
+            triggers.append("task_scope=multi")
+        if context_size == "large":
+            triggers.append("context_size=large")
+        issues.append(
+            f"{plan_path}: SPLIT_REQUIRED — 実装着手禁止 ({', '.join(triggers)})。"
+            " plan.md + subissues.md のみ作成して停止すること (copilot-instructions.md §0)"
+        )
+
+    return issues

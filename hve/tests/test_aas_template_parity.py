@@ -34,21 +34,23 @@ from workflow_registry import AAS  # type: ignore[import]
 # 依存なし (None) = 依存セクションで「なし」と記載されるべき
 # 依存あり (str) = このパターンが ## 依存 セクションに含まれているべき
 # 依存あり (list) = いずれかのパターンが含まれていれば OK（別表現の許容）
+# Sub-4 (B-1): Step 4 → 4.1 (データモデル) / 4.2 (サンプルデータ) に分割
 _AAS_STEP_DEPENDENCY_PATTERNS: dict[str, None | str | list[str]] = {
     "1":   None,                       # 依存なし
     "2":   "1",                        # Step.1 に依存
     "3.1": "2",                        # Step.2 に依存
     "3.2": "3.1",                      # Step.3.1 に依存（Step.1.1 は NG）
-    "4":   "3.2",                      # Step.3.2 に依存（Step.1.2 は NG）
-    "5":   "4",                        # Step.4 に依存（Step.2 は NG）
-    "6":   "5",                        # Step.5 に依存（Step.4（画面一覧） は NG）
-    "7":   "6",                        # Step.6 に依存（Step.5（サービスカタログ） は NG）
+    "4.1": "3.2",                      # Step.3.2 に依存
+    "4.2": "4.1",                      # Step.4.1 に依存
+    "5":   "4.1",                      # Step.4.1 に依存（4.2 はサンプルデータのため独立）
+    "6":   "5",                        # Step.5 に依存
+    "7":   "6",                        # Step.6 に依存
 }
 
 # aad-web からの混入が疑われる誤ったステップ参照パターン
 _FORBIDDEN_DEPENDENCY_PATTERNS = {
     "3.2": ["Step.1.1"],
-    "4":   ["Step.1.2"],
+    "4.1": ["Step.1.2"],
     "5":   ["Step.2（データモデル作成）", "Step.2（"],
     "6":   ["Step.4（画面一覧"],
     "7":   ["Step.5（サービスカタログ）"],

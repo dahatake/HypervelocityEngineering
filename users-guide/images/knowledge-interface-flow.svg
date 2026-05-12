@@ -2,8 +2,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" role="img"
      aria-labelledby="svg-title svg-desc"
      font-family="'Segoe UI','Hiragino Kaku Gothic ProN','Meiryo',sans-serif">
-  <title id="svg-title">knowledge/ を介した要求定義の一元管理フロー</title>
-  <desc id="svg-desc">3つの情報源（original-docs/, qa/, src/）から、aqod / akm / adoc の3ワークフローを経由して knowledge/ と docs-generated/ を生成。設計・開発ワークフローが knowledge/ を業務コンテキストとして自動参照し、反復により精緻化される。</desc>
+  <title id="svg-title">knowledge/ を介した要求定義の一元管理フロー（Work IQ 入力対応）</title>
+  <desc id="svg-desc">4つの情報源（original-docs/, qa/, src/, Work IQ）から、aqod / akm / adoc の3ワークフローを経由して knowledge/ と docs-generated/ を生成。akm は qa/original-docs/workiq のマルチ選択入力に対応し、workiq 選択時は AKM メイン DAG の前段で Work IQ 取り込みフェーズが走る。設計・開発ワークフローが knowledge/ を業務コンテキストとして自動参照し、反復により精緻化される（HVE Cloud Agent は workiq 入力対象外）。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
@@ -41,6 +41,9 @@
   <text x="160" y="410" text-anchor="middle" class="node-title" fill="#0d47a1">src/</text>
   <text x="160" y="430" text-anchor="middle" class="node-sub" fill="#0d47a1">既存ソースコード</text>
   <text x="160" y="446" text-anchor="middle" class="node-sub" fill="#0d47a1">（資産活用）</text>
+  <rect x="60" y="475" width="200" height="60" rx="6" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="160" y="500" text-anchor="middle" class="node-title" fill="#9a3412">Work IQ（任意）</text>
+  <text x="160" y="518" text-anchor="middle" class="node-sub" fill="#9a3412">Microsoft 365（hve CLI のみ）</text>
   <rect x="350" y="90" width="260" height="410" rx="8" class="group-frame"/>
   <text x="480" y="112" text-anchor="middle" class="group-title">② ワークフロー</text>
   <rect x="370" y="140" width="220" height="80" rx="6" class="wf-box"/>
@@ -51,6 +54,7 @@
   <text x="480" y="286" text-anchor="middle" class="node-title" fill="#e65100">akm</text>
   <text x="480" y="304" text-anchor="middle" class="node-sub" fill="#e65100">auto-knowledge-management.yml</text>
   <text x="480" y="320" text-anchor="middle" class="node-sub" fill="#e65100">KnowledgeManager Agent</text>
+  <text x="480" y="335" text-anchor="middle" class="node-sub" fill="#9a3412">sources: qa,original-docs,workiq</text>
   <rect x="370" y="380" width="220" height="80" rx="6" class="wf-box"/>
   <text x="480" y="406" text-anchor="middle" class="node-title" fill="#e65100">adoc</text>
   <text x="480" y="424" text-anchor="middle" class="node-sub" fill="#e65100">auto-app-documentation.yml</text>
@@ -81,6 +85,8 @@
   <path d="M 260 200 Q 315 240 370 285" class="edge" marker-end="url(#arrow)"/>
   <path d="M 260 300 Q 315 300 370 300" class="edge" marker-end="url(#arrow)"/>
   <path d="M 260 420 Q 315 420 370 420" class="edge" marker-end="url(#arrow)"/>
+  <path d="M 260 500 Q 315 410 370 310" stroke="#ea580c" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+  <text x="295" y="478" class="edge-label" fill="#9a3412">workiq → akm (Pre-DAG)</text>
   <path d="M 370 200 Q 300 230 260 280" class="edge-iter" marker-end="url(#arrow)"/>
   <text x="295" y="248" class="edge-label" fill="#b71c1c">質問票を生成</text>
   <path d="M 590 300 Q 640 280 700 265" class="edge" marker-end="url(#arrow)"/>

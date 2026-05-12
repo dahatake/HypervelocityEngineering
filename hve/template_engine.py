@@ -31,13 +31,20 @@ _DEFAULT_TARGET_FILES: Dict[str, str] = {
 }
 
 
-def _get_default_akm_target_files(sources: str) -> str:
-    """AKM の sources に応じた target_files 既定値を返す。"""
-    if sources == "original-docs":
-        return "original-docs/*"
-    if sources == "both":
-        return ""
-    return _DEFAULT_TARGET_FILES.get("akm", "")
+def _get_default_akm_target_files(sources) -> str:
+    """AKM の sources に応じた target_files 既定値を返す。
+
+    ``sources`` は文字列（カンマ/空白区切り）または ``list[str]`` を受け付ける。
+    Work IQ のみ、または非 Work IQ ソースが複数の場合は既定パターンなし。
+
+    後方互換: 旧 ``"original-docs"`` / ``"both"`` 等の単一文字列も受理する。
+    """
+    # orchestrator 側の正規化ロジックを再利用する。
+    try:
+        from .orchestrator import _default_akm_target_files as _impl  # type: ignore
+    except ImportError:
+        from orchestrator import _default_akm_target_files as _impl  # type: ignore[no-redef]
+    return _impl(sources)
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
@@ -852,7 +859,7 @@ def render_template(
     body = body.replace("{job_section}", _build_job_section(params.get("batch_job_id", "")))
 
     # AKM 固有プレースホルダ
-    body = body.replace("{akm_sources}", params.get("sources", "qa"))
+    body = body.replace("{akm_sources}", params.get("sources", "qa,original-docs"))
     body = body.replace("{akm_target_files}", params.get("target_files", ""))
     body = body.replace(
         "{akm_target_files_section}",

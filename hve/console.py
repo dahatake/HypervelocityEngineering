@@ -6,6 +6,7 @@ ANSI カラー・ボックス描画・スピナー・インタラクティブメ
 
 from __future__ import annotations
 
+import json
 import re
 import os
 import shutil
@@ -766,6 +767,13 @@ class Console:
         agent_str = f" {s.DIM}(Agent: {agent}){s.RESET}" if agent else ""
         self._print(f"  {s.CYAN}▶{s.RESET} {s.BOLD}[Step.{step_id}]{s.RESET} {title}{agent_str}")
         self._step_start_times[step_id] = time.time()
+        # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
+        self._emit_structured(
+            event="step_start",
+            step_id=step_id,
+            title=title,
+            agent=agent,
+        )
 
     def step_end(self, step_id: str, status: str, elapsed: float = 0.0) -> None:
         """ステップ完了。quiet 以外で表示。Usage 累計サマリーを付加。"""
@@ -784,10 +792,78 @@ class Console:
                 f" tools={tool_count}]{s.RESET}"
             )
         self._print(f"  {icon} {s.BOLD}[Step.{step_id}]{s.RESET} {status} {elapsed_str}{usage_summary}")
+        # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
+        self._emit_structured(
+            event="step_end",
+            step_id=step_id,
+            status=status,
+            elapsed=elapsed,
+        )
         # クリーンアップ
         self._step_usage.pop(step_id, None)
         self._step_tool_count.pop(step_id, None)
         self._step_files.pop(step_id, None)
+
+    # ------------------------------------------------------------------
+    # stderr JSON 機械可読出力（最詳細レベル verbose のみで出力）
+    # ------------------------------------------------------------------
+    def _emit_structured(self, *, event: str, **fields: Any) -> None:
+        """イベントを stderr に JSON 1 行で出力する。
+
+        構造化 JSON 出力は最詳細レベル (verbosity>=3, --verbosity verbose) のみで
+        行う。compact / normal / quiet および final_only モードでは抑止する。
+
+        Args:
+            event: イベント種別 ("step_start"/"step_end"/"phase_start"/"phase_end"/"token_chunk"/"dag_wave_start" 等)
+            **fields: 追加フィールド（step_id, title, agent, run_id, parent_step_id,
+                      wave_num, total_waves, fanout_key, session_id など）。
+        """
+        # 最詳細レベルのみ出力。final_only 時は中間イベント抑止の原則に従い無効。
+        if self._verbosity < 3 or self.final_only:
+            return
+        try:
+            payload: Dict[str, Any] = {
+                "event": event,
+                "ts": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+            }
+            # step_id から parent_step_id / fanout_key を自動派生
+            sid = fields.get("step_id")
+            if isinstance(sid, str) and "/" in sid and "parent_step_id" not in fields:
+                parent, _, key = sid.partition("/")
+                payload["parent_step_id"] = parent
+                if "fanout_key" not in fields:
+                    payload["fanout_key"] = key
+            run_id = getattr(self, "_run_id", None)
+            if run_id and "run_id" not in fields:
+                payload["run_id"] = run_id
+            # None 値は除外して JSON を簡潔に保つ
+            for k, v in fields.items():
+                if v is not None:
+                    payload[k] = v
+            line = json.dumps(payload, ensure_ascii=False, default=str)
+            print(line, file=sys.stderr, flush=True)
+        except Exception:
+            # 観測パスが本処理を阻害しないよう全例外を握り潰す
+            pass
+
+    def set_run_id(self, run_id: Optional[str]) -> None:
+        """構造化ログに含める run_id を設定する。"""
+        self._run_id = run_id
+
+    def token_chunk(self, step_id: str, text: str, *, kind: str = "delta") -> None:
+        """Streaming トークン断片を可視化する（E-1）。
+
+        本メソッドは **stderr JSON 機械可読出力のみ** を担当する。
+        人間可読出力は既存の ``stream_token`` / ``reasoning_token`` が担う。
+
+        Args:
+            step_id: ステップ ID
+            text: トークン断片
+            kind: "delta" / "message" / "reasoning" など
+        """
+        # 構造化 JSON 出力は _emit_structured 側で一元的にゲートされる
+        # (verbosity>=3 かつ非 final_only 時のみ出力)。
+        self._emit_structured(event="token_chunk", step_id=step_id, kind=kind, length=len(text))
 
     def track_file(self, step_id: str, path: str, mode: str = "read") -> None:
         """ステップのファイル I/O を記録する。
@@ -1940,6 +2016,13 @@ class Console:
         bar = f"{s.DIM}{'─' * 48}{s.RESET}"
         self._print(f"\n  {s.CYAN}────{s.RESET} Wave {wave_num}/{total_waves} {bar}")
         self._print(f"  {s.CYAN}▸{s.RESET} {joined}")
+        # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
+        self._emit_structured(
+            event="dag_wave_start",
+            wave_num=wave_num,
+            total_waves=total_waves,
+            step_ids=[getattr(st, "id", str(st)) for st in steps],
+        )
 
     def dag_progress(self, completed: int, running: int, total: int) -> None:
         """DAG 全体の進捗バー。quiet 以外で表示。"""
@@ -1958,6 +2041,11 @@ class Console:
 
     def step_phase_start(self, step_id: str, phase_num: int, total_phases: int, name: str) -> None:
         """ステップ内フェーズ開始。quiet 以外で表示。"""
+        # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
+        self._emit_structured(
+            event="phase_start", step_id=step_id,
+            phase_num=phase_num, total_phases=total_phases, name=name,
+        )
         if self.quiet:
             return
         s = self.s
@@ -1970,6 +2058,12 @@ class Console:
         elapsed: float, result: str = "",
     ) -> None:
         """ステップ内フェーズ完了。quiet 以外で表示。"""
+        # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
+        self._emit_structured(
+            event="phase_end", step_id=step_id,
+            phase_num=phase_num, total_phases=total_phases, name=name,
+            elapsed=elapsed, result=result or None,
+        )
         if self.quiet:
             return
         s = self.s

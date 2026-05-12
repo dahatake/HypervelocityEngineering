@@ -1,0 +1,111 @@
+name: Check Auto-QA Skip (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        required: true
+        type: number
+      issue_body:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
+    outputs:
+      skip_auto_qa:
+        value: ${{ jobs.check.outputs.skip_auto_qa }}
+      skip_reason:
+        value: ${{ jobs.check.outputs.skip_reason }}
+      qa_exists:
+        value: ${{ jobs.check.outputs.qa_exists }}
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      skip_auto_qa: ${{ steps.main.outputs.skip_auto_qa }}
+      skip_reason: ${{ steps.main.outputs.skip_reason }}
+      qa_exists: ${{ steps.main.outputs.qa_exists }}
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Evaluate skip condition
+        id: main
+        env:
+          INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
+          INPUT_ISSUE_BODY: ${{ inputs.issue_body }}
+          INPUT_ISSUE_LABELS: ${{ inputs.issue_labels }}
+        run: |
+          set -euo pipefail
+
+          skip_auto_qa="false"
+          skip_reason="no existing QA"
+          qa_exists="false"
+
+          {
+            issue_labels="${INPUT_ISSUE_LABELS:-[]}" 
+            issue_body="${INPUT_ISSUE_BODY:-}"
+            if ! jq -e '.' >/dev/null 2>&1 <<<"${issue_labels}"; then
+              issue_labels='[]'
+            fi
+
+            if [[ -z "${issue_body}" ]]; then
+              issue_body=$(gh api "/repos/${REPO}/issues/${INPUT_ISSUE_NUMBER}" --jq '.body // ""' || echo "")
+            fi
+
+            if jq -e '. | index("qa-force-regenerate") != null' >/dev/null 2>&1 <<<"${issue_labels}"; then
+              skip_auto_qa="false"
+              skip_reason="force regenerate label"
+              qa_exists="false"
+            elif ! grep -q '<!-- auto-qa-skip-if-existing: true -->' <<<"${issue_body}"; then
+              skip_auto_qa="false"
+              skip_reason="opt-in flag not set"
+              qa_exists="false"
+            else
+              root_issue=$(sed -n -E 's/.*<!--[[:space:]]*root-issue:[[:space:]]*#([0-9]+)[[:space:]]*-->.*$/\1/p' <<<"${issue_body}" | head -n 1)
+              if [[ -z "${root_issue}" ]]; then
+                root_issue="${INPUT_ISSUE_NUMBER}"
+              fi
+
+              deliverable=$(ISSUE_BODY="${issue_body}" python3 -c "import os,re; body=os.environ.get('ISSUE_BODY',''); m=re.search(r'^##\\s*出力\\s*$([\\s\\S]*?)(?=^##\\s+|\\Z)', body, flags=re.MULTILINE); sec=m.group(1) if m else ''; mm=re.search(r'(docs/[^\\s\\x60]+\\.md)', sec); print(mm.group(1) if mm else '')")
+
+              script_output=""
+              if [[ -n "${deliverable}" ]]; then
+                script_output=$(ISSUE_BODY="${issue_body}" /bin/bash .github/scripts/bash/check-qa-existing.sh --root-issue "${root_issue}" --deliverable "${deliverable}" || true)
+              else
+                script_output=$(ISSUE_BODY="${issue_body}" /bin/bash .github/scripts/bash/check-qa-existing.sh --root-issue "${root_issue}" || true)
+              fi
+
+              qa_exists=$(awk -F= '$1=="qa_exists"{print $2}' <<<"${script_output}" | tail -n 1)
+              if [[ "${qa_exists}" == "true" ]]; then
+                skip_auto_qa="true"
+                skip_reason="existing QA detected"
+              else
+                skip_auto_qa="false"
+                skip_reason="no existing QA"
+                qa_exists="false"
+              fi
+            fi
+          } || {
+            skip_auto_qa="false"
+            skip_reason="check failed (fail-safe)"
+            qa_exists="false"
+          }
+
+          {
+            echo "skip_auto_qa=${skip_auto_qa}"
+            echo "skip_reason=${skip_reason}"
+            echo "qa_exists=${qa_exists}"
+          } >> "$GITHUB_OUTPUT"

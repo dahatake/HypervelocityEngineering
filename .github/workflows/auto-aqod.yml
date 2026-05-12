@@ -122,8 +122,8 @@ jobs:
           create_label "aqod:done" "0E8A16" ""
           create_label "aqod:blocked" "D73A4A" ""
           create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
-          create_label "auto-qa" "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
-          create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
+          create_label "auto-qa" "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
       - name: 即時 aqod:initialized 付与
         if: steps.gate.outputs.mode == 'initialize'
@@ -488,14 +488,52 @@ jobs:
           PY
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()
+        env:
+          BRANCH: ${{ steps.parse.outputs.branch }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
-          branch='${{ steps.parse.outputs.branch }}'
+
+          branch="${BRANCH}"
+
           git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
-            echo "Invalid branch name: ${branch}" >&2
+            echo "::error::Invalid branch name: ${branch}" >&2
             exit 1
           }
-          git push origin "HEAD:refs/heads/${branch}"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No Self-Improve changes to commit."
+            exit 0
+          fi
+
+          git commit -m "[Self-Improve] 自動品質改善"
+
+          pushed=false
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}/3 to ${branch}"
+
+            if git push origin "HEAD:refs/heads/${branch}"; then
+              pushed=true
+              break
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Push failed. Fetching and rebasing onto origin/${branch}..."
+              git fetch origin "${branch}"
+
+              if ! git rebase "origin/${branch}"; then
+                echo "::error::Rebase failed due to conflicts. Aborting rebase." >&2
+                git rebase --abort || true
+                exit 1
+              fi
+            fi
+          done
+
+          if [ "${pushed}" != "true" ]; then
+            echo "::error::git push failed after 3 attempts." >&2
+            exit 1
+          fi

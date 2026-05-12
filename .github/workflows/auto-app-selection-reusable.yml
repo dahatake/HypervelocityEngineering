@@ -43,7 +43,16 @@ permissions:
   pull-requests: write
 
 jobs:
+  check_qa_skip:
+    uses: ./.github/workflows/check-auto-qa-skip-reusable.yml
+    with:
+      issue_number: ${{ fromJSON(inputs.issue_number) }}
+      issue_labels: ${{ inputs.issue_labels }}
+      issue_body: ''
+    secrets: inherit
+
   orchestrate:
+    needs: check_qa_skip
     runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
@@ -53,6 +62,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
       REPO: ${{ github.repository }}
+      SKIP_AUTO_QA: ${{ needs.check_qa_skip.outputs.skip_auto_qa }}
+      SKIP_AUTO_QA_REASON: ${{ needs.check_qa_skip.outputs.skip_reason }}
 
     steps:
       # ----------------------------------------------------------------
@@ -225,8 +236,8 @@ jobs:
           create_label "aas:done"           "0E8A16" ""
           create_label "aas:blocked"        "D73A4A" ""
           create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
-          create_label "auto-qa"             "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
-          create_label "auto-approve-ready" "1D76DB" "Ready for auto-approve and auto-merge"
+          create_label "auto-qa"             "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
       # ----------------------------------------------------------------
       # 2.5 aas:initialized 即時付与（二重実行防止）
@@ -287,6 +298,7 @@ jobs:
       - name: Issue 初期化とStep Issue 生成
         if: steps.gate.outputs.mode == 'initialize'
         env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
         run: |
           set -euo pipefail
@@ -352,7 +364,7 @@ jobs:
           }
 
           # アサイン
-          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
 
           # コメント投稿
           post_comment() {
@@ -505,6 +517,10 @@ jobs:
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
+            echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
+            AUTO_QA="false"
+          fi
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
@@ -916,7 +932,7 @@ jobs:
             sleep 1
           }
 
-          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
 
           post_comment() {
             local issue_num="$1"
@@ -1427,7 +1443,7 @@ jobs:
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -c "
+          python3 - <<'PY'
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
@@ -1437,13 +1453,56 @@ jobs:
           config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
           config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
-          "
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          PY
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()
+        env:
+          BRANCH: ${{ steps.parse.outputs.branch }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          branch="${BRANCH}"
+
+          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
+            echo "::error::Invalid branch name: ${branch}" >&2
+            exit 1
+          }
+
           git add -A
-          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
-          git push origin HEAD:${{ steps.parse.outputs.branch }}
+
+          if git diff --cached --quiet; then
+            echo "No Self-Improve changes to commit."
+            exit 0
+          fi
+
+          git commit -m "[Self-Improve] 自動品質改善"
+
+          pushed=false
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}/3 to ${branch}"
+
+            if git push origin "HEAD:refs/heads/${branch}"; then
+              pushed=true
+              break
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Push failed. Fetching and rebasing onto origin/${branch}..."
+              git fetch origin "${branch}"
+
+              if ! git rebase "origin/${branch}"; then
+                echo "::error::Rebase failed due to conflicts. Aborting rebase." >&2
+                git rebase --abort || true
+                exit 1
+              fi
+            fi
+          done
+
+          if [ "${pushed}" != "true" ]; then
+            echo "::error::git push failed after 3 attempts." >&2
+            exit 1
+          fi

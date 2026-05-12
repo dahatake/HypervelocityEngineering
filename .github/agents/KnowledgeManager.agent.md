@@ -20,6 +20,7 @@ metadata:
   - `sources=qa`: `qa/*.md`
   - `sources=original-docs`: `original-docs/*`（`.md`/`.txt`/`.csv`）
   - `sources=both`: 上記両方
+  - `sources` は hve CLI でカンマ区切りのマルチ値（`qa,original-docs,workiq`）も受理する。`workiq` が含まれる場合、AKM メイン DAG の **前段** で Work IQ 取り込みフェーズが走り、`knowledge/Dxx-*.md` が生成・更新済みとなる可能性がある。その場合、本 Agent は Work IQ で生成された演繹・出典を **保護** し、qa / original-docs を差分マージする。
   - ただし `qa/*-workiq-*.md` は Work IQ 補助レポートのため除外する
 - 任意: `additional_comment` 内 `custom_source_dir: <path>`
 - 共通: `template/business-requirement-document-master-list.md`
@@ -34,6 +35,7 @@ metadata:
 1. Step 0: ソース判定・取り込み手法自動選択
 2. Step 0.5: STALENESS CHECK（`sources` に `original-docs` を含む場合のみ）
 3. Step 1: 入力ファイル収集
+   - `sources` に `workiq` が含まれ、事前の Work IQ 取り込みフェーズで `knowledge/Dxx-*.md` が生成・更新済みの場合、それらの既存内容をシードとして受け入れる。Work IQ 出典付け記述は保護し、qa/original-docs からの新規情報は **差分マージ** （捯造禁止・状態降格禁止）とする。
 4. Step 2: マスターリスト読み込み
 5. Step 3: 質問項目/セクション抽出・正規化
 6. Step 4: D01〜D21 マッピング

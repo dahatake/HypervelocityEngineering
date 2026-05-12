@@ -65,7 +65,8 @@ def test_resolve_text_returns_raw_text():
 
 def test_resolve_single_file(tmp_path: Path):
     md_file = tmp_path / "sample.md"
-    md_file.write_text("# Hello\n\nContent", encoding="utf-8")
+    # Windows \u3067 write_text \u306f \\n \u3092 \\r\\n \u306b\u5909\u63db\u3059\u308b\u305f\u3081 write_bytes \u3092\u4f7f\u7528\u3057\u308b\u3002
+    md_file.write_bytes(b"# Hello\n\nContent")
 
     result = resolve(str(md_file))
 
@@ -91,16 +92,25 @@ def test_resolve_directory_recursive(tmp_path: Path):
     assert "B" in contents
 
 
-def test_resolve_multiple_paths_csv(tmp_path: Path):
+def test_resolve_multiple_paths_csv(tmp_path: Path, monkeypatch):
+    # Windows の tmp_path は長いため、is_path_like の 200 文字上限を超えて
+    # is_path=False と誤判定される。cwd を tmp_path に移して相対パスで検証する。
+    monkeypatch.chdir(tmp_path)
     f1 = tmp_path / "a.md"
     f1.write_text("content_a", encoding="utf-8")
     f2 = tmp_path / "b.md"
     f2.write_text("content_b", encoding="utf-8")
 
-    result = resolve(f"{f1}, {f2}")
+    result = resolve("a.md, b.md")
 
+    # デバッグ用: 失敗時の原因把握のため diagnostics を assertion メッセージに含める
+    diag = (
+        f"is_path={result.is_path} files_count={len(result.files)} "
+        f"errors={result.errors} skipped={result.skipped} "
+        f"raw_text={result.raw_text!r}"
+    )
     readable = [f for f in result.files if f.skip_reason is None]
-    assert len(readable) == 2
+    assert len(readable) == 2, diag
     contents = {f.content for f in readable}
     assert "content_a" in contents
     assert "content_b" in contents

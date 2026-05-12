@@ -76,7 +76,9 @@ body:
     id: enable_qa
     attributes:
       label: "質問票設定"
-      description: "チェックを入れると、ステップ実行前に質問票が作成されます（auto-qa ラベルが付与）。"
+      description: |
+        チェックを入れると、ステップ実行前に質問票が作成されます（auto-qa ラベルが付与）。
+        詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
 

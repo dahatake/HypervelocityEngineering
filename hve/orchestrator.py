@@ -45,6 +45,7 @@ try:
         CODE_REVIEW_AGENT_FIX_PROMPT,
         CODE_REVIEW_CLI_PROMPT,
         AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT,
+        AKM_WORKIQ_INGEST_PROMPT,
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
@@ -60,6 +61,7 @@ except ImportError:
         CODE_REVIEW_AGENT_FIX_PROMPT,
         CODE_REVIEW_CLI_PROMPT,
         AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT,
+        AKM_WORKIQ_INGEST_PROMPT,
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
@@ -263,6 +265,13 @@ def _build_step_complete_callback(
                 kwargs["error_summary"] = (
                     (result.error or "")[:500] if result.error else None
                 )
+            # Fork-integration (T2.2): retry_count / forked_session_id を state へ反映
+            retry_count = getattr(result, "retry_count", 0)
+            if isinstance(retry_count, int) and retry_count > 0:
+                kwargs["retry_count"] = retry_count
+            forked_sid = getattr(result, "forked_session_id", None)
+            if forked_sid:
+                kwargs["forked_session_id"] = forked_sid
             state.update_step(result.step_id, **kwargs)
         except Exception as exc:  # pragma: no cover - I/O 例外パスは E2E で確認
             console.warning(
@@ -270,6 +279,24 @@ def _build_step_complete_callback(
             )
 
     return _on_step_complete
+
+
+def _build_fork_kpi_logger(config: SDKConfig) -> Any:
+    """`DAGExecutor` 用の ForkKPILogger を構築する。
+
+    Fork-integration (T2.4/T2.6): フラグ OFF 時は `None` を返してロガー呼び出し自体を
+    完全スキップする（M5 対応: no-op 呼び出しのオーバーヘッド削減）。
+    """
+    if not bool(getattr(config, "fork_on_retry", False)):
+        return None
+    try:
+        from .fork_kpi_logger import ForkKPILogger
+    except ImportError:  # pragma: no cover
+        from fork_kpi_logger import ForkKPILogger  # type: ignore[no-redef]
+    return ForkKPILogger(
+        enabled=True,
+        run_id=getattr(config, "run_id", "") or "unknown",
+    )
 
 # Code Review Agent の GitHub ユーザー名候補
 _COPILOT_USERNAMES = (
@@ -284,8 +311,12 @@ _COPILOT_USERNAMES = (
 _MAX_DIFF_CHARS = 80_000
 
 # AKM デフォルト値
-_AKM_DEFAULT_SOURCES = "qa"
+# Work IQ を入力ソースとして任意追加できるよう、既定は qa + original-docs のマルチ値（カンマ区切り）。
+_AKM_DEFAULT_SOURCES = "qa,original-docs"
 _AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# sources マルチ値の正規化順序（出力順は固定）
+_AKM_SOURCES_ORDER = ("workiq", "qa", "original-docs")
+_AKM_SOURCES_VALID = frozenset(_AKM_SOURCES_ORDER)
 _AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
 _AQOD_DEFAULT_DEPTH = "standard"
 
@@ -295,13 +326,59 @@ _ARD_DEFAULT_TARGET_REGION = "グローバル全体"
 _ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
 
 
-def _default_akm_target_files(sources: str) -> str:
-    """AKM の sources に応じた target_files 既定値を返す。"""
-    if sources == "original-docs":
-        return "original-docs/*"
-    if sources == "both":
-        return ""
-    return _AKM_DEFAULT_TARGET_FILES
+def _normalize_akm_sources(value) -> list:
+    """AKM の sources 値を正規化された list[str] に変換する。
+
+    受理形式:
+    - 文字列（カンマ / 空白区切り）または list[str]/tuple/set
+    - 個別値: ``qa`` / ``original-docs`` / ``workiq`` / ``both``（後方互換 → ``qa,original-docs``）
+    - 空入力 / None → 既定 ``["qa", "original-docs"]``
+
+    Returns:
+        順序固定 ``[workiq, qa, original-docs]`` のうち含まれるものを並べた ``list[str]``。
+        不明なトークンは無視される。
+    """
+    if value is None:
+        tokens: list = []
+    elif isinstance(value, (list, tuple, set)):
+        tokens = [str(v) for v in value]
+    else:
+        import re as _re
+        tokens = [t for t in _re.split(r"[,\s]+", str(value)) if t]
+
+    result_set: set = set()
+    for token in tokens:
+        t = token.strip().lower()
+        if not t:
+            continue
+        if t == "both":
+            result_set.add("qa")
+            result_set.add("original-docs")
+        elif t in _AKM_SOURCES_VALID:
+            result_set.add(t)
+        # 不明トークンは無視（後方互換性のため例外を出さない）
+
+    if not result_set:
+        return ["qa", "original-docs"]
+
+    return [s for s in _AKM_SOURCES_ORDER if s in result_set]
+
+
+def _default_akm_target_files(sources) -> str:
+    """AKM の sources に応じた ``target_files`` 既定値を返す。
+
+    ``sources`` は文字列（カンマ区切り）または ``list[str]`` を受け付ける。
+    Work IQ のみ、または非 Work IQ ソースが複数の場合は既定パターンなし（``""``）。
+    """
+    normalized = _normalize_akm_sources(sources)
+    non_workiq = [s for s in normalized if s != "workiq"]
+    if len(non_workiq) == 1:
+        if non_workiq[0] == "qa":
+            return _AKM_DEFAULT_TARGET_FILES
+        if non_workiq[0] == "original-docs":
+            return "original-docs/*"
+    # 0 件（workiq のみ）または複数 → 既定パターンなし
+    return ""
 
 
 # -----------------------------------------------------------------------
@@ -349,12 +426,29 @@ def _collect_params_non_interactive(
 
     # AKM 固有パラメータ
     if wf.id == "akm":
-        params["sources"] = args.get("sources") or _AKM_DEFAULT_SOURCES
-        params["target_files"] = args.get("target_files") or _default_akm_target_files(params["sources"])
+        # sources は内部表現を「正規化済みカンマ区切り文字列」に統一する。
+        # 受理形式は qa / original-docs / workiq / both（後方互換）/ それらのカンマ・空白区切り組合せ。
+        _raw_sources = args.get("sources") or _AKM_DEFAULT_SOURCES
+        _normalized_sources = _normalize_akm_sources(_raw_sources)
+        params["sources"] = ",".join(_normalized_sources)
+        params["target_files"] = args.get("target_files") or _default_akm_target_files(_normalized_sources)
         params["custom_source_dir"] = args.get("custom_source_dir") or ""
         force_refresh = args.get("force_refresh", None)
         params["force_refresh"] = True if force_refresh is None else force_refresh
         params["enable_auto_merge"] = args.get("enable_auto_merge", False)
+        # Work IQ 取り込み対象 Dxx を正規化リストとして params にも反映する。
+        # config 側ヘルパで文字列／リストを ``["D01","D04",...]`` に正規化。
+        _ingest_dxx_raw = args.get("workiq_akm_ingest_dxx")
+        if _ingest_dxx_raw is not None:
+            try:
+                from .config import _parse_workiq_akm_ingest_dxx as _parse_dxx
+            except ImportError:
+                from config import _parse_workiq_akm_ingest_dxx as _parse_dxx  # type: ignore[no-redef]
+            if isinstance(_ingest_dxx_raw, (list, tuple, set)):
+                _joined = ",".join(str(x) for x in _ingest_dxx_raw)
+            else:
+                _joined = str(_ingest_dxx_raw)
+            params["workiq_akm_ingest_dxx"] = _parse_dxx(_joined)
     elif wf.id == "aqod":
         params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
         params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
@@ -679,6 +773,10 @@ def _collect_file_samples(root: str, limit: int = 10) -> list:
     """指定ディレクトリから最大 limit 件のファイルパスを収集して返す。
 
     大規模リポジトリでの全列挙を避けるため、limit 件見つかった時点で走査を打ち切る。
+    呼び出し側で artifact 種別に応じた limit を渡すこと（Sub-1 A-3）:
+      - "src" → 50（実装ファイルは数が多い）
+      - "test" → 30（テストはやや少ない）
+      - その他 → 10（catalog など）
     """
     from pathlib import Path
     root_path = Path(root)
@@ -731,13 +829,13 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     if test_specs:
         existing["test_specs"] = test_specs
 
-    # ソースコードの検出（上限付き早期終了）
-    src_files = _collect_file_samples("src")
+    # ソースコードの検出（上限付き早期終了。Sub-1 A-3: 種別別動的上限）
+    src_files = _collect_file_samples("src", limit=50)
     if src_files:
         existing["src_files"] = src_files
 
-    # テストコードの検出（上限付き早期終了）
-    test_files = _collect_file_samples("test")
+    # テストコードの検出（上限付き早期終了。Sub-1 A-3: 種別別動的上限）
+    test_files = _collect_file_samples("test", limit=30)
     if test_files:
         existing["test_files"] = test_files
 
@@ -1022,21 +1120,97 @@ def _compute_step_additional_prompt(
         k: v for k, v in existing_artifacts.items()
         if k in step.consumed_artifacts
     }
-    step_reuse_context = _build_reuse_context(filtered_artifacts)
+    # Sub-2 (A-2): step 種別を consumed_artifacts から推定し、再利用ルール文を簡素化する
+    step_kind = _infer_step_kind(step.consumed_artifacts)
+    step_reuse_context = _build_reuse_context(filtered_artifacts, step_kind=step_kind)
     result = ((config.additional_prompt or "") + step_reuse_context).strip() or None
     # Wave 2-3: context injection サイズを記録（デバッグ可視化）
     _injection_chars = len(step_reuse_context)
     if _injection_chars > 0:
         import logging as _logging
         _logging.getLogger(__name__).debug(
-            "Step.%s context_injection: artifacts=%s chars=%d",
-            step.id, list(filtered_artifacts.keys()), _injection_chars,
+            "Step.%s context_injection: artifacts=%s chars=%d kind=%s",
+            step.id, list(filtered_artifacts.keys()), _injection_chars, step_kind,
         )
     return result
 
 
-def _build_reuse_context(existing_artifacts: dict) -> str:
-    """既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。"""
+# Sub-2 (A-2): step 種別ごとの再利用ルール文（既存成果物再利用のヒント）。
+# キー = step_kind、値 = 末尾に付与する箇条書きルール文の行リスト。
+# default はワークフロー単位 (`_build_reuse_context` 直接呼び出し) で使用される長文。
+_REUSE_RULES_BY_KIND: Dict[str, List[str]] = {
+    "catalog": [
+        "**再利用ルール:**",
+        "- Catalog ファイルは既存エントリを保持したまま、新規エントリのみ追加する",
+        "- 既存のテーブル構造・列順を維持する",
+    ],
+    "tests": [
+        "**再利用ルール:**",
+        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
+        "- 既存テストの命名規則・assertion 形式に従う",
+    ],
+    "code": [
+        "**再利用ルール:**",
+        "- 既存コード構造（ディレクトリ・モジュール分割）を尊重し、差分のみを更新する",
+        "- 公開 API のシグネチャ変更は最小限に抑える",
+    ],
+    "docs": [
+        "**再利用ルール:**",
+        "- 既存ドキュメント構造を尊重し、差分のみを更新する",
+        "- セクション見出し・順序を維持する",
+    ],
+    "default": [
+        "**再利用ルール:**",
+        "- 既存のドキュメント/コード構造を尊重し、差分のみを更新する",
+        "- 新規 APP-ID に関する追記は、既存ファイルのフォーマットに従う",
+        "- Catalog ファイルは既存エントリを保持したまま、新規エントリを追加する",
+        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
+        "- `docs/catalog/app-catalog.md` の既存アプリケーション定義を参照し、一貫性を保つ",
+    ],
+}
+
+
+def _infer_step_kind(consumed_artifacts: Optional[List[str]]) -> str:
+    """consumed_artifacts キーから step 種別を推定する (Sub-2 A-2)。
+
+    判定ルール（優先順位）:
+      1. test_files / test_specs を主成分 → "tests"
+      2. src_files を主成分 → "code"
+      3. knowledge / doc_generated を主成分 → "docs"
+      4. *_catalog / *_specs / *_matrix を主成分 → "catalog"
+      5. それ以外（混在含む） → "default"
+
+    「主成分」= 該当種別のキーが consumed_artifacts の半数以上を占める、
+    または consumed_artifacts が空でも種別不明として "default" を返す。
+    """
+    if not consumed_artifacts:
+        return "default"
+    keys = set(consumed_artifacts)
+    test_keys = {"test_files", "test_specs", "test_strategy"} & keys
+    code_keys = {"src_files"} & keys
+    doc_keys = {"knowledge", "doc_generated"} & keys
+    catalog_keys = {k for k in keys if k.endswith("_catalog") or k.endswith("_specs") or k.endswith("_matrix")}
+
+    total = len(keys)
+    half = (total + 1) // 2  # 半数（切り上げ）
+
+    if len(test_keys) >= half and test_keys:
+        return "tests"
+    if len(code_keys) >= half and code_keys:
+        return "code"
+    if len(doc_keys) >= half and doc_keys:
+        return "docs"
+    if len(catalog_keys) >= half and catalog_keys:
+        return "catalog"
+    return "default"
+
+
+def _build_reuse_context(existing_artifacts: dict, step_kind: str = "default") -> str:
+    """既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。
+
+    Sub-2 (A-2): step_kind 引数で再利用ルール文を切替可能。
+    後方互換: step_kind 省略時は "default"（既存の長文ルール）を使う。
+    """
     if not existing_artifacts:
         return ""
 
@@ -1055,15 +1229,9 @@ def _build_reuse_context(existing_artifacts: dict) -> str:
         else:
             lines.append(f"- `{paths}`")
 
-    lines.extend([
-        "",
-        "**再利用ルール:**",
-        "- 既存のドキュメント/コード構造を尊重し、差分のみを更新する",
-        "- 新規 APP-ID に関する追記は、既存ファイルのフォーマットに従う",
-        "- Catalog ファイルは既存エントリを保持したまま、新規エントリを追加する",
-        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
-        "- `docs/catalog/app-catalog.md` の既存アプリケーション定義を参照し、一貫性を保つ",
-    ])
+    rules = _REUSE_RULES_BY_KIND.get(step_kind, _REUSE_RULES_BY_KIND["default"])
+    lines.append("")
+    lines.extend(rules)
 
     return "\n".join(lines)
 
@@ -1655,6 +1823,303 @@ async def _run_akm_workiq_verification(
     )
 
 
+async def _run_akm_workiq_ingest(
+    config: SDKConfig,
+    console: Console,
+    workiq_report_paths: Set[str],
+) -> None:
+    """AKM Pre-DAG: Work IQ を入力ソースとして ``knowledge/Dxx-*.md`` を起票・差分更新する。
+
+    ``_run_akm_workiq_verification`` が DAG 後の妥当性検証であるのに対し、本関数は
+    AKM メイン DAG の **前段** で実行される取り込みフェーズ。Work IQ から取得した
+    情報のみを根拠として Dxx ファイルを新規作成または差分更新する。後段の
+    qa/original-docs DAG ステージが Dxx を更にマージ更新する。
+
+    対象 Dxx は ``config.workiq_akm_ingest_dxx`` で絞り込み、空（既定）の場合は全件。
+
+    失敗時は warning で継続する（後段の qa/original-docs DAG を止めない）。
+    """
+    try:
+        from .workiq import (
+            build_workiq_mcp_config, query_workiq,
+            get_workiq_prompt_template, save_workiq_result,
+            is_workiq_error_response, is_workiq_available,
+            WORKIQ_MCP_SERVER_NAME, _escape_workiq_sandbox_tags,
+            build_akm_workiq_query_targets_from_files,
+            render_akm_workiq_query_target,
+        )
+    except ImportError:
+        from workiq import (  # type: ignore[no-redef]
+            build_workiq_mcp_config, query_workiq,
+            get_workiq_prompt_template, save_workiq_result,
+            is_workiq_error_response, is_workiq_available,
+            WORKIQ_MCP_SERVER_NAME, _escape_workiq_sandbox_tags,
+            build_akm_workiq_query_targets_from_files,
+            render_akm_workiq_query_target,
+        )
+
+    if not is_workiq_available():
+        console.warning(
+            "Work IQ が利用できないため AKM Work IQ 取り込みをスキップします。"
+        )
+        return
+
+    # マスターリストから D クラス対象一覧を構築（既定で全件 = include_confirmed=True）。
+    try:
+        targets = build_akm_workiq_query_targets_from_files(include_confirmed=True)
+    except Exception as build_err:
+        console.warning(
+            f"AKM Work IQ 取り込み: マスターリスト読み込み失敗: {build_err}"
+        )
+        return
+
+    if not targets:
+        console.warning(
+            "AKM Work IQ 取り込み: マスターリストから D クラス対象が抽出できませんでした。スキップします。"
+        )
+        return
+
+    # Dxx 絞り込みフィルタ（``config.workiq_akm_ingest_dxx`` が非空の場合のみ適用）。
+    dxx_filter = list(getattr(config, "workiq_akm_ingest_dxx", []) or [])
+    if dxx_filter:
+        filter_set = {d.strip().upper() for d in dxx_filter if d}
+        targets = [t for t in targets if t.d_class_id.upper() in filter_set]
+        if not targets:
+            console.warning(
+                f"AKM Work IQ 取り込み: 指定された Dxx ({','.join(dxx_filter)}) "
+                "に該当する対象がマスターリストに見つかりませんでした。スキップします。"
+            )
+            return
+
+    console.event(
+        f"AKM Work IQ 取り込み: {len(targets)} 件の D クラスを処理します"
+        + (f"（Dxx フィルタ: {','.join(dxx_filter)}）" if dxx_filter else "（全件）")
+    )
+
+    # SDK / セッション準備（_run_akm_workiq_verification と同方式）。
+    try:
+        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
+        from copilot.session import PermissionHandler
+    except ImportError:
+        console.warning(
+            "Copilot SDK が利用できないため AKM Work IQ 取り込みをスキップします。"
+        )
+        return
+
+    if config.cli_url:
+        sdk_cfg = ExternalServerConfig(url=config.cli_url)
+    else:
+        sdk_cfg = SubprocessConfig(
+            cli_path=config.cli_path,
+            github_token=config.resolve_token() or None,
+            log_level="error",
+        )
+
+    client = CopilotClient(config=sdk_cfg)
+    await client.start()
+
+    queried_count = 0
+    updated_count = 0
+    skipped_count = 0
+    error_count = 0
+
+    try:
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        session_opts: dict = {
+            "on_permission_request": PermissionHandler.approve_all,
+            "streaming": True,
+            "mcp_servers": _mcp,
+            "session_id": _orchestrator_session_id(
+                config, "akm-ingest", suffix="workiq"
+            ),
+        }
+        if config.model and config.model != MODEL_AUTO_VALUE:
+            session_opts["model"] = config.model
+        else:
+            session_opts["model"] = DEFAULT_MODEL
+            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+
+        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+
+        try:
+            # MCP 接続確認
+            try:
+                mcp_list = await session.rpc.mcp.list()
+                wiq_found = False
+                for srv in mcp_list.servers:
+                    if srv.name == WORKIQ_MCP_SERVER_NAME:
+                        mcp_status = srv.status.value if hasattr(srv.status, "value") else str(srv.status)
+                        if mcp_status != "connected":
+                            console.warning(
+                                f"AKM Work IQ 取り込み: MCP サーバー状態 = {mcp_status}。取り込みをスキップします。"
+                            )
+                            return
+                        wiq_found = True
+                        break
+                if not wiq_found:
+                    console.warning(
+                        f"AKM Work IQ 取り込み: MCP サーバー '{WORKIQ_MCP_SERVER_NAME}' が見つかりません。"
+                        "取り込みをスキップします。"
+                    )
+                    return
+            except Exception as mcp_err:
+                console.warning(
+                    f"AKM Work IQ 取り込み: MCP ステータス確認失敗: {mcp_err}"
+                )
+                return
+
+            console.event("AKM Work IQ 取り込み: MCP 接続確認完了")
+
+            knowledge_dir = Path("knowledge")
+            for idx, target in enumerate(targets):
+                d_class_id = target.d_class_id  # "D01" 等
+                console.event(
+                    f"  [{idx + 1}/{len(targets)}] {d_class_id} ({target.document_name}) を取り込み中..."
+                )
+
+                # Work IQ クエリ生成: マスターリスト由来の構造化対象情報を target_content として埋め込む。
+                target_content = render_akm_workiq_query_target(target)
+                km_prompt_template = get_workiq_prompt_template(
+                    "km", config.workiq_prompt_km
+                )
+                workiq_query = km_prompt_template.format(target_content=target_content)
+                console.workiq_prompt(
+                    workiq_query,
+                    label=f"Work IQ プロンプト [{d_class_id} KM ingest]",
+                )
+
+                try:
+                    workiq_result = await query_workiq(
+                        session, workiq_query,
+                        timeout=config.workiq_per_question_timeout,
+                    )
+                except Exception as wiq_err:
+                    console.warning(
+                        f"  {d_class_id}: Work IQ クエリ失敗: {wiq_err}"
+                    )
+                    error_count += 1
+                    if idx < len(targets) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                console.workiq_response(
+                    workiq_result or "",
+                    label=f"Work IQ 応答 [{d_class_id} KM ingest]",
+                )
+
+                # 結果を save（work IQ 補助レポートとして保存）。
+                save_path = save_workiq_result(
+                    config.run_id, "1", f"km-ingest-{d_class_id}",
+                    workiq_result or "",
+                    is_error=is_workiq_error_response(workiq_result or ""),
+                    base_dir=config.workiq_draft_output_dir or "qa",
+                )
+                if save_path:
+                    workiq_report_paths.add(str(save_path))
+
+                queried_count += 1
+
+                # 応答判定。
+                if not workiq_result or not workiq_result.strip():
+                    console.event(f"  {d_class_id}: Work IQ 応答なし。スキップします。")
+                    skipped_count += 1
+                    if idx < len(targets) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                if is_workiq_error_response(workiq_result):
+                    console.warning(f"  {d_class_id}: Work IQ エラー応答。スキップします。")
+                    skipped_count += 1
+                    if idx < len(targets) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                _no_info_keywords = (
+                    "関連情報なし",
+                    "関連する情報は見つかりませんでした",
+                    "該当する情報はありません",
+                )
+                if any(kw in workiq_result for kw in _no_info_keywords):
+                    console.event(f"  {d_class_id}: 関連情報なし。スキップします。")
+                    skipped_count += 1
+                    if idx < len(targets) - 1:
+                        await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+                    continue
+
+                # 既存ファイル状態を判定（新規作成 / 差分更新）。
+                existing_files = sorted(knowledge_dir.glob(f"{d_class_id}-*.md"))
+                existing_files = [
+                    p for p in existing_files
+                    if not p.name.endswith("-ChangeLog.md")
+                ]
+                if existing_files:
+                    existing_path = existing_files[0]
+                    try:
+                        existing_content = existing_path.read_text(encoding="utf-8")
+                    except OSError as read_err:
+                        console.warning(
+                            f"  {d_class_id}: 既存ファイル読み取り失敗: {read_err}"
+                        )
+                        existing_content = "(読み取り失敗)"
+                    if len(existing_content) > _AKM_WORKIQ_DXX_MAX_CONTENT_LENGTH:
+                        existing_content = (
+                            existing_content[:_AKM_WORKIQ_DXX_MAX_CONTENT_LENGTH]
+                            + "\n...(truncated)"
+                        )
+                    existing_status = (
+                        f"既存ファイル: `{existing_path.as_posix()}`（差分更新）\n\n"
+                        f"=== 既存内容 ===\n{existing_content}\n=== 既存内容ここまで ==="
+                    )
+                else:
+                    existing_status = (
+                        f"既存ファイル: なし（`knowledge/{d_class_id}-*.md` を新規作成する）"
+                    )
+
+                console.event(
+                    f"  {d_class_id}: Work IQ 関連情報あり → ファイル"
+                    + ("更新" if existing_files else "新規作成")
+                    + "を実行"
+                )
+
+                update_prompt = AKM_WORKIQ_INGEST_PROMPT.format(
+                    d_class_id=d_class_id,
+                    document_name=target.document_name,
+                    dxx_target_info=target_content,
+                    existing_status=existing_status,
+                    workiq_result=_escape_workiq_sandbox_tags(workiq_result),
+                )
+
+                try:
+                    update_response = await session.send_and_wait(
+                        update_prompt, timeout=config.timeout_seconds
+                    )
+                    update_output = _extract_text(update_response)
+                    if update_output:
+                        updated_count += 1
+                        console.event(f"  {d_class_id}: 取り込み完了")
+                    else:
+                        console.warning(f"  {d_class_id}: 取り込み応答が空でした")
+                except Exception as upd_err:
+                    console.warning(f"  {d_class_id}: ファイル取り込み失敗: {upd_err}")
+                    error_count += 1
+
+                if idx < len(targets) - 1:
+                    await asyncio.sleep(_AKM_WORKIQ_QUERY_INTERVAL)
+
+        finally:
+            await session.disconnect()
+    except Exception as exc:
+        console.warning(f"AKM Work IQ 取り込み中にエラーが発生しました: {exc}")
+        error_count += 1
+    finally:
+        await client.stop()
+
+    console.event(
+        f"AKM Work IQ 取り込み完了: クエリ={queried_count}, 取り込み={updated_count}, "
+        f"スキップ={skipped_count}, エラー={error_count}"
+    )
+
+
 async def _run_ard_workiq_usecase(
     config: SDKConfig,
     console: Console,
@@ -2067,6 +2532,11 @@ async def run_workflow(
         timestamp_style=getattr(config, "timestamp_style", "prefix"),
         final_only=getattr(config, "final_only", False),
     )
+    # ADR-0002 D-3: 構造化ログに run_id を含めるため Console に伝搬する
+    try:
+        console.set_run_id(config.run_id)
+    except Exception:
+        pass
     start_total = time.time()
 
     # --- 1. ワークフロー定義取得 ---
@@ -2095,6 +2565,12 @@ async def run_workflow(
         _phases.append("実行計画 → DAG 実行（事前 QA + Work IQ → 各ステップ実行）")
     else:
         _phases.append("実行計画 → DAG 実行")
+    # AKM Work IQ 取り込み（DAG **前** に挿入。Work IQ 検証 (DAG 後) とは別フェーズ）。
+    if workflow_id == "akm" and config.is_workiq_akm_ingest_enabled() and not config.dry_run:
+        _akm_ingest_idx = next(
+            (i for i, ph in enumerate(_phases) if "DAG 実行" in ph), len(_phases) - 1
+        )
+        _phases.insert(_akm_ingest_idx, "AKM Work IQ 取り込み")
     if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
         _phases.append("AKM Work IQ 検証")
     if workflow_id == "ard" and config.is_workiq_qa_enabled() and not config.dry_run:
@@ -2237,6 +2713,20 @@ async def run_workflow(
     console.phase_start(p, _total_phases, "ステップフィルタリング")
 
     selected_step_ids: List[str] = effective_params.get("selected_steps") or []
+    # ARD: グループ ID (1/2/3) を実 Step ID (1,1.1,1.2 / 2 / 3.1,3.2,3.3) に展開する。
+    # Wizard / CLI 側はグループ ID を返す契約のため、フィルタ前にここで展開する。
+    # 既に実 Step ID が直接渡された場合は fallback `[sid]` で素通し（後方互換）。
+    if workflow_id == "ard" and selected_step_ids:
+        _ARD_GROUP_MAP = {
+            "1": ["1", "1.1", "1.2"],
+            "2": ["2"],
+            "3": ["3.1", "3.2", "3.3"],
+        }
+        _expanded: List[str] = []
+        for _sid in selected_step_ids:
+            _expanded.extend(_ARD_GROUP_MAP.get(_sid, [_sid]))
+        _seen: Set[str] = set()
+        selected_step_ids = [s for s in _expanded if not (s in _seen or _seen.add(s))]
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
     _ard_force_serial = (
         workflow_id == "ard"
@@ -2312,6 +2802,10 @@ async def run_workflow(
         phase_start_issue = time.time()
         console.phase_start(p, _total_phases, "Issue 作成")
 
+    # `workiq_report_paths` は ARD/AKM Work IQ 連携で共有するため Issue 作成前に初期化する。
+    # （後段の Step 実行・DAG 後 verify でも同一インスタンスへ追記される）
+    workiq_report_paths: Set[str] = set()
+
     root_issue_num, step_issue_map = _create_issues_if_needed(
         wf=wf,
         params=effective_params,
@@ -2362,6 +2856,30 @@ async def run_workflow(
             console.phase_end(p, _total_phases, "ARD Work IQ ユースケース参照", time.time() - phase_start_ard_wiq)
         else:
             console.warning("Work IQ 利用条件未充足のため通常実行に委譲 (is_workiq_available=False)")
+
+    # --- 4.7. AKM Work IQ 取り込み（Issue 作成後・DAG 実行前）---
+    # `sources` に `workiq` が含まれる or `workiq_akm_ingest_enabled=True` で実行される。
+    # 後段の qa/original-docs を扱う DAG ステージが、本フェーズで生成・更新された
+    # knowledge/Dxx-*.md を差分マージ更新する前提。失敗時は warning で継続。
+    if (
+        workflow_id == "akm"
+        and config.is_workiq_akm_ingest_enabled()
+        and not config.dry_run
+    ):
+        p = _next_phase()
+        phase_start_akm_ingest = time.time()
+        console.phase_start(p, _total_phases, "AKM Work IQ 取り込み")
+        try:
+            await _run_akm_workiq_ingest(
+                config=config,
+                console=console,
+                workiq_report_paths=workiq_report_paths,
+            )
+        except Exception as akm_ingest_exc:
+            console.warning(
+                f"AKM Work IQ 取り込み中にエラーが発生しました（無視して続行）: {akm_ingest_exc}"
+            )
+        console.phase_end(p, _total_phases, "AKM Work IQ 取り込み", time.time() - phase_start_akm_ingest)
 
     # --- 5. StepRunner 準備 + DAG 実行 ---
     p = _next_phase()
@@ -2502,7 +3020,7 @@ async def run_workflow(
 
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
-    workiq_report_paths: Set[str] = set()
+    # `workiq_report_paths` は 4.5 で初期化済み（ARD/AKM Work IQ 連携と共有）。
     # Wave 2-3 / 2-7: context injection サイズの観測カウンタ
     _w2_none_steps: int = 0          # consumed_artifacts=None のステップ数
     _w2_injection_total: int = 0     # context injection 合計文字数
@@ -2607,6 +3125,11 @@ async def run_workflow(
         step_prompts=step_prompts,
         dag_plan=dag_plan,
         on_step_complete=_build_step_complete_callback(resume_state, console),
+        repo_root=Path(__file__).resolve().parent.parent,
+        # Fork-integration (T2.6/T2.8): フィーチャフラグ off （既定）で旧挙動と完全一致
+        fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
+        fork_kpi_logger=_build_fork_kpi_logger(config),
+        on_fork_retry=runner.set_fork_index,
     )
 
     # Phase 3 (Resume): 完了/スキップ済みステップを事前登録し、再実行を回避する。

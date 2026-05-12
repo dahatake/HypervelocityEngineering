@@ -1470,6 +1470,101 @@ class TestBuildReuseContext(unittest.TestCase):
         self.assertIn("...他 5 ファイル", result)
 
 
+class TestBuildReuseContextStepKind(unittest.TestCase):
+    """Sub-2 (A-2): _build_reuse_context() の step_kind 別簡素化テスト。
+
+    step_kind ごとに再利用ルール文が切り替わり、default よりも短くなることを検証する。
+    """
+
+    def setUp(self) -> None:
+        from orchestrator import _build_reuse_context
+        self._build = _build_reuse_context
+        self._artifacts = {
+            "app_catalog": "docs/catalog/app-catalog.md",
+        }
+
+    def test_default_kind_uses_long_rules(self) -> None:
+        result = self._build(self._artifacts, step_kind="default")
+        # default のルール文は 5 項目（既存と同等）
+        self.assertIn("既存のドキュメント/コード構造を尊重", result)
+        self.assertIn("Catalog ファイルは既存エントリ", result)
+
+    def test_catalog_kind_short(self) -> None:
+        result = self._build(self._artifacts, step_kind="catalog")
+        self.assertIn("Catalog ファイルは既存エントリ", result)
+        # default 専用のルールが含まれないこと
+        self.assertNotIn("既存のドキュメント/コード構造を尊重", result)
+        # default より短いことを確認
+        default_result = self._build(self._artifacts, step_kind="default")
+        self.assertLess(len(result), len(default_result))
+
+    def test_tests_kind_short(self) -> None:
+        result = self._build(self._artifacts, step_kind="tests")
+        self.assertIn("テスト仕様書・テストコード", result)
+        default_result = self._build(self._artifacts, step_kind="default")
+        self.assertLess(len(result), len(default_result))
+
+    def test_code_kind_short(self) -> None:
+        result = self._build(self._artifacts, step_kind="code")
+        self.assertIn("既存コード構造", result)
+        default_result = self._build(self._artifacts, step_kind="default")
+        self.assertLess(len(result), len(default_result))
+
+    def test_docs_kind_short(self) -> None:
+        result = self._build(self._artifacts, step_kind="docs")
+        self.assertIn("既存ドキュメント構造", result)
+        default_result = self._build(self._artifacts, step_kind="default")
+        self.assertLess(len(result), len(default_result))
+
+    def test_unknown_kind_falls_back_to_default(self) -> None:
+        result = self._build(self._artifacts, step_kind="unknown_kind")
+        default_result = self._build(self._artifacts, step_kind="default")
+        self.assertEqual(result, default_result)
+
+    def test_empty_artifacts_returns_empty_regardless_of_kind(self) -> None:
+        for kind in ("default", "catalog", "tests", "code", "docs"):
+            with self.subTest(kind=kind):
+                self.assertEqual(self._build({}, step_kind=kind), "")
+
+
+class TestInferStepKind(unittest.TestCase):
+    """Sub-2 (A-2): _infer_step_kind() の判定ロジックテスト。"""
+
+    def test_none_or_empty_returns_default(self) -> None:
+        from orchestrator import _infer_step_kind
+        self.assertEqual(_infer_step_kind(None), "default")
+        self.assertEqual(_infer_step_kind([]), "default")
+
+    def test_test_majority_returns_tests(self) -> None:
+        from orchestrator import _infer_step_kind
+        self.assertEqual(_infer_step_kind(["test_files", "test_specs"]), "tests")
+        self.assertEqual(_infer_step_kind(["test_files", "test_specs", "app_catalog"]), "tests")
+
+    def test_src_majority_returns_code(self) -> None:
+        from orchestrator import _infer_step_kind
+        self.assertEqual(_infer_step_kind(["src_files"]), "code")
+
+    def test_doc_majority_returns_docs(self) -> None:
+        from orchestrator import _infer_step_kind
+        self.assertEqual(_infer_step_kind(["knowledge"]), "docs")
+        self.assertEqual(_infer_step_kind(["doc_generated"]), "docs")
+
+    def test_catalog_majority_returns_catalog(self) -> None:
+        from orchestrator import _infer_step_kind
+        self.assertEqual(
+            _infer_step_kind(["app_catalog", "service_catalog", "data_model"]),
+            "catalog",
+        )
+
+    def test_mixed_returns_default(self) -> None:
+        from orchestrator import _infer_step_kind
+        # 種別が均等に混在する場合は default に倒れる
+        self.assertEqual(
+            _infer_step_kind(["src_files", "test_files", "app_catalog", "knowledge"]),
+            "default",
+        )
+
+
 class TestReuseContextFiltering(unittest.TestCase):
     """HVE_REUSE_CONTEXT_FILTERING フィーチャーフラグのテスト。
 
@@ -2038,7 +2133,7 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
         # output_paths 未定義の workflow は SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS の値を使う。
         expected_scopes = {
             "aas": "",        # output_paths 定義済み → scope="" でパス直指定
-            "aad-web": "docs/",
+            "aad-web": "",    # Sub-7 (C-4): Step 3 で output_paths 定義済み → scope=""
             "asdw-web": ".",
             "abd": "docs/",
             "abdv": ".",
@@ -2193,23 +2288,36 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
         return wf
 
     def test_defaults_applied_when_akm_params_not_specified(self) -> None:
-        """AKM で sources/target_files/force_refresh 未指定時は既定値が適用されることを確認。"""
+        """AKM で sources/target_files/force_refresh 未指定時は既定値が適用されることを確認。
+
+        Work IQ 入力対応に伴い、既定 sources は ``qa,original-docs`` のマルチ値、
+        target_files は空（複数 non-workiq ソースのため単一パターンなし）となる。
+        """
         from orchestrator import _collect_params_non_interactive
         wf = self._make_wf()
         cli_args = {"branch": "main"}
         params = _collect_params_non_interactive(wf, cli_args)
-        self.assertEqual(params["sources"], "qa")
-        self.assertEqual(params["target_files"], "qa/*.md")
+        self.assertEqual(params["sources"], "qa,original-docs")
+        self.assertEqual(params["target_files"], "")
         self.assertTrue(params["force_refresh"])
 
     def test_sources_value_passthrough(self) -> None:
-        """AKM で sources=qa/original-docs/both がそのまま反映されることを確認。"""
+        """AKM で sources=qa/original-docs/both が正規化形式で反映されることを確認。
+
+        後方互換: ``both`` は ``qa,original-docs`` に正規化される。
+        単一値は正規化後もそのまま維持される。
+        """
         from orchestrator import _collect_params_non_interactive
         wf = self._make_wf()
-        for sources in ["qa", "original-docs", "both"]:
+        expected = {
+            "qa": "qa",
+            "original-docs": "original-docs",
+            "both": "qa,original-docs",
+        }
+        for sources, expected_value in expected.items():
             with self.subTest(sources=sources):
                 params = _collect_params_non_interactive(wf, {"branch": "main", "sources": sources})
-                self.assertEqual(params["sources"], sources)
+                self.assertEqual(params["sources"], expected_value)
 
     def test_force_refresh_false_overrides_default(self) -> None:
         """AKM で force_refresh=False が明示された場合は False が優先されることを確認。"""

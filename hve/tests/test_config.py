@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -634,6 +635,51 @@ class TestNormalizeModelWithWarning(unittest.TestCase):
             cfg = SDKConfig(model="claude-sonnet-4.6")
         self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
         self.assertTrue(any("claude-sonnet-4.6" in str(warning.message) for warning in w))
+
+
+# ---------------------------------------------------------------------------
+# T-20: HVE_AVAILABLE_TOOLS / HVE_EXCLUDED_TOOLS env exposure
+# ---------------------------------------------------------------------------
+
+class TestSDKConfigToolListFromEnv(unittest.TestCase):
+    """available_tools / excluded_tools が環境変数から正しくロードされることを検証する。"""
+
+    def test_unset_returns_none(self) -> None:
+        import os
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            for k in ("HVE_AVAILABLE_TOOLS", "HVE_EXCLUDED_TOOLS"):
+                os.environ.pop(k, None)
+            cfg = SDKConfig.from_env()
+        self.assertIsNone(cfg.available_tools)
+        self.assertIsNone(cfg.excluded_tools)
+
+    def test_empty_returns_none(self) -> None:
+        import os
+        with unittest.mock.patch.dict(
+            os.environ, {"HVE_AVAILABLE_TOOLS": "", "HVE_EXCLUDED_TOOLS": "   "}
+        ):
+            cfg = SDKConfig.from_env()
+        self.assertIsNone(cfg.available_tools)
+        self.assertIsNone(cfg.excluded_tools)
+
+    def test_single_tool(self) -> None:
+        import os
+        with unittest.mock.patch.dict(os.environ, {"HVE_AVAILABLE_TOOLS": "bash"}):
+            cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.available_tools, ["bash"])
+
+    def test_csv_and_whitespace(self) -> None:
+        import os
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "HVE_AVAILABLE_TOOLS": "str_replace_editor, bash glob",
+                "HVE_EXCLUDED_TOOLS": "web_search,fetch",
+            },
+        ):
+            cfg = SDKConfig.from_env()
+        self.assertEqual(cfg.available_tools, ["str_replace_editor", "bash", "glob"])
+        self.assertEqual(cfg.excluded_tools, ["web_search", "fetch"])
 
 
 if __name__ == "__main__":

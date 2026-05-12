@@ -39,7 +39,7 @@ Hypervelocity Engineering（HVE）は、GitHub Copilot cloud agent と `hve` CLI
 
 | Workflow ID | 役割 | 主な成果物 | 対応ガイド |
 |---|---|---|---|
-| `ard` | 企業・業務分析からユースケース候補を整理する | `docs/catalog/use-case-catalog.md` など | [00-auto-requirement-definition.md](users-guide/00-auto-requirement-definition.md) |
+| `ard` | 企業・業務分析からユースケース候補を整理する | `docs/catalog/use-case-catalog.md` など | [01-business-requirement.md（ARD セクション）](users-guide/01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) |
 | `aas` | アプリケーションアーキテクチャ設計 | `docs/catalog/app-catalog.md` など | [02-app-architecture-design.md](users-guide/02-app-architecture-design.md) |
 | `aad-web` | Web / Microservice 設計 | `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `docs/screen/`, `docs/services/`, `docs/test-specs/` | [03-app-design-microservice-azure.md](users-guide/03-app-design-microservice-azure.md) |
 | `asdw-web` | Web / Microservice 実装・デプロイ | `src/`, `test/`, Azure リソース関連成果物 | [05-app-dev-microservice-azure.md](users-guide/05-app-dev-microservice-azure.md) |
@@ -145,6 +145,7 @@ README では全 Agent の列挙は行わず、命名規則と代表例だけを
 - `.github/workflows/copilot-auto-feedback.yml`
 - `.github/workflows/post-qa-to-pr-comment.yml`
 - `.github/workflows/auto-qa-default-answer.yml`
+- `.github/workflows/restore-auto-qa-label.yml`
 - `.github/workflows/auto-issue-qa-ready-transition.yml`
 - `.github/workflows/auto-human-resolved-to-ready.yml`
 - `.github/workflows/auto-blocked-to-human-required.yml`
@@ -235,7 +236,7 @@ python -m hve resume list
 
 | フェーズ | ドキュメント |
 |---|---|
-| ARD（要求定義の自動化） | [00-auto-requirement-definition.md](users-guide/00-auto-requirement-definition.md) |
+| ARD（要求定義の自動化） | [01-business-requirement.md（ARD セクション）](users-guide/01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) |
 | 要求定義 | [01-business-requirement.md](users-guide/01-business-requirement.md) |
 | アプリケーションアーキテクチャ設計 | [02-app-architecture-design.md](users-guide/02-app-architecture-design.md) |
 | Web / Microservice 設計 | [03-app-design-microservice-azure.md](users-guide/03-app-design-microservice-azure.md) |

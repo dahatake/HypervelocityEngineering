@@ -276,6 +276,119 @@ def _truncate_context(text: str, max_length: int) -> str:
     return text[:head_size] + omit_msg + text[-tail_size:]
 
 
+def _truncate_context_with_warn(
+    text: str,
+    max_length: int,
+    *,
+    label: str,
+    console: Any,
+) -> str:
+    """`_truncate_context` のラッパー。切詰めが発生した場合だけ console.warning を出す。
+
+    G-4: 出力サイズの可観測化。処理は継続する（U-3=a の方針）。
+    label にはフェーズ名（例: "Phase 3 review_context"）を渡す。
+    console は `Console` インターフェース互換（warning メソッドを持つ）。
+    """
+    if len(text) > max_length:
+        try:
+            console.warning(
+                f"  ⚠️ {label}: コンテキストが上限 {max_length:,} 文字を超過 "
+                f"(実サイズ {len(text):,}) — 先頭/末尾切詰め適用"
+            )
+        except Exception:
+            # console が None / warning 未実装でも切詰め自体は実施する
+            pass
+    return _truncate_context(text, max_length)
+
+
+_CLIENT_START_MAX_ATTEMPTS: int = 3
+_CLIENT_START_BACKOFF_SECONDS: tuple = (0.5, 1.0, 2.0)
+
+
+# ---------------------------------------------------------------------------
+# ADR-0002: Fan-out per-key プロンプト注入ヘルパー (T3B)
+# ---------------------------------------------------------------------------
+
+def _apply_fanout_prompt_template(
+    *,
+    prompt: str,
+    fanout_meta: Dict[str, Any],
+    console: Any = None,
+) -> str:
+    """fan-out 子ステップ用の追加プロンプトを base prompt 先頭に注入する。
+
+    テンプレートパス内の ``{key}`` を fanout_key で置換してから読み込む。
+    ファイルが存在しない場合は base prompt をそのまま返す（warning のみ）。
+    """
+    key = fanout_meta.get("fanout_key", "")
+    template_path = fanout_meta.get("additional_prompt_template_path")
+    if not template_path or not key:
+        return prompt
+    try:
+        resolved_path = template_path.format(key=key)
+    except (KeyError, IndexError, ValueError):
+        resolved_path = template_path
+    p = Path(resolved_path)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    if not p.is_file():
+        if console is not None:
+            try:
+                console.warning(
+                    f"  ⚠️ fan-out テンプレが存在しません: {p} (key={key}) — base prompt を使用"
+                )
+            except Exception:
+                pass
+        return prompt
+    try:
+        addendum = p.read_text(encoding="utf-8")
+    except OSError as exc:
+        if console is not None:
+            try:
+                console.warning(f"  ⚠️ fan-out テンプレ読込失敗 ({p}): {exc}")
+            except Exception:
+                pass
+        return prompt
+    addendum = addendum.replace("{{key}}", key)
+    return (
+        f"## Fan-out コンテキスト (key={key})\n\n"
+        f"{addendum}\n\n"
+        f"## メインタスク\n\n"
+        f"{prompt}"
+    )
+
+
+async def _start_client_with_retry(client: Any, *, console: Any = None) -> None:
+    """`client.start()` を最大 _CLIENT_START_MAX_ATTEMPTS 回リトライする。
+
+    SDK プロセス起動の瞬断（ポート競合・cli プロセス未起動の race 等）に対する
+    防御。最終試行も失敗した場合は元の例外をそのまま伝播する。
+    """
+    last_exc: Optional[BaseException] = None
+    for attempt in range(1, _CLIENT_START_MAX_ATTEMPTS + 1):
+        try:
+            await client.start()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= _CLIENT_START_MAX_ATTEMPTS:
+                break
+            backoff = _CLIENT_START_BACKOFF_SECONDS[
+                min(attempt - 1, len(_CLIENT_START_BACKOFF_SECONDS) - 1)
+            ]
+            if console is not None:
+                try:
+                    console.warning(
+                        f"client.start() 失敗 ({type(exc).__name__}: {exc}) — "
+                        f"{backoff}s 後にリトライ ({attempt}/{_CLIENT_START_MAX_ATTEMPTS})"
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(backoff)
+    assert last_exc is not None
+    raise last_exc
+
+
 def _is_review_fail(content: str) -> bool:
     """合格判定行のトークンから FAIL 判定かどうかを判定する。
 
@@ -542,6 +655,12 @@ class StepRunner:
         # Phase 6: サブセッション作成回数カウンター（observability）。
         # run_step() 開始時にリセットされる。テストから参照可能。
         self._sub_sessions_created: int = 0
+        # ADR-0002: fan-out 子ステップ実行中に session_opts ビルダーから参照されるメタ
+        self._current_fanout_meta: Optional[Dict[str, Any]] = None
+        # Fork-integration (T2.1): ステップ毎のフォーク回数。0=初回、1+=リトライ。
+        # DAGExecutor が `set_fork_index(step_id, n)` で更新し、_make_step_session_id
+        # から参照することで session_id に `-fork{n}` suffix を付与する。
+        self._fork_indices: Dict[str, int] = {}
 
     def _session_id_prefix(self) -> str:
         """SDKConfig.session_id_prefix が空ならデフォルト ("hve") を返す。"""
@@ -564,16 +683,71 @@ class StepRunner:
         session_id を返すため、Phase 3 で `client.resume_session(session_id)` を
         呼べる前提を作る。
 
+        Fork-integration (T2.1): `_fork_indices[step_id] > 0` の場合、suffix に
+        `-fork{N}` を自動付与する。これにより DAGExecutor がリトライ時に
+        `set_fork_index()` を呼ぶだけでフォーク用の独立 session_id が得られる。
+
         Args:
             step_id: ステップ識別子（"1.1" 等）
             suffix: サブセッション種別（"qa" / "review" / "pre-qa" 等）。空ならメインセッション。
         """
+        effective_suffix = suffix
+        fork_index = self._fork_indices.get(step_id, 0)
+        if fork_index > 0:
+            fork_token = f"fork{fork_index}"
+            effective_suffix = f"{suffix}-{fork_token}" if suffix else fork_token
         return make_session_id(
             run_id=self.config.run_id,
             step_id=step_id,
-            suffix=suffix,
+            suffix=effective_suffix,
             prefix=self._session_id_prefix(),
         )
+
+    def _make_fork_session_id(self, step_id: str, fork_index: int, suffix: str = "") -> str:
+        """フォーク用 session_id を、`_fork_indices` 状態に依存せず直接生成する。
+
+        Fork-integration (T2.1): KPI ロガーや診断ツールが「次に発火するフォーク
+        session_id」を予測したい場合に使う。`_fork_indices[step_id]` を更新せず
+        参照のみで完結するため、副作用がない。
+
+        Args:
+            step_id: ステップ識別子
+            fork_index: フォーク回数（1 以上）。0 以下は ValueError。
+            suffix: 追加 suffix。空でも可。
+
+        Returns:
+            `{prefix}-{run_id}-step-{step_id}[-{suffix}]-fork{N}` 形式の session_id
+
+        Raises:
+            ValueError: fork_index が 1 未満の場合
+        """
+        if fork_index < 1:
+            raise ValueError(f"fork_index は 1 以上である必要があります（指定値: {fork_index}）")
+        fork_token = f"fork{fork_index}"
+        effective_suffix = f"{suffix}-{fork_token}" if suffix else fork_token
+        return make_session_id(
+            run_id=self.config.run_id,
+            step_id=step_id,
+            suffix=effective_suffix,
+            prefix=self._session_id_prefix(),
+        )
+
+    def set_fork_index(self, step_id: str, fork_index: int) -> None:
+        """ステップのフォーク回数を更新する（DAGExecutor のリトライフックから呼ぶ）。
+
+        Fork-integration (T2.1): 次回 `_make_step_session_id(step_id)` 呼び出しから
+        `-fork{N}` suffix が自動付与される。`fork_index=0` でリセット可。
+
+        Args:
+            step_id: ステップ識別子
+            fork_index: 0 以上。0=フォークなし（初回）
+        """
+        if fork_index < 0:
+            raise ValueError(f"fork_index は 0 以上である必要があります（指定値: {fork_index}）")
+        if fork_index == 0:
+            self._fork_indices.pop(step_id, None)
+        else:
+            self._fork_indices[step_id] = fork_index
 
     def _build_sub_session_opts(
         self,
@@ -621,6 +795,13 @@ class StepRunner:
 
         if _mcp:
             opts["mcp_servers"] = _mcp
+
+        # G-1: SDK の available_tools / excluded_tools をサブセッションへ伝搬する
+        # （メインセッションと同じ制限をサブにも適用）
+        if self.config.available_tools:
+            opts["available_tools"] = list(self.config.available_tools)
+        if self.config.excluded_tools:
+            opts["excluded_tools"] = list(self.config.excluded_tools)
 
         # Phase 2: 決定論的 session_id を付与（step_id + suffix が指定された場合のみ）
         if step_id:
@@ -716,6 +897,8 @@ class StepRunner:
         "custom_agents",
         "agent",
         "streaming",
+        "available_tools",
+        "excluded_tools",
     })
 
     def _should_resume_main_session(self, step_id: str, session_id: str) -> bool:
@@ -853,9 +1036,18 @@ class StepRunner:
 
         try:
             _max_context_chars = self._get_context_injection_max_chars()
-            _trunc_prompt = _truncate_context(original_prompt, _max_context_chars)
-            _trunc_output = _truncate_context(main_output, _max_context_chars)
-            _trunc_context = _truncate_context(improvement_context, _max_context_chars)
+            _trunc_prompt = _truncate_context_with_warn(
+                original_prompt, _max_context_chars,
+                label=f"{source_phase} original_prompt", console=self.console,
+            )
+            _trunc_output = _truncate_context_with_warn(
+                main_output, _max_context_chars,
+                label=f"{source_phase} main_output", console=self.console,
+            )
+            _trunc_context = _truncate_context_with_warn(
+                improvement_context, _max_context_chars,
+                label=f"{source_phase} improvement_context", console=self.console,
+            )
 
             _improve_prompt = MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT.format(
                 source_phase=source_phase,
@@ -1184,7 +1376,10 @@ class StepRunner:
             _effective_pre_qa_session = session
             # Phase 0a: 事前質問票生成 — 原プロンプトをコンテキストとして注入
             _max_context_chars = self._get_context_injection_max_chars()
-            _prompt_context = _truncate_context(original_prompt, _max_context_chars)
+            _prompt_context = _truncate_context_with_warn(
+                original_prompt, _max_context_chars,
+                label="Phase 0 Pre-QA original_prompt", console=self.console,
+            )
             _effective_pre_qa_prompt = (
                 "以下はこれから実行するタスクのプロンプトです。"
                 "成果物はまだ存在しません。このプロンプトを前提として事前質問票を作成してください。\n\n"
@@ -1409,20 +1604,46 @@ class StepRunner:
         prompt: str,
         custom_agent: Optional[str] = None,
         workflow_id: Optional[str] = None,
+        fanout_meta: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """ステップを実行する。
 
         Args:
-            step_id: ステップ識別子（例: "1.1", "2.3"）
+            step_id: ステップ識別子（例: "1.1", "2.3", fan-out 子の場合 "1/D01"）
             title: ステップタイトル（表示用）
             prompt: メインタスクのプロンプト文字列
             custom_agent: 使用する Custom Agent 名（省略可）
             workflow_id: ワークフロー識別子（省略可）。AQOD 専用プロンプト切り替えに使用。
+            fanout_meta: ADR-0002 fan-out 子ステップのメタ情報。次のキーを含む:
+                - fanout_key: fan-out キー（例 "D01"）
+                - base_step_id: 親ステップ ID（例 "1"）
+                - additional_prompt_template_path: per-key プロンプトテンプレ
+                - per_key_mcp_servers: per-key MCP 上書き
 
         Returns:
             True: 成功, False: 失敗
         """
         start = time.time()
+        # ADR-0002: fan-out per-key プロンプト注入 (T3B) と per-key MCP 上書き (T3A)
+        if fanout_meta:
+            try:
+                prompt = _apply_fanout_prompt_template(
+                    prompt=prompt,
+                    fanout_meta=fanout_meta,
+                    console=self.console,
+                )
+            except Exception as exc:
+                # テンプレ読み込み失敗時は warning のみ出して prompt は変更しない
+                try:
+                    self.console.warning(
+                        f"  ⚠️ Step.{step_id} fan-out テンプレ展開失敗: {exc}"
+                    )
+                except Exception:
+                    pass
+            # per-key MCP は session_opts 構築箇所で参照するため self._current_fanout_meta に保持
+            self._current_fanout_meta = fanout_meta
+        else:
+            self._current_fanout_meta = None
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools = []
@@ -1476,7 +1697,7 @@ class StepRunner:
                     cli_args=self.config.cli_args,
                 )
             client = CopilotClient(config=sdk_config)
-            await client.start()
+            await _start_client_with_retry(client, console=self.console)
 
             # セッション構築オプション
             session_opts: Dict[str, Any] = {
@@ -1499,6 +1720,30 @@ class StepRunner:
                 }
                 if _main_mcp_servers:
                     session_opts["mcp_servers"] = _main_mcp_servers
+
+            # ADR-0002 (T3A/E-4): fan-out 子ステップでは per-key MCP を上書きマージ
+            _fmeta = getattr(self, "_current_fanout_meta", None)
+            if _fmeta:
+                _per_key = _fmeta.get("per_key_mcp_servers") or {}
+                _key_servers = _per_key.get(_fmeta.get("fanout_key", "")) or {}
+                if _key_servers:
+                    _merged = dict(session_opts.get("mcp_servers") or {})
+                    for _k, _v in _key_servers.items():
+                        _merged[_k] = copy.deepcopy(_v)
+                    session_opts["mcp_servers"] = _merged
+                    try:
+                        self.console.event(
+                            f"  🔌 [{step_id}] per-key MCP {sorted(_key_servers.keys())} を適用"
+                        )
+                    except Exception:
+                        pass
+
+            # G-1: SDK の available_tools / excluded_tools をメインセッションへ伝搬する
+            # SDK 0.1.0: create_session(..., available_tools=None, excluded_tools=None, ...)
+            if self.config.available_tools:
+                session_opts["available_tools"] = list(self.config.available_tools)
+            if self.config.excluded_tools:
+                session_opts["excluded_tools"] = list(self.config.excluded_tools)
 
             # Custom Agents (グローバル定義)
             # 明示設定 (config.custom_agents_config) を最優先し、
@@ -1694,7 +1939,10 @@ class StepRunner:
                         _review_session.on(self._handle_session_event)
                         self._sub_sessions_created += 1
                         _max_context_chars = self._get_context_injection_max_chars()
-                        _review_context = _truncate_context(main_output or "", _max_context_chars)
+                        _review_context = _truncate_context_with_warn(
+                            main_output or "", _max_context_chars,
+                            label="Phase 3 Review main_output", console=self.console,
+                        )
                         _effective_review_prompt = (
                             "以下は同一ステップのメインタスク出力です。"
                             "この内容を前提としてレビューしてください。\n\n"
@@ -1913,6 +2161,7 @@ class StepRunner:
 
                     # JSON ブロックを抽出してパース
                     _phases_from_llm: Dict[str, str] = {}
+                    _json_parse_error: Optional[str] = None
                     _json_match = _extract_json_block(_verify_content)
                     if _json_match:
                         try:
@@ -1920,9 +2169,23 @@ class StepRunner:
                             _after_score = int(_parsed.get("after_quality_score", _after_score))
                             _degraded = bool(_parsed.get("degraded", _degraded))
                             _phases_from_llm = _parsed.get("verification_phases", {})
-                        except (json.JSONDecodeError, ValueError, TypeError):
-                            pass  # パース失敗時は scan 結果ベースの値を使用
+                        except (json.JSONDecodeError, ValueError, TypeError) as _exc:
+                            # G-7: JSON パース失敗を可観測化（黙示フォールバックの抑止）
+                            _json_parse_error = f"{type(_exc).__name__}: {_exc}"
+                            self.console.warning(
+                                f"  ⚠️ [{step_id}] Phase 4 verify: LLM JSON のパースに失敗しました "
+                                f"({_json_parse_error}) — scan 結果ベースの値で代替します"
+                            )
+                    else:
+                        _json_parse_error = "no_json_block_found"
+                        self.console.warning(
+                            f"  ⚠️ [{step_id}] Phase 4 verify: LLM 応答に JSON ブロックが見つかりません — "
+                            "scan 結果ベースの値で代替します"
+                        )
 
+                    _notes = _verify_content[:LEARNING_SUMMARY_MAX_LENGTH]
+                    if _json_parse_error:
+                        _notes = f"[json_parse_error={_json_parse_error}] " + _notes
                     _verification: VerificationResult = {
                         "after_quality_score": _after_score,
                         "degraded": _degraded,
@@ -1938,7 +2201,7 @@ class StepRunner:
                             "diff": _phases_from_llm.get("diff", "SKIP"),
                         },
                         "overall": "FAIL" if _degraded else "PASS",
-                        "notes": _verify_content[:LEARNING_SUMMARY_MAX_LENGTH],
+                        "notes": _notes,
                     }
 
                     # Phase 4e: 学習ログ記録
@@ -2039,6 +2302,11 @@ class StepRunner:
             token = _get(data, "delta_content", "deltaContent") or ""
             if token:
                 self.console.stream_token(step_id, token)
+                # ADR-0002 E-1: stderr JSON へトークン長を出力（verbosity 不問）
+                try:
+                    self.console.token_chunk(step_id, token, kind="message")
+                except Exception:
+                    pass
             return
 
         if etype == "assistant.streaming_delta":
@@ -2299,6 +2567,11 @@ class StepRunner:
             token = _get(data, "delta_content", "deltaContent") or ""
             if token:
                 self.console.reasoning_token(step_id, token)
+                # ADR-0002 E-1: stderr JSON へ reasoning デルタ長を出力
+                try:
+                    self.console.token_chunk(step_id, token, kind="reasoning")
+                except Exception:
+                    pass
             return
 
         if etype == "assistant.usage":

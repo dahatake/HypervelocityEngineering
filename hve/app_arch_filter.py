@@ -38,6 +38,11 @@ _ARCH_KIND_MAP: Dict[str, str] = {
 
 _CATALOG_SECTION = "A) サマリ表（全APP横断）"
 _DEFAULT_CATALOG_PATH = "docs/catalog/app-arch-catalog.md"
+_CATALOG_SECTION_CANONICAL = "A) サマリ表（全APP横断）"
+_CATALOG_SECTION_ACCEPTED_KEYWORDS: List[str] = [
+    "サマリ表",
+    "選定結果一覧",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -138,15 +143,32 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
     content = path.read_text(encoding="utf-8")
 
     # セクション抽出
-    m = re.search(
+    canonical_re = re.compile(
         r"##\s*A\)\s*サマリ表（全APP横断）\s*\n(.*?)(?=\n##\s|\Z)",
-        content,
         re.DOTALL,
     )
+    loose_re = re.compile(
+        r"##\s*A\)[^\n]*?(?:"
+        + "|".join(map(re.escape, _CATALOG_SECTION_ACCEPTED_KEYWORDS))
+        + r")[^\n]*\n(.*?)(?=\n##\s|\Z)",
+        re.DOTALL,
+    )
+
+    m = canonical_re.search(content)
     if not m:
-        raise ValueError(
-            f"catalog に `{_CATALOG_SECTION}` セクションが見つかりません: {catalog_path}"
-        )
+        m = loose_re.search(content)
+        if m:
+            actual_heading = re.search(r"^##\s*A\)[^\n]*", content, re.MULTILINE)
+            actual = actual_heading.group(0) if actual_heading else "(unknown)"
+            print(
+                f"⚠️ WARNING: catalog の見出しが canonical (`## {_CATALOG_SECTION_CANONICAL}`) と異なります: "
+                f"`{actual}` を受理しました。出力契約に合わせて見出しを揃えることを推奨します: {catalog_path}",
+                file=sys.stderr,
+            )
+        else:
+            raise ValueError(
+                f"catalog に `{_CATALOG_SECTION}` セクションが見つかりません: {catalog_path}"
+            )
 
     section = m.group(1)
 

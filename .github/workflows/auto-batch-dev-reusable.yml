@@ -62,7 +62,16 @@ permissions:
   pull-requests: write
 
 jobs:
+  check_qa_skip:
+    uses: ./.github/workflows/check-auto-qa-skip-reusable.yml
+    with:
+      issue_number: ${{ fromJSON(inputs.issue_number) }}
+      issue_labels: ${{ inputs.issue_labels }}
+      issue_body: ''
+    secrets: inherit
+
   orchestrate:
+    needs: check_qa_skip
     runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
@@ -72,6 +81,8 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
       REPO: ${{ github.repository }}
+      SKIP_AUTO_QA: ${{ needs.check_qa_skip.outputs.skip_auto_qa }}
+      SKIP_AUTO_QA_REASON: ${{ needs.check_qa_skip.outputs.skip_reason }}
 
     steps:
       # ----------------------------------------------------------------
@@ -232,8 +243,8 @@ jobs:
           create_label "abdv:done"                   "0E8A16" ""
           create_label "abdv:blocked"                "D73A4A" ""
           create_label "auto-context-review"        "1D76DB" "auto context review trigger for copilot-auto-review workflow"
-          create_label "auto-qa"                     "BFD4F2" "auto qa trigger for copilot-auto-qa workflow"
-          create_label "auto-approve-ready"          "1D76DB" "Ready for auto-approve and auto-merge"
+          create_label "auto-qa"                     "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready"          "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
       # ----------------------------------------------------------------
       # 2.5. 即時 abdv:initialized 付与（二重実行防止）
@@ -257,6 +268,7 @@ jobs:
       - name: Issue 初期化とStep Issue 生成
         if: steps.gate.outputs.mode == 'initialize'
         env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
         run: |
           set -euo pipefail
@@ -279,6 +291,40 @@ jobs:
           # ---- ユーティリティ関数 ----
           source "${GITHUB_WORKSPACE}/.github/scripts/abd-common.sh"
           source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/assign-copilot.sh"
+
+          # ---- 共通: app-arch filter エラー分類関数 ----
+          _post_app_arch_filter_error() {
+            local _root="$1"
+            local _result="$2"
+            local _catalog="$3"
+            local _err
+            _err=$(echo "${_result}" | python3 "${GITHUB_WORKSPACE}/.github/scripts/python/parse_filter_error.py" 2>/dev/null || echo "")
+
+            local _msg
+            if [[ -z "${_err}" ]]; then
+              _msg="⚠️ エラー: app-arch filter が予期せず失敗しました（exit 1, 詳細不明）。ワークフローログを確認してください。catalog: \`${_catalog}\`"
+            else
+              case "${_err}" in
+                *"catalog ファイルが見つかりません"*)
+                  _msg="⚠️ エラー: \`${_catalog}\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
+                  ;;
+                *"セクションが見つかりません"*)
+                  _msg="⚠️ エラー: \`${_catalog}\` の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません。出力契約 (.github/skills/planning/architecture-questionnaire/assets/output-format.md §7.2) に沿って見出しを修正するか、AAS Step.2 を再実行してください。詳細: ${_err}"
+                  ;;
+                *"Markdown テーブルが見つかりません"*)
+                  _msg="⚠️ エラー: \`${_catalog}\` の \`A) サマリ表\` セクションに Markdown テーブルが見つかりません。詳細: ${_err}"
+                  ;;
+                *"\`APP-ID\` 列が見つかりません"*|*"\`推薦アーキテクチャ\` 列が見つかりません"*)
+                  _msg="⚠️ エラー: \`${_catalog}\` のサマリ表に必要な列（\`APP-ID\` または \`推薦アーキテクチャ\`）が見つかりません。詳細: ${_err}"
+                  ;;
+                *)
+                  _msg="⚠️ エラー: app-arch filter: ${_err}"
+                  ;;
+              esac
+            fi
+            echo "ERROR: app-arch filter: ${_err:-（詳細なし）}" >&2
+            post_comment "${_root}" "${_msg}"
+          }
 
           # ---- Issue body パース ----
           PARSED=$(python3 - <<'PYEOF'
@@ -456,6 +502,10 @@ jobs:
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
+            echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
+            AUTO_QA="false"
+          fi
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
@@ -485,15 +535,14 @@ jobs:
             --workflow abdv \
             ${APP_IDS:+--app-ids "${APP_IDS}"} \
             --catalog docs/catalog/app-arch-catalog.md) || {
-            echo "ERROR: app-arch-catalog.md が見つからないか読み取れません。処理を中止します。" >&2
-            post_comment "${ROOT_ISSUE}" "⚠️ エラー: \`docs/catalog/app-arch-catalog.md\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
+            _post_app_arch_filter_error "${ROOT_ISSUE}" "${FILTER_RESULT:-}" "docs/catalog/app-arch-catalog.md"
             exit 1
           }
 
+          # フェイルセーフ: Python が exit 0 でも JSON に error が含まれる場合
           FILTER_ERROR=$(echo "${FILTER_RESULT}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null || echo "")
           if [[ -n "${FILTER_ERROR}" ]]; then
-            echo "ERROR: app-arch filter エラー: ${FILTER_ERROR}" >&2
-            post_comment "${ROOT_ISSUE}" "⚠️ エラー: app-arch filter: ${FILTER_ERROR}"
+            _post_app_arch_filter_error "${ROOT_ISSUE}" "${FILTER_RESULT}" "docs/catalog/app-arch-catalog.md"
             exit 1
           fi
 
@@ -1398,7 +1447,7 @@ jobs:
           QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python -c "
+          python3 - <<'PY'
           import os
           from hve.self_improve import run_improvement_loop
           from hve.config import SDKConfig
@@ -1408,14 +1457,56 @@ jobs:
           config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
           config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
           result = run_improvement_loop(config=config, repo_root='.')
-          print(f'Self-Improve: {result[\"stopped_reason\"]} (score={result[\"final_score\"]})')
-          "
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          PY
       - name: Commit improvements
         if: steps.parse.outputs.enable == 'true' && success()
+        env:
+          BRANCH: ${{ steps.parse.outputs.branch }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "[Self-Improve] 自動品質改善"
-          git push origin HEAD:${{ steps.parse.outputs.branch }}
 
+          branch="${BRANCH}"
+
+          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
+            echo "::error::Invalid branch name: ${branch}" >&2
+            exit 1
+          }
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No Self-Improve changes to commit."
+            exit 0
+          fi
+
+          git commit -m "[Self-Improve] 自動品質改善"
+
+          pushed=false
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}/3 to ${branch}"
+
+            if git push origin "HEAD:refs/heads/${branch}"; then
+              pushed=true
+              break
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Push failed. Fetching and rebasing onto origin/${branch}..."
+              git fetch origin "${branch}"
+
+              if ! git rebase "origin/${branch}"; then
+                echo "::error::Rebase failed due to conflicts. Aborting rebase." >&2
+                git rebase --abort || true
+                exit 1
+              fi
+            fi
+          done
+
+          if [ "${pushed}" != "true" ]; then
+            echo "::error::git push failed after 3 attempts." >&2
+            exit 1
+          fi

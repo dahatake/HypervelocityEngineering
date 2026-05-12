@@ -4,7 +4,7 @@ name: QA 完了 → auto-context-review 自動遷移
 # auto-context-review ラベルを自動で付与する。
 # これにより copilot-auto-review.yml がチェーン発火し、レビュー指示が自動投稿される。
 #
-# QA 完了の判定条件（すべて満たす必要あり）:
+# QA 完了の判定条件:
 #   1. PR に auto-qa ラベルが付いている
 #   2. PR に auto-context-review ラベルがまだ付いていない
 #   3. 紐づく Issue の auto-context-review ラベルを確認し、後続ステップで分岐する
@@ -14,9 +14,13 @@ name: QA 完了 → auto-context-review 自動遷移
 #   5. QA 指示後に以下いずれかの回答シグナルが存在する
 #      - ユーザー（bot 以外）の @copilot メンションコメント
 #      - <!-- auto-qa-default-answered --> マーカーコメント（auto-qa-default-answer.yml）
-#      ※「質問なし」パターン: user_reply_count == 0 かつ QA 指示後の Bot コメントにチェックボックス（- [ ]）がない場合も QA 完了と判定
-#   6. synchronize イベントで発火している（Copilot がコミットを push した = タスク実行完了）
-#      ※ issue_comment トリガー経由の場合は条件6を省略
+#      ※「質問なし」パターン: user_reply_count == 0 かつ auto_answered_count == 0 かつ
+#         QA 指示後の Bot コメントが質問票形式（チェックボックス / Qxx / 質問ID / 選択肢）を含まない場合も QA 完了と判定
+#   6. 以下のいずれかで QA 完了と判定
+#      - パスA: 回答後にコミットが存在（latest_commit_at > reply_at）し、
+#               default-answer 経由時は Copilot の反映完了コメントも検出
+#      - パスB: default-answer 投稿済みかつ PR diff に qa/*answer*.md が存在
+#      ※ issue_comment トリガー経由でも判定可能
 # ※ draft 状態でも動作する（最終的な Ready 化・Merge は別ワークフローで安全に制御）
 #
 # トリガー: pull_request_target: [synchronize], issue_comment: [created]
@@ -156,27 +160,48 @@ jobs:
           reason=""
           echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
 
+          write_reason_output() {
+            local reason_text="$1"
+            local reason_eof
+            reason_eof=$(uuidgen 2>/dev/null || date +reason-%s%N)
+            {
+              echo "reason<<${reason_eof}"
+              echo "${reason_text}"
+              echo "${reason_eof}"
+            } >> "${GITHUB_OUTPUT}"
+          }
+
+          load_issue_flags() {
+            local issue_number="$1"
+            local current_issue_data=""
+            current_issue_data=$(gh api "/repos/${REPO}/issues/${issue_number}" --jq 'select(.pull_request == null)' 2>/dev/null) || current_issue_data=''
+            if [ -z "${current_issue_data}" ]; then
+              return 1
+            fi
+            issue_labels=$(echo "${current_issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
+            has_issue_review_label=$(echo "${issue_labels}" \
+              | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
+            issue_body=$(echo "${current_issue_data}" | jq -r '.body // ""')
+            has_issue_auto_merge="false"
+            if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+              has_issue_auto_merge="true"
+            fi
+            return 0
+          }
+
           # 条件 3: 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
           # （pull_request_target / issue_comment の両経路で共通して実施）
           # ※ レビューなしの場合でも QA 完了判定は続行し、後続で分岐する
           has_issue_review_label="false"
           has_issue_auto_merge="false"
           if [ -n "${ISSUE_NUMBER}" ]; then
-            issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq 'select(.pull_request == null)' 2>/dev/null) || issue_data=''
-            if [ -z "${issue_data}" ]; then
+            if ! load_issue_flags "${ISSUE_NUMBER}"; then
               reason="紐づく #${ISSUE_NUMBER} は Issue として検証できません。QA 完了判定をスキップします。"
               echo "${reason}"
               echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
               echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
-              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              write_reason_output "${reason}"
               exit 0
-            fi
-            issue_labels=$(echo "${issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
-            has_issue_review_label=$(echo "${issue_labels}" \
-              | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
-            issue_body=$(echo "${issue_data}" | jq -r '.body // ""')
-            if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
-              has_issue_auto_merge="true"
             fi
             echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
             echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
@@ -199,21 +224,13 @@ jobs:
               echo "✅ フォールバック成功: Issue #${FALLBACK_ISSUE}"
               ISSUE_NUMBER="${FALLBACK_ISSUE}"
               echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
-              issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq 'select(.pull_request == null)' 2>/dev/null) || issue_data=''
-              if [ -z "${issue_data}" ]; then
+              if ! load_issue_flags "${ISSUE_NUMBER}"; then
                 reason="フォールバックで復元した #${ISSUE_NUMBER} は Issue として検証できません。QA 完了判定をスキップします。"
                 echo "${reason}"
                 echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
                 echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
-                echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+                write_reason_output "${reason}"
                 exit 0
-              fi
-              issue_labels=$(echo "${issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
-              has_issue_review_label=$(echo "${issue_labels}" \
-                | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
-              issue_body=$(echo "${issue_data}" | jq -r '.body // ""')
-              if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
-                has_issue_auto_merge="true"
               fi
               echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
               echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
@@ -222,7 +239,7 @@ jobs:
               echo "${reason}"
               echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
               echo "direct_approve=false" >> "${GITHUB_OUTPUT}"
-              echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+              write_reason_output "${reason}"
               exit 0
             fi
           fi
@@ -243,7 +260,7 @@ jobs:
             reason="QA 指示コメント（<!-- copilot-auto-qa-posted -->）が見つかりません。QA 未開始です。"
             echo "${reason}"
             echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
-            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            write_reason_output "${reason}"
             exit 0
           fi
 
@@ -267,12 +284,18 @@ jobs:
             | jq --arg qa_at "${qa_posted_at}" \
               '[.[] |
                 select(.created_at > $qa_at) |
-                select(.body | contains("<!-- auto-qa-default-answered -->"))
+                select((.user.type != "Bot") or (.user.login == "github-actions[bot]")) |
+                select(
+                  (.body // "")
+                  | split("\n")
+                  | map(select(startswith(">") | not))
+                  | join("\n")
+                  | contains("<!-- auto-qa-default-answered -->")
+                )
               ] | length')
-          total_reply_count=$((user_reply_count + auto_answered_count))
           echo "ユーザー回答数: ${user_reply_count}, 自動デフォルト回答数: ${auto_answered_count}"
 
-          if [ "${total_reply_count:-0}" -eq 0 ]; then
+          if [ "${user_reply_count:-0}" -eq 0 ] && [ "${auto_answered_count:-0}" -eq 0 ]; then
             # 「質問なし」パターンの検知:
             # QA 指示後の Copilot Bot コメントが存在し、チェックボックス（- [ ]）を含まない場合は
             # 質問票なし = QA 完了（質問なし）と判定する
@@ -284,7 +307,13 @@ jobs:
             bot_reply_count=$(echo "${bot_replies_after_qa}" | jq 'length')
             if [ "${bot_reply_count:-0}" -gt 0 ]; then
               has_questionnaire=$(echo "${bot_replies_after_qa}" \
-                | jq '[.[] | select(.body | test("^\\s*- \\[ \\]"; "m"))] | length')
+                | jq '[.[] | select(
+                    (.body | test("^\\s*- \\[ \\]"; "m"))
+                    or (.body | test("\\*\\*\\[Q\\d+\\]\\*\\*"; "i"))
+                    or (.body | test("\\*\\*\\[質問ID\\]\\*\\*"; "i"))
+                    or (.body | test("^\\s*選択肢[:：]"; "m"))
+                    or (.body | test("優先順位付き質問票"))
+                  )] | length')
               if [ "${has_questionnaire:-0}" -eq 0 ]; then
                 # 質問なしパターン → QA 完了
                 echo "✅ 質問なしパターンを検知しました。QA 完了と判定します。"
@@ -293,7 +322,7 @@ jobs:
                 fi
                 echo "qa_complete=true" >> "${GITHUB_OUTPUT}"
                 echo "direct_approve=${direct_approve}" >> "${GITHUB_OUTPUT}"
-                echo "reason=QA 完了（質問なし）: Copilot が QA 指示に対して質問なしと回答しました。" >> "${GITHUB_OUTPUT}"
+                write_reason_output "QA 完了（質問なし）: Copilot が QA 指示に対して質問なしと回答しました。"
                 echo "has_issue_review_label=${has_issue_review_label}" >> "${GITHUB_OUTPUT}"
                 echo "has_issue_auto_merge=${has_issue_auto_merge}" >> "${GITHUB_OUTPUT}"
                 exit 0
@@ -303,7 +332,7 @@ jobs:
             reason="QA 指示後にユーザーの @copilot メンションコメントが見つかりません。ユーザーの回答待ちです。"
             echo "${reason}"
             echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
-            echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+            write_reason_output "${reason}"
             exit 0
           fi
 
@@ -314,15 +343,60 @@ jobs:
                 select(.created_at > $qa_at) |
                 select(
                   ((.user.type != "Bot") and (.body | ascii_downcase | contains("@copilot")))
-                  or (.body | contains("<!-- auto-qa-default-answered -->"))
+                  or (
+                    ((.user.type != "Bot") or (.user.login == "github-actions[bot]"))
+                    and (
+                      (.body // "")
+                      | split("\n")
+                      | map(select(startswith(">") | not))
+                      | join("\n")
+                      | contains("<!-- auto-qa-default-answered -->")
+                    )
+                  )
                 )
               ] | .[0].created_at')
           echo "回答日時: ${reply_at}"
 
+          if [ -z "${reply_at}" ] || [ "${reply_at}" = "null" ]; then
+            reason="回答日時を特定できませんでした。QA 完了判定は安全側で未完了とします。"
+            echo "${reason}"
+            echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+            write_reason_output "${reason}"
+            exit 0
+          fi
+
+          reply_at_epoch=$(date -d "${reply_at}" +%s 2>/dev/null || true)
+          if [ -z "${reply_at_epoch}" ]; then
+            reason="回答日時の解析に失敗しました（reply_at=${reply_at}）。QA 完了判定は安全側で未完了とします。"
+            echo "${reason}"
+            echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+            write_reason_output "${reason}"
+            exit 0
+          fi
+
           # auto-qa-default-answered の有無を判定
           has_default_answer=$(echo "${pr_comments}" \
             | jq --arg qa_at "${qa_posted_at}" \
-              '[.[] | select(.created_at > $qa_at) | select(.body | contains("<!-- auto-qa-default-answered -->"))] | length')
+              '[.[] |
+                select(.created_at > $qa_at) |
+                select((.user.type != "Bot") or (.user.login == "github-actions[bot]")) |
+                select(
+                  (.body // "")
+                  | split("\n")
+                  | map(select(startswith(">") | not))
+                  | join("\n")
+                  | contains("<!-- auto-qa-default-answered -->")
+                )
+              ] | length')
+
+          has_answer_files_in_diff="false"
+          if [ "${has_default_answer:-0}" -gt 0 ]; then
+            answer_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate \
+              --jq '.[] | select(.filename | test("^qa/.*answer.*\\.md$")) | .filename' 2>/dev/null) || answer_files=""
+            if [ -n "${answer_files}" ]; then
+              has_answer_files_in_diff="true"
+            fi
+          fi
 
           # default-answer 経由の場合: Copilot の反映完了コメントを要求
           copilot_acknowledged_default="false"
@@ -339,11 +413,19 @@ jobs:
                     )
                   ) |
                   select(
-                    (.body | contains("auto-qa-default-answered"))
-                    or (.body | contains("既定値"))
-                    or (.body | contains("デフォルト"))
-                    or (.body | contains("反映しました"))
-                    or (.body | contains("適用しました"))
+                    (.body // "")
+                    | split("\n")
+                    | map(select(startswith(">") | not))
+                    | join("\n")
+                    | (
+                      contains("auto-qa-default-answered")
+                      or contains("既定値")
+                      or contains("デフォルト")
+                      or contains("反映しました")
+                      or contains("適用しました")
+                      or contains("採用しました")
+                      or contains("確認しました")
+                    )
                   )
                 ] | length')
             if [ "${copilot_ack_count:-0}" -gt 0 ]; then
@@ -367,7 +449,24 @@ jobs:
             --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
           echo "最新コミット日時: ${latest_commit_at}"
 
-          if [ -n "${latest_commit_at}" ] && [ "$(date -d "${latest_commit_at}" +%s 2>/dev/null || echo 0)" -gt "$(date -d "${reply_at}" +%s 2>/dev/null || echo 0)" ]; then
+          latest_commit_epoch=""
+          if [ -n "${latest_commit_at}" ] && [ "${latest_commit_at}" != "null" ]; then
+            latest_commit_epoch=$(date -d "${latest_commit_at}" +%s 2>/dev/null || true)
+            if [ -z "${latest_commit_epoch}" ]; then
+              reason="最新コミット日時の解析に失敗しました（latest_commit_at=${latest_commit_at}）。QA 完了判定は安全側で未完了とします。"
+              echo "${reason}"
+              echo "qa_complete=false" >> "${GITHUB_OUTPUT}"
+              write_reason_output "${reason}"
+              exit 0
+            fi
+          fi
+
+          has_commit_after_reply="false"
+          if [ -n "${latest_commit_epoch}" ] && [ "${latest_commit_epoch}" -gt "${reply_at_epoch}" ]; then
+            has_commit_after_reply="true"
+          fi
+
+          if [ "${has_commit_after_reply}" = "true" ]; then
             # default-answer 経由の場合: Copilot の反映コメントも必要
             if [ "${has_default_answer:-0}" -gt 0 ] && [ "${copilot_acknowledged_default}" != "true" ]; then
               reason="auto-qa-default-answered 後にコミットは存在しますが、Copilot の反映完了コメントが未検出です。反映作業の完了待ちです。"
@@ -380,6 +479,13 @@ jobs:
                 direct_approve="true"
               fi
             fi
+          elif [ "${has_default_answer:-0}" -gt 0 ] && [ "${has_answer_files_in_diff}" = "true" ]; then
+            echo "✅ default-answer 後の回答ファイル（qa/*answer*.md）が PR diff に存在するため、先回りコミットとして QA 完了と判定します。"
+            qa_complete="true"
+            reason="QA 完了: auto-qa-default-answered 投稿時点で qa/*answer*.md が PR diff に存在する先回りコミットを検知しました。"
+            if [ "${has_issue_review_label}" != "true" ] && [ "${has_issue_auto_merge}" = "true" ]; then
+              direct_approve="true"
+            fi
           else
             reason="ユーザーの回答後にコミットがまだありません。Copilot のタスク実行待ちです。"
             echo "${reason}"
@@ -387,7 +493,7 @@ jobs:
 
           echo "qa_complete=${qa_complete}" >> "${GITHUB_OUTPUT}"
           echo "direct_approve=${direct_approve}" >> "${GITHUB_OUTPUT}"
-          echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+          write_reason_output "${reason}"
           echo "has_issue_review_label=${has_issue_review_label}" >> "${GITHUB_OUTPUT}"
           echo "has_issue_auto_merge=${has_issue_auto_merge}" >> "${GITHUB_OUTPUT}"
 
@@ -438,6 +544,49 @@ jobs:
           # 未完了の場合はログのみ出力（PR コメントは投稿しない。synchronize は頻繁に発火するため）
           echo "⏳ QA 完了条件を満たしていません: ${REASON}"
           echo "次の synchronize または issue_comment イベントで再チェックします。"
+
+      - name: QA 完了（手動レビュー待ち）通知
+        if: >
+          steps.pr-info.outputs.skip != 'true'
+          && steps.check-qa-complete.outputs.qa_complete == 'true'
+          && steps.check-qa-complete.outputs.has_issue_review_label != 'true'
+          && steps.check-qa-complete.outputs.direct_approve != 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.check-qa-complete.outputs.issue_number }}
+          REASON: ${{ steps.check-qa-complete.outputs.reason }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- qa-complete-manual-review -->'
+
+          existing_manual_review_comment=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
+            2>/dev/null) || existing_manual_review_comment=0
+
+          if [ "${existing_manual_review_comment:-0}" -gt 0 ]; then
+            echo "手動レビュー待ちコメントは既に投稿済みです。"
+            exit 0
+          fi
+
+          has_auto_qa=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}" \
+            --jq '[.labels[].name] | if contains(["auto-qa"]) then "true" else "false" end' 2>/dev/null) || has_auto_qa="false"
+          if [ "${has_auto_qa}" = "true" ]; then
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "auto-qa"
+            echo "auto-qa ラベルを除去しました。"
+          fi
+
+          # shellcheck disable=SC2016
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s' \
+            "${MARKER}" \
+            '## ✅ QA 完了（手動レビュー待ち）' \
+            'QA 完了を検知しました。Issue 設定により auto-context-review / auto-approve-ready は自動付与されません。' \
+            "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
+            "- 🔍 **判定理由**: ${REASON}" \
+            '- 🙋 **次のアクション**: レビュアーが手動でレビューと承認を進めてください。' \
+            '> ℹ️ このコメントは `auto-qa-to-review-transition.yml` によって自動投稿されました。')
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${COMMENT}"
+          echo "✅ 手動レビュー待ちコメントを投稿しました。"
 
       - name: auto-approve-ready ラベルを PR に付与（レビューなしパス）
         if: >

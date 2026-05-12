@@ -5,25 +5,52 @@ on:
     types: [labeled, ready_for_review]
   issues:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      target_issue:
+        description: 'テスト対象 Issue 番号'
+        required: true
+        type: string
+      target_pr:
+        description: 'テスト対象 PR 番号（PR 経路の場合）'
+        required: false
+        type: string
+        default: ''
+      dry_run:
+        description: 'ドライラン（書き込み操作をスキップ）'
+        required: false
+        type: boolean
+        default: true
+      simulate_label:
+        description: 'シミュレートするラベル名（例: aas:qa-ready）'
+        required: false
+        type: string
+        default: ''
 
 permissions:
+  contents: read
   pull-requests: write
   issues: write
 
 jobs:
   auto-qa:
     concurrency:
-      group: copilot-auto-qa-${{ github.event.pull_request.number }}
+      group: copilot-auto-qa-${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
       cancel-in-progress: false
     if: >
-      github.event_name == 'pull_request_target'
+      (github.event_name == 'pull_request_target'
       && contains(github.event.pull_request.labels.*.name, 'auto-qa')
+      && !contains(github.event.pull_request.labels.*.name, 'qa-questionnaire-pr'))
+      || (github.event_name == 'workflow_dispatch' && inputs.target_pr != '')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+      SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
       PR_BODY: ${{ github.event.pull_request.body }}
 
     steps:
@@ -189,10 +216,32 @@ jobs:
             - QA 回答を成果物に反映しない場合は、その理由を完了コメントまたは成果物内に記録してください。
         run: |
           set -euo pipefail
-          if gh pr comment "${PR_NUMBER}" \
-            --repo "${REPO}" \
-            --body "${COMMENT_BODY}"; then
+          dry_run_guard() {
+            local cmd_desc="$1"
+            shift
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::notice::[DRY RUN] スキップ: ${cmd_desc}"
+              echo "[DRY RUN] would execute: ${cmd_desc}"
+              return 0
+            fi
+            "$@"
+          }
+          if dry_run_guard "PR への auto-qa 指示コメント投稿" \
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${COMMENT_BODY}"; then
             echo "✅ 優先順位付き質問票作成指示コメントを PR #${PR_NUMBER} に投稿しました。"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::group::DRY RUN Summary"
+              echo "[DRY RUN] target_issue=${ISSUE_NUMBER}"
+              echo "[DRY RUN] target_pr=${PR_NUMBER}"
+              echo "[DRY RUN] simulate_label=${SIMULATE_LABEL}"
+              echo "[DRY RUN] === Skipped writes ==="
+              echo "[DRY RUN] would execute: gh pr comment ${PR_NUMBER} --body \"<COMMENT_BODY (500 chars preview)>\""
+              echo "[DRY RUN] === Read-only checks executed ==="
+              echo "[DRY RUN] existing QA comment check: OK"
+              echo "::endgroup::"
+            fi
           else
             echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
             exit 1
@@ -200,17 +249,21 @@ jobs:
 
   auto-review:
     concurrency:
-      group: copilot-auto-review-${{ github.event.pull_request.number }}
+      group: copilot-auto-review-${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
       cancel-in-progress: false
     if: >
-      github.event_name == 'pull_request_target'
-      && contains(github.event.pull_request.labels.*.name, 'auto-context-review')
+      (github.event_name == 'pull_request_target'
+      && contains(github.event.pull_request.labels.*.name, 'auto-context-review'))
+      || (github.event_name == 'workflow_dispatch' && inputs.target_pr != '')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+      SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
       PR_BODY: ${{ github.event.pull_request.body }}
 
     steps:
@@ -341,10 +394,32 @@ jobs:
             捏造は絶対に禁止です。
         run: |
           set -euo pipefail
-          if gh pr comment "${PR_NUMBER}" \
-            --repo "${REPO}" \
-            --body "${COMMENT_BODY}"; then
+          dry_run_guard() {
+            local cmd_desc="$1"
+            shift
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::notice::[DRY RUN] スキップ: ${cmd_desc}"
+              echo "[DRY RUN] would execute: ${cmd_desc}"
+              return 0
+            fi
+            "$@"
+          }
+          if dry_run_guard "PR への auto-review 指示コメント投稿" \
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${COMMENT_BODY}"; then
             echo "✅ 敵対的レビュー指示コメントを PR #${PR_NUMBER} に投稿しました。"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::group::DRY RUN Summary"
+              echo "[DRY RUN] target_issue=${ISSUE_NUMBER}"
+              echo "[DRY RUN] target_pr=${PR_NUMBER}"
+              echo "[DRY RUN] simulate_label=${SIMULATE_LABEL}"
+              echo "[DRY RUN] === Skipped writes ==="
+              echo "[DRY RUN] would execute: gh pr comment ${PR_NUMBER} --body \"<COMMENT_BODY (500 chars preview)>\""
+              echo "[DRY RUN] === Read-only checks executed ==="
+              echo "[DRY RUN] existing review comment check: OK"
+              echo "::endgroup::"
+            fi
           else
             echo "::error::PR #${PR_NUMBER} へのコメント投稿に失敗しました。"
             exit 1
@@ -353,33 +428,35 @@ jobs:
   auto-qa-on-issue:
     # Issue に *:qa-ready ラベルが付与された時に事前 QA 質問票を投稿する
     concurrency:
-      group: copilot-auto-pre-qa-${{ github.event.issue.number }}
+      group: copilot-auto-pre-qa-${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
       cancel-in-progress: false
     if: >
-      github.event_name == 'issues'
+      (github.event_name == 'issues'
       && github.event.action == 'labeled'
-      && (
-        github.event.label.name == 'aas:qa-ready'
-        || github.event.label.name == 'aad:qa-ready'
-        || github.event.label.name == 'aad-web:qa-ready'
-        || github.event.label.name == 'asdw:qa-ready'
-        || github.event.label.name == 'asdw-web:qa-ready'
-        || github.event.label.name == 'abd:qa-ready'
-        || github.event.label.name == 'abdv:qa-ready'
-        || github.event.label.name == 'aag:qa-ready'
-        || github.event.label.name == 'aagd:qa-ready'
-        || github.event.label.name == 'akm:qa-ready'
-        || github.event.label.name == 'aqod:qa-ready'
-        || github.event.label.name == 'adoc:qa-ready'
-      )
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","abd:qa-ready","abdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), github.event.label.name))
+      || (github.event_name == 'workflow_dispatch'
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","abd:qa-ready","abdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), inputs.simulate_label))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
       REPO: ${{ github.repository }}
-      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+      QA_READY_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || github.event.label.name }}
+      SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
 
     steps:
+      - name: Diagnostic — トリガー条件確認
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "action=${{ github.event.action }}"
+          echo "label.name=${{ github.event.label.name }}"
+          echo "issue.number=${{ github.event.issue.number }}"
+          echo "ref=${{ github.ref }}"
+
       - name: 冪等性ガード（既に事前 QA 投稿済みならスキップ）
         id: guard
         run: |
@@ -402,19 +479,155 @@ jobs:
           fi
 
       - name: pre-QA prompt source を checkout
-        if: steps.guard.outputs.posted != 'true'
+        if: steps.guard.outputs.posted != 'true' || vars.ENABLE_COPILOT_QA_ASSIGN != 'false'
         uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        if: steps.guard.outputs.posted != 'true' || vars.ENABLE_COPILOT_QA_ASSIGN != 'false'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: hve をインストール
+        if: steps.guard.outputs.posted != 'true' || vars.ENABLE_COPILOT_QA_ASSIGN != 'false'
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e .
 
       - name: Issue に事前 QA 質問票生成指示を投稿
         if: steps.guard.outputs.posted != 'true'
         run: |
           set -euo pipefail
-          COMMENT_BODY="$(python3 -m hve emit-prompt pre-qa --comment-body)"
-          if gh issue comment "${ISSUE_NUMBER}" \
-            --repo "${REPO}" \
-            --body "${COMMENT_BODY}"; then
+          dry_run_guard() {
+            local cmd_desc="$1"
+            shift
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::notice::[DRY RUN] スキップ: ${cmd_desc}"
+              echo "[DRY RUN] would execute: ${cmd_desc}"
+              return 0
+            fi
+            "$@"
+          }
+          COMMENT_BODY="$(python3 -m hve emit-prompt pre-qa --comment-body)" || {
+            echo "::error::hve emit-prompt の実行に失敗しました。"
+            exit 1
+          }
+          if [ -z "${COMMENT_BODY}" ]; then
+            echo "::error::COMMENT_BODY が空です。hve emit-prompt の出力を確認してください。"
+            exit 1
+          fi
+          echo "::group::COMMENT_BODY preview (先頭500文字)"
+          printf '%s' "${COMMENT_BODY}" | head -c 500
+          echo
+          echo "::endgroup::"
+          if dry_run_guard "Issue への pre-QA 指示コメント投稿" \
+            gh issue comment "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --body "${COMMENT_BODY}"; then
             echo "✅ 事前 QA 質問票作成指示コメントを Issue #${ISSUE_NUMBER} に投稿しました。"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::group::DRY RUN Summary"
+              echo "[DRY RUN] target_issue=${ISSUE_NUMBER}"
+              echo "[DRY RUN] target_pr=${PR_NUMBER}"
+              echo "[DRY RUN] simulate_label=${SIMULATE_LABEL}"
+              echo "[DRY RUN] === Skipped writes ==="
+              echo "[DRY RUN] would execute: gh issue comment ${ISSUE_NUMBER} --body \"<COMMENT_BODY (500 chars preview)>\""
+              echo "[DRY RUN] === Read-only checks executed ==="
+              echo "[DRY RUN] issue_data fetched: OK"
+              echo "[DRY RUN] pre-qa prompt generated by hve: OK"
+              echo "::endgroup::"
+            fi
           else
             echo "::error::Issue #${ISSUE_NUMBER} へのコメント投稿に失敗しました。"
             exit 1
+          fi
+
+      - name: Copilot を Issue にアサインして qa-drafting へ遷移
+        if: ${{ vars.ENABLE_COPILOT_QA_ASSIGN != 'false' }}
+        run: |
+          set -euo pipefail
+          dry_run_guard() {
+            local cmd_desc="$1"
+            shift
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "::notice::[DRY RUN] スキップ: ${cmd_desc}"
+              echo "[DRY RUN] would execute: ${cmd_desc}"
+              return 0
+            fi
+            "$@"
+          }
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}") || {
+            echo "::error::Issue #${ISSUE_NUMBER} の取得に失敗しました。"
+            exit 1
+          }
+
+          issue_labels=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json
+          print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels', [])]))
+          " 2>/dev/null || echo '[]')
+          QA_DRAFTING_LABEL="${QA_READY_LABEL/:qa-ready/:qa-drafting}"
+
+          if printf '%s' "${issue_labels}" | python3 -c "
+          import sys, json
+          labels = json.load(sys.stdin)
+          target = sys.argv[1]
+          print('true' if target in labels else 'false')
+          " "${QA_DRAFTING_LABEL}" | grep -q '^true$'; then
+            echo "Issue #${ISSUE_NUMBER} は既に ${QA_DRAFTING_LABEL} 状態です。"
+            exit 0
+          fi
+
+          BRANCH=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'<!--\s*branch:\s*([^\s-][^-]*?)\s*-->', body)
+          print(m.group(1).strip() if m else 'main')
+          " 2>/dev/null || echo 'main')
+          CUSTOM_AGENT=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'## Custom Agent\s*\n\s*\`([^\`]+)\`', body)
+          print(m.group(1) if m else '')
+          " 2>/dev/null || echo '')
+          SELECTED_MODEL=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json, re
+          body = json.load(sys.stdin).get('body', '')
+          m = re.search(r'<!--\s*model:\s*([^\s-][^-]*?)\s*-->', body)
+          print(m.group(1).strip() if m else '')
+          " 2>/dev/null || echo '')
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
+          if ! dry_run_guard "Issue への Copilot アサイン" \
+            assign_copilot "${ISSUE_NUMBER}" "${CUSTOM_AGENT}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+            echo "::error::Issue #${ISSUE_NUMBER} への Copilot アサインに失敗しました。"
+            exit 1
+          fi
+
+          dry_run_guard "qa-ready ラベル除去" \
+            gh api -X DELETE \
+              "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" \
+              --silent 2>/dev/null || true
+          dry_run_guard "qa-drafting ラベル付与" \
+            gh issue edit "${ISSUE_NUMBER}" \
+              --repo "${REPO}" \
+              --add-label "${QA_DRAFTING_LABEL}" || {
+              echo "::error::${QA_DRAFTING_LABEL} ラベル付与に失敗しました。"
+              exit 1
+            }
+          echo "✅ Issue #${ISSUE_NUMBER} に Copilot をアサインし、${QA_DRAFTING_LABEL} へ遷移しました。"
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "::group::DRY RUN Summary"
+            echo "[DRY RUN] target_issue=${ISSUE_NUMBER}"
+            echo "[DRY RUN] target_pr=${PR_NUMBER}"
+            echo "[DRY RUN] simulate_label=${SIMULATE_LABEL}"
+            echo "[DRY RUN] === Skipped writes ==="
+            echo "[DRY RUN] would execute: assign_copilot ${ISSUE_NUMBER} ${CUSTOM_AGENT} ${BRANCH} '' ${SELECTED_MODEL}"
+            echo "[DRY RUN] would execute: gh api -X DELETE /repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}"
+            echo "[DRY RUN] would execute: gh issue edit ${ISSUE_NUMBER} --add-label \"${QA_DRAFTING_LABEL}\""
+            echo "[DRY RUN] === Read-only checks executed ==="
+            echo "[DRY RUN] issue_data fetched: OK"
+            echo "[DRY RUN] custom_agent extracted: ${CUSTOM_AGENT:-}"
+            echo "[DRY RUN] branch extracted: ${BRANCH:-main}"
+            echo "::endgroup::"
           fi

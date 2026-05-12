@@ -676,27 +676,27 @@ class TestTrackToolFiles(unittest.TestCase):
         return runner
 
     def test_edit_file_tracked_as_read_and_write(self) -> None:
+        # console.track_file は path を os.path.normpath 後 forward-slash に正規化するため
+        # OS 依存しない forward-slash で期待値を検証する。
         runner = self._make_runner()
         runner._track_tool_files("1", "edit_file", {"path": "src/main.py"})
         files = runner.console._step_files.get("1", {})
-        self.assertIn(os.path.normpath("src/main.py"), files.get("read", []))
-        self.assertIn(os.path.normpath("src/main.py"), files.get("write", []))
+        self.assertIn("src/main.py", files.get("read", []))
+        self.assertIn("src/main.py", files.get("write", []))
 
     def test_bash_redirect_tracked_as_write(self) -> None:
-        import os
         runner = self._make_runner()
         runner._track_bash_files("1", "echo hello > output/result.txt")
         files = runner.console._step_files.get("1", {})
-        self.assertIn(os.path.normpath("output/result.txt"), files.get("write", []))
+        self.assertIn("output/result.txt", files.get("write", []))
 
     def test_bash_redirect_no_space_and_fd_tracked_as_write(self) -> None:
-        import os
         runner = self._make_runner()
         runner._track_bash_files("1", "echo hi>out.txt; echo ng 2>err.log; tee -a tee.log")
         files = runner.console._step_files.get("1", {})
-        self.assertIn(os.path.normpath("out.txt"), files.get("write", []))
-        self.assertIn(os.path.normpath("err.log"), files.get("write", []))
-        self.assertIn(os.path.normpath("tee.log"), files.get("write", []))
+        self.assertIn("out.txt", files.get("write", []))
+        self.assertIn("err.log", files.get("write", []))
+        self.assertIn("tee.log", files.get("write", []))
 
     def test_skip_tools_not_tracked(self) -> None:
         runner = self._make_runner()
@@ -921,7 +921,7 @@ class TestSessionIdPropagation(unittest.TestCase):
         kw = fake_client.create_session_kwargs[0]
         self.assertIn("session_id", kw)
         # フォーマット: "hve-{run_id}-step-{step_id}"
-        self.assertEqual(kw["session_id"], "hve-20260507T100000-test01-step-1.1")
+        self.assertEqual(kw["session_id"], "hve-20260507T100000-test01-step-1-1")
 
     def test_session_id_is_deterministic_across_runs(self) -> None:
         """同じ run_id + step_id で複数回 run_step() を呼ぶと常に同じ session_id が渡される。"""
@@ -983,9 +983,9 @@ class TestSessionIdPropagation(unittest.TestCase):
         qa = runner._make_step_session_id("1.1", suffix="qa")
         review = runner._make_step_session_id("1.1", suffix="review")
 
-        self.assertEqual(main, "hve-run-helper-001-step-1.1")
-        self.assertEqual(qa, "hve-run-helper-001-step-1.1-qa")
-        self.assertEqual(review, "hve-run-helper-001-step-1.1-review")
+        self.assertEqual(main, "hve-run-helper-001-step-1-1")
+        self.assertEqual(qa, "hve-run-helper-001-step-1-1-qa")
+        self.assertEqual(review, "hve-run-helper-001-step-1-1-review")
         # サブセッション ID は全て異なる
         self.assertEqual(len({main, qa, review}), 3)
 
@@ -1020,8 +1020,8 @@ class TestSessionIdPropagation(unittest.TestCase):
                 "claude-opus-4.6", step_id="1.1", suffix="review"
             )
 
-        self.assertEqual(opts_qa.get("session_id"), "hve-run-qa-suffix-001-step-1.1-qa")
-        self.assertEqual(opts_review.get("session_id"), "hve-run-qa-suffix-001-step-1.1-review")
+        self.assertEqual(opts_qa.get("session_id"), "hve-run-qa-suffix-001-step-1-1-qa")
+        self.assertEqual(opts_review.get("session_id"), "hve-run-qa-suffix-001-step-1-1-review")
         # 明示モデル指定時は reasoning_effort を付与しない契約を二重保証
         self.assertNotIn("reasoning_effort", opts_qa)
         self.assertNotIn("reasoning_effort", opts_review)
@@ -1073,12 +1073,14 @@ class TestSubSessionOptsReasoningEffort(unittest.TestCase):
         return {"copilot.session": fake_copilot_session}
 
     def test_auto_model_adds_reasoning_effort_high(self) -> None:
-        from config import MODEL_AUTO_VALUE
+        from config import MODEL_AUTO_VALUE, DEFAULT_MODEL
 
         runner = self._make_runner_with_fake_permission()
         with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
             opts = runner._build_sub_session_opts(MODEL_AUTO_VALUE)
-        self.assertNotIn("model", opts)
+        # Auto 指定時は CLI ユーザー設定の -high バリアント上書きを避けるため
+        # 実装は DEFAULT_MODEL を明示付与し reasoning_effort='high' を設定する。
+        self.assertEqual(opts.get("model"), DEFAULT_MODEL)
         self.assertEqual(opts.get("reasoning_effort"), "high")
 
     def test_explicit_model_omits_reasoning_effort(self) -> None:
@@ -1089,10 +1091,12 @@ class TestSubSessionOptsReasoningEffort(unittest.TestCase):
         self.assertNotIn("reasoning_effort", opts)
 
     def test_empty_string_treated_as_auto(self) -> None:
+        from config import DEFAULT_MODEL
+
         runner = self._make_runner_with_fake_permission()
         with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
             opts = runner._build_sub_session_opts("")
-        self.assertNotIn("model", opts)
+        self.assertEqual(opts.get("model"), DEFAULT_MODEL)
         self.assertEqual(opts.get("reasoning_effort"), "high")
 
 
@@ -1790,6 +1794,239 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         source = inspect.getsource(StepRunner.run_step)
         self.assertIn("_log_sub_session_reason", source)
         self.assertIn("_log_main_session_reuse", source)
+
+
+# ---------------------------------------------------------------------------
+# G-1: available_tools / excluded_tools propagation (T-04)
+# ---------------------------------------------------------------------------
+
+class TestAvailableExcludedToolsPropagation(unittest.TestCase):
+    """SDKConfig.available_tools / excluded_tools がメインセッション・サブセッション・
+    resume_session の全経路で SDK へ伝搬されることを検証する。
+    """
+
+    def _build_fake_sdk(self):
+        import types
+
+        class _FakeSession:
+            async def send_and_wait(self, *args, **kwargs):
+                return None
+
+            async def disconnect(self):
+                return None
+
+            def on(self, handler):
+                return None
+
+        class _FakeClient:
+            def __init__(self) -> None:
+                self.create_session_kwargs: list = []
+
+            async def start(self):
+                return None
+
+            async def stop(self):
+                return None
+
+            async def create_session(self, **kwargs):
+                self.create_session_kwargs.append(kwargs)
+                return _FakeSession()
+
+        fake_client = _FakeClient()
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot.CopilotClient = lambda config=None: fake_client
+        fake_copilot.SubprocessConfig = lambda **kwargs: object()
+        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+        return fake_client, fake_copilot, fake_copilot_session
+
+    def test_main_session_receives_available_and_excluded_tools(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-tools01",
+            available_tools=["str_replace_editor", "bash"],
+            excluded_tools=["web_search"],
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertEqual(kw.get("available_tools"), ["str_replace_editor", "bash"])
+        self.assertEqual(kw.get("excluded_tools"), ["web_search"])
+
+    def test_main_session_omits_keys_when_unset(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-tools02",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertNotIn("available_tools", kw)
+        self.assertNotIn("excluded_tools", kw)
+
+    def test_sub_session_opts_includes_tools(self) -> None:
+        cfg = SDKConfig(
+            model="claude-opus-4.7",
+            available_tools=["bash"],
+            excluded_tools=["web_search"],
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        # _build_sub_session_opts は copilot.session.PermissionHandler を import する
+        import types
+        fake_session_mod = types.ModuleType("copilot.session")
+        class _PH:
+            @staticmethod
+            async def approve_all(*a, **kw):
+                return True
+        fake_session_mod.PermissionHandler = _PH
+        with unittest.mock.patch.dict(sys.modules, {"copilot.session": fake_session_mod}):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertEqual(opts.get("available_tools"), ["bash"])
+        self.assertEqual(opts.get("excluded_tools"), ["web_search"])
+
+    def test_resume_session_keys_includes_tools(self) -> None:
+        from runner import StepRunner as SR
+        self.assertIn("available_tools", SR._RESUME_SESSION_KEYS)
+        self.assertIn("excluded_tools", SR._RESUME_SESSION_KEYS)
+
+
+# ---------------------------------------------------------------------------
+# G-8: client.start() retry helper (T-16)
+# ---------------------------------------------------------------------------
+
+class TestStartClientWithRetry(unittest.IsolatedAsyncioTestCase):
+    """`_start_client_with_retry` が start 失敗時にリトライ・最終 raise すること。"""
+
+    async def test_succeeds_on_first_attempt(self) -> None:
+        from runner import _start_client_with_retry
+
+        class C:
+            def __init__(self):
+                self.calls = 0
+            async def start(self):
+                self.calls += 1
+        c = C()
+        await _start_client_with_retry(c)
+        self.assertEqual(c.calls, 1)
+
+    async def test_retries_then_succeeds(self) -> None:
+        from runner import _start_client_with_retry, _CLIENT_START_BACKOFF_SECONDS
+        # backoff を 0 にパッチして高速化
+        with unittest.mock.patch("runner._CLIENT_START_BACKOFF_SECONDS", (0, 0, 0)):
+            class C:
+                def __init__(self):
+                    self.calls = 0
+                async def start(self):
+                    self.calls += 1
+                    if self.calls < 2:
+                        raise RuntimeError("boom")
+            c = C()
+            await _start_client_with_retry(c)
+        self.assertEqual(c.calls, 2)
+
+    async def test_raises_after_max_attempts(self) -> None:
+        from runner import _start_client_with_retry
+        with unittest.mock.patch("runner._CLIENT_START_BACKOFF_SECONDS", (0, 0, 0)):
+            class C:
+                def __init__(self):
+                    self.calls = 0
+                async def start(self):
+                    self.calls += 1
+                    raise RuntimeError("always fail")
+            c = C()
+            with self.assertRaises(RuntimeError):
+                await _start_client_with_retry(c)
+            self.assertEqual(c.calls, 3)
+
+
+# ---------------------------------------------------------------------------
+# G-7: Phase 4 verify JSON parse failure visibility (T-14)
+# ---------------------------------------------------------------------------
+
+class TestVerifyJsonParseWarning(unittest.TestCase):
+    """Phase 4 verify の JSON パース失敗時に Console.warning が呼ばれること、
+    および notes に [json_parse_error=...] プレフィックスが付くことを検証する。
+
+    runner.py 内のロジック実装はインライン展開されているため、ソース上の
+    マーカー文字列で実装存在を検証する（非実行検証）。
+    """
+
+    def test_runner_source_contains_warning_branch(self) -> None:
+        from pathlib import Path
+        src = Path(__file__).resolve().parent.parent / "runner.py"
+        text = src.read_text(encoding="utf-8")
+        # T-13 で追加した文言
+        self.assertIn("json_parse_error", text)
+        self.assertIn("LLM JSON のパースに失敗", text)
+        self.assertIn("LLM 応答に JSON ブロックが見つかりません", text)
+
+
+# ---------------------------------------------------------------------------
+# G-4: _truncate_context_with_warn (T-09)
+# ---------------------------------------------------------------------------
+
+class TestTruncateContextWithWarn(unittest.TestCase):
+    """切詰め発生時のみ console.warning が呼ばれることを検証する。"""
+
+    def _make_console_mock(self):
+        c = unittest.mock.MagicMock()
+        c.warning = unittest.mock.MagicMock()
+        return c
+
+    def test_no_warning_when_under_limit(self) -> None:
+        from runner import _truncate_context_with_warn
+        c = self._make_console_mock()
+        out = _truncate_context_with_warn("hello", 100, label="test", console=c)
+        self.assertEqual(out, "hello")
+        c.warning.assert_not_called()
+
+    def test_warning_when_over_limit(self) -> None:
+        from runner import _truncate_context_with_warn
+        c = self._make_console_mock()
+        long = "a" * 1000
+        out = _truncate_context_with_warn(long, 100, label="Phase X test", console=c)
+        self.assertLessEqual(len(out), 100)
+        c.warning.assert_called_once()
+        msg = c.warning.call_args.args[0]
+        self.assertIn("Phase X test", msg)
+        self.assertIn("100", msg)
+        self.assertIn("1,000", msg)
+
+    def test_warning_failure_does_not_break(self) -> None:
+        from runner import _truncate_context_with_warn
+        c = unittest.mock.MagicMock()
+        c.warning.side_effect = RuntimeError("console broken")
+        out = _truncate_context_with_warn("a" * 200, 50, label="t", console=c)
+        # 例外が伝播せず切詰めは実施される
+        self.assertLessEqual(len(out), 50)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 220" font-family="system-ui, -apple-system, sans-serif">
+  <title>AQOD: Original Docs Review データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="220" fill="#f6f8fa" rx="12"/>
+
+  <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AQOD: Original Docs Review データフロー</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">Custom Agent の入出力ファイル</text>
+
+  <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- Step 1 -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1（original-docs 質問票生成）</text>
+  <rect x="20" y="108" width="310" height="80" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="128" text-anchor="middle" font-size="10" fill="#24292e">original-docs/**/*.md</text>
+  <text x="175" y="144" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D07-用語集・ドメインモデル定義書.md</text>
+  <text x="175" y="160" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: target_scope / depth</text>
+  <text x="175" y="176" text-anchor="middle" font-size="10" fill="#24292e">focus_areas</text>
+  <rect x="430" y="115" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="138" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">QA-DocConsistency</text>
+  <text x="565" y="155" text-anchor="middle" font-size="10" fill="#586069">original-docs/ 横断分析</text>
+  <text x="565" y="170" text-anchor="middle" font-size="9" fill="#959da5">論理矛盾・欠落・捏造リスク検出</text>
+  <rect x="800" y="115" width="360" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="138" text-anchor="middle" font-size="10" fill="#24292e">qa/QA-DocConsistency-Issue-&lt;N&gt;.md</text>
+  <text x="980" y="156" text-anchor="middle" font-size="10" fill="#586069">（Issue 起動時）</text>
+  <text x="980" y="173" text-anchor="middle" font-size="10" fill="#24292e">qa/QA-DocConsistency-&lt;timestamp&gt;.md</text>
+  <line x1="330" y1="148" x2="430" y2="148" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="148" x2="800" y2="148" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

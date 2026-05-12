@@ -22,6 +22,7 @@
 - [付録A: MCP Server 設定ガイド](#付録a-mcp-server-設定ガイド)
 - [付録B: Custom Agents 設定ガイド](#付録b-custom-agents-設定ガイド)
 - [付録C: DAG 並列実行と Post-step 自動プロンプト](#付録c-dag-並列実行と-post-step-自動プロンプト)
+- [フォーク機能 Fork-on-Retry](#フォーク機能-fork-on-retry)
 - [付録D: トラブルシューティング](#付録d-トラブルシューティング)
 - [付録E: セキュリティ・SSO・関連リンク](#付録e-セキュリティsso関連リンク)
 
@@ -1115,8 +1116,31 @@ hve wizard / CLI
 | 互換プロンプト（KM） | `--workiq-prompt-km` | `WORKIQ_PROMPT_KM` | なし（現行の通常実行では使用しません） |
 | 互換プロンプト（Review） | `--workiq-prompt-review` | `WORKIQ_PROMPT_REVIEW` | なし（現行の通常実行では使用しません） |
 | Work IQ 追加プロンプト（QA） | なし | なし | `Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）` |
+| AKM 入力としての Work IQ | `--workiq-akm-ingest` / `--no-workiq-akm-ingest` | `WORKIQ_AKM_INGEST_ENABLED=true` | `--sources qa,original-docs,workiq` 等で `workiq` を選ぶと自動 ON |
+| AKM 取り込み対象 Dxx | `--workiq-dxx D01,D04` | `WORKIQ_AKM_INGEST_DXX=D01,D04` | ウィザードで Work IQ 選択後にプロンプト表示（省略=全件 D01〜D21） |
 
 ※ `aqod` かつ `auto_qa=True` の場合、QA 回答ドラフトは自動 ON になり質問は表示されません。
+
+### AKM 入力ソースとしての Work IQ（hve ローカル CLI のみ）
+
+`hve` ローカル CLI では、AKM の `--sources` にカンマ区切りで `workiq` を含められます。
+含めた場合、AKM メイン DAG の **前段** で Work IQ 取り込みフェーズ（`_run_akm_workiq_ingest`）
+が走り、Microsoft 365 のデータ（メール / チャット / 会議 / ファイル）を一次情報として
+`knowledge/Dxx-*.md` を新規作成または差分更新します。
+
+```bash
+# Work IQ 単独で全 Dxx を起票
+python -m hve orchestrate --workflow akm --sources workiq
+
+# qa + original-docs + Work IQ の 3 ソースを順次適用（Work IQ が最初）
+python -m hve orchestrate --workflow akm --sources qa,original-docs,workiq
+
+# Work IQ 取り込み対象を D01, D04 に絞り込む
+python -m hve orchestrate --workflow akm --sources workiq --workiq-dxx D01,D04
+```
+
+> **HVE Cloud Agent 非対応**: Issue Template 経由の Cloud 実行（`auto-knowledge-management-reusable.yml`）
+> では Work IQ 入力は使用できません。Work IQ 連携が必要な場合はローカル CLI を使用してください。
 
 > **注意**: Web 実行環境（ブラウザ UI だけでの実行）では Work IQ 連携は利用できません。`python -m hve` のローカル CLI 実行で利用してください。
 
@@ -2084,6 +2108,88 @@ python -m hve orchestrate --workflow aqod
 ### Code Review Agent フェーズ（`--auto-coding-agent-review`）
 
 全ステップ完了後: Root Issue 作成 → ブランチ作成 → 全ステップ実行 → PR 作成 → Code Review Agent レビュー依頼 → レビュー完了ポーリング（デフォルト 7200秒） → 修正プロンプト
+
+---
+
+### フォーク機能 Fork-on-Retry
+
+> **由来**: GitHub Copilot CLI `1.0.45` で追加された `/fork`（現在セッションを独立した新セッションへフォーク）機能の概念を、`hve` のサブタスク実行に統合した機能です。
+> 一次情報: [github/copilot-cli changelog.md](https://github.com/github/copilot-cli/blob/main/changelog.md)
+
+#### 概要
+
+`hve` の DAG 実行中にステップが失敗した場合、**フィーチャフラグ `HVE_FORK_ON_RETRY=true`** を設定しておくと、**1 回だけ**自動的に新しい session_id（フォーク）でリトライします。
+
+- 既定: **OFF**（旧挙動と完全一致）
+- 発火対象: 非コンテナの失敗ステップ
+- リトライ回数: 1 回のみ（過剰トークン消費を防止）
+- リトライも失敗した場合: 従来通り `failed` 扱い、後続ステップはブロック
+
+#### 有効化方法
+
+```bash
+# Linux / macOS
+export HVE_FORK_ON_RETRY=true
+python -m hve orchestrate --workflow aas
+
+# Windows (PowerShell)
+$env:HVE_FORK_ON_RETRY = "true"
+python -m hve orchestrate --workflow aas
+```
+
+#### KPI レポートの読み方
+
+フラグ ON でフォークが発火すると、以下のパスに JSON Lines 形式のログが出力されます。
+
+- パス: `work/kpi/fork-kpi-<run_id>.jsonl`
+- フィールド:
+
+| フィールド | 意味 |
+|---|---|
+| `timestamp` | レコード書き込み時刻（ISO 8601 UTC） |
+| `run_id` | 実行 ID |
+| `step_id` | ステップ識別子 |
+| `session_id` | 初回試行の session_id |
+| `forked_session_id` | リトライ時のフォーク session_id（未発火時は null） |
+| `success` | 最終的に成功したか |
+| `retry_count` | リトライ回数（0 = リトライなし、1 = 1 回リトライ） |
+| `elapsed_seconds` | 最終試行までの合計経過時間（秒） |
+| `tokens` | トークン量（取得できれば。未取得時は 0） |
+| `fork_on_retry_enabled` | 実行時点のフラグ値（運用追跡用） |
+
+3 指標の派生:
+
+- **トークン量**: `tokens` の合計
+- **再実行率**: `retry_count > 0` の件数 ÷ 全レコード数
+- **所要時間**: `elapsed_seconds` の合計
+
+#### ロールバック手順
+
+1. `HVE_FORK_ON_RETRY` 環境変数を `false`（または未設定）に戻す:
+
+   ```bash
+   # Linux / macOS
+   export HVE_FORK_ON_RETRY=false
+   # または
+   unset HVE_FORK_ON_RETRY
+
+   # Windows (PowerShell)
+   $env:HVE_FORK_ON_RETRY = "false"
+   # または
+   Remove-Item Env:\HVE_FORK_ON_RETRY
+   ```
+
+2. `python -m hve` を再実行。フォーク発火条件が偽になり、リトライは行われません。
+
+3. 既存テスト（`hve/tests/test_dag_executor.py` 等）の挙動は変わりません。
+
+4. 永続化スキーマ（`state.json`）は **追加のみ**で旧バージョンとの後方互換を維持します。旧 `state.json` でも新コードで正常に読み込めます。
+
+#### 既知の制約
+
+- Copilot SDK 側にネイティブの `fork` API があるかは公開情報からは未確認です。本実装は **フォールバック方式**（新 session_id を発行する）であり、Copilot CLI `/fork` のセッション内部状態コピーと完全に等価ではありません。
+- リトライは **1 回限り**です。`tdd_max_retries`（TDD GREEN フェーズの再試行数）とは独立です。
+- 用語: 本ガイドでは「フォーク」で統一しています（GitHub Copilot CLI の `/fork` 由来）。
 
 ---
 

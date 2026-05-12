@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" font-family="system-ui, -apple-system, sans-serif">
+  <title>ARD: 要求定義の自動化 データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="380" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ARD: 要求定義の自動化 データフロー</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+
+  <!-- Column headers -->
+  <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
+
+  <!-- ==================== Step 1 ==================== -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1（対象業務 未定）</text>
+  <rect x="20" y="105" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="124" text-anchor="middle" font-size="10" fill="#24292e">company_name / target_region</text>
+  <text x="175" y="140" text-anchor="middle" font-size="10" fill="#24292e">survey_base_date / analysis_purpose</text>
+  <text x="175" y="155" text-anchor="middle" font-size="10" fill="#24292e">attached_docs（任意）</text>
+  <rect x="430" y="105" width="270" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="126" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-ARD-BusinessAnalysis-</text>
+  <text x="565" y="140" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Untargeted</text>
+  <text x="565" y="155" text-anchor="middle" font-size="10" fill="#586069">企業全体の事業分析</text>
+  <rect x="800" y="118" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="141" text-anchor="middle" font-size="10" fill="#24292e">docs/company-business-requirement.md</text>
+  <line x1="330" y1="135" x2="430" y2="135" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="135" x2="800" y2="137" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 2 ==================== -->
+  <text x="565" y="182" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2（対象業務 指定済）</text>
+  <rect x="20" y="190" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="209" text-anchor="middle" font-size="10" fill="#24292e">company_name / target_business</text>
+  <text x="175" y="225" text-anchor="middle" font-size="10" fill="#24292e">target_region / analysis_purpose</text>
+  <text x="175" y="240" text-anchor="middle" font-size="10" fill="#24292e">attached_docs（任意）</text>
+  <rect x="430" y="190" width="270" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="211" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-ARD-BusinessAnalysis-</text>
+  <text x="565" y="225" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Targeted</text>
+  <text x="565" y="240" text-anchor="middle" font-size="10" fill="#586069">対象事業・業務の事業分析</text>
+  <rect x="800" y="203" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="226" text-anchor="middle" font-size="10" fill="#24292e">docs/business-requirement.md</text>
+  <line x1="330" y1="220" x2="430" y2="220" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="220" x2="800" y2="222" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 3 ==================== -->
+  <text x="565" y="268" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 3（ユースケース作成）</text>
+  <line x1="565" y1="245" x2="565" y2="271" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="278" width="310" height="70" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="297" text-anchor="middle" font-size="10" fill="#24292e">docs/business-requirement.md</text>
+  <text x="175" y="313" text-anchor="middle" font-size="10" fill="#24292e">（優先。Step 2 出力）</text>
+  <text x="175" y="329" text-anchor="middle" font-size="10" fill="#24292e">または</text>
+  <text x="175" y="345" text-anchor="middle" font-size="10" fill="#24292e">docs/company-business-requirement.md</text>
+  <rect x="430" y="285" width="270" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="312" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-ARD-UseCaseCatalog</text>
+  <text x="565" y="328" text-anchor="middle" font-size="10" fill="#586069">ユースケース一覧の生成</text>
+  <rect x="800" y="295" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="318" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
+  <line x1="330" y1="313" x2="430" y2="313" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="313" x2="800" y2="314" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>

@@ -63,6 +63,7 @@ jobs:
           is_draft=$(echo "${pr_data}" | jq -r '.draft // false')
 
           has_auto_qa=$(echo "${pr_labels}" | jq -r 'if index("auto-qa") == null then "false" else "true" end')
+          has_qa_questionnaire_pr=$(echo "${pr_labels}" | jq -r 'if index("qa-questionnaire-pr") == null then "false" else "true" end')
           has_auto_context_review=$(echo "${pr_labels}" | jq -r 'if index("auto-context-review") == null then "false" else "true" end')
           has_auto_approve_ready=$(echo "${pr_labels}" | jq -r 'if index("auto-approve-ready") == null then "false" else "true" end')
           has_create_subissues=$(echo "${pr_labels}" | jq -r 'if index("create-subissues") == null then "false" else "true" end')
@@ -85,10 +86,14 @@ jobs:
                && [[ "${has_create_subissues}" != "true" ]]; then
               target=create_subissues
             elif [[ "${has_auto_qa}" == "true" ]] \
+                 && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
                  && [[ "${has_auto_context_review}" != "true" ]] \
                  && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=qa_to_review
-            elif [[ "${has_auto_context_review}" == "true" ]] && [[ "${has_auto_approve_ready}" != "true" ]] && [[ "${is_draft}" != "true" ]]; then
+            elif [[ "${has_auto_context_review}" == "true" ]] \
+                 && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
+                 && [[ "${has_auto_approve_ready}" != "true" ]] \
+                 && [[ "${is_draft}" != "true" ]]; then
               target=review_to_approve
             elif [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then
               target=create_subissues
@@ -101,11 +106,14 @@ jobs:
               target=create_subissues
             elif ([[ "${is_copilot_bot}" == "true" ]] || [[ "${is_default_answer_comment}" == "true" ]]) \
                && [[ "${has_auto_qa}" == "true" ]] \
+               && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
                && [[ "${has_auto_context_review}" != "true" ]] \
                && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=qa_to_review
             elif [[ "${is_copilot_bot}" == "true" ]] \
-                 && [[ "${has_auto_context_review}" == "true" ]] && [[ "${has_auto_approve_ready}" != "true" ]]; then
+                 && [[ "${has_auto_context_review}" == "true" ]] \
+                 && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
+                 && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=review_to_approve
             elif [[ "${is_copilot_bot}" == "true" ]] \
                  && [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then

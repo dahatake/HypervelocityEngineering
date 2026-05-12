@@ -11,11 +11,14 @@
 #   - 既存ラベル   → PATCH で色・description を更新
 #   - 複数回実行しても安全
 #
+# 管理方針:
+#   - 全てのラベル（ステートラベル含む）は .github/labels.json を Single Source of Truth として管理する。
+#   - 各オーケストレーターワークフローの self-bootstrap（create_label 呼び出し）は
+#     冪等動作の保険として残しているが、正本は labels.json である。
+#   - 不一致が発生した場合は labels.json 側を優先し、workflow 側を修正すること。
+#
 # 管理対象外:
-#   - ステートラベル (aas:initialized, aas:ready, ... など xxx:yyy 形式)
-#     → 各オーケストレーターワークフローが自己 bootstrap する
-#   - Sub Issue 固有ラベル
-#     → 各 Sub Issue 作成時にワークフローが自動付与する
+#   - Sub Issue 固有ラベル → 各 Sub Issue 作成時にワークフローが自動付与する
 #
 # 実行タイミング:
 #   リポジトリ作成後に1度だけ実行してください。
