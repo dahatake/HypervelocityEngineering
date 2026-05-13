@@ -10,7 +10,21 @@
 
 ```
 対象ファイル = work/ または qa/ 配下の書き込み対象パス
+親ディレクトリ = 対象ファイルの dirname（例: qa/, work/<Agent名>/Issue-<N>/）
 
+# 0. 書き込み前準備（必須）
+if 親ディレクトリが存在しない:
+    → mkdir -p 相当で先に作成する（rg/ls/find による事前確認の前）
+
+# 1. 既存ファイル列挙時の安全策（必須）
+親ディレクトリ内の既存ファイルを列挙したい場合:
+    → 必ず Test-Path / os.path.isdir / pathlib.Path.exists 等で存在チェックを行う
+    → 存在しないパスを rg / ls / find / grep の引数に渡してはならない
+      （例: 未作成の qa/ に対する `rg qa` は ripgrep の os error 2 を発生させ
+        Agent 実行が「ツール失敗」で中断される）
+    → 親ディレクトリが存在しない場合は「該当ファイル無し」とみなして処理継続
+
+# 2. 書き込み本体
 if 対象ファイルが既に存在する:
     → 既存ファイルを削除する（Git 上の delete 操作）
     → 削除されたことを確認する
@@ -23,7 +37,7 @@ else:
 
 ※ 1コミット内での delete + create 同時実行は許可。edit/update は不可。
 
-**禁止**: 上書き更新(edit/update/patch) / 追記(append) / 削除省略
+**禁止**: 上書き更新(edit/update/patch) / 追記(append) / 削除省略 / 存在しないパスを検索ツールに渡すこと
 
 **適用範囲**: `work/` 全ファイル・サブディレクトリ / `qa/` 全ファイル / `knowledge/` 全ファイル / §2.3 分割モードのファイル / 全 Custom Agent（AGENTS.md §8 により例外なし）
 

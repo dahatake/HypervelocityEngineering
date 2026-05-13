@@ -574,7 +574,8 @@ class TestAdditionalPrompt(unittest.TestCase):
             wf=wf,
             additional_prompt="追加指示",
         )
-        self.assertEqual(result, "テンプレートプロンプト\n\n追加指示")
+        # 言語ルール（_LANGUAGE_DIRECTIVE_JA）が冒頭に注入された上で末尾が追加指示で終わる
+        self.assertTrue(result.endswith("テンプレートプロンプト\n\n追加指示"))
 
     def test_template_prompt_passes_execution_mode(self) -> None:
         from orchestrator import _build_step_prompt
@@ -2292,6 +2293,7 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
 
         Work IQ 入力対応に伴い、既定 sources は ``qa,original-docs`` のマルチ値、
         target_files は空（複数 non-workiq ソースのため単一パターンなし）となる。
+        force_refresh の既定は False（差分マージ）。
         """
         from orchestrator import _collect_params_non_interactive
         wf = self._make_wf()
@@ -2299,7 +2301,7 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
         params = _collect_params_non_interactive(wf, cli_args)
         self.assertEqual(params["sources"], "qa,original-docs")
         self.assertEqual(params["target_files"], "")
-        self.assertTrue(params["force_refresh"])
+        self.assertFalse(params["force_refresh"])
 
     def test_sources_value_passthrough(self) -> None:
         """AKM で sources=qa/original-docs/both が正規化形式で反映されることを確認。
@@ -2320,12 +2322,20 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
                 self.assertEqual(params["sources"], expected_value)
 
     def test_force_refresh_false_overrides_default(self) -> None:
-        """AKM で force_refresh=False が明示された場合は False が優先されることを確認。"""
+        """AKM で force_refresh=False が明示された場合は False が反映されることを確認（既定も False）。"""
         from orchestrator import _collect_params_non_interactive
         wf = self._make_wf()
         cli_args = {"branch": "main", "force_refresh": False}
         params = _collect_params_non_interactive(wf, cli_args)
         self.assertFalse(params["force_refresh"])
+
+    def test_force_refresh_true_overrides_default(self) -> None:
+        """AKM で force_refresh=True が明示された場合は True が既定 (False) を上書きすることを確認。"""
+        from orchestrator import _collect_params_non_interactive
+        wf = self._make_wf()
+        cli_args = {"branch": "main", "force_refresh": True}
+        params = _collect_params_non_interactive(wf, cli_args)
+        self.assertTrue(params["force_refresh"])
 
 
 class TestCollectParamsNonInteractiveAqodDefaults(unittest.TestCase):

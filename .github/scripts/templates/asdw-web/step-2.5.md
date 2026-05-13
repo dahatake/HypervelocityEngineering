@@ -18,6 +18,8 @@
 - `docs/catalog/service-catalog-matrix.md` 更新
 - `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI
 
+{existing_artifact_policy}
+
 ## デプロイ TDD フロー（必須）
 1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-compute-test-spec.md`
 2. 検証スクリプトの生成: `infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）

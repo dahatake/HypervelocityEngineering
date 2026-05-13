@@ -12,6 +12,8 @@
 ## 出力
 - `docs/catalog/domain-analytics.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Microservice-DomainAnalytics` を使用
 

@@ -14,6 +14,8 @@
 ## 出力
 - `docs-generated/files/{relative-path}.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-ConfigSummary`
 

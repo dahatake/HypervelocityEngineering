@@ -1,0 +1,199 @@
+name: State Transition on PR Merge
+
+on:
+  pull_request_target:
+    types: [closed]
+
+concurrency:
+  group: state-transition-on-pr-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  transition:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+
+    steps:
+      - name: PR body から parent-issue を解決
+        id: resolve
+        run: |
+          set -euo pipefail
+          issue_number=$(printf '%s' "${PR_BODY}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'<!--\s*parent-issue:\s*#([0-9]+)\s*-->', body or '')
+          print(m.group(1) if m else '')
+          " 2>/dev/null || echo '')
+          echo "issue_number=${issue_number}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${issue_number}" ]; then
+            echo "PR #${PR_NUMBER}: parent-issue マーカーを解決できません。スキップします。"
+          fi
+
+      - name: 系列プレフィックス判定
+        id: detect-prefix
+        if: steps.resolve.outputs.issue_number != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || {
+            echo "prefix=" >> "${GITHUB_OUTPUT}"
+            echo "Issue #${ISSUE_NUMBER} を取得できません。"
+            exit 0
+          }
+
+          prefix=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json
+          issue = json.load(sys.stdin)
+          title = issue.get('title', '')
+          labels = [l.get('name', '') for l in issue.get('labels', [])]
+
+          # 全12系列: aas, aad, aad-web, asdw, asdw-web, abd, abdv, aag, aagd, akm, adoc, aqod
+          title_prefix_map = [
+              ('[AAD-WEB]', 'aad-web'),
+              ('[ASDW-WEB]', 'asdw-web'),
+              ('[AAS]', 'aas'),
+              ('[ABD]', 'abd'),
+              ('[ABDV]', 'abdv'),
+              ('[AAG]', 'aag'),
+              ('[AAGD]', 'aagd'),
+              ('[AKM]', 'akm'),
+              ('[ADOC]', 'adoc'),
+              ('[AQOD]', 'aqod'),
+              # 後方互換: 旧プレフィックス [AAD]/[ASDW] は -web 系列にマップ
+              ('[AAD]', 'aad-web'),
+              ('[ASDW]', 'asdw-web'),
+          ]
+
+          resolved = ''
+          for token, mapped in title_prefix_map:
+              if title.startswith(token):
+                  resolved = mapped
+                  break
+
+          if not resolved:
+              candidates = ['aas', 'aad-web', 'asdw-web', 'abd', 'abdv', 'aag', 'aagd', 'akm', 'aqod', 'adoc', 'aad', 'asdw']
+              for cand in candidates:
+                  if any(lbl.startswith(f'{cand}:') for lbl in labels):
+                      if cand == 'aad':
+                          resolved = 'aad-web'
+                      elif cand == 'asdw':
+                          resolved = 'asdw-web'
+                      else:
+                          resolved = cand
+                      break
+
+          print(resolved)
+          " 2>/dev/null || echo '')
+
+          echo "prefix=${prefix}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${prefix}" ]; then
+            echo "Issue #${ISSUE_NUMBER}: 系列プレフィックスを判定できません。スキップします。"
+          fi
+
+      - name: done 付与と残置ラベル整理
+        id: transition-labels
+        if: steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+          PREFIX: ${{ steps.detect-prefix.outputs.prefix }}
+        run: |
+          set -euo pipefail
+
+          done_label="${PREFIX}:done"
+          qa_drafting_label="${PREFIX}:qa-drafting"
+          qa_ready_label="${PREFIX}:qa-ready"
+          ready_label="${PREFIX}:ready"
+          running_label="${PREFIX}:running"
+
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || {
+            echo "result=Issue #${ISSUE_NUMBER} の取得に失敗" >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+          labels_csv=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json
+          labels = [l.get('name', '') for l in json.load(sys.stdin).get('labels', [])]
+          print(','.join(labels))
+          " 2>/dev/null || echo '')
+
+          added_done=false
+          done_present=false
+          if printf ',%s,' "${labels_csv}" | grep -q ",${done_label},"; then
+            echo "${done_label} は既に存在するため、付与をスキップします。"
+            done_present=true
+          else
+            if gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${done_label}"; then
+              added_done=true
+            else
+              echo "WARNING: ${done_label} の付与に失敗しました。"
+            fi
+
+            issue_after=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_after=''
+            if [ -n "${issue_after}" ]; then
+              done_present=$(DONE_LABEL="${done_label}" printf '%s' "${issue_after}" | python3 -c "
+              import sys, json
+              import os
+              labels = [l.get('name', '') for l in json.load(sys.stdin).get('labels', [])]
+              done_label = os.environ.get('DONE_LABEL', '')
+              print('true' if done_label in labels else 'false')
+              " 2>/dev/null || echo 'false')
+            fi
+          fi
+
+          if [ "${done_present}" != "true" ]; then
+            result=$(printf 'prefix=%s, done_added=%s, removed=[]' \
+              "${PREFIX}" "${added_done}")
+            echo "${done_label} が存在しないため、残置ラベル削除をスキップします。"
+            echo "result=${result}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          for stale in "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}"; do
+            gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${stale}" --silent 2>/dev/null || true
+          done
+
+          result=$(printf 'prefix=%s, done_added=%s, removed=[%s,%s,%s,%s]' \
+            "${PREFIX}" "${added_done}" "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}")
+          echo "result=${result}" >> "${GITHUB_OUTPUT}"
+
+      - name: 処理結果コメントを Issue に投稿
+        if: steps.resolve.outputs.issue_number != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+          PREFIX: ${{ steps.detect-prefix.outputs.prefix }}
+          RESULT: ${{ steps.transition-labels.outputs.result }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- state-transition-on-pr-merge-done -->'
+
+          if [ -z "${PREFIX}" ]; then
+            SUMMARY='prefix 判定不能のためスキップ'
+          elif [ -n "${RESULT}" ]; then
+            SUMMARY="${RESULT}"
+          else
+            SUMMARY='遷移ステップ未実行（条件不一致）'
+          fi
+
+          COMMENT=$(printf '%s\n\n## ✅ PR merge 起点の状態遷移\n\n- PR: #%s\n- Issue: #%s\n- 結果: %s\n\n> ℹ️ このコメントは `state-transition-on-pr-merge.yml` によって自動投稿されました。' \
+            "${MARKER}" "${PR_NUMBER}" "${ISSUE_NUMBER}" "${SUMMARY}")
+
+          comment_id=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>/dev/null \
+            | jq -sr --arg marker "${MARKER}" 'map(select((.body // "") | contains($marker))) | last | (.id // empty)') || comment_id=''
+
+          if [ -n "${comment_id}" ]; then
+            gh api --method PATCH "/repos/${REPO}/issues/comments/${comment_id}" -f "body=${COMMENT}" >/dev/null
+          else
+            gh issue comment "${ISSUE_NUMBER}" --repo "${REPO}" --body "${COMMENT}"
+          fi

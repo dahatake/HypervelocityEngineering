@@ -490,7 +490,21 @@ def discover_task_goal_from_docs(
     # ── 2. Skills ファイルから goal_description を補完 ────────────
     if not goal_description:
         skills_dir = repo / ".github" / "skills"
-        for skill_subpath in _WORKFLOW_SKILLS_MAP.get(workflow_id, []):
+        _skill_subpaths: List[str] = []
+        try:
+            try:
+                from .skill_resolver import get_skill_subpaths_for_workflow
+            except ImportError:
+                from skill_resolver import get_skill_subpaths_for_workflow  # type: ignore[no-redef]
+            _skill_subpaths = get_skill_subpaths_for_workflow(workflow_id)
+        except Exception:
+            _skill_subpaths = []
+
+        # 共通 resolver が利用不能な場合のみ legacy マップへフォールバック
+        if not _skill_subpaths:
+            _skill_subpaths = list(_WORKFLOW_SKILLS_MAP.get(workflow_id, []))
+
+        for skill_subpath in _skill_subpaths:
             skill_path = skills_dir / skill_subpath / "SKILL.md"
             desc = _extract_frontmatter_desc(skill_path)
             if desc:

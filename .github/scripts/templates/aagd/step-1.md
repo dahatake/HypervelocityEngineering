@@ -20,6 +20,8 @@
 ## 成果物
 - `docs/agent/agent-application-definition.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-AIAgentDesign-Step1` を使用
 

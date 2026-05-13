@@ -20,6 +20,8 @@ TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、A
 ## 出力
 - `docs/test-specs/{agentId}-test-spec.md`（Agent 別テスト仕様書）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-TDD-TestSpec` を使用
 

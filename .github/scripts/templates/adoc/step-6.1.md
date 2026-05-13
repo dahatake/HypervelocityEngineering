@@ -12,6 +12,8 @@
 ## 出力
 - `docs-generated/guides/onboarding.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-Onboarding`
 

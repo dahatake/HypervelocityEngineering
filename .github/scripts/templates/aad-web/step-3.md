@@ -15,6 +15,8 @@ AAD-WEB Step 2.1（画面定義）/ Step 2.2（マイクロサービス定義）
 ## 出力
 - `docs/catalog/screen-service-consistency-report.md`
 
+{existing_artifact_policy}
+
 ## 依存
 - Step 2.1, 2.2, 2.3 が全て完了していること（AND join）
 

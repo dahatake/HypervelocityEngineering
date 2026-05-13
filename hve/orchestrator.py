@@ -202,6 +202,50 @@ def _orchestrator_session_id(config: SDKConfig, step_id: str, suffix: str = "") 
 # -----------------------------------------------------------------------
 # Phase 3 (Resume): SDKConfig 復元ヘルパー
 # -----------------------------------------------------------------------
+async def _auto_reconcile_on_resume(state: RunState, config: SDKConfig) -> None:
+    """Phase 5 (Resume 2-layer txn): Resume 開始直前の整合性チェック。
+
+    state.json 内で `running|failed` のステップが SDK 側に存在しない場合、
+    `pending` + `session_id=None` に戻して新規 `create_session` 経路へ送る。
+    SDK の `get_session_metadata(sid)` を使った O(1) 存在確認（Phase 0 で確認済）。
+
+    失敗は warn のみ。SDK 接続不可の場合は何もしない（既存の resume_session →
+    create_session fallback で救済される）。
+    """
+    try:
+        from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
+    except ImportError:
+        return  # SDK 未利用環境では何もしない
+
+    try:
+        from .reconciler import reconcile_run
+    except ImportError:
+        from reconciler import reconcile_run  # type: ignore[no-redef]
+
+    sdk_config = SubprocessConfig(
+        cli_path=config.cli_path,
+        github_token=config.resolve_token() or None,
+        log_level="error",
+    )
+    client = CopilotClient(config=sdk_config)
+    try:
+        await client.start()
+        result = await reconcile_run(state, sdk_client=client, dry_run=False)
+        if result.actions_taken:
+            print(
+                f"[reconcile] Resume 開始時: {len(result.actions_taken)} 件のステップを"
+                f" pending に戻しました",
+                file=sys.stderr,
+            )
+            for action in result.actions_taken:
+                print(f"  - {action}", file=sys.stderr)
+    finally:
+        try:
+            await client.stop()
+        except Exception:  # pragma: no cover
+            pass
+
+
 def _restore_config_from_state(config: SDKConfig, state: RunState) -> None:
     """`state.config_snapshot` から `SDKConfig` のフィールドを復元する。
 
@@ -434,7 +478,7 @@ def _collect_params_non_interactive(
         params["target_files"] = args.get("target_files") or _default_akm_target_files(_normalized_sources)
         params["custom_source_dir"] = args.get("custom_source_dir") or ""
         force_refresh = args.get("force_refresh", None)
-        params["force_refresh"] = True if force_refresh is None else force_refresh
+        params["force_refresh"] = False if force_refresh is None else force_refresh
         params["enable_auto_merge"] = args.get("enable_auto_merge", False)
         # Work IQ 取り込み対象 Dxx を正規化リストとして params にも反映する。
         # config 側ヘルパで文字列／リストを ``["D01","D04",...]`` に正規化。
@@ -713,6 +757,19 @@ def _create_issues_if_needed(
 # プロンプト構築
 # -----------------------------------------------------------------------
 
+# 全 Step プロンプト先頭に注入する言語ルール。
+# 思考プロセス（reasoning / chain-of-thought）も日本語で行わせるため、
+# モデルが reasoning を開始する前に確実に届くよう、Step プロンプト本文の
+# 冒頭に常時付与する。固有名詞・コマンド・パス等は英語のまま許容する。
+_LANGUAGE_DIRECTIVE_JA: str = (
+    "## 出力言語ルール（最優先・思考プロセス含む）\n"
+    "- 思考プロセス（reasoning / chain-of-thought / 内部独白）も日本語で行うこと。\n"
+    "- ツール委譲の意図表明・計画の自問自答・推論の途中経過も日本語で記述する。\n"
+    "- 固有名詞・コマンド名・ファイルパス・コード識別子・引用文は英語のままで構わない。\n"
+    "\n"
+)
+
+
 def _build_step_prompt(
     step,
     params: dict,
@@ -744,7 +801,7 @@ def _build_step_prompt(
             if prompt:
                 if additional_prompt:
                     prompt = prompt + "\n\n" + additional_prompt
-                return prompt
+                return _LANGUAGE_DIRECTIVE_JA + prompt
         except Exception:
             pass
 
@@ -762,7 +819,7 @@ def _build_step_prompt(
     fallback = "\n".join(parts)
     if additional_prompt:
         fallback = fallback + "\n\n" + additional_prompt
-    return fallback
+    return _LANGUAGE_DIRECTIVE_JA + fallback
 
 
 # -----------------------------------------------------------------------
@@ -1046,6 +1103,65 @@ def _check_workflow_input_artifacts(
         msg = "\n".join(lines)
         console.warning(msg)
         return {"should_abort": False, "error": None}
+
+
+def _check_required_skills_for_active_steps(
+    wf,
+    workflow_id: str,
+    active_steps: Set[str],
+    console: "Console",
+) -> dict:
+    """active step に required_skills があれば、存在する skill 名かを事前検証する。"""
+    try:
+        try:
+            from .skill_resolver import get_required_skills_for_step, validate_skill_names
+        except ImportError:
+            from skill_resolver import get_required_skills_for_step, validate_skill_names  # type: ignore[no-redef]
+    except Exception as exc:
+        console.warning(
+            f"Skill resolver の読み込みに失敗したため skill 事前検証をスキップします: {exc}"
+        )
+        return {"should_abort": False, "error": None}
+
+    missing_rows: List[Dict[str, Any]] = []
+    for step in wf.steps:
+        if step.is_container or step.id not in active_steps:
+            continue
+
+        declared = list(getattr(step, "required_skills", []) or [])
+        required = get_required_skills_for_step(
+            workflow_id=workflow_id,
+            step_id=step.id,
+            step_declared_required=declared,
+        )
+        if not required:
+            continue
+
+        missing, _resolved, suggestions = validate_skill_names(required)
+        for skill_name in missing:
+            missing_rows.append(
+                {
+                    "step_id": step.id,
+                    "step_title": step.title,
+                    "skill": skill_name,
+                    "suggestions": suggestions.get(skill_name, []),
+                }
+            )
+
+    if not missing_rows:
+        return {"should_abort": False, "error": None}
+
+    lines = ["必須 skill が見つかりません。以下を修正してください:"]
+    for row in missing_rows:
+        suggest = row.get("suggestions") or []
+        suggest_text = f" (候補: {', '.join(suggest)})" if suggest else ""
+        lines.append(
+            f"  - Step.{row['step_id']} {row['step_title']}: {row['skill']}{suggest_text}"
+        )
+
+    msg = "\n".join(lines)
+    console.error(msg)
+    return {"should_abort": True, "error": msg}
 
 
 def collect_workflow_output_paths(workflow_id: str) -> List[str]:
@@ -2517,6 +2633,16 @@ async def run_workflow(
         merged_params.update(params)
         params = merged_params
 
+        # Phase 5 (Resume 2-layer txn): SDK セッション実体との整合性チェック。
+        # state_only な session_id は SDK 側で失われており、そのまま resume すると
+        # `resume_session` 失敗 → `create_session` フォールバックの 2 回呼び出しが
+        # 発生する。事前に pending に戻して create 経路に直接送ることで効率化する。
+        # 失敗は warn のみで実行を継続（reconcile が無くても従来の fallback で救済可能）。
+        try:
+            await _auto_reconcile_on_resume(resume_state, config)
+        except Exception as exc:  # pragma: no cover - top-level guard
+            print(f"WARN: resume 開始時の auto-reconcile で例外: {exc}", file=sys.stderr)
+
     # run_id が未設定の場合、ワークフロー実行開始時に1回生成する（並列安全性）
     if not config.run_id:
         config.run_id = generate_run_id()
@@ -2983,7 +3109,39 @@ async def run_workflow(
     except Exception as exc:
         console.warning(f"state.json の初期保存に失敗しました: {exc}")
 
-    runner = StepRunner(config=config, console=console, resume_state=resume_state)
+    # Phase 6 (Resume 2-layer txn): StepRunner に RunJournal を注入し、
+    # 各 phase 完了時の checkpoint marker を `work/runs/<run_id>/journal.jsonl` に
+    # 記録する。失敗は warn のみで実行を継続（runner 側 _record_checkpoint で握る）。
+    try:
+        try:
+            from .run_journal import RunJournal
+            from .run_state import sync_intent_log_from_journal
+        except ImportError:
+            from run_journal import RunJournal  # type: ignore[no-redef]
+            from run_state import sync_intent_log_from_journal  # type: ignore[no-redef]
+        _journal_run_dir = resume_state.state_path.parent
+        _step_journal: Optional[Any] = RunJournal(_journal_run_dir)
+        # resume_state に journal_path を記録（v0.5 fields）
+        resume_state.journal_path = str(_step_journal.path.relative_to(_journal_run_dir.parent)) \
+            if _journal_run_dir.parent in _step_journal.path.parents \
+            else str(_step_journal.path)
+        # v1.0.3 (Major #15): journal の pending intent を state.intent_log に同期。
+        # クラッシュ復帰後の Resume 開始時に未完了 intent の可視化に役立つ。
+        sync_intent_log_from_journal(resume_state, _step_journal)
+        try:
+            resume_state.save()
+        except Exception:  # pragma: no cover
+            pass
+    except Exception as exc:  # pragma: no cover - 防御的 fallback
+        console.warning(f"RunJournal 初期化に失敗（checkpoint 記録なしで続行）: {exc}")
+        _step_journal = None
+
+    runner = StepRunner(
+        config=config,
+        console=console,
+        resume_state=resume_state,
+        journal=_step_journal,
+    )
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
     existing_artifacts = _detect_existing_artifacts(workflow_id, effective_params)
@@ -3016,6 +3174,22 @@ async def run_workflow(
             "skipped": [],
             "elapsed_total": time.time() - start_total,
             "error": _artifact_check["error"],
+        }
+
+    _skill_check = _check_required_skills_for_active_steps(
+        wf=wf,
+        workflow_id=workflow_id,
+        active_steps=active_steps,
+        console=console,
+    )
+    if _skill_check["should_abort"]:
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "elapsed_total": time.time() - start_total,
+            "error": _skill_check["error"],
         }
 
     # ステップ → プロンプト の事前構築

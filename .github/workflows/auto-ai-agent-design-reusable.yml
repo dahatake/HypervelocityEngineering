@@ -653,7 +653,7 @@ jobs:
             "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
@@ -725,7 +725,7 @@ jobs:
             fi
 
             # Step.1.1
-            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## Custom Agent\n`Arch-AIAgentDesign-Step1` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aag:done` ラベルを付与すること%s%s' \
+            BODY_S11=$(printf '%s\n## 目的\nユースケース文書を根拠に、DDD観点でドメイン分析を行い、docs/catalog/domain-analytics.md を作成する。\n\n## 前提条件\n- `docs/catalog/app-catalog.md` が存在すること（App Architecture Design の成果物）\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/domain-analytics.md`\n\n## 既存成果物がある場合の更新方針\n- 既存ファイルがある場合でも、メインタスク本体を必ず実行する\n- 新規情報を作成し、既存ファイルへ差分マージする\n- 参照節追記のみ・ヘッダ注記のみで完了にしない\n- `knowledge/` など参照元に更新が無い場合は「更新なし」を明示する\n- 「再作成して」は将来実装予定のオプション（現時点では自動削除・再作成しない）\n- 確認できない情報は補完せず、変更が無い場合は「変更なし」と明記する\n\n## Custom Agent\n`Arch-AIAgentDesign-Step1` を使用\n\n## 依存\n- フェーズ2の最初のStepとして実行（前段の依存はフェーズ1の成果物のみ）\n\n## 完了条件\n- `docs/catalog/domain-analytics.md` が作成されている\n- 完了時に自身に `aag:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION_S11}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAG] Step.1.1: ドメイン分析" \
@@ -741,7 +741,7 @@ jobs:
             fi
 
             # Step.1.2
-            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## Custom Agent\n`Arch-AIAgentDesign-Step1` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aag:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aag:done` ラベルを付与すること%s%s' \
+            BODY_S12=$(printf '%s\n## 目的\nユースケース文書とドメイン分析結果を根拠に、サービス一覧を抽出し、docs/catalog/service-catalog.md を作成する。\n\n## 入力\n- `docs/catalog/use-case-catalog.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/catalog/service-catalog.md`\n\n## 既存成果物がある場合の更新方針\n- 既存ファイルがある場合でも、メインタスク本体を必ず実行する\n- 新規情報を作成し、既存ファイルへ差分マージする\n- 参照節追記のみ・ヘッダ注記のみで完了にしない\n- `knowledge/` など参照元に更新が無い場合は「更新なし」を明示する\n- 「再作成して」は将来実装予定のオプション（現時点では自動削除・再作成しない）\n- 確認できない情報は補完せず、変更が無い場合は「変更なし」と明記する\n\n## Custom Agent\n`Arch-AIAgentDesign-Step1` を使用\n\n## 依存\n- Step.1.1（ドメイン分析）が `aag:done` であること\n\n## アプリケーション粒度\n📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。\n\n## 完了条件\n- `docs/catalog/service-catalog.md` が作成されている\n- 完了時に自身に `aag:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAG] Step.1.2: サービス一覧抽出" \

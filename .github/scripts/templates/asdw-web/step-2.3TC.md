@@ -14,6 +14,8 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 ## 出力
 - `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Microservice-Azure-ServiceTestCoding` を使用
 

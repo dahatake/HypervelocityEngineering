@@ -27,8 +27,8 @@ metadata:
 
 ## §3 出力
 - `knowledge/business-requirement-document-status.md`
-- `knowledge/D{NN}-*.md`
-- `knowledge/D{NN}-*-ChangeLog.md`
+- `knowledge/D{NN}-*.md` — **要求項目（REQ）テーブル形式**（Skill `knowledge-management` references/knowledge-management-guide.md §7 / §11.6 準拠）。§2 = Confirmed REQ（REQ-D{NN}-001 番台）、§3 = Tentative REQ（REQ-D{NN}-101 番台）、§4 = Unknown 表、§5/§6/§7 は REQ 単位カバー率・件数。散文の箇条書きや QA トレース文の貼り付けは禁止。
+- `knowledge/D{NN}-*-ChangeLog.md` — **REQ-ID 別サブセクション構造**（同 §7 ChangeLog テンプレ）。冒頭メタブロック + 全体更新履歴 + 「要求項目別ログ」（REQ-ID ごとにサブセクション、各サブ内は日付昇順）+ 付録 A（原文保全）。
 - `work/KnowledgeManager/Issue-<識別子>/artifacts/*`
 
 ## §4 処理手順
@@ -44,6 +44,11 @@ metadata:
 9. Step 6.5: 矛盾検出（`sources` に `original-docs` を含む場合のみ）
 10. Step 7: status 生成
 11. Step 7.5: `knowledge/D{NN}` および `D{NN}-*-ChangeLog.md` 生成
+    - 7.5.1: §11.6 同類項目マージルール（主題キーワード一致 + 採用値一致 + 状態一致の AND 条件）で Confirmed / Tentative 入力を REQ にグルーピング
+    - 7.5.2: REQ-ID 採番（Confirmed=001 番台 / Tentative=101 番台）
+    - 7.5.3: REQ テーブルを §2 / §3 へ書き出し（散文・箇条書きは禁止）
+    - 7.5.4: ChangeLog の「全体更新履歴」へ生成イベント 1 行追記、各 REQ-ID サブセクションへ「新規/マージ/値更新/状態降格」を日付昇順で追記
+    - 7.5.5: 付録 A に全マッピング元入力の原文を保存（`統合先 REQ-ID` 列必須）
 12. Step 8: 敵対的レビュー（オプション）
 
 ### Step 0 判定ロジック

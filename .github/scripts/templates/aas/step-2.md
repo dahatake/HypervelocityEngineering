@@ -9,6 +9,8 @@
 ## 出力
 - `docs/catalog/app-arch-catalog.md`
 
+{existing_artifact_policy}
+
 ## 注意
 - 全APPの入力ファイルが揃っていなくても実行可能です
 - 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます

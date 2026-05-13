@@ -8,14 +8,14 @@
 list      — 一覧表示。未完了のみ表示。`--json` で JSON 出力。
 show      — 1 セッションの詳細を表示。`--json` で JSON 出力。
 rename    — `state.session_name` を更新。
-delete    — `work/runs/<run_id>/` を削除。`--hard` で SDK 側セッションも削除。
+delete    — `<session-state-dir>/runs/<run_id>/` を削除。`--hard` で SDK 側セッションも削除。
 continue  — 非対話で resume 実行（`__main__._resume_selected_run` の対話部分を skip）。
 
-== work-artifacts-layout §4.1 との関係 ==
+== Git 管理ポリシー ==
 
-`work/runs/<run_id>/` 配下は `run_state.py` モジュール docstring と同様、Git にコミット
-されない実行時メタデータであり §4.1 の delete→create ルールの対象外。`delete` サブ
-コマンドはディレクトリツリーごと安全に削除する（hve が生成したものに限定）。
+`<session-state-dir>/runs/<run_id>/` 配下は `run_state.py` モジュール docstring と同様、
+Git にコミットされるクロスデバイス共有メタデータである。`delete` サブコマンドは
+ディレクトリツリーごと安全に削除する（hve が生成したものに限定）。
 
 == 安全性ガード ==
 
@@ -48,6 +48,12 @@ try:
         list_resumable_runs,
         to_local_time_str,
     )
+    from .run_lock import RunLock, RunLockError
+    from .run_journal import (
+        DEFAULT_ARCHIVE_DIRNAME,
+        KIND_DELETE_HARD_DIR_REMOVED,
+        RunJournal,
+    )
 except ImportError:  # flat-import (test) フォールバック
     from run_state import (  # type: ignore[no-redef]
         DEFAULT_RUNS_DIR,
@@ -57,6 +63,12 @@ except ImportError:  # flat-import (test) フォールバック
         _safe_run_id_component,
         list_resumable_runs,
         to_local_time_str,
+    )
+    from run_lock import RunLock, RunLockError  # type: ignore[no-redef]
+    from run_journal import (  # type: ignore[no-redef]
+        DEFAULT_ARCHIVE_DIRNAME,
+        KIND_DELETE_HARD_DIR_REMOVED,
+        RunJournal,
     )
 
 # ---------------------------------------------------------------------------
@@ -209,6 +221,11 @@ def cmd_show(args: argparse.Namespace) -> int:
             print(f"{sid:<24} {st.status:<10} {elapsed:<10} {sess}")
             if st.error_summary:
                 print(f"  └─ error: {st.error_summary}")
+
+    print()
+    print("注: SDK 側セッション (~/.copilot/session-state/<sid>/) はデバイス毎に保持され、")
+    print("    Git では同期されません。別デバイスで resume すると当該ステップは新規")
+    print("    セッション (フォーク) として再実行されます。")
     return 0
 
 
@@ -248,11 +265,22 @@ def cmd_rename(args: argparse.Namespace) -> int:
 # delete サブコマンド
 # ---------------------------------------------------------------------------
 
-async def _hard_delete_sdk_sessions(state: RunState) -> List[str]:
+async def _hard_delete_sdk_sessions(
+    state: RunState,
+    *,
+    journal: Optional["RunJournal"] = None,
+    journal_seq: Optional[int] = None,
+) -> List[str]:
     """state に含まれる SDK セッション ID を全て delete_session する。
 
     DEFAULT_SESSION_ID_PREFIX で始まる ID のみ削除対象とし、誤って他用途の
-    セッションを消さない。
+    セッションを消さない。Phase 4 では `get_session_metadata` で存在確認してから
+    `delete_session` を呼ぶ idempotent パターンに変更。
+
+    Args:
+        state: 削除対象の RunState。
+        journal: 進捗を記録する RunJournal（Phase 4）。None なら記録しない。
+        journal_seq: journal の対象 seq。journal 非 None なら必須。
 
     Returns:
         削除に失敗した session_id（失敗理由付き）のリスト。
@@ -269,8 +297,16 @@ async def _hard_delete_sdk_sessions(state: RunState) -> List[str]:
 
     try:
         from .config import SDKConfig
+        from .run_journal import (
+            KIND_DELETE_HARD_SDK_DELETED,
+            KIND_DELETE_HARD_SDK_FAILED,
+        )
     except ImportError:
         from config import SDKConfig  # type: ignore[no-redef]
+        from run_journal import (  # type: ignore[no-redef]
+            KIND_DELETE_HARD_SDK_DELETED,
+            KIND_DELETE_HARD_SDK_FAILED,
+        )
 
     cfg = SDKConfig.from_env()
     sdk_config = SubprocessConfig(
@@ -291,9 +327,22 @@ async def _hard_delete_sdk_sessions(state: RunState) -> List[str]:
                 failed.append(f"{sid}: prefix が '{DEFAULT_SESSION_ID_PREFIX}' で始まらないためスキップ")
                 continue
             try:
+                # Phase 4: idempotent パターン (Phase 0 調査結果に基づく)
+                # `get_session_metadata(sid)` が None を返せばセッション不在 → 削除済み扱い
+                meta = await client.get_session_metadata(sid)
+                if meta is None:
+                    if journal is not None and journal_seq is not None:
+                        journal.step(journal_seq, kind=KIND_DELETE_HARD_SDK_DELETED,
+                                     target=sid, payload={"note": "already-absent"})
+                    continue
                 await client.delete_session(sid)
+                if journal is not None and journal_seq is not None:
+                    journal.step(journal_seq, kind=KIND_DELETE_HARD_SDK_DELETED, target=sid)
             except Exception as exc:  # SDK が定義する例外型は変動するため広く捕捉
                 failed.append(f"{sid}: {type(exc).__name__}: {exc}")
+                if journal is not None and journal_seq is not None:
+                    journal.step(journal_seq, kind=KIND_DELETE_HARD_SDK_FAILED, target=sid,
+                                 payload={"error": f"{type(exc).__name__}: {exc}"})
     finally:
         try:
             await client.stop()
@@ -325,8 +374,13 @@ def _safe_remove_run_dir(state: RunState, work_dir: Path) -> None:
 def cmd_delete(args: argparse.Namespace) -> int:
     """`hve resume delete <run_id>` ハンドラー。
 
+    Phase 4 (Resume 2-layer txn): `RunLock` で排他制御し、`RunJournal` に
+    Write-Ahead Intent Log として `delete-hard.begin → step* → end` を記録する。
+    途中クラッシュ時は次回起動時の `recover_pending_on_startup` で完遂される。
+
     `--hard` 指定時は SDK 側の `~/.copilot/session-state/<sid>/` も
-    `client.delete_session()` 経由で削除する。`--yes` で確認をスキップ。
+    `client.delete_session()` 経由で削除する（idempotent: get_session_metadata で
+    存在確認してから削除）。`--yes` で確認をスキップ。
     """
     work_dir = _resolve_work_dir(args)
     run_id: str = args.run_id
@@ -342,39 +396,114 @@ def cmd_delete(args: argparse.Namespace) -> int:
     print(f"  セッション名 : {state.session_name or '(無名)'}")
     print(f"  ワークフロー : {state.workflow_id}")
     print(f"  ステータス   : {state.status}")
-    sdk_count = sum(
-        1 for st in state.step_states.values()
+    sdk_session_ids = [
+        st.session_id for st in state.step_states.values()
         if st.session_id and st.session_id.startswith(DEFAULT_SESSION_ID_PREFIX)
-    )
+    ]
     if is_hard:
-        print(f"  --hard 指定により SDK 側セッション {sdk_count} 件も削除します")
+        print(f"  --hard 指定により SDK 側セッション {len(sdk_session_ids)} 件も削除します")
 
     if not _confirm("本当に削除しますか？", default=False, assume_yes=assume_yes):
         print("キャンセルしました。")
         return 0
 
-    # SDK 側削除（--hard 時のみ）
-    if is_hard:
-        try:
-            failed = asyncio.run(_hard_delete_sdk_sessions(state))
-        except Exception as exc:  # pragma: no cover - asyncio 異常系
-            print(f"WARN: SDK 側セッション削除中に例外: {exc}", file=sys.stderr)
-            failed = []
-        for line in failed:
-            print(f"WARN: SDK 削除失敗: {line}", file=sys.stderr)
-
-    # work/runs/<run_id>/ 削除
+    # Phase 4: RunLock + RunJournal による crash-safe delete
+    archive_dir = work_dir.parent / DEFAULT_ARCHIVE_DIRNAME
     try:
-        _safe_remove_run_dir(state, work_dir)
-    except RuntimeError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        lock = RunLock(state.run_id, work_dir)
+        lock.acquire()
+    except RunLockError as exc:
+        print(f"ERROR: ロック取得失敗（他プロセス使用中の可能性）: {exc}", file=sys.stderr)
+        if exc.held_by:
+            print(f"  保持者: pid={exc.held_by.get('pid')} "
+                  f"hostname={exc.held_by.get('hostname_hash')} "
+                  f"heartbeat={exc.held_by.get('heartbeat_at')}", file=sys.stderr)
         return 1
+
+    journal = RunJournal(work_dir / _safe_run_id_component(state.run_id))
+    seq = journal.begin(
+        kind="delete-hard",
+        target=state.run_id,
+        payload={"session_ids": sdk_session_ids, "is_hard": is_hard},
+    )
+
+    try:
+        # SDK 側削除（--hard 時のみ）
+        if is_hard:
+            try:
+                failed = asyncio.run(_hard_delete_sdk_sessions(
+                    state, journal=journal, journal_seq=seq,
+                ))
+            except Exception as exc:  # pragma: no cover - asyncio 異常系
+                print(f"WARN: SDK 側セッション削除中に例外: {exc}", file=sys.stderr)
+                failed = []
+            for line in failed:
+                print(f"WARN: SDK 削除失敗: {line}", file=sys.stderr)
+
+        # state.json 存在ガード（rmtree 前）
+        run_dir_path = work_dir / _safe_run_id_component(state.run_id)
+        if run_dir_path.exists() and not (run_dir_path / "state.json").exists():
+            print(
+                f"ERROR: 安全性ガード: '{run_dir_path}' に state.json が存在しないため削除しません。",
+                file=sys.stderr,
+            )
+            return 1
+
+        # Critical #1 (v1.0.2): journal を archive へ移動してから end を書く。
+        # この順序により、end 書き込み後 / rmtree 前にクラッシュしても、
+        # archive 内に begin + end が揃った journal が残るため recovery で no-op として扱える。
+        # archive 移動 → end → rmtree の順なら、end 失敗時も archive 内に begin だけが
+        # 残るため次回起動時の recovery で完遂可能。
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archived_path = journal.archive(archive_dir)
+        if archived_path is not None:
+            # archive 済みファイルに end を直接追記する
+            _append_to_archive(archived_path, {
+                "seq": seq,
+                "ts": datetime_utc_now_iso(),
+                "kind": "delete-hard.end",
+                "target": state.run_id,
+                "payload": {},
+            })
+    finally:
+        # lock を release してから rmtree（Windows 互換）。
+        # ロック解放後 rmtree までの間に他プロセスがロックを取れるが、
+        # state.json 存在ガードによりすぐ撤退できるため実害なし。
+        try:
+            lock.release()
+        except Exception:  # pragma: no cover
+            pass
+
+    # <session-state-dir>/runs/<run_id>/ 削除（.lock もここで消える。journal は既に archive 済み）
+    try:
+        if run_dir_path.exists():
+            shutil.rmtree(run_dir_path)
     except OSError as exc:
         print(f"ERROR: ディレクトリ削除に失敗: {exc}", file=sys.stderr)
         return 1
 
     print(f"OK: 削除しました (run_id={state.run_id})")
     return 0
+
+
+def _append_to_archive(archive_path: Path, record: Dict[str, Any]) -> None:
+    """archive 済み journal ファイルへ末尾 1 行追加（O_APPEND で原子的書き込み）。"""
+    line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+    fd = os.open(str(archive_path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    try:
+        os.write(fd, line.encode("utf-8"))
+        try:
+            os.fsync(fd)
+        except OSError:  # pragma: no cover
+            pass
+    finally:
+        os.close(fd)
+
+
+def datetime_utc_now_iso() -> str:
+    """ISO 8601 UTC 文字列を返す（cmd_delete 内のみで使用）。"""
+    import datetime as _dt
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -538,6 +667,50 @@ def add_resume_parser(subparsers: argparse._SubParsersAction) -> argparse.Argume
         help="SDK バージョン差異を検出したら中断する (デフォルトは警告のみで続行)",
     )
 
+    # Phase 5: reconcile
+    p_rec = resume_sub.add_parser(
+        "reconcile",
+        help="state.json と SDK セッション実体の整合性をチェックする (Phase 5)",
+    )
+    p_rec.add_argument(
+        "run_id", nargs="?", default=None,
+        help="対象 Run ID（省略 + --all なら全 Run）",
+    )
+    p_rec.add_argument(
+        "--all", action="store_true", default=False,
+        help="<session-state-dir>/runs/ 配下の全 Run を対象にする",
+    )
+    p_rec.add_argument(
+        "--dry-run", action="store_true", default=True,
+        help="既定。実際の state.json 修正は行わず候補のみ表示",
+    )
+    p_rec.add_argument(
+        "--auto-fix", dest="dry_run", action="store_false",
+        help="state_only 検出時に state を pending に戻す",
+    )
+    p_rec.add_argument(
+        "--json", action="store_true", default=False,
+        help="JSON 形式で出力する",
+    )
+
+    # Phase 5: gc-orphans
+    p_gc = resume_sub.add_parser(
+        "gc-orphans",
+        help="hve-* prefix の orphan SDK セッションを削除する (Phase 5)",
+    )
+    p_gc.add_argument(
+        "--dry-run", action="store_true", default=True,
+        help="既定。削除候補のみ表示",
+    )
+    p_gc.add_argument(
+        "--yes", "-y", dest="dry_run", action="store_false",
+        help="実削除を行う（確認なし）",
+    )
+    p_gc.add_argument(
+        "--json", action="store_true", default=False,
+        help="JSON 形式で出力する",
+    )
+
     return resume_parser
 
 
@@ -557,14 +730,188 @@ def dispatch(args: argparse.Namespace) -> int:
         return cmd_delete(args)
     if sub == "continue":
         return cmd_continue(args)
+    if sub == "reconcile":
+        return cmd_reconcile(args)
+    if sub == "gc-orphans":
+        return cmd_gc_orphans(args)
     # サブコマンド未指定 → 簡易ヘルプ
     print(
-        "使い方: python -m hve resume {list|show|rename|delete|continue} [...]\n"
-        "  list      — セッション一覧 (--json)\n"
-        "  show      — 1 セッションの詳細 (--json)\n"
-        "  rename    — セッション名変更\n"
-        "  delete    — セッション削除 (--hard で SDK 側も / --yes で確認スキップ)\n"
-        "  continue  — 非対話 Resume 実行 (--abort-on-sdk-mismatch)",
+        "使い方: python -m hve resume {list|show|rename|delete|continue|reconcile|gc-orphans} [...]\n"
+        "  list        — セッション一覧 (--json)\n"
+        "  show        — 1 セッションの詳細 (--json)\n"
+        "  rename      — セッション名変更\n"
+        "  delete      — セッション削除 (--hard で SDK 側も / --yes で確認スキップ)\n"
+        "  continue    — 非対話 Resume 実行 (--abort-on-sdk-mismatch)\n"
+        "  reconcile   — state.json と SDK セッション実体の整合性チェック\n"
+        "  gc-orphans  — hve-* prefix の orphan SDK セッションを削除",
         file=sys.stderr,
     )
     return 1
+
+
+# ---------------------------------------------------------------------------
+# reconcile / gc-orphans サブコマンド (Phase 5)
+# ---------------------------------------------------------------------------
+
+async def _build_sdk_client_for_reconcile() -> Any:
+    """SDK の CopilotClient を構築して start する。失敗時は None を返す。"""
+    try:
+        from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
+    except ImportError:
+        return None
+    try:
+        from .config import SDKConfig
+    except ImportError:
+        from config import SDKConfig  # type: ignore[no-redef]
+    cfg = SDKConfig.from_env()
+    sdk_config = SubprocessConfig(
+        cli_path=cfg.cli_path,
+        github_token=cfg.resolve_token() or None,
+        log_level="error",
+    )
+    client = CopilotClient(config=sdk_config)
+    await client.start()
+    return client
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """`hve resume reconcile [run_id] [--all] [--auto-fix]` ハンドラー。"""
+    try:
+        from .reconciler import reconcile_all, reconcile_run
+        from .run_state import RunState
+    except ImportError:
+        from reconciler import reconcile_all, reconcile_run  # type: ignore[no-redef]
+        from run_state import RunState  # type: ignore[no-redef]
+
+    work_dir = _resolve_work_dir(args)
+    run_id = getattr(args, "run_id", None)
+    is_all = bool(getattr(args, "all", False))
+    dry_run = bool(getattr(args, "dry_run", True))
+    as_json = bool(getattr(args, "json", False))
+
+    if not run_id and not is_all:
+        print("ERROR: run_id または --all を指定してください", file=sys.stderr)
+        return 1
+
+    async def _main() -> Dict[str, Any]:
+        client = await _build_sdk_client_for_reconcile()
+
+        async def _list_sessions():
+            return await client.list_sessions()
+
+        try:
+            if is_all:
+                results = await reconcile_all(
+                    work_dir, sdk_client=client, dry_run=dry_run
+                )
+            else:
+                state = RunState.load(run_id, work_dir=work_dir)
+                results = {state.run_id: await reconcile_run(
+                    state, sdk_client=client, dry_run=dry_run,
+                    sdk_list_sessions=_list_sessions if client else None,
+                )}
+        finally:
+            if client is not None:
+                try:
+                    await client.stop()
+                except Exception:  # pragma: no cover
+                    pass
+
+        out: Dict[str, Any] = {}
+        for rid, r in results.items():
+            out[rid] = {
+                "sessions_state_only": r.sessions_state_only,
+                "sessions_sdk_only": r.sessions_sdk_only,
+                "sessions_both": r.sessions_both,
+                "actions_taken": r.actions_taken,
+                "actions_pending": r.actions_pending,
+            }
+        return out
+
+    try:
+        results = asyncio.run(_main())
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # pragma: no cover
+        print(f"ERROR: reconcile 実行中に例外: {exc}", file=sys.stderr)
+        return 1
+
+    if as_json:
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        return 0
+
+    for rid, r in results.items():
+        print(f"Run ID: {rid}")
+        print(f"  状態整合 (both)        : {len(r['sessions_both'])}")
+        print(f"  state のみ (SDK 消失)  : {len(r['sessions_state_only'])}")
+        print(f"  SDK のみ (orphan 候補) : {len(r['sessions_sdk_only'])}")
+        for sid in r['sessions_state_only']:
+            print(f"    [state-only] {sid}")
+        for sid in r['sessions_sdk_only']:
+            print(f"    [sdk-only]   {sid}")
+        if r['actions_taken']:
+            print(f"  実行アクション:")
+            for a in r['actions_taken']:
+                print(f"    - {a}")
+        if r['actions_pending']:
+            print(f"  保留アクション (--auto-fix で実行可):")
+            for a in r['actions_pending']:
+                print(f"    - {a}")
+    return 0
+
+
+def cmd_gc_orphans(args: argparse.Namespace) -> int:
+    """`hve resume gc-orphans [--yes]` ハンドラー。"""
+    try:
+        from .reconciler import gc_orphans
+    except ImportError:
+        from reconciler import gc_orphans  # type: ignore[no-redef]
+
+    work_dir = _resolve_work_dir(args)
+    dry_run = bool(getattr(args, "dry_run", True))
+    as_json = bool(getattr(args, "json", False))
+
+    async def _main():
+        client = await _build_sdk_client_for_reconcile()
+        if client is None:
+            return None
+        try:
+            return await gc_orphans(work_dir, sdk_client=client, dry_run=dry_run)
+        finally:
+            try:
+                await client.stop()
+            except Exception:  # pragma: no cover
+                pass
+
+    try:
+        result = asyncio.run(_main())
+    except Exception as exc:  # pragma: no cover
+        print(f"ERROR: gc-orphans 実行中に例外: {exc}", file=sys.stderr)
+        return 1
+
+    if result is None:
+        print("ERROR: Copilot SDK が利用できません", file=sys.stderr)
+        return 1
+
+    if as_json:
+        print(json.dumps({
+            "candidates": result.candidates,
+            "deleted": result.deleted,
+            "failed": result.failed,
+            "dry_run": result.dry_run,
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"削除候補: {len(result.candidates)} 件")
+    for sid in result.candidates:
+        print(f"  - {sid}")
+    if dry_run:
+        print("（--yes を付けると実削除します）")
+    else:
+        print(f"削除成功: {len(result.deleted)} 件")
+        if result.failed:
+            print(f"削除失敗: {len(result.failed)} 件")
+            for f in result.failed:
+                print(f"  - {f}", file=sys.stderr)
+    return 0

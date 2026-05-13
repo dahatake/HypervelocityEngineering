@@ -23,6 +23,8 @@
 ## 出力
 - `qa/{key}-original-docs-questionnaire.md`（fan-out 子毎に 1 ファイル。`{key}` は `D01`〜`D21`）
 
+{existing_artifact_policy}
+
 ## 完了条件
 - `qa/{key}-original-docs-questionnaire.md` が生成されている
 - 出力フォーマットが Agent 仕様 `## 6) Originalドキュメント整合性チェック` に準拠している{additional_section}

@@ -371,11 +371,11 @@ class TestBuildParams(unittest.TestCase):
         params = _build_params(args)
         self.assertTrue(params["force_refresh"])
 
-    def test_akm_force_refresh_default_true(self) -> None:
-        """AKM force_refresh デフォルト値が True であることを確認。"""
+    def test_akm_force_refresh_default_false(self) -> None:
+        """AKM force_refresh デフォルト値が False であることを確認（差分マージが既定）。"""
         args = _parse(["orchestrate", "-w", "akm"])
         params = _build_params(args)
-        self.assertTrue(params["force_refresh"])
+        self.assertFalse(params["force_refresh"])
 
     def test_akm_no_force_refresh_sets_false(self) -> None:
         """AKM --no-force-refresh で force_refresh が False になることを確認。"""
@@ -1584,10 +1584,10 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         # Phase 再編後の menu_select 順: workflow(akm), exec_mode(手動), model, AKM sources(Phase A'), verbosity(Phase D)
         con.menu_select.side_effect = [0, 2, 0, 0, 1]
         # Phase 再編後の yes_no 順:
-        #   force_refresh=True(Phase A' AKM), AKM QA=False, WorkIQ review=False,
+        #   force_refresh=False(Phase A' AKM, 差分マージが既定), AKM QA=False, WorkIQ review=False,
         #   CodeReview=False, auto_self_improve=False,
         #   Issue=False, PR=False, dry_run=False, confirm=True
-        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True]
+        con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, False, True]
         # Phase 再編後の input 順:
         #   target_files, custom_source_dir, additional_prompt, timeout, branch, session_name
         con.prompt_input.side_effect = [

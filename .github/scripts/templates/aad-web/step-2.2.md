@@ -11,6 +11,8 @@
 ## 出力
 - `docs/services/{{serviceId}}-{{serviceNameSlug}}-description.md`（サービスごとに1ファイル）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Microservice-ServiceDetail` を使用
 

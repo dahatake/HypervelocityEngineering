@@ -15,6 +15,8 @@
 ## 出力
 - `docs/azure/dependency-review-report.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `QA-AzureDependencyReview` を使用
 

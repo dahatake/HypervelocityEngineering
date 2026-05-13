@@ -13,6 +13,8 @@
 ## 出力
 - `docs-generated/guides/migration-assessment.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-Migration`
 

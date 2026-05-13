@@ -164,6 +164,14 @@ class TestWorkflowDef:
         assert "app_ids" in wf.params
         assert "app_id" in wf.params
 
+    def test_ard_steps_require_knowledge_management(self):
+        wf = get_workflow("ard")
+        assert wf is not None
+        for step_id in ["1", "1.1", "1.2", "2", "3.1", "3.2", "3.3"]:
+            step = wf.get_step(step_id)
+            assert step is not None
+            assert "knowledge-management" in step.required_skills
+
 
 class TestGetRootSteps:
     """get_root_steps() のテスト。"""

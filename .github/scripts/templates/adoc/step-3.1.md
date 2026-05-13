@@ -11,6 +11,8 @@
 ## 出力
 - `docs-generated/components/{module-name}.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-ComponentDesign`
 

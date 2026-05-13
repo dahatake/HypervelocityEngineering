@@ -24,3 +24,5 @@ AQOD Step 1 (fan-out 21 並列) で生成された各 `qa/{{key}}-original-docs-
 - `qa/original-docs-cross-questionnaire.md`
 
 {completion_instruction}{additional_section}
+
+{existing_artifact_policy}

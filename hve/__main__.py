@@ -45,7 +45,7 @@
     python -m hve orchestrate --workflow aad \\
       --create-issues --issue-title "Sprint 42: AAD 全ステップ実行"
 
-    # Knowledge Management（デフォルト設定: sources=qa, target_files=qa/*.md, force_refresh=true）
+    # Knowledge Management（デフォルト設定: sources=qa, target_files=qa/*.md, force_refresh=false）
     python -m hve orchestrate --workflow akm
 
     # original-docs 起点
@@ -553,7 +553,7 @@ def _prompt_akm_params(
     if is_quick_auto:
         params["sources"] = _AKM_DEFAULT_SOURCES
         params["target_files"] = _default_akm_target_files(params["sources"])
-        params["force_refresh"] = True
+        params["force_refresh"] = False
         params["custom_source_dir"] = ""
         params["enable_auto_merge"] = False
         # Work IQ 入力フェーズはクイック全自動モードでは既定 OFF（明示要求がない限り）。
@@ -585,7 +585,7 @@ def _prompt_akm_params(
 
     params["force_refresh"] = con.prompt_yes_no(
         "既存 knowledge/ 出力を完全に再生成する？",
-        default=True,
+        default=False,
     )
     params["custom_source_dir"] = con.prompt_input(
         "追加ソースディレクトリ（スペース区切り・任意）",
@@ -1040,7 +1040,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--force-refresh",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="AKM: 既存 status.md を完全に再生成する (デフォルト: 有効。--no-force-refresh で無効化)",
+        help="AKM: 既存 knowledge/ 出力を完全に再生成する (デフォルト: 無効。--force-refresh で有効化)",
     )
     orch.add_argument(
         "--custom-source-dir",
@@ -1600,9 +1600,9 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["target_files"] = " ".join(target_files) if target_files else _default_akm_target_files(params["sources"])
         custom_source_dir = getattr(args, "custom_source_dir", None)
         params["custom_source_dir"] = " ".join(custom_source_dir) if custom_source_dir else ""
-        # AKM では、フラグ未指定(None)の場合はデフォルトで True とする
+        # AKM では、フラグ未指定(None)の場合はデフォルトで False とする（差分マージ）
         force_refresh = getattr(args, "force_refresh", None)
-        params["force_refresh"] = True if force_refresh is None else force_refresh
+        params["force_refresh"] = False if force_refresh is None else force_refresh
         params["enable_auto_merge"] = getattr(args, "enable_auto_merge", False)
         # Work IQ 取り込み対象 Dxx（--workiq-dxx）。
         # 文字列が渡された場合は orchestrator 側で正規化される。
@@ -1702,6 +1702,101 @@ def _build_params(args: argparse.Namespace) -> dict:
 # メイン
 # -----------------------------------------------------------------------
 
+def _run_startup_recovery() -> None:
+    """Phase 4 (Resume 2-layer txn): 起動時 recovery を実行する。
+
+    `work/journal-archive/` 配下の未完了 delete-hard を補償する。SDK が
+    インストールされていれば SDK 削除も含めて完遂し、未インストール時は
+    ディレクトリ削除のみ行う（残り SDK セッションは次回起動時 or
+    `resume gc-orphans` で処理される）。
+
+    Major #7 (v1.0.2): pending journal が無ければ SDK client は構築しない
+    （起動コストを抑制）。
+    """
+    try:
+        from .recovery import recover_pending_on_startup
+        from .run_journal import scan_archive_for_pending, DEFAULT_ARCHIVE_DIRNAME
+        from .run_state import DEFAULT_RUNS_DIR
+    except ImportError:
+        from recovery import recover_pending_on_startup  # type: ignore[no-redef]
+        from run_journal import scan_archive_for_pending, DEFAULT_ARCHIVE_DIRNAME  # type: ignore[no-redef]
+        from run_state import DEFAULT_RUNS_DIR  # type: ignore[no-redef]
+
+    # 先に archive スキャンして、pending が無ければ SDK 構築をスキップ
+    archive_dir = DEFAULT_RUNS_DIR.parent / DEFAULT_ARCHIVE_DIRNAME
+    if not scan_archive_for_pending(archive_dir):
+        return
+
+    # SDK が import 可能なら delete_session / get_session_metadata を提供
+    sdk_delete = None
+    sdk_exists = None
+    client_handle = None
+    started_flag = {"v": False}  # nonlocal 用のミュータブルコンテナ
+    try:
+        from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
+        try:
+            from .config import SDKConfig
+        except ImportError:
+            from config import SDKConfig  # type: ignore[no-redef]
+        cfg = SDKConfig.from_env()
+        sdk_config = SubprocessConfig(
+            cli_path=cfg.cli_path,
+            github_token=cfg.resolve_token() or None,
+            log_level="error",
+        )
+        client_handle = CopilotClient(config=sdk_config)
+
+        async def _ensure_started():
+            # Minor #30: SDK の private 属性を立てる代わりに closure 変数を使う
+            if not started_flag["v"]:
+                await client_handle.start()
+                started_flag["v"] = True
+
+        async def _del(sid: str) -> None:
+            await _ensure_started()
+            await client_handle.delete_session(sid)
+
+        async def _exists(sid: str) -> bool:
+            await _ensure_started()
+            meta = await client_handle.get_session_metadata(sid)
+            return meta is not None
+
+        sdk_delete = _del
+        sdk_exists = _exists
+    except ImportError:
+        # SDK 未インストール → SDK 操作スキップ
+        pass
+
+    async def _main():
+        try:
+            results = await recover_pending_on_startup(
+                sdk_delete_session=sdk_delete,
+                sdk_session_exists=sdk_exists,
+            )
+        finally:
+            if client_handle is not None and started_flag["v"]:
+                try:
+                    await client_handle.stop()
+                except Exception:  # pragma: no cover
+                    pass
+        for r in results:
+            if r.get("recovered_seqs"):
+                print(f"[recovery] {r['archive']}: seqs={r['recovered_seqs']}",
+                      file=sys.stderr)
+            for err in r.get("errors", []):
+                print(f"[recovery] WARN: {err}", file=sys.stderr)
+
+    try:
+        asyncio.run(_main())
+    except RuntimeError:
+        # event loop 既存環境では新規 loop で実行
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(_main())
+        finally:
+            loop.close()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """エントリポイント。
 
@@ -1710,6 +1805,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    # Phase 4 (Resume 2-layer txn): 起動時 recovery
+    # work/journal-archive/ 配下の未完了 delete-hard 等を補償する。
+    # 失敗は warn のみで進行を止めない（実害は次回 hve resume gc-orphans 等で吸収可能）。
+    # `--no-recovery` 相当のオプトアウト環境変数: HVE_DISABLE_STARTUP_RECOVERY=1
+    if os.environ.get("HVE_DISABLE_STARTUP_RECOVERY", "").strip().lower() not in {"1", "true", "yes"}:
+        try:
+            _run_startup_recovery()
+        except Exception as exc:  # pragma: no cover - top-level guard
+            print(f"WARN: startup recovery で例外（処理は続行）: {exc}", file=sys.stderr)
 
     if args.command == "orchestrate":
         return _cmd_orchestrate(args)
@@ -1942,16 +2047,16 @@ def _delete_run_interactive(con: Any, state: Any) -> bool:
             sdk_failed_unexpectedly = True
         for line in failed:
             con.warning(f"SDK 削除失敗: {line}")
-        # SDK 側削除が完全に失敗した場合、work/runs/ を消すと
+        # SDK 側削除が完全に失敗した場合、<session-state-dir>/runs/ を消すと
         # SDK 側の orphan を追跡できなくなるため、ディスク削除を抓潰す。
         if sdk_failed_unexpectedly:
             if not con.prompt_yes_no(
-                "SDK 側削除が失敗しました。work/runs/ をそれでも削除しますか？",
+                "SDK 側削除が失敗しました。<session-state-dir>/runs/ をそれでも削除しますか？",
                 default=False,
             ):
             
                 con._print(
-                    f"  {s.YELLOW}work/runs/ の削除を中止しました。{s.RESET}",
+                    f"  {s.YELLOW}<session-state-dir>/runs/ の削除を中止しました。{s.RESET}",
                     ts=False,
                 )
                 return False
@@ -2123,7 +2228,7 @@ def _show_resume_menu_on_demand(con: Any) -> Optional[int]:
 def _maybe_show_resume_prompt(con: Any) -> Optional[int]:
     """Wizard 起動時に Resume プロンプトを表示する。
 
-    Phase 4 (Resume): `work/runs/` に再開可能な Run があれば、最初に
+    Phase 4 (Resume): `<session-state-dir>/runs/` に再開可能な Run があれば、最初に
     「再開する／新規実行／管理画面」を選択させる。
 
     Returns:
@@ -2192,7 +2297,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         )
 
     # ── Phase 4 (Resume): 再開プロンプト ─────────────────
-    # work/runs/ に再開可能な Run があれば、最初に「再開／新規／管理」を選択させる。
+    # <session-state-dir>/runs/ に再開可能な Run があれば、最初に「再開／新規／管理」を選択させる。
     # 「新規実行」が選ばれた場合のみ None が返り、通常フローへフォールスルーする。
     _resume_result = _maybe_show_resume_prompt(con)
     if _resume_result is not None:

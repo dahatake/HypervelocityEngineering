@@ -9,6 +9,8 @@
 ## 出力
 - `docs-generated/architecture/infra-deps.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-InfraDeps`
 

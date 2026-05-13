@@ -13,6 +13,8 @@
 ## 出力
 - `docs/catalog/screen-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-UI-List` を使用
 

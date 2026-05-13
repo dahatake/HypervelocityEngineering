@@ -12,6 +12,8 @@
 ## 出力
 - `docs/batch/jobs/{jobId}-{jobNameSlug}-spec.md`（ジョブごとに1ファイル）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-JobSpec` を使用
 

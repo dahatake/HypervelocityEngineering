@@ -13,6 +13,13 @@ metadata:
 
 `.github/copilot-instructions.md` §0 を最優先で遵守する。本 Skill は全 Agent 共通の参照先を集約する。
 
+## 出力言語ルール（思考プロセスを含む）
+
+- 最終出力だけでなく **思考プロセス（reasoning / chain-of-thought / 内部独白）も日本語で行う** こと。
+- ツール委譲の意図表明（例: "I need to delegate this task to ..."）、計画の自問自答、推論の途中経過もすべて日本語で記述する。
+- 英語の固有名詞・コマンド名・ファイルパス・コード識別子・引用文はそのまま英語で構わない。
+- 本ルールは hve オーケストレーターのターミナル出力（`○` で始まる Thinking 行）にも適用される。
+
 ## 全 Agent 共通 Skills 参照リスト
 
 - `task-questionnaire`：コンテキスト収集・質問票作成の詳細手順

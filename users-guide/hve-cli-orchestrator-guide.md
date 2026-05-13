@@ -90,17 +90,134 @@ python -m hve
 wizard が起動し、ワークフロー選択・オプション設定・実行確認を対話的にガイドします。
 詳しい環境構築手順は以下の「環境設定（ゼロからのセットアップ）」セクション、wizard の詳細は「インタラクティブモード（推奨）」セクションを参照してください。
 
+### リポジトリをローカルパッケージとしてインストールして使う
+
+リポジトリルートで次を実行すると、`hve/` を editable install として利用できます。
+
+```bash
+python3 -m pip install -e .
+```
+
+インストール後は、以下のどちらでも起動できます。
+
+```bash
+python3 -m hve <subcommand>
+hve <subcommand>
+```
+
+workflow で利用している実行例:
+
+```bash
+python3 -m hve emit-prompt pre-qa --comment-body
+```
+
 > 上記コマンドが動かない場合は、以下の「[環境設定（ゼロからのセットアップ）](#環境設定ゼロからのセットアップ)」を参照してください。
 
 ---
 
 ## 中断と再開（Resume）
 
-`hve` は実行中断後の再開をサポートします。
+### 概要
 
-- **保存（中断）**: 実行中に `Ctrl+R` を押すと、現在ステップの完了を待って `work/runs/<run_id>/state.json` に保存します。
-- **再開**: 次回 `python -m hve` 起動時に再開候補が表示されます。CLI では `python -m hve resume continue <run_id>` を利用できます。
-- **管理**: `python -m hve resume list/show/rename/delete` でセッション管理が可能です。
+`hve` の実行中、ターミナルで `Ctrl+R` を押すと、ワークフローを **graceful pause**（保存付き中断）できます。中断したワークフローは、次回 `python -m hve` を起動した際の再開候補一覧から、または `python -m hve resume continue <run_id>` で残りのステップから続行できます。
+
+### Ctrl+R が「行うこと」
+
+1. **実行中の DAG executor をキャンセルする**  
+   現在実行中のステップを `asyncio` の cancellation 機構で打ち切ります。実行中ステップが完了するまで待つわけではありません。
+2. **`work/runs/<run_id>/state.json` に最終状態を保存する**  
+   `status = "paused"` / `pause_reason = "ctrl+r"` を書き込み、tempfile + `os.fsync` + `os.replace` によるアトミック書き換えで保存します。書き換えは Windows でも `os.replace` のリトライで保護されます。
+3. **既に完了済みのステップ状態を保持する**  
+   各ステップは「開始時（`running` 遷移時）」と「完了時（`completed` / `failed` / `skipped` / `blocked`）」の 2 点で `state.json` に自動 save されており、中断時点で既に完了していたステップの状態はそのまま残ります。
+4. **次回 Resume の起点を残す**  
+   中断中だったステップは `running` のまま `state.json` に記録され、保存済みの `session_id` を介して次回 `client.resume_session(session_id)` の再開対象になります。
+
+### Ctrl+R が「行わないこと」
+
+- **実行中ステップの完了を待たない。**  
+  LLM 応答受信中・ツール実行中・ファイル書き込み中であっても、その時点で cancel が発火します。
+- **実行中ステップが出力途中だったファイルの整合性は保証しない。**  
+  `docs/` / `src/` / `work/` 等に書き込み中だったファイルが中途半端な内容のまま残る可能性があります（hve 側でロールバックは行いません）。
+- **Copilot SDK 側のセッション（`~/.copilot/session-state/<session_id>/`）の flush を強制しない。**  
+  SDK が会話履歴をいつディスクに書き出すかは SDK 実装に依存し、hve からは制御していません。Ctrl+R 押下時点で SDK が最新の応答をディスクに書ききっている保証はありません。
+- **実行中ステップの「途中までの会話内容」を hve 側 `state.json` には記録しない。**  
+  `state.json` の粒度は **ステップ単位**です。ステップ実行中に蓄積された LLM の応答テキスト・ツール呼び出し履歴・中間トークンは `state.json` に入りません（これらは SDK 側に残っていれば次回 `resume_session` で復元される、という間接的な経路に依存します）。
+- **Ctrl+C と同じ即時停止ではない。**  
+  `Ctrl+C`（SIGINT）は従来どおり機能し、graceful pause は実行されません。
+
+### Ctrl+R が動作しない環境
+
+以下のいずれかに該当する環境では、`Ctrl+R` 監視は**自動的に無効化されます**（押しても反応しません）。これは raw mode の stdin 操作が安全に行えない、または意図しない副作用を起こす可能性があるためです。
+
+- 環境変数 `HVE_DISABLE_KEYBIND` が `1` / `true` / `yes` / `on` のいずれかに設定されている
+- 環境変数 `PYTEST_CURRENT_TEST` が設定されている（pytest 実行中）
+- 標準入力が TTY ではない（パイプ、リダイレクト、`< file` 入力、CI など）
+- VS Code 統合ターミナル等で標準入力が直接読めない場合
+
+明示的に無効化したい場合は `HVE_DISABLE_KEYBIND=1` を設定してください。
+
+### 再開（Resume）の方法
+
+- **wizard 経由**: 次回 `python -m hve` を起動すると、未完了セッション（`paused` / `running` / `failed`）が再開候補として表示されます。
+- **CLI 経由**: `python -m hve resume continue <run_id>` で非対話的に再開します。
+- **管理コマンド**: `python -m hve resume {list|show|rename|delete|reconcile|gc-orphans}` でセッションを管理します。
+
+主なオプション:
+
+| コマンド | 主なオプション | 用途 |
+|---|---|---|
+| `resume list` | `--json`、`--work-dir <PATH>` | 未完了セッション一覧。JSON 出力可。 |
+| `resume show <run_id>` | `--json` | 1 セッションの詳細（ステップごとの状態・`session_id`・エラー要約）。 |
+| `resume rename <run_id> <new_name>` | — | セッション名変更。 |
+| `resume delete <run_id>` | `--hard`、`--yes` | `work/runs/<run_id>/` を削除。`--hard` で SDK 側 `~/.copilot/session-state/<session_id>/` も削除（`hve` で始まる session_id のみ対象）。`--yes` で確認スキップ。**v1.0 以降は Write-Ahead Journal で crash-safe 化**、削除途中で中断しても次回起動時の自動 recovery で完遂される。 |
+| `resume continue <run_id>` | `--abort-on-sdk-mismatch` | 非対話再開。Copilot SDK のメジャーバージョン不一致時に中断したい場合に指定（既定は警告のみで続行）。 |
+| **`resume reconcile`** | `[run_id]` / `--all` / `--auto-fix` / `--json` | **state.json と SDK セッション実体の整合性チェック**（v1.0 新規）。SDK 側で消失したセッションを参照する step を `pending` に戻す（`--auto-fix` で実行、既定は dry-run）。 |
+| **`resume gc-orphans`** | `--yes` / `--json` | **SDK 側に残った `hve-*` 接頭辞の孤児セッションを削除**（v1.0 新規）。`state.json` で参照中の sid は絶対に削除しない安全ガード付き。既定は dry-run、`--yes` で実削除。 |
+
+### v1.0 アップグレード時の注意（破壊的変更）
+
+v1.0 で導入された Resume 2 層トランザクション保護機能により、`work/runs/<run_id>/state.json` の `schema_version` が **1.0 → 2.0** へ非互換変更されました。旧バージョンで生成された state.json は **読み込み不可** となります。
+
+**対処**:
+
+- 旧バージョンで実行中だったセッションを再開したい場合は、v1.0 へのアップグレード前に完了させてください。
+- アップグレード後は `work/runs/` を手動削除すると、`resume list` 起動時の warn ログが消えます: `rm -rf work/runs/` （PowerShell: `Remove-Item -Recurse -Force work\runs\`）。
+- 旧 state.json は v1.0 の `RunState.load` で `ValueError` を投げるため、誤った再開は発生しません（`list` では warn + skip）。
+
+**v1.0 以降の Resume の堅牢化**:
+
+- 同一 `run_id` への並行 hve 実行は `work/runs/<run_id>/.lock` ファイルで排他制御されます（OS レベルロック）。
+- `resume delete --hard` は Write-Ahead Journal により crash-safe 化。途中で SDK 削除失敗 / 中断しても次回起動時に自動 recovery で完遂。
+- Resume 開始時に SDK セッション実体との整合性チェックが自動実行され、消失セッションを参照する step は自動で `pending` に戻されます。
+
+### Resume 時の挙動
+
+`python -m hve resume continue <run_id>`（または wizard の再開候補選択）で再開すると、次の処理が行われます。
+
+- 完了済みステップ（`completed` / `skipped`）は再実行されず、DAG 上「依存解決済み」として扱われます。
+- 中断時に `running` だったステップは、保存された `session_id` で `client.resume_session()` を試行し、SDK 側にセッションが残っていれば会話の続きから再開します。
+- SDK 側セッションが失われている、または SDK 例外で `resume_session` が失敗した場合は、warn ログを出した上で**新規 `create_session` にフォールバック**します。この場合、そのステップは事実上 **最初から実行し直し** になります。
+- 保存時と現環境で **Copilot SDK のメジャーバージョンが一致しない** 場合は警告が表示されます。`--abort-on-sdk-mismatch` を付けると、不一致時に再開を中止します（既定は警告のみで続行）。
+- `--create-issues` / `--create-pr` が保存時に有効だった場合、再開時にも `REPO` および `GH_TOKEN`（または `GITHUB_TOKEN`）環境変数が必須です。未設定の場合は再開が中止されます。
+
+### リスクと注意点
+
+| リスク | 説明 | 緩和策 |
+|---|---|---|
+| **実行中ステップの作業ロス** | Ctrl+R は実行中ステップを cancel するため、長時間 LLM 応答を生成中だったステップの応答・ツール出力・書き込み中ファイルが失われる可能性がある。 | 重要な単一ステップが完了するまで Ctrl+R を待つ。次のステップ境界まで進んでから押す。 |
+| **中途半端なファイル書き込み** | エディタ系ツールがファイル書き込み中に cancel された場合、ファイルが破損・部分書き込み状態になる可能性がある。 | 再開後にファイルの整合性を `git status` / `git diff` で確認する。問題があれば `git checkout -- <path>` で巻き戻す。 |
+| **Resume 時に最初からやり直しになるステップ** | SDK 側セッションが消失していた場合、`create_session` フォールバックでそのステップは 0 から再実行される（前回までのトークン消費は無駄になる）。 | 中断後はできるだけ早く再開する。SDK アップデートをまたいでの長期 pause は避ける。 |
+| **SDK バージョン不一致** | hve のメジャーバージョンや Copilot SDK のメジャーバージョンが保存時と現在で異なると、再開はブロックされる（`is_resumable` が False）か、警告付きで続行となる。 | `--abort-on-sdk-mismatch` で安全側に倒すか、再開前に SDK のバージョンを確認する。 |
+| **無効化環境で「押しても効かない」** | 非 TTY / CI / pytest / VS Code 統合ターミナル等では Ctrl+R 監視自体が起動していない。 | 環境を確認する。CI で実行する場合は中断ではなく事前にステップ範囲を `--steps` で絞る運用にする。 |
+| **state.json の保存粒度はステップ単位** | 1 ステップ内部の進捗（応答途中、ツール途中）は `state.json` には記録されない。 | 1 ステップが長くなる構成では、ワークフローのステップ粒度を細かくする、または並列度（`--max-parallel`）を上げて全体時間を短くする。 |
+| **`state.json` 自体は Git にコミットされない** | `work/runs/` 配下は実行時メタデータであり、共有・引き継ぎには手動コピーが必要。 | 別 PC への引き継ぎが必要な場合は `work/runs/<run_id>/` ディレクトリをまとめて転送する。`config_snapshot` から機密（`github_token`・`repo`・`mcp_servers`）は除外されているため、テナント情報は環境変数で再注入する必要がある。 |
+| **`Ctrl+C` との誤操作** | Ctrl+C は SIGINT として従来どおり即時終了する（pause 保存は行われない）。 | 保存付き中断は必ず `Ctrl+R`、即時終了は `Ctrl+C`、と意識的に使い分ける。 |
+
+### 推奨運用
+
+- **長時間ステップの途中で押さない**: 可能であれば、コンソール上に「ステップ完了」のログが流れた直後など、ステップ境界で押す。
+- **押した後は再開まで時間を空けない**: SDK セッションの保持期間や互換性のリスクを最小化するため、なるべく早く `resume continue` する。
+- **CI / スクリプト実行では使わない**: 自動化環境では Ctrl+R 監視が自動無効化されており、そもそも機能しない。CI では `--steps` でスコープを分割するなど、別のアプローチを取る。
 
 ---
 

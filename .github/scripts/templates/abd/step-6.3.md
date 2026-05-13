@@ -13,6 +13,8 @@
 ## 出力
 - `docs/test-specs/{jobId}-test-spec.md`（ジョブごとに1ファイル）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-TDD-TestSpec` を使用
 

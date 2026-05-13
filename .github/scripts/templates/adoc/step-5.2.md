@@ -8,6 +8,8 @@
 ## 出力
 - `docs-generated/architecture/dependency-map.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-DependencyMap`
 

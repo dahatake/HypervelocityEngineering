@@ -13,6 +13,8 @@
 ## 出力
 - `docs-generated/guides/refactoring.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-Refactoring`
 

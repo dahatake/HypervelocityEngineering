@@ -11,6 +11,8 @@
 ## 出力
 - `docs/batch/batch-test-strategy.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-TestStrategy` を使用
 

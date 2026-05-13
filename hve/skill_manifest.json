@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "workflow_defaults": {
+    "ard": ["task-dag-planning"],
+    "aas": ["task-dag-planning", "architecture-questionnaire"],
+    "aad-web": ["task-dag-planning", "microservice-design-guide"],
+    "asdw-web": ["microservice-design-guide"],
+    "abd": ["batch-design-guide"],
+    "abdv": ["batch-design-guide", "test-strategy-template"],
+    "aag": ["task-dag-planning"],
+    "aagd": ["test-strategy-template"],
+    "akm": ["knowledge-management"],
+    "aqod": ["knowledge-lookup"],
+    "adoc": ["task-dag-planning"]
+  },
+  "required_skills": {
+    "ard": {
+      "1": ["knowledge-management"],
+      "1.1": ["knowledge-management"],
+      "1.2": ["knowledge-management"],
+      "2": ["knowledge-management"],
+      "3.1": ["knowledge-management"],
+      "3.2": ["knowledge-management"],
+      "3.3": ["knowledge-management"]
+    },
+    "akm": {
+      "1": ["knowledge-management"]
+    },
+    "aqod": {
+      "1": ["knowledge-lookup"],
+      "2": ["knowledge-lookup"]
+    }
+  },
+  "aliases": {
+    "KnowledgeManager": "knowledge-management",
+    "knowledge_manager": "knowledge-management",
+    "knowledgeManagement": "knowledge-management",
+    "KnowledgeLookup": "knowledge-lookup",
+    "knowledge_lookup": "knowledge-lookup"
+  }
+}

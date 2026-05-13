@@ -146,7 +146,37 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         self.assertIn('<!-- auto-qa: %s -->', content)
         self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
 
+    def test_reusable_workflows_embed_validation_marker_in_prompt(self) -> None:
+        """Copilot向け追加入力セクションに検証マーカー指示が含まれることを検証する。"""
+        targets = [
+            "auto-ai-agent-design-reusable.yml",
+            "auto-ai-agent-dev-reusable.yml",
+            "auto-app-detail-design-web-reusable.yml",
+            "auto-app-dev-microservice-web-reusable.yml",
+            "auto-app-documentation-reusable.yml",
+            "auto-app-selection-reusable.yml",
+            "auto-batch-design-reusable.yml",
+            "auto-batch-dev-reusable.yml",
+            "auto-knowledge-management-reusable.yml",
+        ]
+        for filename in targets:
+            with self.subTest(filename=filename):
+                content = self._read_workflow(filename)
+                self.assertIn("## 検証結果（PR本文に必須）", content)
+                self.assertIn("<!-- validation-confirmed -->", content)
+                m = re.search(
+                    r"QA_REVIEW_SECTION=\$\(printf '(?P<section>.*?)'\)",
+                    content,
+                    re.DOTALL,
+                )
+                self.assertIsNotNone(m, "QA_REVIEW_SECTION が見つかりません")
+                section = m.group("section")
+                self.assertIn("## 追加コンテキストの参照", section)
+                self.assertIn("## 検証結果（PR本文に必須）", section)
+                self.assertIn("<!-- validation-confirmed -->", section)
 
+    def test_akm_aqod_python_heredoc_blocks_are_compilable(self) -> None:
+        """AKM/AQODワークフローのPython heredocブロックが構文的に有効であることを検証する。"""
         pattern = re.compile(
             r"<<'(?P<marker>PY(?:EOF|TAGS|MERGE))'\n(?P<code>.*?)\n\s*(?P=marker)",
             re.DOTALL,

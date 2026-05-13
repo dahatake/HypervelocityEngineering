@@ -8,6 +8,8 @@
 ## 出力
 - `docs/catalog/app-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-ApplicationAnalytics`
 

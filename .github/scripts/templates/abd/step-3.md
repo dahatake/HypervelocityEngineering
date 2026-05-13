@@ -12,6 +12,8 @@
 ## 出力
 - `docs/batch/batch-job-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-JobCatalog` を使用
 

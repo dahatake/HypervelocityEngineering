@@ -16,6 +16,7 @@ NOTE:
 from __future__ import annotations
 
 import re
+import unittest
 from pathlib import Path
 
 import yaml  # PyYAML は CI (test-hve-python.yml) で必須インストール済み
@@ -533,6 +534,55 @@ class TestIssueQaReadyTransitionWorkflow:
         assert "<!-- qa-reference-end -->" in content
         assert "## Referenced QA Files" in content
         assert "参照なし: 理由 = <理由>" in content
+
+
+class TestLabelStateMachineFixWorkflows(unittest.TestCase):
+    """Issue #2551 Phase C のラベル状態機械修正を静的検証する。"""
+
+    def test_auto_issue_transition_has_pull_request_target_opened(self):
+        yaml_data = _load_workflow_yaml("auto-issue-qa-ready-transition.yml")
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        pr_types = on_section.get("pull_request_target", {}).get("types", [])
+        self.assertIn("opened", pr_types)
+
+    def test_auto_issue_transition_contains_copilot_pr_detection_and_marker(self):
+        content = _read_workflow_text("auto-issue-qa-ready-transition.yml")
+        self.assertIn("copilot-swe-agent[bot]", content)
+        self.assertIn("Copilot", content)
+        self.assertIn("<!-- hve-qa-context-injected -->", content)
+        self.assertIn("transition-pr-opened", content)
+        self.assertIn("steps.inject-qa-context-pr.outputs.qa_comment_found == 'true'", content)
+
+    def test_state_transition_on_pr_merge_workflow_contract(self):
+        workflow = "state-transition-on-pr-merge.yml"
+        workflow_path = _WORKFLOWS_DIR / workflow
+        self.assertTrue(workflow_path.exists(), f"{workflow} が存在しません")
+
+        yaml_data = _load_workflow_yaml(workflow)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        pr_types = on_section.get("pull_request_target", {}).get("types", [])
+        self.assertIn("closed", pr_types)
+
+        job_if = yaml_data.get("jobs", {}).get("transition", {}).get("if", "")
+        self.assertIn("github.event.pull_request.merged == true", job_if)
+
+        permissions = yaml_data.get("permissions", {})
+        self.assertEqual("write", permissions.get("issues"))
+
+        content = _read_workflow_text(workflow)
+        for prefix in [
+            "aas", "aad", "aad-web", "asdw", "asdw-web", "abd",
+            "abdv", "aag", "aagd", "akm", "adoc", "aqod",
+        ]:
+            self.assertIn(prefix, content)
+        self.assertIn("<!-- state-transition-on-pr-merge-done -->", content)
+
+    def test_state_transition_on_pr_merge_has_done_idempotency_guard(self):
+        content = _read_workflow_text("state-transition-on-pr-merge.yml")
+        self.assertIn("if printf ',%s,' \"${labels_csv}\" | grep -q \",${done_label},\"; then", content)
+        self.assertIn("付与をスキップ", content)
+        self.assertIn("if [ \"${done_present}\" != \"true\" ]; then", content)
+        self.assertIn("残置ラベル削除をスキップ", content)
 
 
 class TestVerifyQaReferenceInPrWorkflow:

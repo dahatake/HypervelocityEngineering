@@ -15,6 +15,8 @@ Step.3.2 でデプロイ済みの Web アプリ（SWA URL）に対して、Playw
 - Playwright 実行ログ
 - 失敗時: HTML レポート / trace artifact
 
+{existing_artifact_policy}
+
 ## 必須シナリオ（Issue で増減可）
 1. ログイン / 認証導線（該当なしの場合は代表的な初期画面遷移）
 2. 主要 CRUD 操作（リソース別に最低 1 件）

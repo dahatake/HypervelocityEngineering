@@ -17,6 +17,8 @@
 ## 出力
 - `docs/azure/azure-services-additional.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Microservice-Azure-AddServiceDesign` を使用
 

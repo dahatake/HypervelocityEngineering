@@ -14,6 +14,8 @@ Step.2 の Agent Catalog の各 Agent について詳細設計書を作成し、
 - `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）
 - `docs/ai-agent-catalog.md`（Agent 一覧）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-AIAgentDesign-Step3` を使用
 

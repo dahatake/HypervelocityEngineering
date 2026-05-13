@@ -8,6 +8,8 @@
 ## 出力
 - `docs-generated/architecture/overview.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-ArchOverview`
 

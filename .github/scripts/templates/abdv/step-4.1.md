@@ -14,6 +14,8 @@
 ## 出力
 - WAF レビューレポート（`docs/azure/waf-review.md`）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `QA-AzureArchitectureReview` を使用
 

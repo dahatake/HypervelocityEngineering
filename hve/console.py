@@ -1253,12 +1253,12 @@ class Console:
     # ------------------------------------------------------------------
 
     def subagent_started(self, step_id: str, name: str) -> None:
-        """Sub-agent 開始。Level 3 で確定行、Level 1-2 でスピナー更新。"""
+        """Sub-agent 開始。サブタスク作成時に名前を可視化するため Level 1+ で確定行。"""
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
         msg = f"▶ {prefix}Sub-agent: {name}"
-        if self._verbosity >= 3:
+        if self._verbosity >= 1:
             self._print(f"  {msg}")
         else:
             self._update_spinner_msg(msg)
@@ -1287,12 +1287,12 @@ class Console:
             self._update_spinner_msg(msg)
 
     def subagent_selected(self, step_id: str, name: str) -> None:
-        """Agent 選択。Level 3 で確定行、Level 1-2 でスピナー更新。"""
+        """Agent 選択。サブタスクのエージェント名可視化のため Level 1+ で確定行。"""
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
         msg = f"🤖 {prefix}Agent 選択: {name}"
-        if self._verbosity >= 3:
+        if self._verbosity >= 1:
             self._print(f"  {msg}")
         else:
             self._update_spinner_msg(msg)

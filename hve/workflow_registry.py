@@ -123,6 +123,13 @@ class StepDef:
     指定キーは StepDef.fanout_*_keys に含まれている必要がある。
     """
 
+    required_skills: List[str] = field(default_factory=list)
+    """このステップの実行前に存在検証すべき Skill 名。
+
+    例: ["knowledge-management"]
+    空リストは「必須 skill 指定なし」を意味する。
+    """
+
 
 @dataclass
 class WorkflowDef:
@@ -376,7 +383,8 @@ AAD_WEB = WorkflowDef(
         StepDef(id="1", title="画面一覧と遷移図",
                 custom_agent="Arch-UI-List",
                 consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics"],
-                body_template_path="templates/aad-web/step-1.md"),
+                body_template_path="templates/aad-web/step-1.md",
+                output_paths=["docs/catalog/screen-catalog.md"]),
         StepDef(id="2.1", title="画面定義書",
                 custom_agent="Arch-UI-Detail",
                 depends_on=["1"],
@@ -688,6 +696,7 @@ AKM = WorkflowDef(
             depends_on=[],
             # qa/, original-docs/, template/, .github/skills/ は既知 key なし → 成果物参照なし
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             body_template_path="templates/akm/step-1.md",
             fanout_static_keys=_AKM_FANOUT_KEYS,
             additional_prompt_template_path="hve/prompt/fanout/akm/_common.md",
@@ -722,9 +731,12 @@ AQOD = WorkflowDef(
             depends_on=[],
             # original-docs/ は既知 key なし; knowledge/D07-* は knowledge キーでカバー
             consumed_artifacts=["knowledge"],
+            required_skills=["knowledge-lookup"],
             body_template_path="templates/aqod/step-1.md",
             fanout_static_keys=_AQOD_FANOUT_KEYS,
             additional_prompt_template_path="hve/prompt/fanout/aqod/_common.md",
+            # v1.0.4 (TBD-13): fan-out 子ステップが生成する質問票パス
+            output_paths_template=["qa/{key}-original-docs-questionnaire.md"],
         ),
         StepDef(
             id="2",
@@ -732,7 +744,9 @@ AQOD = WorkflowDef(
             custom_agent="QA-DocConsistency",
             depends_on=["1"],
             consumed_artifacts=["knowledge"],
+            required_skills=["knowledge-lookup"],
             body_template_path="templates/aqod/step-2.md",
+            output_paths=["qa/original-docs-cross-questionnaire.md"],
         ),
     ],
 )
@@ -751,7 +765,8 @@ ADOC = WorkflowDef(
         StepDef(id="5", title="アーキテクチャ横断分析（コンテナ）", custom_agent=None, is_container=True),
         StepDef(id="6", title="目的特化ドキュメント（コンテナ）", custom_agent=None, is_container=True),
         # Step.1
-        StepDef(id="1", title="ファイルインベントリ", custom_agent="Doc-FileInventory", depends_on=[], consumed_artifacts=[], body_template_path="templates/adoc/step-1.md"),
+        StepDef(id="1", title="ファイルインベントリ", custom_agent="Doc-FileInventory", depends_on=[], consumed_artifacts=[], body_template_path="templates/adoc/step-1.md",
+                output_paths=["docs-generated/inventory.md"]),
         # Step.2.x — 並列 fork
         StepDef(id="2.1", title="ファイルサマリー（プロダクションコード）", custom_agent="Doc-FileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.1.md"),
         StepDef(id="2.2", title="ファイルサマリー（テストコード）", custom_agent="Doc-TestSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.2.md"),
@@ -760,21 +775,33 @@ ADOC = WorkflowDef(
         StepDef(id="2.5", title="ファイルサマリー（大規模ファイル分割）", custom_agent="Doc-LargeFileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.5.md"),
         # Step.3.x — AND join + 並列 fork
         StepDef(id="3.1", title="コンポーネント設計書", custom_agent="Doc-ComponentDesign", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.1.md"),
-        StepDef(id="3.2", title="API 仕様書", custom_agent="Doc-APISpec", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.2.md"),
-        StepDef(id="3.3", title="データモデル定義書", custom_agent="Doc-DataModel", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.3.md"),
-        StepDef(id="3.4", title="テスト仕様サマリー", custom_agent="Doc-TestSpecSummary", depends_on=["2.2"], consumed_artifacts=[], body_template_path="templates/adoc/step-3.4.md"),
-        StepDef(id="3.5", title="技術的負債一覧", custom_agent="Doc-TechDebt", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.5.md"),
+        StepDef(id="3.2", title="API 仕様書", custom_agent="Doc-APISpec", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.2.md",
+                output_paths=["docs-generated/components/api-spec.md"]),
+        StepDef(id="3.3", title="データモデル定義書", custom_agent="Doc-DataModel", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.3.md",
+                output_paths=["docs-generated/components/data-model.md"]),
+        StepDef(id="3.4", title="テスト仕様サマリー", custom_agent="Doc-TestSpecSummary", depends_on=["2.2"], consumed_artifacts=[], body_template_path="templates/adoc/step-3.4.md",
+                output_paths=["docs-generated/components/test-spec-summary.md"]),
+        StepDef(id="3.5", title="技術的負債一覧", custom_agent="Doc-TechDebt", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.5.md",
+                output_paths=["docs-generated/components/tech-debt.md"]),
         # Step.4 — AND join
-        StepDef(id="4", title="コンポーネントインデックス", custom_agent="Doc-ComponentIndex", depends_on=["3.1", "3.2", "3.3", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-4.md"),
+        StepDef(id="4", title="コンポーネントインデックス", custom_agent="Doc-ComponentIndex", depends_on=["3.1", "3.2", "3.3", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-4.md",
+                output_paths=["docs-generated/component-index.md"]),
         # Step.5.x — 並列 fork
-        StepDef(id="5.1", title="アーキテクチャ概要", custom_agent="Doc-ArchOverview", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.1.md"),
-        StepDef(id="5.2", title="依存関係マップ", custom_agent="Doc-DependencyMap", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.2.md"),
-        StepDef(id="5.3", title="インフラ依存分析", custom_agent="Doc-InfraDeps", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.3.md"),
-        StepDef(id="5.4", title="非機能要件現状分析", custom_agent="Doc-NFRAnalysis", depends_on=["4", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.4.md"),
+        StepDef(id="5.1", title="アーキテクチャ概要", custom_agent="Doc-ArchOverview", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.1.md",
+                output_paths=["docs-generated/architecture/overview.md"]),
+        StepDef(id="5.2", title="依存関係マップ", custom_agent="Doc-DependencyMap", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.2.md",
+                output_paths=["docs-generated/architecture/dependency-map.md"]),
+        StepDef(id="5.3", title="インフラ依存分析", custom_agent="Doc-InfraDeps", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.3.md",
+                output_paths=["docs-generated/architecture/infra-deps.md"]),
+        StepDef(id="5.4", title="非機能要件現状分析", custom_agent="Doc-NFRAnalysis", depends_on=["4", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.4.md",
+                output_paths=["docs-generated/architecture/nfr-analysis.md"]),
         # Step.6.x — 並列 fork
-        StepDef(id="6.1", title="オンボーディングガイド", custom_agent="Doc-Onboarding", depends_on=["5.1", "5.2"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.1.md"),
-        StepDef(id="6.2", title="リファクタリングガイド", custom_agent="Doc-Refactoring", depends_on=["5.2", "5.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.2.md"),
-        StepDef(id="6.3", title="移行アセスメント", custom_agent="Doc-Migration", depends_on=["5.1", "5.3", "5.4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.3.md"),
+        StepDef(id="6.1", title="オンボーディングガイド", custom_agent="Doc-Onboarding", depends_on=["5.1", "5.2"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.1.md",
+                output_paths=["docs-generated/guides/onboarding.md"]),
+        StepDef(id="6.2", title="リファクタリングガイド", custom_agent="Doc-Refactoring", depends_on=["5.2", "5.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.2.md",
+                output_paths=["docs-generated/guides/refactoring.md"]),
+        StepDef(id="6.3", title="移行アセスメント", custom_agent="Doc-Migration", depends_on=["5.1", "5.3", "5.4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.3.md",
+                output_paths=["docs-generated/guides/migration-assessment.md"]),
     ],
 )
 
@@ -801,6 +828,7 @@ ARD = WorkflowDef(
             title="事業分野候補列挙",
             custom_agent="Arch-ARD-BusinessAnalysis-Untargeted",
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             output_paths=["docs/company-business-recommendation.md"],
             body_template_path="templates/ard/step-1.md",
         ),
@@ -810,6 +838,7 @@ ARD = WorkflowDef(
             custom_agent="Arch-ARD-BusinessAnalysis-Untargeted",
             depends_on=["1"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             fanout_parser="business_candidate",
             output_paths_template=["docs/business/{key}-analysis.md"],
             body_template_path="templates/ard/step-1.1.md",
@@ -821,6 +850,7 @@ ARD = WorkflowDef(
             custom_agent="Arch-ARD-BusinessAnalysis-Untargeted",
             depends_on=["1.1"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             output_paths=["docs/company-business-requirement.md"],
             body_template_path="templates/ard/step-1.2.md",
         ),
@@ -832,6 +862,7 @@ ARD = WorkflowDef(
             # 未指定経路では Step 1.2 完了後の skip_fallback で 3.1 にバイパス。
             skip_fallback_deps=["1.2"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             output_paths=["docs/business-requirement.md"],
             body_template_path="templates/ard/step-2.md",
         ),
@@ -842,6 +873,7 @@ ARD = WorkflowDef(
             depends_on=["2"],
             skip_fallback_deps=["1.2"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-skeleton.md"],
             required_input_paths=[
                 "docs/business-requirement.md",
@@ -855,6 +887,7 @@ ARD = WorkflowDef(
             custom_agent="Arch-ARD-UseCaseCatalog",
             depends_on=["3.1"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             fanout_parser="use_case_skeleton",
             output_paths_template=["docs/use-cases/{key}-detail.md"],
             body_template_path="templates/ard/step-3.2.md",
@@ -866,6 +899,7 @@ ARD = WorkflowDef(
             custom_agent="Arch-ARD-UseCaseCatalog",
             depends_on=["3.2"],
             consumed_artifacts=[],
+            required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-catalog.md"],
             body_template_path="templates/ard/step-3.3.md",
         ),

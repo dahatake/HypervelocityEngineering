@@ -15,6 +15,8 @@
 ## 出力
 - `src/batch/{jobId}-{jobNameSlug}/` 配下の本実装コード
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Batch-ServiceCoding` を使用
 

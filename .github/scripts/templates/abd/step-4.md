@@ -12,6 +12,8 @@
 ## 出力
 - `docs/batch/batch-service-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-ServiceCatalog` を使用
 

@@ -8,6 +8,8 @@ API 関連サマリーから API 仕様書を生成する。
 ## 出力
 - `docs-generated/components/api-spec.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-APISpec`
 

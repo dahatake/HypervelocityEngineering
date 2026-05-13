@@ -13,6 +13,8 @@
 ## 出力
 - `docs/catalog/test-strategy.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-TDD-TestStrategy` を使用
 

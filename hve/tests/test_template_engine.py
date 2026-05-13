@@ -13,6 +13,7 @@ from hve.template_engine import (
     _build_additional_section,
     _build_app_id_section,
     _build_completion_instruction,
+    _build_existing_artifact_policy_section,
     _build_job_section,
     _build_qa_review_context_section,
     _build_rg_section,
@@ -27,6 +28,10 @@ from hve.template_engine import (
     resolve_selected_steps,
 )
 from hve.workflow_registry import get_workflow, StepDef, WorkflowDef
+
+
+def _is_shared_template(md_file: Path, templates_dir: Path) -> bool:
+    return md_file.relative_to(templates_dir).parts[0] == "_shared"
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +63,18 @@ class TestLoadTemplate:
         assert result == ""
         captured = capsys.readouterr()
         assert "テンプレートが見つかりません" in captured.out
+
+
+class TestExistingArtifactPolicyTemplate:
+    def test_shared_policy_template_exists(self):
+        content = _load_template("templates/_shared/existing-artifact-policy.md")
+        assert "## 既存成果物がある場合の更新方針" in content
+        assert "再作成して" in content
+
+    def test_build_existing_artifact_policy_section(self):
+        section = _build_existing_artifact_policy_section()
+        assert "メインタスク本体を必ず実行" in section
+        assert "更新なし" in section
 
 
 # ---------------------------------------------------------------------------
@@ -656,6 +673,8 @@ class TestAllTemplatesHaveAdditionalSection:
         templates_dir = _TEMPLATES_BASE / "templates"
         missing = []
         for md_file in sorted(templates_dir.rglob("*.md")):
+            if _is_shared_template(md_file, templates_dir):
+                continue
             content = md_file.read_text(encoding="utf-8")
             if "{additional_section}" not in content:
                 missing.append(str(md_file.relative_to(templates_dir)))
@@ -671,6 +690,83 @@ class TestAllTemplatesHaveAdditionalSection:
             ) or ("完了時に `" in content and ":done` を付与すること" in content):
                 legacy_patterns.append(str(md_file.relative_to(templates_dir)))
         assert not legacy_patterns, f"以下のテンプレートに旧 done 指示が残っています: {legacy_patterns}"
+
+
+class TestExistingArtifactPolicyIntegration:
+    _TARGET_TEMPLATE_DIRS = [
+        "aas",
+        "aad-web",
+        "asdw-web",
+        "abd",
+        "abdv",
+        "aag",
+        "aagd",
+        "akm",
+        "adoc",
+        "aqod",
+    ]
+
+    def test_target_templates_have_existing_artifact_policy_placeholder(self):
+        missing = []
+        for d in self._TARGET_TEMPLATE_DIRS:
+            for md_file in sorted((_TEMPLATES_BASE / "templates" / d).glob("*.md")):
+                content = md_file.read_text(encoding="utf-8")
+                if "{existing_artifact_policy}" not in content:
+                    missing.append(str(md_file.relative_to(_TEMPLATES_BASE / "templates")))
+        assert not missing, (
+            "以下のテンプレートに {existing_artifact_policy} がありません: "
+            f"{missing}"
+        )
+
+    def test_render_template_replaces_existing_artifact_policy_placeholder(self):
+        samples = [
+            ("aas", "templates/aas/step-1.md"),
+            ("aad-web", "templates/aad-web/step-1.md"),
+            ("asdw-web", "templates/asdw-web/step-1.1.md"),
+            ("abd", "templates/abd/step-1.1.md"),
+            ("abdv", "templates/abdv/step-1.1.md"),
+            ("aag", "templates/aag/step-1.md"),
+            ("aagd", "templates/aagd/step-1.md"),
+            ("akm", "templates/akm/step-1.md"),
+            ("adoc", "templates/adoc/step-1.md"),
+            ("aqod", "templates/aqod/step-1.md"),
+        ]
+        for wf_id, template_path in samples:
+            wf = get_workflow(wf_id)
+            body = render_template(
+                template_path,
+                root_issue_num=1,
+                params={"branch": "main"},
+                wf=wf,
+            )
+            assert "{existing_artifact_policy}" not in body
+            assert "## 既存成果物がある場合の更新方針" in body
+
+    def test_yaml_inline_bodies_include_existing_artifact_policy_keywords(self):
+        def _extract_printf_body(content: str, var_name: str) -> str:
+            prefix = f"{var_name}=$(printf '"
+            start = content.find(prefix)
+            assert start != -1, f"{var_name} の printf 開始を検出できませんでした"
+            start += len(prefix)
+            end = content.find("' \\", start)
+            assert end != -1, f"{var_name} の printf 終端を検出できませんでした"
+            return content[start:end]
+
+        repo_root = Path(__file__).resolve().parents[2]
+        workflow_expectations = {
+            ".github/workflows/auto-app-dev-microservice-web-reusable.yml": 2,
+            ".github/workflows/auto-app-detail-design-web-reusable.yml": 2,
+            ".github/workflows/auto-ai-agent-design-reusable.yml": 2,
+            ".github/workflows/auto-ai-agent-dev-reusable.yml": 2,
+        }
+        for rel_path, expected_count in workflow_expectations.items():
+            content = (repo_root / rel_path).read_text(encoding="utf-8")
+            assert content.count("## 既存成果物がある場合の更新方針") == expected_count
+            assert "メインタスク本体を必ず実行する" in content
+            body_s11 = _extract_printf_body(content, "BODY_S11")
+            body_s12 = _extract_printf_body(content, "BODY_S12")
+            assert "## 既存成果物がある場合の更新方針" in body_s11
+            assert "## 既存成果物がある場合の更新方針" in body_s12
 
 
 # ---------------------------------------------------------------------------
@@ -770,6 +866,8 @@ class TestQaReviewContextSection:
         templates_dir = _TEMPLATES_BASE / "templates"
         missing = []
         for md_file in sorted(templates_dir.rglob("*.md")):
+            if _is_shared_template(md_file, templates_dir):
+                continue
             rel = str(md_file.relative_to(_TEMPLATES_BASE))  # e.g. "templates/aas/step-1.md"
             wf_id = md_file.parts[-2]  # e.g. "aas"
             try:
@@ -1295,14 +1393,20 @@ class TestAgenticRetrievalConstants:
         assert snapshot["foundry_sku_fallback_policy"] == "standard_allowed"
 
     def test_backward_compat_load_state_without_agentic_fields(self):
-        """既存 state.json（新フィールドなし）を読み込んでもクラッシュしないこと。"""
+        """schema 2.0 state.json でも、config_snapshot 内に Agentic Retrieval 関連
+        フィールドが無い場合に `.get(key, default)` で安全にデフォルト値を取得できること。
+
+        Phase 1 (Resume 2-layer txn): schema_version は 2.0 が必須。旧 1.0 は ValueError で
+        拒否されるため、本テストでは schema 2.0 を使って config_snapshot だけが
+        部分的に欠落するケースを検証する。
+        """
         import json
         import tempfile
         from pathlib import Path
         from hve.run_state import RunState
-        # 新フィールドを含まない古い state.json を模倣
+        # schema 2.0 を使い、Agentic Retrieval フィールドのみ意図的に欠落
         old_state = {
-            "schema_version": "1.0",
+            "schema_version": "2.0",
             "run_id": "20260101T000000-abc123",
             "session_name": "test session",
             "workflow_id": "aad-web",

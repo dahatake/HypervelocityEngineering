@@ -49,3 +49,44 @@ test_cases:
       - type: action
         detail: "knowledge/ 配下の管理ファイル更新であり、knowledge-management Skill の範囲内。ステータス管理テンプレートを参照して更新する"
     reason: "knowledge/ 配下の管理ファイル更新であり knowledge-management の適用範囲"
+
+  # --- REQ テーブル形式テンプレート（§7 / §11.6 v2.0）の構造検証 ---
+  - id: req-table-format-confirmed
+    input: "qa/ から Confirmed 回答を knowledge/D15-*.md の §2 に書き起こしたい。フォーマットは？"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "§2 は REQ テーブル形式で記述する。各 REQ は独立サブセクション (### REQ-D15-001: ...) + 必須行（要求ID/要求名/分類/優先度/状態/要求内容/詳細条件/受入基準(AC)/非対象/根拠/トレーサビリティ）を持つテーブル。REQ-ID は Confirmed=001 番台。散文の箇条書きや QA 回答セルの貼り付けは禁止"
+    reason: "§7 / §11.6 v2.0 REQ テーブルフォーマット遵守"
+
+  - id: req-table-format-tentative
+    input: "Tentative（推論補完）の項目を §3 に書きたい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Tentative も REQ テーブル形式（REQ-D{NN}-101 番台、状態列に ⚠️ Tentative、推論根拠と要確認アクション行を必須化）。優先度は既定 Should"
+    reason: "§7 / §11.6 v2.0 Tentative REQ 表現規約"
+
+  - id: req-merge-same-topic-same-value
+    input: "qa/Issue-1666.md No.25 と qa/Issue-1679.md No.36 が両方とも「KPI更新頻度=日次」で Confirmed。どう書く？"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "§11.6 同類項目マージルール: 主題キーワード一致+採用値一致+状態一致の AND 条件を満たすため 1 REQ にマージ。根拠行に両出典をセミコロン区切りで列挙し、ChangeLog の該当 REQ-ID サブセクションへ「新規」「マージ」を日付昇順で記録"
+    reason: "§11.6 同類統合ルール"
+
+  - id: changelog-per-req-subsection
+    input: "knowledge/D01-*-ChangeLog.md のフォーマット構造を教えて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "冒頭メタブロック + 全体更新履歴テーブル + 要求項目別ログ（### REQ-D01-XXX ごとのサブセクション。各サブ内は日時/イベント種別/データソース/出典/変更内容の表で日付昇順）+ 付録 A（原文保全、統合先 REQ-ID 列付き）"
+    reason: "§7 ChangeLog テンプレート v2.0 構造"
+
+  - id: unknown-not-as-req
+    input: "Unknown 状態の質問を REQ 化すべき？"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Unknown は REQ 化しない。従来通り §4（未確定事項）テーブルで管理する。捏造禁止の観点から placeholder REQ 起票は不可"
+    reason: "§3 状態判定 v2.0 Unknown ハンドリング"

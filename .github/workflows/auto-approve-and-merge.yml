@@ -340,16 +340,18 @@ jobs:
           echo "has_validation=false" >> "${GITHUB_OUTPUT}"
           echo "⚠️ PR body・コメントに検証実施記録（marker/見出し/箇条書き）が見つかりません。"
 
-          # 冪等性チェック: 既に不足通知コメントが投稿済みならスキップ
+          # 冪等性チェック: 同一 HEAD SHA での不足通知コメントが既に投稿済みならスキップ
+          # failed マーカーと同様に HEAD SHA 単位で判定し、新コミット push 時は再評価する
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
           existing_count=$(echo "${pr_comments_all}" \
-            | jq --arg marker "${VALIDATION_MARKER}" \
-              '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+            | jq --arg marker "${VALIDATION_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
           if [ "${existing_count:-0}" -gt 0 ]; then
-            echo "検証不足通知コメントは既に投稿済みです。スキップします。"
+            echo "同一 HEAD SHA (${HEAD_SHA}) で検証不足通知コメントは既に投稿済みです。スキップします。"
             exit 0
           fi
 
-          # 不足通知コメントを投稿
+          # 不足通知コメントを投稿（末尾に HEAD SHA フッターを付与して冪等化）
           comment_body="$(
             {
               printf '%s\n' "${VALIDATION_MARKER}"
@@ -378,10 +380,12 @@ jobs:
               printf '%s\n' "### 再実行手順"
               printf '\n'
               printf '%s\n' "1. PR body またはコメントへ検証実施記録を追記する"
-              printf '%s\n' "2. \`auto-approve-ready\` ラベルを一度外す"
-              printf '%s\n' "3. \`auto-approve-ready\` ラベルを再付与してワークフローを再実行する"
+              printf '%s\n' "2. 新しいコミットを push すると \`synchronize\` イベントで自動的に再評価されます"
+              printf '%s\n' "3. または \`auto-approve-ready\` ラベルを一度外して再付与することでも再実行できます"
               printf '\n'
               printf '%s\n' "> ℹ️ このコメントは \`auto-approve-and-merge.yml\` によって自動投稿されました。"
+              printf '\n'
+              printf '%s\n' "${SHA_MARKER}"
             }
           )"
           gh pr comment "${PR_NUMBER}" \
@@ -389,9 +393,126 @@ jobs:
             --body "${comment_body}" || echo "WARNING: 検証不足通知コメントの投稿に失敗しました。"
           echo "検証不足通知コメントを PR #${PR_NUMBER} に投稿しました。"
 
+      - name: QA Reference チェック結果確認（auto-approve 前提条件）
+        # verify-qa-reference-in-pr.yml が required モードで FAIL を出した場合に自動 Approve/Merge をスキップする。
+        # warning モードの FAIL またはマーカーコメントが存在しない場合は後方互換のためスキップしない。
+        id: check-qa-reference
+        if: steps.guard.outputs.already_done != 'true'
+        run: |
+          set -euo pipefail
+          QA_REF_MARKER='<!-- auto-approve-qa-reference-missing -->'
+          QA_REF_RESULT_MARKER='<!-- qa-reference-check-result -->'
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+          REQUIRED_MODE_PATTERN='モード: `required`'
+          FAIL_PATTERN='❌ FAIL'
+
+          # PR コメントを全件取得（API エラーとコメント0件を区別する）
+          api_err_file=$(mktemp)
+          if ! pr_comments_raw=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>"${api_err_file}"); then
+            err_msg=$(cat "${api_err_file}" 2>/dev/null || echo "unknown error")
+            rm -f "${api_err_file}"
+            echo "::warning::PR コメントの取得に失敗しました: ${err_msg}。QA Reference チェックをスキップします（qa_reference_passed=true）。"
+            echo "qa_reference_passed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          rm -f "${api_err_file}"
+          # コメント0件は正常（warn 不要）
+          pr_comments=$(printf '%s' "${pr_comments_raw}" | jq -s '.' 2>/dev/null || echo '[]')
+
+          # <!-- qa-reference-check-result --> マーカー付きコメントを検索（最新1件、updated_at 付き）
+          qa_ref_data=$(printf '%s' "${pr_comments}" \
+            | jq -c --arg marker "${QA_REF_RESULT_MARKER}" \
+              '[.[] | select(.body | contains($marker))] | last // null' \
+            2>/dev/null || echo 'null')
+          qa_ref_comment=$(printf '%s' "${qa_ref_data}" | jq -r '.body // ""' 2>/dev/null || echo '')
+          qa_ref_updated_at=$(printf '%s' "${qa_ref_data}" | jq -r '.updated_at // ""' 2>/dev/null || echo '')
+
+          qa_reference_passed="true"
+          if [ -n "${qa_ref_comment}" ]; then
+            # required モード かつ FAIL を含む場合のみ詳細チェックへ
+            if printf '%s' "${qa_ref_comment}" | grep -qF "${REQUIRED_MODE_PATTERN}" && \
+               printf '%s' "${qa_ref_comment}" | grep -qF "${FAIL_PATTERN}"; then
+
+              # verify-qa-reference-in-pr.yml は PASS 時にコメントを更新しないため、
+              # FAIL コメントの updated_at が HEAD コミット日時より前なら「スタール」として PASS 扱いにする
+              stale="false"
+              if [ -n "${qa_ref_updated_at}" ]; then
+                head_commit_date=$(gh api "/repos/${REPO}/commits/${HEAD_SHA}" \
+                  --jq '.commit.committer.date // ""' 2>/dev/null || echo '')
+                if [ -n "${head_commit_date}" ]; then
+                  qa_updated_epoch=$(date -d "${qa_ref_updated_at}" +%s 2>/dev/null || echo '')
+                  head_commit_epoch=$(date -d "${head_commit_date}" +%s 2>/dev/null || echo '')
+                  if [ -n "${qa_updated_epoch}" ] && [ -n "${head_commit_epoch}" ] && \
+                     [ "${qa_updated_epoch}" -lt "${head_commit_epoch}" ]; then
+                    stale="true"
+                    echo "::notice::QA Reference FAIL コメント（${qa_ref_updated_at}）は HEAD コミット（${head_commit_date}）より前の結果です。スタールとして扱います。"
+                  fi
+                fi
+              fi
+
+              if [ "${stale}" = "false" ]; then
+                qa_reference_passed="false"
+              fi
+            fi
+          fi
+
+          echo "qa_reference_passed=${qa_reference_passed}" >> "${GITHUB_OUTPUT}"
+
+          if [ "${qa_reference_passed}" = "true" ]; then
+            echo "✅ QA Reference チェック: PASS または warning モード FAIL（スキップなし）"
+            exit 0
+          fi
+
+          echo "⚠️ QA Reference チェック: required モードで FAIL を検出。Approve/Merge をスキップします。"
+
+          # 冪等性チェック: 同一 SHA の案内コメントが既に投稿済みならスキップ
+          existing_count=0
+          if ! existing_count=$(echo "${pr_comments}" \
+            | jq --arg marker "${QA_REF_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' \
+            2>/dev/null); then
+            echo "::warning::冪等性チェック（jq）に失敗しました。重複投稿を避けるため案内コメントをスキップします。"
+            exit 0
+          fi
+          if [ "${existing_count:-0}" -gt 0 ]; then
+            echo "QA Reference 案内コメントは同一 SHA で既に投稿済みです。スキップします。"
+            exit 0
+          fi
+
+          # 案内コメントを投稿（SHA フッター付き）
+          comment_body="$(
+            {
+              printf '%s\n' "${QA_REF_MARKER}"
+              printf '\n'
+              printf '%s\n' '## ⚠️ QA Reference チェックが required モードで失敗しています'
+              printf '\n'
+              printf '%s\n' '`verify-qa-reference-in-pr.yml` が **`required` モード** で **❌ FAIL** を検出したため、自動 Approve/Merge をスキップしました。'
+              printf '\n'
+              printf '%s\n' '### 対処方法'
+              printf '\n'
+              printf '%s\n' '1. PR 本文の `<!-- qa-reference-start -->` ～ `<!-- qa-reference-end -->` セクションに、参照した QA ファイルのパス（`qa/...`）を記載してください'
+              printf '%s\n' '2. QA 参照が不要な場合は `参照なし: 理由 = <理由>` と明記してください'
+              printf '%s\n' '3. `verify-qa-reference-in-pr.yml` のチェックが PASS になったことを確認してください'
+              printf '\n'
+              printf '%s\n' '### 再実行手順'
+              printf '\n'
+              printf '%s\n' '1. 上記対処を PR 本文に反映する'
+              printf '%s\n' '2. `auto-approve-ready` ラベルを一度外す'
+              printf '%s\n' '3. `auto-approve-ready` ラベルを再付与してワークフローを再実行する'
+              printf '\n'
+              printf '%s\n' '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。'
+              printf '%s\n' "${SHA_MARKER}"
+            }
+          )"
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body "${comment_body}" || echo "WARNING: QA Reference 案内コメントの投稿に失敗しました。"
+          echo "QA Reference 案内コメントを PR #${PR_NUMBER} に投稿しました。"
+
       - name: PR を Approve
         id: approve
-        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -410,7 +531,7 @@ jobs:
 
       - name: Auto-merge を有効化（squash）
         id: merge
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -438,7 +559,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}

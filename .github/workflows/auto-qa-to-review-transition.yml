@@ -611,15 +611,228 @@ jobs:
             exit 0
           fi
 
+          # 検証マーカーチェック（auto-approve-ready 付与前）
+          # auto-approve-and-merge.yml の check-validation ステップと同じ判定パターンを使用
+          VALIDATION_MISSING_MARKER='<!-- auto-qa-to-review-validation-missing -->'
+          VALIDATION_CONFIRMED_MARKER='<!-- validation-confirmed -->'
+          HEADING_REGEX='^#{1,6}[[:space:]]+.*(検証|Validation|Verification)'
+          BULLET_REGEX='^[[:space:]*>-]*(\*\*|__)?(検証|Validation|Verification)(\*\*|__)?[[:space:]]*[:：]'
+          LEGACY_REGEX='(^#{1,6}[[:space:]]+|^)(Validation|検証)'
+
+          # PR body を取得
+          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '.body // ""' 2>/dev/null || echo '')
+
+          # PR コメントを取得（検証不足通知コメントは判定対象から除外）
+          pr_comments_all=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+          pr_comments=$(echo "${pr_comments_all}" \
+            | jq --arg marker "${VALIDATION_MISSING_MARKER}" '[.[] | select(.body | contains($marker) | not)]' \
+            2>/dev/null || echo '[]')
+
+          has_validation="false"
+          combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null || echo '')")
+
+          # 1) HTML コメントマーカー方式（最優先）
+          if printf '%s' "${combined_text}" | grep -qiF "${VALIDATION_CONFIRMED_MARKER}"; then
+            has_validation="true"
+          # 2) 見出し方式（PR body）
+          elif printf '%s' "${pr_body}" | grep -qiE "${HEADING_REGEX}"; then
+            has_validation="true"
+          # 3) 箇条書き/強調方式（PR body）
+          elif printf '%s' "${pr_body}" | grep -qiE "${BULLET_REGEX}"; then
+            has_validation="true"
+          # 互換フォールバック: 旧判定（行頭 Validation/検証、PR body）
+          elif printf '%s' "${pr_body}" | grep -qiE "${LEGACY_REGEX}"; then
+            has_validation="true"
+          # 4) 見出し方式（PR コメント）
+          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE "${HEADING_REGEX}"; then
+            has_validation="true"
+          # 5) 箇条書き/強調方式（PR コメント）
+          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE "${BULLET_REGEX}"; then
+            has_validation="true"
+          # 互換フォールバック: 旧判定（行頭 Validation/検証、PR コメント）
+          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
+              | grep -qiE "${LEGACY_REGEX}"; then
+            has_validation="true"
+          fi
+
+          if [ "${has_validation}" = "false" ]; then
+            echo "⚠️ PR body・コメントに検証実施記録（marker/見出し/箇条書き）が見つかりません。"
+
+            # issue_comment 経路では PR body 自動追記もスキップ（競合回避）
+            # （auto-qa-default-answer.yml 投稿直後に発火するため、Copilot のメインタスク完了前に
+            #   チェックが走り誤検出する競合を回避する。synchronize 経路でのみ実施）
+            if [ "${EVENT_NAME}" = "issue_comment" ]; then
+              echo "ℹ️ issue_comment 経路のため処理をスキップします。"
+              echo "   次回 synchronize イベント（Copilot の commit push 後）で再評価します。"
+              exit 0
+            fi
+
+            # PR 変更ファイルを取得してコード変更の有無を判定
+            # API 失敗・空結果はフェイルクローズ（「不明」扱いで警告コメント経路へ）
+            pr_files_rc=0
+            pr_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+              --paginate --jq '.[].filename' 2>/dev/null) || pr_files_rc=$?
+            has_code_changes="false"
+
+            if [ "${pr_files_rc}" -ne 0 ] || [ -z "${pr_files}" ]; then
+              if [ "${pr_files_rc}" -ne 0 ]; then
+                echo "⚠️ PR 変更ファイル一覧の取得に失敗しました（rc=${pr_files_rc}）。安全のためコード変更ありと見なします（フェイルクローズ）。"
+              else
+                echo "⚠️ PR 変更ファイル一覧が空です（rc=0 / files=空）。安全のためコード変更ありと見なします（フェイルクローズ）。"
+              fi
+              has_code_changes="true"
+            else
+              # 実行系拡張子ブラックリスト
+              EXT_REGEX='\.(py|sh|bash|zsh|yml|yaml|json|toml|ini|cfg|js|ts|tsx|jsx|mjs|cjs|go|rs|java|kt|rb|php|cs|cpp|c|h|hpp)$'
+              # ビルド設定ファイルのファイル名ブラックリスト
+              FILE_REGEX='(^|/)(Dockerfile|Makefile|requirements\.txt|pyproject\.toml|package\.json|package-lock\.json|yarn\.lock|poetry\.lock|Pipfile|Pipfile\.lock|go\.mod|go\.sum)$'
+              if printf '%s\n' "${pr_files}" | grep -qiE "${EXT_REGEX}"; then
+                has_code_changes="true"
+              elif printf '%s\n' "${pr_files}" | grep -qiE "${FILE_REGEX}"; then
+                has_code_changes="true"
+              fi
+            fi
+
+            if [ "${has_code_changes}" = "true" ]; then
+              # コード変更あり: 従来通り警告コメントを投稿して exit
+
+              # 冪等性チェック: 既に検証不足通知コメントが投稿済みならスキップ
+              existing_validation_comment=$(echo "${pr_comments_all}" \
+                | jq --arg marker "${VALIDATION_MISSING_MARKER}" \
+                  '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+
+              if [ "${existing_validation_comment:-0}" -gt 0 ]; then
+                echo "検証不足通知コメントは既に投稿済みです。スキップします。"
+                exit 0
+              fi
+
+              # @copilot メンションで検証追記を指示するコメントを投稿
+              MISSING_COMMENT="$(
+                {
+                  printf '%s\n' "${VALIDATION_MISSING_MARKER}"
+                  printf '\n'
+                  printf '%s\n' "## ⚠️ 検証実施記録が確認できません（auto-approve-ready 付与保留）"
+                  printf '\n'
+                  printf '%s\n' "@copilot PR body に \`## 検証結果\` セクションと \`<!-- validation-confirmed -->\` マーカーを追記してください。"
+                  printf '\n'
+                  printf '%s\n' "PR body またはコメントに検証実施記録（\`validation-confirmed\` マーカー / \`Validation\`・\`検証\` 見出し / \`検証:\` 形式）が見つからないため、\`auto-approve-ready\` ラベルの付与を保留しました。"
+                  printf '\n'
+                  printf '%s\n' "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。"
+                  printf '\n'
+                  printf '%s\n' "### 対処方法"
+                  printf '\n'
+                  printf '%s\n' "以下いずれかを PR body またはコメントに追記してください（推奨順）:"
+                  printf '\n'
+                  printf '%s\n' "1. HTML コメントマーカー（推奨）"
+                  printf '%s\n' "   - \`<!-- validation-confirmed -->\`"
+                  printf '%s\n' "2. 見出し方式"
+                  printf '%s\n' "   - \`## 検証\`"
+                  printf '%s\n' "   - \`## 検証結果\`"
+                  printf '%s\n' "   - \`## Validation\`"
+                  printf '%s\n' "3. 箇条書き / 強調方式"
+                  printf '%s\n' "   - \`- 検証: pytest 実行済\`"
+                  printf '%s\n' "   - \`**検証**: ビルド成功\`"
+                  printf '%s\n' "   - \`> Validation: lint OK\`"
+                  printf '\n'
+                  printf '%s\n' "> ℹ️ このコメントは \`auto-qa-to-review-transition.yml\` によって自動投稿されました。"
+                }
+              )"
+              gh pr comment "${PR_NUMBER}" \
+                --repo "${REPO}" \
+                --body "${MISSING_COMMENT}" || echo "WARNING: 検証不足通知コメントの投稿に失敗しました。"
+              echo "検証不足通知コメントを PR #${PR_NUMBER} に投稿しました。auto-approve-ready 付与をスキップします。"
+              exit 0
+            fi
+
+            # コード変更なし: PR body に検証セクションを自動追記
+            AUTO_APPENDED_MARKER='<!-- validation-auto-appended -->'
+
+            # PR body 冪等性チェック: ## 検証 見出しの存在を基準にする（通知コメントとは独立）
+            current_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+              --jq '.body // ""' 2>/dev/null || echo '')
+
+            if printf '%s' "${current_body}" | grep -qiE "${HEADING_REGEX}"; then
+              echo "ℹ️ PR body に既に検証セクションが存在します。PR body 追記をスキップします。"
+            else
+              VALIDATION_APPEND="$(printf '\n---\n\n## 検証\n\n%s\n%s\n\n<!-- validation-confirmed -->\n<!-- validation-auto-appended-by: auto-qa-to-review-transition.yml -->\n' \
+                '該当なし: 理由 = PR 差分にコード変更（実行系ファイル）が含まれません。差分は文書・QA ファイルのみです。' \
+                '代替 = PR 差分ファイル一覧の確認（実行系拡張子・ビルド設定ファイルなし）')"
+              NEW_BODY="${current_body}${VALIDATION_APPEND}"
+              new_body_json=$(jq -n --arg body "${NEW_BODY}" '{"body": $body}')
+              echo "${new_body_json}" | gh api --method PATCH "/repos/${REPO}/pulls/${PR_NUMBER}" \
+                --input - 2>/dev/null \
+                || echo "WARNING: PR body の更新に失敗しました。処理を継続します。"
+              echo "✅ PR body に検証セクションを自動追記しました。"
+            fi
+
+            # 通知コメント冪等性チェック: コメントマーカーで判定（PR body 追記とは独立）
+            existing_appended=$(echo "${pr_comments_all}" \
+              | jq --arg marker "${AUTO_APPENDED_MARKER}" \
+                '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+
+            if [ "${existing_appended:-0}" -le 0 ]; then
+              # 通知コメントを投稿
+              APPENDED_COMMENT="$(
+                {
+                  printf '%s\n' "${AUTO_APPENDED_MARKER}"
+                  printf '\n'
+                  printf '%s\n' "## ℹ️ 検証セクションを自動追記しました"
+                  printf '\n'
+                  printf '%s\n' "PR 差分にコード変更（実行系ファイル）が含まれないため、\`auto-qa-to-review-transition.yml\` が PR body 末尾に検証セクション（該当なし + 代替）を自動追記しました。"
+                  printf '\n'
+                  printf '%s\n' "- 📋 **判定根拠**: 変更ファイル一覧に実行系拡張子・ビルド設定ファイルなし"
+                  printf '%s\n' "- 🔍 **対象拡張子（ブラックリスト）**: \`.py\`/\`.sh\`/\`.yml\`/\`.json\`/\`.ts\`/\`.go\`/\`.rs\` 等、および \`Dockerfile\`/\`Makefile\`/\`requirements.txt\` 等"
+                  printf '%s\n' "- 📝 **追記マーカー**: \`<!-- validation-auto-appended-by: auto-qa-to-review-transition.yml -->\`"
+                  printf '\n'
+                  printf '%s\n' "この自動追記は §0 要件「検証実施／できない場合は理由と代替を明記」を満たすためのフェイルセーフです。"
+                  printf '\n'
+                  printf '%s\n' "> ℹ️ このコメントは \`auto-qa-to-review-transition.yml\` によって自動投稿されました。"
+                }
+              )"
+              gh pr comment "${PR_NUMBER}" \
+                --repo "${REPO}" \
+                --body "${APPENDED_COMMENT}" || echo "WARNING: 通知コメントの投稿に失敗しました。処理を継続します。"
+              echo "✅ 通知コメントを投稿しました。"
+            else
+              echo "ℹ️ 検証セクション自動追記済みコメントが既に存在します。スキップします。"
+            fi
+
+            echo "✅ コード変更なし確認。auto-approve-ready ラベルの付与を継続します。"
+          fi
+
+          echo "✅ PR body/コメントに検証実施記録を確認しました。auto-approve-ready ラベルを付与します。"
+
           # 紐づく Issue に auto-context-review ラベルがなく、auto-merge 有効の場合のみ直接遷移
           echo "Issue に auto-context-review ラベルがなく、auto-merge が有効なため直接 auto-approve-ready に遷移します。"
+
+          # draft → ready_for_review に遷移（auto-approve-and-merge.yml の !draft 条件を満たすため）
+          IS_DRAFT=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.draft' 2>/dev/null || echo 'false')
+          DRAFT_TRANSITIONED="false"
+          if [ "${IS_DRAFT}" = "true" ]; then
+            echo "PR は draft 状態です。ready_for_review に遷移します。"
+            if gh pr ready "${PR_NUMBER}" --repo "${REPO}" 2>/dev/null; then
+              echo "✅ PR を draft → ready_for_review に遷移しました。"
+              DRAFT_TRANSITIONED="true"
+            else
+              echo "WARNING: gh pr ready の実行に失敗しました。処理を継続します。"
+            fi
+          fi
+
           gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-approve-ready"
-          COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s' \
+          DRAFT_NOTE=""
+          if [ "${DRAFT_TRANSITIONED}" = "true" ]; then
+            DRAFT_NOTE=$(printf '\n- 📝 **draft → ready_for_review に遷移しました**（`auto-approve-and-merge.yml` の起動条件を満たすため）')
+          fi
+          COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n%s\n\n%s' \
             '<!-- qa-to-approve-direct-done -->' \
             '## 🔄 QA → Approve 直接遷移（レビューなしパス）' \
             'QA 完了を検知しました。Issue にレビュー設定がなく、`auto-merge: true` のため `auto-approve-ready` ラベルを直接 PR に付与しました。' \
             "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
-            '- 🔍 **判定理由**: Issue に auto-context-review ラベルなし + <!-- auto-merge: true -->' \
+            "- 🔍 **判定理由**: Issue に auto-context-review ラベルなし + \`auto-merge: true\`${DRAFT_NOTE}" \
             '> ℹ️ このコメントは `auto-qa-to-review-transition.yml` によって自動投稿されました。')
           gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${COMMENT}"
           echo "✅ auto-approve-ready ラベルを PR に付与しました（レビューなしパス）。"

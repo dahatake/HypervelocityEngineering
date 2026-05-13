@@ -11,6 +11,8 @@
 ## 出力
 - `docs/batch/batch-monitoring-design.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-MonitoringDesign` を使用
 

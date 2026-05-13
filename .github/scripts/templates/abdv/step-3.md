@@ -16,6 +16,8 @@
 - CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）
 - `infra/azure/batch/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Batch-FunctionsDeploy` を使用
 

@@ -10,6 +10,8 @@
 ## 出力
 - `docs/catalog/service-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Microservice-ServiceIdentify` を使用
 

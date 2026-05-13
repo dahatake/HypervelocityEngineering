@@ -8,6 +8,8 @@
 ## 出力
 - `docs-generated/components/test-spec-summary.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-TestSpecSummary`
 

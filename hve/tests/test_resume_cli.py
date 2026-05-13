@@ -275,7 +275,10 @@ class TestCmdRename(unittest.TestCase):
 class TestCmdDelete(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        self.work_dir = Path(self._tmp.name)
+        # work_dir.parent に archive_dir が作られる仕様なので、独立した親ディレクトリ
+        # 配下に work_dir/runs を作って他テストとの干渉を避ける（v1.0.3 修正）
+        self.work_dir = Path(self._tmp.name) / "runs"
+        self.work_dir.mkdir(parents=True)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -338,6 +341,10 @@ class TestCmdDelete(unittest.TestCase):
             async def stop(self):
                 return None
 
+            async def get_session_metadata(self, sid: str):
+                # 存在するとして仕立てる（truthy な object）
+                return object()
+
             async def delete_session(self, sid: str) -> None:
                 deleted_ids.append(sid)
 
@@ -361,6 +368,43 @@ class TestCmdDelete(unittest.TestCase):
         for sid in deleted_ids:
             self.assertTrue(sid.startswith(DEFAULT_SESSION_ID_PREFIX))
 
+    def test_delete_archives_journal_with_end_record(self) -> None:
+        """Critical #1 (v1.0.2): cmd_delete 後、journal が archive へ移動され
+        begin + end のペアが揃っていることを検証する。"""
+        _make_state(
+            self.work_dir,
+            run_id="20260507T120000-archtest",
+            selected=["1"],
+            completed=["1"],
+        )
+        archive_dir = self.work_dir.parent / "journal-archive"
+        args = _ns(
+            work_dir=str(self.work_dir),
+            run_id="20260507T120000-archtest",
+            hard=False,  # SDK 経由は使わない（archive 検証だけが目的）
+            yes=True,
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = resume_cli.cmd_delete(args)
+        self.assertEqual(rc, 0)
+        # run_dir は消えている
+        self.assertFalse((self.work_dir / "20260507T120000-archtest").exists())
+        # archive_dir に begin + end が揃った journal がある
+        self.assertTrue(archive_dir.exists())
+        archives = list(archive_dir.glob("20260507T120000-archtest-*.jsonl"))
+        self.assertEqual(len(archives), 1)
+        import json as _json
+        records = []
+        with archives[0].open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(_json.loads(line))
+        kinds = [r["kind"] for r in records]
+        self.assertIn("delete-hard.begin", kinds)
+        self.assertIn("delete-hard.end", kinds)
+
     def test_hard_delete_skips_non_hve_prefix_session_id(self) -> None:
         """安全性ガード: hve prefix で始まらない session_id は削除しない。"""
         state = _make_state(self.work_dir, run_id="20260507T120000-del004")
@@ -376,6 +420,9 @@ class TestCmdDelete(unittest.TestCase):
 
             async def stop(self):
                 return None
+
+            async def get_session_metadata(self, sid: str):  # pragma: no cover
+                return object()
 
             async def delete_session(self, sid: str) -> None:  # pragma: no cover - 呼ばれてはいけない
                 deleted_ids.append(sid)

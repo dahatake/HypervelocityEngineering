@@ -13,6 +13,8 @@
 ## 出力
 - 整合性チェックレポート（`docs/azure/dependency-review.md`）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `QA-AzureDependencyReview` を使用
 

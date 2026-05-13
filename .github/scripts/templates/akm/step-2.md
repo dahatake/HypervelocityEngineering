@@ -27,6 +27,8 @@ AKM Step 1 (fan-out 21 並列) で生成された `knowledge/D01〜D21-*.md` 全
 1. レビューレポート（合格判定: ✅ PASS / ❌ FAIL + 観点別の指摘）
 2. `knowledge/business-requirement-document-status.md` 更新（観点別の整合性ステータス追記）
 
+{existing_artifact_policy}
+
 ## 並列実行ルール
 
 - 本ステップは Step 1 完了後の単一ジョブ。並列ではない。

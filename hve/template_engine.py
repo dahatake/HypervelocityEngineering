@@ -29,6 +29,7 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
+_EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH = "templates/_shared/existing-artifact-policy.md"
 
 
 def _get_default_akm_target_files(sources) -> str:
@@ -405,7 +406,7 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
 
     if "force_refresh" in wf.params:
         params["force_refresh"] = _prompt_yes_no(
-            "既存の status.md を完全に再生成する？", default=True
+            "既存 knowledge/ 出力を完全に再生成する？", default=False
         )
     if "custom_source_dir" in wf.params:
         params["custom_source_dir"] = _prompt(
@@ -509,6 +510,11 @@ def _load_template(template_path: str) -> str:
         print(f"  ⚠️ テンプレートが見つかりません: {template_path}", flush=True)
         return ""
     return full_path.read_text(encoding="utf-8")
+
+
+def _build_existing_artifact_policy_section() -> str:
+    """既存成果物更新方針セクションを返す。"""
+    return _load_template(_EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH).strip()
 
 
 def _resolve_app_ids(params: dict) -> list:
@@ -822,6 +828,11 @@ def render_template(
 
     body = body.replace("{root_ref}", root_ref)
     body = body.replace("{additional_section}", qa_review_section + additional_section)
+    if "{existing_artifact_policy}" in body:
+        body = body.replace(
+            "{existing_artifact_policy}",
+            _build_existing_artifact_policy_section(),
+        )
     body = body.replace(
         "{completion_instruction}",
         _build_completion_instruction(wf.label_prefix, execution_mode),
@@ -867,7 +878,7 @@ def render_template(
     )
     body = body.replace(
         "{akm_force_refresh}",
-        str(params.get("force_refresh", True)).lower(),
+        str(params.get("force_refresh", False)).lower(),
     )
     body = body.replace("{akm_custom_source_dir}", params.get("custom_source_dir", ""))
 

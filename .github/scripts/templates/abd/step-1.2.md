@@ -11,6 +11,8 @@
 ## 出力
 - `docs/batch/batch-data-source-analysis.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-DataSourceAnalysis` を使用
 

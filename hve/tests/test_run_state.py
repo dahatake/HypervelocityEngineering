@@ -242,8 +242,10 @@ class TestRunStateIO(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             RunState.load("nonexistent-run-id", work_dir=self.work_dir)
 
-    def test_default_runs_dir_is_work_runs(self) -> None:
-        self.assertEqual(DEFAULT_RUNS_DIR, Path("work") / "runs")
+    def test_default_runs_dir_is_session_state_runs(self) -> None:
+        # DEFAULT_RUNS_DIR は <repo-root>/session-state/runs を指す（CWD 非依存）
+        from run_state import _resolve_repo_root
+        self.assertEqual(DEFAULT_RUNS_DIR, _resolve_repo_root() / "session-state" / "runs")
 
 
 # ---------------------------------------------------------------------------

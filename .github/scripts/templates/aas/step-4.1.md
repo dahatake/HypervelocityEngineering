@@ -10,6 +10,8 @@
 ## 出力
 - `docs/catalog/data-model.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-DataModeling` を使用
 

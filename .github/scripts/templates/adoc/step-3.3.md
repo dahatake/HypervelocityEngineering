@@ -8,6 +8,8 @@
 ## 出力
 - `docs-generated/components/data-model.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-DataModel`
 

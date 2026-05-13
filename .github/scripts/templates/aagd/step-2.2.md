@@ -12,6 +12,8 @@ TDD RED フェーズ: Agent テスト仕様書（`docs/test-specs/{agentId}-test
 ## 出力
 - `test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（テストコードのみ）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Microservice-Azure-AgentTestCoding` を使用
 

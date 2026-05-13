@@ -14,6 +14,8 @@ CI/CD ファイルをファイル単位で要約する。
 ## 出力
 - `docs-generated/files/{relative-path}.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-CICDSummary`
 

@@ -16,6 +16,8 @@
 ## 出力
 - `docs/azure/azure-architecture-review-report.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `QA-AzureArchitectureReview` を使用
 

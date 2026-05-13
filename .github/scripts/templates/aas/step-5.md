@@ -12,6 +12,8 @@
 ## 出力
 - `docs/catalog/data-catalog.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-DataCatalog` を使用
 

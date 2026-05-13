@@ -16,6 +16,8 @@
 - `infra/azure/batch/create-batch-resources.sh`（Azure CLI リソース作成スクリプト）
 - `infra/azure/batch/verify-batch-resources.sh`（Azure CLI リソース検証スクリプト）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Batch-DataServiceSelect` を使用
 

@@ -11,6 +11,8 @@
 ## 出力
 - `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-UI-Detail` を使用
 

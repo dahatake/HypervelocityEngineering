@@ -15,6 +15,8 @@
 ## 出力
 - `docs/azure/azure-services-compute.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Microservice-Azure-ComputeDesign` を使用
 

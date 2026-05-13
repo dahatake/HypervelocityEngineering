@@ -3,6 +3,8 @@ name: Issue QA-Ready to Ready Transition
 on:
   issue_comment:
     types: [created]
+  pull_request_target:
+    types: [opened]
   workflow_dispatch:
     inputs:
       target_issue:
@@ -26,7 +28,7 @@ on:
         default: ''
 
 concurrency:
-  group: issue-qa-ready-transition-${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+  group: issue-qa-ready-transition-${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number || format('pr-{0}', github.event.pull_request.number) }}
   cancel-in-progress: false
 
 permissions:
@@ -40,7 +42,8 @@ jobs:
     #   - <!-- auto-qa-default-answered --> マーカー付きコメント
     #   - または @copilot メンション付きの OWNER/MEMBER/COLLABORATOR コメント
     if: >
-      !github.event.issue.pull_request
+      github.event_name != 'pull_request_target'
+      && !github.event.issue.pull_request
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -351,3 +354,127 @@ jobs:
             echo "[DRY RUN] branch extracted: ${BRANCH:-main}"
             echo "::endgroup::"
           fi
+
+  transition-pr-opened:
+    if: >
+      github.event_name == 'pull_request_target'
+      && github.event.pull_request.user.type == 'Bot'
+      && (
+        github.event.pull_request.user.login == 'Copilot'
+        || github.event.pull_request.user.login == 'copilot-swe-agent'
+        || github.event.pull_request.user.login == 'copilot-swe-agent[bot]'
+        || github.event.pull_request.user.login == 'copilot[bot]'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+      PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+
+    steps:
+      - name: Copilot PR かどうか確認
+        id: check-copilot
+        run: |
+          set -euo pipefail
+          IS_COPILOT_LOGIN="false"
+          if [ "${PR_AUTHOR_LOGIN}" = "Copilot" ] || \
+             [ "${PR_AUTHOR_LOGIN}" = "copilot-swe-agent" ] || \
+             [ "${PR_AUTHOR_LOGIN}" = "copilot-swe-agent[bot]" ] || \
+             [ "${PR_AUTHOR_LOGIN}" = "copilot[bot]" ]; then
+            IS_COPILOT_LOGIN="true"
+          fi
+          if [ "${IS_COPILOT_LOGIN}" = "true" ] && [ "${PR_AUTHOR_TYPE}" = "Bot" ]; then
+            echo "is_copilot=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "is_copilot=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: PR body から parent-issue を解決
+        id: resolve-issue
+        if: steps.check-copilot.outputs.is_copilot == 'true'
+        run: |
+          set -euo pipefail
+          issue_number=$(printf '%s' "${PR_BODY}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'<!--\s*parent-issue:\s*#([0-9]+)\s*-->', body or '')
+          print(m.group(1) if m else '')
+          " 2>/dev/null || echo '')
+          echo "issue_number=${issue_number}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${issue_number}" ]; then
+            echo "PR body から parent-issue を解決できませんでした。スキップします。"
+          fi
+
+      - name: Issue の *:qa-ready / *:qa-drafting ラベル確認
+        id: detect-qa-ready
+        if: steps.check-copilot.outputs.is_copilot == 'true' && steps.resolve-issue.outputs.issue_number != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data=''
+          if [ -z "${issue_data}" ]; then
+            echo "qa_ready_label=" >> "${GITHUB_OUTPUT}"
+            echo "Issue #${ISSUE_NUMBER} を取得できませんでした。"
+            exit 0
+          fi
+          qa_ready_label=$(echo "${issue_data}" | python3 -c "
+          import sys, json
+          labels = [l['name'] for l in json.load(sys.stdin).get('labels', [])]
+          qa_labels = [l for l in labels if l.endswith(':qa-ready') or l.endswith(':qa-drafting')]
+          print(qa_labels[0] if qa_labels else '')
+          " 2>/dev/null || echo '')
+          echo "qa_ready_label=${qa_ready_label}" >> "${GITHUB_OUTPUT}"
+          if [ -z "${qa_ready_label}" ]; then
+            echo "Issue #${ISSUE_NUMBER} に *:qa-ready / *:qa-drafting ラベルがないためスキップします。"
+          fi
+
+      - name: hve-qa-context-injected マーカーを付与
+        id: inject-qa-context-pr
+        if: steps.check-copilot.outputs.is_copilot == 'true' && steps.resolve-issue.outputs.issue_number != '' && steps.detect-qa-ready.outputs.qa_ready_label != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          echo "qa_comment_found=false" >> "${GITHUB_OUTPUT}"
+          MARKER="<!-- hve-qa-context-injected -->"
+          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null) || {
+            echo "Issue body の取得に失敗しました。"
+            exit 0
+          }
+          if printf '%s' "${current_body}" | grep -qF "${MARKER}"; then
+            echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
+            echo "既に hve-qa-context-injected マーカーが存在します。"
+            exit 0
+          fi
+          append=$(printf '\n\n%s\n' "${MARKER}")
+          new_body="${current_body}${append}"
+          gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" --field "body=${new_body}" --silent 2>/dev/null || {
+            echo "Issue body へのマーカー付与に失敗しました。"
+            exit 0
+          }
+          echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
+
+      - name: qa-ready / qa-drafting → ready 遷移（PR opened 経路）
+        if: >
+          steps.check-copilot.outputs.is_copilot == 'true'
+          && steps.resolve-issue.outputs.issue_number != ''
+          && steps.detect-qa-ready.outputs.qa_ready_label != ''
+          && steps.inject-qa-context-pr.outputs.qa_comment_found == 'true'
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
+          QA_READY_LABEL: ${{ steps.detect-qa-ready.outputs.qa_ready_label }}
+        run: |
+          set -euo pipefail
+          READY_LABEL="${QA_READY_LABEL/:qa-ready/:ready}"
+          READY_LABEL="${READY_LABEL/:qa-drafting/:ready}"
+          RUNNING_LABEL="${READY_LABEL/:ready/:running}"
+          gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent 2>/dev/null || true
+          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${READY_LABEL}" || true
+          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${RUNNING_LABEL}" || true
+          echo "PR opened 経路で遷移完了: ${QA_READY_LABEL} → ${READY_LABEL}, ${RUNNING_LABEL}"

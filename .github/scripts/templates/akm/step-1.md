@@ -46,6 +46,8 @@
 - `knowledge/business-requirement-document-status.md`
 - `knowledge/D{NN}-<文書名>.md`
 
+{existing_artifact_policy}
+
 ## 完了条件
 - `knowledge/business-requirement-document-status.md` が生成されている
 - マッピングがある D クラスについて `knowledge/D{NN}-<文書名>.md` が生成されている

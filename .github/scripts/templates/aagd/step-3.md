@@ -17,6 +17,8 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 - `docs/test-specs/deploy-step2-agent-test-spec.md`
 - `docs/azure/service-catalog.md`（Agent エンドポイント追記）
 
+{existing_artifact_policy}
+
 ## デプロイ TDD フロー（必須）
 1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-agent-test-spec.md`
 2. 検証スクリプトの生成: `infra/azure/verify-agent-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）

@@ -8,6 +8,8 @@
 ## 出力
 - `docs-generated/components/tech-debt.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-TechDebt`
 

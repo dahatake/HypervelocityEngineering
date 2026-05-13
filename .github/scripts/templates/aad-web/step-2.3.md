@@ -17,6 +17,8 @@
 - `docs/test-specs/{{serviceId}}-test-spec.md`（サービスごとに1ファイル）
 - `docs/test-specs/{{screenId}}-test-spec.md`（画面ごとに1ファイル）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-TDD-TestSpec` を使用
 

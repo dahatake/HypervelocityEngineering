@@ -12,6 +12,8 @@
 ## 出力
 - `docs/batch/batch-data-model.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-DataModel` を使用
 

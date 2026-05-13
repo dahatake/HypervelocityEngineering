@@ -10,6 +10,8 @@
 ## 出力
 - `docs/batch/batch-domain-analytics.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Arch-Batch-DomainAnalytics` を使用
 

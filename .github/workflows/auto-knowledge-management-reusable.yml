@@ -537,7 +537,7 @@ jobs:
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
@@ -585,7 +585,7 @@ jobs:
             CUSTOM_SOURCE_DISPLAY=$(printf '%s' "${CUSTOM_SOURCE_DIR}" | tr ' ' '\n' | sed 's/^/- /')
           fi
 
-          BODY_S1=$(printf '%s\n## 目的\n`qa/` / `original-docs/` から knowledge ファイルを生成・更新する。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| sources | %s |\n| force_refresh | %s |\n\n### target_files\n%s\n\n### custom_source_dir\n%s\n\n## 入力\n- `qa/*.md`（sources=qa,both）\n- `original-docs/*`（sources=original-docs,both）\n- `template/business-requirement-document-master-list.md`\n\n## 出力\n- `knowledge/business-requirement-document-status.md`\n- `knowledge/D{NN}-<文書名>.md`\n\n## Custom Agent\n`KnowledgeManager`\n\n## 依存\n- なし（単独ステップ）\n\n## 完了条件\n- `knowledge/business-requirement-document-status.md` が生成されている\n- `knowledge/D{NN}-<文書名>.md` が更新されている\n- 完了時に自身に `akm:done` ラベルを付与すること%s' \
+          BODY_S1=$(printf '%s\n## 目的\n`qa/` / `original-docs/` から knowledge ファイルを生成・更新する。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| sources | %s |\n| force_refresh | %s |\n\n### target_files\n%s\n\n### custom_source_dir\n%s\n\n## 入力\n- `qa/*.md`（sources=qa,both）\n- `original-docs/*`（sources=original-docs,both）\n- `template/business-requirement-document-master-list.md`\n\n## 出力\n- `knowledge/business-requirement-document-status.md`\n- `knowledge/D{NN}-<文書名>.md` — **要求項目（REQ）テーブル形式**（Skill `knowledge-management` §7 / §11.6 準拠：§2=Confirmed REQ-D{NN}-001番台 / §3=Tentative REQ-D{NN}-101番台 / §4=Unknown表 / §5-§7=REQ単位カバー率・件数）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造（要求項目別ログ：各REQに対する新規/マージ/値更新を日付昇順で記録）+ 付録A（原文保全）\n\n## Custom Agent\n`KnowledgeManager`\n\n## 依存\n- なし（単独ステップ）\n\n## 完了条件\n- `knowledge/business-requirement-document-status.md` が生成されている\n- `knowledge/D{NN}-<文書名>.md` が REQ テーブル形式で更新されている（散文の箇条書きや QA トレース文の貼り付けは禁止）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` が REQ-ID 別サブセクション構造で更新されている\n- 完了時に自身に `akm:done` ラベルを付与すること%s' \
             "${ROOT_REF}" "${SOURCES}" "${FORCE_REFRESH_DISPLAY}" "${TARGET_FILES_DISPLAY}" "${CUSTOM_SOURCE_DISPLAY}" "${ADDITIONAL_SECTION}")
 
           if RESP=$(create_issue \
@@ -705,7 +705,7 @@ jobs:
             "1")
               add_label "${ROOT_ISSUE}" "akm:done"
               echo "Root Issue #${ROOT_ISSUE} に akm:done を付与しました。"
-              _done_msg=$(printf '🎉 knowledge/ ドキュメント生成・管理（AKM）が完了しました！\n\n**生成された成果物:**\n- `knowledge/business-requirement-document-status.md` — D01〜D21 クラス別ステータス・カバレッジギャップ・詳細マッピング\n- `knowledge/D{NN}-<文書名>.md` — QA マッピングが存在する D クラスごとの個別文書ファイル\n- `work/KnowledgeManager/Issue-xxx/plan.md` — 実行計画')
+              _done_msg=$(printf '🎉 knowledge/ ドキュメント生成・管理（AKM）が完了しました！\n\n**生成された成果物:**\n- `knowledge/business-requirement-document-status.md` — D01〜D21 クラス別ステータス・カバレッジギャップ・詳細マッピング\n- `knowledge/D{NN}-<文書名>.md` — QA マッピングが存在する D クラスごとの要求定義書ドラフト（REQ テーブル形式：REQ-D{NN}-001 番台=Confirmed / REQ-D{NN}-101 番台=Tentative）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造の変更ログ（要求項目別ログ + 付録A原文保全）\n- `work/KnowledgeManager/Issue-xxx/plan.md` — 実行計画')
               post_comment "${ROOT_ISSUE}" "${_done_msg}"
               echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
               ;;

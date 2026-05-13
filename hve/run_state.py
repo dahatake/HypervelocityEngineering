@@ -1,22 +1,22 @@
 """run_state.py — Resume 機能のための Run State Manager 基盤。
 
-Phase 1 (Resume): ワークフロー実行の進行状況を `work/runs/<run_id>/state.json` に
-永続化するレイヤ。Resume は本モジュール上に Phase 2 以降で構築する。
+Phase 1 (Resume): ワークフロー実行の進行状況を
+`<session-state-dir>/runs/<run_id>/state.json` に永続化するレイヤ。
+Resume は本モジュール上に Phase 2 以降で構築する。
 
-== work-artifacts-layout §4.1 との関係 ==
+`<session-state-dir>` は環境変数 `HVE_SESSION_STATE_DIR` で上書き可能。
+既定はリポジトリルート配下の `session-state/` ディレクトリ
+（CWD 非依存。詳細は `get_session_state_dir()` 参照）。
 
-`work-artifacts-layout` SKILL §4.1 は `work/` 配下のファイルに対し
-"delete→create" を必須としているが、`hve/config.py` の qa_merger コメントに
-「§4.1 の delete→create ルールは Git 上の成果物更新フローを指す」と明記されている。
+== Git 管理ポリシー ==
 
-state.json は以下の理由から §4.1 の例外として扱い、
-qa_merger.py と同パターン（tempfile + os.replace によるアトミック上書き）で
-保存する:
+`session-state/` は **Git にコミットする** 運用を採用する（他デバイス間で
+resume を継続できるようにするため）。`.gitignore` には追加しない。
+ただし 1 ステップごとに頻繁に更新されるため、qa_merger.py と同パターン
+（tempfile + os.replace によるアトミック上書き）で保存する。
 
-1. Git にコミットされない実行時メタデータである（CI/PR の対象外）
-2. 1 ステップ完了ごとに頻繁に更新されるライブファイルである
-3. work-artifacts-layout §4.5 の並列安全性ルールにより、`work/runs/<run_id>/`
-   は run_id で隔離されており他ジョブとの衝突は発生しない
+並列安全性: `<session-state-dir>/runs/<run_id>/` は run_id で隔離されており
+他ジョブとの衝突は発生しない。
 
 == 公開 API ==
 
@@ -51,8 +51,68 @@ from typing import Any, Dict, List, Optional
 # 定数
 # ---------------------------------------------------------------------------
 
-SCHEMA_VERSION: str = "1.0"
-DEFAULT_RUNS_DIR: Path = Path("work") / "runs"
+SCHEMA_VERSION: str = "2.0"
+"""state.json スキーマバージョン。
+
+Resume の 2 層トランザクション保護導入により 1.0 → 2.0 へ bump。
+旧 1.0 は `_from_dict` で ValueError 拒否（マイグレーション未提供）。
+2.0 で追加されたフィールド:
+  - RunState: `journal_path` / `intent_log` / `sdk_session_index` / `lock_holder`
+  - StepState: `checkpoint_marker` / `last_journal_seq` / `sdk_session_exists`
+"""
+
+_SUPPORTED_SCHEMA_VERSIONS: frozenset[str] = frozenset({"2.0"})
+"""読み込み可能な schema_version 集合。旧バージョンは拒否される。"""
+
+# ---------------------------------------------------------------------------
+# Session-state ディレクトリ解決
+# ---------------------------------------------------------------------------
+# Resume / Session 関連ファイル（state.json / journal.jsonl / .lock /
+# journal-archive）の保存先ルート。
+#
+# 解決優先順位:
+#   1. 環境変数 HVE_SESSION_STATE_DIR が空でなければそれを使用
+#   2. それ以外は <repo-root>/session-state/  (リポジトリルート基準で決定論的)
+#
+# 「リポジトリルート」は本ファイル (`hve/run_state.py`) の親ディレクトリの
+# 親、すなわち hve パッケージを含むディレクトリと定義する。CWD には依存しない。
+# これにより `hve/` から起動しても `<repo-root>/` から起動しても同じ場所に
+# 出力される（旧実装の CWD 相対 `work/runs/` による二重出力問題を解消）。
+
+HVE_SESSION_STATE_DIR_ENV: str = "HVE_SESSION_STATE_DIR"
+DEFAULT_SESSION_STATE_DIRNAME: str = "session-state"
+
+
+def _resolve_repo_root() -> Path:
+    """`hve/` パッケージを含むディレクトリ（= リポジトリルート）を返す。"""
+    return Path(__file__).resolve().parent.parent
+
+
+def get_session_state_dir() -> Path:
+    """Session-state ディレクトリのルートパスを返す（環境変数 > 既定）。"""
+    env = os.environ.get(HVE_SESSION_STATE_DIR_ENV, "").strip()
+    if env:
+        return Path(env).expanduser().resolve()
+    return _resolve_repo_root() / DEFAULT_SESSION_STATE_DIRNAME
+
+
+def get_default_runs_dir() -> Path:
+    """Run ごとの state.json / journal.jsonl / .lock を格納するディレクトリ。"""
+    return get_session_state_dir() / "runs"
+
+
+def get_default_archive_dir() -> Path:
+    """Recovery 完了済み journal の archive ディレクトリ。"""
+    return get_session_state_dir() / "journal-archive"
+
+
+DEFAULT_RUNS_DIR: Path = get_default_runs_dir()
+"""モジュール import 時点での既定 runs ディレクトリ。
+
+ランタイムで環境変数を変更したい場合は `get_default_runs_dir()` を直接
+呼び出すこと。テストで mock.patch する場合は本シンボルを差し替える。
+"""
+
 STATE_FILENAME: str = "state.json"
 
 # RunState.status / StepState.status の許可値（Literal の代わりに集合で検証）
@@ -255,6 +315,54 @@ class HostInfo:
 
 
 # ---------------------------------------------------------------------------
+# Phase 1 (Resume 2-layer txn): Intent Log / Lock Info
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Intent:
+    """Write-Ahead Intent Log のレコード。
+
+    `journal.jsonl` 上の `begin → step* → end` 区間を表現する。
+    `completed_at is None` のものが未完了の意図（Phase 4 で recovery 対象）。
+
+    Phase 3 の `RunJournal` 実装側で詳細フォーマットを決定するが、
+    本データクラスは `RunState.intent_log` に保持する集約ビューを提供する。
+    """
+
+    seq: int
+    """journal.jsonl 内での単調増加 seq。"""
+    kind: str
+    """意図種別。例: `delete-hard` / `step-checkpoint` / `rename`。"""
+    target: str = ""
+    """対象 ID（run_id / step_id / session_id 等）。"""
+    started_at: str = ""
+    """ISO 8601 UTC タイムスタンプ。"""
+    completed_at: Optional[str] = None
+    """完了 ISO 8601 UTC タイムスタンプ。None なら in-flight。"""
+    payload: Dict[str, Any] = field(default_factory=dict)
+    """意図種別ごとの任意パラメータ。"""
+
+
+@dataclass
+class LockInfo:
+    """`<session-state-dir>/runs/<run_id>/.lock` ファイル内容の表現（Phase 2 で永続化）。
+
+    本データクラスは `RunState.lock_holder` として保持され、
+    state.json save 時に最後のロック取得者情報を併せて記録する
+    （監査・stale 判定の根拠）。
+    """
+
+    pid: int
+    """ロック取得プロセスの PID。"""
+    hostname_hash: str
+    """`_hostname_hash()` と同一形式の固定長ハッシュ（PII 漏洩回避）。"""
+    acquired_at: str
+    """取得時刻（ISO 8601 UTC）。"""
+    heartbeat_at: str = ""
+    """最終 heartbeat 時刻（ISO 8601 UTC）。120 秒以上更新なし → stale 判定。"""
+
+
+# ---------------------------------------------------------------------------
 # Step 状態
 # ---------------------------------------------------------------------------
 
@@ -277,6 +385,15 @@ class StepState:
     forked_session_id: Optional[str] = None
     """リトライ時に使われた fork session_id。リトライ未発火なら None。"""
 
+    # Phase 1 (Resume 2-layer txn): ステップ内 fine-grained progress と SDK セッション状態追跡用。
+    checkpoint_marker: Optional[str] = None
+    """ステップ内の最終チェックポイント名。例: `main-task-response-received` / `qa-phase-done`。
+    Phase 6 で runner が書き込む。Resume 時に checkpoint に応じてフェーズスキップ判定。。"""
+    last_journal_seq: int = 0
+    """`journal.jsonl` での最終記録 seq。Phase 3 で使用。"""
+    sdk_session_exists: Optional[bool] = None
+    """最終 reconciliation 時点での SDK セッション存在フラグ。Phase 5 で更新。None = 未チェック。"""
+
     def __post_init__(self) -> None:
         if self.status not in _STEP_STATUSES:
             raise ValueError(
@@ -288,6 +405,9 @@ class StepState:
         # Fork-integration (T2.2): 不正値の正規化
         if not isinstance(self.retry_count, int) or self.retry_count < 0:
             self.retry_count = 0
+        # Phase 1: 不正値の正規化
+        if not isinstance(self.last_journal_seq, int) or self.last_journal_seq < 0:
+            self.last_journal_seq = 0
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +432,7 @@ class RunState:
 
     `state_path` プロパティで `<work_dir>/<run_id>/state.json` を返す。
     work_dir はインスタンス変数 `_work_dir` で保持し、デフォルトは
-    `DEFAULT_RUNS_DIR` (= `work/runs`)。
+    `DEFAULT_RUNS_DIR` (= `<session-state-dir>/runs`)。
     """
 
     schema_version: str = SCHEMA_VERSION
@@ -328,6 +448,16 @@ class RunState:
     params_snapshot: Dict[str, Any] = field(default_factory=dict)
     selected_step_ids: List[str] = field(default_factory=list)
     step_states: Dict[str, StepState] = field(default_factory=dict)
+
+    # Phase 1 (Resume 2-layer txn): 新規フィールド。
+    journal_path: Optional[str] = None
+    """`<session-state-dir>/runs/<run_id>/journal.jsonl` への相対パス。Phase 3 で書き込まれる。"""
+    intent_log: List[Intent] = field(default_factory=list)
+    """未完了の Intent ビュー。Phase 3 で journal から派生。"""
+    sdk_session_index: Dict[str, str] = field(default_factory=dict)
+    """`session_id` → 最終確認時刻（ISO 8601 UTC）。Phase 5 reconciler が更新。"""
+    lock_holder: Optional[LockInfo] = None
+    """最後にロックを保持したプロセスの情報。Phase 2 で更新される。"""
 
     # asdict で除外するためアンダースコア prefix
     _work_dir: Path = field(default=DEFAULT_RUNS_DIR, repr=False, compare=False)
@@ -400,7 +530,20 @@ class RunState:
 
     @classmethod
     def _from_dict(cls, data: Dict[str, Any], *, work_dir: Path) -> "RunState":
-        """dict から RunState を再構築する（schema 互換のため柔軟に）。"""
+        """dict から RunState を再構築する。
+
+        Phase 1 (Resume 2-layer txn): `schema_version` が `_SUPPORTED_SCHEMA_VERSIONS`
+        に含まれない場合は `ValueError` で拒否する（マイグレーション非提供）。
+        旧 schema_version="1.0" の state.json は破壊的変更で読み込み不可になる。
+        """
+        ver = str(data.get("schema_version", "") or "")
+        if ver not in _SUPPORTED_SCHEMA_VERSIONS:
+            raise ValueError(
+                f"state.json の schema_version='{ver}' は本バージョンの hve では"
+                f"サポートされていません（対応: {sorted(_SUPPORTED_SCHEMA_VERSIONS)}）。"
+                f" Resume 2-layer transaction protection 導入に伴う破壊的変更です。"
+                f" 既存の <session-state-dir>/runs/<run_id>/ は削除してください。"
+            )
         host_data = data.get("host") or {}
         host = HostInfo(
             hostname_hash=host_data.get("hostname_hash", ""),
@@ -427,6 +570,10 @@ class RunState:
                     # Fork-integration (T2.2): 後方互換のため get with default
                     retry_count=int(st.get("retry_count") or 0),
                     forked_session_id=st.get("forked_session_id"),
+                    # Phase 1: 新フィールド復元
+                    checkpoint_marker=st.get("checkpoint_marker"),
+                    last_journal_seq=int(st.get("last_journal_seq") or 0),
+                    sdk_session_exists=st.get("sdk_session_exists"),
                 )
             except ValueError:
                 # 無効 status は pending として復元
@@ -436,8 +583,40 @@ class RunState:
         if status not in _RUN_STATUSES:
             status = "pending"
 
+        # Phase 1: intent_log / lock_holder の復元
+        intent_log_raw = data.get("intent_log") or []
+        intent_log: List[Intent] = []
+        for rec in intent_log_raw:
+            if not isinstance(rec, dict):
+                continue
+            try:
+                intent_log.append(Intent(
+                    seq=int(rec.get("seq", 0)),
+                    kind=str(rec.get("kind", "")),
+                    target=str(rec.get("target", "")),
+                    started_at=str(rec.get("started_at", "")),
+                    completed_at=rec.get("completed_at"),
+                    payload=dict(rec.get("payload") or {}),
+                ))
+            except (TypeError, ValueError):
+                # 破損レコードは黙ってスキップ
+                continue
+
+        lock_holder_raw = data.get("lock_holder")
+        lock_holder: Optional[LockInfo] = None
+        if isinstance(lock_holder_raw, dict):
+            try:
+                lock_holder = LockInfo(
+                    pid=int(lock_holder_raw.get("pid", 0)),
+                    hostname_hash=str(lock_holder_raw.get("hostname_hash", "")),
+                    acquired_at=str(lock_holder_raw.get("acquired_at", "")),
+                    heartbeat_at=str(lock_holder_raw.get("heartbeat_at", "")),
+                )
+            except (TypeError, ValueError):
+                lock_holder = None
+
         return cls(
-            schema_version=data.get("schema_version", SCHEMA_VERSION),
+            schema_version=ver,
             run_id=data.get("run_id", ""),
             session_name=data.get("session_name", ""),
             workflow_id=data.get("workflow_id", ""),
@@ -450,6 +629,11 @@ class RunState:
             params_snapshot=dict(data.get("params_snapshot") or {}),
             selected_step_ids=list(data.get("selected_step_ids") or []),
             step_states=step_states,
+            # Phase 1: 新フィールド
+            journal_path=data.get("journal_path"),
+            intent_log=intent_log,
+            sdk_session_index=dict(data.get("sdk_session_index") or {}),
+            lock_holder=lock_holder,
             _work_dir=work_dir,
         )
 
@@ -558,6 +742,60 @@ class RunState:
         # status 検証 / error_summary 切り詰め
         st.__post_init__()
         self.save()
+
+
+# ---------------------------------------------------------------------------
+# Phase 1 (v1.0.3, Major #15/#16): intent_log / lock_holder 同期ヘルパー
+# ---------------------------------------------------------------------------
+
+def sync_intent_log_from_journal(state: "RunState", journal: Any) -> None:
+    """`journal.pending_intents()` から `state.intent_log` を派生し更新する。
+
+    Major #15 (v1.0.3): `intent_log` field を実利用する経路を提供する。
+    呼び出し側は orchestrator / resume CLI の Resume 開始時に
+    `sync_intent_log_from_journal(state, journal); state.save()` を実行する想定。
+
+    failures は warn せず握り潰す（state I/O 失敗で実行を止めない原則）。
+    """
+    try:
+        pending = journal.pending_intents()
+    except Exception:
+        return
+    intents: List[Intent] = []
+    for rec in pending:
+        if not isinstance(rec, dict):
+            continue
+        try:
+            intents.append(Intent(
+                seq=int(rec.get("seq", 0)),
+                kind=str(rec.get("kind", "")),
+                target=str(rec.get("target", "")),
+                started_at=str(rec.get("ts", "")),
+                completed_at=None,
+                payload=dict(rec.get("payload") or {}),
+            ))
+        except (TypeError, ValueError):
+            continue
+    state.intent_log = intents
+
+
+def record_lock_holder(state: "RunState", lock: Any) -> None:
+    """`RunLock` 取得直後に `state.lock_holder` を更新する。
+
+    Major #16 (v1.0.3): `lock_holder` field を実利用する経路を提供する。
+    `lock` は `RunLock` インスタンス（`_pid` / `_hostname_hash` / `_acquired_at` 属性を持つ）。
+    `state.save()` は呼ばないため、呼び出し側で save する必要がある。
+    """
+    try:
+        state.lock_holder = LockInfo(
+            pid=int(getattr(lock, "_pid", 0)),
+            hostname_hash=str(getattr(lock, "_hostname_hash", "")),
+            acquired_at=str(getattr(lock, "_acquired_at", "") or _utc_now_iso()),
+            heartbeat_at=str(getattr(lock, "_acquired_at", "") or _utc_now_iso()),
+        )
+    except Exception:
+        # 失敗は静かに無視（lock_holder は監査情報であり、欠落しても実行に影響しない）
+        pass
 
 
 # ---------------------------------------------------------------------------

@@ -643,12 +643,16 @@ class StepRunner:
         console: Console,
         *,
         resume_state: Optional["RunState"] = None,
+        journal: Optional["RunJournal"] = None,
     ) -> None:
         self.config = config
         self.console = console
         # Phase 3 (Resume): 完了済みステップの skip / 失敗ステップの resume_session 分岐に使用する。
         # None の場合は新規実行モード（resume 機能を使わない既存挙動と完全互換）。
         self._resume_state = resume_state
+        # Phase 6 (Resume 2-layer txn): 任意の RunJournal。checkpoint 記録に使う。
+        # None なら journal 記録はスキップ（既存挙動と完全互換）。
+        self._journal = journal
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
@@ -661,6 +665,46 @@ class StepRunner:
         # DAGExecutor が `set_fork_index(step_id, n)` で更新し、_make_step_session_id
         # から参照することで session_id に `-fork{n}` suffix を付与する。
         self._fork_indices: Dict[str, int] = {}
+
+    def _record_checkpoint(self, step_id: str, marker: str) -> None:
+        """Phase 6 (Resume 2-layer txn): ステップ内 checkpoint を記録する。
+
+        - `self._resume_state.step_states[step_id].checkpoint_marker` を更新
+        - `self._journal` が非 None なら journal に `step.checkpoint` を追記
+        いずれも失敗は warn のみで実行を継続する（実行成功優先の原則）。
+
+        v1.0.3 (Major #11): `journal.record_event` による単発レコード化で
+        fsync 回数を半減。
+
+        Args:
+            step_id: 対象ステップ ID。
+            marker: checkpoint 識別子。例: `main-task-response-received`,
+                `qa-phase-done`, `review-phase-done`, `self-improve-iter-1-done`。
+        """
+        if self._resume_state is None and self._journal is None:
+            return
+        try:
+            seq = 0
+            if self._journal is not None:
+                try:
+                    from .run_journal import KIND_STEP_CHECKPOINT
+                except ImportError:
+                    from run_journal import KIND_STEP_CHECKPOINT  # type: ignore[no-redef]
+                # 単発イベントとして 1 レコードで記録（fsync 1 回）。
+                # pending_intents 判定は .begin/.end のみを見るため pending 化されない。
+                seq = self._journal.record_event(
+                    kind=KIND_STEP_CHECKPOINT,
+                    target=step_id,
+                    payload={"marker": marker},
+                )
+            if self._resume_state is not None:
+                self._resume_state.update_step(
+                    step_id, checkpoint_marker=marker, last_journal_seq=seq,
+                )
+        except Exception as exc:  # pragma: no cover - I/O 異常系
+            self.console.warning(
+                f"[checkpoint] step={step_id} marker={marker} の記録に失敗: {exc}"
+            )
 
     def _session_id_prefix(self) -> str:
         """SDKConfig.session_id_prefix が空ならデフォルト ("hve") を返す。"""
@@ -1778,6 +1822,27 @@ class StepRunner:
 
             # ステップ固有 Custom Agent を先頭に追加し、agent で pre-select
             if custom_agent:
+                _required_skills_for_step: List[str] = []
+                _base_step_id = str(step_id).split("/", 1)[0]
+                if workflow_id:
+                    try:
+                        try:
+                            from .workflow_registry import get_step
+                            from .skill_resolver import get_required_skills_for_step
+                        except ImportError:  # pragma: no cover
+                            from workflow_registry import get_step  # type: ignore[no-redef]
+                            from skill_resolver import get_required_skills_for_step  # type: ignore[no-redef]
+
+                        _step_def = get_step(workflow_id, _base_step_id)
+                        _declared = list(getattr(_step_def, "required_skills", []) or [])
+                        _required_skills_for_step = get_required_skills_for_step(
+                            workflow_id=workflow_id,
+                            step_id=_base_step_id,
+                            step_declared_required=_declared,
+                        )
+                    except Exception:
+                        _required_skills_for_step = []
+
                 # グローバル定義に同名がなければ最小定義を追加（fallback）
                 existing_names = {a.get("name") for a in custom_agents}
                 if custom_agent not in existing_names:
@@ -1808,6 +1873,29 @@ class StepRunner:
                             "prompt": base_prompt,
                         },
                     )
+
+                # Prompt Guard: Agent 名を skill 名として使わないことを明示し、必要 skill を固定する。
+                _guard = [
+                    "## Skill 利用ガード",
+                    "- `skill(...)` ツールには Custom Agent 名ではなく、skill 名のみを指定すること。",
+                ]
+                if _required_skills_for_step:
+                    _guard.append(
+                        "- このステップで使用可能な skill 名: "
+                        + ", ".join(f"`{s}`" for s in _required_skills_for_step)
+                    )
+                _guard_text = "\n".join(_guard)
+
+                for agent_def in custom_agents:
+                    if agent_def.get("name") != custom_agent:
+                        continue
+                    _existing_prompt = str(agent_def.get("prompt") or "")
+                    if _guard_text not in _existing_prompt:
+                        agent_def["prompt"] = (
+                            (_existing_prompt + "\n\n" + _guard_text).strip()
+                        )
+                    break
+
                 session_opts["agent"] = custom_agent
 
             if custom_agents:
@@ -1885,6 +1973,8 @@ class StepRunner:
                     current_phase=current_phase,
                     total_phases=total_phases,
                 )
+                # Phase 6 (Resume 2-layer txn): checkpoint 記録
+                self._record_checkpoint(step_id, "qa-phase-done")
 
             # Phase 1: メインタスク
             current_phase += 1
@@ -1908,6 +1998,10 @@ class StepRunner:
                 step_id, current_phase, total_phases, "メインタスク",
                 elapsed=time.time() - phase1_start,
             )
+            # Phase 6 (Resume 2-layer txn): メインタスクの応答受信完了を checkpoint として記録。
+            # これ以降のクラッシュでも SDK セッションが生きていれば Resume 時に
+            # メインタスクを再送せず QA/Review フェーズから再開できる（将来 TBD）。
+            self._record_checkpoint(step_id, "main-task-response-received")
 
             # Phase 2 (post-QA / 事後 QA) は廃止されました。
             # 旧 qa_phase="post"/"both" / aqod_post_qa_enabled / --aqod-post-qa は削除済み。
@@ -2030,6 +2124,9 @@ class StepRunner:
                 finally:
                     if _review_session is not None:
                         await _review_session.disconnect()
+                # Phase 6 (Resume 2-layer txn): Review フェーズ完了 checkpoint。
+                # Critical 残存で RuntimeError が投げられた場合はここには到達しない。
+                self._record_checkpoint(step_id, "review-phase-done")
 
             # Phase 4: 自己改善ループ（auto_self_improve=True かつ skip でない場合）
             # scope が "" または "step" の場合のみ実行。"workflow" / "disabled" の場合はスキップ。
@@ -2221,6 +2318,10 @@ class StepRunner:
                         f"score {_before_score} → {_after_score} "
                         f"({'⚠️ デグレード' if _degraded else '✅ 改善'})"
                     )
+
+                    # Phase 6 (Resume 2-layer txn): 自己改善イテレーション完了を checkpoint として記録。
+                    # デグレード検知で break される場合も、そのイテレーション自体は完走しているため marker を記録する。
+                    self._record_checkpoint(step_id, f"self-improve-iter-{_iteration}-done")
 
                     # Phase 4f: デグレード検知 → 即時停止
                     if _degraded:

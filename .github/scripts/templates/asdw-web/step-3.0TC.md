@@ -14,6 +14,8 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 ## 出力
 - `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Dev-Microservice-Azure-UITestCoding` を使用
 

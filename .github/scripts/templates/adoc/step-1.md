@@ -14,6 +14,8 @@
 ## 出力
 - `docs-generated/inventory.md`
 
+{existing_artifact_policy}
+
 ## Custom Agent
 `Doc-FileInventory`
 
