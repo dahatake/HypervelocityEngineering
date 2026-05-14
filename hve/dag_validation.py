@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+try:
+    from .orchestrator_context import OrchestratorContext  # type: ignore[import]
+except ImportError:  # pragma: no cover - script execution path
+    from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+
 
 @dataclass(frozen=True)
 class DAGValidationIssue:
@@ -162,7 +167,11 @@ _PLAN_META_HEAD_LINES: int = 5
 _PLAN_META_REQUIRED_KEYS: Tuple[str, ...] = ("task_scope", "context_size")
 
 
-def check_plan_md_metadata(plan_path: Path) -> list[str]:
+def check_plan_md_metadata(
+    plan_path: Path,
+    *,
+    orchestrator_ctx: Optional[OrchestratorContext] = None,
+) -> list[str]:
     """`work/**/plan.md` の冒頭 5 行メタデータを検証する。
 
     違反メッセージのリストを返す。空リストなら問題なし。
@@ -175,6 +184,10 @@ def check_plan_md_metadata(plan_path: Path) -> list[str]:
 
     Args:
         plan_path: plan.md ファイルへのパス（通常 `work/**/plan.md`）
+        orchestrator_ctx: Orchestrator 配下で実行されている場合のコンテキスト。
+            `None` の場合は単独実行モード（従来通り SPLIT_REQUIRED で停止）。
+            非 None の場合は Orchestrator が subissues.md を並列 fork する旨の
+            継続可注記を追記する（task_scope=multi / context_size=large 両方が対象）。
 
     Returns:
         違反メッセージのリスト。空なら全条件 OK。
@@ -218,9 +231,18 @@ def check_plan_md_metadata(plan_path: Path) -> list[str]:
             triggers.append("task_scope=multi")
         if context_size == "large":
             triggers.append("context_size=large")
-        issues.append(
+        message = (
             f"{plan_path}: SPLIT_REQUIRED — 実装着手禁止 ({', '.join(triggers)})。"
             " plan.md + subissues.md のみ作成して停止すること (copilot-instructions.md §0)"
         )
+        # Orchestrator 配下では subissues.md からサブタスクを並列 fork するため、
+        # task_scope=multi / context_size=large どちらでも継続可。
+        # 単独実行モード (orchestrator_ctx is None) では従来通り停止。
+        if orchestrator_ctx is not None:
+            message += (
+                " [Orchestrator 配下のため別 Context (Sub-issue / サブセッション) で"
+                "実装継続可。本 Agent は plan.md + subissues.md 作成後に正常終了すること]"
+            )
+        issues.append(message)
 
     return issues

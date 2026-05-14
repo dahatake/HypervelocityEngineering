@@ -286,10 +286,66 @@ class Console:
         # --- Usage 累計 ---
         self._step_usage: Dict[str, Dict[str, int]] = {}
         self._step_tool_count: Dict[str, int] = {}
+        # Sub-agent child_id 衝突回避: (step_id, name) → 採番カウンタ / アクティブ child_id
+        self._subagent_seq: Dict[tuple, int] = {}
+        self._subagent_active: Dict[tuple, str] = {}
         # ステップ単位のファイル I/O 追跡
         # 構造: {step_id: {"read": [path, ...], "write": [path, ...]}}
         # list で挿入順（処理順）を保持し、重複は track_file 内で排除する
         self._step_files: Dict[str, Dict[str, List[str]]] = {}
+
+        # --- Workbench UI ブリッジ（Phase 2-4）---
+        # WorkbenchController を attach_workbench() で注入する。
+        # 直接代入はせず、必ず公開メソッド経由で操作する。
+        self._workbench: Optional[Any] = None
+        # spinner / step_end で参照する直近 step_id（spinner を Header#2 へ紐付け）
+        self._current_step_id: Optional[str] = None
+        # _Style.no_color の元値（attach 時に True 上書き、detach 時に復元）
+        self._style_no_color_saved: Optional[Any] = None
+
+    # ------------------------------------------------------------------
+    # Workbench UI ブリッジ API
+    # ------------------------------------------------------------------
+
+    @property
+    def workbench_enabled(self) -> bool:
+        """Workbench を有効化してよいかを判定する。
+
+        以下のいずれかに該当すれば False を返す:
+          - 非 TTY（pipe / CI）
+          - quiet (verbosity=0) / final_only
+          - 環境変数 HVE_NO_WORKBENCH=1（NO_COLOR は色のみ抑止のため対象外）
+        """
+        if not self._is_tty:
+            return False
+        if self.final_only or self.quiet:
+            return False
+        if os.environ.get("HVE_NO_WORKBENCH", "").strip() in ("1", "true", "True"):
+            return False
+        return True
+
+    def attach_workbench(self, wb: Any) -> None:
+        """WorkbenchController を注入する。
+
+        attach 後、_emit() および step_*/context_usage/spinner_* は wb への
+        状態反映も行う。_Style は Workbench 描画と二重装飾しないため
+        no_color=True 相当に動的切替する（detach 時に復元）。
+        """
+        self._workbench = wb
+        # _Style を差し替え（attach 時は no_color=True で再構築）
+        self._style_no_color_saved = self.s
+        try:
+            self.s = _Style(self._is_tty, no_color=True)
+        except Exception:
+            # _Style 実装が変わっても落とさない
+            pass
+
+    def detach_workbench(self) -> None:
+        """WorkbenchController を切り離し、_Style 状態を復元する。"""
+        self._workbench = None
+        if self._style_no_color_saved is not None:
+            self.s = self._style_no_color_saved  # type: ignore[assignment]
+            self._style_no_color_saved = None
 
     # ------------------------------------------------------------------
     # 内部ヘルパー
@@ -318,13 +374,22 @@ class Console:
             try:
                 if ts:
                     if self._timestamp_style == "prefix":
-                        print(f"{timestamp_prefix()} {msg}", flush=True)
+                        formatted = f"{timestamp_prefix()} {msg}"
                     elif self._timestamp_style == "suffix":
-                        print(f"{msg} {self._styled(timestamp_prefix(), self.s.DIM)}", flush=True)
+                        formatted = f"{msg} {self._styled(timestamp_prefix(), self.s.DIM)}"
                     else:  # "off"
-                        print(msg, flush=True)
+                        formatted = msg
                 else:
-                    print(msg, flush=True)
+                    formatted = msg
+                # Workbench 有効時は Body へ流し、それ以外は通常 stdout
+                if self._workbench is not None:
+                    try:
+                        self._workbench.append_body(formatted)
+                    except Exception:
+                        # Workbench 側で例外が出ても本流を止めない
+                        print(formatted, flush=True)
+                else:
+                    print(formatted, flush=True)
             finally:
                 self._resume_spinner()
 
@@ -683,6 +748,9 @@ class Console:
         """バックグラウンドスピナーを開始する。既に動作中の場合はメッセージのみ更新。"""
         if self.quiet or not self._is_tty or self._screen_reader or self.final_only:
             return
+        # Workbench 有効時は Header#2 の Spinner で表現するため独自描画は行わない
+        if self._workbench is not None:
+            return
         with self._spinner_msg_lock:
             self._spinner_msg = msg
             self._spinner_base_msg = msg
@@ -767,6 +835,14 @@ class Console:
         agent_str = f" {s.DIM}(Agent: {agent}){s.RESET}" if agent else ""
         self._print(f"  {s.CYAN}▶{s.RESET} {s.BOLD}[Step.{step_id}]{s.RESET} {title}{agent_str}")
         self._step_start_times[step_id] = time.time()
+        # Workbench ブリッジ: Header#2 の該当ステップを running にし、
+        # _current_step_id を更新して spinner との紐付けに備える。
+        self._current_step_id = step_id
+        if self._workbench is not None:
+            try:
+                self._workbench.set_step_status(step_id, "running")
+            except Exception:
+                pass
         # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
         self._emit_structured(
             event="step_start",
@@ -792,6 +868,17 @@ class Console:
                 f" tools={tool_count}]{s.RESET}"
             )
         self._print(f"  {icon} {s.BOLD}[Step.{step_id}]{s.RESET} {status} {elapsed_str}{usage_summary}")
+        # Workbench ブリッジ: status を done/failed/skipped にマップし、
+        # 進行中ポインタをクリア。
+        _wb_status_map = {"success": "done", "failed": "failed", "skipped": "skipped"}
+        if self._workbench is not None:
+            try:
+                mapped = _wb_status_map.get(status, "done")
+                self._workbench.set_step_status(step_id, mapped)
+            except Exception:
+                pass
+        if self._current_step_id == step_id:
+            self._current_step_id = None
         # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
         self._emit_structured(
             event="step_end",
@@ -1160,7 +1247,7 @@ class Console:
         if self._verbosity == 0:
             return
         s = self.s
-        msg = f"{s.ITALIC}○ {s.DIM}{text}{s.RESET}"
+        msg = f"{s.ITALIC}◌ {s.DIM}{text}{s.RESET}"
         self._emit(msg, ts=ts)
 
     def final_message(self, step_id: str, content: str) -> None:
@@ -1254,6 +1341,23 @@ class Console:
 
     def subagent_started(self, step_id: str, name: str) -> None:
         """Sub-agent 開始。サブタスク作成時に名前を可視化するため Level 1+ で確定行。"""
+        # Workbench へサブタスク登録（active 時のみ）
+        wb = getattr(self, "_workbench", None)
+        if wb is not None and step_id:
+            try:
+                key = (step_id, name)
+                seq = self._subagent_seq.get(key, 0) + 1
+                self._subagent_seq[key] = seq
+                child_id = (
+                    f"{step_id}::subagent::{name}"
+                    if seq == 1
+                    else f"{step_id}::subagent::{name}#{seq}"
+                )
+                self._subagent_active[key] = child_id
+                wb.register_subtask(step_id, child_id, f"Sub-agent: {name}", kind="subagent")
+                wb.update_subtask(child_id, "running", activity=name)
+            except Exception:
+                pass
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1265,6 +1369,16 @@ class Console:
 
     def subagent_completed(self, step_id: str, name: str) -> None:
         """Sub-agent 完了。Level 2+ で確定行、Level 1 でスピナー更新。"""
+        wb = getattr(self, "_workbench", None)
+        if wb is not None and step_id:
+            try:
+                key = (step_id, name)
+                child_id = self._subagent_active.pop(
+                    key, f"{step_id}::subagent::{name}"
+                )
+                wb.update_subtask(child_id, "done", activity=name)
+            except Exception:
+                pass
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1276,6 +1390,16 @@ class Console:
 
     def subagent_failed(self, step_id: str, name: str, error: str = "") -> None:
         """Sub-agent 失敗。Level 2+ で確定行、Level 1 でスピナー更新。"""
+        wb = getattr(self, "_workbench", None)
+        if wb is not None and step_id:
+            try:
+                key = (step_id, name)
+                child_id = self._subagent_active.pop(
+                    key, f"{step_id}::subagent::{name}"
+                )
+                wb.update_subtask(child_id, "failed", activity=error or name)
+            except Exception:
+                pass
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1324,6 +1448,12 @@ class Console:
         pct = (current_tokens / token_limit * 100) if token_limit else 0
         msg = f"📏 {prefix}Context: {current_tokens}/{token_limit} ({pct:.0f}%) msgs={msgs}"
         self._emit(f"  {msg}", always=True)
+        # Workbench Footer へも反映
+        if self._workbench is not None:
+            try:
+                self._workbench.set_context(current_tokens, token_limit, msgs)
+            except Exception:
+                pass
 
     def compaction(self, step_id: str, phase: str, pre_tokens: int = 0, post_tokens: int = 0) -> None:
         """コンテキスト圧縮。Level 3 で確定行、Level 1-2 でスピナー更新。"""
@@ -2132,10 +2262,28 @@ class Console:
         self._print(f"  [{current}/{total}]{suffix}")
 
     def warning(self, msg: str) -> None:
-        """警告表示。quiet 以外で表示。stderr に出力。"""
+        """警告表示。quiet 以外で表示。stderr に出力。
+
+        Workbench 起動中は UserActions ペインにも WARN 通知を投入する。
+        """
         if not self.quiet:
             print(f"{timestamp_prefix()} ⚠️  {msg}", file=sys.stderr, flush=True)
+        wb = self._workbench
+        if wb is not None:
+            try:
+                wb.append_user_action("WARN", str(msg))
+            except Exception:
+                pass
 
     def error(self, msg: str) -> None:
-        """エラー表示。常に表示（quiet でも表示）。"""
+        """エラー表示。常に表示（quiet でも表示）。
+
+        Workbench 起動中は UserActions ペインにも ERROR 通知を投入する。
+        """
         print(f"{timestamp_prefix()} ❌ ERROR: {msg}", file=sys.stderr, flush=True)
+        wb = self._workbench
+        if wb is not None:
+            try:
+                wb.append_user_action("ERROR", str(msg))
+            except Exception:
+                pass

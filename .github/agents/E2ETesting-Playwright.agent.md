@@ -11,7 +11,7 @@ metadata:
 UIDeploy 後の実環境 E2E 検証専用 Agent。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 # 1) 目的
 - Step.3.2 でデプロイ済みの SWA URL に対して Playwright E2E を実行し、操作シナリオレベルの品質ギャップを埋める。

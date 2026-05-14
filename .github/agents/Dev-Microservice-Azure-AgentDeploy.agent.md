@@ -11,7 +11,7 @@ metadata:
 Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用Agent。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。

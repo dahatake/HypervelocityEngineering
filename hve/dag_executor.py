@@ -105,6 +105,7 @@ class DAGExecutor:
         fork_on_retry: bool = False,
         fork_kpi_logger: Any = None,
         on_fork_retry: Optional[Callable[[str, int], None]] = None,
+        on_fork_retry_ui: Optional[Callable[[str, int], None]] = None,
     ) -> None:
         self.workflow = workflow
         self.dag_plan = dag_plan
@@ -170,6 +171,9 @@ class DAGExecutor:
         self._fork_on_retry: bool = bool(fork_on_retry)
         self._fork_kpi_logger = fork_kpi_logger
         self._on_fork_retry = on_fork_retry
+        # Phase 6+: 動的 retry fork を Workbench Header#2 に反映させる UI 通知フック
+        # (step_id, retry_count) 。retry_count=0 でクリア。例外は握り潰す。
+        self._on_fork_retry_ui = on_fork_retry_ui
 
         # 実行状態
         self.completed: Set[str] = set()
@@ -465,6 +469,12 @@ class DAGExecutor:
                         self.console.event(
                             f"  🔁 [Step.{step.id}] フォークリトライを実行します (fork_index=1)"
                         )
+                    # Phase 6+: Workbench Header#2 に retry 表示を反映
+                    if self._on_fork_retry_ui is not None:
+                        try:
+                            self._on_fork_retry_ui(step.id, retry_count)
+                        except Exception:  # pragma: no cover - UI フック例外は握り潰す
+                            pass
                     # C3: 同時並列発火を緩和するため軽微なジッターを入れる（最大 0.5 秒）
                     try:
                         import random as _random
@@ -493,6 +503,12 @@ class DAGExecutor:
                                 self.console.warning(
                                     f"on_fork_retry リセット失敗 (step={step.id}): {reset_exc}"
                                 )
+                    # Phase 6+: Workbench の retry 表示をクリア
+                    if self._on_fork_retry_ui is not None:
+                        try:
+                            self._on_fork_retry_ui(step.id, 0)
+                        except Exception:  # pragma: no cover
+                            pass
 
             elapsed = time.time() - start
 

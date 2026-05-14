@@ -64,7 +64,7 @@ def _run_validator(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[st
 def test_missing_reference_detected(tmp_path: Path) -> None:
     _write(
         tmp_path / ".github/skills/_routing/SKILL.md",
-        _routing_md(".github/skills/planning/missing-skill/SKILL.md"),
+        _routing_md(".github/skills/missing-skill/SKILL.md"),
     )
 
     result = _run_validator(tmp_path)
@@ -89,14 +89,14 @@ def test_outside_root_reference_detected(tmp_path: Path) -> None:
 def test_unreferenced_skill_warned(tmp_path: Path) -> None:
     _write(
         tmp_path / ".github/skills/_routing/SKILL.md",
-        _routing_md(".github/skills/planning/task-a/SKILL.md"),
+        _routing_md(".github/skills/task-a/SKILL.md"),
     )
     _write(
-        tmp_path / ".github/skills/planning/task-a/SKILL.md",
+        tmp_path / ".github/skills/task-a/SKILL.md",
         _skill_md("task-a"),
     )
     _write(
-        tmp_path / ".github/skills/planning/task-b/SKILL.md",
+        tmp_path / ".github/skills/task-b/SKILL.md",
         _skill_md("task-b"),
     )
 
@@ -104,7 +104,7 @@ def test_unreferenced_skill_warned(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert "UNREFERENCED_SKILL" in result.stderr
-    assert ".github/skills/planning/task-b/SKILL.md" in result.stderr
+    assert ".github/skills/task-b/SKILL.md" in result.stderr
 
 
 def test_duplicate_skill_name_detected(tmp_path: Path) -> None:

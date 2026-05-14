@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Arch-AIAgentDesign-Step1/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -43,7 +43,7 @@ metadata:
 | 12 | `docs/catalog/screen-catalog.md` | 画面一覧。Agent が UI 内で動作する場合の Conversation Design 根拠 |
 | 13 | `docs/screen/{画面ID}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
 | 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 15 | `.github/skills/planning/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。

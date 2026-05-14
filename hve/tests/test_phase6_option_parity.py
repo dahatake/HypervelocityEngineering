@@ -40,7 +40,6 @@ _TEMPLATES_WITH_MODEL = [
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
-    "self-improve.yml",
 ]
 
 # enable_auto_merge を持つべき Issue Template（全ワークフロー対象テンプレート）
@@ -55,7 +54,6 @@ _TEMPLATES_WITH_AUTO_MERGE = [
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
-    "self-improve.yml",
 ]
 
 _TEMPLATES_WITH_RUNNER_TYPE = [
@@ -279,9 +277,8 @@ class TestModelDropdown(unittest.TestCase):
                 )
 
     def test_templates_have_review_model_and_qa_model(self) -> None:
-        """self-improve.yml 以外の10テンプレートに review_model / qa_model ドロップダウンが存在すること。"""
-        templates_with_review_qa = [t for t in _TEMPLATES_WITH_MODEL if t != "self-improve.yml"]
-        for template in templates_with_review_qa:
+        """全テンプレートに review_model / qa_model ドロップダウンが存在すること。"""
+        for template in _TEMPLATES_WITH_MODEL:
             with self.subTest(template=template):
                 content = self._read_template(template)
                 review_options = _extract_dropdown_options(content, "review_model")
@@ -296,12 +293,6 @@ class TestModelDropdown(unittest.TestCase):
                     self._EXPECTED_OPTIONS,
                     f"{template}: qa_model options が期待値と異なります",
                 )
-
-    def test_self_improve_template_has_only_main_model(self) -> None:
-        """self-improve.yml には review_model / qa_model が存在しないこと。"""
-        content = self._read_template("self-improve.yml")
-        self.assertNotIn("id: review_model", content)
-        self.assertNotIn("id: qa_model", content)
 
     def test_model_choices_parity_with_templates(self) -> None:
         """hve/config.py の MODEL_CHOICES と Issue Template options（Auto を除く）が完全一致すること。"""
@@ -374,7 +365,6 @@ class TestRunnerTypeOptionParity(unittest.TestCase):
                 )
 
     def test_out_of_scope_templates_do_not_have_runner_type(self) -> None:
-        self.assertNotIn("id: runner_type", self._read_template("self-improve.yml"))
         self.assertNotIn("id: runner_type", self._read_template("setup-labels.yml"))
 
     def test_dispatcher_detect_extracts_and_outputs_runner_type(self) -> None:

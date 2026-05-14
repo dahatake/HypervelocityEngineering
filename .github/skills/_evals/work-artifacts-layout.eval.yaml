@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: work-artifacts-layout
-skill_path: .github/skills/planning/work-artifacts-layout/SKILL.md
+skill_path: .github/skills/work-artifacts-layout/SKILL.md
 description: work/ 配下の作業ディレクトリ構造を整備するスキル。README.md の入口設計、contracts/artifacts の分離、qa/ 質問票構造、削除→新規作成ルールを提供する。
 
 test_cases:

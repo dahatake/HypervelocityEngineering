@@ -54,6 +54,7 @@ try:
     from .dag_planner import build_dag_plan
     from .run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id
     from .keybind import KEY_CTRL_R, KeybindMonitor
+    from .orchestrator_context import OrchestratorContext
 except ImportError:
     from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
@@ -70,6 +71,7 @@ except ImportError:
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id  # type: ignore[no-redef]
     from keybind import KEY_CTRL_R, KeybindMonitor  # type: ignore[no-redef]
+    from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
@@ -114,19 +116,40 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
     検出条件は Python の組み込み TypeError 文言
     (`got an unexpected keyword argument`) と `reasoning_effort` の両方が
     含まれる場合に限定する。
+
+    併せて、Skill レジストリへ `.github/skills` を登録する
+    (`skill_directories` / `enable_config_discovery`) を呼び出し側で
+    未指定の場合のみ自動注入する。SDK が当該引数を未サポートの場合は
+    TypeError を契機に剥がして再試行する。
     """
-    try:
-        return await client.create_session(**session_opts)
-    except TypeError as exc:
-        msg = str(exc)
-        if (
-            "unexpected keyword argument" in msg
-            and "reasoning_effort" in msg
-            and "reasoning_effort" in session_opts
-        ):
-            _opts = {k: v for k, v in session_opts.items() if k != "reasoning_effort"}
-            return await client.create_session(**_opts)
-        raise
+    from pathlib import Path as _Path
+
+    _opts_with_skills = dict(session_opts)
+    if "skill_directories" not in _opts_with_skills:
+        _skills_dir = _Path.cwd() / ".github" / "skills"
+        if _skills_dir.is_dir():
+            _opts_with_skills["skill_directories"] = [str(_skills_dir)]
+    if "enable_config_discovery" not in _opts_with_skills:
+        _opts_with_skills["enable_config_discovery"] = True
+
+    async def _attempt(opts: Dict[str, Any]) -> Any:
+        try:
+            return await client.create_session(**opts)
+        except TypeError as exc:
+            msg = str(exc)
+            if "unexpected keyword argument" not in msg:
+                raise
+            # Skill 系 / config discovery を未サポートの SDK に対するフォールバック
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills"):
+                if _kw in msg and _kw in opts:
+                    _stripped = {k: v for k, v in opts.items() if k != _kw}
+                    return await _attempt(_stripped)
+            if "reasoning_effort" in msg and "reasoning_effort" in opts:
+                _stripped = {k: v for k, v in opts.items() if k != "reasoning_effort"}
+                return await _attempt(_stripped)
+            raise
+
+    return await _attempt(_opts_with_skills)
 
 
 # -----------------------------------------------------------------------
@@ -2580,6 +2603,7 @@ async def run_workflow(
     *,
     resume_state: Optional[RunState] = None,
     session_name: Optional[str] = None,
+    orchestrator_ctx: Optional["OrchestratorContext"] = None,
 ) -> dict:
     """ワークフローを SDK でローカル実行する。
 
@@ -2664,6 +2688,33 @@ async def run_workflow(
     except Exception:
         pass
     start_total = time.time()
+
+    # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
+    # ファイル追加・更新・削除を OS イベントで検知し .hve/mdq.sqlite を逐次更新する。
+    # 既存の `python -m hve.mdq index` による手動索引更新は維持されている。
+    # watchdog 未導入や起動失敗は警告ログのみで本体実行を妨げない。
+    # Cloud Agent / GitHub Actions では本機能を使用しない（config.mdq_watch=False で無効化）。
+    _mdq_watcher = None
+    if getattr(config, "mdq_watch", True) and not getattr(config, "dry_run", False):
+        try:
+            from .mdq.watcher import MdqWatcher  # type: ignore
+            from .mdq.cli import DEFAULT_ROOTS as _MDQ_ROOTS  # type: ignore
+            from .mdq.store import DEFAULT_DB_PATH as _MDQ_DB  # type: ignore
+            _mdq_watcher = MdqWatcher(
+                repo_root=Path.cwd(),
+                roots=_MDQ_ROOTS,
+                db_path=_MDQ_DB,
+                debounce_ms=getattr(config, "mdq_watch_debounce_ms", 500),
+            )
+            if not _mdq_watcher.start():
+                _mdq_watcher = None
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"WARN: mdq watcher 起動をスキップしました ({exc})", file=sys.stderr)
+            _mdq_watcher = None
+    # プロセス終了時に確実に停止（早期 return が複数ある関数のため atexit を使用）
+    if _mdq_watcher is not None:
+        import atexit as _atexit
+        _atexit.register(_mdq_watcher.stop)
 
     # --- 1. ワークフロー定義取得 ---
     wf = get_workflow(workflow_id)
@@ -3141,6 +3192,7 @@ async def run_workflow(
         console=console,
         resume_state=resume_state,
         journal=_step_journal,
+        orchestrator_ctx=orchestrator_ctx,
     )
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
@@ -3362,8 +3414,82 @@ async def run_workflow(
     monitor.register(KEY_CTRL_R, _on_ctrl_r)
 
     paused_by_user: bool = False
+    # Workbench UI の起動（TTY/quiet/final_only/HVE_NO_WORKBENCH 等で自動降格）
+    _wb = None
+    if getattr(console, "workbench_enabled", False) and not getattr(config, "no_workbench", False):
+        try:
+            from hve.workbench import WorkbenchController, WorkbenchState, StepView
+            # Phase 6: fan-out 事前展開後のステップを Header#2 に表示する。
+            # executor 構築時に _expanded_steps / active_step_ids が
+            # fanout_expander により展開済み（dag_plan 併用時は展開なし）。
+            _expanded_steps = getattr(executor, "_expanded_steps", None) or list(wf.steps)
+            _active_for_view = set(getattr(executor, "active_step_ids", active_steps))
+            steps_view = [
+                StepView(id=s.id, title=s.title, status="pending")
+                for s in _expanded_steps
+                if s.id in _active_for_view
+            ]
+            wb_state = WorkbenchState(
+                workflow_id=workflow_id,
+                workflow_name=getattr(wf, "name", "") or "",
+                run_id=str(getattr(resume_state, "run_id", "")),
+                model=getattr(config, "model", "unknown"),
+                steps=steps_view,
+                body_window=int(getattr(config, "workbench_body_lines", 20)),
+            )
+            # --workbench-history 配線: 既定 RingBuffer の容量を置換する
+            _hist = int(getattr(config, "workbench_history", 10000) or 10000)
+            if _hist < 0:
+                # 負値 → 無制限バッファ
+                from hve.workbench import RingBuffer as _RingBuffer
+                wb_state.body = _RingBuffer(capacity=None)
+            elif _hist > 0 and _hist != wb_state.body.capacity:
+                from hve.workbench import RingBuffer as _RingBuffer
+                wb_state.body = _RingBuffer(capacity=_hist)
+            _wb = WorkbenchController(
+                wb_state,
+                flush_on_exit=bool(getattr(config, "workbench_flush_on_exit", True)),
+            )
+            _wb.__enter__()
+            if _wb.active:
+                console.attach_workbench(_wb)
+                # Phase 6+: 動的 retry fork (fork_on_retry=True 時) を Header#2 に反映。
+                # DAGExecutor は構築済みのため、コールバックを事後注入する。
+                # retry 通知は Header#2 のラベルだけでなく UserActions にも残す。
+                def _on_retry_with_ua(sid: str, retry_n: int) -> None:
+                    try:
+                        _wb.mark_retry(sid, retry_n)  # type: ignore[union-attr]
+                    except Exception:
+                        pass
+                    if retry_n and retry_n > 0:
+                        try:
+                            _wb.append_user_action(  # type: ignore[union-attr]
+                                "WARN",
+                                f"step {sid}: retry #{retry_n}",
+                                step_id=sid,
+                            )
+                        except Exception:
+                            pass
+                try:
+                    executor._on_fork_retry_ui = _on_retry_with_ua  # type: ignore[attr-defined]
+                except Exception:  # pragma: no cover
+                    pass
+        except Exception as _wb_exc:  # pragma: no cover
+            # Workbench 起動失敗は plain にフォールバック（ログのみ）
+            try:
+                console.warning(f"Workbench UI 起動失敗、plain 出力に降格します: {_wb_exc}")
+            except Exception:
+                pass
+            _wb = None
+
     try:
-        monitor.start()
+        # Workbench 起動中は stdin 競合を避けるため KeybindMonitor を起動しない。
+        # Workbench モードでは完了後に `/exit` で終了する。
+        # Workbench 非起動時のみ Ctrl+R 監視を有効化。
+        _monitor_started = False
+        if _wb is None or not getattr(_wb, "active", False):
+            monitor.start()
+            _monitor_started = True
         executor_task = asyncio.create_task(executor.execute(), name="hve-executor")
         pause_task = asyncio.create_task(pause_event.wait(), name="hve-pause-wait")
         try:
@@ -3395,7 +3521,50 @@ async def run_workflow(
                 pass
             results = await executor_task
     finally:
-        monitor.stop()
+        if _monitor_started:
+            monitor.stop()
+        # Workbench UI を停止し Console から detach
+        if _wb is not None:
+            # 全タスク完了を宣言し、useractions レポートを保存（冪等）。
+            # その後 /exit 入力を待機する。
+            try:
+                _wb.mark_all_done()
+            except Exception:
+                pass
+            import os as _os
+            import sys as _sys
+            _t = _os.environ.get("HVE_WORKBENCH_EXIT_TIMEOUT", "").strip()
+            _timeout: float = 0.0
+            if _t:
+                try:
+                    _timeout = float(_t)
+                    if _timeout < 0:
+                        raise ValueError(
+                            f"HVE_WORKBENCH_EXIT_TIMEOUT must be >= 0, got {_t!r}"
+                        )
+                except ValueError as _ve:
+                    print(
+                        f"[hve.workbench] WARN: HVE_WORKBENCH_EXIT_TIMEOUT 不正値 {_t!r} → 無制限待機で続行 ({_ve})",
+                        file=_sys.stderr,
+                        flush=True,
+                    )
+                    _timeout = 0.0
+            try:
+                _wb.wait_for_exit(timeout=_timeout)
+            except Exception as _we:
+                print(
+                    f"[hve.workbench] WARN: wait_for_exit 失敗 → 続行 ({_we})",
+                    file=_sys.stderr,
+                    flush=True,
+                )
+            try:
+                console.detach_workbench()
+            except Exception:
+                pass
+            try:
+                _wb.__exit__(None, None, None)
+            except Exception:
+                pass
 
     # Phase 6 (Resume): Ctrl+R で中断された場合は state を paused にして早期 return。
     if paused_by_user:

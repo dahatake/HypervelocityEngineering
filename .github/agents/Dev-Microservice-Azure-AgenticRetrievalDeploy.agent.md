@@ -10,15 +10,15 @@ metadata:
 > **WORK**: `work/Dev-Microservice-Azure-AgenticRetrievalDeploy/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 本 PR では IaC スクリプト本体を固定生成しない。Agent 実行時に
   `azure-prepare` / `azure-deploy` を使って生成する。
 
 ## Agent 固有の Skills 依存
-- `.github/skills/planning/agent-common-preamble/SKILL.md`
-- `.github/skills/planning/task-dag-planning/SKILL.md`
-- `.github/skills/planning/work-artifacts-layout/SKILL.md`
-- `.github/skills/planning/app-scope-resolution/SKILL.md`
+- `.github/skills/agent-common-preamble/SKILL.md`
+- `.github/skills/task-dag-planning/SKILL.md`
+- `.github/skills/work-artifacts-layout/SKILL.md`
+- `.github/skills/app-scope-resolution/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
 - `.github/skills/harness/harness-verification-loop/SKILL.md`
 - `.github/skills/azure-skills/azure-ai/SKILL.md`

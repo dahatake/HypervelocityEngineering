@@ -9,12 +9,12 @@ metadata:
 > **WORK**: `work/Arch-Microservice-ServiceDetail/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 
 # 1) 参照順序（最優先の根拠）
-1. 仕様テンプレ（本文構造の正）：`.github/skills/planning/microservice-design-guide/references/microservice-definition.md`
+1. 仕様テンプレ（本文構造の正）：`.github/skills/microservice-design-guide/references/microservice-definition.md`
 2. サービス定義（必ず最初に読む）:
    - `docs/catalog/service-catalog.md`
    - `docs/domain-analytics.md`
@@ -62,7 +62,7 @@ metadata:
      <!-- implementation_files: false -->
      ```
      （このエージェントは計画フェーズ専用のため `implementation_files` は常に `false`）
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - **分割要否は Skill task-dag-planning の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**。詳細は Skill `task-dag-planning` を参照。
   - plan.md のメタデータを §2.3 準拠で設定する（`implementation_files: false` 必須）

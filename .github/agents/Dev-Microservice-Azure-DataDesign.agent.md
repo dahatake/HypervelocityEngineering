@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存
@@ -26,7 +26,7 @@ metadata:
   - `docs/domain-analytics.md`
   - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 任意（存在すれば参照）
-  - `.github/skills/planning/agent-common-preamble/references/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
+  - `.github/skills/agent-common-preamble/references/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

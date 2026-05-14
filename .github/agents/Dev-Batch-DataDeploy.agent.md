@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Dev-Batch-DataDeploy/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 

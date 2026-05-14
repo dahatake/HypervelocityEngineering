@@ -35,8 +35,6 @@ class TestIssueTemplateSelfImprove(unittest.TestCase):
         "setup-labels.yml",  # ラベル初期化用: 自己改善対象外
     ]
 
-    _TEMPLATE_SELF_IMPROVE = "self-improve.yml"  # 自己改善専用: 別扱い
-
     def _read(self, filename: str) -> str:
         path = _TEMPLATE_DIR / filename
         self.assertTrue(path.exists(), f"テンプレートが見つかりません: {path}")
@@ -93,19 +91,6 @@ class TestIssueTemplateSelfImprove(unittest.TestCase):
                 content,
                 f"{template} に enable_self_improve が含まれていますが、対象外テンプレートです",
             )
-
-    def test_self_improve_yml_is_separate(self) -> None:
-        """self-improve.yml は通常テンプレートの自己改善フィールドとは別であることを確認。"""
-        # self-improve.yml が存在することを確認（自己改善専用テンプレート）
-        path = _TEMPLATE_DIR / self._TEMPLATE_SELF_IMPROVE
-        self.assertTrue(path.exists(), f"{self._TEMPLATE_SELF_IMPROVE} が存在しません")
-        # 通常の enable_self_improve チェックボックスは持たない（自己改善そのもの）
-        content = path.read_text(encoding="utf-8")
-        self.assertNotIn(
-            "id: enable_self_improve",
-            content,
-            "self-improve.yml は通常ワークフロー用の enable_self_improve フィールドを持つべきではありません",
-        )
 
 
 class TestReusableWorkflowSelfImprove(unittest.TestCase):

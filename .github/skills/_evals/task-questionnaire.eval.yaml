@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: task-questionnaire
-skill_path: .github/skills/planning/task-questionnaire/SKILL.md
+skill_path: .github/skills/task-questionnaire/SKILL.md
 description: タスクの不明点を洗い出し、選択式の質問票を作成するスキル。PR連携モードと非PR連携モードの2つの動作モードを持つ。
 
 test_cases:

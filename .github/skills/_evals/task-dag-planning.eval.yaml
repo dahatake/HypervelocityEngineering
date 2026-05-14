@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: task-dag-planning
-skill_path: .github/skills/planning/task-dag-planning/SKILL.md
+skill_path: .github/skills/task-dag-planning/SKILL.md
 description: タスクの依存関係（DAG）で分解し、分単位の見積と分割判断を行うスキル。plan.md / subissues.md を作成し、15分超のタスクを安全に分割する。
 
 test_cases:

@@ -208,6 +208,12 @@ class SDKConfig:
     timestamp_style: str = "prefix"        # F4: タイムスタンプ表示位置: prefix/suffix/off
     final_only: bool = False                # F5: 最終出力のみ表示（DAG サマリ＋各 step の final_message）
 
+    # --- Workbench UI（Phase 5）---
+    no_workbench: bool = False              # True: Workbench UI を無効化（--workbench off 相当）
+    workbench_body_lines: int = 20          # Body コンテンツ行数（10〜20 にクランプ）
+    workbench_history: int = 10000          # 履歴バッファ容量
+    workbench_flush_on_exit: bool = True    # 終了時に履歴を stdout フラッシュ
+
     # --- SDK ---
     cli_args: List[str] = field(default_factory=list)
     # SubprocessConfig.cli_args に渡す追加 CLI 引数。例:
@@ -332,6 +338,19 @@ class SDKConfig:
 
     # --- セキュリティ ---
     model_override: Optional[str] = None    # 緊急回避用モデル上書き。設定時は Issue Template の選択より優先される。HVE_MODEL_OVERRIDE 環境変数で設定
+
+    # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
+    mdq_watch: bool = True
+    """``True`` で run_workflow 起動時に hve.mdq.watcher を起動し、Markdown
+    ファイルの追加/更新/削除を ``.hve/mdq.sqlite`` へ逐次反映する。
+
+    - 既定 ON。watchdog 未導入時は自動で無効化（警告ログのみ）。
+    - ``--no-mdq-watch`` / 環境変数 ``HVE_MDQ_WATCH=0`` で OFF。
+    - Cloud Agent / GitHub Actions では使用しない（本機能は CLI 専用）。
+    - 既存の ``python -m hve.mdq index`` による手動索引更新は維持される。
+    """
+    mdq_watch_debounce_ms: int = 500
+    """watcher のデバウンス間隔（ms）。既定 500ms。"""
     # ※ プロンプトサニタイズの有効/無効は HVE_PROMPT_SANITIZATION 環境変数で直接制御する（security.is_sanitization_enabled() 参照）
 
     # --- メイン成果物改善制御 ---
@@ -530,6 +549,8 @@ class SDKConfig:
             require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
             session_id_prefix=os.environ.get("HVE_SESSION_ID_PREFIX", "").strip(),
             fork_on_retry=_env_bool("HVE_FORK_ON_RETRY", default=False),
+            mdq_watch=_env_bool("HVE_MDQ_WATCH", default=True),
+            mdq_watch_debounce_ms=int(os.environ.get("HVE_MDQ_WATCH_DEBOUNCE_MS", "500") or "500"),
         )
 
     def get_review_model(self) -> str:

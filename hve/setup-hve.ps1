@@ -3,7 +3,9 @@ param(
     [switch]$CheckOnly,
     [switch]$WithWorkIQ,
     [switch]$InstallExternalCopilotCli,
-    [switch]$ForceRecreateVenv
+    [switch]$ForceRecreateVenv,
+    [switch]$SkipMdq,
+    [switch]$SkipMdqWatch
 )
 
 $ErrorActionPreference = "Stop"
@@ -184,6 +186,17 @@ if (Test-Path $venvPython) {
         Write-Step "Installing Python dependencies"
         Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "--upgrade", "pip")
         Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "--upgrade", "github-copilot-sdk")
+
+        if (-not $SkipMdq) {
+            $extrasTarget = if ($SkipMdqWatch) { "mdq" } else { "mdq-watch" }
+            Write-Step ("Installing markdown-query optional extras ([{0}])" -f $extrasTarget)
+            try {
+                Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "-e", ".[$extrasTarget]")
+                Write-Host ("[{0}] extras installed." -f $extrasTarget)
+            } catch {
+                Write-SetupWarning ("Failed to install [$extrasTarget] extras: " + $_.Exception.Message + ". markdown-query Skill will still work with built-in fallback. Re-run later: " + $venvPython + ' -m pip install -e ".[' + $extrasTarget + ']"')
+            }
+        }
     }
 
     Write-Step "Verifying HVE runtime"
@@ -192,6 +205,20 @@ if (Test-Path $venvPython) {
 
     $hveHelpExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-m", "hve", "--help")
     if ($hveHelpExitCode -eq 0) { Write-Host "python -m hve --help: OK" } else { Write-SetupWarning "python -m hve --help failed." }
+
+    if (-not $SkipMdq) {
+        $mdqHelpExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-m", "hve.mdq", "--help")
+        if ($mdqHelpExitCode -eq 0) { Write-Host "python -m hve.mdq --help: OK" } else { Write-SetupWarning "python -m hve.mdq --help failed. markdown-query Skill may not be available." }
+
+        if ($CheckOnly) {
+            $mdqExtrasExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import rank_bm25, tiktoken")
+            if ($mdqExtrasExitCode -eq 0) { Write-Host "[mdq] extras: OK (rank_bm25, tiktoken)" } else { Write-SetupWarning "[mdq] extras missing. Run without -CheckOnly to install, or pass -SkipMdq to suppress this check." }
+            if (-not $SkipMdqWatch) {
+                $watchExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import watchdog")
+                if ($watchExitCode -eq 0) { Write-Host "[mdq-watch] extras: OK (watchdog)" } else { Write-SetupWarning "[mdq-watch] extras missing (watchdog). HVE CLI Orchestrator のリアルタイム索引更新は無効になります。Run without -CheckOnly to install, or pass -SkipMdqWatch to suppress this check." }
+            }
+        }
+    }
 }
 
 if ($gh) {
@@ -216,10 +243,21 @@ if ($gh) {
 }
 if (Test-Path $venvPython) {
     Write-Host "Basic runtime check: $venvPython -m hve --help"
+    if (-not $SkipMdq) {
+        Write-Host "Markdown query (local): $venvPython -m hve.mdq index ; $venvPython -m hve.mdq stats"
+        if (-not $SkipMdqWatch) {
+            Write-Host "Markdown query (realtime, CLI Orchestrator only): watchdog installed. Disable with --no-mdq-watch or HVE_MDQ_WATCH=0."
+        }
+    }
 } else {
     Write-Host "Create .venv first (run setup without -CheckOnly), then run: .venv\\Scripts\\python.exe -m hve --help"
 }
 Write-Host "Optional: Node.js / npm / npx are only required when using Work IQ or Node-based MCP tools."
+if ($SkipMdq) {
+    Write-Host "markdown-query [mdq] extras skipped (-SkipMdq). Built-in fallback (MiniBM25) will be used."
+} elseif ($SkipMdqWatch) {
+    Write-Host "markdown-query watcher extras skipped (-SkipMdqWatch). [mdq] installed but watchdog is not; HVE CLI Orchestrator realtime index update will be disabled."
+}
 
 if ($CheckOnly) {
     Write-Host "`nCheck-only completed with $script:WarningCount warning(s)."

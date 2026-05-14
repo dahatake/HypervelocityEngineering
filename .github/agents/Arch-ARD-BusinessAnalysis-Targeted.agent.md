@@ -8,7 +8,7 @@ metadata:
 ---
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 目的
 - 指定された事業・業務について As-Is、To-Be、Gap、Strategic Recommendations を一貫した論理構造で分析する。

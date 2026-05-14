@@ -31,7 +31,6 @@ class TestIssueTemplateQaControls(unittest.TestCase):
 
     _TEMPLATES_OUT_OF_SCOPE = [
         "setup-labels.yml",
-        "self-improve.yml",
     ]
 
     def _read_template(self, filename: str) -> str:

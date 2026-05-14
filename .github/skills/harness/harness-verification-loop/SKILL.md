@@ -47,12 +47,12 @@ Phase 失敗時のエスカレーション: `references/verification-commands.md
 
 ## 差分品質評価（Diff Quality Assessment）
 
-PR 提出前に以下を実施する:
+タスク完了報告（GitHub Issue 起点モードでは PR 提出前、CLI セッション起点モードでは `completion-report.md` 提出前）に以下を実施する:
 
 1. `git diff --stat` で変更サマリーを取得する
-2. 変更ファイルが Issue/AC の対象スコープ内か確認する
+2. 変更ファイルが タスク / AC（受け入れ条件）の対象スコープ内か確認する
 3. 無関係な変更（整形のみ、コメント追加のみ等）が含まれていないか確認する
-4. 結果を `work-artifacts-layout` Skill で定義される作業ディレクトリ直下の `verification-report.md`（例: `work/Issue<識別子>/verification-report.md`）の Diff セクションに記録する
+4. 結果を `work-artifacts-layout` Skill で定義される作業ディレクトリ直下の `verification-report.md`（例: `work/Issue-<識別子>/verification-report.md`）の Diff セクションに記録する
 
 ---
 

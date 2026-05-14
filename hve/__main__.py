@@ -1228,6 +1228,74 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # mdq リアルタイム索引更新（HVE CLI Orchestrator 限定機能）
+    orch.add_argument(
+        "--mdq-watch",
+        dest="mdq_watch",
+        action="store_true",
+        default=None,
+        help=(
+            "Markdown ファイルの追加/更新/削除を OS イベントで検知し .hve/mdq.sqlite を逐次更新する。"
+            " 既定 ON。watchdog 未導入時は自動で無効化（警告ログのみ）。"
+            " 環境変数 HVE_MDQ_WATCH=0 または --no-mdq-watch で無効化できる。"
+            " 既存の `python -m hve.mdq index` による手動索引更新は維持される。"
+        ),
+    )
+    orch.add_argument(
+        "--no-mdq-watch",
+        dest="no_mdq_watch",
+        action="store_true",
+        default=False,
+        help="mdq リアルタイム索引更新を無効化する（--mdq-watch および HVE_MDQ_WATCH=true より優先）。",
+    )
+    orch.add_argument(
+        "--mdq-watch-debounce-ms",
+        dest="mdq_watch_debounce_ms",
+        type=int,
+        default=None,
+        metavar="MS",
+        help="mdq watcher のデバウンス間隔（ms、既定 500）。環境変数 HVE_MDQ_WATCH_DEBOUNCE_MS でも指定可。",
+    )
+
+    # --- Workbench UI（4 ペイン固定レイアウトのターミナル表示）---
+    orch.add_argument(
+        "--workbench",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help=(
+            "Workbench UI（Header/Steps/Body 固定スクロール/Footer）を有効化する。"
+            "auto: TTY かつ非 quiet/final_only/HVE_NO_WORKBENCH=1 時に有効。"
+            "off: 常に既存の plain 出力。"
+        ),
+    )
+    orch.add_argument(
+        "--workbench-body-lines",
+        type=int,
+        default=20,
+        metavar="N",
+        help="Workbench Body のコンテンツ行数（10〜20 にクランプ。既定: 20。環境変数 HVE_WORKBENCH_BODY_LINES でも指定可）。",
+    )
+    orch.add_argument(
+        "--workbench-history",
+        type=int,
+        default=10000,
+        metavar="N",
+        help="Workbench 履歴バッファ容量（既定: 10000 行）。",
+    )
+    orch.add_argument(
+        "--workbench-flush-on-exit",
+        dest="workbench_flush_on_exit",
+        action="store_true",
+        default=True,
+        help="Workbench 終了時に履歴を通常 stdout にフラッシュする（CI ログ保存性、既定: 有効）。",
+    )
+    orch.add_argument(
+        "--no-workbench-flush-on-exit",
+        dest="workbench_flush_on_exit",
+        action="store_false",
+        help="Workbench 終了時のフラッシュを無効化する。",
+    )
+
     # --- qa-merge サブコマンド ---
     qa_merge = sub.add_parser(
         "qa-merge",
@@ -1462,6 +1530,36 @@ def _build_config(args: argparse.Namespace):
     cfg.timestamp_style = getattr(args, "timestamp_style", "prefix")
     cfg.final_only = getattr(args, "final_only", False)
 
+    # --- Workbench UI（Phase 5）---
+    _wb_mode = getattr(args, "workbench", "auto")
+    cfg.no_workbench = (_wb_mode == "off")
+    # 優先順位: CLI 明示値 > 環境変数 HVE_WORKBENCH_BODY_LINES > 既定 20
+    _wb_lines_raw = int(getattr(args, "workbench_body_lines", 20) or 20)
+    import os as _os_wb
+    _env_wb_lines = _os_wb.environ.get("HVE_WORKBENCH_BODY_LINES", "").strip()
+    if _env_wb_lines and _wb_lines_raw == 20:
+        try:
+            _wb_lines_raw = int(_env_wb_lines)
+        except ValueError:
+            pass
+    _wb_lines = max(10, min(20, _wb_lines_raw))
+    if _wb_lines != _wb_lines_raw:
+        import sys as _sys
+        print(
+            f"[hve] workbench body lines={_wb_lines_raw} を [10,20] にクランプ → {_wb_lines}",
+            file=_sys.stderr,
+        )
+    cfg.workbench_body_lines = _wb_lines
+    cfg.workbench_history = int(getattr(args, "workbench_history", 10000) or 10000)
+    cfg.workbench_flush_on_exit = bool(getattr(args, "workbench_flush_on_exit", True))
+    # --workbench {on,auto,off} のマッピング:
+    #   off → cfg.no_workbench=True で起動を拑否
+    #   auto → Console.workbench_enabled の自動判定（TTY/quiet/final_only/HVE_NO_WORKBENCH）
+    #   on → auto と同じ起動判定を採りつつ、HVE_NO_WORKBENCH の拑否だけ解除する
+    if _wb_mode == "on":
+        import os as _os
+        _os.environ.pop("HVE_NO_WORKBENCH", None)
+
     # --verbosity 明示指定 > --verbose/--quiet フラグ > デフォルト
     _verbosity_map = {"quiet": 0, "compact": 1, "normal": 2, "verbose": 3}
     if getattr(args, "verbosity", None) is not None:
@@ -1486,6 +1584,16 @@ def _build_config(args: argparse.Namespace):
     elif getattr(args, "self_improve", False):
         cfg.auto_self_improve = True
         cfg.self_improve_skip = False
+
+    # mdq リアルタイム索引更新: 優先順位 --no-mdq-watch > --mdq-watch > HVE_MDQ_WATCH > デフォルト True
+    if getattr(args, "no_mdq_watch", False):
+        cfg.mdq_watch = False
+    elif getattr(args, "mdq_watch", None) is True:
+        cfg.mdq_watch = True
+    # debounce: CLI 引数 > 環境変数 > デフォルト
+    _mdq_debounce = getattr(args, "mdq_watch_debounce_ms", None)
+    if _mdq_debounce is not None:
+        cfg.mdq_watch_debounce_ms = int(_mdq_debounce)
 
     if args.cli_path:
         cfg.cli_path = args.cli_path
@@ -3494,6 +3602,10 @@ def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
 
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
+    # HVE CLI Orchestrator 実行配下シグナルは OrchestratorContext を明示引数で
+    # 伝播させる方式へ移行済み（copilot-instructions.md §0 Orchestrator 例外）。
+    # 環境変数 `HVE_ORCHESTRATOR_ACTIVE` は使用しない。
+
     # バリデーション: --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と併用必須
     if args.auto_coding_agent_review_auto_approval and not args.auto_coding_agent_review:
         print(
@@ -3518,6 +3630,11 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     except ImportError:
         from orchestrator import run_workflow  # type: ignore[no-redef]
 
+    try:
+        from .orchestrator_context import OrchestratorContext
+    except ImportError:
+        from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+
     config = _build_config(args)
     params = _build_params(args)
 
@@ -3539,11 +3656,16 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if not _validate_auto_coding_agent_review(args, config):
         return 1
 
+    # HVE CLI Orchestrator 配下シグナル: OrchestratorContext を生成して伝播。
+    # `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
+    orchestrator_ctx = OrchestratorContext(run_id=config.run_id or "")
+
     result = asyncio.run(
         run_workflow(
             workflow_id=args.workflow,
             params=params,
             config=config,
+            orchestrator_ctx=orchestrator_ctx,
         )
     )
 

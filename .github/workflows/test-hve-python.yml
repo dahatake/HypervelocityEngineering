@@ -41,3 +41,38 @@ jobs:
 
       - name: Run all HVE tests
         run: pytest hve/tests/ -v --ignore=hve/tests/test_dag_parity.py
+
+  mdq-smoke:
+    name: mdq index smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package with [mdq] extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[mdq]"
+      - name: Build mdq index
+        run: python -m hve.mdq index
+      - name: Verify stats
+        run: |
+          set -euo pipefail
+          python -m hve.mdq stats > mdq-stats.json
+          cat mdq-stats.json
+          python - <<'PY'
+          import json, sys
+          s = json.load(open("mdq-stats.json"))
+          assert s.get("files", 0) > 0, f"files={s.get('files')}"
+          assert s.get("chunks", 0) > 0, f"chunks={s.get('chunks')}"
+          print("OK", s)
+          PY
+          {
+            echo "## mdq smoke"
+            echo '```json'
+            cat mdq-stats.json
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

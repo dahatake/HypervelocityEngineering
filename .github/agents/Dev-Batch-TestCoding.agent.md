@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Dev-Batch-TestCoding/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 役割（このエージェントがやること）
 
@@ -99,7 +99,7 @@ metadata:
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
      ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: テストケース種別単位（§2 通常テスト → §3.1 冪等性 → §3.2〜§3.6 その他バッチ固有）

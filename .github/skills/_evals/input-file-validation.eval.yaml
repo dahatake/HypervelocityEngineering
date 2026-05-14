@@ -1,5 +1,5 @@
 skill: input-file-validation
-skill_path: .github/skills/planning/input-file-validation/SKILL.md
+skill_path: .github/skills/input-file-validation/SKILL.md
 description: Custom Agent の入力ファイル（必読ファイル・推奨ファイル）の存在確認と欠損時の処理ルールを提供する。
 
 test_cases:

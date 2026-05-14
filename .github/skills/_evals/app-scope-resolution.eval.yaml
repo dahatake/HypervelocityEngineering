@@ -1,5 +1,5 @@
 skill: app-scope-resolution
-skill_path: .github/skills/planning/app-scope-resolution/SKILL.md
+skill_path: .github/skills/app-scope-resolution/SKILL.md
 description: APP-ID に基づくスコープ解決ルール。Issue body から APP-ID を取得し、app-catalog.md との紐付けで対象サービス・画面・エンティティを特定する。AAD-WEB/ASDW-WEB/ABD/ABDV では app-arch-catalog.md の推薦アーキテクチャで自動フィルタリングする。
 
 test_cases:

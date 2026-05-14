@@ -2029,5 +2029,62 @@ class TestTruncateContextWithWarn(unittest.TestCase):
         self.assertLessEqual(len(out), 50)
 
 
+class TestSubSessionOptsCustomAgent(unittest.TestCase):
+    """SPLIT-fork 拡張: _build_sub_session_opts(custom_agent=...) の挙動。"""
+
+    @staticmethod
+    def _patched_modules():
+        import types
+
+        fake_copilot_session = types.ModuleType("copilot.session")
+
+        class _PermissionHandler:
+            @staticmethod
+            async def approve_all(*args, **kwargs):
+                return True
+
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+        return {"copilot.session": fake_copilot_session}
+
+    def _make_runner(self) -> "StepRunner":
+        from runner import StepRunner
+        cfg = SDKConfig(model="claude-opus-4.7", run_id="run-split-fork")
+        console = Console(verbose=False, quiet=True)
+        return StepRunner(config=cfg, console=console)
+
+    def test_custom_agent_sets_opts(self) -> None:
+        runner = self._make_runner()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts(
+                "claude-opus-4.7",
+                custom_agent="Arch-UI-Detail",
+            )
+        self.assertEqual(opts.get("custom_agent"), "Arch-UI-Detail")
+
+    def test_custom_agent_omitted_backward_compat(self) -> None:
+        """QA/Review 既存呼び出し（custom_agent 省略）では opts に含めない。"""
+        runner = self._make_runner()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertNotIn("custom_agent", opts)
+
+    def test_custom_agent_none_explicit(self) -> None:
+        """custom_agent=None 明示でも opts に含めない。"""
+        runner = self._make_runner()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts(
+                "claude-opus-4.7", custom_agent=None,
+            )
+        self.assertNotIn("custom_agent", opts)
+
+    def test_custom_agent_empty_string_treated_as_none(self) -> None:
+        runner = self._make_runner()
+        with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
+            opts = runner._build_sub_session_opts(
+                "claude-opus-4.7", custom_agent="",
+            )
+        self.assertNotIn("custom_agent", opts)
+
+
 if __name__ == "__main__":
     unittest.main()

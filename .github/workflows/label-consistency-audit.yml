@@ -1,0 +1,276 @@
+name: Label Consistency Audit
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 毎日 2:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'ドライラン（修復を実行しない）'
+        type: boolean
+        default: false
+      target_issue:
+        description: '特定 Issue 番号（空白 = 全件スキャン）'
+        type: string
+        default: ''
+  issues:
+    types: [labeled, unlabeled, closed]
+
+concurrency:
+  group: label-consistency-audit-${{ github.event.issue.number || inputs.target_issue || 'full-scan' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'true' || 'false' }}
+      TARGET_ISSUE: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || (github.event_name == 'issues' && github.event.issue.number || '') }}
+
+    steps:
+      - name: ラベル整合性監査と自動修復
+        id: audit
+        run: |
+          set -euo pipefail
+
+          # 対象 12 系列プレフィックス
+          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm adoc aqod"
+
+          # 自動修復対象: done が存在する場合に除去すべき古いラベル
+          # 形式: "stale_suffix"（done と共存不可）
+          AUTO_FIX_STALE_SUFFIXES="qa-drafting qa-ready ready running"
+
+          # 自動修復しない（どちらが正しいか断定不可）の不整合ペア（片方向のみ定義）
+          # 通知のみ: running + qa-ready
+          AMBIGUOUS_PAIRS="running:qa-ready"
+
+          AUDIT_LABEL="needs-label-audit"
+          SUMMARY_LINES=""
+          TOTAL_ISSUES=0
+          FIXED_COUNT=0
+          NOTIFIED_COUNT=0
+
+          # ── Issues 取得 ─────────────────────────────────────────
+          if [ -n "${TARGET_ISSUE}" ]; then
+            # 入力値を数値のみに制限（インジェクション防止）
+            if ! printf '%s' "${TARGET_ISSUE}" | grep -qE '^[0-9]+$'; then
+              echo "::error::target_issue は数値のみ使用できます: '${TARGET_ISSUE}'"
+              exit 1
+            fi
+            ISSUE_NUMBERS="${TARGET_ISSUE}"
+          else
+            # 全 open + closed の Issue を取得（PR は除外、最大 500 件）
+            ISSUE_NUMBERS=$(gh api "/repos/${REPO}/issues?state=all&per_page=100" \
+              --paginate \
+              --jq 'map(select(.pull_request|not)) | .[].number' 2>/dev/null | head -500 || echo '')
+          fi
+
+          if [ -z "${ISSUE_NUMBERS}" ]; then
+            echo "監査対象 Issue が見つかりませんでした。"
+            echo "total=0" >> "${GITHUB_OUTPUT}"
+            echo "fixed=0" >> "${GITHUB_OUTPUT}"
+            echo "notified=0" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # ── 各 Issue の監査 ────────────────────────────────────
+          for issue_num in ${ISSUE_NUMBERS}; do
+            TOTAL_ISSUES=$(( TOTAL_ISSUES + 1 ))
+            issue_data=$(gh api "/repos/${REPO}/issues/${issue_num}" 2>/dev/null) || continue
+            labels_csv=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          labels = [l.get('name','') for l in data.get('labels', [])]
+          print(','.join(labels))
+          " 2>/dev/null || echo '')
+
+            for prefix in ${PREFIXES}; do
+              done_label="${prefix}:done"
+              has_done=false
+              if printf ',%s,' "${labels_csv}" | grep -q ",${done_label},"; then
+                has_done=true
+              fi
+
+              # ── Case 1: done + 古いラベルの同時付与 → 自動修復 ──────
+              if [ "${has_done}" = "true" ]; then
+                for stale_suffix in ${AUTO_FIX_STALE_SUFFIXES}; do
+                  stale_label="${prefix}:${stale_suffix}"
+                  if printf ',%s,' "${labels_csv}" | grep -q ",${stale_label},"; then
+                    LINE="Issue #${issue_num}: [自動修復対象] ${done_label} + ${stale_label} の同時付与を検出"
+                    echo "  ${LINE}"
+                    SUMMARY_LINES="${SUMMARY_LINES}
+          - ${LINE}"
+                    if [ "${DRY_RUN}" != "true" ]; then
+                      # ラベル名を URL エンコード（":" 等を含むため必要）
+                      ENCODED_STALE_LABEL=$(python3 -c "
+          import sys, urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe=''))
+          " "${stale_label}" 2>/dev/null) || {
+                        echo "::warning::ラベル名の URL エンコードに失敗しました: ${stale_label} — このラベルの削除をスキップします"
+                        continue
+                      }
+                      gh api -X DELETE "/repos/${REPO}/issues/${issue_num}/labels/${ENCODED_STALE_LABEL}" --silent 2>/dev/null || true
+                      FIXED_COUNT=$(( FIXED_COUNT + 1 ))
+                      echo "    → ${stale_label} を削除しました"
+                      # Case 4 の誤検知防止のため labels_csv から削除済みラベルを除去
+                      new_labels_csv=$(python3 -c "
+          import sys
+          csv = sys.stdin.read()
+          labels = [l for l in csv.split(',') if l != sys.argv[1]]
+          print(','.join(labels))
+          " "${stale_label}" <<< "${labels_csv}" 2>/dev/null) && labels_csv="${new_labels_csv}" || \
+                        echo "::warning::labels_csv の更新に失敗（${stale_label}）: Case 4 で誤検知が発生する可能性があります"
+                    else
+                      echo "    [DRY RUN] would execute: gh api -X DELETE /repos/${REPO}/issues/${issue_num}/labels/${stale_label}"
+                    fi
+                  fi
+                done
+              fi
+
+              # ── Case 2: 曖昧な同時付与 → needs-label-audit 付与＋通知 ──
+              for pair in ${AMBIGUOUS_PAIRS}; do
+                suffix_a="${pair%%:*}"
+                suffix_b="${pair##*:}"
+                label_a="${prefix}:${suffix_a}"
+                label_b="${prefix}:${suffix_b}"
+                has_a=false
+                has_b=false
+                if printf ',%s,' "${labels_csv}" | grep -q ",${label_a},"; then has_a=true; fi
+                if printf ',%s,' "${labels_csv}" | grep -q ",${label_b},"; then has_b=true; fi
+                if [ "${has_a}" = "true" ] && [ "${has_b}" = "true" ]; then
+                  LINE="Issue #${issue_num}: [要人手確認] ${label_a} + ${label_b} の同時付与（自動修復不可）"
+                  echo "  ${LINE}"
+                  SUMMARY_LINES="${SUMMARY_LINES}
+          - ${LINE}"
+                  if [ "${DRY_RUN}" != "true" ]; then
+                    gh issue edit "${issue_num}" --repo "${REPO}" --add-label "${AUDIT_LABEL}" 2>/dev/null || true
+                    NOTIFIED_COUNT=$(( NOTIFIED_COUNT + 1 ))
+                  else
+                    echo "    [DRY RUN] would execute: gh issue edit ${issue_num} --add-label ${AUDIT_LABEL}"
+                  fi
+                fi
+              done
+
+              # ── Case 3: closed Issue に進行中ラベルが残っている → 通知 ──
+              issue_state=$(printf '%s' "${issue_data}" | python3 -c "
+          import sys, json
+          print(json.load(sys.stdin).get('state',''))
+          " 2>/dev/null || echo '')
+              if [ "${issue_state}" = "closed" ]; then
+                for active_suffix in ready running qa-ready qa-drafting; do
+                  active_label="${prefix}:${active_suffix}"
+                  if printf ',%s,' "${labels_csv}" | grep -q ",${active_label},"; then
+                    # done が既にある場合は Case 1 で処理済みのためスキップ
+                    if [ "${has_done}" = "false" ]; then
+                      LINE="Issue #${issue_num}: [要人手確認] closed Issue に ${active_label} が残置（${done_label} なし）"
+                      echo "  ${LINE}"
+                      SUMMARY_LINES="${SUMMARY_LINES}
+          - ${LINE}"
+                      if [ "${DRY_RUN}" != "true" ]; then
+                        gh issue edit "${issue_num}" --repo "${REPO}" --add-label "${AUDIT_LABEL}" 2>/dev/null || true
+                        NOTIFIED_COUNT=$(( NOTIFIED_COUNT + 1 ))
+                      else
+                        echo "    [DRY RUN] would execute: gh issue edit ${issue_num} --add-label ${AUDIT_LABEL}"
+                      fi
+                    fi
+                  fi
+                done
+              fi
+
+              # ── Case 4: 同一 prefix で複数状態ラベルが並立 → 通知 ──
+              state_suffixes="ready running qa-ready qa-drafting done"
+              state_count=0
+              state_found=""
+              for s_suffix in ${state_suffixes}; do
+                s_label="${prefix}:${s_suffix}"
+                if printf ',%s,' "${labels_csv}" | grep -q ",${s_label},"; then
+                  state_count=$(( state_count + 1 ))
+                  state_found="${state_found} ${s_label}"
+                fi
+              done
+              if [ "${state_count}" -ge 2 ]; then
+                # done + stale は Case 1 で処理済みなので、それ以外の多重付与のみ通知
+                # 簡易判定: done が存在し残りが1つなら自動修復済み扱い
+                if [ "${has_done}" = "true" ] && [ "${state_count}" -eq 2 ]; then
+                  : # 自動修復対象は Case 1 で処理済み
+                else
+                  LINE="Issue #${issue_num}: [要人手確認] prefix=${prefix} に ${state_count} 個の状態ラベルが並立:${state_found}"
+                  echo "  ${LINE}"
+                  SUMMARY_LINES="${SUMMARY_LINES}
+          - ${LINE}"
+                  if [ "${DRY_RUN}" != "true" ]; then
+                    gh issue edit "${issue_num}" --repo "${REPO}" --add-label "${AUDIT_LABEL}" 2>/dev/null || true
+                    NOTIFIED_COUNT=$(( NOTIFIED_COUNT + 1 ))
+                  else
+                    echo "    [DRY RUN] would execute: gh issue edit ${issue_num} --add-label ${AUDIT_LABEL}"
+                  fi
+                fi
+              fi
+            done
+          done
+
+          # ── サマリー出力 ────────────────────────────────────────
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "監査完了"
+          echo "  スキャン Issue 数: ${TOTAL_ISSUES}"
+          echo "  自動修復件数:      ${FIXED_COUNT}"
+          echo "  通知件数:          ${NOTIFIED_COUNT}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "  ※ DRY RUN モード — 実際の変更は行っていません"
+          fi
+          echo "════════════════════════════════════════"
+
+          echo "total=${TOTAL_ISSUES}" >> "${GITHUB_OUTPUT}"
+          echo "fixed=${FIXED_COUNT}" >> "${GITHUB_OUTPUT}"
+          echo "notified=${NOTIFIED_COUNT}" >> "${GITHUB_OUTPUT}"
+          echo "dry_run=${DRY_RUN}" >> "${GITHUB_OUTPUT}"
+          {
+            echo 'summary<<EOF'
+            echo "${SUMMARY_LINES}"
+            echo 'EOF'
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: GitHub Actions サマリー出力
+        if: always()
+        env:
+          TOTAL: ${{ steps.audit.outputs.total }}
+          FIXED: ${{ steps.audit.outputs.fixed }}
+          NOTIFIED: ${{ steps.audit.outputs.notified }}
+          DRY_RUN: ${{ steps.audit.outputs.dry_run }}
+          SUMMARY: ${{ steps.audit.outputs.summary }}
+        run: |
+          {
+            printf '## 🔍 ラベル整合性監査結果\n\n'
+            printf '| 項目 | 件数 |\n'
+            printf '|---|---|\n'
+            printf '| スキャン Issue 数 | %s |\n' "${TOTAL:-0}"
+            printf '| 自動修復件数 | %s |\n' "${FIXED:-0}"
+            printf '| 通知件数（`needs-label-audit` 付与） | %s |\n' "${NOTIFIED:-0}"
+            if [ "${DRY_RUN}" = "true" ]; then
+              printf '\n> ⚠️ **DRY RUN モード** — 実際の変更は行っていません\n'
+            fi
+            if [ -n "${SUMMARY}" ]; then
+              printf '\n### 検出された不整合\n\n%s\n' "${SUMMARY}"
+            else
+              printf '\n✅ 不整合なし\n'
+            fi
+            printf '\n### 自動修復ルール\n\n'
+            printf '| 状態 | 処理 |\n'
+            printf '|---|---|\n'
+            printf '| `*:done` + `*:qa-drafting` | `*:qa-drafting` を自動除去 |\n'
+            printf '| `*:done` + `*:qa-ready` | `*:qa-ready` を自動除去 |\n'
+            printf '| `*:done` + `*:ready` | `*:ready` を自動除去 |\n'
+            printf '| `*:done` + `*:running` | `*:running` を自動除去 |\n'
+            printf '| `*:running` + `*:qa-ready` | `needs-label-audit` 付与（要人手確認） |\n'
+            printf '| closed + 進行中ラベル残置（done なし） | `needs-label-audit` 付与（要人手確認） |\n'
+            printf '| 同一 prefix に 3 つ以上の状態ラベル | `needs-label-audit` 付与（要人手確認） |\n'
+            printf '\n> このワークフローは `label-consistency-audit.yml` によって自動実行されます。\n'
+          } >> "${GITHUB_STEP_SUMMARY}"

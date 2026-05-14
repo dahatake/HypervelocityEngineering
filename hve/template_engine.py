@@ -367,7 +367,12 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
         )
     if "tdd_max_retries" in wf.params:
         import re as _re
-        raw = _prompt("TDD GREEN リトライ最大回数 (3/5/7/10)", default="5", required=False)
+        print("\n[TDD GREEN リトライ最大回数]")
+        print("  TDD GREEN フェーズでテストが全 PASS にならない場合、")
+        print("  実装を修正しながら最大この回数まで再試行します。")
+        print("  上限を超えた場合は blocked ラベルを付与して停止します。")
+        print("  選択肢: 3 / 5 / 7 / 10  （デフォルト: 5）")
+        raw = _prompt("TDD GREEN リトライ最大回数", default="5", required=False)
         m = _re.search(r'\d+', raw or "5")
         if m:
             params["tdd_max_retries"] = int(m.group())

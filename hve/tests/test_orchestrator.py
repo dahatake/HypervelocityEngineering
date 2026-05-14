@@ -2141,8 +2141,6 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
             "aag": "docs/",
             "aagd": ".",
             "akm": "knowledge/",
-            "aqod": "qa/",
-            "adoc": "docs/",
         }
         for workflow_id, expected_scope in expected_scopes.items():
             with self.subTest(workflow_id=workflow_id):

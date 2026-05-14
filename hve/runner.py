@@ -72,6 +72,7 @@ try:
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
     )
+    from .orchestrator_context import OrchestratorContext
 except ImportError:
     from config import (  # type: ignore[no-redef]
         DEFAULT_MODEL,
@@ -105,6 +106,7 @@ except ImportError:
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
     )
+    from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
 _MAX_SCAN_OUTPUT_LENGTH: int = 8000
@@ -249,19 +251,39 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
     (例: `reasoning_effort must be one of ...`) や、別キーワードの
     エラーメッセージに `reasoning_effort` が偶然含まれるケースで
     誤って引数を剥がして再試行することを防ぐ。
+
+    併せて、Skill レジストリへ `.github/skills` を登録する
+    (`skill_directories` / `enable_config_discovery`) を呼び出し側で
+    未指定の場合のみ自動注入する。SDK が当該引数を未サポートの場合は
+    TypeError を契機に剥がして再試行する。
     """
-    try:
-        return await client.create_session(**session_opts)
-    except TypeError as exc:
-        msg = str(exc)
-        if (
-            "unexpected keyword argument" in msg
-            and "reasoning_effort" in msg
-            and "reasoning_effort" in session_opts
-        ):
-            _opts = {k: v for k, v in session_opts.items() if k != "reasoning_effort"}
-            return await client.create_session(**_opts)
-        raise
+    from pathlib import Path as _Path
+
+    _opts_with_skills = dict(session_opts)
+    if "skill_directories" not in _opts_with_skills:
+        _skills_dir = _Path.cwd() / ".github" / "skills"
+        if _skills_dir.is_dir():
+            _opts_with_skills["skill_directories"] = [str(_skills_dir)]
+    if "enable_config_discovery" not in _opts_with_skills:
+        _opts_with_skills["enable_config_discovery"] = True
+
+    async def _attempt(opts: Dict[str, Any]) -> Any:
+        try:
+            return await client.create_session(**opts)
+        except TypeError as exc:
+            msg = str(exc)
+            if "unexpected keyword argument" not in msg:
+                raise
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills"):
+                if _kw in msg and _kw in opts:
+                    _stripped = {k: v for k, v in opts.items() if k != _kw}
+                    return await _attempt(_stripped)
+            if "reasoning_effort" in msg and "reasoning_effort" in opts:
+                _stripped = {k: v for k, v in opts.items() if k != "reasoning_effort"}
+                return await _attempt(_stripped)
+            raise
+
+    return await _attempt(_opts_with_skills)
 
 
 def _truncate_context(text: str, max_length: int) -> str:
@@ -644,6 +666,7 @@ class StepRunner:
         *,
         resume_state: Optional["RunState"] = None,
         journal: Optional["RunJournal"] = None,
+        orchestrator_ctx: Optional["OrchestratorContext"] = None,
     ) -> None:
         self.config = config
         self.console = console
@@ -653,6 +676,10 @@ class StepRunner:
         # Phase 6 (Resume 2-layer txn): 任意の RunJournal。checkpoint 記録に使う。
         # None なら journal 記録はスキップ（既存挙動と完全互換）。
         self._journal = journal
+        # Orchestrator 実行コンテキスト（`HVE_ORCHESTRATOR_ACTIVE` 環境変数の置換）。
+        # None == 単独実行モード（Split fork 無効、Agent は plan.md/subissues.md 生成で停止）。
+        # 非 None == Orchestrator 配下（Split 検出時に subissues.md からサブタスクを並列 fork）。
+        self._orchestrator_ctx = orchestrator_ctx
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
@@ -800,6 +827,7 @@ class StepRunner:
         include_workiq: bool = False,
         step_id: Optional[str] = None,
         suffix: str = "",
+        custom_agent: Optional[str] = None,
     ) -> Dict[str, Any]:
         """レビュー/QA 用の別セッション構築オプションを生成する。
 
@@ -810,12 +838,20 @@ class StepRunner:
         Phase 2 (Resume): step_id + suffix が指定された場合は決定論的 session_id を
         付与する（make_session_id で生成）。後方互換のため step_id=None の場合は
         session_id を付与しない（SDK 側で自動生成）。
+
+        SPLIT-fork 拡張 (custom_agent): SPLIT_REQUIRED 分割サブタスクの実行では
+        親 Step と **同じ Custom Agent** を継承する必要があるため、`custom_agent`
+        引数が指定された場合のみ ``opts["custom_agent"]`` に設定する。QA/Review
+        の既存呼び出しは ``custom_agent=None`` (省略) で従来挙動を維持する。
         """
         from copilot.session import PermissionHandler
         opts: Dict[str, Any] = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
         }
+        # SPLIT-fork 用: 親 Step の Custom Agent を継承（QA/Review では None のため未設定）
+        if custom_agent:
+            opts["custom_agent"] = custom_agent
         # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
         if model and model != MODEL_AUTO_VALUE:
             opts["model"] = model
@@ -1641,6 +1677,203 @@ class StepRunner:
         )
         return pre_qa_context
 
+    # ------------------------------------------------------------------
+    # Phase 1.5: SPLIT_REQUIRED サブタスク fork
+    # ------------------------------------------------------------------
+
+    async def _maybe_run_split_fork(
+        self,
+        *,
+        client: Any,
+        step_id: str,
+        custom_agent: Optional[str],
+    ) -> bool:
+        """Agent が SPLIT_REQUIRED で出力した subissues.md を検出し、サブタスクを fork する。
+
+        Orchestrator 配下 (`self._orchestrator_ctx is not None`) のときのみ動作。
+        単独実行モードでは常に True を返して素通しする（Agent が plan.md+subissues.md
+        で停止する従来挙動を維持）。
+
+        サブタスクは `depends_on` から計算した topological wave 単位で並列実行する
+        （同一 wave 内は `asyncio.gather` + `Semaphore(max_parallel_subtasks)`）。
+
+        Args:
+            client: 親 Step のメイン CopilotClient
+            step_id: 親 Step ID
+            custom_agent: 親 Step の Custom Agent 名
+
+        Returns:
+            True: 全サブタスク成功 / SPLIT 未発生 / Orchestrator 未配下
+            False: 1 件以上のサブタスクが失敗、または再帰深度上限到達
+        """
+        ctx = self._orchestrator_ctx
+        # 単独実行モード or 機能無効 → 素通し（従来挙動）
+        if ctx is None or not ctx.split_fork_enabled:
+            return True
+
+        try:
+            from .split_fork import (
+                SubIssuesParseError,
+                build_subtask_prompt,
+                check_subtask_completion,
+                compute_waves,
+                discover_subissues_md,
+                make_subtask_work_subdir,
+                parse_subissues_md,
+            )
+        except ImportError:  # pragma: no cover - script execution path
+            from split_fork import (  # type: ignore[no-redef]
+                SubIssuesParseError,
+                build_subtask_prompt,
+                check_subtask_completion,
+                compute_waves,
+                discover_subissues_md,
+                make_subtask_work_subdir,
+                parse_subissues_md,
+            )
+
+        work_root = Path("work")
+        subissues_path = discover_subissues_md(
+            work_root=work_root,
+            custom_agent=custom_agent,
+            parent_step_id=step_id,
+        )
+        if subissues_path is None:
+            return True  # SPLIT 未発生
+
+        depth = ctx.split_fork_depth
+        max_depth = ctx.split_fork_max_depth
+        if depth >= max_depth:
+            self.console.error(
+                f"  ✗ [{step_id}] SPLIT fork 深度上限到達 (depth={depth}, max={max_depth}) "
+                f"— subissues.md 発見も実行をスキップして Step failed 化"
+            )
+            return False
+
+        try:
+            subissues = parse_subissues_md(subissues_path)
+        except SubIssuesParseError as exc:
+            self.console.error(
+                f"  ✗ [{step_id}] subissues.md パース失敗: {exc}"
+            )
+            return False
+
+        try:
+            waves = compute_waves(subissues)
+        except SubIssuesParseError as exc:
+            self.console.error(
+                f"  ✗ [{step_id}] subissues.md depends_on 解決失敗: {exc}"
+            )
+            return False
+
+        self.console.event(
+            f"  🔀 [{step_id}] SPLIT_REQUIRED 検出 ({subissues_path}) "
+            f"— {len(subissues)} サブタスクを {len(waves)} wave で並列 fork "
+            f"(depth={depth}/{max_depth}, max_parallel={ctx.max_parallel_subtasks})"
+        )
+
+        # parent_work_identifier を subissues.md のパスから推定する
+        # 例: work/Arch-UI-Detail/Issue-screen-detail/subissues.md
+        #     → parent_work_identifier = "screen-detail"
+        parent_dir_name = subissues_path.parent.name
+        if parent_dir_name.startswith("Issue-"):
+            parent_identifier = parent_dir_name[len("Issue-"):]
+        else:
+            parent_identifier = parent_dir_name
+
+        # 子セッションへ深度を +1 した ctx を伝播（現状は同一プロセス内で完結するが、
+        # 将来のサブセッション内 fork 連鎖に備える）
+        child_ctx = ctx.with_increased_depth()  # noqa: F841 — observability/future use
+        del child_ctx  # 今は使用しない（保留）
+
+        semaphore = asyncio.Semaphore(max(1, ctx.max_parallel_subtasks))
+
+        async def _run_one(sub: Any) -> bool:
+            """1 サブタスク分のセッション生成・実行・完了判定。成功なら True。"""
+            async with semaphore:
+                work_subdir = make_subtask_work_subdir(
+                    parent_custom_agent=custom_agent,
+                    parent_work_identifier=parent_identifier,
+                    subissue_index=sub.index,
+                )
+                sub_prompt = build_subtask_prompt(
+                    subissue=sub,
+                    parent_step_id=step_id,
+                    parent_custom_agent=custom_agent,
+                    work_subdir=work_subdir,
+                )
+
+                sub_opts = self._build_sub_session_opts(
+                    self.config.model,
+                    include_workiq=False,
+                    step_id=step_id,
+                    suffix=f"split-{sub.index:03d}",
+                    custom_agent=sub.custom_agent or custom_agent,
+                )
+
+                sub_session = None
+                try:
+                    sub_session = await _create_session_with_auto_reasoning_fallback(
+                        client, sub_opts,
+                    )
+                    sub_session.on(self._handle_session_event)
+                    self._sub_sessions_created += 1
+
+                    sub_response = await sub_session.send_and_wait(
+                        sub_prompt, timeout=self.config.timeout_seconds,
+                    )
+                    _ = _extract_text(sub_response)
+
+                    ok, reason = check_subtask_completion(work_root, work_subdir)
+                    if ok:
+                        self.console.event(
+                            f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功"
+                        )
+                        self._record_checkpoint(
+                            step_id, f"split-fork-{sub.index:03d}-done",
+                        )
+                        return True
+                    self.console.error(
+                        f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
+                    )
+                    return False
+                except Exception as exc:
+                    self.console.error(
+                        f"  ✗ [{step_id}/sub-{sub.index:03d}] 実行中にエラー: {exc}"
+                    )
+                    return False
+                finally:
+                    if sub_session is not None:
+                        try:
+                            await sub_session.disconnect()
+                        except Exception as cleanup_exc:
+                            self.console.warning(
+                                f"[cleanup] sub_session.disconnect() failed: {cleanup_exc}"
+                            )
+
+        # Wave 単位で並列実行。失敗 wave があっても wave 内は全件実行し、
+        # 後続 wave へは進まない（依存先が未完了のため、空振りを避ける）。
+        all_success = True
+        for wave_idx, wave in enumerate(waves, start=1):
+            self.console.event(
+                f"  ⏵ [{step_id}] wave {wave_idx}/{len(waves)} 並列実行: "
+                f"{[f'sub-{s.index:03d}' for s in wave]}"
+            )
+            results = await asyncio.gather(
+                *(_run_one(s) for s in wave),
+                return_exceptions=False,
+            )
+            if not all(results):
+                all_success = False
+                self.console.error(
+                    f"  ✗ [{step_id}] wave {wave_idx} に失敗あり — 後続 wave をスキップ"
+                )
+                break
+
+        if all_success:
+            self._record_checkpoint(step_id, "split-fork-all-done")
+        return all_success
+
     async def run_step(
         self,
         step_id: str,
@@ -1858,7 +2091,7 @@ class StepRunner:
                     base_prompt = (
                         f"You are {custom_agent}.\n\n"
                         f"# 参照: agent-common-preamble\n"
-                        f"作業開始時は .github/skills/planning/agent-common-preamble/SKILL.md を参照し、"
+                        f"作業開始時は .github/skills/agent-common-preamble/SKILL.md を参照し、"
                         f"共通ルールを確認してください。"
                     )
                     if self.config.additional_prompt:
@@ -2002,6 +2235,21 @@ class StepRunner:
             # これ以降のクラッシュでも SDK セッションが生きていれば Resume 時に
             # メインタスクを再送せず QA/Review フェーズから再開できる（将来 TBD）。
             self._record_checkpoint(step_id, "main-task-response-received")
+
+            # Phase 1.5 (SPLIT-fork): Agent が SPLIT_REQUIRED 判定で
+            # subissues.md を出力した場合、サブタスクとしてサブセッション fork する。
+            # 既定 OFF（フィーチャフラグ HVE_SPLIT_FORK_ENABLED=1 で有効化）。
+            _split_fork_ok = await self._maybe_run_split_fork(
+                client=client,
+                step_id=step_id,
+                custom_agent=custom_agent,
+            )
+            if not _split_fork_ok:
+                # サブタスクのいずれかが失敗 → Step failed として早期 return
+                self.console.step_io_summary(step_id)
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
 
             # Phase 2 (post-QA / 事後 QA) は廃止されました。
             # 旧 qa_phase="post"/"both" / aqod_post_qa_enabled / --aqod-post-qa は削除済み。

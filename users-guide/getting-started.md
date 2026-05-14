@@ -206,6 +206,40 @@ npx skills add microsoft/skills --skill '*' --agent copilot --yes --copy
 
 手動で即座に同期する場合は、GitHub Actions タブから `Sync Azure Skills` ワークフローを手動実行してください。
 
+### markdown-query Skill（ローカル完結 Markdown 横断クエリ）
+
+Copilot / Custom Agent が `docs/` `knowledge/` `qa/` `original-docs/` `work/` 等の Markdown を横断参照する際の Context Window を最小化する、**100% ローカル**で動作する Skill です。クラウド埋め込み・外部 API 呼び出しは行いません。
+
+- Skill 本体: `.github/skills/markdown-query/SKILL.md`
+- 実装: `hve.mdq`（SQLite + BM25）
+- 索引対象（既定 11 フォルダ）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `session-state/`, `hve-dev/`
+
+#### 任意依存の導入（推奨）
+
+`hve/setup-hve.ps1` / `hve/setup-hve.sh` を `-SkipMdq` / `--skip-mdq` 無しで実行している場合、`[mdq]` extras は既定で導入されています。以下はセットアップスクリプトを使わない場合や手動再導入用の手順です。
+
+```bash
+pip install -e ".[mdq]"   # rank_bm25 + tiktoken を同時導入
+```
+
+未導入時は内蔵の MiniBM25（純 stdlib）と char/4 トークン推定でフォールバック動作します。
+
+#### 初回索引と動作確認
+
+```bash
+python -m hve.mdq index
+python -m hve.mdq stats
+python -m hve.mdq search --q "業務要件" --top-k 3 --format compact
+```
+
+`stats` で `files > 0 && chunks > 0` を確認できれば成功です。索引ファイルは `.hve/mdq.sqlite` に作成され、リポジトリの `.gitignore` で除外済みです（コミット不可）。
+
+#### HVE Cloud Agent Orchestrator での挙動
+
+- Skill 発見は `.github/skills/_routing/SKILL.md` の planning 共通テーブル経由で行われます（登録済）。
+- Cloud runner 上では作業ツリーが揮発するため、索引は **その実行内で都度 `python -m hve.mdq index` を実行** する必要があります。CLI Orchestrator 側のオペレーション詳細は [HVE CLI Orchestrator ガイド 付録F](./hve-cli-orchestrator-guide.md#付録f-markdown-横断クエリmarkdown-query-skill) を参照してください。
+- 効果計測（撤去判断用）の手順は [HVE CLI Orchestrator ガイド 付録F.7](./hve-cli-orchestrator-guide.md#f7-パフォーマンス確認手順撤去判断用) を参照してください。
+
 ---
 
 ## Step.4. 認証設定（COPILOT_PAT）

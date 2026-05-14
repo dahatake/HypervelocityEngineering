@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
 
@@ -68,7 +68,7 @@ metadata:
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
      ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - 見積は粗くてよいが、****task_scope=multi または context_size=large** なら分割へ切り替える。
 

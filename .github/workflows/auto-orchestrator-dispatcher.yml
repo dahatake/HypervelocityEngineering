@@ -9,6 +9,10 @@ permissions:
   contents: write
   pull-requests: write
 
+# 注: HVE Cloud Agent Orchestrator 実行配下シグナルは Python 側で
+# `OrchestratorContext` 明示引数として伝播する方式へ移行済み。
+# `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
+
 jobs:
   detect:
     runs-on: ubuntu-latest

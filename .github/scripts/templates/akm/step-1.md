@@ -33,7 +33,7 @@
 - `qa/*.md`（sources に qa を含む場合）
 - `original-docs/*`（sources に original-docs を含む場合）
 - `template/business-requirement-document-master-list.md`
-- `.github/skills/planning/knowledge-management/references/knowledge-management-guide.md`
+- `.github/skills/knowledge-management/references/knowledge-management-guide.md`
 
 > **Work IQ 入力の取り扱い**:
 > `sources` にカンマ区切りで `workiq` が含まれている場合、本ステップが実行される **前** に

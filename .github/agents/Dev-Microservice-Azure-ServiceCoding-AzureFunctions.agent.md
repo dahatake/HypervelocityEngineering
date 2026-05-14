@@ -14,7 +14,7 @@ metadata:
 - “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存

@@ -60,6 +60,7 @@
 | `copilot-auto-feedback.yml` | Copilot Auto Feedback | `pull_request_target: [labeled, ready_for_review]` / `issues: [labeled]` |
 | `create-subissues-from-pr.yml` | Create Sub Issues from PR | `pull_request: [labeled]` |
 | `e2e-playwright-reusable.yml` | E2E Playwright (Reusable) | `workflow_call` |
+| `mdq-index-reusable.yml` | mdq Index (Reusable, smoke / self-build helper) | `workflow_call` |
 | `integration-tests-sample.yml` | Integration Tests Sample (Optional) | `workflow_dispatch` |
 | `link-copilot-pr-to-issue.yml` | Copilot PR body への Closes | `pull_request_target: [opened]` |
 | `plan-validation-and-labeling.yml` | Plan Validation and Labeling | `pull_request` |
@@ -507,22 +508,23 @@ StepDef(
 
 | Skill 名 | パス | 説明 |
 |---------|------|------|
-| `agent-common-preamble` | `.github/skills/planning/agent-common-preamble/` | 全 Agent 共通ルール・Skills 参照リスト |
-| `input-file-validation` | `.github/skills/planning/input-file-validation/` | 必読ファイル確認・欠損時処理 |
-| `app-scope-resolution` | `.github/skills/planning/app-scope-resolution/` | APP-ID スコープ解決 |
-| `task-questionnaire` | `.github/skills/planning/task-questionnaire/` | 質問票作成 |
-| `task-dag-planning` | `.github/skills/planning/task-dag-planning/` | DAG計画・分割判定 |
-| `work-artifacts-layout` | `.github/skills/planning/work-artifacts-layout/` | work/ 構造設計 |
+| `agent-common-preamble` | `.github/skills/agent-common-preamble/` | 全 Agent 共通ルール・Skills 参照リスト |
+| `input-file-validation` | `.github/skills/input-file-validation/` | 必読ファイル確認・欠損時処理 |
+| `app-scope-resolution` | `.github/skills/app-scope-resolution/` | APP-ID スコープ解決 |
+| `task-questionnaire` | `.github/skills/task-questionnaire/` | 質問票作成 |
+| `task-dag-planning` | `.github/skills/task-dag-planning/` | DAG計画・分割判定 |
+| `work-artifacts-layout` | `.github/skills/work-artifacts-layout/` | work/ 構造設計 |
+| `markdown-query` | `.github/skills/markdown-query/` | ローカル完結の Markdown 横断クエリ（Context 最小化用、`hve.mdq` 実装） |
 
 ### ドメイン Skills
 
 | Skill 名 | パス | 主な利用 Agent |
 |---------|------|-------------|
-| `architecture-questionnaire` | `.github/skills/planning/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer` |
-| `knowledge-management` | `.github/skills/planning/knowledge-management/` | `KnowledgeManager` |
-| `mcp-server-design` | `.github/skills/planning/mcp-server-design/` | MCP Server 設計時 |
-| `batch-design-guide` | `.github/skills/planning/batch-design-guide/` | `Arch-Batch-*`, `Dev-Batch-*` |
-| `microservice-design-guide` | `.github/skills/planning/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*` |
+| `architecture-questionnaire` | `.github/skills/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer` |
+| `knowledge-management` | `.github/skills/knowledge-management/` | `KnowledgeManager` |
+| `mcp-server-design` | `.github/skills/mcp-server-design/` | MCP Server 設計時 |
+| `batch-design-guide` | `.github/skills/batch-design-guide/` | `Arch-Batch-*`, `Dev-Batch-*` |
+| `microservice-design-guide` | `.github/skills/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*` |
 
 ## APP-ID 指定方法
 

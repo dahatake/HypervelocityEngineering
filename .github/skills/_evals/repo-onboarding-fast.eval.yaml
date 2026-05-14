@@ -1,5 +1,5 @@
 skill: repo-onboarding-fast
-skill_path: .github/skills/planning/repo-onboarding-fast/SKILL.md
+skill_path: .github/skills/repo-onboarding-fast/SKILL.md
 description: 初見のリポジトリで最小限の読解により入口・境界・標準コマンドを確定し、onboarding.md に固定するスキル。
 
 test_cases:

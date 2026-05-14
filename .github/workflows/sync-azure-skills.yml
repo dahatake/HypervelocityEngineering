@@ -28,8 +28,8 @@ jobs:
           mkdir -p /tmp/custom-skills-backup/output
           # planning category custom skills
           for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
-            if [ -d ".github/skills/planning/${skill}" ]; then
-              cp -r ".github/skills/planning/${skill}" "/tmp/custom-skills-backup/planning/${skill}"
+            if [ -d ".github/skills/${skill}" ]; then
+              cp -r ".github/skills/${skill}" "/tmp/custom-skills-backup/planning/${skill}"
               echo "Backed up: planning/${skill}"
             fi
           done
@@ -67,8 +67,8 @@ jobs:
           mkdir -p .github/skills/output
           for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
             if [ -d "/tmp/custom-skills-backup/planning/${skill}" ]; then
-              rm -rf ".github/skills/planning/${skill}"
-              cp -r "/tmp/custom-skills-backup/planning/${skill}" ".github/skills/planning/${skill}"
+              rm -rf ".github/skills/${skill}"
+              cp -r "/tmp/custom-skills-backup/planning/${skill}" ".github/skills/${skill}"
               echo "Restored: planning/${skill}"
             fi
           done

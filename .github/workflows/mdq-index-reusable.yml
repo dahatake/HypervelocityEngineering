@@ -1,0 +1,76 @@
+name: mdq-index (reusable)
+
+# Reusable workflow that builds the local-only Markdown index used by the
+# `markdown-query` Skill. Intended to be called from existing reusable
+# workflows BEFORE Custom Agent steps that read large amounts of Markdown,
+# so that the Agent can call `python -m hve.mdq search ...` to keep its
+# context window small.
+#
+# Notes:
+# - The on-disk index `.hve/mdq.sqlite` is gitignored and ephemeral on
+#   GitHub-hosted runners. It must be rebuilt within the same job that
+#   consumes it (cross-job sharing would require actions/cache or
+#   actions/upload-artifact, which is intentionally out of scope here).
+# - Optional dependencies (`rank_bm25`, `tiktoken`) are installed via the
+#   `[mdq]` extras; without them the package falls back to internal
+#   implementations (see `users-guide/hve-cli-orchestrator-guide.md` 付録F).
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.11"
+      install-extras:
+        type: boolean
+        default: true
+        description: "Install [mdq] optional extras (rank_bm25, tiktoken)."
+      roots:
+        type: string
+        default: ""
+        description: >-
+          Space-separated list of roots to index. Empty (default) uses the
+          CLI defaults defined in hve/mdq/cli.py:DEFAULT_ROOTS.
+    outputs:
+      stats:
+        description: "JSON output of `python -m hve.mdq stats`."
+        value: ${{ jobs.index.outputs.stats }}
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    outputs:
+      stats: ${{ steps.run.outputs.stats }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install package
+        run: |
+          if [ "${{ inputs.install-extras }}" = "true" ]; then
+            pip install -e ".[mdq]"
+          else
+            pip install -e .
+          fi
+      - name: Build index
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.roots }}" ]; then
+            args=""
+            for r in ${{ inputs.roots }}; do
+              args="$args --root $r"
+            done
+            # shellcheck disable=SC2086
+            python -m hve.mdq index $args
+          else
+            python -m hve.mdq index
+          fi
+          stats="$(python -m hve.mdq stats)"
+          echo "stats=$stats" >> "$GITHUB_OUTPUT"
+          echo "## mdq index" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$stats" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

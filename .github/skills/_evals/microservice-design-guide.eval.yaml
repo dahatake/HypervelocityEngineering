@@ -1,5 +1,5 @@
 skill: microservice-design-guide
-skill_path: .github/skills/planning/microservice-design-guide/SKILL.md
+skill_path: .github/skills/microservice-design-guide/SKILL.md
 description: マイクロサービスの設計ガイドを提供する。サービス定義・API 設計・境界コンテキストとの対応・デプロイ単位の決定手順を定義する。
 
 test_cases:

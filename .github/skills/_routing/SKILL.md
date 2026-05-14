@@ -16,26 +16,27 @@ metadata:
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| Agent 作業開始（共通） | `agent-common-preamble` | `.github/skills/planning/agent-common-preamble/SKILL.md` | 全 Agent 共通ルール・Skills 参照リスト一元管理 |
-| 入力ファイル確認 | `input-file-validation` | `.github/skills/planning/input-file-validation/SKILL.md` | 必読ファイル確認・欠損時処理ルール |
-| APP-ID スコープ解決 | `app-scope-resolution` | `.github/skills/planning/app-scope-resolution/SKILL.md` | APP-ID からサービス/画面/エンティティ特定 |
-| タスク開始 / 不明点あり | `task-questionnaire` | `.github/skills/planning/task-questionnaire/SKILL.md` | 選択式質問票で要件を明確化 |
-| 計画 / DAG / 見積 | `task-dag-planning` | `.github/skills/planning/task-dag-planning/SKILL.md` | 依存関係分解・粒度/コンテキスト分割判定 |
-| work/ 配下の構造設計 | `work-artifacts-layout` | `.github/skills/planning/work-artifacts-layout/SKILL.md` | 入口 README + contracts/artifacts |
-| リポジトリ初見 | `repo-onboarding-fast` | `.github/skills/planning/repo-onboarding-fast/SKILL.md` | 高速オンボーディング（構造把握・規約確認） |
+| Agent 作業開始（共通） | `agent-common-preamble` | `.github/skills/agent-common-preamble/SKILL.md` | 全 Agent 共通ルール・Skills 参照リスト一元管理 |
+| 入力ファイル確認 | `input-file-validation` | `.github/skills/input-file-validation/SKILL.md` | 必読ファイル確認・欠損時処理ルール |
+| APP-ID スコープ解決 | `app-scope-resolution` | `.github/skills/app-scope-resolution/SKILL.md` | APP-ID からサービス/画面/エンティティ特定 |
+| タスク開始 / 不明点あり | `task-questionnaire` | `.github/skills/task-questionnaire/SKILL.md` | 選択式質問票で要件を明確化 |
+| 計画 / DAG / 見積 | `task-dag-planning` | `.github/skills/task-dag-planning/SKILL.md` | 依存関係分解・粒度/コンテキスト分割判定 |
+| work/ 配下の構造設計 | `work-artifacts-layout` | `.github/skills/work-artifacts-layout/SKILL.md` | 入口 README + contracts/artifacts |
+| リポジトリ初見 | `repo-onboarding-fast` | `.github/skills/repo-onboarding-fast/SKILL.md` | 高速オンボーディング（構造把握・規約確認） |
 | Karpathy ガイドライン参照 | `karpathy-guidelines` | `.github/skills/karpathy-guidelines/SKILL.md` | Karpathy の実装原則（最小変更・仮説明示・検証重視） |
 
 **【ドメイン設計 / planning】**
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| アーキテクチャ候補選定 | `architecture-questionnaire` | `.github/skills/planning/architecture-questionnaire/SKILL.md` | Q1-Q26 質問票・適合度評価 |
-| knowledge/ 管理 | `knowledge-management` | `.github/skills/planning/knowledge-management/SKILL.md` | D01〜D21 分類・状態判定・ステータス管理 |
-| タスク実行中に業務要件が不明瞭 | `knowledge-lookup` | `.github/skills/planning/knowledge-lookup/SKILL.md` | knowledge/ D01〜D21 の条件付き参照ルール |
-| MCP Server 設計 | `mcp-server-design` | `.github/skills/planning/mcp-server-design/SKILL.md` | Skills と MCP Server の責務分離・API設計 |
-| バッチ処理設計 | `batch-design-guide` | `.github/skills/planning/batch-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
-| マイクロサービス設計 | `microservice-design-guide` | `.github/skills/planning/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
-| original-docs/ 取り込み | `knowledge-management` | `.github/skills/planning/knowledge-management/SKILL.md` | original-docs/ → D01〜D21 分類・矛盾検出 |
+| アーキテクチャ候補選定 | `architecture-questionnaire` | `.github/skills/architecture-questionnaire/SKILL.md` | Q1-Q26 質問票・適合度評価 |
+| knowledge/ 管理 | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | D01〜D21 分類・状態判定・ステータス管理 |
+| タスク実行中に業務要件が不明瞭 | `knowledge-lookup` | `.github/skills/knowledge-lookup/SKILL.md` | knowledge/ D01〜D21 の条件付き参照ルール |
+| MCP Server 設計 | `mcp-server-design` | `.github/skills/mcp-server-design/SKILL.md` | Skills と MCP Server の責務分離・API設計 |
+| バッチ処理設計 | `batch-design-guide` | `.github/skills/batch-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
+| マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
+| original-docs/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | original-docs/ → D01〜D21 分類・矛盾検出 |
+| Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | ローカル完結の Markdown 検索・該当チャンクのみ返却で Context 最小化。HVE CLI Orchestrator 実行中はリアルタイム索引更新が並走する（既定 ON、`--no-mdq-watch` で無効化、Cloud Agent では非対応） |
 
 **Workflow 一覧（Issue Template / hve）**
 - `aas`, `aad`, `asdw`, `abd`, `abdv`, `aag`, `aagd`, `akm`, `aqod`, `adoc`

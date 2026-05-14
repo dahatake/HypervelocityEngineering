@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDeploy/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する（`.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md`）。
@@ -67,8 +67,8 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 `{WORK}contracts/additional-services.md` に固定する（後続Subが迷わないため）。
 
 その上で `{WORK}plan.md` を作成する（詳細は skills を使う）：
-- `.github/skills/planning/task-dag-planning/SKILL.md`
-- `.github/skills/planning/work-artifacts-layout/SKILL.md`
+- `.github/skills/task-dag-planning/SKILL.md`
+- `.github/skills/work-artifacts-layout/SKILL.md`
 - **plan.md 作成時の必須手順（省略禁止）**:
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
@@ -79,7 +79,7 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
      <!-- subissues_count: N -->
      <!-- implementation_files: true or false -->
      ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 
 #### 3.2.1 受け入れ条件（AC）の定義（plan.md 内に必須）

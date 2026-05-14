@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 
 from hve.dag_validation import validate_workflow_definition
@@ -115,6 +116,45 @@ class TestCheckPlanMdMetadata(unittest.TestCase):
         from pathlib import Path
         issues = check_plan_md_metadata(Path("/nonexistent-path-xyz/plan.md"))
         self.assertTrue(any("ファイルが存在しません" in m for m in issues))
+
+    def test_orchestrator_exception_appends_continuation_note_for_multi(self):
+        """orchestrator_ctx 非 None かつ task_scope=multi で継続可注記が追記される。"""
+        from dag_validation import check_plan_md_metadata
+        from orchestrator_context import OrchestratorContext
+        import tempfile
+        body = "# t\nrun_id: x\ntask_scope: multi\ncontext_size: small\nmode: SPLIT\n\nbody\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._make_plan(tmp, body)
+            issues = check_plan_md_metadata(
+                p, orchestrator_ctx=OrchestratorContext(run_id="r1"),
+            )
+        self.assertTrue(any("SPLIT_REQUIRED" in m and "実装着手禁止" in m for m in issues))
+        self.assertTrue(any("Orchestrator 配下" in m and "実装継続可" in m for m in issues))
+
+    def test_orchestrator_exception_applies_for_large_too(self):
+        """新仕様: context_size=large 単独でも Orchestrator 配下なら継続可注記が付く。"""
+        from dag_validation import check_plan_md_metadata
+        from orchestrator_context import OrchestratorContext
+        import tempfile
+        body = "# t\nrun_id: x\ntask_scope: single\ncontext_size: large\nmode: SPLIT\n\nbody\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._make_plan(tmp, body)
+            issues = check_plan_md_metadata(
+                p, orchestrator_ctx=OrchestratorContext(run_id="r1"),
+            )
+        self.assertTrue(any("SPLIT_REQUIRED" in m and "context_size=large" in m for m in issues))
+        self.assertTrue(any("Orchestrator 配下" in m for m in issues))
+
+    def test_orchestrator_ctx_none_keeps_existing_message(self):
+        """orchestrator_ctx=None なら従来通りの停止メッセージのみ（単独実行モード）。"""
+        from dag_validation import check_plan_md_metadata
+        import tempfile
+        body = "# t\nrun_id: x\ntask_scope: multi\ncontext_size: small\nmode: SPLIT\n\nbody\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._make_plan(tmp, body)
+            issues = check_plan_md_metadata(p, orchestrator_ctx=None)
+        self.assertTrue(any("SPLIT_REQUIRED" in m for m in issues))
+        self.assertFalse(any("Orchestrator 配下" in m for m in issues))
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/QA-PostImproveVerify/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **改善後検証（読み取り＋検証）**。明示依頼が無い限り **コードの変更はしない**。
 - Skill harness-safety-guard: 破壊的操作は絶対に実行しない。
 

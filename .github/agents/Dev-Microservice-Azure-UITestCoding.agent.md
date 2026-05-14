@@ -12,7 +12,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 このエージェントは **画面別テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## Agent 固有の Skills 依存
 - `repo-onboarding-fast`：リポジトリ高速オンボーディング（必要な場合のみ）

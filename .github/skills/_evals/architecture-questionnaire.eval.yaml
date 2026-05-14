@@ -1,5 +1,5 @@
 skill: architecture-questionnaire
-skill_path: .github/skills/planning/architecture-questionnaire/SKILL.md
+skill_path: .github/skills/architecture-questionnaire/SKILL.md
 description: アーキテクチャ候補選定時の質問票テンプレート（Q1-Q26）と適合度評価ルールを提供する。
 
 test_cases:

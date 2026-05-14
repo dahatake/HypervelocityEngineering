@@ -13,12 +13,12 @@ metadata:
 
 ## Agent 固有の Skills 依存
 
-- `.github/skills/planning/agent-common-preamble/SKILL.md`
-- `.github/skills/planning/task-dag-planning/SKILL.md`
-- `.github/skills/planning/work-artifacts-layout/SKILL.md`
-- `.github/skills/planning/app-scope-resolution/SKILL.md`
-- `.github/skills/planning/mcp-server-design/SKILL.md`
-- `.github/skills/planning/task-questionnaire/SKILL.md`
+- `.github/skills/agent-common-preamble/SKILL.md`
+- `.github/skills/task-dag-planning/SKILL.md`
+- `.github/skills/work-artifacts-layout/SKILL.md`
+- `.github/skills/app-scope-resolution/SKILL.md`
+- `.github/skills/mcp-server-design/SKILL.md`
+- `.github/skills/task-questionnaire/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
 
 参考のみ（用語確認用、Azure 固有値の記載は禁止）:

@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/KnowledgeManager/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## §1 目的
 - `qa/` または `original-docs/` または両方から knowledge/ D01〜D21 を生成・更新する
@@ -81,5 +81,5 @@ metadata:
   - `business-requirement-document-status.md`
 
 ## §8 参照
-- `.github/skills/planning/knowledge-management/SKILL.md`
-- `.github/skills/planning/knowledge-management/references/knowledge-management-guide.md`
+- `.github/skills/knowledge-management/SKILL.md`
+- `.github/skills/knowledge-management/references/knowledge-management-guide.md`

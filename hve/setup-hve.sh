@@ -5,6 +5,8 @@ CHECK_ONLY=false
 WITH_WORKIQ=false
 INSTALL_EXTERNAL_COPILOT_CLI=false
 FORCE_RECREATE_VENV=false
+SKIP_MDQ=false
+SKIP_MDQ_WATCH=false
 WARNING_COUNT=0
 GH_AUTH_OK=false
 
@@ -17,6 +19,8 @@ Options:
   --with-workiq                   Check Node.js/npm/npx prerequisites for Work IQ.
   --install-external-copilot-cli  Install/check external copilot CLI when needed (uses Homebrew if available).
   --force-recreate-venv           Recreate .venv if it exists with an unsupported Python.
+  --skip-mdq                      Skip installing markdown-query optional extras ([mdq]).
+  --skip-mdq-watch                Install [mdq] but skip watcher extras (watchdog). HVE CLI Orchestrator realtime index update will be disabled.
   -h, --help                      Show this help.
 USAGE
 }
@@ -27,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --with-workiq) WITH_WORKIQ=true ;;
     --install-external-copilot-cli) INSTALL_EXTERNAL_COPILOT_CLI=true ;;
     --force-recreate-venv) FORCE_RECREATE_VENV=true ;;
+    --skip-mdq) SKIP_MDQ=true ;;
+    --skip-mdq-watch) SKIP_MDQ_WATCH=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
   esac
@@ -143,6 +149,16 @@ if [[ -x "$VENV_PYTHON" ]]; then
     step "Installing Python dependencies"
     run "$VENV_PYTHON" -m pip install --upgrade pip
     run "$VENV_PYTHON" -m pip install --upgrade github-copilot-sdk
+
+    if [[ "$SKIP_MDQ" != true ]]; then
+      if [[ "$SKIP_MDQ_WATCH" == true ]]; then EXTRAS_TARGET="mdq"; else EXTRAS_TARGET="mdq-watch"; fi
+      step "Installing markdown-query optional extras ([$EXTRAS_TARGET])"
+      if "$VENV_PYTHON" -m pip install -e ".[$EXTRAS_TARGET]"; then
+        printf '[%s] extras installed.\n' "$EXTRAS_TARGET"
+      else
+        warn "Failed to install [$EXTRAS_TARGET] extras. markdown-query Skill will still work with built-in fallback. Re-run later: $VENV_PYTHON -m pip install -e \".[$EXTRAS_TARGET]\""
+      fi
+    fi
   fi
 
   step "Verifying HVE runtime"
@@ -155,6 +171,28 @@ if [[ -x "$VENV_PYTHON" ]]; then
     printf 'python -m hve --help: OK\n'
   else
     warn "python -m hve --help failed."
+  fi
+
+  if [[ "$SKIP_MDQ" != true ]]; then
+    if "$VENV_PYTHON" -m hve.mdq --help >/dev/null 2>&1; then
+      printf 'python -m hve.mdq --help: OK\n'
+    else
+      warn "python -m hve.mdq --help failed. markdown-query Skill may not be available."
+    fi
+    if [[ "$CHECK_ONLY" == true ]]; then
+      if "$VENV_PYTHON" -c 'import rank_bm25, tiktoken' >/dev/null 2>&1; then
+        printf '[mdq] extras: OK (rank_bm25, tiktoken)\n'
+      else
+        warn "[mdq] extras missing. Run without --check-only to install, or pass --skip-mdq to suppress this check."
+      fi
+      if [[ "$SKIP_MDQ_WATCH" != true ]]; then
+        if "$VENV_PYTHON" -c 'import watchdog' >/dev/null 2>&1; then
+          printf '[mdq-watch] extras: OK (watchdog)\n'
+        else
+          warn "[mdq-watch] extras missing (watchdog). HVE CLI Orchestrator realtime index update will be disabled. Run without --check-only to install, or pass --skip-mdq-watch to suppress this check."
+        fi
+      fi
+    fi
   fi
 fi
 
@@ -179,10 +217,21 @@ if command -v gh >/dev/null 2>&1; then
 fi
 if [[ -x "$VENV_PYTHON" ]]; then
   printf 'Basic runtime check: %s -m hve --help\n' "$VENV_PYTHON"
+  if [[ "$SKIP_MDQ" != true ]]; then
+    printf 'Markdown query (local): %s -m hve.mdq index ; %s -m hve.mdq stats\n' "$VENV_PYTHON" "$VENV_PYTHON"
+    if [[ "$SKIP_MDQ_WATCH" != true ]]; then
+      printf 'Markdown query (realtime, CLI Orchestrator only): watchdog installed. Disable with --no-mdq-watch or HVE_MDQ_WATCH=0.\n'
+    fi
+  fi
 else
   printf 'Create .venv first (run setup without --check-only), then run: .venv/bin/python -m hve --help\n'
 fi
 printf 'Optional: Node.js / npm / npx are only required when using Work IQ or Node-based MCP tools.\n'
+if [[ "$SKIP_MDQ" == true ]]; then
+  printf 'markdown-query [mdq] extras skipped (--skip-mdq). Built-in fallback (MiniBM25) will be used.\n'
+elif [[ "$SKIP_MDQ_WATCH" == true ]]; then
+  printf 'markdown-query watcher extras skipped (--skip-mdq-watch). [mdq] installed but watchdog is not; HVE CLI Orchestrator realtime index update will be disabled.\n'
+fi
 
 if [[ "$CHECK_ONLY" == true ]]; then
   printf '\nCheck-only completed with %s warning(s).\n' "$WARNING_COUNT"

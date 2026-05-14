@@ -69,6 +69,10 @@ sdkconfig_internal_fields:
   - unattended                      # 全自動モード（自動化用）
   - verbose                         # 詳細出力（レガシー互換）
   - verbosity                       # 出力レベル（出力制御）
+  - no_workbench                    # Workbench UI 無効化（出力制御、HVE_NO_WORKBENCH）
+  - workbench_body_lines            # Workbench body ペイン行数（出力制御、--workbench-body-lines）
+  - workbench_flush_on_exit         # Workbench 終了時バッファフラッシュ（出力制御）
+  - workbench_history               # Workbench RingBuffer 容量（出力制御）
   - workiq_akm_ingest_dxx           # AKM Work IQ 取り込み Dxx フィルタ（内部、HVE_WORKIQ_AKM_INGEST_DXX）
   - workiq_akm_ingest_enabled       # AKM Work IQ 取り込み有効フラグ（内部、HVE_WORKIQ_AKM_INGEST_ENABLED）
 

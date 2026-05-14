@@ -20,7 +20,7 @@ metadata:
 - mode が不明な場合は **1回のメッセージで確認** してから実行する。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **ドキュメント整合性チェック（読み取り＋検証）**。明示依頼が無い限り **ドキュメントの変更はしない**。
 - Skill harness-safety-guard: 破壊的操作は絶対に実行しない。
 - 本 Agent の主目的は、Markdown 形式の正しさではなく、**文書内容が業務要件・設計・実装・他文書と論理的に整合しているか**を確認することである。

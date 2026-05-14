@@ -1,5 +1,5 @@
 skill: knowledge-management
-skill_path: .github/skills/planning/knowledge-management/SKILL.md
+skill_path: .github/skills/knowledge-management/SKILL.md
 description: knowledge/ 配下のファイル管理ルールを提供する。D01-D21 分類・命名・更新手順、qa/ と knowledge/ の使い分けを定義する。
 
 test_cases:

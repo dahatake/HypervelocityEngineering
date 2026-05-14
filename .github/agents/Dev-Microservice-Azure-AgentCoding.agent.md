@@ -11,7 +11,7 @@ metadata:
 Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フェーズ）専用Agent。
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
 ## Agent 固有の Skills 依存

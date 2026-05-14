@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Arch-ImprovementPlanner/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 目的は **改善計画策定（設計）**。明示依頼が無い限り **コードの変更はしない**（計画フェーズ専用）。
 - §2.2 分割判定を機械的に実行し、結果を plan.md の `## 分割判定` セクションに記録する。
 
@@ -69,7 +69,7 @@ metadata:
      <!-- subissues_count: N -->
      <!-- implementation_files: false -->
      ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - SPLIT_REQUIRED の場合は `{WORK}subissues.md` も作成する
 

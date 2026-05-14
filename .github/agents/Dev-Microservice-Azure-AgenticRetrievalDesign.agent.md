@@ -10,16 +10,16 @@ metadata:
 > **WORK**: `work/Dev-Microservice-Azure-AgenticRetrievalDesign/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 本 Agent は **設計ドキュメント生成専用**。IaC 実装ファイル（`infra/azure/...`）は生成しない。
 
 ## Agent 固有の Skills 依存
-- `.github/skills/planning/agent-common-preamble/SKILL.md`
-- `.github/skills/planning/task-dag-planning/SKILL.md`
-- `.github/skills/planning/work-artifacts-layout/SKILL.md`
-- `.github/skills/planning/app-scope-resolution/SKILL.md`
-- `.github/skills/planning/mcp-server-design/SKILL.md`
-- `.github/skills/planning/architecture-questionnaire/SKILL.md`
+- `.github/skills/agent-common-preamble/SKILL.md`
+- `.github/skills/task-dag-planning/SKILL.md`
+- `.github/skills/work-artifacts-layout/SKILL.md`
+- `.github/skills/app-scope-resolution/SKILL.md`
+- `.github/skills/mcp-server-design/SKILL.md`
+- `.github/skills/architecture-questionnaire/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
 - `.github/skills/harness/adversarial-review/SKILL.md`
 - `.github/skills/azure-skills/azure-ai/SKILL.md`

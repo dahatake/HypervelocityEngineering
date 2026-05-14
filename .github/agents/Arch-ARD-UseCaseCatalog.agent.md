@@ -8,7 +8,7 @@ metadata:
 ---
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 ## 1) 目的
 - 事業分析（As-Is / To-Be / 戦略提言）を前提に、ソフトウェアでソリューション提供するシナリオに限定した Use Case Inventory を作成する。

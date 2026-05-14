@@ -9,7 +9,7 @@ metadata:
 > **WORK**: `work/Arch-UI-Detail/Issue-<識別子>/`
 
 ## 共通ルール
-> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/planning/agent-common-preamble/SKILL.md`) を継承する。
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - この agent は **docs/screen/** と **work/** 以外を原則変更しない（例外が必要なら理由を明記）。
 
 ## Agent 固有の Skills 依存
@@ -63,7 +63,7 @@ metadata:
       <!-- subissues_count: N -->
       <!-- implementation_files: true or false -->
       ```
-   3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/planning/task-dag-planning/references/plan-template.md` を参照）
+   3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
    4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 5) Skill task-dag-planning の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
 6) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録

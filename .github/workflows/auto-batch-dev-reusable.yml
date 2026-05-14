@@ -309,7 +309,7 @@ jobs:
                   _msg="⚠️ エラー: \`${_catalog}\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
                   ;;
                 *"セクションが見つかりません"*)
-                  _msg="⚠️ エラー: \`${_catalog}\` の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません。出力契約 (.github/skills/planning/architecture-questionnaire/assets/output-format.md §7.2) に沿って見出しを修正するか、AAS Step.2 を再実行してください。詳細: ${_err}"
+                  _msg="⚠️ エラー: \`${_catalog}\` の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません。出力契約 (.github/skills/architecture-questionnaire/assets/output-format.md §7.2) に沿って見出しを修正するか、AAS Step.2 を再実行してください。詳細: ${_err}"
                   ;;
                 *"Markdown テーブルが見つかりません"*)
                   _msg="⚠️ エラー: \`${_catalog}\` の \`A) サマリ表\` セクションに Markdown テーブルが見つかりません。詳細: ${_err}"

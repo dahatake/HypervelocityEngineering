@@ -1,5 +1,5 @@
 skill: batch-design-guide
-skill_path: .github/skills/planning/batch-design-guide/SKILL.md
+skill_path: .github/skills/batch-design-guide/SKILL.md
 description: バッチ処理の設計ガイドを統合的に提供する。要件定義・ジョブ定義・データフロー・非機能要件・テスト仕様を references/ に集約する。
 
 test_cases:
