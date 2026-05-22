@@ -111,6 +111,9 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # 0 = 未設定（既定の 1100 を使用）。
             "main_window_width": 0,
             "workbench_window_width": 0,
+            # Dock パネル表示状態（Phase D 追加）。既定は非表示（ユーザーが ActivityBar から開く）。
+            "file_explorer_visible": False,
+            "markdown_preview_visible": False,
             # Issue-gui-session-workdir-isolation T7/T8:
             # GUI セッション作業ディレクトリ (work/gui-runs/<id>/) の後処理。
             # "keep"   = 何もしない（既定）

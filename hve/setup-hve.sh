@@ -86,13 +86,19 @@ step "Checking required tools"
 if command -v git >/dev/null 2>&1; then
   printf 'Git: %s\n' "$(command -v git)"
 else
-  warn "Git was not found. Install Git before cloning or updating the repository."
+  warn "Git was not found. Install on a clean OS:
+    macOS:        brew install git
+    Ubuntu/Debian:sudo apt-get update && sudo apt-get install -y git
+    Fedora/RHEL:  sudo dnf install -y git"
 fi
 
 if command -v gh >/dev/null 2>&1; then
   printf 'GitHub CLI: %s\n' "$(command -v gh)"
 else
-  warn "GitHub CLI was not found. Install it from https://cli.github.com/."
+  warn "GitHub CLI was not found. Install on a clean OS:
+    macOS:        brew install gh
+    Ubuntu/Debian:see https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+    Fedora/RHEL:  sudo dnf install -y gh"
 fi
 
 PYTHON_BIN=""
@@ -100,8 +106,29 @@ if PYTHON_BIN="$(find_python311)"; then
   readarray -t PY_INFO < <(python_info "$PYTHON_BIN")
   printf 'Python: %s (%s)\n' "${PY_INFO[0]}" "${PY_INFO[1]}"
 else
-  warn "Python 3.11+ was not found. Install Python 3.11 or newer and rerun this script."
+  warn "Python 3.11+ was not found. Install on a clean OS:
+    macOS:        brew install python@3.13
+    Ubuntu/Debian:sudo apt-get install -y python3.13 python3.13-venv  (24.04+)
+    Fedora/RHEL:  sudo dnf install -y python3.13
+    Other:        https://www.python.org/downloads/"
   if [[ "$CHECK_ONLY" != true ]]; then exit 1; fi
+fi
+
+# Linux: GUI (QtWebEngine) に必要な system lib を案内（自動インストールはしない）。
+if [[ "$WITH_GUI" == true ]] && [[ "$(uname -s)" == "Linux" ]]; then
+  step "Linux GUI system library check (informational)"
+  missing_libs=""
+  for lib in libxcb-cursor0 libnss3 libxkbcommon-x11-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2; do
+    if ! ldconfig -p 2>/dev/null | grep -q "${lib%-*}"; then
+      missing_libs="${missing_libs} ${lib}"
+    fi
+  done
+  if [[ -n "$missing_libs" ]]; then
+    warn "Possibly missing system libs for Qt/QtWebEngine:${missing_libs}
+    Ubuntu/Debian: sudo apt-get install -y${missing_libs}
+    Fedora/RHEL:   use 'dnf provides' to map .so names to packages.
+    Headless Linux (no X11/Wayland) cannot launch the GUI; use the CLI orchestrator."
+  fi
 fi
 
 if [[ "$WITH_WORKIQ" == true ]]; then
@@ -183,6 +210,10 @@ except Exception:
       step "Installing GUI Orchestrator extras ([gui,gui-docconvert]) including markitdown"
       if "$VENV_PYTHON" -m pip install -e ".[gui,gui-docconvert]"; then
         printf '[gui,gui-docconvert] extras installed (PySide6 + markitdown[all]).\n'
+        step "Downloading Mermaid / KaTeX assets for Markdown preview"
+        if ! "$VENV_PYTHON" -m hve.gui.markdown_preview.download_assets; then
+          warn "Asset download had failures. Markdown body will still render; Mermaid/KaTeX will be disabled."
+        fi
       else
         warn "Failed to install [gui,gui-docconvert] extras. Re-run later: $VENV_PYTHON -m pip install -e \".[gui,gui-docconvert]\""
       fi

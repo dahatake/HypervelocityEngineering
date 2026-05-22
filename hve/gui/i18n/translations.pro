@@ -34,7 +34,10 @@ SOURCES = ../app.py \
           ../workbench_state.py \
           ../workbench_widgets.py \
           ../workbench_window.py \
-          ../widgets/app_id_checklist.py
+          ../widgets/app_id_checklist.py \
+          ../activity_bar.py \
+          ../file_explorer/file_tree_panel.py \
+          ../markdown_preview/preview_panel.py
 
 TRANSLATIONS = hve_gui_en_US.ts
 

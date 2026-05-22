@@ -48,6 +48,10 @@ from PySide6.QtWidgets import (
 
 from .header_bar import HeaderBar
 from .copilot_chat_panel import CopilotChatPanel
+from .activity_bar import ActivityBar
+from .file_explorer.file_tree_panel import FileTreePanel
+from .markdown_preview.preview_panel import MarkdownPreviewPanel
+from .panel_toggle.dock_toggle_actions import bind as bind_dock_toggle
 from .page_options import OptionsPage
 from .page_workbench import WorkbenchPage
 from .page_workflow_select import WorkflowSelectPage
@@ -458,13 +462,81 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._btn_next)
         nav.addWidget(self._btn_stop)
 
+        # ActivityBar を _stack の左側に配置し、同一行としてレイアウト
+        self._activity_bar = ActivityBar(central)
+        body_row = QHBoxLayout()
+        body_row.setContentsMargins(0, 0, 0, 0)
+        body_row.setSpacing(4)
+        body_row.addWidget(self._activity_bar)
+        body_row.addWidget(self._stack, stretch=1)
+
         layout = QVBoxLayout(central)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.addLayout(top_row)
         layout.addWidget(self._header)
-        layout.addWidget(self._stack, stretch=1)
+        layout.addLayout(body_row, stretch=1)
         layout.addWidget(self._status_banner)
         layout.addLayout(nav)
+
+        # D1-D4: 左右 Dock パネルを追加 × ActivityBar とバインド × 設定復元
+        self._setup_dock_panels()
+
+    # ----------------------------------------------------------
+    # D1-D4: ファイルツリー / Markdown プレビュー Dock 統合
+    # ----------------------------------------------------------
+
+    def _setup_dock_panels(self) -> None:
+        """左右に FileTreePanel / MarkdownPreviewPanel を Dock として配置する。"""
+        from . import settings_store as _ss
+
+        # 監視ルート: 当該 GUI セッションの work_root + リポジトリ標準成果物ディレクトリ。
+        # 存在しないパスは MultiRootFileModel.add_root が無視する。
+        candidate_roots = [
+            self._session_workdir.work_root,
+            self._repo_root / "docs",
+            self._repo_root / "knowledge",
+            self._repo_root / "qa",
+            self._repo_root / "docs-generated",
+        ]
+        roots = [p for p in candidate_roots if p.exists() and p.is_dir()]
+
+        self._file_tree_dock = FileTreePanel(roots, parent=self)
+        self._preview_dock = MarkdownPreviewPanel(parent=self)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._file_tree_dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._preview_dock)
+
+        # ActivityBar ボタンと Dock の双方向同期（バインダは GC 防止のため保持）
+        self._dock_binders = [
+            bind_dock_toggle(self._file_tree_dock, self._activity_bar.btn_explorer),
+            bind_dock_toggle(self._preview_dock, self._activity_bar.btn_preview),
+        ]
+
+        # ファイル選択 → プレビュー
+        self._file_tree_dock.file_selected.connect(self._preview_dock.load_file)
+
+        # 設定からの表示状態復元（既定は非表示でレイアウト最小化）
+        try:
+            explorer_visible = bool(_ss.get_option("file_explorer_visible"))
+            preview_visible = bool(_ss.get_option("markdown_preview_visible"))
+        except Exception:
+            explorer_visible, preview_visible = False, False
+        self._file_tree_dock.setVisible(explorer_visible)
+        self._preview_dock.setVisible(preview_visible)
+        # 初期チェック状態を実際の visibility に同期
+        self._activity_bar.btn_explorer.setChecked(explorer_visible)
+        self._activity_bar.btn_preview.setChecked(preview_visible)
+
+    def _persist_dock_visibility(self) -> None:
+        """Dock 表示状態を settings_store に保存する（closeEvent から呼ぶ）。"""
+        if not hasattr(self, "_file_tree_dock") or not hasattr(self, "_preview_dock"):
+            return
+        try:
+            from . import settings_store as _ss
+
+            _ss.set_option("file_explorer_visible", self._file_tree_dock.isVisible())
+            _ss.set_option("markdown_preview_visible", self._preview_dock.isVisible())
+        except Exception:
+            pass
 
     def _open_settings_window(self) -> None:
         if self._settings_window is None or not self._settings_window.isVisible():
@@ -2455,6 +2527,8 @@ class MainWindow(QMainWindow):
             if ret != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
+        # Phase D-4: Dock 表示状態の永続化
+        self._persist_dock_visibility()
         self._page_workbench.cleanup()
         self._copilot_dock.shutdown()
         try:

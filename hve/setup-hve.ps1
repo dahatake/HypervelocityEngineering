@@ -124,16 +124,16 @@ Set-Location $repoRoot
 
 Write-Step "Checking required tools"
 $git = Resolve-PreferredCommand -Name "git"
-if ($git) { Write-Host "Git: $git" } else { Write-SetupWarning "Git was not found. Install Git from https://git-scm.com/download/win." }
+if ($git) { Write-Host "Git: $git" } else { Write-SetupWarning "Git was not found. Install on a clean Windows OS:`n        winget install Git.Git    or    https://git-scm.com/download/win" }
 
 $gh = Resolve-PreferredCommand -Name "gh"
-if ($gh) { Write-Host "GitHub CLI: $gh" } else { Write-SetupWarning "GitHub CLI was not found. Install it from https://cli.github.com/." }
+if ($gh) { Write-Host "GitHub CLI: $gh" } else { Write-SetupWarning "GitHub CLI was not found. Install on a clean Windows OS:`n        winget install GitHub.cli    or    https://cli.github.com/" }
 
 $python = Find-Python311
 if ($python) {
     Write-Host ("Python: {0} ({1}.{2}.{3})" -f $python.Executable, $python.Major, $python.Minor, $python.Patch)
 } else {
-    Write-SetupWarning "Python 3.11+ was not found. Install Python 3.11 or newer and rerun this script."
+    Write-SetupWarning "Python 3.11+ was not found. Install on a clean Windows OS:`n        winget install Python.Python.3.13`n        or download from https://www.python.org/downloads/`n        Make sure to check 'Add python.exe to PATH'."
     if (-not $CheckOnly) { exit 1 }
 }
 
@@ -224,6 +224,12 @@ except Exception:
             try {
                 Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "-e", ".[gui,gui-docconvert]")
                 Write-Host "[gui,gui-docconvert] extras installed (PySide6 + markitdown[all])."
+                Write-Step "Downloading Mermaid / KaTeX assets for Markdown preview"
+                try {
+                    Invoke-Checked -FilePath $venvPython -Arguments @("-m", "hve.gui.markdown_preview.download_assets")
+                } catch {
+                    Write-SetupWarning ("Asset download had failures: " + $_.Exception.Message + ". Markdown body will still render; Mermaid/KaTeX will be disabled.")
+                }
             } catch {
                 Write-SetupWarning ("Failed to install [gui,gui-docconvert] extras: " + $_.Exception.Message + ". Re-run later: " + $venvPython + ' -m pip install -e ".[gui,gui-docconvert]"')
             }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- シンプルなプレビュー（文書）アイコン。本リポジトリ独自作成。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+  <line x1="3" y1="5" x2="12" y2="5" stroke="#555555" stroke-width="1.2"/>
+  <line x1="3" y1="7.5" x2="10" y2="7.5" stroke="#888888" stroke-width="1"/>
+  <line x1="3" y1="9.5" x2="11" y2="9.5" stroke="#888888" stroke-width="1"/>
+  <line x1="3" y1="11.5" x2="9" y2="11.5" stroke="#888888" stroke-width="1"/>
+</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+  <line x1="3" y1="5" x2="12" y2="5" stroke="#555555" stroke-width="1.2"/>
+  <line x1="3" y1="7.5" x2="10" y2="7.5" stroke="#888888" stroke-width="1"/>
+  <line x1="3" y1="9.5" x2="11" y2="9.5" stroke="#888888" stroke-width="1"/>
+  <line x1="3" y1="11.5" x2="9" y2="11.5" stroke="#888888" stroke-width="1"/>
+</svg>
