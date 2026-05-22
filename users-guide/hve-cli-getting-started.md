@@ -68,7 +68,25 @@ hve\setup-hve.cmd
 ./hve/setup-hve.sh
 ```
 
-スクリプトは `.venv` 作成 + `github-copilot-sdk` + `[mdq]` extras をインストールします。詳細・オプション（`--with-gui` 等）は [hve-cli-orchestrator-guide.md の「セットアップスクリプトを使った環境構築」](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照してください。
+スクリプトは `.venv` 作成 + `github-copilot-sdk` + 全 extras（`mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を既定でインストールします。CLI のみで良い場合は `--no-gui`、最小構成にしたい場合は `--minimal` を付けてください。詳細・オプションは [hve-cli-orchestrator-guide.md の「セットアップスクリプトを使った環境構築」](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照してください。
+
+> **Python 自動インストールと管理者権限について**
+>
+> Python 3.11+ が見つからない場合、セットアップスクリプトは **最新の Python 3.14 を自動インストール**しようとします。OS ごとに以下の権限が必要になる場合があります:
+>
+> | OS | 使用するパッケージマネージャ | 権限 |
+> |---|---|---|
+> | Windows | `winget`（`--scope user` でユーザー領域へインストール） | 通常は不要。winget 自体が UAC（管理者承認）を要求する場合あり |
+> | macOS | Homebrew (`brew install python@3.14`) | **sudo 不要**（Homebrew がユーザー prefix を所有している場合） |
+> | Ubuntu / Debian | `apt` + deadsnakes PPA | **sudo 必要**（`sudo apt-get` / `sudo add-apt-repository`） |
+> | Fedora / RHEL | `dnf` | **sudo 必要** |
+> | Arch Linux | `pacman` | **sudo 必要** |
+>
+> 自動インストール前に確認プロンプトが表示されます。確認を省略するには `-Yes`（Windows）/ `--yes`（macOS/Linux）を、自動インストールを完全に無効化するには `-NoInstallPython` / `--no-install-python` を指定してください。winget や Homebrew 自体が未インストールの環境では、エラーメッセージに従って手動で導入してください。
+>
+> **PowerShell 7+ 必須（Windows）**
+>
+> `setup-hve.cmd` / `setup-hve.ps1` は **PowerShell 7+（pwsh.exe）が必須**です。Windows 同梱の Windows PowerShell 5.x は非対応（ネイティブコマンド引数の二重引用符処理が異なるため）。pwsh が未インストールの場合、`setup-hve.cmd` は **winget で自動インストール**を試みます（`--scope user` でユーザー領域、UAC 要求が発生する場合あり）。手動導入は `winget install --id Microsoft.PowerShell -e --source winget` または https://aka.ms/install-powershell を参照してください。
 
 ### 4. 動作確認
 

@@ -1,0 +1,263 @@
+name: Verify QA Reference in PR
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, ready_for_review, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      target_pr:
+        description: '検証対象 PR 番号'
+        required: true
+        type: string
+      dry_run:
+        description: 'ドライラン（コメント投稿をスキップ）'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: verify-qa-reference-in-pr-${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  verify:
+    if: >
+      (vars.QA_REFERENCE_CHECK_MODE != 'disabled')
+      && (
+        (github.event_name == 'pull_request_target'
+        && !github.event.pull_request.draft
+        && contains(github.event.pull_request.labels.*.name, 'auto-qa')
+        && !contains(github.event.pull_request.labels.*.name, 'qa-questionnaire-pr'))
+        || (github.event_name == 'workflow_dispatch' && inputs.target_pr != '')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      CHECK_MODE: ${{ vars.QA_REFERENCE_CHECK_MODE != '' && vars.QA_REFERENCE_CHECK_MODE || 'warning' }}
+
+    steps:
+      - name: Verify QA Reference section in PR body
+        id: run-check
+        run: |
+          set -euo pipefail
+
+          MODE=$(printf '%s' "${CHECK_MODE}" | tr '[:upper:]' '[:lower:]')
+          case "${MODE}" in
+            warning|required|disabled)
+              ;;
+            *)
+              MODE="warning"
+              ;;
+          esac
+
+          if [ "${MODE}" = "disabled" ]; then
+            {
+              echo "has_failure=false"
+              echo "effective_mode=${MODE}"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          pr_error_log=$(mktemp)
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_error_log}") || {
+            err_preview=$(head -n 10 "${pr_error_log}" 2>/dev/null || echo "unknown error")
+            echo "::error::PR #${PR_NUMBER} の取得に失敗しました: ${err_preview}"
+            failures_json='["PR #'"${PR_NUMBER}"' の取得に失敗しました"]'
+            {
+              echo '<!-- qa-reference-check-result -->'
+              echo '## 🔍 QA Reference Check Result'
+              echo
+              printf '**結果**: ❌ FAIL（モード: `%s`）\n\n' "${MODE}"
+              echo '**理由**:'
+              jq -r '.[] | "- " + .' <<<"${failures_json}"
+              echo
+              echo '**修正方法**:'
+              echo '時間をおいて再実行してください。継続して失敗する場合はトークン権限・GitHub API 状態を確認してください。'
+              echo
+              printf '**現在のモード**: `%s`\n' "${MODE}"
+              echo '**`required` モード昇格予定**: 安定確認後 2 週間を目安'
+            } > /tmp/qa_reference_check_comment.md
+            {
+              echo "has_failure=true"
+              echo "effective_mode=${MODE}"
+              echo "failure_reasons_json=${failures_json}"
+              echo "warning_reasons_json=[]"
+            } >> "${GITHUB_OUTPUT}"
+            rm -f "${pr_error_log}"
+            exit 0
+          }
+          rm -f "${pr_error_log}"
+
+          pr_body=$(printf '%s' "${pr_data}" | jq -r '.body // ""')
+          head_sha=$(printf '%s' "${pr_data}" | jq -r '.head.sha // ""')
+          base_sha=$(printf '%s' "${pr_data}" | jq -r '.base.sha // ""')
+
+          failures_json='[]'
+          warnings_json='[]'
+          qa_section=''
+
+          if ! printf '%s' "${pr_body}" | grep -qF '<!-- qa-reference-start -->' || \
+             ! printf '%s' "${pr_body}" | grep -qF '<!-- qa-reference-end -->'; then
+            failures_json=$(jq -nc '["QA Reference セクションが PR 本文に存在しません"]')
+          else
+            qa_section=$(printf '%s' "${pr_body}" | sed -n '/<!-- qa-reference-start -->/,/<!-- qa-reference-end -->/p' | sed '1d;$d')
+          fi
+
+          qa_paths=()
+          if [ -n "${qa_section}" ]; then
+            while IFS= read -r path; do
+              [ -n "${path}" ] || continue
+              qa_paths+=("${path}")
+            done < <(printf '%s\n' "${qa_section}" | sed -n -E 's/^[[:space:]]*-[[:space:]]*(qa\/[^[:space:]]+)[[:space:]]*$/\1/p')
+          fi
+
+          no_reference_reason=''
+          if [ -n "${qa_section}" ]; then
+            no_reference_reason=$(printf '%s\n' "${qa_section}" | sed -n -E 's/^[[:space:]]*参照なし[[:space:]]*:[[:space:]]*理由[[:space:]]*=[[:space:]]*(.+)[[:space:]]*$/\1/p' | head -n 1)
+          fi
+
+          if [ "${#qa_paths[@]}" -eq 0 ] && [ -z "${no_reference_reason}" ]; then
+            failures_json=$(printf '%s' "${failures_json}" | jq -c '. + ["QA Reference セクションに参照ファイルまたは『参照なし: 理由 = ...』が記載されていません"]')
+          fi
+
+          for qa_path in "${qa_paths[@]}"; do
+            if ! echo "${qa_path}" | grep -qE '^qa/[a-zA-Z0-9_][a-zA-Z0-9_.-]*(/[a-zA-Z0-9_][a-zA-Z0-9_.-]*)*\.md$'; then
+              failures_json=$(printf '%s' "${failures_json}" | jq -c --arg msg "記載された QA ファイル「${qa_path}」は qa/ 配下ではありません" ". + [\$msg]")
+              continue
+            fi
+            if echo "${qa_path}" | grep -qE '(^|/)\.\.(/|$)' || echo "${qa_path}" | grep -qE '(^|/)\.(/|$)'; then
+              failures_json=$(printf '%s' "${failures_json}" | jq -c --arg msg "記載された QA ファイル「${qa_path}」が無効なパスです" ". + [\$msg]")
+              continue
+            fi
+            if [[ "${qa_path}" == /* ]] || [[ "${qa_path}" == *"\\"* ]] || [[ "${qa_path}" == *"?"* ]] || [[ "${qa_path}" == *"#"* ]] || [[ "${qa_path}" == *"%"* ]]; then
+              failures_json=$(printf '%s' "${failures_json}" | jq -c --arg msg "記載された QA ファイル「${qa_path}」が無効なパスです" ". + [\$msg]")
+              continue
+            fi
+
+            exists_head="false"
+            exists_base="false"
+
+            if gh api "/repos/${REPO}/contents/${qa_path}?ref=${head_sha}" >/tmp/qa_ref_contents_head.json 2>/tmp/qa_ref_contents_head.err; then
+              exists_head="true"
+            fi
+
+            if [ "${exists_head}" != "true" ] && gh api "/repos/${REPO}/contents/${qa_path}?ref=${base_sha}" >/tmp/qa_ref_contents_base.json 2>/tmp/qa_ref_contents_base.err; then
+              exists_base="true"
+            fi
+
+            if [ "${exists_head}" != "true" ] && [ "${exists_base}" != "true" ]; then
+              failures_json=$(printf '%s' "${failures_json}" | jq -c --arg msg "記載された QA ファイル「${qa_path}」がリポジトリに存在しません" ". + [\$msg]")
+            fi
+          done
+
+          listed_paths_json=$(printf '%s\n' "${qa_paths[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+
+          linked_issue=$(printf '%s' "${pr_body}" | sed -n -E 's/.*(Fixes|Closes|Resolves)[[:space:]]+#([0-9]+).*/\2/ip' | head -n 1)
+          if [ -z "${linked_issue}" ]; then
+            linked_issue=$(printf '%s' "${pr_body}" | sed -n -E 's/.*<!--[[:space:]]*parent-issue:[[:space:]]*#([0-9]+)[[:space:]]*-->.*$/\1/p' | head -n 1)
+          fi
+
+          if [ -n "${linked_issue}" ]; then
+            issue_body=$(gh api "/repos/${REPO}/issues/${linked_issue}" --jq '.body // ""' 2>/tmp/qa_ref_issue.err || echo '')
+            root_issue=$(printf '%s' "${issue_body}" | sed -n -E 's/.*<!--[[:space:]]*root-issue:[[:space:]]*#([0-9]+)[[:space:]]*-->.*$/\1/p' | head -n 1)
+            if [ -n "${root_issue}" ]; then
+              tree_json=$(gh api "/repos/${REPO}/git/trees/${head_sha}?recursive=1" 2>/tmp/qa_ref_tree_head.err || true)
+              if [ -z "${tree_json}" ]; then
+                tree_json=$(gh api "/repos/${REPO}/git/trees/${base_sha}?recursive=1" 2>/tmp/qa_ref_tree_base.err || true)
+              fi
+
+              if [ -n "${tree_json}" ]; then
+                while IFS= read -r expected_path; do
+                  [ -n "${expected_path}" ] || continue
+                  if ! jq -e --arg p "${expected_path}" "index(\$p) != null" <<<"${listed_paths_json}" >/dev/null; then
+                    warnings_json=$(printf '%s' "${warnings_json}" | jq -c --arg msg "推奨: 「${expected_path}」が存在しますが PR 本文の Referenced QA Files に未記載です" ". + [\$msg]")
+                  fi
+                done < <(printf '%s' "${tree_json}" | jq -r --arg root "${root_issue}" ".tree[]?.path | select(test(\"^qa/[^/]+-Issue-\" + \$root + \"-questionnaire-.*\\\\.md$\"))")
+              fi
+            fi
+          fi
+
+          has_failure=$(jq -r 'if length > 0 then "true" else "false" end' <<<"${failures_json}")
+          {
+            echo "has_failure=${has_failure}"
+            echo "effective_mode=${MODE}"
+            echo "failure_reasons_json=${failures_json}"
+            echo "warning_reasons_json=${warnings_json}"
+          } >> "${GITHUB_OUTPUT}"
+
+          if [ "${has_failure}" = "true" ]; then
+            {
+              echo '<!-- qa-reference-check-result -->'
+              echo '## 🔍 QA Reference Check Result'
+              echo
+              printf '**結果**: ❌ FAIL（モード: `%s`）\n\n' "${MODE}"
+              echo '**理由**:'
+              jq -r '.[] | "- " + .' <<<"${failures_json}"
+              echo
+              echo '**修正方法**:'
+              echo 'PR 本文に以下のセクションを追加してください:'
+              echo
+              echo '```markdown'
+              echo '<!-- qa-reference-start -->'
+              echo '## Referenced QA Files'
+              echo '- qa/<参照したQA回答ファイルのパス>'
+              echo '<!-- qa-reference-end -->'
+              echo '```'
+              echo
+              echo 'QA 参照が不要な場合は、同セクション内に「参照なし: 理由 = <理由>」と明記してください。'
+              echo
+              if jq -e 'length > 0' <<<"${warnings_json}" >/dev/null; then
+                echo '**推奨ログ（FAIL 対象外）:**'
+                jq -r '.[] | "- " + .' <<<"${warnings_json}"
+                echo
+              fi
+              printf '**現在のモード**: `%s`\n' "${MODE}"
+              echo '**`required` モード昇格予定**: 安定確認後 2 週間を目安'
+            } > /tmp/qa_reference_check_comment.md
+          fi
+
+      - name: Upsert PR comment on failure
+        if: steps.run-check.outputs.has_failure == 'true' && env.DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+
+          comment_id=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[] | select(.body | contains("<!-- qa-reference-check-result -->")) | .id' \
+            2>/dev/null | tail -1 || true)
+
+          if [ -n "${comment_id}" ]; then
+            gh api --method PATCH "/repos/${REPO}/issues/comments/${comment_id}" \
+              -f body="$(cat /tmp/qa_reference_check_comment.md)" >/dev/null
+            echo "既存コメント（ID=${comment_id}）を更新しました。"
+          else
+            gh pr comment "${PR_NUMBER}" \
+              --repo "${REPO}" \
+              --body "$(cat /tmp/qa_reference_check_comment.md)"
+            echo "失敗コメントを新規投稿しました。"
+          fi
+
+      - name: Skip comment posting in dry-run mode
+        if: steps.run-check.outputs.has_failure == 'true' && env.DRY_RUN == 'true'
+        run: |
+          echo "[DRY RUN] コメント投稿をスキップしました。"
+
+      - name: Emit warning log (warning mode)
+        if: steps.run-check.outputs.has_failure == 'true' && steps.run-check.outputs.effective_mode == 'warning'
+        run: |
+          echo "::warning::QA Reference チェックが失敗しました（warning モードのため CI は継続）。"
+
+      - name: Fail in required mode
+        if: steps.run-check.outputs.has_failure == 'true' && steps.run-check.outputs.effective_mode == 'required'
+        run: |
+          echo "::error::QA Reference チェックが失敗しました（required モード）。"
+          exit 1

@@ -382,7 +382,10 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("Knowledge Management (AKM)", "C11"),
             ("Original Docs Review (AQOD)", "C12"),
             ("Source Codeからのドキュメント作成 (ADOC)", "C13"),
-            ("Auto Requirement Definition (ARD)", "C14"),
+            # C14 (ARD) は実行時パラメータのため Step 1 右ペインのみで編集する。
+            # 設定画面に二重表示すると同期しない独立インスタンスとなり、ユーザーが
+            # 入力先を取り違える原因となるため削除（業務エリア/対象企業名は
+            # Step 1 右ペインの C14 のみで入力する）。
         ],
     ),
     (

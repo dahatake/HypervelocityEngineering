@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Changed — セットアップスクリプト (`hve/setup-hve.*`) をゼロから再作成
+
+OS のみが入った Windows / macOS / Linux からワンショットで HVE CLI / GUI の全機能を実行できる環境を構築するため、3 スクリプトを書き直した。
+
+- **既定で導入する extras を全機能セットに統合**: `mdq-watch,mdq-ja,semantic,gui,gui-pty,gui-docconvert`
+  - 旧版で抜けていた `[semantic]` (fastembed / nltk / numpy) と `[gui-pty]` (pywinpty / ptyprocess) を既定インストール対象に追加。GUI 設定画面の「[semantic] extra が未インストール」警告を解消。
+  - 旧版で `-WithGui` 指定時のみ導入していた `[gui]` / `[gui-docconvert]` も既定 ON 化。
+- **追加処理**: `pip install -e .` (editable)、`pip / setuptools / wheel` アップグレード、`nltk punkt_tab` 事前 DL、Mermaid/KaTeX アセット DL、GUI 翻訳 `.ts → .qm` コンパイル、17 項目の verify を全プラットフォームで統一。
+- **OS prereq 案内**: `git` / `gh` / Python 3.11+ が無い場合に Windows (`winget`) / macOS (`brew`) / Ubuntu/Debian (`apt-get`) / Fedora/RHEL (`dnf`) のコマンドを表示。Linux では Qt/QtWebEngine 必須 system lib (`libxcb-cursor0` 等) を診断。
+- **フラグを 3 プラットフォーム統一**（旧仕様から BREAKING CHANGE）:
+  - 新フラグ: `-CheckOnly` / `--check-only`, `-NoGui` / `--no-gui`, `-Minimal` / `--minimal`, `-Force` / `--force`, `-SkipNltkDownload` / `--skip-nltk-download`, `-WithSkills` / `--with-skills`
+  - 旧 `--with-gui` / `-WithGui` は廃止（GUI extras 既定 ON のため不要）。CLI 専用にしたい場合は `--no-gui` / `-NoGui`。base のみの最小構成は新フラグ `--minimal` / `-Minimal`。
+  - 旧 `-WithWorkIQ` / `--with-workiq` / `-InstallExternalCopilotCli` / `--install-external-copilot-cli` / `-ForceRecreateVenv` / `--force-recreate-venv` / `-SkipMdq` / `--skip-mdq` / `-SkipMdqWatch` / `--skip-mdq-watch` は廃止。Work IQ / 外部 Copilot CLI は OS 標準のパッケージマネージャから個別導入する方針に変更。
+- **`hve\setup-hve.cmd` は `.ps1` を呼ぶ薄ラッパに統一**。cmd の cp932 と Japanese テキストの相性問題を回避し、`.cmd` と `.ps1` の挙動差を解消。`.cmd` は全 PS フラグを verbatim 転送する。
+
 ### Added — bump-my-version 導入（バージョンアップ自動化）
 
 - `pyproject.toml` に `[tool.bumpversion]` 設定を追加し、`pyproject.toml` / `hve/__init__.py` / `CHANGELOG.md` の 3 箇所を 1 コマンドで同時更新できるようにした。

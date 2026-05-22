@@ -1,0 +1,127 @@
+name: Sync Azure Skills
+
+on:
+  # 自動 cron は無効化済み: .github/skills/azure-skills/ は .gitignore で除外され、
+  # 各開発者の手元で hve/setup-hve.{ps1,sh,cmd} の --with-skills フラグから
+  # npx skills add microsoft/skills を実行してローカルにのみ展開する運用に変更したため。
+  # 手動で同期 PR を作成したい場合は workflow_dispatch から実行する。
+  # schedule:
+  #   - cron: '0 9 * * 1'  # 毎週月曜 9:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Backup custom skills
+        run: |
+          mkdir -p /tmp/custom-skills-backup/planning
+          mkdir -p /tmp/custom-skills-backup/output
+          # planning category custom skills
+          for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d ".github/skills/${skill}" ]; then
+              cp -r ".github/skills/${skill}" "/tmp/custom-skills-backup/planning/${skill}"
+              echo "Backed up: planning/${skill}"
+            fi
+          done
+          # output category custom skills
+          for skill in large-output-chunking; do
+            if [ -d ".github/skills/output/${skill}" ]; then
+              cp -r ".github/skills/output/${skill}" "/tmp/custom-skills-backup/output/${skill}"
+              echo "Backed up: output/${skill}"
+            fi
+          done
+
+      - name: Remove non-custom azure-skills folders
+        run: |
+          cd .github/skills
+          for dir in */; do
+            dir="${dir%/}"
+            case "${dir}" in
+              planning|output|harness|testing|cicd|observability)
+                echo "Keeping custom category: ${dir}"
+                ;;
+              *)
+                rm -rf "${dir}"
+                echo "Removed: ${dir}"
+                ;;
+            esac
+          done
+
+      - name: Install latest azure-skills
+        run: |
+          npx -y skills add microsoft/skills --skill '*' --agent copilot --yes --copy
+
+      - name: Restore custom skills
+        run: |
+          mkdir -p .github/skills/planning
+          mkdir -p .github/skills/output
+          for skill in repo-onboarding-fast task-dag-planning work-artifacts-layout; do
+            if [ -d "/tmp/custom-skills-backup/planning/${skill}" ]; then
+              rm -rf ".github/skills/${skill}"
+              cp -r "/tmp/custom-skills-backup/planning/${skill}" ".github/skills/${skill}"
+              echo "Restored: planning/${skill}"
+            fi
+          done
+          for skill in large-output-chunking; do
+            if [ -d "/tmp/custom-skills-backup/output/${skill}" ]; then
+              rm -rf ".github/skills/output/${skill}"
+              cp -r "/tmp/custom-skills-backup/output/${skill}" ".github/skills/output/${skill}"
+              echo "Restored: output/${skill}"
+            fi
+          done
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: auto/sync-azure-skills
+          commit-message: 'chore: sync azure-skills to latest'
+          title: 'chore: sync azure-skills to latest'
+          body: |
+            ## 概要
+
+            `microsoft/skills` リポジトリから最新の Azure Skills を自動同期しました。
+
+            ## 変更内容
+
+            - `.github/skills/` 配下の azure-skills 由来スキルを最新版に更新
+
+            ## カスタムスキル（同期対象外）
+
+            以下のカスタムスキルは同期対象外のため、変更ありません：
+            - `planning/repo-onboarding-fast`
+            - `planning/task-dag-planning`
+            - `planning/work-artifacts-layout`
+            - `output/large-output-chunking`
+
+            ## 確認チェックリスト
+
+            - [ ] 新規追加・削除されたスキルフォルダを確認した
+            - [ ] 既存スキルの内容変更を確認した
+            - [ ] `copilot-instructions.md` §5 のスキル参照ルールへの影響がないことを確認した（汎用記述のため影響なし）
+            - [ ] カスタムスキル 4 件が正しく保持されていることを確認した
+          delete-branch: true

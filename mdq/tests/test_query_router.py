@@ -49,8 +49,21 @@ def test_short_proper_noun_route() -> None:
 
 
 def test_concept_overview_route() -> None:
+    # concept_overview は pageindex を第一候補にする (新ルート)。
+    # available_strategies 未指定時はフォールバックなしで pageindex を返す。
     d = qr.classify_query("システム全体のアーキテクチャ")
     assert d.reason == "concept_overview"
+    assert d.strategy == "pageindex"
+
+
+def test_concept_overview_falls_back_when_pageindex_missing() -> None:
+    d = qr.classify_query(
+        "システム全体のアーキテクチャ",
+        available_strategies={"heading"},
+    )
+    assert d.reason == "concept_overview"
+    assert d.original_strategy == "pageindex"
+    assert d.fallback_used is True
     assert d.strategy == "heading"
 
 

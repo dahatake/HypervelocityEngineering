@@ -52,7 +52,11 @@ def db_path_for(lang: str = "ja-jp", strategy: str = "heading") -> Path:
 #       - chunk_embedding: float32 BLOB produced by late-chunking (Q9=B).
 #         NULL means the row was not indexed with --late-chunking.
 #     Both columns are pure ADD COLUMN migrations; no data loss.
-SCHEMA_VERSION = 5
+# v6: summary column added (nullable) for the `pageindex` chunking
+#     strategy. NULL for chunks produced by other strategies; populated
+#     with a deterministic head/first_paragraph extract by
+#     :mod:`mdq.strategies_pageindex`. ADD COLUMN migration; no data loss.
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -76,7 +80,8 @@ CREATE TABLE IF NOT EXISTS chunks (
   part_total      INTEGER NOT NULL DEFAULT 1,
   parent_chunk_id TEXT,
   text_raw        TEXT,
-  chunk_embedding BLOB
+  chunk_embedding BLOB,
+  summary         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(path);
 """
@@ -159,6 +164,9 @@ def _migrate(conn: sqlite3.Connection, fts_tokenizer: str = "unicode61") -> None
             conn.execute(
                 "ALTER TABLE chunks ADD COLUMN chunk_embedding BLOB"
             )
+        # v5 -> v6: ADD COLUMN summary (nullable, pageindex strategy).
+        if "summary" not in cols:
+            conn.execute("ALTER TABLE chunks ADD COLUMN summary TEXT")
     # Always ensure the parent index exists once the column is guaranteed.
     conn.execute(_PARENT_INDEX_DDL)
     # v1 -> v2: chunk_id derivation changed. Drop chunks and clear file SHA-1
@@ -263,27 +271,30 @@ def delete_chunks_for(conn: sqlite3.Connection, path: str) -> None:
 def insert_chunks(conn: sqlite3.Connection, rows: Iterable[tuple]) -> None:
     """Insert chunk rows.
 
-    Accepts 9-, 11-, 12- or 14-tuples (all back-compat):
+    Accepts 9-, 11-, 12-, 14- or 15-tuples (all back-compat):
       - 9-tuple  (legacy): through tags. part_index/part_total/parent default.
       - 11-tuple         : adds (part_index, part_total). parent NULL.
       - 12-tuple         : adds parent_chunk_id at the end.
       - 14-tuple (v5)    : adds (text_raw, chunk_embedding) at the end.
+      - 15-tuple (v6)    : adds summary at the end.
     """
     materialised = []
     for r in rows:
         if len(r) == 9:
-            materialised.append((*r, 0, 1, None, None, None))
+            materialised.append((*r, 0, 1, None, None, None, None))
         elif len(r) == 11:
-            materialised.append((*r, None, None, None))
+            materialised.append((*r, None, None, None, None))
         elif len(r) == 12:
-            materialised.append((*r, None, None))
+            materialised.append((*r, None, None, None))
+        elif len(r) == 14:
+            materialised.append((*r, None))
         else:
             materialised.append(tuple(r))
     conn.executemany(
         "INSERT OR REPLACE INTO chunks(chunk_id, path, heading_path, level, "
         "start_line, end_line, token_est, text, tags, part_index, part_total, "
-        "parent_chunk_id, text_raw, chunk_embedding) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "parent_chunk_id, text_raw, chunk_embedding, summary) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         materialised,
     )
 
@@ -299,7 +310,7 @@ def all_chunks(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return list(conn.execute(
         "SELECT chunk_id, path, heading_path, level, start_line, end_line, "
         "token_est, text, tags, part_index, part_total, parent_chunk_id, "
-        "text_raw, chunk_embedding "
+        "text_raw, chunk_embedding, summary "
         "FROM chunks"
     ))
 

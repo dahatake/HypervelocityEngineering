@@ -45,7 +45,18 @@ def db_path_for(lang: str = "ja-jp", strategy: str = "heading") -> Path:
 #     the nearest ancestor heading chunk. Populated during indexing; allows
 #     fast O(1) parent lookup for --with-parent expansion. NULL for chunks
 #     without an ancestor (top-level heading, preface, fixed_window rows).
-SCHEMA_VERSION = 4
+# v5: text_raw + chunk_embedding columns added (both nullable) for the
+#     `semantic_paragraph` chunking strategy.
+#       - text_raw: original chunk body before contextualizer template
+#         expansion (Q11=B). NULL means `text` is already the raw body.
+#       - chunk_embedding: float32 BLOB produced by late-chunking (Q9=B).
+#         NULL means the row was not indexed with --late-chunking.
+#     Both columns are pure ADD COLUMN migrations; no data loss.
+# v6: summary column added (nullable) for the `pageindex` chunking
+#     strategy. NULL for chunks produced by other strategies; populated
+#     with a deterministic head/first_paragraph extract by
+#     :mod:`mdq.strategies_pageindex`. ADD COLUMN migration; no data loss.
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -67,7 +78,10 @@ CREATE TABLE IF NOT EXISTS chunks (
   tags            TEXT,
   part_index      INTEGER NOT NULL DEFAULT 0,
   part_total      INTEGER NOT NULL DEFAULT 1,
-  parent_chunk_id TEXT
+  parent_chunk_id TEXT,
+  text_raw        TEXT,
+  chunk_embedding BLOB,
+  summary         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(path);
 """
@@ -143,6 +157,16 @@ def _migrate(conn: sqlite3.Connection, fts_tokenizer: str = "unicode61") -> None
             conn.execute(
                 "ALTER TABLE chunks ADD COLUMN parent_chunk_id TEXT"
             )
+        # v4 -> v5: ADD COLUMN text_raw + chunk_embedding (both nullable).
+        if "text_raw" not in cols:
+            conn.execute("ALTER TABLE chunks ADD COLUMN text_raw TEXT")
+        if "chunk_embedding" not in cols:
+            conn.execute(
+                "ALTER TABLE chunks ADD COLUMN chunk_embedding BLOB"
+            )
+        # v5 -> v6: ADD COLUMN summary (nullable, pageindex strategy).
+        if "summary" not in cols:
+            conn.execute("ALTER TABLE chunks ADD COLUMN summary TEXT")
     # Always ensure the parent index exists once the column is guaranteed.
     conn.execute(_PARENT_INDEX_DDL)
     # v1 -> v2: chunk_id derivation changed. Drop chunks and clear file SHA-1
@@ -247,24 +271,30 @@ def delete_chunks_for(conn: sqlite3.Connection, path: str) -> None:
 def insert_chunks(conn: sqlite3.Connection, rows: Iterable[tuple]) -> None:
     """Insert chunk rows.
 
-    Accepts 9-, 11- or 12-tuples:
+    Accepts 9-, 11-, 12-, 14- or 15-tuples (all back-compat):
       - 9-tuple  (legacy): through tags. part_index/part_total/parent default.
       - 11-tuple         : adds (part_index, part_total). parent NULL.
       - 12-tuple         : adds parent_chunk_id at the end.
+      - 14-tuple (v5)    : adds (text_raw, chunk_embedding) at the end.
+      - 15-tuple (v6)    : adds summary at the end.
     """
     materialised = []
     for r in rows:
         if len(r) == 9:
-            materialised.append((*r, 0, 1, None))
+            materialised.append((*r, 0, 1, None, None, None, None))
         elif len(r) == 11:
+            materialised.append((*r, None, None, None, None))
+        elif len(r) == 12:
+            materialised.append((*r, None, None, None))
+        elif len(r) == 14:
             materialised.append((*r, None))
         else:
             materialised.append(tuple(r))
     conn.executemany(
         "INSERT OR REPLACE INTO chunks(chunk_id, path, heading_path, level, "
         "start_line, end_line, token_est, text, tags, part_index, part_total, "
-        "parent_chunk_id) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "parent_chunk_id, text_raw, chunk_embedding, summary) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         materialised,
     )
 
@@ -279,7 +309,8 @@ def all_chunks(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     return list(conn.execute(
         "SELECT chunk_id, path, heading_path, level, start_line, end_line, "
-        "token_est, text, tags, part_index, part_total, parent_chunk_id "
+        "token_est, text, tags, part_index, part_total, parent_chunk_id, "
+        "text_raw, chunk_embedding, summary "
         "FROM chunks"
     ))
 

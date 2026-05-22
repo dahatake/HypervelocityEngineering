@@ -255,17 +255,18 @@ HVE の基本実行環境は、`hve/` 直下のセットアップスクリプト
 
 `hve` を初めて使う Windows ユーザーは、エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックするだけでセットアップを完了できます。PowerShell の実行ポリシー設定は不要です。
 
-`.cmd` がサポートする引数は次のみです:
+`.cmd` は **`.ps1` を呼んでフラグを verbatim 転送する薄ラッパ**で、`.ps1` と同じオプションを全てサポートします（v0.1.x 以降）。
 
 | 引数 | 動作 |
 |---|---|
-| なし（既定） | venv 作成 + `github-copilot-sdk` + mdq extras + **GUI extras** を導入（GUI extras は既定 ON） |
-| `--check-only` | 環境状態のみ表示（変更なし） |
-| `--skip-mdq` | mdq extras 導入をスキップ |
-| `--no-gui` | GUI extras 導入をスキップ（CLI のみ） |
-| `--help` / `/?` | 使い方表示 |
-
-> **`.ps1` との違い**: `.cmd` は **GUI extras を既定でインストール** します（`.ps1` は `-WithGui` 指定時のみ）。`-WithWorkIQ` / `-InstallExternalCopilotCli` / `-ForceRecreateVenv` / `-SkipMdqWatch` 等の上級オプションは `.cmd` ではサポートしません。これらが必要な場合は下記の Windows PowerShell 手順を使用してください。
+| なし（既定） | venv 作成 + `github-copilot-sdk` + 全 extras（`mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を導入 |
+| `-CheckOnly` | 環境状態のみ表示（変更なし） |
+| `-NoGui` | GUI 関連 extras（gui / gui-pty / gui-docconvert）をスキップ（CLI 専用） |
+| `-Minimal` | base のみインストール（検証/開発用の最小構成） |
+| `-Force` | 既存 `.venv` を削除して再作成 |
+| `-SkipNltkDownload` | `nltk punkt_tab` の事前 DL をスキップ |
+| `-WithSkills` | `microsoft/skills` を npx で `.github/skills/azure-skills/` に導入（Node.js 20+ 必須） |
+| `-Help` | 使い方表示 |
 
 ### Windows PowerShell
 
@@ -313,32 +314,32 @@ chmod +x hve/setup-hve.sh
 
 ### オプション
 
-> **`.cmd`（Windows 初心者向け）でサポートする引数は `--check-only` / `--skip-mdq` / `--no-gui` / `--help` のみです。** 下表の `-WithWorkIQ` / `-InstallExternalCopilotCli` / `-ForceRecreateVenv` / `-SkipMdqWatch` 等のオプションが必要な場合は `.ps1`（Windows PowerShell）または `.sh`（macOS / Linux）を使用してください。
-
 | 機能 | Windows | macOS / Linux | 既定 | 説明 |
 |---|---|---|---|---|
 | 検出のみ | `-CheckOnly` | `--check-only` | false | インストールや `.venv` 変更を行わず状態だけ確認 |
-| Work IQ 確認 | `-WithWorkIQ` | `--with-workiq` | false | Node.js / npm / npx の確認と Work IQ 利用前の注意を表示 |
-| 外部 Copilot CLI | `-InstallExternalCopilotCli` | `--install-external-copilot-cli` | false | SDK 同梱ではなく外部 `copilot` コマンドを使いたい場合だけ確認または導入 |
-| venv 再作成 | `-ForceRecreateVenv` | `--force-recreate-venv` | false | 既存 `.venv` を削除して作り直す |
-| markdown-query 依存スキップ | `-SkipMdq` | `--skip-mdq` | false | 既定の `pip install -e ".[mdq-watch]"` 実行と `python -m mdq --help` 検証を抑止する。失敗しても警告に降格するため、CI / オフライン環境で完全抑止したい場合のみ指定 |
-| watcher 用依存スキップ | `-SkipMdqWatch` | `--skip-mdq-watch` | false | `[mdq]` extras（rank_bm25 + tiktoken）のみ導入し、watcher 用 `watchdog` をスキップする。HVE CLI Orchestrator のリアルタイム索引更新（付録 F.8）は無効になる |
+| GUI スキップ | `-NoGui` | `--no-gui` | false | GUI 関連 extras（gui / gui-pty / gui-docconvert）を除外し CLI 専用とする |
+| 最小構成 | `-Minimal` | `--minimal` | false | base のみインストール（extras 全スキップ）。検証・開発用 |
+| venv 再作成 | `-Force` | `--force` | false | 既存 `.venv` を削除して作り直す |
+| nltk DL スキップ | `-SkipNltkDownload` | `--skip-nltk-download` | false | `nltk punkt_tab` の事前 DL をスキップ（オフライン環境向け） |
+| 外部 Skills | `-WithSkills` | `--with-skills` | false | `microsoft/skills` を npx で `.github/skills/azure-skills/` に導入（Node.js 20+ 必須） |
+
+> **旧フラグは廃止されました** (v0.1.x): `--with-gui` / `-WithGui` (既定 ON のため不要) / `--with-workiq` / `-WithWorkIQ` / `--install-external-copilot-cli` / `-InstallExternalCopilotCli` / `--force-recreate-venv` / `-ForceRecreateVenv` / `--skip-mdq` / `-SkipMdq` / `--skip-mdq-watch` / `-SkipMdqWatch`。Work IQ / 外部 Copilot CLI は OS 標準のパッケージマネージャ（winget / brew / apt-get / dnf）から個別に導入してください。
 
 ### 再実行時の挙動
 
 - `.venv` が存在し、Python 3.11+ で作成されている場合は再利用します。
-- `.venv` が Python 3.11 未満で作成されている場合、通常は停止します。作り直す場合は `-ForceRecreateVenv` または `--force-recreate-venv` を明示してください。
+- `.venv` が Python 3.11 未満で作成されている場合、通常モードでは自動再作成します。`-CheckOnly` / `--check-only` 下では警告のみにダウングレードし、`-Force` / `--force` を明示すると無条件で削除して作り直します。
 - `github-copilot-sdk` は再実行時も `python -m pip install --upgrade github-copilot-sdk` で更新確認します。
 - `-CheckOnly` / `--check-only` は環境を変更せず、不足している項目を警告として表示します。
 
 ### 認証と任意機能
 
-- スクリプトは Python 3.11+ の確認、`python3` / `python` の判定、Git / GitHub CLI の確認、`.venv` 作成、`pip` 更新、`github-copilot-sdk` 導入、`python -m hve --help` 確認、`gh auth status` 確認までを自動化します。
+- スクリプトは Python 3.11+ の確認、`python3` / `python` / `py -3.x` の判定、Git / GitHub CLI の確認、`.venv` 作成、`pip` / `setuptools` / `wheel` 更新、`github-copilot-sdk` 導入、`nltk punkt_tab` 事前 DL、Mermaid/KaTeX アセット DL、GUI 翻訳 `.qm` コンパイル、17 項目の verify、`gh auth status` 確認までを自動化します。
 - スクリプトはトークンやシークレットを作成・保存しません。GitHub 認証は `gh auth login` を実行してください。
-- 基本実行では外部 `copilot` コマンドは不要です。`COPILOT_CLI_PATH` や `--cli-path` で外部 CLI を明示指定したい場合だけ、外部 Copilot CLI を導入してください。
-- Node.js / npm / npx は任意です。Work IQ や Node ベース MCP を使う場合のみ必要です。
-- Work IQ は Public Preview の機能です。`--with-workiq` / `-WithWorkIQ` は Node.js / npm / npx の確認までを行い、Microsoft 365 / Entra ID の認証、EULA、管理者同意が必要になる場合は手動対応として案内します。
-- `markdown-query` Skill 用の任意依存（`rank_bm25` + `tiktoken`）は既定で導入されます。インストールに失敗した場合でもスクリプトは警告のみで継続し、Skill は内蔵 MiniBM25 によりフォールバック動作します。CI 等で完全に抑止したい場合は `-SkipMdq` / `--skip-mdq` を指定してください。詳細は [付録F. Markdown 横断クエリ（markdown-query Skill）](#付録f-markdown-横断クエリmarkdown-query-skill) を参照。
+- 基本実行では外部 `copilot` コマンドは不要です。`COPILOT_CLI_PATH` や `--cli-path` で外部 CLI を明示指定したい場合だけ、OS 標準のパッケージマネージャ（winget / brew / apt-get / dnf）から個別に導入してください。
+- Node.js / npm / npx は任意です。Work IQ や Node ベース MCP、`-WithSkills` / `--with-skills` を使う場合のみ必要です。
+- Work IQ は Public Preview の機能です。セットアップスクリプトでは導入まで行わず、Microsoft 365 / Entra ID の認証、EULA、管理者同意は手動で対応してください。
+- `markdown-query` Skill 用の任意依存（`rank_bm25` + `tiktoken` + `watchdog`）は既定で導入されます。インストールに失敗した場合でもスクリプトは警告のみで継続し、Skill は内蔵 MiniBM25 によりフォールバック動作します。`-Minimal` / `--minimal` を指定すると base のみとなり、これら extras は導入されません。詳細は [付録F. Markdown 横断クエリ（markdown-query Skill）](#付録f-markdown-横断クエリmarkdown-query-skill) を参照。
 
 ---
 
@@ -2363,7 +2364,7 @@ Copilot / Custom Agent が大量の Markdown を参照する際の **Context Win
 
 ### F.1 環境構築
 
-`hve/setup-hve.ps1` / `hve/setup-hve.sh` を `-SkipMdq` / `--skip-mdq` 無しで実行している場合、本ステップは既に完了しています。以下はセットアップスクリプトを使わない場合や、`[mdq]` extras のインストールが失敗した後に手動再導入する場合の手順です。
+`hve/setup-hve.ps1` / `hve/setup-hve.sh` を `-Minimal` / `--minimal` 無しで実行している場合、本ステップは既に完了しています。以下はセットアップスクリプトを使わない場合や、`[mdq]` extras のインストールが失敗した後に手動再導入する場合の手順です。
 
 ```bash
 pip install -e ".[mdq-watch]"   # 任意 extras: rank_bm25 + tiktoken + watchdog（推奨）
@@ -2469,7 +2470,7 @@ python tools/skills/markdown_query/benchmark.py \
 
 **有効化（依存導入）**:
 
-推奨は `hve/setup-hve.ps1` / `hve/setup-hve.sh` の実行です。これらは既定で `[mdq-watch]` extras をインストールするため、追加コマンドなしでリアルタイム索引更新が利用可能になります。watcher 用依存（`watchdog`）だけスキップしたい場合は `-SkipMdqWatch` / `--skip-mdq-watch` を指定してください。手動 `pip install` 例は §F.1 を参照してください。
+推奨は `hve/setup-hve.ps1` / `hve/setup-hve.sh` の実行です。これらは既定で `[mdq-watch]` extras（`watchdog` 含む）をインストールするため、追加コマンドなしでリアルタイム索引更新が利用可能になります。`-Minimal` / `--minimal` を指定すると base のみとなり watcher 依存も導入されません。手動 `pip install` 例は §F.1 を参照してください。
 
 ```bash
 pip install -e ".[mdq-watch]"   # watchdog + rank_bm25 + tiktoken

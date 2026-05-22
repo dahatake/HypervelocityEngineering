@@ -657,5 +657,33 @@ class WorkflowSelectPage(QWidget):
         for wf_id, grp in self._step_groups.items():
             self.steps_selection_changed.emit(wf_id, grp.enabled_step_ids())
 
+        # 必須要件サマリーバナーを更新（Task D）
+        self._notify_requirements_banner()
+
     def _on_steps_changed(self, workflow_id: str, enabled_step_ids: List[str]) -> None:
         self.steps_selection_changed.emit(workflow_id, enabled_step_ids)
+        self._notify_requirements_banner()
+
+    # ----------------------------------------------------------
+    # 必須要件サマリーバナー連携（Task D）
+    # ----------------------------------------------------------
+
+    def _collect_all_selected_steps(self) -> List[Tuple[str, List[str]]]:
+        """選択ワークフロー × 選択ステップ ID 一覧を返す。"""
+        return [
+            (wf_id, grp.enabled_step_ids())
+            for wf_id, grp in self._step_groups.items()
+        ]
+
+    def _notify_requirements_banner(self) -> None:
+        """OptionsPage 側のバナーを最新の選択状態で更新する。"""
+        if self._options_page is None:
+            return
+        updater = getattr(self._options_page, "update_requirements_banner", None)
+        if not callable(updater):
+            return
+        try:
+            updater(self._collect_all_selected_steps())
+        except Exception:
+            # 表示更新失敗で本体機能を止めない
+            pass

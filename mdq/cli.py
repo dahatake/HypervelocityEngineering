@@ -52,7 +52,7 @@ def _add_db_arg(p: argparse.ArgumentParser, *, allow_auto: bool = False) -> None
                    help="Tokenize language (default: ja-jp). Selects FTS5 "
                         "tokenizer and the per-language DB instance.")
     strategy_choices = ["heading", "heading_recursive", "fixed_window",
-                        "semantic_paragraph"]
+                        "semantic_paragraph", "pageindex"]
     if allow_auto:
         strategy_choices = ["auto"] + strategy_choices
         p.add_argument(
@@ -110,6 +110,14 @@ def cmd_index(args: argparse.Namespace) -> int:
             late_chunking=(True
                            if getattr(args, "late_chunking", False)
                            else None),
+        )
+    # Install pageindex runtime overrides.
+    if args.strategy == "pageindex":
+        from . import strategies_pageindex as _pi
+        _pi.clear_runtime_config()
+        _pi.set_runtime_config(
+            summary_chars=(getattr(args, "pageindex_summary_chars", None) or None),
+            summary_mode=getattr(args, "pageindex_summary_mode", None),
         )
     t0 = perf_counter()
     summary = indexer.build_index(
@@ -191,6 +199,9 @@ def cmd_search(args: argparse.Namespace) -> int:
         merge_parts=args.merge_parts,
         engine=args.engine,
         fusion_alpha=getattr(args, "fusion_alpha", None),
+        pageindex_tree_depth=int(
+            getattr(args, "pageindex_tree_depth", 0) or 0
+        ),
     )
     elapsed_ms = int((perf_counter() - t0) * 1000)
     # 集計: snippet 文字数合計と、参照元ファイルの全文字数推定
@@ -513,6 +524,19 @@ def build_parser() -> argparse.ArgumentParser:
              "Embeds each final chunk and persists vectors into the "
              "chunk_embedding column for linear-weighted retrieval fusion.",
     )
+    # --- pageindex strategy options --------------------------------------
+    p_idx.add_argument(
+        "--pageindex-summary-chars", type=int, default=0,
+        help="pageindex: per-chunk summary length in characters "
+             "(0 uses code default PAGEINDEX_SUMMARY_CHARS=200).",
+    )
+    p_idx.add_argument(
+        "--pageindex-summary-mode",
+        choices=["head", "first_paragraph"], default=None,
+        help="pageindex: summary extraction mode "
+             "(default: 'head' — first N chars of the body). "
+             "'first_paragraph' picks the first paragraph, clipped to N chars.",
+    )
     p_idx.set_defaults(func=cmd_index)
 
     p_s = sub.add_parser("search", help="Search the index")
@@ -548,6 +572,14 @@ def build_parser() -> argparse.ArgumentParser:
              "blend final_score = alpha*bm25_norm + (1-alpha)*cosine_sim. "
              "Default: 0.5. Set to 1.0 to disable vector blending; 0.0 to "
              "score by cosine only.",
+    )
+    p_s.add_argument(
+        "--pageindex-tree-depth", type=int, default=0, metavar="N",
+        help="pageindex DB 限定: each hit's expansion gets a "
+             "table-of-contents 'tree_path' walking up to N ancestor "
+             "heading chunks. Each node = {chunk_id, heading_path, summary}. "
+             "Ordered root-first, hit last. 0 disables (default). "
+             "他 strategy DB では summary 列が NULL のため黙って無視される。",
     )
     p_s.add_argument("--format", choices=["jsonl", "compact"], default="jsonl")
     p_s.set_defaults(func=cmd_search)

@@ -65,10 +65,16 @@ hve\setup-hve.cmd
 #### macOS / Linux
 
 ```bash
-./hve/setup-hve.sh --with-gui
+./hve/setup-hve.sh
 ```
 
+> `./hve/setup-hve.sh` も GUI extras（PySide6, markitdown, pywinpty/ptyprocess 等）を**既定で導入**します。CLI のみで良い場合は `--no-gui` を付けてください。
+
 スクリプトの詳細・オプションは [hve-gui-orchestrator-guide.md の「インストール」](./hve-gui-orchestrator-guide.md#インストール) を参照してください。
+
+> **Python 自動インストールと管理者権限について**
+>
+> Python 3.11+ が見つからない場合、セットアップスクリプトは最新の Python 3.14 を自動インストールしようとします。OS ごとに必要な権限が異なります（Windows: winget で UAC を要求する場合あり / macOS: Homebrew のため通常 sudo 不要 / Linux: `sudo apt`・`sudo dnf` 等で **sudo 必要**）。詳細は [hve-cli-getting-started.md](./hve-cli-getting-started.md#3-venv-作成と依存パッケージのインストール) の補足表を参照してください。確認プロンプトをスキップするには `-Yes`/`--yes`、自動インストールを無効化するには `-NoInstallPython`/`--no-install-python` を指定します。
 
 ### 4. GUI を起動して動作確認
 

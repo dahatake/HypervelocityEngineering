@@ -281,6 +281,33 @@ class TestSettingsWindow(_GuiTestBase):
         self.assertFalse(w._header.is_all_completed())
         self.assertIn("停止", w._status_label.text())
 
+    def test_on_stop_all_clicked_disables_stop_button_immediately(self) -> None:
+        """[停止] クリック直後に [停止] ボタンが即無効化されることを検証する。
+
+        多重押下防止のため、process_finished を待たずに setEnabled(False) する。
+        """
+        from hve.gui.main_window import MainWindow
+
+        w = MainWindow(session_index=1)
+        # Step 2 へ遷移し、実行中状態をシミュレート
+        btns = w._page_workflow._group.buttons()
+        if not btns:
+            self.skipTest("No workflow buttons")
+        btns[0].setChecked(True)
+        w._btn_next.click()
+        w._page_workbench._is_running = True
+        w._refresh_navigation()
+        # 前提: 実行中は [停止] 有効・[戻る] 無効
+        self.assertTrue(w._btn_stop.isEnabled())
+        self.assertFalse(w._btn_back.isEnabled())
+
+        # stop_orchestrator が実プロセスを触らないようにパッチして発火させる
+        with patch.object(w._page_workbench, "stop_orchestrator"):
+            w._on_stop_all_clicked()
+
+        # クリック直後: [停止] は即無効化される（[戻る] は process_finished 待ち）
+        self.assertFalse(w._btn_stop.isEnabled())
+
 
 class TestHeaderBarCompleted(_GuiTestBase):
     def test_mark_completed_sets_flag(self) -> None:

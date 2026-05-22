@@ -115,6 +115,7 @@ def rebuild_index(
     overlap_paragraphs: int | None = None,
     force: bool = False,
     semantic_options: dict | None = None,
+    pageindex_options: dict | None = None,
     progress_callback=None,
 ) -> dict:
     """Manually rebuild the index and return a summary.
@@ -131,6 +132,10 @@ def rebuild_index(
         / ``embed_provider`` / ``embed_model`` / ``contextualize`` /
         ``late_chunking``. Caller should pre-normalise via
         :func:`settings_store.get_semantic_runtime_config`.
+    pageindex_options:
+        When ``strategy == "pageindex"``, the dict is forwarded to
+        :func:`mdq.strategies_pageindex.set_runtime_config`. Keys recognised:
+        ``summary_chars`` / ``summary_mode``.
     progress_callback:
         Optional ``Callable[[str, int, int], None]`` forwarded to the
         indexer. Caller is responsible for thread safety.
@@ -146,6 +151,15 @@ def rebuild_index(
                 _sem.set_runtime_config(**semantic_options)
         except Exception:  # noqa: BLE001 -- semantic extra not installed
             # The strategy will transparently fall back to heading_recursive.
+            pass
+    # Install pageindex runtime overrides BEFORE opening the store.
+    if strategy == "pageindex":
+        try:
+            from mdq import strategies_pageindex as _pi
+            _pi.clear_runtime_config()
+            if pageindex_options:
+                _pi.set_runtime_config(**pageindex_options)
+        except Exception:  # noqa: BLE001 -- defensive
             pass
     conn = mdq_store.open_store(resolved_db, lang=lang)
     try:

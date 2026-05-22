@@ -1,0 +1,51 @@
+skill: svg-renderer
+skill_path: .github/skills/output/svg-renderer/SKILL.md
+description: 図やダイアグラムをSVGコードとして生成し、画面にレンダリング表示するスキル。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: architecture-diagram-svg-render
+    input: "Azure のアーキテクチャ図をSVGでレンダリングして画面に表示してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "画面表示モードで動作し、SVGを生成してファイル保存後、Playwright browser_navigate + browser_take_screenshot で画面表示する"
+    reason: "USE FOR: SVG render, SVG diagram creation に該当する。WHEN: SVGでレンダリングして に該当する"
+
+  - id: flowchart-svg-display
+    input: "デプロイフロー図をSVGで描いて表示してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "flowchart の SVG を生成し、画面表示モードで Playwright を使ってレンダリングする"
+    reason: "WHEN: SVGで描いて に該当する。描いて + 表示 = 画面表示モード"
+
+  - id: svg-file-save-only
+    input: "ER図のSVGを作成してファイルに保存してほしい（表示は不要）"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "ファイル保存モードで動作し、SVGを生成してファイル保存のみ行う。画面レンダリングは不要"
+    reason: "USE FOR: SVG diagram creation に該当する。ファイル保存モードのケース"
+
+  # --- 負のテストケース ---
+  - id: not-for-mermaid-diagram
+    input: "シーケンス図を Mermaid 形式で記述してほしい"
+    expected_trigger: false
+    expected_skill: "docs-output-format"
+    reason: "DO NOT USE FOR: Mermaid diagrams に該当する。Mermaid 図は docs-output-format §2 の Mermaid 記法指針を参照する"
+
+  - id: not-for-plantuml
+    input: "クラス図を PlantUML 形式で作成してほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: PlantUML diagrams に該当する。svg-renderer は SVG 専用"
+
+  # --- エッジケース ---
+  - id: edge-visualize-keyword
+    input: "データフローを可視化して見せてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "「可視化して」+ 「見せてほしい」= 画面表示モード。SVG を生成してレンダリング表示する"
+    reason: "WHEN: SVGで可視化して に該当するエッジケース。表示形式が明示されていないが画面表示モードを選択"

@@ -1,0 +1,66 @@
+# .github/skills/_evals/large-output-chunking.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: large-output-chunking
+skill_path: .github/skills/output/large-output-chunking/SKILL.md
+description: 巨大出力の分割ルール。50,000文字超は分割必須、20,000文字以下が推奨上限。artifacts/<name>.index.md + artifacts/<name>.part-XXXX.md 形式で保存する。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: huge-output-over-50000-chars
+    input: "全サービスの詳細仕様書を1ファイルに生成してください。50,000文字を超える見込みです。"
+    expected_trigger: true
+    verify:
+      - type: file_creation
+        detail: "artifacts/<name>.index.md が生成されること"
+      - type: file_creation
+        detail: "artifacts/<name>.part-0001.md 以降の分割ファイルが生成されること"
+      - type: content_contains
+        detail: "index.md に目的/参照元/分割軸/結合順/再生成条件が含まれること"
+    reason: "SKILL.md の §0 に '50,000文字超は分割必須（強制）' と明示されており、大量出力の生成依頼は典型的なトリガー"
+
+  - id: chunked-write-on-failure
+    input: "ファイルへの書き込みが何度やっても失敗します。チャンク分割で書き込みを安定させてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "§3 書き込み安全策（段階的書き込み・read 検証・最大3回リトライ）が適用されること"
+    reason: "SKILL.md の USE FOR に 'write safety, staged writing, read verification, retry on write failure' が明示されており、書き込み失敗時の安全策依頼はトリガー条件に該当する"
+
+  - id: index-plus-part-format
+    input: "大量のデータを index.md と part ファイルに分割して保存してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "artifacts/<name>.index.md + artifacts/<name>.part-XXXX.md の命名規則が使用されること"
+      - type: content_contains
+        detail: "各 part ファイルの先頭に source/scope/generated-at のメタデータが付与されること"
+    reason: "SKILL.md の §1 に 'index + part 形式で保存する手順' が明示されており、index+part 形式での保存依頼はトリガー条件に該当する"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: split-axis-design-decision
+    input: "このドキュメントをサービス単位で分割するか、機能単位で分割するか判断してください。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "SKILL.md の Non-goals に '分割軸の設計判断は Agent が行う' と明示されており、分割方針の判断自体は本スキルの対象外"
+
+  - id: quality-review-of-content
+    input: "生成したドキュメントの内容が正しいかレビューしてください。"
+    expected_trigger: false
+    expected_skill: adversarial-review
+    reason: "SKILL.md の Non-goals に 'ファイル内容の品質評価は adversarial-review が担当' と明示されており、成果物の品質レビューは対象外"
+
+  - id: file-path-decision
+    input: "作業ファイルをどこに配置すればいいか教えてください。"
+    expected_trigger: false
+    expected_skill: work-artifacts-layout
+    reason: "SKILL.md の Non-goals に 'ファイル配置パスの決定は work-artifacts-layout が担当' と明示されており、パス設計は対象外"
+
+  # --- エッジケース ---
+  - id: borderline-20000-chars
+    input: "ドキュメントを生成します。推定20,000文字程度になる見込みです。"
+    expected_trigger: false
+    reason: "SKILL.md の §0 に '20,000文字以下は推奨上限内（分割は任意）' と定義されており、20,000文字以下は分割強制には該当しない。ただし Agent の判断で分割を選択することは可能。"

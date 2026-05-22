@@ -53,6 +53,11 @@ def defaults() -> Dict[str, Any]:
         "semantic_fusion_alpha": 0.5,         # late_chunking ON 時の検索融合係数
         # Q6=B: bge-m3 初回 DL 確認ダイアログを「以後表示しない」フラグ
         "semantic_bge_m3_warning_dismissed": False,
+        # --- pageindex 戦略専用 ---------------------------------------
+        # CLI フラグと 1:1 対応。0 / "" 値は mdq.strategies の
+        # PAGEINDEX_* 定数（コード側 SoT）にフォールバックする。
+        "pageindex_summary_chars": 0,         # 0=コード側既定 200 を採用
+        "pageindex_summary_mode": "head",     # head / first_paragraph
     }
 
 

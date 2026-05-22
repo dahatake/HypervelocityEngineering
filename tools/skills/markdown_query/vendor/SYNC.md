@@ -19,10 +19,15 @@ that does not already have `mdq` installed, the launcher scripts
 | `__init__.py` / `__main__.py` | Package entrypoints |
 | `cli.py` | `python -m mdq` argparse entry. `--strategy auto` lives here. |
 | `config.py` | Portable config loader (`mdq.toml` / `.mdq/config.toml` resolution, `GENERIC_DEFAULT_ROOTS`). |
+| `contextualizer.py` | Contextualizer template used by `semantic_paragraph`. |
+| `embeddings.py` | Embedding provider abstraction (fastembed / null). |
 | `indexer.py` | File walker, chunk dataclass, `parent_chunk_id` assignment, `_subdivide` with `overlap_paragraphs`. |
+| `sentence_splitter.py` | Sentence splitter (nltk / regex fallback) for `semantic_paragraph`. |
 | `strategies.py` | Strategy registry + per-strategy scanners. |
-| `search.py` | BM25 / grep / FTS5 search, parent chain (`with_parent_depth`), dedup. |
-| `store.py` | SQLite schema (v4) and migrations. |
+| `strategies_semantic.py` | `semantic_paragraph` implementation (embedding-based subdivision). |
+| `strategies_pageindex.py` | `pageindex` implementation (heading tree + per-node summary). |
+| `search.py` | BM25 / grep / FTS5 search, parent chain (`with_parent_depth`), pageindex `tree_path`, dedup. |
+| `store.py` | SQLite schema (v6) and migrations. |
 | `query_router.py` | **Skill-side auto strategy router** invoked when `--strategy auto`. Pure rule-based, no LLM. |
 | `tokenize.py` | FTS5 tokenizer resolver. |
 | `usage_log.py` | JSONL append-only log. |

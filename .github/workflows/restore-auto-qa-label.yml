@@ -1,0 +1,133 @@
+name: Restore auto-qa label
+
+on:
+  pull_request_target:
+    types: [labeled, unlabeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      target_pr:
+        description: "復元対象 PR 番号"
+        required: true
+        type: string
+      dry_run:
+        description: "true の場合はラベル変更を実施せずログのみ出力"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: restore-auto-qa-label-${{ github.event.pull_request.number || inputs.target_pr }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  restore:
+    if: >
+      github.event_name == 'workflow_dispatch'
+      || (
+        contains(github.event.pull_request.labels.*.name, 'qa-questionnaire-pr')
+        && !contains(github.event.pull_request.labels.*.name, 'auto-qa')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+    steps:
+      - name: リポジトリをチェックアウト（Issue 判定用共通スクリプト読み込み）
+        uses: actions/checkout@v4
+
+      - name: Restore auto-qa label when misclassified
+        env:
+          OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>/dev/null) || {
+            echo "PR #${PR_NUMBER} の取得に失敗したためスキップします。"
+            exit 0
+          }
+
+          pr_labels=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | @json')
+          has_qa_questionnaire_pr=$(echo "${pr_labels}" | jq -r 'if contains(["qa-questionnaire-pr"]) then "true" else "false" end')
+          has_auto_qa=$(echo "${pr_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
+          if [ "${has_qa_questionnaire_pr}" != "true" ] || [ "${has_auto_qa}" = "true" ]; then
+            echo "対象外: qa-questionnaire-pr なし、または auto-qa ありのため復元不要です。"
+            exit 0
+          fi
+
+          pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+          pr_body_head=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${pr_body_head}" | grep -qF '<!-- qa-questionnaire-pr: opt-in -->'; then
+            echo "対象外: opt-in 宣言済み PR のため復元しません。"
+            exit 0
+          fi
+
+          done_count=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --paginate \
+            --jq '.[]' 2>/dev/null \
+            | jq -rs '[.[]
+                | select((.user.login == "github-actions[bot]") or (.user.login == "copilot-swe-agent[bot]"))
+                | select(.body | contains("<!-- restore-auto-qa-label-done -->"))
+              ] | length' \
+            2>/dev/null) || done_count="0"
+          if [ "${done_count:-0}" -gt 0 ] 2>/dev/null; then
+            echo "冪等スキップ: 既に復元済みです。"
+            exit 0
+          fi
+
+          EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+          {
+            echo "PR_BODY<<${EOF_MARKER}"
+            echo "${pr_body}"
+            echo "${EOF_MARKER}"
+          } >> "${GITHUB_ENV}"
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/pr-common.sh"
+          find_issue_number
+          if [ -z "${ISSUE_NUMBER:-}" ]; then
+            echo "対象外: 紐づく Issue が特定できないため復元しません。"
+            exit 0
+          fi
+
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || {
+            echo "対象外: Issue #${ISSUE_NUMBER} の取得に失敗したため復元しません。"
+            exit 0
+          }
+
+          issue_labels=$(echo "${issue_data}" | jq -r '((.labels // []) | map(.name)) | @json')
+          issue_body=$(echo "${issue_data}" | jq -r '.body // ""')
+          issue_has_auto_qa_label=$(echo "${issue_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
+          issue_has_auto_qa_marker="false"
+          if printf '%s' "${issue_body}" | grep -qF '<!-- auto-qa: true -->'; then
+            issue_has_auto_qa_marker="true"
+          fi
+          if [ "${issue_has_auto_qa_label}" != "true" ] && [ "${issue_has_auto_qa_marker}" != "true" ]; then
+            echo "対象外: 紐づく Issue #${ISSUE_NUMBER} に auto-qa ラベル/マーカーが無いため復元しません。"
+            exit 0
+          fi
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "dry_run=true: 復元対象です（PR #${PR_NUMBER}, Issue #${ISSUE_NUMBER}）。実変更は行いません。"
+            exit 0
+          fi
+
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "qa-questionnaire-pr"
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-qa"
+
+          comment_body=$(cat <<'EOF'
+          <!-- restore-auto-qa-label-done -->
+          `qa-questionnaire-pr` を除去し、`auto-qa` を再付与しました。
+
+          > ℹ️ このコメントは `restore-auto-qa-label.yml` によって自動投稿されました。
+          EOF
+          )
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${comment_body}"
+          echo "復元完了: PR #${PR_NUMBER} に auto-qa を再付与しました。"

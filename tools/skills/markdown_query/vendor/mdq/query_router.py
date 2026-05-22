@@ -16,12 +16,14 @@ Rules (highest-priority first; first match wins):
   2. ``exact_match``       : query is quoted ``"..."``
   3. ``short_proper_noun`` : <= 3 short tokens with proper-noun characteristics
   4. ``concept_overview``  : query contains overview/architecture/etc. terms
+                             -> ``pageindex`` (table-of-contents navigation)
   5. ``narrative_query``   : long natural-language question (>=8 tokens or
                              contains how/why/what markers)
   6. ``code_fragment``     : query contains code-ish punctuation (=>, (), {})
   7. ``default``           : fallback to ``heading_recursive``
 
-Each rule maps to one of ``heading`` / ``heading_recursive`` / ``fixed_window``.
+Each rule maps to one of ``heading`` / ``heading_recursive`` / ``fixed_window``
+/ ``semantic_paragraph`` / ``pageindex``.
 When the chosen strategy's DB is absent (``available_strategies`` does not
 include it), the router falls back through a fixed preference list and
 records ``fallback_used=True``.
@@ -84,8 +86,13 @@ _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3040-\u30ff\u4e00-\u9fff]")
 
 
 # Fallback preference when the chosen DB is unavailable.
+# Order rationale: pageindex provides the strongest table-of-contents
+# expansion when present; semantic_paragraph is the most expressive
+# embedding-based strategy; heading_recursive/heading/fixed_window form
+# the existing legacy chain.
 _FALLBACK_ORDER: tuple[str, ...] = (
-    "heading_recursive", "heading", "fixed_window",
+    "pageindex", "semantic_paragraph", "heading_recursive",
+    "heading", "fixed_window",
 )
 
 
@@ -248,16 +255,22 @@ def classify_query(
         candidates.append(original)
         return _finalize(original, "short_proper_noun", 3, candidates, available)
 
-    # Rule 4: concept / overview term
+    # Rule 4: concept / overview term. Prefer pageindex when its DB
+    # exists — PageIndex-style table-of-contents navigation matches the
+    # "give me an overview" intent. Fallback chain picks the next best
+    # strategy when the pageindex DB is absent.
     if _has_concept_term(tokens, q):
-        original = "heading"
+        original = "pageindex"
         candidates.append(original)
         return _finalize(original, "concept_overview", 4, candidates, available)
 
-    # Rule 5: narrative question
+    # Rule 5: narrative question. Prefer semantic_paragraph for long
+    # natural-language queries when its DB exists; the existing
+    # `_finalize` fallback chain will pick `heading_recursive` otherwise.
     if _is_narrative(tokens, q):
-        original = "heading_recursive"
+        original = "semantic_paragraph"
         candidates.append(original)
+        candidates.append("heading_recursive")
         return _finalize(original, "narrative_query", 5, candidates, available)
 
     # Rule 7: default

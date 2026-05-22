@@ -1,0 +1,126 @@
+name: Self-Improve Auto Close
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  close-self-improve-issue:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout helper scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts
+
+      - name: Auto close self-improve issues
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/yaml-safe-helpers.sh"
+
+          has_marker() {
+            local issue_num="$1"
+            local page=1
+            while true; do
+              local comments_json
+              comments_json=$(gh api "/repos/${REPO}/issues/${issue_num}/comments?per_page=100&page=${page}" 2>/dev/null) || {
+                printf '%s\n' "WARNING: #${issue_num} のコメント取得に失敗しました。安全のため自動クローズをスキップします。" >&2
+                return 1
+              }
+              local marked
+              marked=$(echo "${comments_json}" | wh_has_marker) || marked="false"
+              if [[ "${marked}" == "true" ]]; then
+                return 0
+              fi
+              local count
+              count=$(echo "${comments_json}" | wh_count_items) || count=0
+              if (( count < 100 )); then
+                break
+              fi
+              page=$((page + 1))
+            done
+            return 1
+          }
+
+          all_subs_closed() {
+            local issue_num="$1"
+            local page=1
+            while true; do
+              local subs_json
+              subs_json=$(gh api "/repos/${REPO}/issues/${issue_num}/sub_issues?per_page=100&page=${page}" 2>/dev/null) || {
+                printf '%s\n' "WARNING: #${issue_num} の sub_issues 取得に失敗しました。安全のため自動クローズをスキップします。" >&2
+                return 1
+              }
+              local all_closed
+              all_closed=$(echo "${subs_json}" | wh_all_closed) || all_closed="false"
+              if [[ "${all_closed}" != "true" ]]; then
+                return 1
+              fi
+              local count
+              count=$(echo "${subs_json}" | wh_count_items) || count=0
+              if (( count < 100 )); then
+                break
+              fi
+              page=$((page + 1))
+            done
+            return 0
+          }
+
+          CLOSING_ISSUES=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json closingIssuesReferences --jq '.closingIssuesReferences[].number' 2>/dev/null || true)
+          if [[ -z "${CLOSING_ISSUES}" ]]; then
+            PR_BODY=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" --json body --jq '.body // ""' 2>/dev/null || true)
+            CLOSING_ISSUES=$(printf '%s' "${PR_BODY}" | wh_parse_closing_issues)
+          fi
+
+          if [[ -z "${CLOSING_ISSUES}" ]]; then
+            echo "closing issue なし。終了します。"
+            exit 0
+          fi
+
+          for ISSUE_NUM in ${CLOSING_ISSUES}; do
+            [[ "${ISSUE_NUM}" =~ ^[0-9]+$ ]] || continue
+            if ! ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${ISSUE_NUM}" 2>/dev/null); then
+              echo "::warning::Issue #${ISSUE_NUM} の取得に失敗しました（削除済みまたはアクセス不可）。"
+              ISSUE_JSON='{}'
+            fi
+
+            IS_SELF_IMPROVE=$(echo "${ISSUE_JSON}" | wh_has_label "self-improve") || IS_SELF_IMPROVE="false"
+            if [[ "${IS_SELF_IMPROVE}" != "true" ]]; then
+              continue
+            fi
+
+            STATE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('state',''))" 2>/dev/null || echo "")
+            if [[ "${STATE}" != "open" ]]; then
+              continue
+            fi
+
+            AUTO_MERGE_ENABLED=$(echo "${ISSUE_JSON}" | wh_check_auto_merge) || AUTO_MERGE_ENABLED="false"
+            if [[ "${AUTO_MERGE_ENABLED}" != "true" ]]; then
+              continue
+            fi
+
+            if has_marker "${ISSUE_NUM}"; then
+              continue
+            fi
+
+            if ! all_subs_closed "${ISSUE_NUM}"; then
+              echo "Issue #${ISSUE_NUM}: 未完了 Sub Issue があるためスキップ"
+              continue
+            fi
+
+            CLOSE_COMMENT=$(printf '## ✅ Auto Close\n\nSelf-Improve Issue の完了を検知したため自動クローズします。\n\n<!-- auto-close-done -->')
+            gh issue comment "${ISSUE_NUM}" --repo "${REPO}" --body "${CLOSE_COMMENT}" > /dev/null 2>&1 || true
+            gh issue close "${ISSUE_NUM}" --repo "${REPO}" --reason completed > /dev/null 2>&1 || true
+          done

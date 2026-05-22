@@ -1,0 +1,51 @@
+skill: test-strategy-template
+skill_path: .github/skills/testing/test-strategy-template/SKILL.md
+description: テスト戦略の共通テンプレート。テストピラミッド定義・テストダブル選択基準・テストデータ戦略・カバレッジ方針を提供する。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: test-strategy-document-creation
+    input: "SVC-10 AI CS Support のテスト戦略書を作成してほしい。テストピラミッドとテストダブルの選択を含めて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/test-design-principles.md §1 テストピラミッド定義と §2 テストダブル選択基準を参照してテスト戦略書を作成する"
+    reason: "USE FOR: test strategy, test pyramid に該当する"
+
+  - id: test-doubles-selection
+    input: "Azure Cosmos DB を使うテストでどのテストダブルを使えばよいか確認したい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/test-design-principles.md §2 テストダブル選択基準を参照。Cosmos DB は Testcontainers（Cosmos DB エミュレーター）を推奨"
+    reason: "USE FOR: test doubles selection, Testcontainers に該当する"
+
+  - id: coverage-policy-confirmation
+    input: "テストのカバレッジ目標は何パーセントにすべきか教えてほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/test-design-principles.md §4 カバレッジ方針を参照。Unit Test ビジネスロジック 80% 以上、変換ロジック 100% 目標を案内する"
+    reason: "USE FOR: coverage policy に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-test-code-generation
+    input: "SVC-10 の get_ticket_status エンドポイントのテストコードを Python で書いてほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: test code generation (agents do that) に該当する。テストコードの実装は Dev-*-TestCoding 系 Agent が担当"
+
+  - id: not-for-individual-test-case-design
+    input: "SVC-10 のテストケース表を作成してほしい（正常系・異常系の一覧）"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: individual test case design (Arch-TDD-TestSpec Agent が担当) に該当する"
+
+  # --- エッジケース ---
+  - id: edge-faker-for-test-data
+    input: "テストデータを自動生成したい。Faker を使うべきかシード管理にすべきか判断してほしい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "references/test-design-principles.md §3 テストデータ戦略を参照。正常系・バリエーションテストは Faker、CI の回帰テストはシード管理（固定シード）を推奨"
+    reason: "USE FOR: test data strategy, Faker, seed management に該当するエッジケース"

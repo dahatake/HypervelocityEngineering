@@ -51,10 +51,9 @@ from PySide6.QtWidgets import (
 
 from .header_bar import HeaderBar
 from .copilot_chat_panel import CopilotChatPanel
-from .activity_bar import ActivityBar
+from .top_file_toggles_bar import TopFileTogglesBar
 from .file_explorer.file_tree_panel import FileTreePanel
 from .markdown_preview.preview_panel import MarkdownPreviewPanel
-from .panel_toggle.dock_toggle_actions import bind as bind_dock_toggle
 from .page_options import OptionsPage
 from .page_workbench import WorkbenchPage
 from .page_workflow_select import WorkflowSelectPage
@@ -431,19 +430,11 @@ class MainWindow(QMainWindow):
         # Q8=B: 初期状態は強調 (未認証想定)。後続 AuthMonitor で更新。
         self._apply_plugin_auth_button_style(highlighted=True)
 
-        # C: ヘッダーに「表示」ボタン（横幅プリセット用）を追加する。
-        self._btn_view = _make_tool_button(
-            self.tr("表示"),
-            self.tr("ウィンドウ横幅を変更します"),
-            QStyle.StandardPixmap.SP_DesktopIcon,
-        )
-        self._btn_view.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self._btn_view.setMenu(self._build_view_menu())
-
         top_row = QHBoxLayout()
+        self._top_file_toggles = TopFileTogglesBar()
+        top_row.addWidget(self._top_file_toggles)
         top_row.addStretch()
         top_row.addWidget(self._btn_plugin_auth)
-        top_row.addWidget(self._btn_view)
         top_row.addWidget(self._btn_session)
         top_row.addWidget(self._btn_settings)
         top_row.addWidget(self._btn_copilot)
@@ -533,12 +524,10 @@ class MainWindow(QMainWindow):
         nav.addWidget(self._btn_next)
         nav.addWidget(self._btn_stop)
 
-        # ActivityBar を _stack の左側に配置し、同一行としてレイアウト
-        self._activity_bar = ActivityBar(central)
+        # _stack をボディ行に配置（ファイル/プレビュートグルは top_row 側へ移設済み）
         body_row = QHBoxLayout()
         body_row.setContentsMargins(0, 0, 0, 0)
         body_row.setSpacing(4)
-        body_row.addWidget(self._activity_bar)
         body_row.addWidget(self._stack, stretch=1)
 
         layout = QVBoxLayout(central)
@@ -549,7 +538,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._status_banner)
         layout.addLayout(nav)
 
-        # D1-D4: 左右 Dock パネルを追加 × ActivityBar とバインド × 設定復元
+        # D1-D4: 左右 Dock パネルを追加 × TopFileTogglesBar とバインド × 設定復元
         self._setup_dock_panels()
 
     # ----------------------------------------------------------
@@ -574,19 +563,19 @@ class MainWindow(QMainWindow):
         )
         self._last_applied_explorer_roots = raw_roots
 
-        self._file_tree_dock = FileTreePanel(roots, parent=self)
+        self._file_tree_dock = FileTreePanel(
+            roots,
+            parent=self,
+            display_names=self._explorer_root_display_names(),
+        )
         self._preview_dock = MarkdownPreviewPanel(parent=self)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._file_tree_dock)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._preview_dock)
+        # プレビューはエクスプローラーの右隣（メインの左側）に水平配置
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._preview_dock)
+        self.splitDockWidget(self._file_tree_dock, self._preview_dock, Qt.Orientation.Horizontal)
 
-        # Wave D T11: FileTreePanel タイトルバーに「📁 ファイル」見出し + 横並びトグル
-        self._file_tree_dock.setup_file_section_title_bar(self._preview_dock)
-
-        # ActivityBar ボタンと Dock の双方向同期（バインダは GC 防止のため保持）
-        self._dock_binders = [
-            bind_dock_toggle(self._file_tree_dock, self._activity_bar.btn_explorer),
-            bind_dock_toggle(self._preview_dock, self._activity_bar.btn_preview),
-        ]
+        # TopFileTogglesBar ボタンと Dock を双方向同期（バインダは GC 防止のため保持）
+        self._top_file_toggles.bind(self._file_tree_dock, self._preview_dock)
 
         # ファイル選択 → プレビュー（Wave C T09: 最小化状態の preview を自動 show）
         self._file_tree_dock.file_selected.connect(self._on_explorer_file_selected)
@@ -600,8 +589,8 @@ class MainWindow(QMainWindow):
         self._file_tree_dock.setVisible(explorer_visible)
         self._preview_dock.setVisible(preview_visible)
         # 初期チェック状態を実際の visibility に同期
-        self._activity_bar.btn_explorer.setChecked(explorer_visible)
-        self._activity_bar.btn_preview.setChecked(preview_visible)
+        self._top_file_toggles.btn_explorer.setChecked(explorer_visible)
+        self._top_file_toggles.btn_preview.setChecked(preview_visible)
 
     def _on_explorer_file_selected(self, path: Path) -> None:
         """エクスプローラーでファイルが選択されたときの処理。
@@ -614,7 +603,7 @@ class MainWindow(QMainWindow):
         was_hidden = not self._preview_dock.isVisible()
         if was_hidden:
             self._preview_dock.setVisible(True)
-            self._activity_bar.btn_preview.setChecked(True)
+            self._top_file_toggles.btn_preview.setChecked(True)
             try:
                 _ss.set_option("markdown_preview_visible", True)
             except OSError:
@@ -644,8 +633,25 @@ class MainWindow(QMainWindow):
             repo_root=self._repo_root,
             extra_roots=[self._session_workdir.work_root],
         )
-        self._file_tree_dock.set_roots(roots)
+        self._file_tree_dock.set_roots(
+            roots,
+            display_names=self._explorer_root_display_names(),
+        )
         self._last_applied_explorer_roots = raw_roots
+
+    def _explorer_root_display_names(self) -> dict:
+        """ルート表示名のマッピングを返す。
+
+        現状は GUI セッション作業フォルダー（``work/gui-runs/<session_run_id>/``）
+        のみを ``作業フォルダー (<session_run_id>)`` の形式で表示する。
+        それ以外のルートは ``FileTreePanel`` 側のフォールバック（``path.name``）に委ねる。
+        """
+        try:
+            work_root = self._session_workdir.work_root.resolve()
+        except OSError:
+            work_root = self._session_workdir.work_root
+        label = self.tr("作業フォルダー") + f" ({self._session_workdir.session_run_id})"
+        return {work_root: label}
 
     def _persist_dock_visibility(self) -> None:
         """Dock 表示状態を settings_store に保存する（closeEvent から呼ぶ）。"""
@@ -690,7 +696,10 @@ class MainWindow(QMainWindow):
                     "C11": self._page_options.c11,
                     "C12": self._page_options.c12,
                     "C13": self._page_options.c13,
-                    "C14": self._page_options.c14,
+                    # C14 (ARD) は設定画面から削除済み。Step 1 右ペインの
+                    # OptionsPage.c14 のみが SSOT となるため、ここで
+                    # apply_to_widgets に渡すと「設定画面側の空値」で Step 1 の
+                    # 入力（company_name 等）が上書きされてしまう。
                 },
                 _settings or settings_store.load(),
             )
@@ -1670,6 +1679,18 @@ class MainWindow(QMainWindow):
                 ret = int(plan_dlg.exec())
 
             if applied_gaps:
+                # ギャップ適用前の中間スナップショットを保存（is_final_accepted=False）
+                self._save_step1_args_snapshot(
+                    iteration=self._step1_plan_review_iterations,
+                    is_final_accepted=False,
+                    wf_ids=wf_ids_now,
+                    autopilot_mode=autopilot_mode,
+                    precheck_result=result,
+                    plan_review=review,
+                    additional_prompts=additional_prompts,
+                    extra_provided=extra_provided,
+                    auth_states=auth_states,
+                )
                 # ギャップ適用 → workflow_select に反映 → ループ続行（再 precheck）
                 self._page_workflow.apply_plan_review_gaps(applied_gaps)
                 self._set_status(
@@ -1682,9 +1703,65 @@ class MainWindow(QMainWindow):
                 continue
 
             if ret == int(QDialog.DialogCode.Accepted):
+                # 最終承認スナップショット（is_final_accepted=True、latest-accepted/ も生成）
+                self._save_step1_args_snapshot(
+                    iteration=self._step1_plan_review_iterations,
+                    is_final_accepted=True,
+                    wf_ids=wf_ids_now,
+                    autopilot_mode=autopilot_mode,
+                    precheck_result=result,
+                    plan_review=review,
+                    additional_prompts=additional_prompts,
+                    extra_provided=extra_provided,
+                    auth_states=auth_states,
+                )
                 return True
             # Cancel
             return False
+
+    def _save_step1_args_snapshot(
+        self,
+        *,
+        iteration: int,
+        is_final_accepted: bool,
+        wf_ids: list,
+        autopilot_mode: bool,
+        precheck_result=None,
+        plan_review=None,
+        additional_prompts: Optional[dict] = None,
+        extra_provided: Optional[dict] = None,
+        auth_states=None,
+    ) -> None:
+        """Step 1 事前チェック完了時点の args/パラメータをスナップショット保存。
+
+        失敗は GUI 主処理を止めないよう内部で握り潰す（WARNING ログのみ）。
+        詳細は ``hve.gui.step1_args_snapshot.save_step1_snapshot`` 参照。
+        """
+        try:
+            from .step1_args_snapshot import save_step1_snapshot
+
+            save_step1_snapshot(
+                work_root=self._session_workdir.work_root,
+                session_run_id=self._session_workdir.session_run_id,
+                iteration=iteration,
+                is_final_accepted=is_final_accepted,
+                wf_ids=wf_ids,
+                page_options=self._page_options,
+                repo_root=Path(self._repo_root) if self._repo_root else Path.cwd(),
+                autopilot_mode=autopilot_mode,
+                precheck_result=precheck_result,
+                plan_review=plan_review,
+                additional_prompts=additional_prompts,
+                extra_provided=extra_provided,
+                attachment_paths=self._collect_ard_attachment_paths(),
+                auth_states=auth_states,
+                env_overrides=self._session_workdir.env_overrides(),
+            )
+        except Exception as _exc:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "_save_step1_args_snapshot 失敗: %s", _exc
+            )
 
     def _confirm_autopilot_start(self, wf_ids: list) -> bool:
         """Autopilot 開始確認ダイアログ (Q5=b)。OK なら True を返す。"""
@@ -2524,6 +2601,11 @@ class MainWindow(QMainWindow):
         """
         self._stop_all_invoked = True
 
+        # 停止要求の多重押下防止: クリック直後に [停止] を無効化する。
+        # [戻る] の有効化は process_finished → _refresh_navigation 経由で行う
+        # （プロセス完全終了を待つため）。
+        self._btn_stop.setEnabled(False)
+
         # ① Autopilot Controller を停止（存在し、cancel_all を持つときのみ）
         ctrl = getattr(self, "_autopilot_controller", None)
         if ctrl is not None:
@@ -2695,43 +2777,6 @@ class MainWindow(QMainWindow):
 
     def _on_copilot_clicked(self) -> None:
         self._copilot_dock.setVisible(not self._copilot_dock.isVisible())
-
-    # ----------------------------------------------------------
-    # C: 「表示」メニュー — 横幅プリセット
-    # ----------------------------------------------------------
-    def _build_view_menu(self) -> QMenu:
-        """ヘッダーの「表示」ボタン用ドロップダウンメニューを構築する。"""
-        menu = QMenu(self)
-        for label, width in (
-            (self.tr("横幅: コンパクト (800px)"), 800),
-            (self.tr("横幅: 標準 (1100px)"), 1100),
-            (self.tr("横幅: ワイド (1400px)"), 1400),
-        ):
-            act = QAction(label, self)
-            # ループ変数キャプチャを避けるため既定値で束縛。
-            act.triggered.connect(lambda _checked=False, w=width: self._apply_width_preset(w))
-            menu.addAction(act)
-        menu.addSeparator()
-        act_save = QAction(self.tr("現在の幅を既定にする"), self)
-        act_save.triggered.connect(self._save_current_width_as_default)
-        menu.addAction(act_save)
-        return menu
-
-    def _apply_width_preset(self, width: int) -> None:
-        """指定幅へリサイズする。永続化は既存の resizeEvent デバウンスに任せる。"""
-        # 最大化中はそのままだと resize が無効になるため、通常状態へ戻す。
-        if self.isMaximized():
-            self.showNormal()
-        self.resize(int(width), self.height())
-
-    def _save_current_width_as_default(self) -> None:
-        """現在の幅を main_window_width として即時保存する。"""
-        try:
-            from . import settings_store as _ss
-
-            _ss.set_option("main_window_width", int(self.width()))
-        except OSError:
-            pass
 
     def resizeEvent(self, event: "QResizeEvent") -> None:  # type: ignore[override]
         super().resizeEvent(event)

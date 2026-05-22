@@ -83,7 +83,7 @@ hve\setup-hve.cmd   ← 初回 1 回だけダブルクリック（.venv + GUI ex
 hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 ```
 
-**macOS / Linux**: `./hve/setup-hve.sh --with-gui` で一括セットアップ後、`./hve-gui.sh` で起動。
+**macOS / Linux**: `./hve/setup-hve.sh` で一括セットアップ後、`./hve-gui.sh` で起動。
 
 ウィザードが開いたら **Step 1（ワークフロー選択）→ Step 2（オプション設定）→ Step 3（実行）** の順に進めます。詳細は [3 ステップ操作ガイド](#3-ステップ操作ガイド) を参照してください。
 
@@ -95,7 +95,7 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 |---|---|---|
 | Python 3.11+ | **必須** | HVE 基本要件 |
 | `pip install -e ".[gui]"` | **必須** | PySide6 を含む GUI 依存 |
-| `pip install -e ".[gui,gui-docconvert]"` または `hve/setup-hve.ps1 --WithGui` / `hve/setup-hve.sh --with-gui` | オプション | ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` / `.html` をドラッグ&ドロップする場合（変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
+| `pip install -e ".[gui,gui-docconvert]"`（`hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで実行すれば既定で導入） | オプション | ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` / `.html` をドラッグ&ドロップする場合（変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
 | GitHub Copilot CLI（外部 `copilot` コマンド） | HVE CLI 共通 | Custom Agent 実行に必要 |
 
 > その他の前提条件（Git / GitHub アカウント / Copilot ライセンス等）は [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。
@@ -104,24 +104,25 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 
 ## インストール
 
-**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + mdq extras + **GUI extras**（PySide6 + markitdown）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は後述の **`hve-gui.bat`** をダブルクリックで GUI を起動できます。
+**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + 全 extras（mdq-watch / mdq-ja / semantic / **gui** / gui-pty / gui-docconvert）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は後述の **`hve-gui.bat`** をダブルクリックで GUI を起動できます。
 
 ```bash
-# リポジトリをクローン後、セットアップスクリプトで GUI + 添付変換（markitdown）を一括インストールするのが推奨:
-# Windows (初心者向け、cmd ダブルクリック対応 — GUI extras は既定 ON):
+# リポジトリをクローン後、セットアップスクリプトで GUI + 添付変換（markitdown）を一括インストールするのが推奨（v0.1.x 以降、GUI extras は既定 ON）:
+# Windows (初心者向け、cmd ダブルクリック対応):
 hve\setup-hve.cmd
-# Windows (PowerShell、上級オプション対応):
-powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1 -WithGui
+# Windows (PowerShell):
+powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
 # Linux / macOS:
-./hve/setup-hve.sh --with-gui
+./hve/setup-hve.sh
 
+# CLI 専用にしたい場合は --no-gui / -NoGui を付与。
 # 手動インストールだけで進める場合:
 pip install -e ".[gui]"
 # ARD 添付ファイル D&D で PDF / DOCX / XLSX / XLS / PPTX / HTML を変換する場合は追加で
 pip install -e ".[gui,gui-docconvert]"   # 内部依存は markitdown[all] のみ
 ```
 
-> **`.cmd` vs `.ps1`**: `.cmd` は **GUI extras を既定でインストール** します（`.ps1` は `-WithGui` 指定時のみ）。`.cmd` がサポートする引数は `--check-only` / `--skip-mdq` / `--no-gui` / `--help` のみ。Work IQ や `.venv` 再作成等の上級オプションが必要な場合は `.ps1` を使用してください。詳細は [hve-cli-orchestrator-guide.md - セットアップスクリプト](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照。
+> **`.cmd` vs `.ps1`**: `.cmd` は `.ps1` を呼ぶ薄ラッパとなり、同一のオプション（`-CheckOnly` / `-NoGui` / `-Minimal` / `-Force` / `-SkipNltkDownload` / `-WithSkills`）をサポートします。詳細は [hve-cli-orchestrator-guide.md - セットアップスクリプト](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照。
 
 ---
 
@@ -281,7 +282,7 @@ chmod +x hve-gui.command
 | 対応形式 | 必要なインストール |
 |---|---|
 | `.md` / `.markdown` / `.txt` / `.csv` | `pip install -e ".[gui]"` のみ |
-| `.html` / `.htm` / `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` | `pip install -e ".[gui,gui-docconvert]"` が必要（`hve/setup-hve.ps1 --WithGui` または `hve/setup-hve.sh --with-gui` で自動。変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
+| `.html` / `.htm` / `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` | `pip install -e ".[gui,gui-docconvert]"` が必要（`hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで実行すれば既定で導入。変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
 
 - **保存先**: `<repo>/docs/attached/` 配下に Markdown として保存されます。ファイル名は ASCII 安全化されます。
 - **起点ファイル選択**: 複数ファイルを D&D した場合、`business_requirement-input.md` として採用する起点ファイルをダイアログで選択します。1 ファイルのみの場合は確認なしで自動採用。
@@ -480,7 +481,7 @@ DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--a
 | `hve-gui.sh` `.venv が見つかりません` と表示される | 仮想環境未作成 | スクリプトが案内する通り `python3 -m venv .venv && .venv/bin/pip install -e ".[gui]"` を実行 |
 | macOS Finder で `hve-gui.command` が「開発元を確認できない」 | Gatekeeper のブロック | 右クリック → 「開く」で初回警告を回避。以後ダブルクリックで起動可能 |
 | `python -m hve` / `python -m hve gui` でエラー | `PySide6` 未インストール | `pip install -e ".[gui]"` を実行（引数なし起動は CLI に自動フォールバック） |
-| D&D で `.docx` / `.pdf` / `.xlsx` / `.pptx` / `.html` が変換されない | `gui-docconvert`（markitdown）未インストール | `hve/setup-hve.ps1 --WithGui` または `hve/setup-hve.sh --with-gui` を実行。手動は `pip install -e ".[gui,gui-docconvert]"` |
+| D&D で `.docx` / `.pdf` / `.xlsx` / `.pptx` / `.html` が変換されない | `gui-docconvert`（markitdown）未インストール | `hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで再実行、または `pip install -e ".[gui,gui-docconvert]"` |
 | GUI が起動しない（X11 / Wayland エラー） | ディスプレイサーバー未接続 | SSH ポートフォワードや X11 転送を設定するか、CLI Orchestrator を使用 |
 | ウィンドウが複数起動しない | PySide6 バージョン不足 | `PySide6>=6.6` を確認 |
 
@@ -524,7 +525,7 @@ HVE_GUI_LANG=en_US python -m hve gui
 
 ソース言語は日本語（`ja_JP`）。英訳は `hve/gui/i18n/hve_gui_en_US.ts` を編集し、`pyside6-lrelease` で `.qm` をコンパイルします。詳細は [hve/gui/i18n/README.md](../hve/gui/i18n/README.md) を参照。
 
-`setup-hve.ps1 -WithGui` / `setup-hve.sh --with-gui` 実行時に `.ts` が `.qm` より新しい場合は自動コンパイルされます。
+`setup-hve.ps1` / `setup-hve.sh` 実行時（オプション無し既定）に `.ts` が `.qm` より新しい場合は自動コンパイルされます。
 
 ---
 
@@ -538,3 +539,62 @@ HVE_GUI_LANG=en_US python -m hve gui
 | [workflow-reference.md](./workflow-reference.md) | ワークフロー一覧・Custom Agent 一覧 |
 | [hve-technical-architecture.md](./hve-technical-architecture.md) | GUI / CLI / Cloud の技術アーキテクチャ詳細（開発者向け） |
 | [hve/gui/i18n/README.md](../hve/gui/i18n/README.md) | GUI 翻訳ファイル管理（開発者向け） |
+
+
+---
+
+## Step 1 事前チェックスナップショット（args/パラメータ保存）
+
+Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェック（FILE / WIZARD_INPUT / SETTING / AUTH 4 カテゴリ統合 precheck）とプランレビューが完了するたびに、その時点の args/パラメータ一式が JSON スナップショットとして自動保存されます。後追いデバッグ・監査・サポート問い合わせ時の再現用です。
+
+### 保存先
+
+```
+<repo>/work/gui-runs/<session_run_id>/step1-precheck/
+├── <UTC timestamp>__iter1/        # 1 回目の precheck 通過時
+├── <UTC timestamp>__iter2/        # ギャップ適用→再 precheck 通過時
+├── ...
+└── latest-accepted/               # 「このプランで実行」承認時のコピー
+```
+
+- `session_run_id` は GUI 1 セッション = 1 ID（`gui-<timestamp>-<random>`）。
+- 反復ごとに `<UTC timestamp>__iter<n>/` ディレクトリが新規作成される（同名ディレクトリは削除→新規作成）。
+- 最終承認時のみ `latest-accepted/` へコピーされる（毎回上書き）。
+
+### 含まれる情報（1 ディレクトリあたり）
+
+| ファイル | 内容 |
+|---|---|
+| `metadata.json` | session_run_id / iteration / is_final_accepted / autopilot_mode / timestamp / repo_root / workflow_ids / schema_version |
+| `selection.json` | 選択中の workflow_ids、Autopilot ON/OFF |
+| `orchestrate-args.json` | workflow_id → `OrchestrateArgs` 全フィールド（dict 化、マスク済み） |
+| `orchestrate-argv.json` | workflow_id → `python -m hve orchestrate ...` に渡される argv 配列（マスク済み） |
+| `precheck-result.json` | precheck の生結果（カテゴリ別不足項目など） |
+| `plan-review.json` | プランレビュー（実行順序・ギャップ提案など） |
+| `attachments.json` | additional_prompts / extra_provided / ARD 添付パス一覧 |
+| `auth-snapshot.json` | provider → AuthState 名（トークン本体は含めない） |
+| `env-overrides.json` | 子プロセスへ注入される env（HVE_WORK_ROOT / HVE_GUI_SESSION_ID 等、マスク済み） |
+
+### マスキング方針
+
+機密情報の漏洩防止のため、以下のキー名／argv フラグ名を含む値はすべて `***` に置換されます（大文字小文字無視・部分一致）:
+
+- `token` / `secret` / `password` / `passwd`
+- `api_key` / `api-key` / `access_key` / `access-key`
+- `private_key` / `private-key` / `client_secret` / `client-secret`
+- `bearer` / `credential`
+
+例: `GITHUB_TOKEN` / `--github-token` / `workiq_client_secret` などは値が `***` に置換されます。
+`auth-snapshot.json` は AuthState 名（`AUTHENTICATED` 等）のみ記録し、トークン本体は一切含めません。
+
+### 動作・運用
+
+- スナップショット保存の失敗は GUI 主処理を止めません（WARNING ログのみ出力）。
+- `work/gui-runs/` は `.gitignore` で除外されています（コミット対象外）。
+- セッション終了時の挙動は `GuiSessionWorkdir.cleanup_policy`（既定 `keep`）に従い、`archive` / `purge` を指定するとスナップショットも対象になります。
+- スキーマは `metadata.json.schema_version` でバージョニング（現行 `1`）。
+
+### 用途
+
+- 「Step 1 を通ったのに Step 2 で挙動が違う」等の問い合わせ時、`latest-accepted/orchestrate-argv.json` を CLI で再実行すれば再現可能。
+- ギャップ適用ループの各回の差分比較（`iter1` ↔ `iter2`）でユーザー操作の影響を確認可能。

@@ -49,6 +49,7 @@ from .threads import IndexRefreshThread, UsageReportThread
 
 # Phase 3 additions
 from .semantic_options import SemanticOptionsWidget
+from .pageindex_options import PageIndexOptionsWidget
 from .search_preview_panel import TestSearchPanel
 
 
@@ -172,6 +173,15 @@ class MdqIndexSection(QWidget):
         self._semantic_options_widget.setVisible(
             self._strategy == "semantic_paragraph"
         )
+        # pageindex 専用設定。
+        self._pageindex_options_widget = PageIndexOptionsWidget()
+        self._pageindex_options_widget.changed.connect(
+            self._on_pageindex_options_changed
+        )
+        self._pageindex_options_widget.load_from(_saved_mdq)
+        self._pageindex_options_widget.setVisible(
+            self._strategy == "pageindex"
+        )
         self._test_search_panel = TestSearchPanel(repo_root=repo_root)
         self._test_search_panel.set_context(
             lang=self._lang, strategy=self._strategy,
@@ -198,6 +208,8 @@ class MdqIndexSection(QWidget):
         basic_layout.addLayout(select_form)
         # Phase 3: semantic_paragraph 専用設定（Strategy 切替で可視/不可視）。
         basic_layout.addWidget(self._semantic_options_widget)
+        # pageindex 専用設定（Strategy 切替で可視/不可視）。
+        basic_layout.addWidget(self._pageindex_options_widget)
         # 説明文は親ウィジェット幅に動的追従（word wrap のみ、固定幅不使用）。
         _desc_lang = QLabel(
             self.tr(
@@ -573,6 +585,13 @@ class MdqIndexSection(QWidget):
             )
         except AttributeError:
             pass  # widget 未構築（移行期防御）
+        # pageindex 専用 widget の可視性を更新。
+        try:
+            self._pageindex_options_widget.setVisible(
+                self._strategy == "pageindex"
+            )
+        except AttributeError:
+            pass
         try:
             self._test_search_panel.set_context(
                 lang=self._lang, strategy=self._strategy,
@@ -600,6 +619,10 @@ class MdqIndexSection(QWidget):
             )
         except AttributeError:
             pass
+
+    def _on_pageindex_options_changed(self) -> None:
+        """PageIndexOptionsWidget の変更を [mdq] へ永続化する。"""
+        self._persist_settings()
 
     def _resolve_fusion_alpha(self) -> float | None:
         """Q9=A: late_chunking ON + semantic_paragraph 時のみ alpha を返す。"""
@@ -651,7 +674,16 @@ class MdqIndexSection(QWidget):
                 )
             except Exception:  # noqa: BLE001 -- defensive
                 sem_opts = None
-        self._start_refresh_thread(force=True, semantic_options=sem_opts)
+        # pageindex 用 runtime options を組み立てる。
+        pi_opts = None
+        if self._strategy == "pageindex":
+            try:
+                pi_opts = self._pageindex_options_widget.to_runtime_kwargs()
+            except AttributeError:
+                pi_opts = None
+        self._start_refresh_thread(
+            force=True, semantic_options=sem_opts, pageindex_options=pi_opts,
+        )
 
     def _on_delete_db_clicked(self) -> None:
         """Q2=A 個別 DB 削除。二重確認後に unlink。"""
@@ -694,6 +726,7 @@ class MdqIndexSection(QWidget):
 
     def _start_refresh_thread(
         self, *, force: bool = False, semantic_options: dict | None = None,
+        pageindex_options: dict | None = None,
     ) -> None:
         """共通: refresh thread の起動。差分更新 / 完全再ビルド両方が利用。"""
         self._btn_incremental_refresh.setEnabled(False)
@@ -713,6 +746,7 @@ class MdqIndexSection(QWidget):
             overlap_paragraphs=int(self._overlap_paragraphs),
             force=force,
             semantic_options=semantic_options,
+            pageindex_options=pageindex_options,
             parent=self,
         )
         self._refresh_thread.succeeded.connect(self._on_refresh_succeeded)
@@ -745,6 +779,11 @@ class MdqIndexSection(QWidget):
             # Phase 3: semantic_paragraph 専用 widget の値を merge。
             try:
                 mdq.update(self._semantic_options_widget.to_settings_dict())
+            except AttributeError:
+                pass  # 移行期防御
+            # pageindex 専用 widget の値を merge。
+            try:
+                mdq.update(self._pageindex_options_widget.to_settings_dict())
             except AttributeError:
                 pass  # 移行期防御
             cur["mdq"] = mdq
@@ -1041,7 +1080,15 @@ class MdqIndexSection(QWidget):
                 )
             except Exception:  # noqa: BLE001 -- defensive
                 sem_opts = None
-        self._start_refresh_thread(force=False, semantic_options=sem_opts)
+        pi_opts = None
+        if self._strategy == "pageindex":
+            try:
+                pi_opts = self._pageindex_options_widget.to_runtime_kwargs()
+            except AttributeError:
+                pi_opts = None
+        self._start_refresh_thread(
+            force=False, semantic_options=sem_opts, pageindex_options=pi_opts,
+        )
 
     def _on_refresh_succeeded(self, summary: dict) -> None:
         self._last_refresh_elapsed_ms = int(summary.get("elapsed_ms", 0))

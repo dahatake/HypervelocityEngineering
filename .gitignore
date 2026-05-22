@@ -115,6 +115,11 @@ build/
 hve/.settings.txt
 hve/.settings.txt.tmp
 
+# HVE GUI セッション作業ディレクトリ（マシンローカル・regenerable・
+# Step 1 事前チェックスナップショット等を含む。詳細は
+# users-guide/hve-gui-orchestrator-guide.md「Step 1 事前チェックスナップショット」参照）
+work/gui-runs/
+
 # Externally-sourced agent skills (installed via setup-hve --with-skills / npx skills add microsoft/skills)
 .github/skills/azure-skills/
 

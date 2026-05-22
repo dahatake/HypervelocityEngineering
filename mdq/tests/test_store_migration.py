@@ -1,4 +1,4 @@
-"""Tests for store schema migration (v3 -> v5)."""
+"""Tests for store schema migration (v3 -> v6)."""
 from __future__ import annotations
 
 import sqlite3
@@ -21,8 +21,9 @@ def test_open_store_creates_v5_schema(tmp_path: Path) -> None:
         assert "parent_chunk_id" in cols, "v4 column missing on fresh DB"
         assert "text_raw" in cols, "v5 text_raw column missing on fresh DB"
         assert "chunk_embedding" in cols, "v5 chunk_embedding column missing on fresh DB"
+        assert "summary" in cols, "v6 summary column missing on fresh DB"
         v = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert v == 5
+        assert v == 6
     finally:
         conn.close()
 
@@ -75,7 +76,7 @@ def test_open_store_migrates_legacy_v3_db(tmp_path: Path) -> None:
         ).fetchone()
         assert row[0] == "cid"
         assert row[1] is None
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     finally:
         conn.close()
 

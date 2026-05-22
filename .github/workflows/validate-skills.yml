@@ -1,0 +1,46 @@
+name: Validate Skills
+
+on:
+  pull_request:
+    paths:
+      - '.github/skills/**'
+      - '.github/copilot-instructions.md'
+      - '.github/scripts/validate-skills.py'
+      - '.github/scripts/validate-skill-routing.py'
+      - '.github/scripts/add-frontmatter-version.py'
+      - '.github/skills/CONTRIBUTING.md'
+      - '.github/workflows/validate-skills.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-frontmatter:
+    name: Validate SKILL.md frontmatter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          python3 .github/scripts/validate-skills.py
+
+  validate-routing:
+    name: Validate skill routing consistency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # TODO(PR-14/PR-15 完了後): continue-on-error を外して必須ゲート化する。
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate skill routing consistency
+        run: |
+          python3 .github/scripts/validate-skill-routing.py

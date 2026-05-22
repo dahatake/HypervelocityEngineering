@@ -1,0 +1,261 @@
+name: "Web App Design"
+description: "Issue から Web アプリサブシステムの設計ワークフロー (Step.1〜Step.2.3) を自動起動します"
+title: "[Web App Design] Web アプリ設計"
+labels:
+  - "auto-app-detail-design-web"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Web App Design
+        このフォームから Issue を作成すると、Web アプリサブシステム向けの設計タスクが
+        Sub-issue として生成され、Copilot が依存関係に従って順次・並列実行します。
+
+        ### 実行されるステップ
+        | ステップ | 内容 |
+        |---------|------|
+        | **Step.1** | 画面一覧と遷移図 |
+        | **Step.2.1** | 画面定義書 |
+        | **Step.2.2** | マイクロサービス定義書 |
+        | **Step.2.3** | TDD テスト仕様書（Step.2.1 AND Step.2.2 完了後） |
+
+        ⚠️ **前提条件**:
+        - Architecture Design (AAS) が完了していること
+        - 以下のファイルが存在すること:
+          - `docs/catalog/app-arch-catalog.md`（推薦アーキテクチャ フィルタリングの正本）
+          - `docs/catalog/app-catalog.md`
+          - `docs/catalog/domain-analytics.md`
+          - `docs/catalog/service-catalog.md`
+          - `docs/catalog/data-model.md`
+          - `docs/catalog/test-strategy.md`
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/design-v2"
+      value: "main"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      description: |
+        ワークフローを実行する Runner を選択します。
+        - **GitHub Hosted**: `ubuntu-latest`（GitHub 提供の標準ランナー）
+        - **Self-hosted (ACA)**: `[self-hosted, linux, x64, aca]`（Azure Container Apps 上のセルフホストランナー）
+        - Self-hosted runner はオプションです（GitHub Hosted を使う場合はスキップ可能）
+        - Self-hosted を選ぶ場合は runner が online であり、label が一致していることを確認してください（詳細: `users-guide/setup-self-hosted-runner.md`）
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
+      description: |
+        対象とする APP-ID をカンマ区切りで指定してください。
+        指定した場合: 指定 APP-ID のうち `Webフロントエンド + クラウド` の推薦アーキテクチャのもののみ対象になります。
+        未指定の場合: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `Webフロントエンド + クラウド` の APP-ID が自動選択されます。
+      placeholder: "例: APP-01, APP-02"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: "実行するステップ"
+      description: |
+        実行したいステップにチェックを入れてください。
+        ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
+        ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
+        📋 **依存関係**: Step.1 → Step.2.1 ‖ Step.2.2 → Step.2.3
+      options:
+        - label: "Step.1 — 画面一覧と遷移図"
+        - label: "Step.2.1 — 画面定義書 ※ Step.1 が必須"
+        - label: "Step.2.2 — マイクロサービス定義書 ※ Step.1 が必須"
+        - label: "Step.2.3 — TDD テスト仕様書 ※ Step.2.1 AND Step.2.2 が必須"
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      description: |
+        Copilot cloud agent が使用するモデルを選択します（hve CLI `--model` と同等）。
+        - `Auto`: GitHub が最適モデルを動的選択（プレミアムリクエスト 0.9x、推奨）
+        - その他: hve/config.py の `MODEL_CHOICES` と同一の選択肢
+        ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+  - type: dropdown
+    id: review_model
+    attributes:
+      label: "レビュー用モデル（任意）"
+      description: |
+        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: qa_model
+    attributes:
+      label: "QA 用モデル（任意）"
+      description: |
+        実行前 QA（auto-qa）の質問票生成で使用するモデル（hve CLI `--qa-model` 相当）。
+        `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      description: |
+        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
+        デフォルト（チェックなし）ではセルフレビューは実行されません。
+      options:
+        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      description: |
+        チェックを入れると、Copilot がステップ実行前に選択式の質問票（事前 QA）を作成します。回答後に実行が開始されます。
+        デフォルト（チェックなし）では質問票は作成されません。
+        詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
+      options:
+        - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
+
+  - type: checkboxes
+    id: enable_self_improve
+    attributes:
+      label: "自己改善ループ設定"
+      description: |
+        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
+        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
+        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
+        デフォルト（チェックなし）では自己改善は実行されません。
+      options:
+        - label: "自己改善ループを有効にする"
+
+  - type: dropdown
+    id: self_improve_max_iterations
+    attributes:
+      label: "自己改善 最大イテレーション数"
+      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      options:
+        - "1"
+        - "2"
+        - "3 (デフォルト)"
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: self_improve_quality_threshold
+    attributes:
+      label: "自己改善 品質スコア目標値"
+      description: "この値に達した時点で改善完了とみなします"
+      options:
+        - "70（最低基準）"
+        - "80（標準）"
+        - "90（高品質）"
+      default: 1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: create_remote_mcp_server
+    attributes:
+      label: Remote MCP Server 実装
+      description: |
+        詳細設計に Remote MCP Server として公開するための設計観点を含めるかを選択してください。
+        実装方式、SDK、Transport、Cloud 固有の構成は実装フェーズで最適なものを選定します。
+      options:
+        - 作成する
+        - 作成しない
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: enable_agentic_retrieval
+    attributes:
+      label: "Agentic Retrieval を使用する"
+      description: |
+        Chat-Bot / AI Agent を機能要件に含むアプリ向け。
+        `Arch-AgenticRetrieval-Detail` Custom Agent の自動判定結果に従います。明示的な上書きも可能です。
+        「しない」を選ぶと AAD-WEB / ASDW-WEB の Agentic Retrieval 関連ステップは生成されません。
+      options:
+        - する
+        - しない
+        - 自動判定に従う
+      default: 2
+    validations:
+      required: false
+
+  - type: dropdown
+    id: foundry_mcp_integration
+    attributes:
+      label: "Microsoft Foundry 連携（Remote MCP Server）"
+      description: |
+        「する」を選ぶと Foundry プロジェクトの新規作成・モデルの Global Deployment・
+        MCP 接続設定までを IaC が自動構成します。
+      options:
+        - する
+        - しない
+      default: 0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      description: |
+        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
+      options:
+        - label: "PR の自動 Approve & Auto-merge を有効にする"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "補足・制約・注意事項があれば記載してください。各 Step issue にも引用されます。"
+      placeholder: "例: 画面は React で実装予定。認証は Azure AD B2C を使用。"
+    validations:
+      required: false

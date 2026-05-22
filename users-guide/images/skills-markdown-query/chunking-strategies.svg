@@ -1,155 +1,236 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700" role="img"
-     aria-labelledby="t d" font-family="Segoe UI, Hiragino Sans, Meiryo, sans-serif">
-  <title id="t">Chunking Strategy 4 種の比較</title>
-  <desc id="d">同一 Markdown 入力に対する 4 つの分割方式の出力チャンク境界比較。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img"
+     aria-labelledby="t d" font-family="Noto Sans JP, Yu Gothic UI, Segoe UI, Hiragino Sans, Meiryo, system-ui, sans-serif">
+  <title id="t">Chunking Strategy 5 種の比較</title>
+  <desc id="d">同一 Markdown 入力 (# A / ## A.1 長文 / ## A.2 短文+コードフェンス / # B) に対する heading, heading_recursive, fixed_window, semantic_paragraph, pageindex の 5 戦略のチャンク境界の違い。</desc>
 
   <defs>
     <style><![CDATA[
-      .ttl { font-size: 20px; font-weight: 700; fill: #1A1A1A; }
-      .meta { font-size: 11px; fill: #555; }
-      .h { font-size: 14px; font-weight: 700; fill: #1A1A1A; }
-      .lbl { font-size: 12px; fill: #1A1A1A; }
-      .sm  { font-size: 11px; fill: #1A1A1A; }
-      .doc { font-family: Consolas, monospace; font-size: 10.5px; fill: #1A1A1A; }
-      .b   { fill: white; stroke-width: 1.4; }
-      .c-h    { stroke: #006B3C; fill: #E8F5EE; }
-      .c-hr   { stroke: #0066CC; fill: #E8F1FB; }
-      .c-fw   { stroke: #B85C00; fill: #FBEEDB; }
-      .c-sem  { stroke: #6B2C91; fill: #F1EBF5; }
-      .doc-bg { fill: #FAFAFA; stroke: #525252; stroke-width: 1; }
+      .ttl  { font-size: 20px; font-weight: 700; fill: #1A1A1A; }
+      .sub  { font-size: 11px; fill: #555; }
+      .h    { font-size: 13px; font-weight: 700; fill: #1A1A1A; }
+      .lbl  { font-size: 11px; fill: #1A1A1A; }
+      .sm   { font-size: 10.5px; fill: #1A1A1A; }
+      .tiny { font-size: 9.5px; fill: #333; }
+      .mono { font-family: Consolas, "Courier New", monospace; font-size: 10px; fill: #1A1A1A; }
+      .lane-box   { fill: #FFFFFF; stroke: #525252; stroke-width: 1; }
+      .doc-bg     { fill: #FAFAFA; stroke: #525252; stroke-width: 1; }
+      .code-bg    { fill: #525252; fill-opacity: 0.18; stroke: #525252; stroke-width: 1; }
       .legend-box { fill: white; stroke: #525252; stroke-width: 1; }
+      .overlap-hr { fill: #FFC107; fill-opacity: 0.35; }
     ]]></style>
+    <pattern id="hatch-fw" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#B85C00" stroke-width="1.2" stroke-opacity="0.55"/>
+    </pattern>
+    <marker id="arr-pi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#888"/>
+    </marker>
   </defs>
 
-  <text x="20" y="28" class="ttl">Chunking Strategy 比較 — 同一入力 → 4 種の境界の違い</text>
-  <text x="20" y="46" class="meta">SoT: mdq/strategies.py + mdq/strategies_semantic.py (v0.5.0)  ·  既定値はコード定数を参照。</text>
+  <text x="20" y="28" class="ttl">Chunking Strategy 比較 — 同一入力 → 5 種の境界の違い</text>
+  <text x="20" y="46" class="sub">SoT: mdq/strategies.py (HEADING_RECURSIVE_MAX_CHARS=2000, FIXED_WINDOW_CHARS=1000, FIXED_WINDOW_OVERLAP=200, PAGEINDEX_SUMMARY_CHARS=200) · mdq/strategies_semantic.py (SEMANTIC_MIN_CHARS=200, SEMANTIC_MAX_CHARS=1000) · mdq/strategies_pageindex.py</text>
 
-  <!-- =================== Sample document =================== -->
-  <rect x="20" y="60" width="380" height="620" rx="6" class="doc-bg"/>
-  <text x="35" y="80" class="h">入力サンプル (sample.md)</text>
-  <text x="35" y="98" class="sm" fill="#555">行番号付き。約 1,600 字想定。</text>
-
-  <g transform="translate(35,116)" class="doc">
-    <text y="0"  fill="#006B3C">L01: # 製品概要</text>
-    <text y="16">L02: 本ページは製品 A の機能と運用…</text>
-    <text y="32">L03: 想定読者は管理者と開発者。</text>
-    <text y="48" fill="#006B3C">L04: ## 機能 1: 索引</text>
-    <text y="64">L05: 索引は SQLite + FTS5 で…</text>
-    <text y="80">L06: 物理ファイルは lang × strategy …</text>
-    <text y="96">L07: 増分更新は SHA1 と mtime で…</text>
-    <text y="112" fill="#006B3C">L08: ### 1.1 走査対象</text>
-    <text y="128">L09: 既定 11 ディレクトリを再帰…</text>
-    <text y="144" fill="#006B3C">L10: ### 1.2 走査除外</text>
-    <text y="160">L11: .mdq/ と .git/ は除外。</text>
-    <text y="176" fill="#006B3C">L12: ## 機能 2: 検索</text>
-    <text y="192">L13: 検索は BM25 既定…</text>
-    <text y="208">L14: 短い固有名詞は heading…</text>
-    <text y="224">L15: 物語的質問は semantic…</text>
-    <text y="240" fill="#006B3C">L16: ## 機能 3: 監視</text>
-    <text y="256">L17: watchdog があれば自動再索引。</text>
-    <text y="272">L18: debounce 500ms / burst 100…</text>
-    <text y="288" fill="#006B3C">L19: ## 運用と FAQ</text>
-    <text y="304">L20: Q: 索引が壊れた</text>
-    <text y="320">L21: A: rm -rf .mdq/ で再構築。</text>
-    <text y="336">L22: Q: 大きな PDF を…</text>
-    <text y="352">L23: A: 本ツールは Markdown のみ…</text>
-    <text y="378" fill="#525252">…(本文継続、合計 ~1,600 字)…</text>
-
-    <text y="410" fill="#B85C00">凡例:</text>
-    <text y="426" fill="#006B3C">緑 = 見出し行</text>
-    <text y="442" fill="#1A1A1A">黒 = 本文</text>
+  <!-- =================== 入力サンプル説明 (top strip) =================== -->
+  <g transform="translate(20,60)">
+    <rect x="0" y="0" width="1160" height="58" rx="6" class="doc-bg"/>
+    <text x="12" y="18" class="h">入力サンプル (全戦略で共通) — 構造のみ図示。コードフェンスは全戦略で不可分 (灰色網掛け)。</text>
+    <g class="mono">
+      <text x="12"  y="38"># A          (H1 / 短い段落 1)</text>
+      <text x="220" y="38">## A.1       (H2 / 約 2,500 字の長い本文)</text>
+      <text x="480" y="38">## A.2       (H2 / 短い段落 + コードフェンス 1 個)</text>
+      <text x="780" y="38"># B          (H1 / 短い段落 1)</text>
+    </g>
+    <text x="12" y="52" class="tiny" fill="#555">縦軸 = 文書先頭 (上) → 末尾 (下) の文字位置。各レーンは同じ縦スケール (約 5,200 字相当) を共有。</text>
   </g>
 
-  <!-- =================== heading =================== -->
-  <g transform="translate(420,60)">
-    <rect x="0" y="0" width="330" height="155" rx="6" class="b c-h"/>
-    <text x="12" y="20" class="h" fill="#006B3C">① heading (既定 / legacy)</text>
-    <text x="12" y="38" class="sm">境界 = 各見出し開始行。max_chunk_chars 超過時のみ等幅分割。</text>
-    <text x="12" y="56" class="sm">overlap なし。`part_index` で同一 heading の連番管理。</text>
-    <text x="12" y="78" class="lbl" font-weight="700">出力チャンク:</text>
-    <text x="12" y="96" class="sm">▸ C1: # 製品概要 (L01–L03)</text>
-    <text x="12" y="112" class="sm">▸ C2: ## 機能 1: 索引 (L04–L07)</text>
-    <text x="12" y="128" class="sm">▸ C3: ### 1.1 走査対象 (L08–L09) / ▸ C4: ### 1.2 (L10–L11)</text>
-    <text x="12" y="144" class="sm">▸ C5: ## 機能 2 (L12–L15) / ▸ C6: ## 機能 3 / ▸ C7: ## 運用…</text>
+  <!-- =================== Lane 1: heading =================== -->
+  <g transform="translate(20,130)">
+    <rect width="220" height="520" rx="6" class="lane-box"/>
+    <text x="12" y="20" class="h" fill="#0066CC">① heading</text>
+    <text x="12" y="36" class="sm">各見出し = 1 チャンク。</text>
+    <text x="12" y="50" class="sm">A.1 の長文もそのまま 1 つ。</text>
+    <text x="12" y="64" class="tiny" fill="#555">overlap なし / LLM 不要</text>
+
+    <rect x="70" y="80" width="80" height="420" fill="#FAFAFA" stroke="#888" stroke-width="0.8"/>
+    <rect x="70" y="370" width="80" height="22" class="code-bg"/>
+    <text x="155" y="384" class="tiny" fill="#525252">code</text>
+
+    <line x1="70" y1="80"  x2="150" y2="80"  stroke="#0066CC" stroke-width="2"/>
+    <line x1="70" y1="105" x2="150" y2="105" stroke="#0066CC" stroke-width="2"/>
+    <line x1="70" y1="317" x2="150" y2="317" stroke="#0066CC" stroke-width="2"/>
+    <line x1="70" y1="394" x2="150" y2="394" stroke="#0066CC" stroke-width="2"/>
+    <line x1="70" y1="500" x2="150" y2="500" stroke="#0066CC" stroke-width="2"/>
+
+    <text x="12" y="95"  class="tiny">C1 # A</text>
+    <text x="12" y="210" class="tiny">C2 ## A.1 (≈2,500字)</text>
+    <text x="12" y="360" class="tiny">C3 ## A.2</text>
+    <text x="12" y="450" class="tiny">C4 # B</text>
   </g>
 
-  <!-- =================== heading_recursive =================== -->
-  <g transform="translate(760,60)">
-    <rect x="0" y="0" width="320" height="155" rx="6" class="b c-hr"/>
-    <text x="12" y="20" class="h" fill="#0066CC">② heading_recursive</text>
-    <text x="12" y="38" class="sm">max=2,000 字超過時に <tspan font-family="Consolas" fill="#0066CC">_subdivide</tspan> で段落単位再分割。</text>
-    <text x="12" y="56" class="sm">overlap_paragraphs=1 (既定) で末尾段落を次チャンク先頭に複製。</text>
-    <text x="12" y="78" class="lbl" font-weight="700">出力チャンク:</text>
-    <text x="12" y="96" class="sm">▸ C1: # 製品概要 (L01–L03)</text>
-    <text x="12" y="112" class="sm">▸ C2a: ## 機能 1 [前半 L04–L06]</text>
-    <text x="12" y="128" class="sm">▸ C2b: ## 機能 1 [overlap L06 + L07] (parent=C2a)</text>
-    <text x="12" y="144" class="sm">▸ C3, C4, … 以降は heading と同様</text>
+  <!-- =================== Lane 2: heading_recursive =================== -->
+  <g transform="translate(255,130)">
+    <rect width="220" height="520" rx="6" class="lane-box"/>
+    <text x="12" y="20" class="h" fill="#006B3C">② heading_recursive</text>
+    <text x="12" y="36" class="sm">2,000 字超で段落単位再分割。</text>
+    <text x="12" y="50" class="sm">overlap=1 段落 (薄黄領域)。</text>
+    <text x="12" y="64" class="tiny" fill="#555">A.1 が 2 サブチャンクに / LLM 不要</text>
+
+    <rect x="70" y="80" width="80" height="420" fill="#FAFAFA" stroke="#888" stroke-width="0.8"/>
+    <rect x="70" y="370" width="80" height="22" class="code-bg"/>
+
+    <rect x="70" y="258" width="80" height="24" class="overlap-hr"/>
+
+    <line x1="70" y1="80"  x2="150" y2="80"  stroke="#006B3C" stroke-width="2"/>
+    <line x1="70" y1="105" x2="150" y2="105" stroke="#006B3C" stroke-width="2"/>
+    <line x1="70" y1="317" x2="150" y2="317" stroke="#006B3C" stroke-width="2"/>
+    <line x1="70" y1="394" x2="150" y2="394" stroke="#006B3C" stroke-width="2"/>
+    <line x1="70" y1="500" x2="150" y2="500" stroke="#006B3C" stroke-width="2"/>
+    <line x1="70" y1="270" x2="150" y2="270" stroke="#006B3C" stroke-width="2" stroke-dasharray="5,3"/>
+
+    <text x="12" y="95"  class="tiny">C1 # A</text>
+    <text x="12" y="185" class="tiny">C2a A.1 前半</text>
+    <text x="12" y="276" class="tiny" fill="#A07000">overlap</text>
+    <text x="12" y="300" class="tiny">C2b A.1 後半</text>
+    <text x="12" y="360" class="tiny">C3 ## A.2</text>
+    <text x="12" y="450" class="tiny">C4 # B</text>
   </g>
 
-  <!-- =================== fixed_window =================== -->
-  <g transform="translate(420,235)">
-    <rect x="0" y="0" width="330" height="170" rx="6" class="b c-fw"/>
+  <!-- =================== Lane 3: fixed_window =================== -->
+  <g transform="translate(490,130)">
+    <rect width="220" height="520" rx="6" class="lane-box"/>
     <text x="12" y="20" class="h" fill="#B85C00">③ fixed_window</text>
-    <text x="12" y="38" class="sm">window=1,000 字 / overlap=200 字。見出しは無視 (フラット分割)。</text>
-    <text x="12" y="56" class="sm">heading_path は分割位置直前の最寄り見出しを継承。</text>
-    <text x="12" y="78" class="lbl" font-weight="700">出力チャンク:</text>
-    <text x="12" y="96" class="sm">▸ W1: 0–1,000 字 (L01 〜 L13 途中)</text>
-    <text x="12" y="112" class="sm">▸ W2: 800–1,800 字 (L11 〜 L21 / 200 字 overlap)</text>
-    <text x="12" y="128" class="sm">▸ … 以降スライディングウィンドウで継続</text>
-    <text x="12" y="152" class="sm" font-style="italic" fill="#8B0000">用途: コード断片や ID 検索で見出し情報が当てにならない時。</text>
+    <text x="12" y="36" class="sm">1,000 字窓 / 200 字 overlap。</text>
+    <text x="12" y="50" class="sm">見出し無視・等幅スライド。</text>
+    <text x="12" y="64" class="tiny" fill="#555">overlap 領域はハッチング / LLM 不要</text>
+
+    <rect x="70" y="80" width="80" height="420" fill="#FAFAFA" stroke="#888" stroke-width="0.8"/>
+    <rect x="70" y="370" width="80" height="22" class="code-bg"/>
+
+    <rect x="70" y="148" width="80" height="17" fill="url(#hatch-fw)"/>
+    <rect x="70" y="216" width="80" height="17" fill="url(#hatch-fw)"/>
+    <rect x="70" y="284" width="80" height="17" fill="url(#hatch-fw)"/>
+    <rect x="70" y="352" width="80" height="17" fill="url(#hatch-fw)"/>
+    <rect x="70" y="420" width="80" height="17" fill="url(#hatch-fw)"/>
+
+    <line x1="70" y1="80"  x2="150" y2="80"  stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="165" x2="150" y2="165" stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="233" x2="150" y2="233" stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="301" x2="150" y2="301" stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="369" x2="150" y2="369" stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="437" x2="150" y2="437" stroke="#B85C00" stroke-width="2"/>
+    <line x1="70" y1="500" x2="150" y2="500" stroke="#B85C00" stroke-width="2"/>
+
+    <text x="12" y="125" class="tiny">W1 0–1000</text>
+    <text x="12" y="200" class="tiny">W2 800–1800</text>
+    <text x="12" y="268" class="tiny">W3 1600–2600</text>
+    <text x="12" y="336" class="tiny">W4 2400–3400</text>
+    <text x="12" y="404" class="tiny">W5 3200–4200</text>
+    <text x="12" y="470" class="tiny">W6 4000–5200</text>
   </g>
 
-  <!-- =================== semantic_paragraph =================== -->
-  <g transform="translate(760,235)">
-    <rect x="0" y="0" width="320" height="170" rx="6" class="b c-sem"/>
-    <text x="12" y="20" class="h" fill="#6B2C91">④ semantic_paragraph (任意拡張 [semantic])</text>
-    <text x="12" y="38" class="sm">Kamradt 二分探索 (percentile 50–99) で意味境界自動推定。</text>
-    <text x="12" y="56" class="sm">min=200 / max=1,000 字。見出しは hard boundary として尊重。</text>
-    <text x="12" y="78" class="lbl" font-weight="700">出力チャンク:</text>
-    <text x="12" y="96" class="sm">▸ S1: 製品概要 + 機能 1 導入 (L01–L05 / 意味的に近接)</text>
-    <text x="12" y="112" class="sm">▸ S2: 索引内部 (L06–L11 / SHA1+走査範囲)</text>
-    <text x="12" y="128" class="sm">▸ S3: 検索 (L12–L15) / ▸ S4: 監視 (L16–L18)</text>
-    <text x="12" y="144" class="sm">▸ S5: FAQ (L19–L23)</text>
-    <text x="12" y="160" class="sm" font-style="italic" fill="#8B0000">埋め込み: fastembed BAAI/bge-m3 (既定) → chunks.chunk_embedding 列。</text>
+  <!-- =================== Lane 4: semantic_paragraph =================== -->
+  <g transform="translate(725,130)">
+    <rect width="220" height="520" rx="6" class="lane-box"/>
+    <text x="12" y="20" class="h" fill="#6B2C91">④ semantic_paragraph</text>
+    <text x="12" y="36" class="sm">見出しは hard 境界 (実線)。</text>
+    <text x="12" y="50" class="sm">内部は embedding 類似度の</text>
+    <text x="12" y="64" class="sm">breakpoint で分割 (破線)。min=200 / max=1,000</text>
+
+    <rect x="70" y="80" width="80" height="420" fill="#FAFAFA" stroke="#888" stroke-width="0.8"/>
+    <rect x="70" y="370" width="80" height="22" class="code-bg"/>
+
+    <line x1="70" y1="80"  x2="150" y2="80"  stroke="#6B2C91" stroke-width="2"/>
+    <line x1="70" y1="105" x2="150" y2="105" stroke="#6B2C91" stroke-width="2"/>
+    <line x1="70" y1="317" x2="150" y2="317" stroke="#6B2C91" stroke-width="2"/>
+    <line x1="70" y1="394" x2="150" y2="394" stroke="#6B2C91" stroke-width="2"/>
+    <line x1="70" y1="500" x2="150" y2="500" stroke="#6B2C91" stroke-width="2"/>
+
+    <line x1="70" y1="180" x2="150" y2="180" stroke="#6B2C91" stroke-width="1.6" stroke-dasharray="4,3"/>
+    <line x1="70" y1="250" x2="150" y2="250" stroke="#6B2C91" stroke-width="1.6" stroke-dasharray="4,3"/>
+    <line x1="70" y1="290" x2="150" y2="290" stroke="#6B2C91" stroke-width="1.6" stroke-dasharray="4,3"/>
+
+    <text x="12" y="95"  class="tiny">S1 # A</text>
+    <text x="12" y="148" class="tiny">S2 A.1 §1</text>
+    <text x="12" y="220" class="tiny">S3 A.1 §2</text>
+    <text x="12" y="275" class="tiny">S4 §3</text>
+    <text x="12" y="310" class="tiny">S5 §4</text>
+    <text x="12" y="360" class="tiny">S6 ## A.2</text>
+    <text x="12" y="450" class="tiny">S7 # B</text>
   </g>
 
-  <!-- =================== Selection guide =================== -->
-  <g transform="translate(420,420)">
-    <rect x="0" y="0" width="660" height="180" rx="6" class="legend-box"/>
-    <text x="12" y="22" class="h">選定ガイド (query_router.py の判定と整合)</text>
+  <!-- =================== Lane 5: pageindex =================== -->
+  <g transform="translate(960,130)">
+    <rect width="220" height="520" rx="6" class="lane-box"/>
+    <text x="12" y="20" class="h" fill="#0066CC">⑤ pageindex</text>
+    <text x="12" y="36" class="sm">heading と同じ境界 (青実線)。</text>
+    <text x="12" y="50" class="sm">各ノードに 200 字 summary。</text>
+    <text x="12" y="64" class="tiny" fill="#A05000">LLM-free (見出し階層から構築)</text>
 
-    <text x="12" y="46" class="lbl" font-weight="700" fill="#006B3C">heading</text>
-    <text x="100" y="46" class="sm">→ ID 検索 / 引用 (Rule 1, 2) / 短い固有名詞 (Rule 3) / 概要語 (Rule 4)</text>
+    <rect x="60" y="80" width="60" height="420" fill="#FAFAFA" stroke="#888" stroke-width="0.8"/>
+    <rect x="60" y="370" width="60" height="22" class="code-bg"/>
 
-    <text x="12" y="68" class="lbl" font-weight="700" fill="#0066CC">heading_recursive</text>
-    <text x="160" y="68" class="sm">→ 既定 (Rule 7) / 長い見出しを過大チャンク化させたくない場合</text>
+    <line x1="60" y1="80"  x2="120" y2="80"  stroke="#0066CC" stroke-width="2"/>
+    <line x1="60" y1="105" x2="120" y2="105" stroke="#0066CC" stroke-width="2"/>
+    <line x1="60" y1="317" x2="120" y2="317" stroke="#0066CC" stroke-width="2"/>
+    <line x1="60" y1="394" x2="120" y2="394" stroke="#0066CC" stroke-width="2"/>
+    <line x1="60" y1="500" x2="120" y2="500" stroke="#0066CC" stroke-width="2"/>
 
-    <text x="12" y="90" class="lbl" font-weight="700" fill="#B85C00">fixed_window</text>
-    <text x="160" y="90" class="sm">→ コード断片 (Rule 6) / 見出しが疎な議事録・ログ</text>
+    <g>
+      <rect x="138" y="86"  width="72" height="20" rx="3" fill="#FFFFFF" stroke="#0066CC" stroke-width="1"/>
+      <text x="142" y="100" class="tiny">📄 sum N1</text>
+    </g>
+    <g>
+      <rect x="138" y="200" width="72" height="20" rx="3" fill="#FFFFFF" stroke="#0066CC" stroke-width="1"/>
+      <text x="142" y="214" class="tiny">📄 sum N2</text>
+    </g>
+    <g>
+      <rect x="138" y="350" width="72" height="20" rx="3" fill="#FFFFFF" stroke="#0066CC" stroke-width="1"/>
+      <text x="142" y="364" class="tiny">📄 sum N3</text>
+    </g>
+    <g>
+      <rect x="138" y="440" width="72" height="20" rx="3" fill="#FFFFFF" stroke="#0066CC" stroke-width="1"/>
+      <text x="142" y="454" class="tiny">📄 sum N4</text>
+    </g>
 
-    <text x="12" y="112" class="lbl" font-weight="700" fill="#6B2C91">semantic_paragraph</text>
-    <text x="160" y="112" class="sm">→ 物語的質問 (Rule 5) / 概念検索。`[semantic]` extra 必須。</text>
+    <path d="M174,106 C174,150 174,180 174,200" fill="none" stroke="#AAAAAA" stroke-width="1" marker-end="url(#arr-pi)"/>
+    <path d="M174,106 C174,250 174,330 174,350" fill="none" stroke="#AAAAAA" stroke-width="1" marker-end="url(#arr-pi)"/>
 
-    <text x="12" y="140" class="sm" font-style="italic">補足: 索引は <tspan font-family="Consolas">.mdq/index-&lt;lang&gt;-&lt;strategy&gt;.sqlite</tspan> として strategy ごとに別ファイル。</text>
-    <text x="12" y="158" class="sm" font-style="italic">利用予定の strategy だけ事前に <tspan font-family="Consolas">python -m mdq index --strategy …</tspan> で索引化すれば良い。</text>
+    <text x="12" y="490" class="tiny" fill="#555">ツリー: N1 親 → N2, N3 子</text>
   </g>
 
-  <!-- =================== Legend (palette) =================== -->
-  <g transform="translate(420,610)">
-    <rect x="0" y="0" width="660" height="70" rx="6" class="legend-box"/>
-    <text x="12" y="22" class="h">配色 (WCAG AA, 対背景白 ≥ 4.5:1)</text>
+  <!-- =================== Legend =================== -->
+  <g transform="translate(20,665)">
+    <rect width="1160" height="120" rx="6" class="legend-box"/>
+    <text x="12" y="20" class="h">凡例 (WCAG AA: 背景白に対しコントラスト比 ≥ 4.5:1 / 色＋線種で識別)</text>
+
     <g transform="translate(12,32)">
-      <rect x="0" y="6" width="14" height="14" class="b c-h"/>
-      <text x="20" y="18" class="sm">heading (#006B3C)</text>
-      <rect x="170" y="6" width="14" height="14" class="b c-hr"/>
-      <text x="190" y="18" class="sm">heading_recursive (#0066CC)</text>
-      <rect x="370" y="6" width="14" height="14" class="b c-fw"/>
-      <text x="390" y="18" class="sm">fixed_window (#B85C00)</text>
-      <g transform="translate(0,22)">
-        <rect x="0" y="6" width="14" height="14" class="b c-sem"/>
-        <text x="20" y="18" class="sm">semantic_paragraph (#6B2C91)</text>
-      </g>
+      <line x1="0" y1="10" x2="28" y2="10" stroke="#0066CC" stroke-width="2"/>
+      <text x="34" y="14" class="sm">① heading — 見出し境界 (青実線) / LLM 不要</text>
+
+      <line x1="320" y1="10" x2="348" y2="10" stroke="#006B3C" stroke-width="2"/>
+      <line x1="320" y1="22" x2="348" y2="22" stroke="#006B3C" stroke-width="2" stroke-dasharray="5,3"/>
+      <text x="354" y="14" class="sm">② heading_recursive — 緑実線 + 再分割は破線</text>
+      <rect x="354" y="18" width="18" height="8" class="overlap-hr"/>
+      <text x="376" y="26" class="tiny">overlap=1 段落 (薄黄)</text>
+
+      <line x1="700" y1="10" x2="728" y2="10" stroke="#B85C00" stroke-width="2"/>
+      <rect x="700" y="18" width="28" height="8" fill="url(#hatch-fw)"/>
+      <text x="734" y="14" class="sm">③ fixed_window — 橙実線 / overlap=200 字ハッチング</text>
+    </g>
+
+    <g transform="translate(12,72)">
+      <line x1="0" y1="10" x2="28" y2="10" stroke="#6B2C91" stroke-width="2"/>
+      <line x1="0" y1="22" x2="28" y2="22" stroke="#6B2C91" stroke-width="1.6" stroke-dasharray="4,3"/>
+      <text x="34" y="14" class="sm">④ semantic_paragraph — 紫実線 (heading hard) + 破線 (意味境界)</text>
+
+      <line x1="430" y1="10" x2="458" y2="10" stroke="#0066CC" stroke-width="2"/>
+      <rect x="430" y="16" width="28" height="12" rx="2" fill="#FFFFFF" stroke="#0066CC" stroke-width="1"/>
+      <text x="434" y="25" class="tiny">📄 sum</text>
+      <text x="464" y="14" class="sm">⑤ pageindex — 青実線 (heading 同等) + 各ノードに summary / ツリー親子 (灰矢印)</text>
+      <text x="464" y="28" class="tiny" fill="#A05000">LLM-free</text>
+
+      <rect x="900" y="6" width="28" height="14" class="code-bg"/>
+      <text x="934" y="18" class="sm">コードフェンス: 全戦略で不可分 (灰色網掛け)</text>
     </g>
   </g>
 </svg>

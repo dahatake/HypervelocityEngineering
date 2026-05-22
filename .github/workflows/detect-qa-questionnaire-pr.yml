@@ -1,0 +1,99 @@
+name: Detect QA Questionnaire PR
+
+# 2026-05: 誤分類による auto-qa フロー停止を防ぐため opt-in 化。
+# メインタスク用 auto-qa PR を保護し、質問票専用 PR のみ明示マーカーで分類する。
+# manual override:
+# PR 本文先頭に <!-- qa-questionnaire-pr: manual-override --> を記載すると
+# 自動分類をスキップできる。
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+concurrency:
+  group: detect-qa-questionnaire-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+    steps:
+      - name: Classify PR and update labels
+        run: |
+          set -euo pipefail
+
+          # マーカーがなければ sed は本文全体を返す（= PR 本文全体で判定）
+          PR_BODY_HEAD=$(printf '%s' "${PR_BODY}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- qa-questionnaire-pr: manual-override -->'; then
+            echo "判定結果: 判定スキップ"
+            echo "理由: manual-override マーカーが PR 本文先頭部に設定されています。"
+            exit 0
+          fi
+          if ! printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- qa-questionnaire-pr: opt-in -->'; then
+            echo "判定結果: 判定スキップ"
+            echo "理由: メインタスク PR 想定（opt-in マーカー無し）"
+            exit 0
+          fi
+
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>&1) || {
+            echo "判定結果: 判定不能"
+            echo "理由: PR 情報の取得に失敗しました。${pr_data}"
+            exit 0
+          }
+          pr_labels=$(echo "${pr_data}" | jq -r '((.labels // []) | map(.name)) | @json')
+          has_qa_questionnaire_pr=$(echo "${pr_labels}" | jq -r 'if contains(["qa-questionnaire-pr"]) then "true" else "false" end')
+          has_auto_qa=$(echo "${pr_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
+
+          changed_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[]' 2>&1) || {
+            echo "判定結果: 判定不能"
+            echo "理由: PR 変更ファイル一覧の取得に失敗しました。権限設定または GitHub API 状態を確認してください。"
+            exit 0
+          }
+          changed_files=$(echo "${changed_files}" | jq -s '.')
+          total_files=$(echo "${changed_files}" | jq 'length')
+          files_outside_qa_questionnaire=$(echo "${changed_files}" | jq '[.[] | select((.filename | test("^qa/.+\\.md$")) | not)] | length')
+
+          if [ "${total_files}" -eq 0 ]; then
+            echo "判定結果: 判定不能"
+            echo "理由: 変更ファイルが 0 件のため判定できません。"
+            exit 0
+          fi
+
+          if [ "${files_outside_qa_questionnaire}" -eq 0 ]; then
+            echo "判定結果: QA 質問票 PR"
+            echo "理由: opt-in マーカーがあり、全 ${total_files} 件が qa/*.md です。"
+
+            if [ "${has_qa_questionnaire_pr}" = "true" ] && [ "${has_auto_qa}" != "true" ]; then
+              echo "冪等スキップ: 既に qa-questionnaire-pr が付与済みで auto-qa も未付与です。"
+              exit 0
+            fi
+
+            if [ "${has_qa_questionnaire_pr}" != "true" ]; then
+              gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "qa-questionnaire-pr"
+              echo "qa-questionnaire-pr ラベルを付与しました。"
+            fi
+
+            if [ "${has_auto_qa}" = "true" ]; then
+              gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "auto-qa"
+              echo "auto-qa ラベルを除去しました。"
+            fi
+          else
+            echo "::warning::判定結果: 判定スキップ"
+            echo "::warning::理由: opt-in マーカーがありますが qa/*.md 以外の変更が ${files_outside_qa_questionnaire} 件含まれています。"
+            if [ "${has_qa_questionnaire_pr}" = "true" ]; then
+              gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "qa-questionnaire-pr"
+              echo "::warning::是正: qa-questionnaire-pr ラベルを除去しました。"
+            else
+              echo "::warning::ラベル更新なし: qa-questionnaire-pr は未付与です。"
+            fi
+          fi

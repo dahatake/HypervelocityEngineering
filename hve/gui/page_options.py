@@ -43,6 +43,12 @@ from PySide6.QtWidgets import (
 
 from .orchestrate_args import OrchestrateArgs
 from .workflow_display import format_workflow_label
+from .workflow_requirements_banner import WorkflowRequirementsBanner
+from .workflow_step_requirements import (
+    WORKFLOW_TO_SECTION,
+    pick_target_step,
+    summarize_requirements,
+)
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QCheckBox
 
 
@@ -1473,16 +1479,6 @@ class _C10AppId(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.app_id = QLineEdit()
-        layout.addWidget(_LabeledField(
-            title=self.tr("アプリ ケーション ID（旧仕様）"),
-            description=(
-                self.tr("アプリ ケーション ID（ASDW/ADFDV 等で使用）。後方互換のため残しています。"
-                "複数指定は下の「対象アプリケーション (APP-ID)」を使用してください。")
-            ),
-            input_widget=self.app_id,
-        ))
-
         self.app_ids = QLineEdit()
         self.app_ids.setPlaceholderText(self.tr("例: AAD-WEB-001,AAD-WEB-002"))
         layout.addWidget(_LabeledField(
@@ -1514,7 +1510,6 @@ class _C10AppId(QWidget):
         ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
-        args.app_id = self.app_id.text().strip() or None
         args.app_ids = self.app_ids.text().strip() or None
         args.app_id = self.app_id.text().strip() or None
         args.usecase_id = self.usecase_id.text().strip() or None
@@ -1966,12 +1961,22 @@ class OptionsPage(QWidget):
         self._aas_notice: Optional[QWidget] = None
         self._groups_layout: Optional[QVBoxLayout] = None
 
+        # 必須要件サマリーバナー（Task C 統合）
+        # 単一インスタンスを保持し、選択ワークフローに応じて配置先を動的切替する。
+        self._requirements_banner: WorkflowRequirementsBanner = WorkflowRequirementsBanner()
+        self._banner_current_section: Optional[str] = None
+        self._last_banner_selection: List[Tuple[str, List[str]]] = []
+
         self._setup_ui()
         self._refresh_specific_categories()
         # auto_qa の変更で C4 (Work IQ) の表示が変わるため購読
         self.c3.auto_qa.stateChanged.connect(
             lambda _s: self._refresh_specific_categories()
         )
+
+        # 監視対象フィールドの textChanged をバナー更新にフック（接続漏れ防止のため
+        # 一覧をテーブル化してまとめて接続する）
+        self._wire_requirements_banner_listeners()
 
     # ----------------------------------------------------------
     # 公開 API
@@ -2084,6 +2089,173 @@ class OptionsPage(QWidget):
     def attachment_pane(self) -> Optional[QWidget]:
         """ARD 添付ペインの参照を返す（test 用）。"""
         return self._attachment_pane
+
+    # ----------------------------------------------------------
+    # 必須要件サマリーバナー（Task C 統合）
+    # ----------------------------------------------------------
+
+    # 監視対象フィールド対応表（プラン Task C のキー → ウィジェット属性）
+    # キーは workflow_step_requirements.INPUT_FIELD_KEYS と一致させる。
+    def _banner_input_widgets(self) -> Dict[str, QWidget]:
+        return {
+            "company_name": self.c14.company_name,
+            "target_business": self.c14.target_business,
+            "resource_group": self.c_azure.resource_group,
+            "target_dirs": self.c13.target_dirs,
+        }
+
+    def _wire_requirements_banner_listeners(self) -> None:
+        """監視対象フィールドの textChanged にバナー更新を接続する。
+
+        `_FilePickerWidget` は内部 QLineEdit `_edit` を持つため両対応する。
+        """
+        for w in self._banner_input_widgets().values():
+            inner = getattr(w, "_edit", None)
+            sig_owner = inner if inner is not None else w
+            sig = getattr(sig_owner, "textChanged", None)
+            if sig is not None:
+                sig.connect(self._on_banner_input_changed)
+
+    def _on_banner_input_changed(self, *_args) -> None:
+        # 現在の選択状態を維持して再描画する。
+        self._refresh_requirements_banner()
+
+    def _collect_banner_input_values(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for k, w in self._banner_input_widgets().items():
+            getter = getattr(w, "text", None)
+            if callable(getter):
+                try:
+                    out[k] = (getter() or "").strip()
+                except Exception:
+                    out[k] = ""
+            else:
+                out[k] = ""
+        return out
+
+    def _banner_file_exists(self, path: str) -> bool:
+        """要件テーブルのファイル/ディレクトリ存在判定。
+
+        - 末尾が "/" のものはディレクトリ扱い（中身が 1 件以上で True）。
+        - それ以外はファイル存在で判定。
+        ベースは ``self._repo_root``。
+        """
+        base = self._repo_root
+        try:
+            target = base / path
+            if path.endswith("/"):
+                return target.is_dir() and any(target.iterdir())
+            return target.is_file()
+        except Exception:
+            return False
+
+    def _current_selection_for_banner(self) -> List[Tuple[str, List[str]]]:
+        """現在の選択 (workflow_id, step_ids) リストを返す。
+        ステップ ID は外部から提供される必要があるため、保持していない場合は
+        全 workflow_id に空リストを返す（外部から ``update_requirements_banner``
+        で明示更新されるまでは「対象なし」表示となる）。
+        """
+        return [(wf, []) for wf in self._workflow_ids]
+
+    def update_requirements_banner(
+        self,
+        selected: List[Tuple[str, List[str]]],
+    ) -> None:
+        """外部（WorkflowSelectPage）から呼び出される公開 API。
+
+        Args:
+            selected: [(workflow_id, [step_id, ...]), ...]
+        """
+        self._last_banner_selection = selected
+        self._refresh_requirements_banner()
+
+    def _refresh_requirements_banner(self) -> None:
+        """内部: バナー内容と配置先を更新する。"""
+        selected = getattr(self, "_last_banner_selection", None)
+        if not selected:
+            # 選択未確定なら非表示
+            self._move_banner_to_section(None)
+            return
+
+        target = pick_target_step(selected)
+        if target is None:
+            self._move_banner_to_section(None)
+            return
+
+        workflow_id, step_id = target
+
+        # ARD 添付ペインの状態を取得
+        attached_count = 0
+        origin_chosen = False
+        if self._attachment_pane is not None and workflow_id == "ard":
+            ts = getattr(self._attachment_pane, "target_business_path", None)
+            if callable(ts):
+                origin_chosen = bool(ts())
+            # 添付件数: _results 属性を参照（無ければ 0）
+            results = getattr(self._attachment_pane, "_results", None)
+            if results is not None:
+                try:
+                    attached_count = len(results)
+                except Exception:
+                    attached_count = 0
+
+        summary = summarize_requirements(
+            workflow_id, step_id,
+            input_values=self._collect_banner_input_values(),
+            file_exists=self._banner_file_exists,
+            attached_count=attached_count,
+            origin_chosen=origin_chosen,
+        )
+        if summary is None:
+            self._move_banner_to_section(None)
+            return
+
+        section = summary.section
+        self._move_banner_to_section(section)
+        self._requirements_banner.set_summary(summary)
+        self._requirements_banner.setVisible(True)
+
+    def _move_banner_to_section(self, section: Optional[str]) -> None:
+        """バナーを指定セクションのレイアウト先頭に移動する。
+
+        section=None または不明セクション → 非表示。
+        """
+        banner = self._requirements_banner
+        if section is None:
+            banner.setVisible(False)
+            self._banner_current_section = None
+            return
+
+        if section == self._banner_current_section:
+            return  # 既に正しい配置
+
+        # 既存の親レイアウトから取り除く
+        parent_layout = banner.parentWidget().layout() if banner.parentWidget() else None
+        if parent_layout is not None:
+            for i in range(parent_layout.count()):
+                if parent_layout.itemAt(i) is not None and parent_layout.itemAt(i).widget() is banner:
+                    parent_layout.takeAt(i)
+                    break
+        banner.setParent(None)
+
+        # 配置先決定
+        if section == "OPTIONS_TOP":
+            if self._groups_layout is not None:
+                self._groups_layout.insertWidget(0, banner)
+                self._banner_current_section = section
+                return
+        else:
+            group = self._category_groups.get(section)
+            if group is not None:
+                inner = group.layout()
+                if inner is not None:
+                    inner.insertWidget(0, banner)
+                    self._banner_current_section = section
+                    return
+
+        # 配置先が解決できない場合は非表示扱い
+        banner.setVisible(False)
+        self._banner_current_section = None
 
     # ----------------------------------------------------------
     # UI セットアップ
@@ -2508,6 +2680,11 @@ class OptionsPage(QWidget):
         sig = getattr(self._attachment_pane, "business_requirement_generated", None)
         if sig is not None:
             sig.connect(self._on_business_requirement_generated)
+
+        # 添付ファイル件数/起点選択が変わったら要件バナーを再描画（接続漏れ対策）
+        files_sig = getattr(self._attachment_pane, "files_changed", None)
+        if files_sig is not None:
+            files_sig.connect(self._on_banner_input_changed)
 
     def _on_business_requirement_generated(self, rel_path: str) -> None:
         """AttachmentPane から要求定義書生成完了通知を受けて target_business を自動セット。"""

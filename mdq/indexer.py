@@ -346,6 +346,9 @@ class Chunk:
     # Float32 chunk embedding bytes from late chunking (v5, Q9=B). When
     # None, this chunk has no associated dense vector.
     embedding_bytes: bytes | None = None
+    # Per-chunk summary (v6) populated by the `pageindex` strategy. NULL
+    # for chunks produced by other strategies.
+    summary: str | None = None
 
     @property
     def chunk_id(self) -> str:
@@ -619,7 +622,7 @@ def index_one_file(repo_root: Path, file_path: Path, conn,
         c.start_line, c.end_line, c.token_est, c.text,
         json.dumps(c.tags, ensure_ascii=False) if c.tags else None,
         c.part_index, c.part_total, c.parent_chunk_id,
-        c.text_raw, c.embedding_bytes,
+        c.text_raw, c.embedding_bytes, c.summary,
     ) for c in chunks]
     _store.insert_chunks(conn, rows)
     return {"action": "indexed", "chunks": len(rows), "sha1": sha1}

@@ -26,6 +26,7 @@ class IndexRefreshThread(QThread):
         overlap_paragraphs: int | None = None,
         force: bool = False,
         semantic_options: dict | None = None,
+        pageindex_options: dict | None = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -35,6 +36,7 @@ class IndexRefreshThread(QThread):
         self._overlap_paragraphs = overlap_paragraphs
         self._force = bool(force)
         self._semantic_options = semantic_options
+        self._pageindex_options = pageindex_options
 
     def run(self) -> None:  # type: ignore[override]
         try:
@@ -45,6 +47,7 @@ class IndexRefreshThread(QThread):
                 overlap_paragraphs=self._overlap_paragraphs,
                 force=self._force,
                 semantic_options=self._semantic_options,
+                pageindex_options=self._pageindex_options,
                 progress_callback=self._emit_progress,
             )
             self.succeeded.emit(summary)

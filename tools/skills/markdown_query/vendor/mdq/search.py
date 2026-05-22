@@ -215,7 +215,8 @@ def search(conn, query: str, *, mode: str = "bm25",
            expand_neighbors: int = 0,
            merge_parts: bool = False,
            engine: str = "auto",
-           fusion_alpha: float | None = None) -> list[Hit]:
+           fusion_alpha: float | None = None,
+           pageindex_tree_depth: int = 0) -> list[Hit]:
     """Run a search against the indexed chunks.
 
     mode: 'bm25' | 'grep'
@@ -233,6 +234,11 @@ def search(conn, query: str, *, mode: str = "bm25",
         ``final = alpha * bm25_norm + (1 - alpha) * cosine_sim``. Set to
         ``1.0`` to disable blending (BM25 only); ``0.0`` for cosine only.
         Ignored entirely when no rows have a non-NULL chunk_embedding.
+    pageindex_tree_depth: when >0 and the DB has any non-NULL ``summary``
+        column (pageindex strategy), attach
+        ``expansion['tree_path']`` to each hit: the ordered chain from up
+        to N root-most ancestors (last) to the hit itself (first), each
+        node = ``{chunk_id, heading_path, summary}``. 0 disables.
     """
     import os
     from . import store as _store
@@ -266,7 +272,7 @@ def search(conn, query: str, *, mode: str = "bm25",
             use_fts5 = False  # silent fallback
 
     if use_fts5:
-        return _search_fts5(
+        hits_fts = _search_fts5(
             conn, query,
             top_k=top_k, max_tokens=max_tokens,
             path_globs=path_globs, tags=tags,
@@ -276,6 +282,9 @@ def search(conn, query: str, *, mode: str = "bm25",
             expand_neighbors=expand_neighbors,
             merge_parts=merge_parts,
         )
+        if pageindex_tree_depth > 0:
+            _apply_tree_path(conn, hits_fts, pageindex_tree_depth)
+        return hits_fts
 
     rows = _store.all_chunks(conn)
     if path_globs:
@@ -341,6 +350,8 @@ def search(conn, query: str, *, mode: str = "bm25",
     # T04: expansion (parent / neighbors / parts)
     _apply_expansion(conn, hits, include_parent, parent_depth,
                      expand_neighbors, merge_parts)
+    if pageindex_tree_depth > 0:
+        _apply_tree_path(conn, hits, pageindex_tree_depth)
     return hits
 
 
@@ -524,6 +535,79 @@ def _resolve_parent_chain(conn, hit: Hit, depth: int) -> list[dict]:
         seen.add(current_chunk_id)
         chain.append(parent_dict)
     return chain
+
+
+def _apply_tree_path(conn, hits: list[Hit], depth: int) -> None:
+    """Attach ``expansion['tree_path']`` for pageindex-style navigation.
+
+    For each hit, fetches up to ``depth`` ancestor heading chunks plus the
+    hit chunk itself, projecting ``(chunk_id, heading_path, summary)``.
+    The returned chain is ordered root-most first, hit last (i.e. natural
+    table-of-contents order). Only populates when the DB has a non-NULL
+    ``summary`` column on at least one node in the chain (pageindex
+    strategy); otherwise leaves ``expansion['tree_path']`` absent.
+    """
+    if depth <= 0 or not hits:
+        return
+    import sqlite3 as _sql
+    conn.row_factory = _sql.Row
+    # Detect whether the schema even has the summary column. SCHEMA v6+.
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(chunks)")}
+    except Exception:
+        return
+    if "summary" not in cols:
+        return
+    for h in hits:
+        # Reuse the parent-chain walker, then build a root-first chain
+        # with the hit node appended last.
+        chain_parents = _resolve_parent_chain(conn, h, depth)
+        # _resolve_parent_chain returns direct-parent first, root-most last.
+        # Reverse to get root-first.
+        ordered = list(reversed(chain_parents))
+        # Fetch summaries for the parent chunks (a single IN query).
+        ids = [n.get("chunk_id") for n in ordered if n.get("chunk_id")]
+        summaries: dict[str, str | None] = {}
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            try:
+                for row in conn.execute(
+                    f"SELECT chunk_id, summary FROM chunks "
+                    f"WHERE chunk_id IN ({placeholders})",
+                    ids,
+                ):
+                    summaries[row["chunk_id"]] = row["summary"]
+            except Exception:
+                summaries = {}
+        # Also fetch the hit's own summary.
+        hit_summary: str | None = None
+        try:
+            row = conn.execute(
+                "SELECT summary FROM chunks WHERE chunk_id = ?",
+                (h.chunk_id,),
+            ).fetchone()
+            hit_summary = row["summary"] if row else None
+        except Exception:
+            pass
+        # Build the projected nodes.
+        nodes: list[dict] = []
+        for n in ordered:
+            nodes.append({
+                "chunk_id": n.get("chunk_id"),
+                "heading_path": n.get("heading_path"),
+                "summary": summaries.get(n.get("chunk_id")),
+            })
+        nodes.append({
+            "chunk_id": h.chunk_id,
+            "heading_path": h.heading_path,
+            "summary": hit_summary,
+        })
+        # Skip when no node in the chain has a summary (non-pageindex DB).
+        if not any(n.get("summary") for n in nodes):
+            continue
+        if h.expansion is None:
+            h.expansion = {}
+        h.expansion["tree_path"] = nodes
 
 
 def _resolve_neighbors(conn, hit: Hit, n: int) -> list[dict]:

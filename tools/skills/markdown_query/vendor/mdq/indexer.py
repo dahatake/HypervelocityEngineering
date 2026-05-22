@@ -338,6 +338,17 @@ class Chunk:
     # itself (i.e. one level up in the heading hierarchy). Populated in
     # index_one_file after occurrence_index assignment.
     parent_chunk_id: str | None = None
+    # Original body before any contextualizer template was prepended (v5).
+    # When None, ``text`` is already the raw body. Populated by the
+    # `semantic_paragraph` strategy when contextualization is enabled
+    # (Q11=B default ON).
+    text_raw: str | None = None
+    # Float32 chunk embedding bytes from late chunking (v5, Q9=B). When
+    # None, this chunk has no associated dense vector.
+    embedding_bytes: bytes | None = None
+    # Per-chunk summary (v6) populated by the `pageindex` strategy. NULL
+    # for chunks produced by other strategies.
+    summary: str | None = None
 
     @property
     def chunk_id(self) -> str:
@@ -611,6 +622,7 @@ def index_one_file(repo_root: Path, file_path: Path, conn,
         c.start_line, c.end_line, c.token_est, c.text,
         json.dumps(c.tags, ensure_ascii=False) if c.tags else None,
         c.part_index, c.part_total, c.parent_chunk_id,
+        c.text_raw, c.embedding_bytes, c.summary,
     ) for c in chunks]
     _store.insert_chunks(conn, rows)
     return {"action": "indexed", "chunks": len(rows), "sha1": sha1}
@@ -635,7 +647,8 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
                 rebuild: bool = False, prune: bool = True,
                 max_chunk_chars: int = 0,
                 strategy: str = "heading",
-                overlap_paragraphs: int | None = None) -> dict:
+                overlap_paragraphs: int | None = None,
+                progress_callback=None) -> dict:
     """Walk Markdown files under roots and persist chunks.
 
     Returns a summary dict: {files_indexed, files_skipped, chunks_written,
@@ -645,6 +658,15 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
     roots but are no longer present on disk are removed from the store
     (chunks are removed via ON DELETE CASCADE). Files outside the given
     roots are left untouched.
+
+    ``progress_callback`` (optional, default None): when provided, called
+    after each file with the signature
+    ``Callable[[str, int, int], None]`` -- ``(message, current, total)``.
+    The callable must be thread-safe with respect to the caller's UI
+    thread; the indexer simply invokes it inline. ``total`` is the total
+    file count for the current walk (pre-computed); ``current`` is the
+    1-based index of the most-recently processed file. Callback exceptions
+    are caught and ignored so they cannot break indexing.
     """
     from . import store as _store  # local import to avoid cycles
 
@@ -655,7 +677,10 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
     # Normalise root list once for prune scoping.
     roots_list = [r.rstrip("/") for r in roots]
 
-    for path in iter_markdown(repo_root, roots_list):
+    # Pre-enumerate so progress_callback knows the total up front.
+    all_paths = list(iter_markdown(repo_root, roots_list))
+    total = len(all_paths)
+    for idx, path in enumerate(all_paths, start=1):
         rel = path.relative_to(repo_root).as_posix()
         seen.add(rel)
         result = index_one_file(repo_root, path, conn, rebuild=rebuild,
@@ -667,6 +692,11 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
             chunks_written += result["chunks"]
         elif result["action"] == "skipped":
             files_skipped += 1
+        if progress_callback is not None:
+            try:
+                progress_callback(rel, idx, total)
+            except Exception:  # noqa: BLE001 -- never propagate UI errors
+                pass
 
     pruned_files = 0
     pruned_chunks = 0

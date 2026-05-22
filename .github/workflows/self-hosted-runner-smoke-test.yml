@@ -1,0 +1,20 @@
+name: self-hosted-runner-smoke-test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, linux, x64, aca]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Runner info
+        run: |
+          echo "runner_name=$RUNNER_NAME"
+          echo "runner_os=$RUNNER_OS"
+          echo "runner_arch=$RUNNER_ARCH"
+      - name: Toolchain check
+        run: |
+          python3 --version
+          az version | head -n 1
+          jq --version

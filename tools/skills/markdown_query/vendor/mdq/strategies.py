@@ -17,20 +17,32 @@ Available strategies (see ``users-guide/skills-markdown-query.md``):
   paragraph/line/fence-aware splitter (``_subdivide``).
 - ``fixed_window``: ignores heading structure, splits the whole file body
   into fixed-size overlapping windows (RecursiveCharacterTextSplitter-style).
+- ``semantic_paragraph``: heading-bounded chunks subdivided by embedding
+  similarity breakpoints (Kamradt-modified). Requires the ``[semantic]``
+  extra; falls back to ``heading_recursive`` if embeddings are unavailable.
+- ``pageindex``: heading-bounded chunks (same boundaries as ``heading``)
+  plus a per-chunk ``summary`` field computed from the chunk body
+  (head N chars or first paragraph). LLM-free; stored in ``chunks.summary``
+  (SCHEMA v6). Designed for PageIndex-style table-of-contents navigation.
 
-Future: ``semantic_paragraph`` / ``sentence`` are reserved for Phase 2.
+Future: ``sentence`` (proposition-level) is reserved for Phase 3.
 """
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
 
-Strategy = Literal["heading", "heading_recursive", "fixed_window"]
+Strategy = Literal[
+    "heading", "heading_recursive", "fixed_window",
+    "semantic_paragraph", "pageindex",
+]
 
 ALL_STRATEGIES: tuple[Strategy, ...] = (
     "heading",
     "heading_recursive",
     "fixed_window",
+    "semantic_paragraph",
+    "pageindex",
 )
 DEFAULT_STRATEGY: Strategy = "heading"
 
@@ -45,6 +57,10 @@ HEADING_RECURSIVE_OVERLAP_PARAGRAPHS: int = 1
 # fixed_window: window size and overlap in characters.
 FIXED_WINDOW_CHARS: int = 1000
 FIXED_WINDOW_OVERLAP: int = 200
+
+# pageindex: per-chunk summary length and extraction mode.
+PAGEINDEX_SUMMARY_CHARS: int = 200
+PAGEINDEX_SUMMARY_MODE: Literal["head", "first_paragraph"] = "head"
 
 
 def normalize(strategy: str | None) -> Strategy:
@@ -87,6 +103,16 @@ def scan_file_for_strategy(
         )
     if strategy == "fixed_window":
         return _scan_fixed_window(repo_root, file_path)
+    if strategy == "semantic_paragraph":
+        from . import strategies_semantic as _sem
+        return _sem.scan_file_semantic_paragraph(
+            repo_root, file_path,
+            max_chars=(max_chunk_chars if max_chunk_chars > 0
+                       else _sem.SEMANTIC_MAX_CHARS),
+        )
+    if strategy == "pageindex":
+        from . import strategies_pageindex as _pi
+        return _pi.scan_file_pageindex(repo_root, file_path)
     return _indexer.scan_file(repo_root, file_path, max_chunk_chars=0)
 
 

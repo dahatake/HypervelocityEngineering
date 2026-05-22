@@ -64,8 +64,8 @@ Copilot / Custom Agent の **Context Window 消費を最小化** することを
 
 ## 4. 前提条件
 
-- `[mdq]` extras 導入済（`hve/setup-hve.ps1` / `hve/setup-hve.sh` を `-SkipMdq` /
-  `--skip-mdq` 無しで実行していれば既定で導入）。
+- `[mdq]` extras 導入済（`hve/setup-hve.ps1` / `hve/setup-hve.sh` を `-Minimal` /
+  `--minimal` 無しで実行していれば既定で導入）。
 - 索引が存在する（`python -m mdq index` を実行済）か、ベンチ実行時に
   `--ensure-index` を付ける。
 - トークナイザ:

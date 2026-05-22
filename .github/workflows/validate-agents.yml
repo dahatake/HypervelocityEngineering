@@ -1,0 +1,44 @@
+name: Validate Agents
+
+on:
+  push:
+    paths:
+      - '.github/agents/**'
+      - '.github/scripts/validate-agents.py'
+      - '.github/scripts/tests/test-validate-agents.py'
+      - '.github/scripts/add-frontmatter-version.py'
+      - '.github/workflows/validate-agents.yml'
+  pull_request:
+    paths:
+      - '.github/agents/**'
+      - '.github/scripts/validate-agents.py'
+      - '.github/scripts/tests/test-validate-agents.py'
+      - '.github/scripts/add-frontmatter-version.py'
+      - '.github/agents/CONTRIBUTING.md'
+      - '.github/workflows/validate-agents.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-agents:
+    name: Validate .agent.md frontmatter
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pytest
+        run: pip install pytest pyyaml --quiet
+
+      - name: Run unit tests for validate-agents
+        run: |
+          pytest .github/scripts/tests/test-validate-agents.py -v
+
+      - name: Validate .agent.md files
+        run: |
+          python3 .github/scripts/validate-agents.py
+
+      - name: Validate io_contract integrity
+        run: |
+          python3 .github/scripts/validate-io-contract.py

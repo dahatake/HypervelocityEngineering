@@ -1,0 +1,425 @@
+name: HVE Cloud Agent Orchestrator Dispatcher
+
+on:
+  issues:
+    types: [opened, labeled, closed]
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+# 注: HVE Cloud Agent Orchestrator 実行配下シグナルは Python 側で
+# `OrchestratorContext` 明示引数として伝播する方式へ移行済み。
+# `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      target: ${{ steps.detect.outputs.target }}
+      mode: ${{ steps.detect.outputs.mode }}
+      issue_number: ${{ steps.detect.outputs.issue_number }}
+      event_action: ${{ steps.detect.outputs.event_action }}
+      label_name: ${{ steps.detect.outputs.label_name }}
+      issue_labels: ${{ steps.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ steps.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ steps.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ steps.detect.outputs.foundry_mcp_integration }}
+      agentic_data_sources_hint: ${{ steps.detect.outputs.agentic_data_sources_hint }}
+      agentic_existing_design_diff_only: ${{ steps.detect.outputs.agentic_existing_design_diff_only }}
+      foundry_sku_fallback_policy: ${{ steps.detect.outputs.foundry_sku_fallback_policy }}
+      runner_type: ${{ steps.detect.outputs.runner_type }}
+    steps:
+      - name: Detect target orchestrator
+        id: detect
+        env:
+          ISSUE_LABELS: ${{ toJson(github.event.issue.labels.*.name) }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          AUTHOR_ASSOCIATION: ${{ github.event.issue.author_association }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+        run: |
+          python3 <<'PY'
+          import json, os, re
+
+          labels = json.loads(os.environ.get('ISSUE_LABELS', '[]') or '[]')
+          title = os.environ.get('ISSUE_TITLE', '')
+          action = os.environ.get('EVENT_ACTION', '')
+          label_name = os.environ.get('LABEL_NAME', '')
+          author_association = os.environ.get('AUTHOR_ASSOCIATION', '')
+          body = os.environ.get('ISSUE_BODY', '') or ''
+          allowed_associations = {'OWNER', 'MEMBER', 'COLLABORATOR'}
+
+          trigger_map = [
+              ('auto-app-selection',              'AAS'),
+              ('auto-app-detail-design-web',      'AAD-WEB'),
+              ('auto-app-dev-microservice-web',   'ASDW-WEB'),
+              ('auto-dataflow-design',               'ADFD'),
+              ('auto-dataflow-dev',                  'ADFDV'),
+              ('auto-ai-agent-design',            'AAG'),
+              ('auto-ai-agent-dev',               'AAGD'),
+              ('auto-app-documentation',          'ADOC'),
+              ('knowledge-management',            'AKM'),
+              # 後方互換
+              ('auto-app-detail-design',          'AAD-WEB'),
+              ('auto-app-dev-microservice',       'ASDW-WEB'),
+          ]
+          done_map = {
+              'aas:done':      'AAS',
+              'aad-web:done':  'AAD-WEB',
+              'asdw-web:done': 'ASDW-WEB',
+              'adfd:done':      'ADFD',
+              'adfdv:done':     'ADFDV',
+              'aag:done':      'AAG',
+              'aagd:done':     'AAGD',
+              'adoc:done':     'ADOC',
+              'akm:done':      'AKM',
+              # 後方互換
+              'aad:done':      'AAD-WEB',
+              'asdw:done':     'ASDW-WEB',
+          }
+          # qa-ready ラベルは Copilot アサインを保留する状態。
+          # auto-issue-qa-ready-transition.yml が qa-ready → ready の遷移を処理するため、
+          # ここでは冪等性のために明示的にスキップする（再初期化を防止）。
+          qa_ready_labels = {
+              'aas:qa-ready', 'aad:qa-ready', 'asdw:qa-ready',
+              'adfd:qa-ready', 'adfdv:qa-ready', 'aag:qa-ready',
+              'aagd:qa-ready', 'akm:qa-ready', 'aqod:qa-ready', 'adoc:qa-ready',
+              'aad-web:qa-ready', 'asdw-web:qa-ready',
+          }
+          closed_prefix_map = [
+              ('[AAD-WEB]', 'AAD-WEB'),
+              ('[ASDW-WEB]', 'ASDW-WEB'),
+              ('[AAG]', 'AAG'),
+              ('[AAGD]', 'AAGD'),
+              ('[ADOC]', 'ADOC'),
+              ('[AAS]', 'AAS'),
+              ('[ADFD]', 'ADFD'),
+              ('[ADFDV]', 'ADFDV'),
+              ('[AKM]', 'AKM'),
+              # 後方互換
+              ('[AAD]', 'AAD-WEB'),
+              ('[ASDW]', 'ASDW-WEB'),
+          ]
+
+          target = 'none'
+          mode = 'skip'
+          enable_agentic_retrieval = 'auto'
+          agentic_data_source_modes = 'indexer'
+          foundry_mcp_integration = 'true'
+          agentic_data_sources_hint = ''
+          agentic_existing_design_diff_only = 'false'
+          foundry_sku_fallback_policy = 'standard_allowed'
+          runner_type = 'github-hosted'
+
+          def section_text(pattern: str) -> str:
+              m = re.search(pattern, body, re.DOTALL)
+              if not m:
+                  return ''
+              value = m.group(1).strip()
+              if value == '_No response_':
+                  return ''
+              return value
+
+          enable_section = section_text(r"###\s*Agentic Retrieval を使用する\s*\n(.*?)(?=###|\Z)")
+          if 'しない' in enable_section:
+              enable_agentic_retrieval = 'no'
+          elif 'する' in enable_section:
+              enable_agentic_retrieval = 'yes'
+          elif '自動判定に従う' in enable_section:
+              enable_agentic_retrieval = 'auto'
+
+          data_source_section = section_text(r"###\s*データソース投入方式\s*\n(.*?)(?=###|\Z)")
+          if data_source_section:
+              has_indexer = bool(re.search(r"-\s*\[[xX]\]\s*Indexer\s*\(Pull\)", data_source_section))
+              has_push = bool(re.search(r"-\s*\[[xX]\]\s*Push\s*API", data_source_section))
+              selected = []
+              if has_indexer:
+                  selected.append('indexer')
+              if has_push:
+                  selected.append('push')
+              agentic_data_source_modes = ','.join(selected) if selected else 'indexer'
+
+          foundry_section = section_text(r"###\s*Microsoft Foundry 連携（Remote MCP Server）\s*\n(.*?)(?=###|\Z)")
+          if 'しない' in foundry_section:
+              foundry_mcp_integration = 'false'
+          elif 'する' in foundry_section:
+              foundry_mcp_integration = 'true'
+
+          agentic_data_sources_hint = section_text(r"###\s*想定データソース（任意）\s*\n(.*?)(?=###|\Z)")
+          agentic_data_sources_hint = agentic_data_sources_hint.replace('\r', ' ').replace('\n', ' / ')
+
+          diff_only_section = section_text(r"###\s*既存設計の差分更新\s*\n(.*?)(?=###|\Z)")
+          if diff_only_section:
+              agentic_existing_design_diff_only = 'true' if re.search(r"-\s*\[[xX]\]", diff_only_section) else 'false'
+
+          sku_fallback_section = section_text(r"###\s*Foundry モデル SKU フォールバック\s*\n(.*?)(?=###|\Z)")
+          if 'Global 必須' in sku_fallback_section:
+              foundry_sku_fallback_policy = 'global_required'
+          elif 'Standard 許容' in sku_fallback_section:
+              foundry_sku_fallback_policy = 'standard_allowed'
+
+          runner_section = section_text(r"###\s*実行 Runner\s*\n(.*?)(?=###|\Z)")
+          if 'Self-hosted' in runner_section or 'self-hosted' in runner_section:
+              runner_type = 'self-hosted'
+          elif 'GitHub Hosted' in runner_section or 'GitHub hosted' in runner_section:
+              runner_type = 'github-hosted'
+
+          if enable_agentic_retrieval == 'no':
+              foundry_mcp_integration = 'false'
+              foundry_sku_fallback_policy = 'standard_allowed'
+
+          if action == 'opened':
+            if author_association in allowed_associations:
+              if 'setup-labels' in labels:
+                target = 'SETUP_LABELS'
+                mode = 'initialize'
+              elif 'original-docs-review' in labels:
+                target = 'AQOD'
+                mode = 'initialize'
+              else:
+                for label, cand in trigger_map:
+                  if label in labels:
+                    target = cand
+                    mode = 'initialize'
+                    break
+          elif action == 'labeled':
+            if label_name == 'setup-labels':
+              target = 'SETUP_LABELS'
+              mode = 'initialize'
+            elif label_name == 'original-docs-review':
+              target = 'AQOD'
+              mode = 'initialize'
+            elif label_name in qa_ready_labels:
+              # qa-ready ラベルは auto-issue-qa-ready-transition.yml が処理するため明示的にスキップ
+              target = 'none'
+              mode = 'skip'
+            elif label_name in done_map:
+              target = done_map[label_name]
+              mode = 'state_transition'
+            else:
+              for trigger_label, cand in trigger_map:
+                if label_name == trigger_label:
+                  target = cand
+                  mode = 'initialize'
+                  break
+          elif action == 'closed':
+            for prefix, cand in closed_prefix_map:
+              if title.startswith(prefix):
+                target = cand
+                mode = 'closed'
+                break
+            if target == 'none':
+              for label, cand in trigger_map:
+                if label in labels:
+                  target = cand
+                  mode = 'closed'
+                  break
+
+          out = os.environ['GITHUB_OUTPUT']
+          with open(out, 'a', encoding='utf-8') as f:
+            f.write(f'target={target}\n')
+            f.write(f'mode={mode}\n')
+            f.write(f'issue_number={os.environ.get("ISSUE_NUMBER", "")}\n')
+            f.write(f'event_action={action}\n')
+            f.write(f'label_name={label_name}\n')
+            f.write('issue_labels=' + json.dumps(labels) + '\n')
+            f.write(f'enable_agentic_retrieval={enable_agentic_retrieval}\n')
+            f.write(f'agentic_data_source_modes={agentic_data_source_modes}\n')
+            f.write(f'foundry_mcp_integration={foundry_mcp_integration}\n')
+            f.write(f'agentic_data_sources_hint={agentic_data_sources_hint}\n')
+            f.write(f'agentic_existing_design_diff_only={agentic_existing_design_diff_only}\n')
+            f.write(f'foundry_sku_fallback_policy={foundry_sku_fallback_policy}\n')
+            f.write(f'runner_type={runner_type}\n')
+          PY
+
+  aad-web:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAD-WEB'
+    uses: ./.github/workflows/auto-app-detail-design-web-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  asdw-web:
+    needs: detect
+    if: needs.detect.outputs.target == 'ASDW-WEB'
+    uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}
+      agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}
+      foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}
+      agentic_data_sources_hint: ${{ needs.detect.outputs.agentic_data_sources_hint }}
+      agentic_existing_design_diff_only: ${{ needs.detect.outputs.agentic_existing_design_diff_only }}
+      foundry_sku_fallback_policy: ${{ needs.detect.outputs.foundry_sku_fallback_policy }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  aag:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAG'
+    uses: ./.github/workflows/auto-ai-agent-design-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  aagd:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAGD'
+    uses: ./.github/workflows/auto-ai-agent-dev-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  adoc:
+    needs: detect
+    if: needs.detect.outputs.target == 'ADOC'
+    uses: ./.github/workflows/auto-app-documentation-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  aas:
+    needs: detect
+    if: needs.detect.outputs.target == 'AAS'
+    uses: ./.github/workflows/auto-app-selection-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  adfd:
+    needs: detect
+    if: needs.detect.outputs.target == 'ADFD'
+    uses: ./.github/workflows/auto-dataflow-design-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  adfdv:
+    needs: detect
+    if: needs.detect.outputs.target == 'ADFDV'
+    uses: ./.github/workflows/auto-dataflow-dev-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  akm:
+    needs: detect
+    if: needs.detect.outputs.target == 'AKM'
+    uses: ./.github/workflows/auto-knowledge-management-reusable.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  setup_labels:
+    needs: detect
+    if: needs.detect.outputs.target == 'SETUP_LABELS'
+    uses: ./.github/workflows/setup-labels.yml
+    with:
+      trigger_source: issues
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+    secrets: inherit
+
+  aqod:
+    needs: detect
+    if: needs.detect.outputs.target == 'AQOD'
+    uses: ./.github/workflows/auto-aqod.yml
+    with:
+      mode: ${{ needs.detect.outputs.mode }}
+      issue_number: ${{ needs.detect.outputs.issue_number }}
+      event_action: ${{ needs.detect.outputs.event_action }}
+      label_name: ${{ needs.detect.outputs.label_name }}
+      issue_labels: ${{ needs.detect.outputs.issue_labels }}
+      runner_type: ${{ needs.detect.outputs.runner_type }}
+    secrets: inherit
+
+  suggest-next:
+    needs: detect
+    if: |
+      needs.detect.outputs.mode == 'state_transition'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Suggest next workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ needs.detect.outputs.issue_number }}
+          COMPLETED_WF: ${{ needs.detect.outputs.target }}
+        run: |
+          python3 <<'PY'
+          import os, subprocess
+
+          chain_map = {
+              "AAS":      [("AAD-WEB", "Web App Design"), ("ADFD", "Dataflow Design"), ("AAG", "AI Agent Design")],
+              "AAD-WEB":  [("ASDW-WEB", "Web App Dev & Deploy")],
+              "ADFD":      [("ADFDV", "Dataflow Dev & Deploy")],
+              "AAG":      [("AAGD", "AI Agent Dev & Deploy")],
+          }
+
+          completed = os.environ.get("COMPLETED_WF", "")
+          issue = os.environ.get("ISSUE_NUMBER", "")
+          suggestions = chain_map.get(completed, [])
+
+          if not suggestions or not issue:
+              raise SystemExit(0)
+
+          lines = [f"## ✅ {completed} 完了 — 次のワークフロー候補\n"]
+          for wf_id, name in suggestions:
+              lines.append(f"- **{name}** (`{wf_id}`): Issue Template から `{wf_id}` 対応テンプレートで新しい Issue を作成してください")
+          lines.append("\n> ⚠️ 各ワークフローのパラメータ（APP-ID, リソースグループ等）は個別に指定が必要です。")
+
+          body = "\n".join(lines)
+          subprocess.run(["gh", "issue", "comment", issue, "--body", body], check=True)
+          PY

@@ -1,6 +1,6 @@
 """hve.gui.main_window の Phase D 統合 smoke test。
 
-Dock 統合（FileTreePanel / MarkdownPreviewPanel / ActivityBar / 双方向トグル）が
+Dock 統合（FileTreePanel / MarkdownPreviewPanel / TopFileTogglesBar / 双方向トグル）が
 MainWindow に正しく組み込まれていること、および既存 _stack 動作に影響しない
 ことを確認する。
 """
@@ -54,14 +54,15 @@ def main_window(qapp, monkeypatch):
     win.deleteLater()
 
 
-def test_main_window_has_activity_bar_and_docks(main_window) -> None:
-    assert main_window._activity_bar is not None
+def test_main_window_has_top_file_toggles_and_docks(main_window) -> None:
+    assert main_window._top_file_toggles is not None
     assert main_window._file_tree_dock is not None
     assert main_window._preview_dock is not None
 
 
 def test_dock_binders_created(main_window) -> None:
-    assert len(main_window._dock_binders) == 2
+    # TopFileTogglesBar.bind() が 2 本のバインダを作る
+    assert len(main_window._top_file_toggles._binders) == 2
 
 
 def test_docks_initially_visible_by_default(main_window) -> None:
@@ -75,11 +76,11 @@ def test_docks_initially_visible_by_default(main_window) -> None:
     assert main_window._preview_dock.isHidden() is True
 
 
-def test_activity_bar_buttons_match_dock_visibility(main_window) -> None:
+def test_top_file_toggles_match_dock_visibility(main_window) -> None:
     """初期状態でトグルボタンの checked が Dock visibility と一致する。"""
-    assert main_window._activity_bar.btn_explorer.isChecked() is True
+    assert main_window._top_file_toggles.btn_explorer.isChecked() is True
     # Wave C T09: Preview の既定は非表示
-    assert main_window._activity_bar.btn_preview.isChecked() is False
+    assert main_window._top_file_toggles.btn_preview.isChecked() is False
 
 
 def test_file_selected_routes_to_preview(main_window, qapp, tmp_path: Path) -> None:
@@ -102,9 +103,9 @@ def test_file_selected_auto_shows_minimized_preview(main_window, qapp, tmp_path:
     main_window._file_tree_dock.file_selected.emit(md)
     qapp.processEvents()
 
-    # Dock が show され、ActivityBar ボタンも追随する
+    # Dock が show され、TopFileTogglesBar ボタンも追随する
     assert main_window._preview_dock.isHidden() is False
-    assert main_window._activity_bar.btn_preview.isChecked() is True
+    assert main_window._top_file_toggles.btn_preview.isChecked() is True
     assert main_window._preview_dock._current_path == md
 
 

@@ -1,0 +1,64 @@
+# .github/skills/_evals/adversarial-review.eval.yaml
+#
+# Skill 発動テストケース
+# - 各テストケースは「この入力が来たとき、このSkillが発動すべきか/すべきでないか」を定義
+# - CI や手動レビューでの Skill ルーティング検証に使用
+
+skill: adversarial-review
+skill_path: .github/skills/harness/adversarial-review/SKILL.md
+description: 成果物の敵対的レビューを実行するスキル。5つの検証軸で問題を発見し、Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。
+
+test_cases:
+  # --- 正のテストケース（このSkillが発動すべき入力） ---
+  - id: explicit-adversarial-review-label
+    input: "adversarial-review ラベルが付与された PR の成果物レビューを実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "5軸検証（目的適合性/内容の妥当性/整合性/品質・運用性/根拠性・不確実性管理）の結果が出力されること"
+      - type: content_contains
+        detail: "Critical/Major/Minor の重大度分類と PASS/FAIL 判定が含まれること"
+    reason: "SKILL.md の実施条件に 'adversarial-review ラベルが付与されている場合のみ実施' と明示されており、ラベル付与はトリガー条件に該当する"
+
+  - id: explicit-comment-flag-review
+    input: "<!-- adversarial-review: true --> が PR body に記載されています。成果物を5軸でレビューしてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "5軸の敵対的レビュー結果が出力されること"
+      - type: content_contains
+        detail: "PASS または FAIL の最終判定が記載されること"
+    reason: "SKILL.md の実施条件に 'Issue/PR body に <!-- adversarial-review: true --> を記載している場合のみ実施' と明示されている"
+
+  - id: pre-production-deploy-review
+    input: "本番デプロイ前の最終チェックとして、adversarial-review: true を指定したので成果物をレビューしてください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "設計レビューおよびコードレビューの5軸評価が実行されること"
+    reason: "SKILL.md の When to Activate に '本番デプロイ前の最終チェック' が含まれており、adversarial-review: true 指定と組み合わせることでトリガーされる"
+
+  # --- 負のテストケース（このSkillが発動すべきでない入力） ---
+  - id: no-explicit-trigger-with-implementation
+    input: "実装が完了しました。PR にコードがコミットされています。"
+    expected_trigger: false
+    expected_skill: harness-verification-loop
+    reason: "SKILL.md の誤適用防止セクションに '実装ファイルが含まれていても、ユーザーが実施条件を明示しない限り敵対的レビューは不要' と明示されている。検証には harness-verification-loop を使用する。"
+
+  - id: auto-context-review-only
+    input: "<!-- auto-context-review: true --> が設定されています。レビューを行ってください。"
+    expected_trigger: false
+    expected_skill: task-questionnaire
+    reason: "SKILL.md の誤適用防止セクションに 'auto-context-review は敵対的レビューの実行条件に含めない' と明示されており、auto-context-review のみでは発動しない。"
+
+  - id: plan-only-split-mode
+    input: "SPLIT_REQUIRED と判定されたので、plan.md と subissues.md のみ作成した PR です。adversarial-review: true は指定されていません。"
+    expected_trigger: false
+    expected_skill: null
+    reason: "SKILL.md の例外セクションに '§2.3 分割モード（Plan-Only）の場合は本スキルを省略する' と明示されており、adversarial-review 未指定の分割モードPRは対象外"
+
+  # --- エッジケース ---
+  - id: ambiguous-review-request-without-flag
+    input: "コードレビューをしてほしいです。品質を確認してください。"
+    expected_trigger: false
+    reason: "SKILL.md の実施条件に 'adversarial-review ラベルまたは <!-- adversarial-review: true --> の明示が必要' とあり、一般的なレビュー依頼では発動しない。ユーザーが明示的に指定した場合のみ発動するため。"

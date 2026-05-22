@@ -1,0 +1,1508 @@
+name: AAS Orchestrator
+
+# auto-app-selection ラベル付き Issue の opened/labeled/closed イベントで起動
+#
+# 設計メモ:
+#   - Issue Template の labels: でラベルを付与した場合、GitHub は issues.labeled イベントを
+#     発火せず issues.opened のみを発火する（GitHub Community Discussion #26753）。
+#   - そのため opened イベントも監視し、ジョブレベル if で対象ラベルを持つ Issue のみ実行する。
+#   - opened イベント時は github.event.label が null のため LABEL_NAME は空文字列になる。
+#   - 既存の冪等化ガード（aas:initialized チェック）により、opened + labeled が同時発火しても安全。
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
+
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  check_qa_skip:
+    uses: ./.github/workflows/check-auto-qa-skip-reusable.yml
+    with:
+      issue_number: ${{ fromJSON(inputs.issue_number) }}
+      issue_labels: ${{ inputs.issue_labels }}
+      issue_body: ''
+    secrets: inherit
+
+  orchestrate:
+    needs: check_qa_skip
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
+    timeout-minutes: 360
+    concurrency:
+      group: aas-orchestrator-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      SKIP_AUTO_QA: ${{ needs.check_qa_skip.outputs.skip_auto_qa }}
+      SKIP_AUTO_QA_REASON: ${{ needs.check_qa_skip.outputs.skip_reason }}
+
+    steps:
+      # ----------------------------------------------------------------
+      # 1. 実行ゲート: auto-app-selection ラベルあり + aas:initialized なし
+      # ----------------------------------------------------------------
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_LABELS: ${{ inputs.issue_labels }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: "${{ inputs.label_name }}"
+        run: |
+          set -euo pipefail
+
+          # Issue の情報を API 経由で一括取得（YAML 展開問題を回避・API 呼び出し回数を削減）
+          if ! ISSUE_RESPONSE=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}"); then
+            echo "WARNING: Issue API 取得に失敗しました。スキップします。" >&2
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ISSUE_TITLE=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          ISSUE_LABELS=$(echo "${ISSUE_RESPONSE}" | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          export ISSUE_TITLE
+          echo "リアルタイムラベル: ${ISSUE_LABELS}"
+
+          # labeled イベントの処理
+          if [[ "${EVENT_ACTION}" == "labeled" ]]; then
+            if [[ "${LABEL_NAME}" == "aas:done" ]]; then
+              if [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]]; then
+                echo "Sub Issue ([AAS] タイトル) への aas:done 付与を検知: state_transition に進みます。"
+                echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+                echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+                exit 0
+              else
+                echo "Root Issue への aas:done 付与を検知: ワークフローはスキップします。"
+                echo "mode=skip" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            elif [[ "${LABEL_NAME}" == "auto-app-selection" ]]; then
+              # auto-app-selection ラベルが後から付与された場合:
+              # 下の has_aas / has_init チェックが未初期化かどうかを判定し、未初期化なら initialize に進む。
+              # 既に aas:initialized 済みの場合は has_init チェックで skip になる。
+              echo "auto-app-selection labeled イベント: initialize ゲートチェックへ進みます。"
+            else
+              echo "aas:done / auto-app-selection 以外の labeled イベント（${LABEL_NAME}）。スキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # closed イベントの処理
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            # [AAS] Sub Issue のみ処理
+            if [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]]; then
+              # 既に aas:done がついている場合は closed イベントで再判定に進む
+              has_done=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'aas:done' in labels else 'false')
+          PY
+              )
+              if [[ "${has_done}" == "true" ]]; then
+                # aas:done labeled 時は Issue 未クローズのため自動クローズ判定が失敗する。
+                # closed イベントで再度コンテナ自動クローズ判定のみ実行する。
+                echo "aas:done ラベル済み + closed イベント: コンテナ自動クローズ判定のみ実行。"
+                echo "mode=container_close_check" >> "$GITHUB_OUTPUT"
+                echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              # aas:done がない場合は closed イベントから直接 state_transition を起動
+              echo "mode=state_transition" >> "$GITHUB_OUTPUT"
+              echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+              exit 0
+            else
+              echo "closed イベント: [AAS] Sub Issue 以外のためスキップ。"
+              echo "mode=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # [AAS] プレフィックスを持つ Sub Issue は初期化をスキップ
+          # （Sub Issue の opened イベントによる再帰的な初期化を防止）
+          if [[ "${ISSUE_TITLE}" =~ ^\[AAS\] ]]; then
+            echo "[AAS] Sub Issue のため初期化対象外。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # auto-app-selection ラベルを持つか確認
+          has_aas=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          print('true' if 'auto-app-selection' in labels else 'false')
+          PY
+          )
+
+          if [[ "${has_aas}" != "true" ]]; then
+            echo "auto-app-selection ラベルなし。スキップ。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # aas:initialized / aas:ready / aas:running / aas:done / aas:blocked
+          # のいずれかを持つ場合はスキップ（冪等化・Sub Issue への誤再初期化防止）
+          has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
+          import sys, json
+          labels = json.load(sys.stdin)
+          skip_labels = {'aas:initialized', 'aas:ready', 'aas:running', 'aas:done', 'aas:blocked', 'aas:qa-ready'}
+          print('true' if any(l in skip_labels for l in labels) else 'false')
+          PY
+          )
+
+          if [[ "${has_init}" == "true" ]]; then
+            echo "aas:* ラベル済み。スキップ（冪等化）。"
+            echo "mode=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "mode=initialize" >> "$GITHUB_OUTPUT"
+          echo "issue_number=${ISSUE_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: ゲート結果のデバッグ出力
+        if: always()
+        env:
+          GATE_MODE: ${{ steps.gate.outputs.mode }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+        run: |
+          echo "::notice::ゲート判定結果: mode=${GATE_MODE}, event=${EVENT_ACTION}, issue=#${ISSUE_NUMBER}"
+          if [[ "${GATE_MODE}" == "skip" ]]; then
+            echo "::notice::Issue #${ISSUE_NUMBER} のゲートチェックは skip でした（event: ${EVENT_ACTION}）"
+          fi
+
+      # ----------------------------------------------------------------
+      # 2. ラベル bootstrap
+      # ----------------------------------------------------------------
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+
+          # ラベル作成関数（インライン定義: checkout 前でも動作可能にするため）
+          create_label() {
+            local name="$1" color="$2" desc="${3:-}"
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/labels" \
+              -d "{\"name\":\"${name}\",\"color\":\"${color}\",\"description\":\"${desc}\"}")
+            case "${http_code}" in
+              201) echo "ラベル作成: ${name}" ;;
+              422) echo "ラベル既存（スキップ）: ${name}" ;;
+              *)   echo "ラベル作成エラー: ${name} HTTP ${http_code}" ;;
+            esac
+            sleep 1
+          }
+
+          create_label "auto-app-selection" "0E8A16" "run app selection workflow (usecase to app list and architecture recommendation)"
+          create_label "aas:initialized"    "C5DEF5" ""
+          create_label "aas:ready"          "0075CA" ""
+          create_label "aas:running"        "E4E669" ""
+          create_label "aas:done"           "0E8A16" ""
+          create_label "aas:blocked"        "D73A4A" ""
+          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "auto-qa"             "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
+          create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
+
+      # ----------------------------------------------------------------
+      # 2.5 aas:initialized 即時付与（二重実行防止）
+      # ----------------------------------------------------------------
+      - name: 即時 aas:initialized 付与（二重実行防止）
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          echo "二重実行防止のため aas:initialized を即座に付与します..."
+          success=0
+          for attempt in 1 2 3; do
+            echo "aas:initialized 付与試行 ${attempt}/3..."
+            if curl -sf -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aas:initialized"]}' > /dev/null; then
+              success=1
+              break
+            fi
+            echo "WARN: aas:initialized の付与に失敗しました。リトライします..." >&2
+            sleep 2
+          done
+          if [[ "${success}" -ne 1 ]]; then
+            echo "ERROR: aas:initialized の付与に失敗しました（3回試行後も失敗）。" >&2
+            exit 1
+          fi
+          echo "aas:initialized を Issue #${ISSUE_NUMBER} に付与しました。"
+
+      # ----------------------------------------------------------------
+      # 2.6. リポジトリ checkout（state_transition で auto-close.sh を利用するため）
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------
+      # 3. Issue body パース & Step Issue 生成
+      # ----------------------------------------------------------------
+      - name: 成果物ディレクトリの事前作成
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          # 成果物ディレクトリの事前作成
+          mkdir -p docs/catalog
+          mkdir -p docs/dataflow
+          mkdir -p docs/dataflow/apps
+          mkdir -p docs/services
+          mkdir -p docs/screen
+          mkdir -p docs/test-specs
+          mkdir -p docs/agent
+          mkdir -p docs/azure
+          mkdir -p docs/usecase
+
+      - name: Issue 初期化とStep Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
+          ISSUE_BODY=$(curl -s \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          # ---- ユーティリティ関数 ----
+
+          # リトライ付き curl（共通ライブラリ）
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/github-api.sh"
+
+          # Issue 作成
+          create_issue() {
+            local title="$1"
+            local body="$2"
+            local labels_json="$3"
+            local data
+            data=$(python3 - "${title}" "${body}" "${labels_json}" <<'PY'
+          import json, sys
+          title = sys.argv[1]
+          body  = sys.argv[2]
+          labels = json.loads(sys.argv[3])
+          print(json.dumps({'title': title, 'body': body, 'labels': labels}))
+          PY
+          )
+            api_call POST "https://api.github.com/repos/${REPO}/issues" "${data}"
+          }
+
+          # Sub Issue 紐付け
+          link_sub_issue() {
+            local parent_num="$1"
+            local child_id="$2"
+            local data="{\"sub_issue_id\":${child_id}}"
+            if ! api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${parent_num}/sub_issues" \
+              "${data}" > /dev/null 2>&1; then
+              echo "::warning::link_sub_issue 失敗: parent=#${parent_num} child_id=${child_id}"
+            fi
+            sleep 1
+          }
+
+          # ラベル付与
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          # アサイン
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
+
+          # コメント投稿
+          post_comment() {
+            local issue_num="$1"
+            local comment_body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${comment_body}")
+            if ! api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null; then
+              echo "::warning::post_comment 失敗: issue_num=${issue_num}"
+            fi
+            sleep 1
+          }
+
+          # Issue body から Custom Agent 名を抽出
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          # ---- Issue body パース ----
+          PARSED=$(python3 - <<'PYEOF'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+
+          # ブランチ名抽出（input フォームの値）
+          branch = "main"
+          m = re.search(r"###\s*対象ブランチ\s*\n+(.+)", body)
+          if m:
+              branch = m.group(1).strip()
+              if not branch or branch == "_No response_":
+                  branch = "main"
+
+          # 実行するステップからスキップ対象を検出
+          # Issue Template は「実行するステップ」セクションで、
+          # チェック済み [x] = 実行、未チェック [ ] = スキップ
+          skip_steps = set()
+          exec_section = re.search(
+              r"###\s*実行するステップ\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if exec_section:
+              section_text = exec_section.group(1)
+              # 全 Step 番号を抽出（チェック状態問わず）
+              all_items = re.findall(
+                  r"-\s*\[[ xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              all_steps = set(all_items)
+              # チェック済み（実行対象）の Step 番号を抽出
+              checked_items = re.findall(
+                  r"-\s*\[[xX]\]\s*Step\.(\d+(?:\.\d+)?)",
+                  section_text
+              )
+              exec_steps = set(checked_items)
+              # スキップ = 全体 - 実行対象
+              skip_steps = all_steps - exec_steps
+              # フォールバック: 全チェックなし = 全 Step 実行（スキップなし）
+              # 運用ドキュメント・Issue Template の説明「未選択で全 Step 実行」に準拠
+              if not exec_steps and all_steps:
+                  skip_steps = set()
+
+          # 追加コメント抽出
+          additional_comment = ""
+          m = re.search(r"###\s*追加コメント[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
+          if m:
+              additional_comment = m.group(1).strip()
+              if additional_comment == "_No response_":
+                  additional_comment = ""
+
+          # レビュー設定の抽出（統合済み: セルフレビュー + 内容のレビュー）
+          # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_context_review = False
+          review_section = re.search(
+              r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if review_section:
+              section_text = review_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
+          auto_qa = False
+          qa_section = re.search(
+              r"###\s*質問票設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if qa_section:
+              section_text = qa_section.group(1)
+              if re.search(r"スキップする", section_text):
+                  # 旧形式（後方互換）: 未チェック = スキップしない = 有効
+                  auto_qa = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+              else:
+                  # 新形式: チェック → 有効
+                  auto_qa = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # PR完全自動化設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
+          auto_merge = False
+          merge_section = re.search(
+              r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)",
+              body, re.DOTALL
+          )
+          if merge_section:
+              section_text = merge_section.group(1)
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+
+          # 自己改善設定
+          enable_self_improve = False
+          si_section = re.search(r"###\s*自己改善ループ設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+          if si_section:
+              enable_self_improve = bool(re.search(r"-\s*\[[xX]\]", si_section.group(1)))
+
+          self_improve_max_iterations = "3"
+          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
+          if m:
+              val = m.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_max_iterations = n.group(1)
+
+          self_improve_quality_threshold = "80"
+          q = re.search(r"###\s*自己改善\s*品質スコア閾値.*?\n+(.+)", body)
+          if q:
+              val = q.group(1).strip()
+              n = re.match(r"(\d+)", val)
+              if n:
+                  self_improve_quality_threshold = n.group(1)
+
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
+          print(json.dumps(result))
+          PYEOF
+          )
+
+          BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
+          SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
+          ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
+          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
+          if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
+            echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
+            AUTO_QA="false"
+          fi
+          AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
+          ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
+          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
+          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
+          MODEL_RAW=$(extract_model "${ISSUE_BODY}")
+          SELECTED_MODEL=$(resolve_model "${MODEL_RAW}")
+          REVIEW_MODEL_RAW=$(extract_review_model "${ISSUE_BODY}")
+          SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
+          QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
+          SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
+          export SELECTED_MODEL SELECTED_REVIEW_MODEL SELECTED_QA_MODEL
+
+          echo "対象ブランチ: ${BRANCH}"
+          echo "スキップ Steps: ${SKIP_STEPS}"
+          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "質問票 (auto-qa): ${AUTO_QA}"
+          echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
+
+          # ---- Root Issue body からスキップ対象のステップ行を除去して更新 ----
+          if [[ -n "${SKIP_STEPS}" ]]; then
+            echo "Root Issue body から未チェックのステップを除去します..."
+
+            PATCH_JSON_FILE=$(mktemp)
+
+            python3 - "${SKIP_STEPS}" "${PATCH_JSON_FILE}" <<'PYBODY'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          skip_steps_str = sys.argv[1]
+          output_file = sys.argv[2]
+
+          skip_steps = set(skip_steps_str.split()) if skip_steps_str.strip() else set()
+
+          if skip_steps:
+              lines = body.split('\n')
+              new_lines = []
+              for line in lines:
+                  m = re.match(r'^\s*-\s*\[[ ]\]\s*Step\.(\d+(?:\.\d+)?)\b', line)
+                  if m and m.group(1) in skip_steps:
+                      continue
+                  new_lines.append(line)
+
+              cleaned = []
+              blank_count = 0
+              for line in new_lines:
+                  if line.strip() == '':
+                      blank_count += 1
+                      if blank_count <= 2:
+                          cleaned.append(line)
+                  else:
+                      blank_count = 0
+                      cleaned.append(line)
+
+              body = '\n'.join(cleaned)
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYBODY
+
+            api_call PATCH \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+              "$(cat "${PATCH_JSON_FILE}")" > /dev/null \
+              && echo "Root Issue #${ROOT_ISSUE} の body を更新しました（未チェックのステップ行を除去）。" \
+              || echo "WARNING: Root Issue body の更新に失敗しました。処理を続行します。" >&2
+
+            rm -f "${PATCH_JSON_FILE}"
+
+            _refreshed=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' 2>/dev/null) \
+              && ISSUE_BODY="${_refreshed}" && export ISSUE_BODY \
+              || echo "WARNING: ISSUE_BODY の再取得に失敗しました。" >&2
+          else
+            echo "全ステップ実行のため Root Issue body の更新は不要です。"
+          fi
+
+          # ---- Root Issue に auto-context-review タグを埋め込み ----
+          REVIEW_TAG_FILE=$(mktemp)
+          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          import sys, os, re, json
+
+          body = os.environ.get("ISSUE_BODY", "")
+          auto_context_review = sys.argv[1]
+          auto_merge = sys.argv[2]
+          branch = sys.argv[3]
+          enable_si = sys.argv[4]
+          si_max_iter = sys.argv[5]
+          si_quality_threshold = sys.argv[6]
+          output_file = sys.argv[7]
+
+          tags = [
+              ("auto-context-review", auto_context_review),
+              ("auto-merge", auto_merge),
+              ("branch", branch),
+              ("enable-self-improve", enable_si),
+              ("self-improve-max-iterations", si_max_iter),
+              ("self-improve-quality-threshold", si_quality_threshold),
+          ]
+
+          for key, value in tags:
+              tag = f"<!-- {key}: {value} -->"
+              pat = re.compile(rf"<!--\s*{re.escape(key)}\s*:[^>]*-->")
+              if pat.search(body):
+                  body = pat.sub(tag, body, count=1)
+              else:
+                  body = body.rstrip() + "\n" + tag + "\n"
+
+          with open(output_file, 'w', encoding='utf-8') as f:
+              json.dump({'body': body}, f, ensure_ascii=False)
+          PYMERGE
+
+          api_call PATCH \
+            "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
+            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve タグを埋め込みました。" \
+            || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
+
+          rm -f "${REVIEW_TAG_FILE}"
+
+          # aas:initialized は step 2.5 で既に付与済みのため、ここでの再付与は不要。
+          # （Wave 4: 二重 API コール削減）
+
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-context-review"
+            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_QA}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-qa"
+            echo "Root Issue #${ROOT_ISSUE} に auto-qa ラベルを付与しました。"
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "auto-approve-ready"
+            echo "Root Issue #${ROOT_ISSUE} に auto-approve-ready ラベルを付与しました。"
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "model/${SELECTED_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "review-model/${SELECTED_REVIEW_MODEL}" || true
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
+          fi
+
+          # ---- Step Issue 生成 ----
+          S1_NUM="" S1_ID=""
+          S2_NUM="" S2_ID=""
+          S31_NUM="" S31_ID=""
+          S32_NUM="" S32_ID=""
+          S4_NUM="" S4_ID=""
+          S5_NUM="" S5_ID=""
+          S6_NUM="" S6_ID=""
+          S7_NUM="" S7_ID=""
+
+          # 各 Step Issue の body 先頭に埋め込む共通メタ情報
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- review-model: %s -->\n<!-- qa-model: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${SELECTED_REVIEW_MODEL}" "${SELECTED_QA_MODEL}")
+
+          # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
+          else
+            ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
+          fi
+
+          skip_step() { echo " ${SKIP_STEPS} " | grep -q " $1 "; }
+
+          # テンプレートからボディを生成する関数
+          # テンプレートファイルを読み込み、プレースホルダを展開する。
+          # 引数: $1=ステップ番号 (例: "3.1"), $2=ROOT_REF, $3=ADDITIONAL_SECTION
+          render_aas_step_body() {
+            local step_num="$1"
+            local root_ref_arg="$2"
+            local additional_section_arg="$3"
+            local tpl_path="${GITHUB_WORKSPACE}/.github/scripts/templates/aas/step-${step_num}.md"
+            python3 - "${tpl_path}" "${root_ref_arg}" "${additional_section_arg}" <<'PY'
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          if not p.exists():
+              raise FileNotFoundError(f"テンプレートが見つかりません: {sys.argv[1]}")
+          body = p.read_text(encoding='utf-8')
+          body = body.replace('{root_ref}', sys.argv[2])
+          body = body.replace('{additional_section}', sys.argv[3])
+          body = body.replace('{completion_instruction}', '- 完了時に自身に `aas:done` ラベルを付与すること')
+          print(body)
+          PY
+          }
+
+          # Step Issue に付与するラベルセット
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-app-selection","auto-context-review","auto-qa"]'
+          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-app-selection","auto-context-review"]'
+          elif [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-app-selection","auto-qa"]'
+          else
+            STEP_LABELS='["auto-app-selection"]'
+          fi
+
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-approve-ready"]')
+          fi
+          if [[ -n "${SELECTED_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg ml "model/${SELECTED_MODEL}" '. + [$ml]')
+          fi
+          if [[ -n "${SELECTED_REVIEW_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg rml "review-model/${SELECTED_REVIEW_MODEL}" '. + [$rml]')
+          fi
+          if [[ -n "${SELECTED_QA_MODEL}" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c --arg qml "qa-model/${SELECTED_QA_MODEL}" '. + [$qml]')
+          fi
+
+          # ---- Step.1 ----
+          if ! skip_step "1"; then
+            BODY_S1=$(render_aas_step_body "1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.1: アプリケーションリストの作成" \
+              "${BODY_S1}" \
+              "${STEP_LABELS}")
+            S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S1_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.1 作成: #${S1_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.2 ----
+          if ! skip_step "2"; then
+            BODY_S2=$(render_aas_step_body "2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.2: ソフトウェアアーキテクチャの推薦" \
+              "${BODY_S2}" \
+              "${STEP_LABELS}")
+            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2 作成: #${S2_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.3.1 ----
+          if ! skip_step "3.1"; then
+            BODY_S31=$(render_aas_step_body "3.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.3.1: ドメイン分析" \
+              "${BODY_S31}" \
+              "${STEP_LABELS}")
+            S31_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S31_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.1 作成: #${S31_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.3.2 ----
+          if ! skip_step "3.2"; then
+            BODY_S32=$(render_aas_step_body "3.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.3.2: サービス一覧抽出" \
+              "${BODY_S32}" \
+              "${STEP_LABELS}")
+            S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S32_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.3.2 作成: #${S32_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4 ----
+          if ! skip_step "4"; then
+            BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.4: データモデル" \
+              "${BODY_S4}" \
+              "${STEP_LABELS}")
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.5 ----
+          if ! skip_step "5"; then
+            BODY_S5=$(render_aas_step_body "5" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.5: データカタログ作成" \
+              "${BODY_S5}" \
+              "${STEP_LABELS}")
+            S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S5_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5 作成: #${S5_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.6 ----
+          if ! skip_step "6"; then
+            BODY_S6=$(render_aas_step_body "6" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.6: サービスカタログ" \
+              "${BODY_S6}" \
+              "${STEP_LABELS}")
+            S6_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S6_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6 作成: #${S6_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.7 ----
+          if ! skip_step "7"; then
+            BODY_S7=$(render_aas_step_body "7" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.7: テスト戦略書" \
+              "${BODY_S7}" \
+              "${STEP_LABELS}")
+            S7_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S7_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.7 作成: #${S7_NUM}"
+            sleep 3
+          fi
+
+          # ---- Sub Issue 紐付け ----
+          echo "Sub Issue 紐付けを開始します..."
+          [[ -n "${S1_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
+          [[ -n "${S2_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S31_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S31_ID}"; echo "Root → Step.3.1 紐付け完了"; }
+          [[ -n "${S32_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S32_ID}"; echo "Root → Step.3.2 紐付け完了"; }
+          [[ -n "${S4_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S5_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
+          [[ -n "${S6_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S6_ID}"; echo "Root → Step.6 紐付け完了"; }
+          [[ -n "${S7_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S7_ID}"; echo "Root → Step.7 紐付け完了"; }
+
+          # ---- 最初に実行すべき Step を起動 ----
+          if [[ -n "${S1_NUM}" ]]; then
+            if [[ "${AUTO_QA}" == "true" ]]; then
+              # auto_qa=true の場合: aas:qa-ready を付与し、Copilot アサインを保留
+              add_label "${S1_NUM}" "aas:qa-ready"
+              echo "Step.1 (#${S1_NUM}) に aas:qa-ready を付与しました（QA 完了待ち）。Copilot アサインは QA 回答後に実行されます。"
+            else
+              add_label "${S1_NUM}" "aas:ready"
+              CA=$(extract_custom_agent "${BODY_S1}")
+              if assign_copilot "${S1_NUM}" "${CA}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
+                add_label "${S1_NUM}" "aas:running"
+                echo "Step.1 に copilot アサイン + aas:running 付与完了"
+              else
+                echo "WARNING: Step.1 へのアサイン失敗。aas:running は付与しません。"
+              fi
+            fi
+          elif [[ -n "${S2_NUM}" ]]; then
+            # Step.1 が存在しない / スキップされている状態で Step.2 は実行できないため、blocked とする
+            add_label "${S2_NUM}" "aas:blocked"
+            echo "Step.1 が存在しないため Step.2 (#${S2_NUM}) を実行できません。Step.1 を作成・完了してから再実行してください。"
+          else
+            echo "実行すべき Step が存在しません（全 Step スキップ）。"
+          fi
+
+          echo "初期化完了。"
+
+      # ----------------------------------------------------------------
+      # 4. 状態遷移: aas:done ラベル付与時
+      # ----------------------------------------------------------------
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # Issue の body と title を API 経由で安全に取得（YAML 展開問題を回避）
+          _ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          DONE_ISSUE_BODY=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          DONE_ISSUE_TITLE=$(echo "${_ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          export DONE_ISSUE_BODY DONE_ISSUE_TITLE
+
+          # closed イベント由来の場合: aas:done ラベルをまだ持っていなければ付与する
+          _HAS_DONE_LABEL=$(echo "${_ISSUE_JSON}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          labels = [l['name'] for l in d.get('labels', [])]
+          print('true' if 'aas:done' in labels else 'false')
+          ")
+          if [[ "${_HAS_DONE_LABEL}" == "false" ]]; then
+            echo "aas:done ラベルを付与します（closed イベント由来）..."
+            curl -s -o /dev/null \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/labels" \
+              -d '{"labels":["aas:done"]}' || true
+            echo "aas:done ラベルを付与しました。"
+            sleep 2
+          fi
+
+          if [[ -z "${COPILOT_PAT}" ]]; then
+            echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
+          fi
+
+          # ---- ユーティリティ関数（共通ライブラリを source） ----
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/github-api.sh"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/prereq-file-check.sh"
+
+          add_label() {
+            local issue_num="$1"
+            local label="$2"
+            api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/labels" \
+              "{\"labels\":[\"${label}\"]}" > /dev/null
+            sleep 1
+          }
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
+
+          post_comment() {
+            local issue_num="$1"
+            local body="$2"
+            local data
+            data=$(python3 -c "import sys,json; print(json.dumps({'body': sys.argv[1]}))" "${body}")
+            if ! api_call POST \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}/comments" \
+              "${data}" > /dev/null; then
+              echo "::warning::post_comment 失敗: issue_num=${issue_num}"
+            fi
+            sleep 1
+          }
+          extract_custom_agent() {
+            local body="$1"
+            echo "${body}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+          print(m.group(1) if m else '')
+          PY
+          }
+
+          activate_issue() {
+            local issue_num="$1"
+            local issue_body
+            issue_body=$(curl -sf \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/issues/${issue_num}" \
+              | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))") || true
+            local agent_name
+            agent_name=$(extract_custom_agent "${issue_body}") || true
+            add_label "${issue_num}" "aas:ready"
+            if assign_copilot "${issue_num}" "${agent_name}" "${BRANCH:-main}" ""; then
+              add_label "${issue_num}" "aas:running"
+              echo "Issue #${issue_num} を aas:ready + copilot アサイン + aas:running に設定しました。(custom_agent: ${agent_name})"
+            else
+              echo "WARNING: Issue #${issue_num} へのアサイン失敗。aas:running は付与しません。"
+            fi
+          }
+
+          # 必須入力ファイルの存在確認を行い、不足があれば blocked にする。
+          # 全ファイルが存在する場合のみ activate_issue を呼び出す。
+          # 引数: $1=issue_num, $2=step_id (冪等マーカー用), 以降=必須ファイルパス
+          activate_with_prereq_check() {
+            local issue_num="$1"
+            local step_id="$2"
+            shift 2
+            local required_files=("$@")
+            local missing=()
+            local check_errors=()
+            local BLOCKED_MARKER="<!-- aas-prereq-check-blocked: step-${step_id} -->"
+            local target_ref="${BRANCH:-main}"
+            local run_id="${GITHUB_RUN_ID:-unknown}"
+            local workflow_name="${GITHUB_WORKFLOW:-unknown}"
+
+            echo "::notice::AAS前提ファイル確認開始 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref}"
+
+            for f in "${required_files[@]}"; do
+              local file_status=0
+              local result_class="unknown"
+              check_prereq_file_status "${REPO}" "${target_ref}" "${f}" || file_status=$?
+              case "${file_status}" in
+                0)
+                  result_class="exists_file"
+                  ;;
+                1)
+                  result_class="missing_http_404"
+                  missing+=("${f}")
+                  echo "::warning::AAS前提ファイル確認不足確定 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}"
+                  echo "::warning::AAS前提ファイル確認不足詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class} note=github_contents_api_http_404_confirmed"
+                  ;;
+                2)
+                  result_class="check_error_non_404"
+                  check_errors+=("${f}")
+                  echo "::error::AAS前提ファイル確認失敗 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}" >&2
+                  echo "::error::AAS前提ファイル確認失敗詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} type=${PREREQ_CHECK_LAST_TYPE:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class} note=not_treated_as_missing_file error=${PREREQ_CHECK_LAST_ERROR:-}" >&2
+                  ;;
+                *)
+                  result_class="unexpected_status"
+                  check_errors+=("${f}")
+                  echo "::error::AAS前提ファイル確認失敗 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f}" >&2
+                  echo "::error::AAS前提ファイル確認失敗詳細 http_status=unexpected_return_code reason=unexpected_status_${file_status} result=${result_class} note=not_treated_as_missing_file" >&2
+                  ;;
+              esac
+              echo "::notice::AAS前提ファイル確認結果 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref} path=${f} file_status=${file_status}"
+              echo "::notice::AAS前提ファイル確認結果詳細 http_status=${PREREQ_CHECK_LAST_HTTP_STATUS:-unknown} type=${PREREQ_CHECK_LAST_TYPE:-unknown} reason=${PREREQ_CHECK_LAST_REASON:-unknown} result=${result_class}"
+            done
+
+            if [ "${#check_errors[@]}" -gt 0 ]; then
+              echo "::error::AAS前提ファイル確認中断 run_id=${run_id} workflow=${workflow_name} repo=${REPO} target_issue=${issue_num} step_id=${step_id} ref=${target_ref}"
+              echo "::error::AAS前提ファイル確認中断詳細 non_404_errors=${check_errors[*]} note=aas_blocked_comment_and_label_not_posted"
+              return 1
+            fi
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              activate_issue "${issue_num}"
+              return
+            fi
+
+            # 必須ファイルが不足している場合
+            echo "⚠️ Step ${step_id} の必須入力ファイルが不足しています。Issue #${issue_num} を blocked にします。"
+            echo "不足ファイル: ${missing[*]}"
+
+            add_label "${issue_num}" "aas:blocked"
+
+            # 冪等性チェック: 既に同じ blocked コメントが投稿済みならスキップ
+            existing_blocked=$(gh api "/repos/${REPO}/issues/${issue_num}/comments" \
+              --paginate --jq '.[]' 2>/dev/null \
+              | jq -rs --arg marker "${BLOCKED_MARKER}" \
+                '[.[] | select(.body | contains($marker))] | length' 2>/dev/null || echo 0)
+            if [ "${existing_blocked:-0}" -gt 0 ]; then
+              echo "blocked コメントは既に投稿済みです。スキップします。"
+              return
+            fi
+
+            # 不足ファイル一覧を含む blocked コメントを投稿
+            local missing_list=""
+            for f in "${missing[@]}"; do
+              missing_list="${missing_list}- \`${f}\`\n"
+            done
+
+            local comment_body
+            comment_body=$(printf '%s\n\n%s\n\n%s\n\n%s\n%b\n%s\n\n%s\n\n%s' \
+              "${BLOCKED_MARKER}" \
+              "## ⛔ aas:blocked — 必須入力成果物が不足しています (Step ${step_id})" \
+              "このステップを実行するために必要な入力ファイルがリポジトリの \`${target_ref}\` ブランチに存在しません（GitHub Contents API で HTTP 404 を確認済み）。" \
+              "**不足しているファイル（GitHub Contents API で HTTP 404 として確認）:**" \
+              "${missing_list}" \
+              "この通知は API/通信/権限/レート制限等の確認失敗によるものではなく、HTTP 404 の確認結果に基づいています。" \
+              "前の Step の成果物が作成された後、または必要なファイルを手動で作成した後に、再度状態遷移をトリガーしてください。" \
+              "> ℹ️ このコメントは \`auto-app-selection-reusable.yml\` によって自動投稿されました。")
+
+            post_comment "${issue_num}" "${comment_body}"
+            echo "blocked コメントを Issue #${issue_num} に投稿しました。"
+          }
+
+          # ---- done Issue の title から Step 番号を特定 ----
+          STEP_MATCH=$(echo "${DONE_ISSUE_TITLE}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          title = sys.stdin.read().strip()
+          m = re.search(r'\[AAS\] Step\.(\d+(?:\.\d+)?)', title)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${STEP_MATCH}" ]]; then
+            echo "Step 番号が特定できません（title: ${DONE_ISSUE_TITLE}）。スキップ。"
+            exit 0
+          fi
+
+          echo "完了した Step: ${STEP_MATCH}"
+
+          # ---- Root Issue 番号の取得 ----
+          ROOT_ISSUE=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- root-issue: #(\d+) -->', body)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" ]]; then
+            echo "Root Issue 番号が取得できません。スキップ。"
+            exit 0
+          fi
+
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ---- ブランチ名の取得 ----
+          BRANCH=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!-- branch: (.+?) -->', body)
+          print(m.group(1).strip() if m else 'main')
+          PY
+          )
+
+          echo "対象ブランチ: ${BRANCH}"
+
+          # ---- auto-context-review / auto-qa PR ラベル付与 ----
+          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          AUTO_QA=$(python3 - <<'PY'
+          import os, re
+          body = os.environ.get('DONE_ISSUE_BODY', '')
+          m = re.search(r'<!--\s*auto-qa:\s*(true|false)\s*-->', body)
+          print(m.group(1) if m else 'false')
+          PY
+          )
+          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+            LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
+              --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            if [[ -n "${LINKED_PRS}" ]]; then
+              while IFS= read -r pr_num; do
+                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                fi
+                if [[ "${AUTO_QA}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
+                    && echo "PR #${pr_num} に auto-qa ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への auto-qa ラベル付与に失敗しました。" >&2
+                fi
+              done <<< "${LINKED_PRS}"
+            fi
+          fi
+
+          # ---- Root Issue の Sub Issues を取得して Step Issue を特定 ----
+          get_sub_issue_number() {
+            local pattern="$1"
+            local resp
+            resp=$(api_call GET \
+              "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues")
+            echo "${resp}" | python3 /dev/fd/3 "${pattern}" 3<<'PY'
+          import sys, re, json
+          issues = json.load(sys.stdin)
+          pattern = sys.argv[1]
+          for issue in issues:
+              title = issue.get('title', '')
+              if re.search(pattern, title):
+                  print(issue['number'])
+                  break
+          PY
+          }
+
+          # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
+          case "${STEP_MATCH}" in
+            "1")
+              # Step.1 完了 → Step.2 を ready + assign（前提: app-catalog.md が存在すること）
+              S2_NUM=$(get_sub_issue_number '\[AAS\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                activate_with_prereq_check "${S2_NUM}" "2" \
+                  "docs/catalog/app-catalog.md"
+              else
+                echo "Step.2 が存在しません。フェーズ1完了。"
+                add_label "${ROOT_ISSUE}" "aas:done"
+                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーションアーキテクチャ設計）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**App Detail Design** Issue を別途作成してください。"
+              fi
+              ;;
+
+            "2")
+              S31_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.1:')
+              if [[ -n "${S31_NUM}" ]]; then
+                activate_with_prereq_check "${S31_NUM}" "3.1" \
+                  "docs/catalog/app-catalog.md" \
+                  "docs/catalog/use-case-catalog.md"
+              else
+                add_label "${ROOT_ISSUE}" "aas:done"
+              fi
+              ;;
+
+            "3.1")
+              S32_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.2:')
+              if [[ -n "${S32_NUM}" ]]; then
+                activate_with_prereq_check "${S32_NUM}" "3.2" \
+                  "docs/catalog/domain-analytics.md" \
+                  "docs/catalog/app-catalog.md"
+              fi
+              ;;
+
+            "3.2")
+              S4_NUM=$(get_sub_issue_number '\[AAS\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                activate_with_prereq_check "${S4_NUM}" "4" \
+                  "docs/catalog/service-catalog.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
+              ;;
+
+            "4")
+              S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                activate_with_prereq_check "${S5_NUM}" "5" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
+              ;;
+
+            "5")
+              S6_NUM=$(get_sub_issue_number '\[AAS\] Step\.6:')
+              if [[ -n "${S6_NUM}" ]]; then
+                activate_with_prereq_check "${S6_NUM}" "6" \
+                  "docs/catalog/service-catalog.md" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
+              ;;
+
+            "6")
+              S7_NUM=$(get_sub_issue_number '\[AAS\] Step\.7:')
+              if [[ -n "${S7_NUM}" ]]; then
+                activate_with_prereq_check "${S7_NUM}" "7" \
+                  "docs/catalog/service-catalog-matrix.md" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
+              ;;
+
+            "7")
+              # Step.7 完了 → Root Issue に aas:done + 完了コメント
+              add_label "${ROOT_ISSUE}" "aas:done"
+              echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
+              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜7）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
+              ;;
+
+            *)
+              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+              ;;
+          esac
+          # ── 自動クローズ判定（auto-merge 有効時）──────────────
+          if [[ -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+            # コンテナ Issue の自動クローズ判定
+            _AC_CONTAINER_NUM=""
+            if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAS\]\ Step\.[0-9]+\.[0-9] ]]; then
+              _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+                | grep -oP '\[AAS\]\s*Step\.\K\d+' | head -1)
+              if [[ -n "${_AC_PARENT_STEP}" ]]; then
+                _AC_CONTAINER_NUM=$(gh api --paginate \
+                  "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                  --jq ".[] | select(.title | test(\"\\\\[AAS\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                  2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+              fi
+            fi
+
+            if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+              echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+              auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+            fi
+
+            echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+            auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+          fi
+
+      # ----------------------------------------------------------------
+      # 4.5. closed イベント時のコンテナ/Root 自動クローズ判定
+      # ----------------------------------------------------------------
+      - name: コンテナ自動クローズ判定（closed イベント）
+        if: steps.gate.outputs.mode == 'container_close_check'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          # ── 完了した Issue の情報取得 ──
+          if ! DONE_ISSUE_JSON=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}" 2>/dev/null); then
+            echo "::warning::Issue #${DONE_ISSUE_NUMBER} の取得に失敗しました（削除済みまたはアクセス不可）。"
+            DONE_ISSUE_JSON='{}'
+          fi
+          DONE_ISSUE_TITLE=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('title',''))")
+          DONE_ISSUE_BODY=$(printf '%s' "${DONE_ISSUE_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('body','') or '')")
+
+          # ── Root Issue 番号の抽出 ──
+          ROOT_ISSUE=$(echo "${DONE_ISSUE_BODY}" | python3 /dev/fd/3 3<<'PY'
+          import sys, re
+          b = sys.stdin.read()
+          m = re.search(r'<!--\s*root-issue:\s*#(\d+)\s*-->', b)
+          print(m.group(1) if m else '')
+          PY
+          )
+
+          if [[ -z "${ROOT_ISSUE}" || ! "${ROOT_ISSUE}" =~ ^[0-9]+$ ]]; then
+            echo "Root Issue を特定できないためスキップ。"
+            exit 0
+          fi
+          echo "Root Issue: #${ROOT_ISSUE}"
+
+          # ── auto-close.sh の読み込み ──
+          if [[ ! -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
+            echo "auto-close.sh が見つかりません。スキップ。"
+            exit 0
+          fi
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
+
+          # ── コンテナ Issue の自動クローズ判定 ──
+          _AC_CONTAINER_NUM=""
+          if [[ "${DONE_ISSUE_TITLE}" =~ ^\[AAS\]\ Step\.[0-9]+\.[0-9] ]]; then
+            _AC_PARENT_STEP=$(echo "${DONE_ISSUE_TITLE}" \
+              | grep -oP '\[AAS\]\s*Step\.\K\d+' | head -1)
+            if [[ -n "${_AC_PARENT_STEP}" ]]; then
+              _AC_CONTAINER_NUM=$(gh api --paginate \
+                "/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues?per_page=100" \
+                --jq ".[] | select(.title | test(\"\\\\[AAS\\\\] Step\\\\.${_AC_PARENT_STEP}:\")) | .number" \
+                2>/dev/null | head -1) || _AC_CONTAINER_NUM=""
+            fi
+          fi
+
+          if [[ -n "${_AC_CONTAINER_NUM}" && "${_AC_CONTAINER_NUM}" =~ ^[0-9]+$ ]]; then
+            echo "=== コンテナ Issue #${_AC_CONTAINER_NUM} の自動クローズ判定 ==="
+            auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
+          else
+            echo "コンテナ Issue が特定できないためスキップ。"
+          fi
+
+          # ── Root Issue の自動クローズ判定 ──
+          echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+          auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
+
+  self-improve:
+    needs: orchestrate
+    if: needs.orchestrate.result == 'success'
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
+    timeout-minutes: 180
+    steps:
+      - name: Parse Self-Improve settings
+        id: parse
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null || true)
+          enable=$(printf '%s' "${body}" | sed -n 's/^.*<!-- enable-self-improve: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
+          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
+          if [[ -z "${enable}" ]]; then
+            enable=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善ループ設定.*?\n(.*?)(?=###|\Z)', body, re.DOTALL)
+          print('true' if (m and re.search(r'-\s*\[[xX]\]', m.group(1))) else 'false')
+          " 2>/dev/null || echo "false")
+          fi
+          if [[ -z "${max_iter}" ]]; then
+            max_iter=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '3')
+          else:
+              print('3')
+          " 2>/dev/null || echo "3")
+          fi
+          if [[ -z "${quality_threshold}" ]]; then
+            quality_threshold=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*自己改善\s*品質スコア閾値.*?\n+(.+)', body)
+          if m:
+              n = re.match(r'(\d+)', m.group(1).strip())
+              print(n.group(1) if n else '80')
+          else:
+              print('80')
+          " 2>/dev/null || echo "80")
+          fi
+          if [[ -z "${branch}" ]]; then
+            branch=$(printf '%s' "${body}" | python3 -c "
+          import sys, re
+          body = sys.stdin.read()
+          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
+          if m:
+              val = m.group(1).strip()
+              print(val if val and val != '_No response_' else 'main')
+          else:
+              print('main')
+          " 2>/dev/null || echo "main")
+          fi
+          [[ -z "${enable}" ]] && enable="false"
+          [[ -z "${max_iter}" ]] && max_iter="3"
+          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
+          [[ -z "${branch}" ]] && branch="main"
+          echo "enable=${enable}" >> "$GITHUB_OUTPUT"
+          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
+          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
+          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          ref: ${{ steps.parse.outputs.branch }}
+
+      - name: Skip Self-Improve when branch is missing
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch == ''
+        run: |
+          echo "Skip Self-Improve: issue body に <!-- branch: ... --> がありません。"
+      - uses: actions/setup-python@v5
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        run: |
+          pip install ruff pytest pytest-cov
+          npm install -g markdownlint-cli
+      - name: Run Self-Improve
+        if: steps.parse.outputs.enable == 'true' && steps.parse.outputs.branch != ''
+        env:
+          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
+          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from hve.self_improve import run_improvement_loop
+          from hve.config import SDKConfig
+          config = SDKConfig.from_env()
+          config.auto_self_improve = True
+          config.self_improve_scope = "workflow"
+          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
+          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
+          result = run_improvement_loop(config=config, repo_root='.')
+          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
+          PY
+      - name: Commit improvements
+        if: steps.parse.outputs.enable == 'true' && success()
+        env:
+          BRANCH: ${{ steps.parse.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          branch="${BRANCH}"
+
+          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
+            echo "::error::Invalid branch name: ${branch}" >&2
+            exit 1
+          }
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "No Self-Improve changes to commit."
+            exit 0
+          fi
+
+          git commit -m "[Self-Improve] 自動品質改善"
+
+          pushed=false
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}/3 to ${branch}"
+
+            if git push origin "HEAD:refs/heads/${branch}"; then
+              pushed=true
+              break
+            fi
+
+            if [ "${attempt}" -lt 3 ]; then
+              echo "Push failed. Fetching and rebasing onto origin/${branch}..."
+              git fetch origin "${branch}"
+
+              if ! git rebase "origin/${branch}"; then
+                echo "::error::Rebase failed due to conflicts. Aborting rebase." >&2
+                git rebase --abort || true
+                exit 1
+              fi
+            fi
+          done
+
+          if [ "${pushed}" != "true" ]; then
+            echo "::error::git push failed after 3 attempts." >&2
+            exit 1
+          fi
