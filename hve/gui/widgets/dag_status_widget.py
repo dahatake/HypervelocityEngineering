@@ -67,11 +67,11 @@ SUBTASK_DOT_R = 5
 SUBTASK_DOT_GAP = 4
 
 _STATUS_GLYPH = {
-    "pending": "○",
-    "running": "◇",
-    "done": "●",
-    "failed": "✗",
-    "skipped": "⊘",
+    "pending": "⚪",
+    "running": "🔄",
+    "done": "✅",
+    "failed": "❌",
+    "skipped": "⏭️",
 }
 
 _STATUS_COLOR_LIGHT = {
@@ -213,6 +213,7 @@ class _StepNodeItem(QGraphicsRectItem):
         self.status = status
         self._widget = widget
         self.started_at: Optional[float] = None
+        self.finished_at: Optional[float] = None
         self._fanout_done: Optional[int] = None
         self._fanout_total: Optional[int] = None
         self._retry: int = 0
@@ -266,10 +267,12 @@ class _StepNodeItem(QGraphicsRectItem):
             label = label[: max_chars - 1] + "…"
         self._lbl_main.setText(label)
 
-        # 経過時間
-        elapsed_text = "-"
+        # 経過時間（完了済みなら finished_at で停止。tick で再呼び出しされても
+        # finished_at が固定値のため値は変わらない）
+        elapsed_text = "--:--:--"
         if self.started_at is not None:
-            elapsed_text = _fmt_elapsed(time.monotonic() - self.started_at)
+            end = self.finished_at if self.finished_at is not None else time.monotonic()
+            elapsed_text = _fmt_elapsed(max(0.0, end - self.started_at))
         self._lbl_elapsed.setText(f"⏱ {elapsed_text}")
 
     # ---------------------------- イベント -------------------------------
@@ -309,6 +312,8 @@ class _WorkflowHeaderItem(QGraphicsRectItem):
         self.label = label
         self.setAcceptHoverEvents(True)
 
+        self.started_at: Optional[float] = None
+        self.finished_at: Optional[float] = None
         self._lbl = QGraphicsSimpleTextItem("", self)
         self._lbl.setPos(8, 5)
         self.refresh_theme()
@@ -328,7 +333,14 @@ class _WorkflowHeaderItem(QGraphicsRectItem):
         expanded = self._widget._is_workflow_expanded(self.instance_id)
         arrow = "▼" if expanded else "▶"
         glyph = _STATUS_GLYPH.get(self.status, "?")
-        text = f"{arrow}  {glyph} {self.label}    ステップ: {done_steps}/{total_steps}"
+        elapsed_text = "--:--:--"
+        if self.started_at is not None:
+            end = self.finished_at if self.finished_at is not None else time.monotonic()
+            elapsed_text = _fmt_elapsed(max(0.0, end - self.started_at))
+        text = (
+            f"{arrow}  {glyph} {self.label}    "
+            f"ステップ: {done_steps}/{total_steps}    [{elapsed_text}]"
+        )
         self._lbl.setText(text)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
@@ -375,8 +387,12 @@ class DagStatusWidget(QWidget):
         self._wf_expanded: Dict[str, bool] = {}
         # Step Fanout 展開状態（既定: 折りたたみ） — 再レイアウト後も保持
         self._step_expanded: Dict[Tuple[str, str], bool] = {}
-        # Step タイミング保持 (instance_id, step_id) -> started_at
+        # Step タイミング保持 (instance_id, step_id) -> started_at / finished_at
         self._step_started_at: Dict[Tuple[str, str], float] = {}
+        self._step_finished_at: Dict[Tuple[str, str], float] = {}
+        # Workflow タイミング保持 instance_id -> started_at / finished_at
+        self._wf_started_at: Dict[str, float] = {}
+        self._wf_finished_at: Dict[str, float] = {}
         # 現在の選択ノード
         self._selected_node_item: Optional[QGraphicsItem] = None
         self._global_started_at: Optional[float] = None
@@ -433,6 +449,9 @@ class DagStatusWidget(QWidget):
         self._step_items.clear()
         self._wf_items.clear()
         self._step_started_at.clear()
+        self._step_finished_at.clear()
+        self._wf_started_at.clear()
+        self._wf_finished_at.clear()
         self._step_expanded.clear()
         self._selected_node_item = None
         self._global_started_at = None
@@ -470,6 +489,25 @@ class DagStatusWidget(QWidget):
             wf_name = str(wf.get("workflow_name", wf_id))
             wf_status_raw = workflow_status.get(wf_id, "") if workflow_status else ""
             wf_status = _normalize_status(wf_status_raw)
+            # Workflow タイミング: running で開始確定、終了状態で停止確定。
+            # started_at 未設定で終了に達した場合、子ステップの最古 started_at を
+            # フォールバック起点とし、無ければ now を採用する。
+            if wf_status == "running" and wf_id not in self._wf_started_at:
+                self._wf_started_at[wf_id] = time.monotonic()
+            if (
+                wf_status in ("done", "failed", "skipped")
+                and wf_id not in self._wf_finished_at
+            ):
+                if wf_id not in self._wf_started_at:
+                    child_starts = [
+                        v
+                        for (k_iid, _), v in self._step_started_at.items()
+                        if k_iid == wf_id
+                    ]
+                    self._wf_started_at[wf_id] = (
+                        min(child_starts) if child_starts else time.monotonic()
+                    )
+                self._wf_finished_at[wf_id] = time.monotonic()
             entry = _WorkflowEntry(
                 instance_id=wf_id,
                 workflow_id=wf_id,
@@ -486,7 +524,16 @@ class DagStatusWidget(QWidget):
                 key = (entry.instance_id, sid)
                 if sstatus == "running" and key not in self._step_started_at:
                     self._step_started_at[key] = time.monotonic()
+                # status が終了状態に達したら finished_at を確定（以後カウントアップ停止）
+                if (
+                    sstatus in ("done", "failed", "skipped")
+                    and key not in self._step_finished_at
+                ):
+                    if key not in self._step_started_at:
+                        self._step_started_at[key] = time.monotonic()
+                    self._step_finished_at[key] = time.monotonic()
                 started_at = self._step_started_at.get(key)
+                finished_at = self._step_finished_at.get(key)
                 entry.steps.append(
                     {
                         "id": sid,
@@ -494,6 +541,7 @@ class DagStatusWidget(QWidget):
                         "depends_on": deps,
                         "status": sstatus,
                         "started_at": started_at,
+                        "finished_at": finished_at,
                     }
                 )
             if subtask_status:
@@ -519,8 +567,33 @@ class DagStatusWidget(QWidget):
         workflows = getattr(state, "workflows", None) or {}
         for instance_id, inst in workflows.items():
             wf_status = _normalize_status(getattr(inst, "status", "pending"))
+            iid = str(instance_id)
+            # WorkflowInstance.started_at / finished_at が正規ソース。
+            # ローカル dict はキャッシュ目的のみ（Plan モードとの統合用）。
+            wf_started = getattr(inst, "started_at", None)
+            wf_finished = getattr(inst, "finished_at", None)
+            if wf_started is not None:
+                self._wf_started_at[iid] = wf_started
+            elif wf_status == "running" and iid not in self._wf_started_at:
+                self._wf_started_at[iid] = time.monotonic()
+            if wf_finished is not None:
+                self._wf_finished_at[iid] = wf_finished
+            elif (
+                wf_status in ("done", "failed", "skipped")
+                and iid not in self._wf_finished_at
+            ):
+                if iid not in self._wf_started_at:
+                    child_starts = [
+                        v
+                        for (k_iid, _), v in self._step_started_at.items()
+                        if k_iid == iid
+                    ]
+                    self._wf_started_at[iid] = (
+                        min(child_starts) if child_starts else time.monotonic()
+                    )
+                self._wf_finished_at[iid] = time.monotonic()
             entry = _WorkflowEntry(
-                instance_id=str(instance_id),
+                instance_id=iid,
                 workflow_id=str(getattr(inst, "workflow_id", instance_id)),
                 label=str(getattr(inst, "label", instance_id)),
                 status=wf_status,
@@ -544,11 +617,27 @@ class DagStatusWidget(QWidget):
 
             for step_id, sv in steps.items():
                 sstatus = _normalize_status(getattr(sv, "status", "pending"))
+                key = (entry.instance_id, str(step_id))
                 started_at = getattr(sv, "started_at", None)
                 if started_at is None:
-                    started_at = self._step_started_at.get((entry.instance_id, step_id))
+                    started_at = self._step_started_at.get(key)
                 else:
-                    self._step_started_at[(entry.instance_id, step_id)] = started_at
+                    self._step_started_at[key] = started_at
+                finished_at = getattr(sv, "finished_at", None)
+                if finished_at is None:
+                    # fallback: 実完了時刻が state 側で未設定の場合のみ。
+                    # now を採用するため elapsed は実体より短くなり得るが、
+                    # 少なくともカウントアップは停止する。
+                    if (
+                        sstatus in ("done", "failed", "skipped")
+                        and key not in self._step_finished_at
+                    ):
+                        if key not in self._step_started_at:
+                            self._step_started_at[key] = time.monotonic()
+                        self._step_finished_at[key] = time.monotonic()
+                    finished_at = self._step_finished_at.get(key)
+                else:
+                    self._step_finished_at[key] = finished_at
                 entry.steps.append(
                     {
                         "id": str(step_id),
@@ -556,6 +645,7 @@ class DagStatusWidget(QWidget):
                         "depends_on": deps_lookup.get(str(step_id), []),
                         "status": sstatus,
                         "started_at": started_at,
+                        "finished_at": finished_at,
                     }
                 )
                 # children を Fanout 子として扱う（subtask 表示用）
@@ -641,6 +731,8 @@ class DagStatusWidget(QWidget):
             )
             self._scene.addItem(header)
             self._wf_items[entry.instance_id] = header
+            header.started_at = self._wf_started_at.get(entry.instance_id)
+            header.finished_at = self._wf_finished_at.get(entry.instance_id)
 
             wf_done = sum(1 for s in entry.steps if s["status"] in ("done", "skipped"))
             wf_total = len(entry.steps)
@@ -675,6 +767,7 @@ class DagStatusWidget(QWidget):
                         widget=self,
                     )
                     node.started_at = s.get("started_at")
+                    node.finished_at = s.get("finished_at")
                     # Fanout
                     subs = entry.subtasks.get(sid)
                     if subs:
@@ -820,6 +913,18 @@ class DagStatusWidget(QWidget):
         for node in self._step_items.values():
             try:
                 node.update_text()
+            except RuntimeError:
+                pass
+        # Workflow ヘッダの経過時間も更新
+        for entry in self._entries:
+            header = self._wf_items.get(entry.instance_id)
+            if header is None:
+                continue
+            try:
+                wf_done = sum(
+                    1 for s in entry.steps if s["status"] in ("done", "skipped")
+                )
+                header.update_text(wf_done, len(entry.steps))
             except RuntimeError:
                 pass
         if self._global_started_at is not None:

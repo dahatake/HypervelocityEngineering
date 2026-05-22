@@ -149,14 +149,17 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "C10": {
         "app_id": "app_id",
         "app_ids": "app_ids",
-        "app_id": "app_id",
         "usecase_id": "usecase_id",
     },
     "C11": {
         "target_files": "target_files",
         "force_refresh": "force_refresh",
         "custom_source_dir": "custom_source_dir",
-        # NOTE: sources は CheckBox 3 個の集合のため _SECTION_FIELDS 経由では扱えない（個別対応）
+        # sources_* は _C11AKM の QCheckBox 3 個。個別に autosave 経路へ乗せる
+        # （`to_args()` 側は引き続き CSV `sources` として集約される）。
+        "sources_qa": "sources_qa",
+        "sources_original_docs": "sources_original_docs",
+        "sources_workiq": "sources_workiq",
     },
     "C12": {
         "target_scope": "target_scope",
@@ -189,9 +192,16 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "AUTOPILOT": {
         "autopilot_max_parallel": "autopilot_max_parallel",
         "step1_show_plan_review_always": "step1_show_plan_review_always",
+        "precheck_use_llm_judge": "precheck_use_llm_judge",
     },
     "GUI_SESSION": {
         "gui_session_cleanup_policy": "gui_session_cleanup_policy",
+    },
+    # EXPLORER: 値は ";" 区切り文字列。QListWidget との同期は
+    # ``_CExplorerSection`` 内部で完結し、settings_apply 経由では QLineEdit
+    # ``explorer_roots`` の text だけを読み書きする。
+    "EXPLORER": {
+        "explorer_roots": "explorer_roots",
     },
 }
 

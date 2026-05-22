@@ -118,3 +118,31 @@ exclude = ["hve.tests*"]
 "hve.gui.icons" = [
   "*.svg",
 ]
+
+# ---------------------------------------------------------------------------
+# bump-my-version 設定（バージョンアップ自動化）
+# 使い方は hve-dev/hve-app-tools.md を参照。
+# 対象: pyproject.toml (本ファイル) / hve/__init__.py / CHANGELOG.md
+# 連動対象外: mdq/__init__.py（独立ライフサイクル）
+# ---------------------------------------------------------------------------
+[tool.bumpversion]
+current_version = "0.1.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "chore(release): bump version to {new_version}"
+tag_message = "chore(release): v{new_version}"
+allow_dirty = false
+
+# 注: pyproject.toml 自身は bump-my-version 1.x が設定ファイルとして暗黙で対象に
+# 含めるため、[[tool.bumpversion.files]] への明示登録は不要（重複登録になる）。
+
+[[tool.bumpversion.files]]
+filename = "hve/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "## [Unreleased]"
+replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"

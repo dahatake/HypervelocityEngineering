@@ -1073,10 +1073,15 @@ class TestFileIO(unittest.TestCase):
     """file_io の表示制御テスト。"""
 
     def test_verbosity_0_no_output(self) -> None:
+        """verbosity=0 では人間向けの ←/→ 表示行が出ない（stats_event 行は別扱い）。"""
         c = Console(verbosity=0)
         with _CaptureOutput() as cap:
             c.file_io("1", "docs/file.md", "read")
-        self.assertEqual(cap.stdout.strip(), "")
+        # 人間向け表示行（←/→ + path）が出ていないこと
+        human_lines = [
+            ln for ln in cap.stdout.splitlines() if not ln.startswith("[hve:stats] ")
+        ]
+        self.assertEqual([ln for ln in human_lines if ln.strip()], [])
 
     def test_verbosity_1_prints_fixed_line_read(self) -> None:
         """verbosity=1 で read を確定行で表示し、← 矢印が含まれる。"""
@@ -1097,6 +1102,27 @@ class TestFileIO(unittest.TestCase):
         with _CaptureOutput() as cap:
             c.file_io("1", "docs/file.md", "read")
         self.assertIn("← [1] docs/file.md", cap.stdout)
+
+    def test_emits_stats_event_file_io(self) -> None:
+        """file_io 呼び出しで `[hve:stats] {"kind":"file_io",...}` 行が常時発火する。
+
+        verbosity=0 でも GUI 用構造化イベントは出力される（人間向けの表示行とは独立）。
+        """
+        import json as _json
+
+        c = Console(verbosity=0)
+        with _CaptureOutput() as cap:
+            c.file_io("step-1", "docs/file.md", "write")
+        # stats_event は stdout に書かれる
+        stats_lines = [
+            ln for ln in cap.stdout.splitlines() if ln.startswith("[hve:stats] ")
+        ]
+        self.assertTrue(stats_lines, "expected at least one [hve:stats] line")
+        payload = _json.loads(stats_lines[-1][len("[hve:stats] ") :])
+        self.assertEqual(payload.get("kind"), "file_io")
+        self.assertEqual(payload.get("step"), "step-1")
+        self.assertEqual(payload.get("path"), "docs/file.md")
+        self.assertEqual(payload.get("mode"), "write")
 
 
 # -----------------------------------------------------------------------

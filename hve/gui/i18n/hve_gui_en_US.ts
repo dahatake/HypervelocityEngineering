@@ -2123,10 +2123,10 @@ Click the &apos;?&apos; button on the right of each item to see a detailed descr
     <message>
         <location filename="../help_content.py" line="78"/>
         <source>ワークフローの実行状況をリアルタイムに確認します。
-ステップ状態（○◇●✗⊘）、ログ、作業状況ツリーが表示されます。
+ステップ状態（⚪🔄✅❌⏭️）、ログ、作業状況ツリーが表示されます。
 実行を中断する場合は [停止] ボタンを使用してください。</source>
         <translation>Monitor the workflow execution in real time.
-Displays step status (○◇●✗⊘), logs, and the activity status tree.
+Displays step status (⚪🔄✅❌⏭️), logs, and the activity status tree.
 Use the [Stop] button to interrupt execution.</translation>
     </message>
     <message>
@@ -2633,8 +2633,8 @@ Use the [Stop] button to interrupt execution.</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="336"/>
-        <source>各ステップの状態を記号で表示します: ○=未着手 / ◇=実行中 / ●=完了 / ✗=失敗 / ⊘=スキップ。</source>
-        <translation>Show step status with symbols: ○=pending / ◇=running / ●=done / ✗=failed / ⊘=skipped.</translation>
+        <source>各ステップの状態を絵文字で表示します: ⚪=未着手 / 🔄=実行中 / ✅=完了 / ❌=失敗 / ⏭️=スキップ。</source>
+        <translation>Show step status with emojis: ⚪=pending / 🔄=running / ✅=done / ❌=failed / ⏭️=skipped.</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="340"/>

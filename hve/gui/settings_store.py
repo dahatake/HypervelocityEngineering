@@ -13,9 +13,12 @@
 from __future__ import annotations
 
 import configparser
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+_logger = logging.getLogger(__name__)
 
 # `hve/.settings.txt` 固定パス（hve パッケージ直下）。
 _SETTINGS_PATH = Path(__file__).resolve().parent.parent / ".settings.txt"
@@ -90,6 +93,12 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "no_self_improve": False,
             "mdq_watch": "",  # 空 = 未指定
             "mdq_watch_debounce_ms": 0,
+            # C11 (AKM) sources チェックボックス 3 個の永続化既定値。
+            # 旧実装では `_SECTION_FIELDS` に登録されておらず保存されなかったため、
+            # ここに既定値を明示し autosave 経路に乗せる（_C11AKM の初期値と整合）。
+            "sources_qa": True,
+            "sources_original_docs": True,
+            "sources_workiq": False,
             # ADOC 既定
             "doc_purpose": "all",
             "max_file_lines": 0,
@@ -107,13 +116,31 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # True: ギャップ 0 件でも必ずプランレビュー Dialog を表示する
             # （実行プランの内訳確認を毎回行いたい上級ユーザー向け）。
             "step1_show_plan_review_always": False,
+            # Step 1 [次へ] 統合 precheck で、追加プロンプト本文に対する
+            # LLM (github-copilot-sdk) ベースの自然言語判定を有効化するフラグ。
+            # True（既定）: 部分文字列マッチで漏れた missing 項目を LLM が再判定し、
+            #   自然言語で言及／代替指定があると判断したものを satisfied として除外する。
+            # False: 従来の部分文字列マッチのみで判定（ネットワーク不通環境向け）。
+            "precheck_use_llm_judge": True,
             # ウィンドウ横幅の永続化（ユーザーが手動でリサイズした際のみ保存）。
             # 0 = 未設定（既定の 1100 を使用）。
             "main_window_width": 0,
             "workbench_window_width": 0,
-            # Dock パネル表示状態（Phase D 追加）。既定は表示（ASCII モック通り、起動直後から全コンポーネント可視）。
+            # Dock パネル表示状態（Phase D 追加）。
+            # file_explorer_visible: 既定は表示（起動直後から左サイドバーを開く）。
+            # markdown_preview_visible: 既定は非表示。エクスプローラーでファイルが
+            #   選択された瞬間に MainWindow が setVisible(True) し、その後ユーザーが
+            #   閉じるまで保持。
             "file_explorer_visible": True,
-            "markdown_preview_visible": True,
+            "markdown_preview_visible": False,
+            # Explorer ルート設定（Wave A 追加）。
+            # ";" 区切りのリポジトリ相対 POSIX パスリスト。未存在のものは設定保存時と
+            # 起動時に mkdir(parents=True, exist_ok=True) で自動作成する（.gitkeep は作らない）。
+            # 既定値は本リポジトリ標準成果物ディレクトリ群。
+            "explorer_roots": "docs;docs-generated;knowledge;original-docs;qa;users-guide",
+            # 全 Dock レイアウトの永続化（QMainWindow.saveState() の base64 文字列）。
+            # 空文字列 = 未保存（既定レイアウトで起動）。
+            "workbench_layout_state": "",
             # Issue-gui-session-workdir-isolation T7/T8:
             # GUI セッション作業ディレクトリ (work/gui-runs/<id>/) の後処理。
             # "keep"   = 何もしない（既定）
@@ -245,8 +272,10 @@ def load() -> Dict[str, Dict[str, Any]]:
                 cp.write(f)
             os.replace(tmp, path)
         except OSError:
-            # 書き出し失敗は致命的ではない（次回起動時に再試行）。
-            pass
+            # 書き出し失敗は致命的ではない（次回起動時に再試行）。ログには残す。
+            _logger.warning(
+                "settings migration write-back failed: %s", path, exc_info=True
+            )
 
     merged: Dict[str, Dict[str, Any]] = {sec: dict(vals) for sec, vals in base.items()}
     for section in cp.sections():

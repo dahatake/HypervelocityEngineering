@@ -31,8 +31,11 @@ from PySide6.QtGui import QAction, QCloseEvent, QIcon, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -76,6 +79,74 @@ _TITLE_MAX_WORKFLOWS = 3  # 旧: タイトル番号表示用定数。現在 _upd
 # ステップインデックス (2 ステップ構成: ワークフローの選択 / 実行)
 _STEP_WORKFLOW = 0
 _STEP_WORKBENCH = 1
+
+
+class _SessionArtifactPickerDialog(QDialog):
+    """Step 1 戻り時に「前回セッションで生成されたファイル」を添付候補として
+    ユーザーへ提示する確認ダイアログ。
+
+    - 一覧はチェックボックス付き ``QListWidget`` で表示し、初期状態は全 ON。
+    - 「全選択 / 全解除」ボタンで一括切替可能。
+    - ``selected_paths()`` で選択されたパスのリストを返す。
+    """
+
+    def __init__(self, candidates: List[Path], parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("前回セッションの生成ファイルを添付に取り込み"))
+        self._candidates: List[Path] = list(candidates)
+
+        info = QLabel(
+            self.tr(
+                "前回の実行で {n} 件のファイルが生成・更新されました。\n"
+                "添付資料として取り込むファイルを選択してください。\n"
+                "（添付ペインへ追加すると Markdown 変換され docs/attached/ に保存されます）"
+            ).format(n=len(self._candidates))
+        )
+        info.setWordWrap(True)
+
+        self._list = QListWidget()
+        for p in self._candidates:
+            item = QListWidgetItem(str(p))
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
+            self._list.addItem(item)
+        self._list.setMinimumHeight(200)
+
+        select_all_btn = QPushButton(self.tr("全選択"))
+        select_all_btn.clicked.connect(lambda: self._set_all(Qt.CheckState.Checked))
+        deselect_all_btn = QPushButton(self.tr("全解除"))
+        deselect_all_btn.clicked.connect(lambda: self._set_all(Qt.CheckState.Unchecked))
+        select_row = QHBoxLayout()
+        select_row.addWidget(select_all_btn)
+        select_row.addWidget(deselect_all_btn)
+        select_row.addStretch()
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(info)
+        layout.addLayout(select_row)
+        layout.addWidget(self._list)
+        layout.addWidget(buttons)
+        self.resize(640, 360)
+
+    def _set_all(self, state: "Qt.CheckState") -> None:
+        for i in range(self._list.count()):
+            it = self._list.item(i)
+            if it is not None:
+                it.setCheckState(state)
+
+    def selected_paths(self) -> List[Path]:
+        out: List[Path] = []
+        for i in range(self._list.count()):
+            it = self._list.item(i)
+            if it is not None and it.checkState() == Qt.CheckState.Checked:
+                out.append(self._candidates[i])
+        return out
 
 
 def _build_step_seeds_for_workflow(workflow_id: str) -> list:
@@ -488,22 +559,28 @@ class MainWindow(QMainWindow):
     def _setup_dock_panels(self) -> None:
         """左右に FileTreePanel / MarkdownPreviewPanel を Dock として配置する。"""
         from . import settings_store as _ss
+        from .explorer_roots import resolve_explorer_roots
 
-        # 監視ルート: 当該 GUI セッションの work_root + リポジトリ標準成果物ディレクトリ。
-        # 存在しないパスは MultiRootFileModel.add_root が無視する。
-        candidate_roots = [
-            self._session_workdir.work_root,
-            self._repo_root / "docs",
-            self._repo_root / "knowledge",
-            self._repo_root / "qa",
-            self._repo_root / "docs-generated",
-        ]
-        roots = [p for p in candidate_roots if p.exists() and p.is_dir()]
+        # 監視ルート: 設定 ``options.explorer_roots`` から解決する。
+        # 解決時に未存在ディレクトリは自動作成される（Wave A 追加）。
+        # GUI セッションの work_root を先頭に追加する。
+        # 適用済み値をキャッシュし、後続の `_on_settings_changed` 経由の再読込で
+        # 同一値による二重 rebuild を抑止する。
+        raw_roots = _ss.get_option("explorer_roots") or ""
+        roots = resolve_explorer_roots(
+            raw_roots,
+            repo_root=self._repo_root,
+            extra_roots=[self._session_workdir.work_root],
+        )
+        self._last_applied_explorer_roots = raw_roots
 
         self._file_tree_dock = FileTreePanel(roots, parent=self)
         self._preview_dock = MarkdownPreviewPanel(parent=self)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._file_tree_dock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._preview_dock)
+
+        # Wave D T11: FileTreePanel タイトルバーに「📁 ファイル」見出し + 横並びトグル
+        self._file_tree_dock.setup_file_section_title_bar(self._preview_dock)
 
         # ActivityBar ボタンと Dock の双方向同期（バインダは GC 防止のため保持）
         self._dock_binders = [
@@ -511,8 +588,8 @@ class MainWindow(QMainWindow):
             bind_dock_toggle(self._preview_dock, self._activity_bar.btn_preview),
         ]
 
-        # ファイル選択 → プレビュー
-        self._file_tree_dock.file_selected.connect(self._preview_dock.load_file)
+        # ファイル選択 → プレビュー（Wave C T09: 最小化状態の preview を自動 show）
+        self._file_tree_dock.file_selected.connect(self._on_explorer_file_selected)
 
         # 設定からの表示状態復元（既定は非表示でレイアウト最小化）
         try:
@@ -525,6 +602,50 @@ class MainWindow(QMainWindow):
         # 初期チェック状態を実際の visibility に同期
         self._activity_bar.btn_explorer.setChecked(explorer_visible)
         self._activity_bar.btn_preview.setChecked(preview_visible)
+
+    def _on_explorer_file_selected(self, path: Path) -> None:
+        """エクスプローラーでファイルが選択されたときの処理。
+
+        Preview Dock が非表示（最小化）の場合は自動的に setVisible(True) してから
+        load する。VS Code の Explorer → Preview 遷移挙動に合わせる。
+        """
+        from . import settings_store as _ss
+
+        was_hidden = not self._preview_dock.isVisible()
+        if was_hidden:
+            self._preview_dock.setVisible(True)
+            self._activity_bar.btn_preview.setChecked(True)
+            try:
+                _ss.set_option("markdown_preview_visible", True)
+            except OSError:
+                pass
+            # 隠れていた状態から開いた直後のみ最前面化（コスト極小・直感的）
+            self._preview_dock.raise_()
+        self._preview_dock.load_file(path)
+
+    def _reload_explorer_roots(self) -> None:
+        """設定変更時に FileTreePanel の監視ルートを再読込する。
+
+        ``_on_settings_changed`` から汎用に呼ばれるため、Explorer 設定以外の変更で
+        ツリーを毎回 rebuild しないよう、前回適用済みの生文字列をキャッシュして
+        no-op 判定する。起動時の初回呼び出しでも `_setup_dock_panels` が既に
+        set_roots 相当の処理を済ませているため二重実行を避けられる。
+        """
+        if not hasattr(self, "_file_tree_dock"):
+            return
+        from . import settings_store as _ss
+        from .explorer_roots import resolve_explorer_roots
+
+        raw_roots = _ss.get_option("explorer_roots") or ""
+        if getattr(self, "_last_applied_explorer_roots", None) == raw_roots:
+            return
+        roots = resolve_explorer_roots(
+            raw_roots,
+            repo_root=self._repo_root,
+            extra_roots=[self._session_workdir.work_root],
+        )
+        self._file_tree_dock.set_roots(roots)
+        self._last_applied_explorer_roots = raw_roots
 
     def _persist_dock_visibility(self) -> None:
         """Dock 表示状態を settings_store に保存する（closeEvent から呼ぶ）。"""
@@ -597,6 +718,16 @@ class MainWindow(QMainWindow):
             self._status_banner.apply_theme(_ss2.get_option("theme") or "light")
         except Exception:
             pass
+
+        # Wave C T08: エクスプローラー監視ルートの即時反映。
+        # 内部キャッシュにより、変更が無ければ no-op で返るため毎回の rebuild は起きない。
+        try:
+            self._reload_explorer_roots()
+        except OSError as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "explorer roots reload failed: %s", exc
+            )
 
     def _setup_menu(self) -> None:
         # menuBar は廃止（ヘッダーアイコンに統合）
@@ -985,6 +1116,78 @@ class MainWindow(QMainWindow):
         if self._current_step() == _STEP_WORKBENCH and not self._page_workbench.is_running():
             self._stack.setCurrentIndex(_STEP_WORKFLOW)
             self._refresh_navigation()
+            # Step 1 戻り時、前回セッションで生成・更新されたファイルを
+            # 添付候補としてユーザーに提示する。
+            self._offer_session_artifacts_to_attachment_pane()
+
+    def _offer_session_artifacts_to_attachment_pane(self) -> None:
+        """WorkbenchPage が収集したセッション成果物を AttachmentPane へ取り込む確認を行う。
+
+        - `page_workbench.session_artifacts()` から書き込みパス一覧を取得。
+        - 存在し、`is_supported` 拡張子で、AttachmentPane に未取り込みのものだけを候補化。
+        - 候補がある場合のみ `_SessionArtifactPickerDialog` を表示し、選択分を
+          `AttachmentPane._on_files_dropped()` 経由で取り込む。
+        - 候補が無いとき・キャンセル時・選択 0 件のときは何もしない。
+        """
+        try:
+            from .doc_convert import is_supported
+        except Exception:
+            return
+
+        try:
+            raw_artifacts = self._page_workbench.session_artifacts()
+        except Exception:
+            return
+        if not raw_artifacts:
+            return
+
+        pane = self._page_options.attachment_pane()
+        if pane is None:
+            return
+
+        # AttachmentPane が既に取り込み済みの元パス (src_path) を集合化し、重複除外。
+        already_attached: set = set()
+        try:
+            for r in getattr(pane, "_results", []) or []:
+                src = getattr(r, "src_path", None)
+                if src is not None:
+                    already_attached.add(str(Path(src).resolve()))
+        except Exception:
+            pass
+
+        candidates: List[Path] = []
+        seen: set = set()
+        for p in raw_artifacts:
+            try:
+                if not p.exists() or not p.is_file():
+                    continue
+                if not is_supported(p):
+                    continue
+                key = str(p.resolve())
+                if key in seen or key in already_attached:
+                    continue
+                seen.add(key)
+                candidates.append(p)
+            except OSError:
+                continue
+
+        if not candidates:
+            return
+
+        dlg = _SessionArtifactPickerDialog(candidates, parent=self)
+        if dlg.exec() != int(QDialog.DialogCode.Accepted):
+            return
+        selected = dlg.selected_paths()
+        if not selected:
+            return
+        try:
+            pane._on_files_dropped(selected)
+        except Exception as exc:
+            import sys as _sys
+            print(
+                f"[gui] AttachmentPane.add session artifacts failed: {exc}",
+                file=_sys.stderr,
+            )
 
     def _on_next_clicked(self) -> None:
         if self._current_step() == _STEP_WORKFLOW:
@@ -1221,16 +1424,10 @@ class MainWindow(QMainWindow):
         # により FILE/WIZARD_INPUT/SETTING/AUTH の 4 カテゴリ統合検査 + プランレビューが
         # 既に実施済みのため、ここでは再実行しない。
         # False のとき: Step 2 直接呼び出し等の経路から、必須入力ファイル検査のみ実行する。
+        # 追加プロンプト / 添付ファイル等は ``_run_step1_unified_precheck`` 内で
+        # ``self._page_options`` / ``self._collect_ard_attachment_paths()`` から
+        # 直接収集されるため、ここでは選択 workflow と autopilot_mode のみ渡せばよい。
         if not skip_step1_precheck:
-            additional_prompts: Dict[str, str] = {}
-            for wf_id, args in zip(ordered_workflows, args_queue):
-                ap = getattr(args, "additional_prompt", None)
-                if ap:
-                    additional_prompts[wf_id] = ap
-            extra_provided: Dict[str, list] = {}
-            paths_for_ard = self._collect_ard_attachment_paths()
-            if paths_for_ard:
-                extra_provided["ard"] = paths_for_ard
             if not self._run_step1_unified_precheck(
                 list(ordered_workflows),
                 autopilot_mode=False,
@@ -1308,6 +1505,15 @@ class MainWindow(QMainWindow):
         # 認証情報の同期取得をループ外に移動（ループ毎の 30s wait を排除）。
         providers, auth_settings, auth_states = self._refresh_auth_states_sync()
 
+        # 追加プロンプトの LLM 自然言語判定を有効化するか（設定パネル トグル）。
+        # 既定 True。ループ内で変化しないためループ外で 1 回だけ取得する。
+        # 空 prompt の場合は collect_missing_files 側で LLM 呼出がスキップされる。
+        try:
+            from .settings_store import get_option as _get_opt
+            _use_llm_judge = bool(_get_opt("precheck_use_llm_judge"))
+        except Exception:
+            _use_llm_judge = True
+
         while True:
             self._step1_plan_review_iterations += 1
             if self._step1_plan_review_iterations > MAX_ITER:
@@ -1328,7 +1534,19 @@ class MainWindow(QMainWindow):
             wizard_inputs: dict = {}
 
             # --- 追加プロンプト / パラメータ指定ファイルを収集 ---
+            # OptionsPage 上の単一 additional_prompt 入力欄を、選択中の全 workflow_id に
+            # 同一文字列として複製してマップする（Q8=A: per-workflow 入力欄は未導入）。
+            # 空文字列／空白のみは無視（precheck_collector 側でも空文字は LLM 呼出スキップ）。
             additional_prompts: dict = {}
+            try:
+                _ap_text = (
+                    self._page_options.additional_prompt.toPlainText().strip()
+                )
+            except Exception:
+                _ap_text = ""
+            if _ap_text:
+                for _wf in wf_ids_now:
+                    additional_prompts[_wf] = _ap_text
             extra_provided: dict = {}
             # Autopilot ON 時のみ catalog パスを extra_provided に追加。
             if autopilot_mode:
@@ -1362,20 +1580,39 @@ class MainWindow(QMainWindow):
                     catalog_rel = str(catalog_path)
                 autopilot_required = [catalog_rel]
 
-            result = run_step1_precheck(
-                wf_ids_now,
-                repo_root,
-                steps_by_workflow=steps_by_wf,
-                wizard_inputs_by_workflow=wizard_inputs,
-                providers=providers,
-                auth_settings=auth_settings,
-                auth_states=auth_states,
-                authenticated_marker=AuthState.AUTHENTICATED,
-                additional_prompts=additional_prompts,
-                extra_provided_paths_by_workflow=extra_provided,
-                implicit_required_paths=implicit_required_paths,
-                autopilot_required_artifacts=autopilot_required or None,
-            )
+            # LLM 判定が走る条件（_use_llm_judge=True かつ追加プロンプト非空）で
+            # 数秒〜10s 程度ブロックされうるため、ビジーカーソルを表示する。
+            _llm_active = bool(_use_llm_judge and additional_prompts)
+            if _llm_active:
+                try:
+                    from PySide6.QtCore import Qt
+                    from PySide6.QtWidgets import QApplication as _QA
+                    _QA.setOverrideCursor(Qt.WaitCursor)
+                except Exception:
+                    _llm_active = False
+            try:
+                result = run_step1_precheck(
+                    wf_ids_now,
+                    repo_root,
+                    steps_by_workflow=steps_by_wf,
+                    wizard_inputs_by_workflow=wizard_inputs,
+                    providers=providers,
+                    auth_settings=auth_settings,
+                    auth_states=auth_states,
+                    authenticated_marker=AuthState.AUTHENTICATED,
+                    additional_prompts=additional_prompts,
+                    extra_provided_paths_by_workflow=extra_provided,
+                    implicit_required_paths=implicit_required_paths,
+                    autopilot_required_artifacts=autopilot_required or None,
+                    use_llm_judge=_use_llm_judge,
+                )
+            finally:
+                if _llm_active:
+                    try:
+                        from PySide6.QtWidgets import QApplication as _QA
+                        _QA.restoreOverrideCursor()
+                    except Exception:
+                        pass
 
             if not result.is_ok():
                 dlg = Step1PrecheckDialog(result, parent=self)

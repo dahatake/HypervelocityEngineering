@@ -9,7 +9,10 @@
   1. ``f`` が repo_root 配下に既に実存する
   2. 同じ Autopilot ランで選択中の任意の step が ``output_paths`` に ``f`` を含む
      （P2=(b) 採用: 選択集合一括、順序は問わない）
-  3. 追加プロンプト本文に ``f`` / description / glob prefix が言及されている
+  3a. 追加プロンプト本文に ``f`` / description / glob prefix が**部分文字列として**言及されている
+  3b. ``use_llm_judge=True`` のとき、LLM (github-copilot-sdk) が追加プロンプト本文を
+      自然言語解釈して当該 ``f`` への言及／代替指定があると判定した（LLM 呼出が
+      タイムアウト・JSON 解析失敗等の場合は 3a の結果のみが採用される）
   4. パラメータ（``attached_docs`` / ``target_business_path`` 等）で
      ``f`` または等価ファイルが指定されている
 """
@@ -190,6 +193,7 @@ def collect_missing_files(
     extra_provided_paths_by_workflow: Optional[Mapping[str, Iterable[str]]] = None,
     implicit_required_paths: Optional[Mapping[str, Iterable[str]]] = None,
     autopilot_required_artifacts: Optional[Iterable[str]] = None,
+    use_llm_judge: bool = False,
 ) -> List[PrecheckItem]:
     """選択 workflow/step の required ファイル不足を収集。
 
@@ -208,6 +212,10 @@ def collect_missing_files(
         autopilot_required_artifacts: workflow 横断のグローバル必須 path 群
             （例: ``["docs/catalog/app-arch-catalog.md"]``。``workflow_id=""`` の
             PrecheckItem として返される）。
+        use_llm_judge: True のとき、部分文字列マッチで「不足」と判定された FILE 項目に
+            対し、追加プロンプト本文を LLM (github-copilot-sdk) に渡して自然言語ベースで
+            再判定する。LLM 呼び出し失敗・タイムアウト時は部分文字列マッチの結果がそのまま
+            残る（Q6 フォールバック方針）。デフォルト False で後方互換。
     """
     workflow_ids_list = [w for w in workflow_ids if w]
     additional_prompts = additional_prompts or {}
@@ -365,7 +373,70 @@ def collect_missing_files(
                 )
             )
 
+    # --- LLM 判定（自然言語による override 解釈）---
+    # 部分文字列マッチで漏れた missing 項目を、追加プロンプト本文と照らして LLM が
+    # 「自然言語で言及／代替指定されている」と判定したものを items から除外する。
+    # 失敗・タイムアウト時は空 dict が返るため items はそのまま（フォールバック）。
+    if use_llm_judge and items:
+        items = _apply_llm_judge(items, additional_prompts)
+
     return items
+
+
+def _apply_llm_judge(
+    items: List[PrecheckItem],
+    additional_prompts: Mapping[str, str],
+) -> List[PrecheckItem]:
+    """workflow_id 別に FILE 項目をグループ化し、LLM 判定で satisfied なものを除外する。
+
+    workflow_id == "" のグローバル必須項目は判定対象外（追加プロンプトとの紐付けが
+    曖昧なため保守側に倒す）。
+    """
+    import logging
+
+    from .precheck_llm_judge import judge_overrides_with_llm
+
+    _logger = logging.getLogger(__name__)
+
+    # workflow_id ごとの FILE 項目を集約
+    by_wf: Dict[str, List[PrecheckItem]] = {}
+    for it in items:
+        if it.category != PrecheckCategory.FILE:
+            continue
+        if not it.workflow_id:
+            continue
+        by_wf.setdefault(it.workflow_id, []).append(it)
+
+    satisfied_keys: set = set()  # (workflow_id, field_name)
+    for wf_id, wf_items in by_wf.items():
+        prompt = (additional_prompts.get(wf_id) or "").strip()
+        if not prompt:
+            continue
+        missing_input = [
+            {
+                "pattern": it.field_name,
+                "description": get_artifact_description(it.field_name) or it.field_name,
+            }
+            for it in wf_items
+        ]
+        judge = judge_overrides_with_llm(prompt, missing_input)
+        for it in wf_items:
+            r = judge.get(it.field_name)
+            if r and r.is_satisfied:
+                satisfied_keys.add((wf_id, it.field_name))
+                # Q4: satisfied 判定の理由をログ出力（運用時の追跡用）
+                _logger.info(
+                    "precheck LLM judge satisfied: wf=%s path=%s reason=%s",
+                    wf_id, it.field_name, r.reason,
+                )
+
+    if not satisfied_keys:
+        return items
+    return [
+        it
+        for it in items
+        if (it.workflow_id, it.field_name) not in satisfied_keys
+    ]
 
 
 __all__ = [

@@ -100,6 +100,17 @@ class MultiRootFileModel(QAbstractItemModel):
     def root_paths(self) -> List[Path]:
         return [n.path for n in self._root._children]
 
+    def clear_roots(self) -> None:
+        """全ルートを削除する（モデルをリセット）。
+
+        ``_root`` は仮想ルートで実ディレクトリを持たないため ``_loaded=True`` を維持し、
+        ``_ensure_loaded`` 時の ``os.scandir`` 実行を防ぐ。
+        """
+        self.beginResetModel()
+        self._root._children = []
+        self._known_root_paths = {}
+        self.endResetModel()
+
     # ------------------------------------------------------------------
     # 子ノード遅延ロード
     # ------------------------------------------------------------------

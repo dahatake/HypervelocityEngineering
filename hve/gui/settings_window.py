@@ -14,6 +14,7 @@ Markdown-Query セクションの実体は
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -125,6 +126,9 @@ class _CAutopilotSection(QWidget):
       - ``step1_show_plan_review_always`` (bool, 既定 False, R5-c)
         旧名: ``autopilot_show_plan_review_always``。Step 1 [次へ] 統合 precheck で
         Autopilot ON/OFF いずれでも参照される共通設定として中立化済み。
+      - ``precheck_use_llm_judge`` (bool, 既定 True)
+        Step 1 [次へ] 押下時に追加プロンプト本文を LLM で自然言語解釈し、
+        部分文字列マッチで漏れた不足項目を再判定する。
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -159,6 +163,22 @@ class _CAutopilotSection(QWidget):
                 " Autopilot ON/OFF のいずれでも適用されます。"
             ),
             input_widget=self.step1_show_plan_review_always,
+        ))
+
+        # 追加プロンプトの LLM 判定（Step 1 precheck 共通設定）
+        self.precheck_use_llm_judge = QCheckBox(
+            self.tr("追加プロンプトを LLM で自然言語解釈する")
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("LLM 判定 (precheck_use_llm_judge)"),
+            description=self.tr(
+                "ON（既定）にすると、Step 1 [次へ] 押下時に不足ファイルがあっても、"
+                " 追加プロンプト本文を LLM (github-copilot-sdk) が自然言語解釈して、"
+                " 別ファイル名の指定／参照ファイルの追加指定などで実質的に解消されているか判定します。"
+                " OFF にすると従来の部分文字列マッチのみで判定します"
+                "（ネットワーク不通環境向け）。"
+            ),
+            input_widget=self.precheck_use_llm_judge,
         ))
         layout.addStretch(1)
 
@@ -205,6 +225,131 @@ class _CGuiSessionSection(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# エクスプローラー（ファイルツリー）監視ルート設定セクション
+# ---------------------------------------------------------------------------
+class _CExplorerSection(QWidget):
+    """エクスプローラーの監視ルートを編集するセクション。
+
+    保存キー: ``explorer_roots`` (";" 区切りのリポジトリ相対 / 絶対パスリスト)。
+
+    UI:
+        - QListWidget でフォルダ一覧を表示
+        - 「追加…」 ``QFileDialog.getExistingDirectory()``
+        - 「削除」 選択行を取り除く
+        - 設定値の橋渡し用に **非表示 QLineEdit** ``explorer_roots`` を保持し、
+          settings_apply のジェネリック ``_get/_set`` 経由で自動保存されるようにする。
+
+    Note:
+        本ウィジェットは設定値の "編集" のみを担当する。実ディレクトリ作成は
+        ``hve.gui.explorer_roots.resolve_explorer_roots()`` で行われる。
+    """
+
+    def __init__(self, repo_root: Path, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        from PySide6.QtWidgets import QFileDialog, QListWidget
+
+        self._repo_root = repo_root
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        title = QLabel(self.tr("エクスプローラー監視フォルダー"))
+        title.setStyleSheet("font-weight: bold;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            self.tr(
+                "左サイドバーのエクスプローラーに表示するフォルダーを設定します。"
+                " 未存在のフォルダーは保存時と GUI 起動時に自動作成されます。"
+                " リポジトリ相対パス（例: docs）と絶対パスの両方が使えます。"
+            )
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #6a737d;")
+        layout.addWidget(desc)
+
+        self._list = QListWidget()
+        self._list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        layout.addWidget(self._list, stretch=1)
+
+        btn_row = QHBoxLayout()
+        self._btn_add = QPushButton(self.tr("追加…"))
+        self._btn_remove = QPushButton(self.tr("削除"))
+        btn_row.addWidget(self._btn_add)
+        btn_row.addWidget(self._btn_remove)
+        btn_row.addStretch(1)
+        layout.addLayout(btn_row)
+
+        # settings_apply が参照するフィールド。非表示で値だけ保持する。
+        # Tab フォーカスを受け取らないよう NoFocus を明示（UX 上、隠し要素には不要）。
+        self.explorer_roots = QLineEdit()
+        self.explorer_roots.setVisible(False)
+        self.explorer_roots.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        layout.addWidget(self.explorer_roots)
+
+        # 入出力同期。
+        # textChanged は外部からの setText（設定ロード時）に応答して QListWidget を
+        # 再構築する。内部の _commit_list_to_text 経由でも textChanged が再発火するが、
+        # 同値による setText は emit されない Qt の仕様により再帰しない。
+        self.explorer_roots.textChanged.connect(self._on_text_changed)
+        self._btn_add.clicked.connect(self._on_add_clicked)
+        self._btn_remove.clicked.connect(self._on_remove_clicked)
+
+        self._file_dialog_factory = QFileDialog  # テスト差し替え用
+
+    # ------------------------------------------------------------------
+    # ;-区切り文字列 → QListWidget の同期
+    # ------------------------------------------------------------------
+    def _on_text_changed(self, text: str) -> None:
+        self._list.clear()
+        for token in (text or "").split(";"):
+            t = token.strip()
+            if t:
+                self._list.addItem(t)
+
+    def _commit_list_to_text(self) -> None:
+        tokens = [self._list.item(i).text().strip() for i in range(self._list.count())]
+        tokens = [t for t in tokens if t]
+        new_text = ";".join(tokens)
+        if new_text != self.explorer_roots.text():
+            self.explorer_roots.setText(new_text)
+            # textChanged は同じ値だと発火しないが、editingFinished で自動保存される。
+            # 明示的に editingFinished を emit してオートセーブを駆動する。
+            self.explorer_roots.editingFinished.emit()
+
+    def _on_add_clicked(self) -> None:
+        d = self._file_dialog_factory.getExistingDirectory(
+            self,
+            self.tr("フォルダーを選択"),
+            str(self._repo_root),
+        )
+        if not d:
+            return
+        # リポジトリ相対化を試みる（相対が可能なら相対、無理なら絶対のまま）。
+        chosen = Path(d).resolve()
+        try:
+            rel = chosen.relative_to(self._repo_root.resolve())
+            token = rel.as_posix()
+        except ValueError:
+            token = chosen.as_posix()
+        # 重複は追加しない
+        existing = {self._list.item(i).text() for i in range(self._list.count())}
+        if token in existing:
+            return
+        self._list.addItem(token)
+        self._commit_list_to_text()
+
+    def _on_remove_clicked(self) -> None:
+        rows = sorted({i.row() for i in self._list.selectedIndexes()}, reverse=True)
+        if not rows:
+            return
+        for r in rows:
+            self._list.takeItem(r)
+        self._commit_list_to_text()
+
+
+# ---------------------------------------------------------------------------
 # SettingsWindow 本体
 # ---------------------------------------------------------------------------
 # VS Code 風のカテゴリ階層定義。
@@ -218,6 +363,7 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("Autopilot", "AUTOPILOT"),
             ("言語 / Language", "LANG"),
             ("GUI セッション作業ディレクトリ", "GUI_SESSION"),
+            ("エクスプローラー", "EXPLORER"),
         ],
     ),
     (
@@ -399,6 +545,8 @@ class SettingsWindow(QMainWindow):
             return _CAutopilotSection()
         if key == "GUI_SESSION":
             return _CGuiSessionSection()
+        if key == "EXPLORER":
+            return _CExplorerSection(self._repo_root)
         # skills レジストリ経由で登録されたセクション
         entry = skill_sections.get_registry().get(key)
         if entry is not None:
@@ -450,6 +598,9 @@ class SettingsWindow(QMainWindow):
             settings_store.save(self._settings)
             self._status_label.setText(self.tr("✅ 自動保存しました"))
         except Exception as e:  # pragma: no cover - defensive
+            logging.getLogger(__name__).warning(
+                "settings auto-save failed", exc_info=True
+            )
             self._status_label.setText(f"⚠ 保存失敗: {e}")
         self.settings_changed.emit(self._settings)
 

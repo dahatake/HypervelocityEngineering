@@ -1198,6 +1198,13 @@ class Console:
             path: ファイルパス。
             mode: "read" または "write"。
         """
+        # GUI 用構造化イベント（verbosity 非依存で常時発火）。
+        # WorkbenchPage がセッション中の生成・更新ファイル一覧を収集するために使用する。
+        try:
+            self.stats_event("file_io", step_id=step_id, path=str(path), mode=str(mode))
+        except Exception:
+            pass
+
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""

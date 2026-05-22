@@ -35,6 +35,7 @@ def run_step1_precheck(
     extra_provided_paths_by_workflow: Optional[Mapping[str, Iterable[str]]] = None,
     implicit_required_paths: Optional[Mapping[str, Iterable[str]]] = None,
     autopilot_required_artifacts: Optional[Iterable[str]] = None,
+    use_llm_judge: bool = False,
 ) -> AutopilotPrecheckResult:
     """Step 1 事前検証を実行し統合結果を返す。
 
@@ -58,6 +59,7 @@ def run_step1_precheck(
             extra_provided_paths_by_workflow=extra_provided_paths_by_workflow,
             implicit_required_paths=implicit_required_paths,
             autopilot_required_artifacts=autopilot_required_artifacts,
+            use_llm_judge=use_llm_judge,
         )
     )
 

@@ -2,7 +2,7 @@
 
 ペインレイアウト:
   1. ActivityStatus: 作業状況ツリー（Workflow/Step/Subtask の 3 階層）
-  2. Header2: ステップ状態（○◇●✗⊘）
+  2. Header2: ステップ状態（⚪🔄✅❌⏭️）
   3. Body: ログペイン（スクロール対応）
   4. UserActions: 実行中の課題（タイムスタンプ + レベル + メッセージ）
   5. Footer: コンテキスト + モデル + 経過時間
@@ -274,6 +274,13 @@ class WorkbenchPage(QWidget):
         # None なら従来通り親 env をそのまま継承（後方互換 / テスト容易性）。
         self._env_overrides: Optional[Dict[str, str]] = None
 
+        # GUI セッション中に orchestrator が「書き込み」したファイルパスの累積リスト。
+        # `[hve:stats] {"kind":"file_io","mode":"write",...}` イベントから収集する。
+        # 順序保持・重複排除のため list + set で管理。
+        # Step 1 ⇔ Step 2 を行き来する間も累積される（明示的に clear するまで保持）。
+        self._session_artifacts: List[Path] = []
+        self._session_artifacts_seen: set = set()
+
         # WorkbenchState を初期化（ダミー値で開始）
         self._state = WorkbenchState(
             workflow_id="unknown",
@@ -524,6 +531,56 @@ class WorkbenchPage(QWidget):
             f"[INFO] セッション開始 ({self._queue_index + 1}/{len(self._args_queue)}): workflow={args.workflow}"
         )
         self.process_started.emit()
+
+    def session_artifacts(self) -> List[Path]:
+        """GUI セッション中に orchestrator が書き込みしたファイルパスの累積リストを返す。
+
+        `[hve:stats] {"kind":"file_io","mode":"write",...}` イベントから収集する。
+        Step 1 ⇔ Step 2 を行き来する間も累積され、`clear_session_artifacts()` を
+        明示呼び出しするまで保持される。
+
+        Returns:
+            重複排除済み・出現順を保持した Path のリスト（コピー）。
+        """
+        return list(self._session_artifacts)
+
+    def clear_session_artifacts(self) -> None:
+        """セッション累積成果物リストをクリアする（明示呼び出し時のみ）。"""
+        self._session_artifacts.clear()
+        self._session_artifacts_seen.clear()
+
+    def _record_file_io_artifact(self, payload: dict) -> None:
+        """`[hve:stats] {"kind":"file_io",...}` イベントから書き込みパスを記録する。
+
+        - mode が "write" のもののみを成果物として記録（read は無視）。
+        - 重複は `_session_artifacts_seen` で抑制。
+        - 相対パスは GUI 起動時の repo_root を解決基準とする。失敗時は与えられた
+          文字列をそのまま Path 化（フォールバック）。
+        """
+        if not isinstance(payload, dict):
+            return
+        mode = payload.get("mode")
+        if mode != "write":
+            return
+        raw_path = payload.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            return
+        try:
+            p = Path(raw_path)
+            if not p.is_absolute():
+                # 子プロセスの cwd は repo_root と想定（既存仕様）。
+                # 解決失敗時は元の Path を維持。
+                try:
+                    p = p.resolve()
+                except OSError:
+                    pass
+        except Exception:
+            return
+        key = str(p)
+        if key in self._session_artifacts_seen:
+            return
+        self._session_artifacts_seen.add(key)
+        self._session_artifacts.append(p)
 
     def stop_orchestrator(self) -> None:
         self._stop_requested = True
@@ -1092,6 +1149,8 @@ class WorkbenchPage(QWidget):
         payload = parse_stats_event(line)
         if payload is not None and payload.get("kind") == "step_status":
             self._apply_stats_step_status(payload)
+        if payload is not None and payload.get("kind") == "file_io":
+            self._record_file_io_artifact(payload)
         self._update_workflow_progress_from_line(line)
         self._update_subtask_from_line(line)
 

@@ -18,11 +18,11 @@ from .workbench_state import WorkbenchState, SimpleTaskNode
 
 
 _STATUS_GLYPH = {
-    "pending": "⊳",      # pending
-    "running": "▶",      # running
-    "done": "●",         # done
-    "failed": "✗",       # failed
-    "skipped": "⊘",      # skipped
+    "pending": "⚪",      # pending
+    "running": "🔄",      # running
+    "done": "✅",         # done
+    "failed": "❌",       # failed
+    "skipped": "⏭️",      # skipped
 }
 
 _STATUS_COLOR = {

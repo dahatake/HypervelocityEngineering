@@ -31,13 +31,13 @@ from .workbench_state import WorkbenchState, StepStatus
 from .workflow_display import format_workflow_label_activity
 
 
-# ステップ状態グリフ
+# ステップ状態グリフ（絵文字）
 _STATUS_GLYPH = {
-    "pending": "○",      # pending
-    "running": "◇",      # running
-    "done": "●",         # done
-    "failed": "✗",       # failed
-    "skipped": "⊘",      # skipped
+    "pending": "⚪",      # pending
+    "running": "🔄",      # running
+    "done": "✅",         # done
+    "failed": "❌",       # failed
+    "skipped": "⏭️",      # skipped
 }
 
 _STATUS_COLOR = {
@@ -50,7 +50,7 @@ _STATUS_COLOR = {
 
 
 class Header2Widget(QWidget):
-    """Header2 ペイン: ステップ状態（○◇●✗⊘）を行に表示。"""
+    """Header2 ペイン: ステップ状態（⚪🔄✅❌⏭️）を行に表示。"""
 
     def __init__(self, state: WorkbenchState, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)

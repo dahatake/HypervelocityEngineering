@@ -528,3 +528,107 @@ def test_t8_target_steps_have_output_paths() -> None:
     assert aagd.get_step("2.1").output_paths_template == [
         "docs/test-specs/{agentId}-test-spec.md"
     ]
+
+# --- T4: LLM 判定統合テスト (use_llm_judge=True) ---
+
+def test_llm_judge_disabled_by_default(tmp_path: Path, monkeypatch) -> None:
+    """use_llm_judge を渡さない場合は LLM ヘルパが呼ばれない（後方互換）。"""
+    called = {"n": 0}
+
+    def fake_judge(*args, **kwargs):  # noqa: ANN001
+        called["n"] += 1
+        return {}
+
+    monkeypatch.setattr(
+        "hve.autopilot.precheck_llm_judge.judge_overrides_with_llm",
+        fake_judge,
+    )
+    collect_missing_files(
+        ["aas"],
+        tmp_path,
+        steps_by_workflow={"aas": ["2"]},
+        additional_prompts={"aas": "別ファイル名で指定します"},
+    )
+    assert called["n"] == 0
+
+
+def test_llm_judge_removes_satisfied_items(tmp_path: Path, monkeypatch) -> None:
+    """LLM が satisfied と判定した項目は missing から除外される。"""
+    from hve.autopilot.precheck_llm_judge import JudgeResult
+
+    def fake_judge(prompt, items, **kwargs):  # noqa: ANN001
+        # すべての候補を satisfied として返す
+        return {
+            it["pattern"]: JudgeResult(is_satisfied=True, reason="LLM ok")
+            for it in items
+        }
+
+    monkeypatch.setattr(
+        "hve.autopilot.precheck_llm_judge.judge_overrides_with_llm",
+        fake_judge,
+    )
+    items_off = collect_missing_files(
+        ["aas"],
+        tmp_path,
+        steps_by_workflow={"aas": ["2"]},
+        additional_prompts={"aas": "自然言語で代替指定"},
+        use_llm_judge=False,
+    )
+    items_on = collect_missing_files(
+        ["aas"],
+        tmp_path,
+        steps_by_workflow={"aas": ["2"]},
+        additional_prompts={"aas": "自然言語で代替指定"},
+        use_llm_judge=True,
+    )
+    aas_missing_off = [it for it in items_off if it.workflow_id == "aas"]
+    aas_missing_on = [it for it in items_on if it.workflow_id == "aas"]
+    assert len(aas_missing_off) > 0
+    assert len(aas_missing_on) == 0
+
+
+def test_llm_judge_keeps_unsatisfied_items(tmp_path: Path, monkeypatch) -> None:
+    """LLM が satisfied=False を返した項目は missing として残る。"""
+    from hve.autopilot.precheck_llm_judge import JudgeResult
+
+    def fake_judge(prompt, items, **kwargs):  # noqa: ANN001
+        return {
+            it["pattern"]: JudgeResult(is_satisfied=False, reason="言及なし")
+            for it in items
+        }
+
+    monkeypatch.setattr(
+        "hve.autopilot.precheck_llm_judge.judge_overrides_with_llm",
+        fake_judge,
+    )
+    items_on = collect_missing_files(
+        ["aas"],
+        tmp_path,
+        steps_by_workflow={"aas": ["2"]},
+        additional_prompts={"aas": "関係ない指示"},
+        use_llm_judge=True,
+    )
+    aas_missing = [it for it in items_on if it.workflow_id == "aas"]
+    assert len(aas_missing) > 0
+
+
+def test_llm_judge_skipped_when_prompt_empty(tmp_path: Path, monkeypatch) -> None:
+    """追加プロンプトが空の workflow に対しては LLM を呼ばない。"""
+    called = {"n": 0}
+
+    def fake_judge(prompt, items, **kwargs):  # noqa: ANN001
+        called["n"] += 1
+        return {}
+
+    monkeypatch.setattr(
+        "hve.autopilot.precheck_llm_judge.judge_overrides_with_llm",
+        fake_judge,
+    )
+    collect_missing_files(
+        ["aas"],
+        tmp_path,
+        steps_by_workflow={"aas": ["2"]},
+        additional_prompts={"aas": ""},
+        use_llm_judge=True,
+    )
+    assert called["n"] == 0

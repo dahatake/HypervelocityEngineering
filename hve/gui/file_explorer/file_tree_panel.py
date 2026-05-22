@@ -29,8 +29,11 @@ from PySide6.QtCore import QFileSystemWatcher, QModelIndex, QSortFilterProxyMode
 from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtWidgets import (
     QDockWidget,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMenu,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -137,6 +140,102 @@ class FileTreePanel(QDockWidget):
         self.setMinimumWidth(180)
 
         self._search.textChanged.connect(self._proxy.set_needle)
+
+    # ------------------------------------------------------------------
+    # 「ファイル」カスタムタイトルバー（Wave D T11）
+    # ------------------------------------------------------------------
+
+    def setup_file_section_title_bar(self, preview_dock: "QDockWidget") -> None:
+        """Dock タイトルバー領域を「📁 ファイル」見出し + 横並びトグルに差し替える。
+
+        VS Code の Side Bar タイトル領域に近い UI を提供する。
+        - ラベル「📁 ファイル」
+        - 「エクスプローラー」「プレビュー」を表す 2 つの小型 QToolButton（横並び）
+          - 各ボタンは対応する Dock の visibility と双方向同期する。
+          - 既存 ActivityBar のボタンとはミラーで動作するため、どちらを操作しても
+            同じ Dock が表示/非表示になる（Qt のシグナルチェーンで自然に同期）。
+
+        Args:
+            preview_dock: 対になる Markdown プレビュー Dock。
+
+        Note:
+            冪等性: 既にカスタムタイトルバーが設定されている場合は no-op。
+            二重呼び出しによる widget リーク・シグナル多重接続を防ぐ。
+        """
+        if hasattr(self, "_tb_btn_explorer"):
+            return
+        tb = QWidget(self)
+        tb.setObjectName("FileTreePanelTitleBar")
+        row = QHBoxLayout(tb)
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(4)
+
+        title = QLabel(self.tr("📁 ファイル"), tb)
+        title.setStyleSheet("font-weight: bold;")
+        row.addWidget(title)
+        row.addStretch(1)
+
+        def _make_toggle(text: str, tooltip: str, dock: "QDockWidget") -> QToolButton:
+            btn = QToolButton(tb)
+            btn.setText(text)
+            btn.setToolTip(tooltip)
+            btn.setCheckable(True)
+            btn.setChecked(not dock.isHidden())
+            btn.setAutoRaise(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            # toggled → Dock.setVisible
+            btn.toggled.connect(dock.setVisible)
+            # Dock visibilityChanged → button.setChecked （他経路で visibility が
+            # 変わった場合の追随）
+            dock.visibilityChanged.connect(btn.setChecked)
+            return btn
+
+        self._tb_btn_explorer = _make_toggle(
+            self.tr("📂"),
+            self.tr("エクスプローラーの表示/非表示"),
+            self,
+        )
+        self._tb_btn_preview = _make_toggle(
+            self.tr("📄"),
+            self.tr("プレビューの表示/非表示"),
+            preview_dock,
+        )
+        row.addWidget(self._tb_btn_explorer)
+        row.addWidget(self._tb_btn_preview)
+
+        self.setTitleBarWidget(tb)
+
+    # ------------------------------------------------------------------
+    # ルート再設定（設定変更時に呼ばれる）
+    # ------------------------------------------------------------------
+
+    def set_roots(self, roots: List[Path]) -> None:
+        """監視ルートを丸ごと差し替える。
+
+        モデルと QFileSystemWatcher の登録状態をクリアした後、与えられた roots を
+        新規に登録する。重複は MultiRootFileModel.add_root で自動的に無視される。
+        """
+        # 既存 watcher エントリをすべて剥がす
+        if self._watched_dirs:
+            try:
+                self._watcher.removePaths(list(self._watched_dirs))
+            except Exception:
+                pass
+        self._watched_dirs = set()
+        self._known_files = {}
+
+        # モデルをリセットして新規ルートを登録
+        self._model.clear_roots()
+        for r in roots:
+            self._model.add_root(r, r.name or str(r))
+
+        # 新しいルートを watcher に登録（既存と同じ depth_limit=1）
+        for r in self._model.root_paths():
+            self._add_watch_recursive(r, depth_limit=1)
+
+        # ビューを再描画
+        if self._view.viewport() is not None:
+            self._view.viewport().update()
 
     # ------------------------------------------------------------------
     # ファイル監視

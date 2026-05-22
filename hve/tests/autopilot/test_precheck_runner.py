@@ -89,3 +89,22 @@ def test_runner_forwards_extra_provided_paths(tmp_path: Path) -> None:
         },
     )
     assert not any(it.field_name == "docs/catalog/app-catalog.md" for it in r.items)
+
+def test_runner_forwards_use_llm_judge(tmp_path: Path, monkeypatch) -> None:
+    """run_step1_precheck の use_llm_judge が collect_missing_files に中継される。"""
+    captured = {"use_llm_judge": None}
+
+    from hve.autopilot import precheck_runner as runner_mod
+
+    def fake_collect(*args, **kwargs):  # noqa: ANN001
+        captured["use_llm_judge"] = kwargs.get("use_llm_judge")
+        return []
+
+    monkeypatch.setattr(runner_mod, "collect_missing_files", fake_collect)
+
+    run_step1_precheck(["aad-web"], tmp_path, use_llm_judge=True)
+    assert captured["use_llm_judge"] is True
+
+    captured["use_llm_judge"] = None
+    run_step1_precheck(["aad-web"], tmp_path)
+    assert captured["use_llm_judge"] is False
