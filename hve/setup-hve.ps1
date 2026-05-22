@@ -3,12 +3,21 @@ param(
     [switch]$CheckOnly,
     [switch]$WithWorkIQ,
     [switch]$WithGui,
+    [switch]$NoGui,
     [switch]$WithSkills,
     [switch]$InstallExternalCopilotCli,
-    [switch]$ForceRecreateVenv,
+    [switch]$Force,
     [switch]$SkipMdq,
     [switch]$SkipMdqWatch
 )
+
+# -Force: 冪等な完全再構築モード。.venv を無条件削除して再作成し、
+# GUI extras (PySide6 + markitdown) を含むすべての必須/推奨依存を導入する。
+# -NoGui を併用した場合のみ GUI extras を除外。extras インストール失敗は
+# WARN ではなく ERROR として扱い（exit 1）、追加タスク無しで hve/gui/cli が
+# 起動できることを保証する。非対話・確認プロンプト無し（CI 利用可）。
+if ($Force -and -not $NoGui) { $WithGui = $true }
+$script:ErrorEscalate = [bool]$Force
 
 $ErrorActionPreference = "Stop"
 $script:WarningCount = 0
@@ -23,6 +32,21 @@ function Write-SetupWarning {
     param([string]$Message)
     $script:WarningCount++
     Write-Warning $Message
+}
+
+function Invoke-Critical {
+    param(
+        [string]$Message,
+        [scriptblock]$Action
+    )
+    try {
+        & $Action
+    } catch {
+        if ($script:ErrorEscalate) {
+            throw ($Message + ": " + $_.Exception.Message)
+        }
+        Write-SetupWarning ($Message + ": " + $_.Exception.Message)
+    }
 }
 
 function Resolve-PreferredCommand {
@@ -163,15 +187,16 @@ if ($InstallExternalCopilotCli) {
 }
 
 Write-Step "Checking Python virtual environment"
+if ($Force -and -not $CheckOnly -and (Test-Path $venvDir)) {
+    Write-Host "-Force specified: removing existing .venv at $venvDir"
+    Remove-Item -Recurse -Force $venvDir
+}
 if (Test-Path $venvPython) {
     $venvInfo = Get-PythonInfo -Exe $venvPython -Label ".venv"
     if (Test-IsPython311OrNewer $venvInfo) {
         Write-Host ("Existing .venv Python: {0}.{1}.{2}" -f $venvInfo.Major, $venvInfo.Minor, $venvInfo.Patch)
-    } elseif ($ForceRecreateVenv -and -not $CheckOnly) {
-        Write-SetupWarning "Existing .venv is older than Python 3.11. Recreating because -ForceRecreateVenv was specified."
-        Remove-Item -Recurse -Force $venvDir
     } else {
-        Write-SetupWarning "Existing .venv is older than Python 3.11. Rerun with -ForceRecreateVenv to recreate it."
+        Write-SetupWarning "Existing .venv is older than Python 3.11. Rerun with -Force to recreate it."
         if (-not $CheckOnly) { exit 1 }
     }
 } elseif ($CheckOnly) {
@@ -199,6 +224,7 @@ if (Test-Path $venvPython) {
                 Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "-e", ".[$extrasTarget]")
                 Write-Host ("[{0}] extras installed." -f $extrasTarget)
             } catch {
+                if ($script:ErrorEscalate) { throw ("Failed to install [$extrasTarget] extras: " + $_.Exception.Message) }
                 Write-SetupWarning ("Failed to install [$extrasTarget] extras: " + $_.Exception.Message + ". markdown-query Skill will still work with built-in fallback. Re-run later: " + $venvPython + ' -m pip install -e ".[' + $extrasTarget + ']"')
             }
             # FTS5 trigram tokenizer（日本語 ja-jp に使用）のサポートをプローブ。
@@ -231,6 +257,7 @@ except Exception:
                     Write-SetupWarning ("Asset download had failures: " + $_.Exception.Message + ". Markdown body will still render; Mermaid/KaTeX will be disabled.")
                 }
             } catch {
+                if ($script:ErrorEscalate) { throw ("Failed to install [gui,gui-docconvert] extras: " + $_.Exception.Message) }
                 Write-SetupWarning ("Failed to install [gui,gui-docconvert] extras: " + $_.Exception.Message + ". Re-run later: " + $venvPython + ' -m pip install -e ".[gui,gui-docconvert]"')
             }
         }

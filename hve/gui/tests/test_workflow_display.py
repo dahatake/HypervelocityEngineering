@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from hve.gui.workflow_display import (
     format_workflow_label,
+    format_workflow_label_activity,
     format_workflow_label_html,
 )
 
@@ -63,3 +64,36 @@ def test_html_escape():
 def test_html_uppercase_id():
     out = format_workflow_label_html("ard", "Auto Requirement Definition")
     assert out == "Auto Requirement Definition (ARD)"
+
+
+def test_activity_explicit_name_and_id():
+    assert (
+        format_workflow_label_activity("ard", "Auto Requirement Definition")
+        == "ARD-Auto Requirement Definition"
+    )
+
+
+def test_activity_resolve_from_registry_when_name_missing():
+    assert (
+        format_workflow_label_activity("ard")
+        == "ARD-Auto Requirement Definition"
+    )
+
+
+def test_activity_hyphenated_id_uppercased():
+    assert (
+        format_workflow_label_activity("aad-web", "Web App Design")
+        == "AAD-WEB-Web App Design"
+    )
+
+
+def test_activity_unknown_id_falls_back_to_id_only():
+    assert (
+        format_workflow_label_activity("__nonexistent_workflow_zzz__")
+        == "__NONEXISTENT_WORKFLOW_ZZZ__"
+    )
+
+
+def test_activity_empty_id_returns_name_or_empty():
+    assert format_workflow_label_activity("", "Some Name") == "Some Name"
+    assert format_workflow_label_activity("", "") == ""

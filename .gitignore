@@ -118,3 +118,9 @@ hve/.settings.txt.tmp
 # Externally-sourced agent skills (installed via setup-hve --with-skills / npx skills add microsoft/skills)
 .github/skills/azure-skills/
 
+
+# Markdown preview vendored assets (downloaded by setup-hve)
+hve/gui/markdown_preview/assets/mermaid.min.js
+hve/gui/markdown_preview/assets/katex.min.js
+hve/gui/markdown_preview/assets/katex.min.css
+hve/gui/markdown_preview/assets/katex-auto-render.min.js

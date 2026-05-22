@@ -43,9 +43,12 @@ def test_main_window_minimum_width_is_at_most_threshold(qapp):
 
     Step 1 を 2 ペイン化 (ワークフロー選択 + オプション) に変更したため、
     OptionsPage を内包する右ペインの最小サイズヒントが増え、従来の 640px は
-    達成困難となった。ドラッグ縮小を妨げない実用上限として 800px を採用する。
+    達成困難となった。さらに Phase D (Dock 統合) で左右に
+    FileTreePanel / MarkdownPreviewPanel を追加し既定可視にしたため、
+    最小幅は ActivityBar 48 + FileTree 180 + 中央 stack + Preview 200 程度に
+    なる。ドラッグ縮小を妨げない実用上限として 1200px を採用する。
     """
-    THRESHOLD = 800
+    THRESHOLD = 1200
     mw = _make_window(qapp)
     try:
         assert mw.minimumWidth() <= THRESHOLD, (

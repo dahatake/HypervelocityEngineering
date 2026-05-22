@@ -28,7 +28,7 @@ from .copy_button import CopyButton
 from .widgets.word_wrap_delegate import WordWrapDelegate
 from .widgets.wrap_helpers import apply_cjk_wrap
 from .workbench_state import WorkbenchState, StepStatus
-from .workflow_display import format_workflow_label
+from .workflow_display import format_workflow_label_activity
 
 
 # ステップ状態グリフ
@@ -174,7 +174,7 @@ class WorkflowProgressWidget(QWidget):
             wf_name = str(wf.get("workflow_name", wf_id))
             wf_state = self._workflow_status.get(wf_id, "")
             wf_state_text = f" [{wf_state}]" if wf_state else ""
-            lines.append(f"{format_workflow_label(wf_id, wf_name)}{wf_state_text}")
+            lines.append(f"{format_workflow_label_activity(wf_id, wf_name)}{wf_state_text}")
 
             step_map = self._step_status.get(wf_id, {})
             subtask_map = self._subtask_status.get(wf_id, {})
@@ -636,7 +636,7 @@ class ActivityStatusWidget(QWidget):
             inst = WorkflowInstance(
                 instance_id=wf_id,
                 workflow_id=wf_id,
-                label=format_workflow_label(wf_id, wf_name),
+                label=format_workflow_label_activity(wf_id, wf_name),
                 app_id=None,
                 status=wf_st,  # type: ignore[arg-type]
                 started_at=wf_started,

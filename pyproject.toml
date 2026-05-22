@@ -45,8 +45,18 @@ semantic = [
 # gui: HVE GUI Orchestrator（PySide6/Qt6 ベース GUI フロントエンド）。
 # `python -m hve gui` または `--ui gui` フラグでの GUI モード起動に必要。
 # ターミナル/CLI モード（既定）では本依存は不要。
+#
+# Markdown プレビュー機能で以下を使用:
+#   - QtWebEngine (PySide6 6.11.1 に同梱を実測確認。
+#     より古い 6.x では PySide6-Addons が必要な可能性あり)
+#   - markdown-it-py: Markdown → HTML 変換
+#   - mdit-py-plugins: KaTeX 数式等の plugin
+#   - Pygments: 非 Markdown ファイルのシンタックスハイライト
 gui = [
   "PySide6>=6.6",
+  "markdown-it-py>=3.0",
+  "mdit-py-plugins>=0.4",
+  "Pygments>=2.17",
 ]
 # gui-pty: HVE GUI Orchestrator で Plugin / MCP Server 認証時にインタラクティブ
 # 端末（PTY）を起動するためのオプション依存。`copilot` / `az` / `gh` 等の対話 CLI を
@@ -96,4 +106,15 @@ exclude = ["hve.tests*"]
 "hve.gui.auth_providers.manifests" = [
   "*.yml",
   "*.yaml",
+]
+# Markdown プレビュー用同梱アセット (Mermaid / KaTeX JS/CSS + preview.html テンプレ + 第三者ライセンス)
+"hve.gui.markdown_preview" = [
+  "assets/*.html",
+  "assets/*.js",
+  "assets/*.css",
+  "assets/LICENSE-third-party.md",
+]
+# ActivityBar / FileTreePanel 用 SVG アイコン
+"hve.gui.icons" = [
+  "*.svg",
 ]

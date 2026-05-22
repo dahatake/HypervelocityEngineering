@@ -83,6 +83,29 @@ def format_workflow_label(
     return name
 
 
+def format_workflow_label_activity(
+    workflow_id: str,
+    workflow_name: Optional[str] = None,
+) -> str:
+    """Step 2 「作業状況」表示専用の書式を返す。
+
+    書式: ``{ID-UPPER}-{Name}``（例: ``ARD-Auto Requirement Definition``）
+
+    エッジケース:
+        - name 解決不可: ``{ID-UPPER}``
+        - workflow_id 空: ``name``（空なら空文字）
+        - 両方空: ``""``
+    """
+    wf_id = (workflow_id or "").strip()
+    name = _resolve_name(wf_id, workflow_name)
+    wf_upper = wf_id.upper()
+    if name and wf_id:
+        return f"{wf_upper}-{name}"
+    if wf_id:
+        return wf_upper
+    return name
+
+
 def format_workflow_label_html(
     workflow_id: str,
     workflow_name: Optional[str] = None,

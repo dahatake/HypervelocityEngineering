@@ -22,6 +22,10 @@ REM   --check-only   Report state only. Do not modify environment.
 REM   --skip-mdq     Skip mdq extras installation.
 REM   --no-gui       Skip GUI extras installation (CLI-only setup).
 REM   --no-recreate  Do not auto-recreate an outdated .venv.
+REM   --force        Idempotent full rebuild: unconditionally delete .venv,
+REM                  recreate, and install all required + GUI extras
+REM                  (unless --no-gui). Extras failures become errors.
+REM                  Non-interactive (no prompt). Conflicts with --no-recreate.
 REM   --help / /?    Show this help.
 REM ============================================================
 
@@ -35,6 +39,7 @@ set SKIP_MDQ=0
 set WITH_GUI=1
 set WITH_SKILLS=0
 set NO_RECREATE=0
+set FORCE=0
 set INTERACTIVE_PAUSE=1
 set WARN=0
 set HAD_ARGS=0
@@ -47,6 +52,7 @@ if /i "%~1"=="--skip-mdq"    ( set "SKIP_MDQ=1" & shift /1 & goto :parse )
 if /i "%~1"=="--no-gui"      ( set "WITH_GUI=0" & shift /1 & goto :parse )
 if /i "%~1"=="--with-skills" ( set "WITH_SKILLS=1" & shift /1 & goto :parse )
 if /i "%~1"=="--no-recreate" ( set "NO_RECREATE=1" & shift /1 & goto :parse )
+if /i "%~1"=="--force"       ( set "FORCE=1" & shift /1 & goto :parse )
 if /i "%~1"=="--help"        goto :help
 if /i "%~1"=="-h"            goto :help
 if /i "%~1"=="/?"            goto :help
@@ -58,6 +64,13 @@ goto :end_error
 :after_parse
 REM Pause only when double-clicked (no args).
 if "%HAD_ARGS%"=="1" set INTERACTIVE_PAUSE=0
+
+REM --force conflicts with --no-recreate (semantic opposite).
+if "%FORCE%"=="1" if "%NO_RECREATE%"=="1" (
+    echo [ERROR] --force and --no-recreate cannot be combined.
+    set INTERACTIVE_PAUSE=0
+    goto :end_error
+)
 
 pushd "%SCRIPT_DIR%." >nul 2>&1
 if errorlevel 1 (
@@ -77,6 +90,7 @@ echo     check-only  : %CHECK_ONLY%
 echo     skip-mdq    : %SKIP_MDQ%
 echo     with-gui    : %WITH_GUI%
 echo     no-recreate : %NO_RECREATE%
+echo     force       : %FORCE%
 echo.
 
 REM ---- Tool detection: git ----
@@ -165,14 +179,19 @@ set NEED_RECREATE=0
 
 if exist "%VENV_PY%" (
     echo Existing .venv detected: %VENV_PY%
-    "%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" >nul 2>&1
-    if errorlevel 1 (
-        if "%NO_RECREATE%"=="1" (
-            echo [WARN] Existing .venv is older than Python 3.11. --no-recreate set; skipping.
-            set /a WARN+=1
-        ) else (
-            echo [INFO] Existing .venv is older than Python 3.11. Recreating automatically.
-            set NEED_RECREATE=1
+    if "%FORCE%"=="1" (
+        echo [INFO] --force specified. Recreating .venv unconditionally.
+        set NEED_RECREATE=1
+    ) else (
+        "%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info >= (3,11) else 1)" >nul 2>&1
+        if errorlevel 1 (
+            if "%NO_RECREATE%"=="1" (
+                echo [WARN] Existing .venv is older than Python 3.11. --no-recreate set; skipping.
+                set /a WARN+=1
+            ) else (
+                echo [INFO] Existing .venv is older than Python 3.11. Recreating automatically.
+                set NEED_RECREATE=1
+            )
         )
     )
 ) else (
@@ -230,6 +249,10 @@ if "%SKIP_MDQ%"=="0" (
     echo ==^> Installing mdq extras ^([mdq-watch,mdq-ja]^)
     "%VENV_PY%" -m pip install -e ".[mdq-watch,mdq-ja]"
     if errorlevel 1 (
+        if "%FORCE%"=="1" (
+            echo [ERROR] mdq extras install failed under --force.
+            goto :end_error
+        )
         echo [WARN] mdq extras install failed. Skill will fall back to MiniBM25.
         set /a WARN+=1
     )
@@ -241,6 +264,10 @@ if "%WITH_GUI%"=="1" (
     echo ==^> Installing GUI extras ^([gui,gui-docconvert]^)
     "%VENV_PY%" -m pip install -e ".[gui,gui-docconvert]"
     if errorlevel 1 (
+        if "%FORCE%"=="1" (
+            echo [ERROR] GUI extras install failed under --force.
+            goto :end_error
+        )
         echo [WARN] GUI extras install failed. GUI Orchestrator will not be available.
         set /a WARN+=1
     ) else (
@@ -356,6 +383,7 @@ echo HVE Windows setup script ^(cmd^)
 echo.
 echo Usage:
 echo   hve\setup-hve.cmd                Default: install venv + SDK + mdq + GUI extras
+echo   hve\setup-hve.cmd --force        Idempotent full rebuild ^(delete + recreate .venv, all extras, fail-hard^)
 echo   hve\setup-hve.cmd --check-only   Report state only ^(no changes^)
 echo   hve\setup-hve.cmd --skip-mdq     Skip mdq extras installation
 echo   hve\setup-hve.cmd --no-gui       Skip GUI extras installation
@@ -366,7 +394,7 @@ echo.
 echo Supported Python: 3.11 / 3.12 / 3.13 / 3.14
 echo.
 echo For advanced options ^(-WithWorkIQ, -InstallExternalCopilotCli,
-echo -ForceRecreateVenv, FTS5 trigram probe, .qm compile^), use:
+echo -Force, FTS5 trigram probe, .qm compile^), use:
 echo   powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
 echo.
 set INTERACTIVE_PAUSE=0

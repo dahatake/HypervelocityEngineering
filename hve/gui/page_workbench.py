@@ -343,9 +343,19 @@ class WorkbenchPage(QWidget):
         self._workflow_status = {
             str(wf.get("workflow_id", "")): "" for wf in self._workflow_plan
         }
+        # steps はワークフロー定義経由で dict 形式 ({"id","title","depends_on"}) で
+        # 渡される。後方互換のため tuple (step_id, title) 形式も受け付ける。
+        def _step_id_of(step):
+            if isinstance(step, dict):
+                return str(step.get("id", ""))
+            try:
+                return str(step[0])
+            except (TypeError, IndexError):
+                return ""
+
         self._workflow_step_status = {
             str(wf.get("workflow_id", "")): {
-                step_id: "" for step_id, _ in wf.get("steps", [])
+                _step_id_of(step): "" for step in wf.get("steps", [])
             }
             for wf in self._workflow_plan
         }
@@ -379,11 +389,11 @@ class WorkbenchPage(QWidget):
 
         Plan モード経路 (start_orchestrators) でのみ呼ばれる。Autopilot 経路は
         既に ``main_window._prepopulate_workbench_with_seeds`` で同等処理済み。
-        label は ``format_workflow_label`` で統一フォーマット (例: "WfX (WF-X)") に
-        揃え、Plan モード set_plan の描画と同等の見た目を保証する。
+        label は ``format_workflow_label_activity`` で統一フォーマット
+        (例: "WF-X-WfX") に揃え、Plan モード set_plan の描画と同等の見た目を保証する。
         """
         from .workbench_state import WorkflowInstanceSeed
-        from .workflow_display import format_workflow_label
+        from .workflow_display import format_workflow_label_activity
 
         seeds: list = []
         for wf in self._workflow_plan:
@@ -391,14 +401,21 @@ class WorkbenchPage(QWidget):
             if not wf_id:
                 continue
             wf_name = str(wf.get("workflow_name", wf_id))
-            steps = [
-                (sid, title) for sid, title in wf.get("steps", [])
-            ]
+            # steps は dict ({"id","title","depends_on"}) または tuple (sid, title) を許容
+            steps = []
+            for step in wf.get("steps", []):
+                if isinstance(step, dict):
+                    steps.append((str(step.get("id", "")), str(step.get("title", ""))))
+                else:
+                    try:
+                        steps.append((str(step[0]), str(step[1])))
+                    except (TypeError, IndexError):
+                        continue
             seeds.append(
                 WorkflowInstanceSeed(
                     instance_id=wf_id,
                     workflow_id=wf_id,
-                    label=format_workflow_label(wf_id, wf_name),
+                    label=format_workflow_label_activity(wf_id, wf_name),
                     app_id=None,
                     steps=steps,
                 )

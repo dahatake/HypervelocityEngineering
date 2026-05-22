@@ -4,9 +4,10 @@ set -u
 CHECK_ONLY=false
 WITH_WORKIQ=false
 WITH_GUI=false
+NO_GUI=false
 WITH_SKILLS=false
 INSTALL_EXTERNAL_COPILOT_CLI=false
-FORCE_RECREATE_VENV=false
+FORCE=false
 SKIP_MDQ=false
 SKIP_MDQ_WATCH=false
 WARNING_COUNT=0
@@ -20,9 +21,10 @@ Options:
   --check-only                    Report current state without changing files.
   --with-workiq                   Check Node.js/npm/npx prerequisites for Work IQ.
   --with-gui                      Install GUI Orchestrator extras ([gui,gui-docconvert]) including PySide6 and markitdown.
+  --no-gui                        With --force, exclude GUI extras (CLI-only setup).
   --with-skills                   Install externally-sourced agent skills (microsoft/skills) via npx into .github/skills/azure-skills/ (gitignored). Requires Node.js / npx.
   --install-external-copilot-cli  Install/check external copilot CLI when needed (uses Homebrew if available).
-  --force-recreate-venv           Recreate .venv if it exists with an unsupported Python.
+  --force                         Idempotent full rebuild: unconditionally delete .venv, recreate, install all required + GUI extras (unless --no-gui). Extras install failures become errors. Non-interactive (no prompt).
   --skip-mdq                      Skip installing markdown-query optional extras ([mdq]).
   --skip-mdq-watch                Install [mdq] but skip watcher extras (watchdog). HVE CLI Orchestrator realtime index update will be disabled.
   -h, --help                      Show this help.
@@ -34,9 +36,10 @@ while [[ $# -gt 0 ]]; do
     --check-only) CHECK_ONLY=true ;;
     --with-workiq) WITH_WORKIQ=true ;;
     --with-gui) WITH_GUI=true ;;
+    --no-gui) NO_GUI=true ;;
     --with-skills) WITH_SKILLS=true ;;
     --install-external-copilot-cli) INSTALL_EXTERNAL_COPILOT_CLI=true ;;
-    --force-recreate-venv) FORCE_RECREATE_VENV=true ;;
+    --force) FORCE=true ;;
     --skip-mdq) SKIP_MDQ=true ;;
     --skip-mdq-watch) SKIP_MDQ_WATCH=true ;;
     -h|--help) usage; exit 0 ;;
@@ -44,6 +47,12 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+
+# --force: 冪等な完全再構築。GUI extras を既定で含める（--no-gui で除外可）。
+# extras 失敗は ERROR として扱い、追加タスク無しで hve/gui/cli 起動を保証。
+if [[ "$FORCE" == true && "$NO_GUI" != true ]]; then
+  WITH_GUI=true
+fi
 
 step() { printf '\n==> %s\n' "$1"; }
 warn() { WARNING_COUNT=$((WARNING_COUNT + 1)); printf 'WARNING: %s\n' "$1" >&2; }
@@ -157,15 +166,16 @@ if [[ "$INSTALL_EXTERNAL_COPILOT_CLI" == true ]]; then
 fi
 
 step "Checking Python virtual environment"
+if [[ "$FORCE" == true && "$CHECK_ONLY" != true && -d "$VENV_DIR" ]]; then
+  printf -- '--force specified: removing existing .venv at %s\n' "$VENV_DIR"
+  rm -rf "$VENV_DIR"
+fi
 if [[ -x "$VENV_PYTHON" ]]; then
   if python_is_311_or_newer "$VENV_PYTHON"; then
     readarray -t VENV_INFO < <(python_info "$VENV_PYTHON")
     printf 'Existing .venv Python: %s\n' "${VENV_INFO[1]}"
-  elif [[ "$FORCE_RECREATE_VENV" == true && "$CHECK_ONLY" != true ]]; then
-    warn "Existing .venv is older than Python 3.11. Recreating because --force-recreate-venv was specified."
-    rm -rf "$VENV_DIR"
   else
-    warn "Existing .venv is older than Python 3.11. Rerun with --force-recreate-venv to recreate it."
+    warn "Existing .venv is older than Python 3.11. Rerun with --force to recreate it."
     if [[ "$CHECK_ONLY" != true ]]; then exit 1; fi
   fi
 elif [[ "$CHECK_ONLY" == true ]]; then
@@ -192,6 +202,9 @@ if [[ -x "$VENV_PYTHON" ]]; then
       if "$VENV_PYTHON" -m pip install -e ".[$EXTRAS_TARGET]"; then
         printf '[%s] extras installed.\n' "$EXTRAS_TARGET"
       else
+        if [[ "$FORCE" == true ]]; then
+          die "Failed to install [$EXTRAS_TARGET] extras (--force)."
+        fi
         warn "Failed to install [$EXTRAS_TARGET] extras. markdown-query Skill will still work with built-in fallback. Re-run later: $VENV_PYTHON -m pip install -e \".[$EXTRAS_TARGET]\""
       fi
       # FTS5 trigram tokenizer (ja-jp 用) のサポート確認。
@@ -215,6 +228,9 @@ except Exception:
           warn "Asset download had failures. Markdown body will still render; Mermaid/KaTeX will be disabled."
         fi
       else
+        if [[ "$FORCE" == true ]]; then
+          die "Failed to install [gui,gui-docconvert] extras (--force)."
+        fi
         warn "Failed to install [gui,gui-docconvert] extras. Re-run later: $VENV_PYTHON -m pip install -e \".[gui,gui-docconvert]\""
       fi
     fi
