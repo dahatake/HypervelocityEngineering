@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 560" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 14px; font-weight: bold; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .hve  { fill: #eaf6ee; stroke: #1a7f37; }
+      .cli  { fill: #fbe9e7; stroke: #b91c1c; }
+      .os   { fill: #e8f1fb; stroke: #1f6feb; }
+      .mcp  { fill: #f8eaf6; stroke: #8250df; }
+      .arr  { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .deny { stroke: #c00; stroke-width: 2; stroke-dasharray: 6 4; fill: none; }
+      .note { font-size: 12px; fill: #333; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">認証・資格情報の取扱い: HVE は触らない（OS 委譲モデル）</text>
+
+  <!-- HVE -->
+  <rect class="box hve" x="30" y="60" width="320" height="180" rx="6"/>
+  <text class="h" x="50" y="84">HVE（CLI / GUI）</text>
+  <text x="50" y="106" class="note">資格情報を保持しない / 書き込まない</text>
+  <text x="50" y="128" class="note">- CLI: 認証コマンドの起動を案内するのみ</text>
+  <text x="50" y="148" class="note">- GUI: PTY 統合で認証コマンドを埋込起動</text>
+  <text x="50" y="168" class="note">- success_regex で完了判定（出力のみ参照）</text>
+  <text x="50" y="190" class="note">- 認証マニフェスト: hve/gui/auth_providers/manifests/*.yaml</text>
+  <text x="50" y="212" class="note">- 「利用できるモデルの取得」は `copilot model list --json` を起動するだけ</text>
+
+  <!-- Copilot CLI -->
+  <rect class="box cli" x="400" y="60" width="320" height="180" rx="6"/>
+  <text class="h" x="420" y="84">GitHub Copilot CLI（`copilot`）</text>
+  <text x="420" y="106" class="note">copilot login / mcp login の実体</text>
+  <text x="420" y="128" class="note">OAuth / Device Code Flow を実装</text>
+  <text x="420" y="148" class="note">トークンの暗号化保管・更新を担当</text>
+  <text x="420" y="170" class="note">copilot mcp list --json / plugin list を提供</text>
+  <text x="420" y="200" class="note">MCP Server / Plugin の認証も Copilot 側で集約</text>
+
+  <!-- OS Credential Store -->
+  <rect class="box os" x="770" y="60" width="280" height="180" rx="6"/>
+  <text class="h" x="790" y="84">OS 認証ストア</text>
+  <text x="790" y="106" class="note">Windows: Credential Manager</text>
+  <text x="790" y="128" class="note">macOS: Keychain</text>
+  <text x="790" y="148" class="note">Linux: Secret Service (libsecret)</text>
+  <text x="790" y="180" class="note">プロセス分離 + OS 権限管理</text>
+  <text x="790" y="202" class="note">HVE プロセスから直接アクセス不可</text>
+
+  <!-- MCP / Plugin -->
+  <rect class="box mcp" x="30" y="290" width="500" height="160" rx="6"/>
+  <text class="h" x="50" y="314">MCP Server / Plugin（任意の外部サービス）</text>
+  <text x="50" y="336" class="note">azure-mcp / github / workiq / 自作 MCP</text>
+  <text x="50" y="356" class="note">各サーバが固有の認証フロー（OAuth / API Key / Device Code）</text>
+  <text x="50" y="376" class="note">認証情報は Copilot CLI 側で保管 → MCP Server に渡される</text>
+  <text x="50" y="398" class="note">HVE は MCP Server に直接接続せず、Copilot CLI 経由で利用</text>
+  <text x="50" y="420" class="note">GUI 認証パネルは `copilot mcp login &lt;name&gt;` を PTY 起動するだけ</text>
+
+  <!-- Notes / forbidden -->
+  <rect class="box" x="560" y="290" width="490" height="160" rx="6"/>
+  <text class="h" x="580" y="314">禁止事項（疎結合維持のため）</text>
+  <text x="580" y="336" class="note">✗ HVE のディスク / プロセスメモリに資格情報を保存</text>
+  <text x="580" y="356" class="note">✗ Copilot CLI の認証ファイルを直接読む</text>
+  <text x="580" y="376" class="note">✗ MCP Server へ HVE が直接 HTTP 接続</text>
+  <text x="580" y="396" class="note">✗ 認証マニフェストに平文クレデンシャルを記載</text>
+  <text x="580" y="418" class="note">✓ 認証 UI / KPI / 再開機構の追加は自由（資格情報を扱わない範囲で）</text>
+
+  <text x="30" y="490" class="note">▶ ゾーン C（Copilot CLI 管理リソース）への接続は全て Copilot CLI 経由。HVE は「呼び出し」と「結果の受け取り」だけを行う。</text>
+  <text x="30" y="510" class="note">▶ 認証フローの統一: 「最初に CLI 認証 → MCP/Plugin は CLI 設定を継承」が原則。Cloud Agent Orchestrator では Coding Agent 側が同等の権限を持つ。</text>
+  <text x="30" y="530" class="note">▶ 詳細運用手順: users-guide/plugin-mcp-auth.md（操作 / トラブルシュート）</text>
+
+  <!-- Arrows -->
+  <path class="arr" d="M350,140 L400,140"/>
+  <path class="arr" d="M720,140 L770,140"/>
+  <path class="arr" d="M280,370 L560,370"/>
+  <path class="arr" d="M560,140 L560,290"/>
+
+  <line class="deny" x1="190" y1="240" x2="190" y2="290"/>
+  <text x="200" y="280" class="note" fill="#c00">直接書込 禁止</text>
+  <line class="deny" x1="910" y1="240" x2="910" y2="290"/>
+  <text x="780" y="280" class="note" fill="#c00">HVE→OS ストア 直接読書き 禁止</text>
+</svg>

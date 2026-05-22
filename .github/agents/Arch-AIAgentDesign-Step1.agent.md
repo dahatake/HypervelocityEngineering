@@ -5,6 +5,96 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/services/SVC-*.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/azure/azure-services-data.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-DataDesign"
+    - path: "docs/azure/azure-services-additional.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-AddServiceDesign"
+    - path: "users-guide/08-ai-agent.md"
+      required: true
+      kind: "static"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/catalog/screen-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-List"
+    - path: "docs/screen/{画面ID}-*.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "src/data/sample-data.json"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: ".github/skills/agent-common-preamble/references/agent-playbook.md"
+      required: false
+      kind: "static"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D05-ユースケース-シナリオカタログ.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D10-API-Event-File-連携契約パック.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D12-権限-認可-職務分掌設計書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D18-Prompt-ガバナンス-入力統制パック.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/agent/agent-application-definition.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}ai-agent-design-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "plan.md"
+      required: true
+      mode: "create"
+    - path: "README.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-AIAgentDesign-Step1/Issue-<識別子>/`
 
@@ -12,13 +102,32 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
-## 1) 適用範囲（このエージェントの役割）
+
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
+- `task-questionnaire` — 不明点の優先度付き質問票作成
+
+## 1) 目的と非目的
 - 対象：指定されたユースケースに対する **AI Agent の設計 Step 1（アプリケーション定義）** を実施する。
 - 目的：ユースケースに最適な AI Agent 群の設計の第一歩として、アプリケーション定義書を作成する。
 - 非対象：Step 2（粒度設計）、Step 3（詳細設計）、Agent の実装（コーディング）、Azure リソースの構築、ランタイムのデプロイ。
 
-## 2) 入力
+## 2) 入力（必ず参照）
 
 ### 必読ファイル（Step の進行に伴い全て存在する前提）
 
@@ -48,7 +157,7 @@ metadata:
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。
 - **サービス詳細仕様（SVC-*.md）が多数ある場合**: Agent の Scope に関連するサービスのみ読む（全サービスを網羅的に読む必要はない）。
-- **入力の優先順位**: ファイル間で矛盾がある場合、`service-catalog.md` > `service-list.md` > `data-model.md` の順で新しい方を正とする。
+- **入力の優先順位**: ファイル間で矛盾がある場合、`docs/catalog/service-catalog.md` > `docs/catalog/data-model.md` の順で新しい方を正とする。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -60,7 +169,7 @@ metadata:
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
 
-## 3) 成果物（必須）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 1) Agent アプリケーション定義書（作成/更新）
    - `docs/agent/agent-application-definition.md`
 
@@ -69,12 +178,12 @@ metadata:
 
 ※ `{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
-## 4) 重要制約（品質と安全）
+## 5) 品質原則（必ず守る）
 - `users-guide/08-ai-agent.md` の各 Step の Prompt を **ガイドラインとして参照** し、その指示に従って設計書を作成する。Prompt の内容をコピー＆ペーストで成果物に混ぜない。
 - 推測で AI Agent の機能・数・境界を断定しない。入力に根拠がない事項は「要確認/TBD」とする。
 - ツールは **必要なときだけ** 使う（無目的な全探索は禁止）。
 
-## 5) 作業手順（この順番で）
+## 4) 実行手順（順序固定）
 
 ### 5.0 入力確認とスコープ固定
 - Issue body から **ユースケースID** と **ユースケース記述ファイルのパス** を取得する。

@@ -74,7 +74,7 @@ class TestUserActionsRender(unittest.TestCase):
         s = _state()
         plain = self._render_plain(render_user_actions(s))
         self.assertIn("通知はまだありません", plain)
-        self.assertIn("user actions", plain)
+        self.assertIn("実行中の課題", plain)
 
     def test_records_appear_in_panel(self):
         s = _state()
@@ -94,7 +94,7 @@ class TestUserActionsRender(unittest.TestCase):
         panel = render_user_actions(s)
         # Panel.title 属性で直接検証（端末幅依存を避ける）
         title = str(panel.title)
-        self.assertIn("scroll", title)
+        self.assertIn("スクロール", title)
         self.assertIn("-2", title)
 
 
@@ -110,7 +110,7 @@ class TestUserInteractionRender(unittest.TestCase):
         self.assertIn("Press `:`", plain)
         self.assertNotIn("/session-store", plain)
         self.assertIn("/help", plain)
-        self.assertIn("userinteraction", plain)
+        self.assertIn("入力エリア", plain)
 
     def test_buffer_shown_in_cmd_mode(self):
         s = _state()

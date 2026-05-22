@@ -52,6 +52,21 @@ validate() {
   local block_count=${#block_files[@]}
 
   if [[ "${block_count}" -eq 0 ]]; then
+    # P-C: Markdown テーブル形式で書かれた subissues.md を検知してエラー化する。
+    # 連続する 3 行以上の `^\s*\|.*\|\s*$` パターンを検出した場合、Agent が
+    # `task-dag-planning` Skill を読まずにテーブル形式で生成した可能性が高い。
+    if awk '
+      /^[[:space:]]*\|.*\|[[:space:]]*$/ {
+        consecutive++
+        if (consecutive >= 3) { found = 1; exit }
+        next
+      }
+      { consecutive = 0 }
+      END { exit (found ? 0 : 1) }
+    ' "${subissues_path}"; then
+      echo "::error::${subissues_path}: \`<!-- subissue -->\` ブロックが 0 件 だが Markdown テーブル形式が検出されました。テーブル形式は禁止です。各行を \`<!-- subissue -->\` ブロックに展開してください。規約: .github/skills/task-dag-planning/references/subissues-template.md" >&2
+      return 1
+    fi
     echo "  ⚠️ No <!-- subissue --> blocks found"
     return 0
   fi

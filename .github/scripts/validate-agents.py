@@ -55,6 +55,99 @@ _WHEN_PATTERN = re.compile("|".join(WHEN_TO_INVOKE_PATTERNS), re.IGNORECASE)
 
 TOOLS_OVERSPEC_THRESHOLD = 10
 
+# Body section heading whose content must not be empty.
+# Empty Skills 依存 section means the Agent declared the dependency anchor but
+# never listed which Skills are required. This is a documentation gap.
+SKILLS_SECTION_HEADING = "## Agent 固有の Skills 依存"
+
+# Files in AGENTS_DIR that are not real Agent definitions and must be skipped
+# during validation.
+# - Files starting with "_" are templates / utilities (e.g. _template.md).
+AGENT_FILE_SKIP_PREFIXES = ("_",)
+
+# ---------------------------------------------------------------------------
+# Heading order check (R07)
+# ---------------------------------------------------------------------------
+# Standard H2 section order per docs/agent-heading-standard.md.
+# Sections marked optional may be absent without warning.
+STANDARD_HEADING_ORDER = [
+    ("## 共通ルール", True),
+    ("## 1) 目的と非目的", True),
+    ("## 2) 入力（必ず参照）", True),
+    ("## 3) 出力フォーマット（Markdown固定スキーマ）", True),
+    ("## 4) 実行手順（順序固定）", True),
+    ("## 5) 品質原則（必ず守る）", True),
+    ("## 6) セルフチェック（出力前に必ず確認）", True),
+    ("## 7) 完了条件", True),
+    ("## Agent 固有の Skills 依存", True),
+    # Optional sections (presence not required, but if present must appear after C8)
+    ("## APP-ID スコープ → Skill `app-scope-resolution` を参照", False),
+    ("## 禁止事項", False),
+    ("## 関連 / 参考", False),
+]
+
+# Agents using XML-tag template (R07 / S7) are out of scope for heading-order check.
+HEADING_CHECK_SKIP_FILES = {
+    "Arch-ArchitectureCandidateAnalyzer.agent.md",
+    "Arch-TDD-TestSpec.agent.md",
+    "Dev-Microservice-Azure-ComputeDeploy-AzureFunctions.agent.md",
+    "Dev-Microservice-Azure-DataDeploy.agent.md",
+    "Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps.agent.md",
+}
+
+# Files using a non-standard first H2 (workflow dispatcher) are skipped.
+HEADING_CHECK_SKIP_FIRST_H2 = "## 0) モードディスパッチ"
+
+
+def _extract_h2_headings(content: str) -> List[str]:
+    """Return list of H2 heading text (with `## ` prefix) in document order."""
+    return [
+        line.rstrip()
+        for line in content.splitlines()
+        if line.startswith("## ")
+    ]
+
+
+def check_heading_order(content: str, filename: str) -> List[str]:
+    """Verify required H2 sections exist and appear in standard order.
+
+    Returns a list of human-readable issue messages (empty if OK).
+    Skips XML-tag-style files and workflow dispatchers.
+    """
+    if filename in HEADING_CHECK_SKIP_FILES:
+        return []
+    h2s = _extract_h2_headings(content)
+    if not h2s:
+        return ["No H2 headings found"]
+    if h2s[0] == HEADING_CHECK_SKIP_FIRST_H2:
+        return []  # workflow dispatcher: out of scope
+
+    issues: List[str] = []
+    standard_only = [(h, req) for h, req in STANDARD_HEADING_ORDER]
+    # Find positions of each standard heading in the file's H2 sequence
+    positions: Dict[str, int] = {}
+    for idx, h2 in enumerate(h2s):
+        for std, _req in standard_only:
+            if h2 == std and std not in positions:
+                positions[std] = idx
+                break
+
+    # Required sections must exist
+    for std, required in standard_only:
+        if required and std not in positions:
+            issues.append(f"Missing required heading: '{std}'")
+
+    # Existing sections must appear in standard order
+    ordered_std = [std for std, _ in standard_only if std in positions]
+    indices = [positions[s] for s in ordered_std]
+    if indices != sorted(indices):
+        issues.append(
+            "Heading order violation: standard sections not in canonical order"
+        )
+
+    return issues
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -139,6 +232,28 @@ def get_metadata_version(fm_text: str) -> Optional[str]:
     return version_match.group(1).strip()
 
 
+def _is_skills_section_empty(content: str) -> Optional[bool]:
+    """Return True if the Skills 依存 section exists but is empty.
+
+    Returns:
+        None  - Section heading not present (caller decides whether to warn).
+        False - Section heading present and contains at least one non-blank line.
+        True  - Section heading present but contains only blank lines.
+    """
+    idx = content.find(SKILLS_SECTION_HEADING)
+    if idx < 0:
+        return None
+    rest = content[idx + len(SKILLS_SECTION_HEADING):]
+    # Find next markdown heading (## or #) — that delimits the section.
+    next_h2 = rest.find("\n## ")
+    next_h1 = rest.find("\n# ")
+    candidates = [p for p in (next_h2, next_h1) if p >= 0]
+    section = rest[: min(candidates)] if candidates else rest
+    # Drop the heading's trailing newline, keep only following content lines.
+    body_lines = [line for line in section.split("\n")[1:] if line.strip()]
+    return not body_lines
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -158,6 +273,12 @@ def main() -> int:
     file_results: List[dict] = []
 
     agent_files = sorted(AGENTS_DIR.glob("*.agent.md"))
+    # Also include legacy files without the .agent.md suffix (e.g. _template.md).
+    # Skip files whose name starts with AGENT_FILE_SKIP_PREFIXES (templates).
+    agent_files = [
+        f for f in agent_files
+        if not f.name.startswith(AGENT_FILE_SKIP_PREFIXES)
+    ]
     if not agent_files:
         print(f"⚠️  No .agent.md files found in {AGENTS_DIR}")
         return 0
@@ -248,6 +369,33 @@ def main() -> int:
                 file_warnings.append(
                     f"tools lists {len(tools)} items (>= {TOOLS_OVERSPEC_THRESHOLD}) — consider reducing to minimum required"
                 )
+
+        # --- Body-level checks (always warnings; promoted to error under --strict) ---
+
+        empty_skills = _is_skills_section_empty(content)
+        if empty_skills is True:
+            msg = (
+                f"Section '{SKILLS_SECTION_HEADING}' exists but is empty "
+                "(list the Skills this Agent depends on, or remove the section)"
+            )
+            if args.strict:
+                file_errors.append(msg)
+            else:
+                file_warnings.append(msg)
+        elif empty_skills is None:
+            msg = (
+                f"Missing recommended section: '{SKILLS_SECTION_HEADING}' "
+                "(declare Skills dependencies for traceability)"
+            )
+            file_warnings.append(msg)
+
+        # --- Heading order check (R07) ---
+        heading_issues = check_heading_order(content, agent_file.name)
+        for issue in heading_issues:
+            if args.strict:
+                file_errors.append(f"Heading: {issue}")
+            else:
+                file_warnings.append(f"Heading: {issue}")
 
         file_results.append(
             {"path": agent_file, "errors": file_errors, "warnings": file_warnings}

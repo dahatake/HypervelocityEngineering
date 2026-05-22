@@ -218,8 +218,8 @@ cd .github/scripts/powershell
 | `aas` | App Architecture Design | 8 |
 | `aad-web` | Web App Design | 4 |
 | `asdw-web` | Web App Dev & Deploy | 19 |
-| `abd` | Batch Design | 9 |
-| `abdv` | Batch Dev | 7 |
+| `adfd` | Dataflow Design | 9 |
+| `adfdv` | Dataflow Dev | 7 |
 | `aag` | AI Agent Design | 3 |
 | `aagd` | AI Agent Dev & Deploy | 5 |
 | `akm` | Knowledge Management | 1 |

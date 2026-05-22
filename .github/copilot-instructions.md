@@ -16,7 +16,7 @@
 - **task_scope=multi または context_size=large の扱い**:
   - **単独実行モード**（Orchestrator 配下でない Agent 単独起動・テスト等）: 実装開始禁止。plan.md + subissues.md のみ作成して終了する。
   - **Orchestrator 配下モード**（HVE Cloud Agent Orchestrator / HVE CLI Orchestrator 実行配下）: Agent は plan.md + subissues.md を作成して当該 Step を終了する。**Orchestrator が** subissues.md を読み込み、`depends_on` 解決により wave 分割したサブタスクを並列実行（Sub-issue 生成 / サブセッション fork）し、全完了後に親 Step の後続または次タスクへ進む。`task_scope=multi` / `context_size=large` のいずれも対象。
-  - **判別方法**: Orchestrator 起動時に生成される `OrchestratorContext` を Python 内部で明示的引数として `StepRunner` / `check_plan_md_metadata` 等へ伝播させる方式。`HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み（参照禁止）。詳細は Skill `task-dag-planning` 参照。
+  - **判別方法**: Orchestrator 起動時に生成される `OrchestratorContext` を Python 内部で明示的引数として `StepRunner` / `check_plan_md_metadata` 等へ伝播させる方式。詳細は Skill `task-dag-planning` 参照。
 - **plan.md 冒頭5行にメタデータ必須**（Skill task-dag-planning §2.1.2）。欠落は CI で自動拒否。
 - **最低1つの検証を実施**: テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記する。
   - **タスク完了報告の検証マーカー必須記載書式**（GitHub 連携時は `auto-approve-and-merge.yml` の自動判定対象、CLI 連携時は人手レビュー可読性と将来の自動化準備）: 以下のいずれかの形式で記載すること:
@@ -32,6 +32,7 @@
 - **knowledge/ 書き込みルール（絶対）**：`knowledge/` 配下へのファイル書き込みも Skill `work-artifacts-layout` §4.1 準拠（削除→新規作成）。例外なし。
 - **knowledge/ 同時更新防止（LOCK）**: `knowledge/` 本体ファイルへ LOCK 情報を埋め込んではならない。LOCK が必要な場合は `work/` 配下のロックファイル、または Issue ラベル等、`knowledge/` の「削除→新規作成」ルールと両立する方式を用いる。他の Agent により対象 D{NN} の LOCK が取得済みであることを検知した場合、後続 Agent は当該 `knowledge/` ファイルを **読み取り専用** とし、書き込みを中止して再実行に回す。
 - **original-docs/ 読み取り専用（絶対）**: `original-docs/` 配下のファイルは全 Agent から **読み取り専用**。変更・削除・追記を禁止。
+- **Markdown 横断検索の既定手段**: リポジトリ内 Markdown 群への横断検索・要件参照は `markdown-query` Skill（`python -m mdq search`）を最初に試す。0 ヒット時、対象が `.md` 以外を含む場合、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。詳細は Skill `markdown-query`（`.github/skills/markdown-query/SKILL.md`）参照。
 
 ---
 

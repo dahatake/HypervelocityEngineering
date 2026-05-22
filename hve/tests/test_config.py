@@ -238,6 +238,28 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ.clear()
             os.environ.update(env_backup)
 
+    def test_from_env_workiq_request_timeout_default_is_300(self) -> None:
+        """環境変数 WORKIQ_REQUEST_TIMEOUT 未設定時の既定値が 300.0（5 分）であること。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ.pop("WORKIQ_REQUEST_TIMEOUT", None)
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.workiq_request_timeout, 300.0)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_workiq_request_timeout_reads_env(self) -> None:
+        """環境変数 WORKIQ_REQUEST_TIMEOUT が設定されていれば値が反映されること。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ["WORKIQ_REQUEST_TIMEOUT"] = "600"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.workiq_request_timeout, 600.0)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
     def test_from_env_uses_auto_when_model_unset(self) -> None:
         env_backup = os.environ.copy()
         try:

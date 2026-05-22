@@ -33,6 +33,10 @@ class OrchestratorContext:
             SPLIT が発生したケース用。
         split_fork_max_depth: 再帰深度上限。超えた場合は fork せず失敗扱い。
         max_parallel_subtasks: 同一 wave 内で並列実行するサブタスク数の上限。
+        continue_on_error: True の場合、Pre-check 失敗を警告に降格して続行する
+            （`local` 実行モード既定、`--strict` でオプトアウト）。Step 自体の
+            失敗時は本フラグに関わらず R1 に従いワークフローを停止する。
+            `github` 実行モード（Cloud）では常に False。
     """
 
     run_id: str = ""
@@ -40,6 +44,7 @@ class OrchestratorContext:
     split_fork_depth: int = 0
     split_fork_max_depth: int = 2
     max_parallel_subtasks: int = 4
+    continue_on_error: bool = False
 
     def with_increased_depth(self) -> "OrchestratorContext":
         """再帰サブタスク向けに `split_fork_depth + 1` の新インスタンスを返す。"""

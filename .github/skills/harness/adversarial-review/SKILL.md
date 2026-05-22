@@ -1,7 +1,7 @@
 ---
 name: adversarial-review
 description: >
-  成果物の敵対的レビューを実行するスキル。5つの検証軸で問題を発見し、 Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。 USE FOR: quality review, 5-axis review, adversarial check. DO NOT USE FOR: implementation (agents do that). WHEN: 成果物のレビューが必要、PR/マージ前の品質チェック。
+  成果物の敵対的レビューを実行するスキル。5つの検証軸で問題を発見し、 Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。 PHASE: 成果物作成後（PR/マージ前または検証ループ完了後のユーザー指定時に使用）。 USE FOR: quality review, 5-axis review, adversarial check. DO NOT USE FOR: implementation (agents do that), pre-execution safety check (use harness-safety-guard), build/test verification (use harness-verification-loop), error recovery (use harness-error-recovery). WHEN: 成果物のレビューが必要、PR/マージ前の品質チェック。
 metadata:
   origin: user
   version: 2.0.0

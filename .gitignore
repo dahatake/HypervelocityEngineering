@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -17,6 +17,7 @@ __pycache__/
 # Node.js dependencies
 node_modules/
 package-lock.json
+!tests/e2e/playwright/package-lock.json
 
 # Python cache
 __pycache__/
@@ -29,6 +30,17 @@ __pycache__/
 
 # Python virtual environment
 .venv/
+
+# mdq local index and HVE QA IPC (regenerable, not for commit)
+.mdq/
+!.mdq/config.toml
+.hve/
+
+# markdown-query benchmark outputs (regenerable, machine-dependent)
+tools/skills/markdown_query/results/
+
+# markdown-query standalone GUI venv (created by setup.ps1 / setup.sh)
+tools/skills/markdown_query/.venv-mdq-gui/
 
 # Python cache
 __pycache__/
@@ -77,3 +89,32 @@ infra/azure/create-azure-agent-resources/agent-ids.env
 
 # ECC plugin junction (machine-local)
 .claude/plugins/
+nul
+
+# hve runtime artifacts (prefetch logs, workiq results) should not be committed
+hve/qa/
+qa/*.jsonl
+qa/2026*-execution-qa-merged.md
+qa/2026*-workiq-prefetch.jsonl
+
+# hve resume / session state
+# session-state/ (= <repo-root>/session-state/) はクロスデバイスで resume を継続する
+# ため Git にコミットする運用。意図的に .gitignore へ追加しない。
+session-state/
+
+# Self-hosted runner deploy outputs (machine-local, may contain resource IDs)
+tools/runner/.runner-deploy.env
+tools/runner/.runner-deploy.json
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+
+# HVE GUI �ݒ�i���[�U�[���Ƃ̃��[�J������l�j
+hve/.settings.txt
+hve/.settings.txt.tmp
+
+# Externally-sourced agent skills (installed via setup-hve --with-skills / npx skills add microsoft/skills)
+.github/skills/azure-skills/
+

@@ -59,13 +59,13 @@ jobs:
           title = issue.get('title', '')
           labels = [l.get('name', '') for l in issue.get('labels', [])]
 
-          # 全12系列: aas, aad, aad-web, asdw, asdw-web, abd, abdv, aag, aagd, akm, adoc, aqod
+          # 全12系列: aas, aad, aad-web, asdw, asdw-web, adfd, adfdv, aag, aagd, akm, adoc, aqod
           title_prefix_map = [
               ('[AAD-WEB]', 'aad-web'),
               ('[ASDW-WEB]', 'asdw-web'),
               ('[AAS]', 'aas'),
-              ('[ABD]', 'abd'),
-              ('[ABDV]', 'abdv'),
+              ('[ADFD]', 'adfd'),
+              ('[ADFDV]', 'adfdv'),
               ('[AAG]', 'aag'),
               ('[AAGD]', 'aagd'),
               ('[AKM]', 'akm'),
@@ -83,7 +83,7 @@ jobs:
                   break
 
           if not resolved:
-              candidates = ['aas', 'aad-web', 'asdw-web', 'abd', 'abdv', 'aag', 'aagd', 'akm', 'aqod', 'adoc', 'aad', 'asdw']
+              candidates = ['aas', 'aad-web', 'asdw-web', 'adfd', 'adfdv', 'aag', 'aagd', 'akm', 'aqod', 'adoc', 'aad', 'asdw']
               for cand in candidates:
                   if any(lbl.startswith(f'{cand}:') for lbl in labels):
                       if cand == 'aad':

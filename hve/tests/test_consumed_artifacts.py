@@ -29,7 +29,7 @@ KNOWN_ARTIFACT_KEYS: frozenset[str] = frozenset(
         "test_strategy",
         "service_catalog_matrix",
         "use_case_catalog",
-        "batch_job_catalog",
+        "dataflow_catalog",
         "batch_service_catalog",
         "batch_data_model",
         "batch_domain_analytics",
@@ -40,7 +40,7 @@ KNOWN_ARTIFACT_KEYS: frozenset[str] = frozenset(
         "test_files",
         "knowledge",
         "agent_specs",
-        "batch_job_specs",
+        "dataflow_specs",
         "doc_generated",
     ]
 )
@@ -111,7 +111,7 @@ class TestConsumedArtifactsSemantics:
 # ---------------------------------------------------------------------------
 
 # Phase 4 で consumed_artifacts を明示設定したワークフロー ID
-PHASE4_TARGET_WORKFLOWS = ["aas", "abd", "abdv", "aag", "aagd", "akm", "aqod", "asdw-web"]
+PHASE4_TARGET_WORKFLOWS = ["aas", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "asdw-web"]
 
 
 class TestPhase4ConsumedArtifactsMinimized:
@@ -267,25 +267,25 @@ class TestPhase4ConsumedArtifactsValues:
         assert "app_catalog" in step.consumed_artifacts
 
     def test_abd_step_11_uses_use_case_catalog(self) -> None:
-        wf = get_workflow("abd")
+        wf = get_workflow("adfd")
         step = wf.get_step("1.1")
         assert step is not None
         assert "use_case_catalog" in step.consumed_artifacts
 
     def test_abd_step4_uses_batch_keys(self) -> None:
-        wf = get_workflow("abd")
+        wf = get_workflow("adfd")
         step = wf.get_step("4")
         assert step is not None
-        assert "batch_job_catalog" in step.consumed_artifacts
+        assert "dataflow_catalog" in step.consumed_artifacts
         assert "batch_data_model" in step.consumed_artifacts
         assert "batch_domain_analytics" in step.consumed_artifacts
 
     def test_abdv_step21_uses_test_specs(self) -> None:
-        wf = get_workflow("abdv")
+        wf = get_workflow("adfdv")
         step = wf.get_step("2.1")
         assert step is not None
         assert "test_specs" in step.consumed_artifacts
-        assert "batch_job_specs" in step.consumed_artifacts
+        assert "dataflow_specs" in step.consumed_artifacts
 
     def test_aag_step1_uses_service_specs(self) -> None:
         wf = get_workflow("aag")

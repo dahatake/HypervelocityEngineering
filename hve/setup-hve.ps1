@@ -1,7 +1,9 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$CheckOnly,
     [switch]$WithWorkIQ,
+    [switch]$WithGui,
+    [switch]$WithSkills,
     [switch]$InstallExternalCopilotCli,
     [switch]$ForceRecreateVenv,
     [switch]$SkipMdq,
@@ -188,13 +190,42 @@ if (Test-Path $venvPython) {
         Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "--upgrade", "github-copilot-sdk")
 
         if (-not $SkipMdq) {
-            $extrasTarget = if ($SkipMdqWatch) { "mdq" } else { "mdq-watch" }
+            $baseExtras = if ($SkipMdqWatch) { "mdq" } else { "mdq-watch" }
+            # mdq-ja は Q5=A 採用上は空 extras（プレースホルダー）だが、今後形態素
+            # 解析器を追加する際の拡張点として同梱しておく。
+            $extrasTarget = "$baseExtras,mdq-ja"
             Write-Step ("Installing markdown-query optional extras ([{0}])" -f $extrasTarget)
             try {
                 Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "-e", ".[$extrasTarget]")
                 Write-Host ("[{0}] extras installed." -f $extrasTarget)
             } catch {
                 Write-SetupWarning ("Failed to install [$extrasTarget] extras: " + $_.Exception.Message + ". markdown-query Skill will still work with built-in fallback. Re-run later: " + $venvPython + ' -m pip install -e ".[' + $extrasTarget + ']"')
+            }
+            # FTS5 trigram tokenizer（日本語 ja-jp に使用）のサポートをプローブ。
+            $trigramCode = @'
+import sqlite3, sys
+c = sqlite3.connect(':memory:')
+try:
+    c.execute("CREATE VIRTUAL TABLE p USING fts5(x, tokenize='trigram')")
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+'@
+            $trigramExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", $trigramCode)
+            if ($trigramExitCode -eq 0) {
+                Write-Host "FTS5 trigram tokenizer (ja-jp 用): OK"
+            } else {
+                Write-SetupWarning "FTS5 trigram tokenizer が未サポートです。SQLite 3.34+ を推奨。フォールバックとして unicode61 が使用されます。"
+            }
+        }
+
+        if ($WithGui) {
+            Write-Step "Installing GUI Orchestrator extras ([gui,gui-docconvert]) including markitdown"
+            try {
+                Invoke-Checked -FilePath $venvPython -Arguments @("-m", "pip", "install", "-e", ".[gui,gui-docconvert]")
+                Write-Host "[gui,gui-docconvert] extras installed (PySide6 + markitdown[all])."
+            } catch {
+                Write-SetupWarning ("Failed to install [gui,gui-docconvert] extras: " + $_.Exception.Message + ". Re-run later: " + $venvPython + ' -m pip install -e ".[gui,gui-docconvert]"')
             }
         }
     }
@@ -207,8 +238,8 @@ if (Test-Path $venvPython) {
     if ($hveHelpExitCode -eq 0) { Write-Host "python -m hve --help: OK" } else { Write-SetupWarning "python -m hve --help failed." }
 
     if (-not $SkipMdq) {
-        $mdqHelpExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-m", "hve.mdq", "--help")
-        if ($mdqHelpExitCode -eq 0) { Write-Host "python -m hve.mdq --help: OK" } else { Write-SetupWarning "python -m hve.mdq --help failed. markdown-query Skill may not be available." }
+        $mdqHelpExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-m", "mdq", "--help")
+        if ($mdqHelpExitCode -eq 0) { Write-Host "python -m mdq --help: OK" } else { Write-SetupWarning "python -m mdq --help failed. markdown-query Skill may not be available." }
 
         if ($CheckOnly) {
             $mdqExtrasExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import rank_bm25, tiktoken")
@@ -217,6 +248,59 @@ if (Test-Path $venvPython) {
                 $watchExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import watchdog")
                 if ($watchExitCode -eq 0) { Write-Host "[mdq-watch] extras: OK (watchdog)" } else { Write-SetupWarning "[mdq-watch] extras missing (watchdog). HVE CLI Orchestrator のリアルタイム索引更新は無効になります。Run without -CheckOnly to install, or pass -SkipMdqWatch to suppress this check." }
             }
+        }
+    }
+
+    if ($WithGui -and $CheckOnly) {
+        $guiImportExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import PySide6")
+        if ($guiImportExitCode -eq 0) { Write-Host "[gui] extras: OK (PySide6)" } else { Write-SetupWarning "[gui] extras missing (PySide6). Run without -CheckOnly to install." }
+        $mdImportExitCode = Invoke-Probe -FilePath $venvPython -Arguments @("-c", "import markitdown")
+        if ($mdImportExitCode -eq 0) { Write-Host "[gui-docconvert] extras: OK (markitdown)" } else { Write-SetupWarning "[gui-docconvert] extras missing (markitdown). Run without -CheckOnly to install." }
+        # i18n translation tools (PySide6 同梱)
+        $lupdate = Resolve-PreferredCommand -Name "pyside6-lupdate"
+        if ($lupdate) { Write-Host "pyside6-lupdate: OK ($lupdate)" } else { Write-SetupWarning "pyside6-lupdate not found on PATH. GUI 多言語化リソース (.ts) の更新には PySide6 同梱の pyside6-lupdate / pyside6-lrelease が必要です。" }
+    }
+
+    # GUI 翻訳バイナリ (.qm) の自動生成: WithGui かつ .ts が存在し .qm が古い/欠落の場合
+    if ($WithGui -and -not $CheckOnly) {
+        $tsPath = Join-Path $repoRoot "hve\gui\i18n\hve_gui_en_US.ts"
+        $qmPath = Join-Path $repoRoot "hve\gui\i18n\hve_gui_en_US.qm"
+        if (Test-Path $tsPath) {
+            $needBuild = $true
+            if (Test-Path $qmPath) {
+                $tsTime = (Get-Item $tsPath).LastWriteTime
+                $qmTime = (Get-Item $qmPath).LastWriteTime
+                if ($qmTime -ge $tsTime) { $needBuild = $false }
+            }
+            if ($needBuild) {
+                $lrelease = Resolve-PreferredCommand -Name "pyside6-lrelease"
+                if ($lrelease) {
+                    Write-Step "Compiling GUI translations (hve_gui_en_US.ts -> .qm)"
+                    try {
+                        Invoke-Checked -FilePath $lrelease -Arguments @($tsPath, "-qm", $qmPath)
+                        Write-Host "GUI translations compiled: $qmPath"
+                    } catch {
+                        Write-SetupWarning ("Failed to compile GUI translations: " + $_.Exception.Message + ". 英語表示にフォールバックする際は日本語のままになります。")
+                    }
+                } else {
+                    Write-SetupWarning "pyside6-lrelease not found; skipping GUI translation compile. Run manually: pyside6-lrelease hve/gui/i18n/translations.pro"
+                }
+            }
+        }
+    }
+}
+
+if ($WithSkills -and -not $CheckOnly) {
+    Write-Step "Installing externally-sourced agent skills (microsoft/skills)"
+    $npx = Resolve-PreferredCommand -Name "npx"
+    if (-not $npx) {
+        Write-SetupWarning "npx not found on PATH. Skipping skills install. Install Node.js 20+ first, then re-run: npx skills add microsoft/skills --skill '*' --agent copilot --yes --copy"
+    } else {
+        try {
+            Invoke-Checked -FilePath $npx -Arguments @("-y", "skills", "add", "microsoft/skills", "--skill", "*", "--agent", "copilot", "--yes", "--copy")
+            Write-Host "microsoft/skills installed under .github/skills/azure-skills/ (gitignored)."
+        } catch {
+            Write-SetupWarning ("Failed to install microsoft/skills: " + $_.Exception.Message + ". Re-run later: npx skills add microsoft/skills --skill '*' --agent copilot --yes --copy")
         }
     }
 }
@@ -244,10 +328,29 @@ if ($gh) {
 if (Test-Path $venvPython) {
     Write-Host "Basic runtime check: $venvPython -m hve --help"
     if (-not $SkipMdq) {
-        Write-Host "Markdown query (local): $venvPython -m hve.mdq index ; $venvPython -m hve.mdq stats"
+        Write-Host "Markdown query (local): $venvPython -m mdq index ; $venvPython -m mdq stats"
         if (-not $SkipMdqWatch) {
             Write-Host "Markdown query (realtime, CLI Orchestrator only): watchdog installed. Disable with --no-mdq-watch or HVE_MDQ_WATCH=0."
         }
+    }
+
+    # `python -m hve` を直接叩けるよう venv アクティベート手順を案内し、
+    # 現在 PATH 上の `python` が venv を指していない場合は警告する。
+    $activateScript = Join-Path $venvDir "Scripts\Activate.ps1"
+    Write-Host ""
+    Write-Host "To use 'python -m hve' directly in this shell, activate the venv:"
+    Write-Host "  . $activateScript"
+    Write-Host "Or always use the full venv path shown above."
+
+    $pythonOnPath = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonOnPath) {
+        try {
+            $resolved = (Resolve-Path $pythonOnPath.Source -ErrorAction Stop).Path
+            $venvResolved = (Resolve-Path $venvPython -ErrorAction Stop).Path
+            if ($resolved -ne $venvResolved) {
+                Write-SetupWarning ("'python' on PATH ($resolved) is NOT the venv Python ($venvResolved). Running 'python -m hve' will fail with ModuleNotFoundError. Activate the venv first: . $activateScript")
+            }
+        } catch { }
     }
 } else {
     Write-Host "Create .venv first (run setup without -CheckOnly), then run: .venv\\Scripts\\python.exe -m hve --help"
@@ -257,6 +360,16 @@ if ($SkipMdq) {
     Write-Host "markdown-query [mdq] extras skipped (-SkipMdq). Built-in fallback (MiniBM25) will be used."
 } elseif ($SkipMdqWatch) {
     Write-Host "markdown-query watcher extras skipped (-SkipMdqWatch). [mdq] installed but watchdog is not; HVE CLI Orchestrator realtime index update will be disabled."
+}
+if ($WithGui) {
+    Write-Host "GUI Orchestrator: PySide6 + markitdown installed. Launch with: $venvPython -m hve gui"
+} else {
+    Write-Host "GUI Orchestrator: skipped. To enable, re-run with -WithGui (installs PySide6 and markitdown for attachment Markdown conversion)."
+}
+if ($WithSkills) {
+    Write-Host "Azure agent skills: installed via npx skills add microsoft/skills."
+} else {
+    Write-Host "Azure agent skills: skipped. To install externally-sourced skills under .github/skills/azure-skills/, re-run with -WithSkills (requires Node.js / npx)."
 }
 
 if ($CheckOnly) {

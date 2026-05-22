@@ -163,7 +163,7 @@ find .github/skills -name "SKILL.md" | sort
 | `.github/skills/agent-common-preamble/SKILL.md` | `agent-common-preamble` | 全 Agent 共通ルール |
 | `.github/skills/app-scope-resolution/SKILL.md` | `app-scope-resolution` | APP-ID スコープ解決 |
 | `.github/skills/architecture-questionnaire/SKILL.md` | `architecture-questionnaire` | アーキテクチャ候補選定 Q1-Q26 |
-| `.github/skills/batch-design-guide/SKILL.md` | `batch-design-guide` | バッチ処理設計 |
+| `.github/skills/dataflow-design-guide/SKILL.md` | `dataflow-design-guide` | データフロー処理設計 |
 | `.github/skills/input-file-validation/SKILL.md` | `input-file-validation` | 入力ファイル確認 |
 | `.github/skills/knowledge-lookup/SKILL.md` | `knowledge-lookup` | knowledge/ D01〜D21 条件付き参照 |
 | `.github/skills/knowledge-management/SKILL.md` | `knowledge-management` | knowledge/ 管理 |
@@ -198,8 +198,8 @@ grep -E "StepDef\(id=" hve/workflow_registry.py | grep -oE 'id="[^"]+"'
 | AAD-WEB | `1`, `2.1`, `2.2`, `2.3` |
 | ASDW-WEB | `1`(c), `2`(c), `3`(c), `4`(c), `1.1`, `1.2`, `2.1`, `2.2`, `2.3`, `2.3T`, `2.3TC`, `2.4`, `2.5`, `3.0T`, `3.0TC`, `3.1`, `3.2`, `4.1`, `4.2` |
 | AAS | `1`, `2`, `3.1`, `3.2`, `4`, `5`, `6`, `7` |
-| ABD | `1.1`, `1.2`, `2`, `3`, `4`, `5`, `6.1`, `6.2`, `6.3` |
-| ABDV | `1.1`, `1.2`, `2.1`, `2.2`, `3`, `4.1`, `4.2` |
+| ADFD | `1.1`, `1.2`, `2`, `3`, `4`, `5`, `6.1`, `6.2`, `6.3` |
+| ADFDV | `1.1`, `1.2`, `2.1`, `2.2`, `3`, `4.1`, `4.2` |
 | AAG | `1`, `2`, `3` |
 | AAGD | `1`, `2.1`, `2.2`, `2.3`, `3` |
 

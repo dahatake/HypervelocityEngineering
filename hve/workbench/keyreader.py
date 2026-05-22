@@ -18,12 +18,15 @@ POSIX  : termios + select で 1 文字ずつ読む。
 from __future__ import annotations
 
 import os
+import re
 import sys
 import threading
 from typing import Any, Optional
 
 
 class KeyReader:
+    _SGR_MOUSE_RE = re.compile(r"^\[<(\d+);(\d+);(\d+)([mM])$")
+
     def __init__(self, controller: Any) -> None:
         self._controller = controller
         self._thread: Optional[threading.Thread] = None
@@ -113,6 +116,24 @@ class KeyReader:
             elif key == "]":
                 # UserActions スクロール（最新方向）
                 wb.scroll_actions_down(1)
+            elif key == "{":
+                # TaskTree スクロール（過去方向）
+                wb.scroll_tasks_up(1)
+            elif key == "}":
+                # TaskTree スクロール（最新方向）
+                wb.scroll_tasks_down(1)
+            elif key == "<":
+                # TaskTree 先頭へ
+                wb.tasks_home()
+            elif key == ">":
+                # TaskTree 末尾へ
+                wb.tasks_end()
+            elif key in ("MOUSE_WHEEL_UP", "MWHEEL_UP"):
+                # マウスホイール上: TaskTree を過去方向へ
+                wb.scroll_tasks_up(1)
+            elif key in ("MOUSE_WHEEL_DOWN", "MWHEEL_DOWN"):
+                # マウスホイール下: TaskTree を最新方向へ
+                wb.scroll_tasks_down(1)
             elif key == "q":
                 # 完了モードでは /exit の入力路を確保するため q は無効化
                 try:
@@ -131,6 +152,29 @@ class KeyReader:
             self._run_windows()
         else:
             self._run_posix()
+
+    def _decode_escape_sequence(self, seq: str) -> Optional[str]:
+        """ESC 以降のシーケンスを内部キーへ変換する。"""
+        mapping = {
+            "[A": "UP",
+            "[B": "DOWN",
+            "[H": "HOME",
+            "[F": "END",
+            "[5~": "PGUP",
+            "[6~": "PGDN",
+        }
+        if seq in mapping:
+            return mapping[seq]
+        m = self._SGR_MOUSE_RE.match(seq)
+        if not m:
+            return None
+        button_code = int(m.group(1))
+        # SGR mouse: wheel up=64, wheel down=65
+        if button_code == 64:
+            return "MOUSE_WHEEL_UP"
+        if button_code == 65:
+            return "MOUSE_WHEEL_DOWN"
+        return None
 
     def _run_windows(self) -> None:  # pragma: no cover - 手動 TTY 検証
         try:
@@ -159,7 +203,23 @@ class KeyReader:
                 elif ch == "\x08":  # Backspace
                     self._dispatch("BACKSPACE")
                 elif ch == "\x1b":  # ESC
-                    self._dispatch("ESC")
+                    # VT 入力の ESC シーケンス（矢印/ページ/マウス）を best effort で解釈
+                    if not msvcrt.kbhit():
+                        self._dispatch("ESC")
+                        continue
+                    seq_chars = []
+                    for _ in range(32):
+                        if not msvcrt.kbhit():
+                            break
+                        c = msvcrt.getwch()
+                        seq_chars.append(c)
+                        if c in ("A", "B", "C", "D", "H", "F", "~", "M", "m"):
+                            break
+                    key = self._decode_escape_sequence("".join(seq_chars))
+                    if key is None:
+                        self._dispatch("ESC")
+                    else:
+                        self._dispatch(key)
                 else:
                     self._dispatch(ch)
             except Exception:
@@ -185,28 +245,23 @@ class KeyReader:
                     continue
                 ch = sys.stdin.read(1)
                 if ch == "\x1b":
-                    # ESC シーケンス（ESC 単独 か 矢印キー [A 等）
+                    # ESC 単独 か ESC シーケンス（矢印/ページ/マウス）
                     rlist2, _, _ = select.select([sys.stdin], [], [], 0.02)
                     if not rlist2:
-                        # 単独 ESC（コマンドキャンセル）
                         self._dispatch("ESC")
                         continue
-                    seq2 = sys.stdin.read(1)
-                    if seq2 == "[":
-                        seq3 = sys.stdin.read(1)
-                        mapping = {"A": "UP", "B": "DOWN", "5": "PGUP", "6": "PGDN", "H": "HOME", "F": "END"}
-                        key = mapping.get(seq3)
-                        if key in ("PGUP", "PGDN"):
-                            # PageUp/Down は ~ 終端
-                            try:
-                                sys.stdin.read(1)
-                            except Exception:
-                                pass
-                        if key:
-                            self._dispatch(key)
-                    else:
-                        # その他 ESC シーケンスは無視
-                        pass
+                    seq_chars = []
+                    for _ in range(48):
+                        rlist3, _, _ = select.select([sys.stdin], [], [], 0.01)
+                        if not rlist3:
+                            break
+                        c = sys.stdin.read(1)
+                        seq_chars.append(c)
+                        if c in ("A", "B", "C", "D", "H", "F", "~", "M", "m"):
+                            break
+                    key = self._decode_escape_sequence("".join(seq_chars))
+                    if key is not None:
+                        self._dispatch(key)
                 elif ch in ("\r", "\n"):
                     self._dispatch("ENTER")
                 elif ch in ("\x7f", "\x08"):  # DEL / Backspace

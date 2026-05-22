@@ -402,8 +402,8 @@ class TestQaReadyLabelTokenFallback:
             ("auto-app-selection-reusable.yml", "Issue 初期化とStep Issue 生成"),
             ("auto-app-detail-design-web-reusable.yml", "Issue 初期化とStep Issue 生成"),
             ("auto-app-dev-microservice-web-reusable.yml", "Issue 初期化とStep Issue 生成"),
-            ("auto-batch-design-reusable.yml", "Issue 初期化とStep Issue 生成"),
-            ("auto-batch-dev-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-dataflow-design-reusable.yml", "Issue 初期化とStep Issue 生成"),
+            ("auto-dataflow-dev-reusable.yml", "Issue 初期化とStep Issue 生成"),
             ("auto-ai-agent-design-reusable.yml", "Issue 初期化とStep Issue 生成"),
             ("auto-ai-agent-dev-reusable.yml", "Issue 初期化とStep Issue 生成"),
             ("auto-app-documentation-reusable.yml", "Issue 初期化と Step.1 生成"),
@@ -571,8 +571,8 @@ class TestLabelStateMachineFixWorkflows(unittest.TestCase):
 
         content = _read_workflow_text(workflow)
         for prefix in [
-            "aas", "aad", "aad-web", "asdw", "asdw-web", "abd",
-            "abdv", "aag", "aagd", "akm", "adoc", "aqod",
+            "aas", "aad", "aad-web", "asdw", "asdw-web", "adfd",
+            "adfdv", "aag", "aagd", "akm", "adoc", "aqod",
         ]:
             self.assertIn(prefix, content)
         self.assertIn("<!-- state-transition-on-pr-merge-done -->", content)

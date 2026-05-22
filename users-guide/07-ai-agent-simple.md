@@ -7,8 +7,8 @@
 ## 目次
 
 - [対象読者・前提・次のステップ](#対象読者前提次のステップ)
-- [AAG / AAGD / ASDW 連携チェーン図（参照先）](#aag--aagd--asdw-連携チェーン図参照先)
 - [実行方法（実装準拠）](#実行方法実装準拠)
+- [AAG / AAGD / ASDW 連携チェーン図（参照先）](#aag--aagd--asdw-連携チェーン図参照先)
 - [ツール](#ツール)
 - [Step 1. AI Agentのリストアップ](#step-1-ai-agentのリストアップ)
 - [Step 2. AI Agentの関連性の図式化](#step-2-ai-agentの関連性の図式化)
@@ -26,10 +26,6 @@
 
 > 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメントが存在する場合、AI Agent 設計で業務コンテキスト（ユースケース: `D05`、業務ルール: `D06`、権限・認可: `D12`、Promptガバナンス: `D18`）として自動参照されます。
 
-## AAG / AAGD / ASDW 連携チェーン図（参照先）
-
-チェーン図の実体は [08-ai-agent.md](./08-ai-agent.md#aag--aagd--asdw-連携チェーン図) に集約しています。
-
 ## 実行方法（実装準拠）
 
 - Issue Template: `.github/ISSUE_TEMPLATE/ai-agent-design.yml`（ラベル: `auto-ai-agent-design`）
@@ -39,6 +35,10 @@
   - Step 1: `Arch-AIAgentDesign-Step1`
   - Step 2: `Arch-AIAgentDesign-Step2`
   - Step 3: `Arch-AIAgentDesign-Step3`
+
+## AAG / AAGD / ASDW 連携チェーン図（参照先）
+
+チェーン図の実体は [08-ai-agent.md](./08-ai-agent.md#aag--aagd--asdw-連携チェーン図) に集約しています。
 
 ## ツール
 

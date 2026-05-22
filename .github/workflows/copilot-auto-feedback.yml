@@ -433,9 +433,9 @@ jobs:
     if: >
       (github.event_name == 'issues'
       && github.event.action == 'labeled'
-      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","abd:qa-ready","abdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), github.event.label.name))
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), github.event.label.name))
       || (github.event_name == 'workflow_dispatch'
-      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","abd:qa-ready","abdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), inputs.simulate_label))
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), inputs.simulate_label))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

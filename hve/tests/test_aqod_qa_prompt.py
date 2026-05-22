@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import AQOD_QA_PROMPT, QA_APPLY_PROMPT, QA_PROMPT_V2
+from prompts import AQOD_QA_PROMPT, QA_PROMPT_V2
 
 
 # ---------------------------------------------------------------------------
@@ -65,12 +65,6 @@ class TestAqodQaPrompt(unittest.TestCase):
         """AQOD_QA_PROMPT が成果物サマリーだけで終えないよう指示している。"""
         self.assertIn("成果物サマリー", AQOD_QA_PROMPT)
         self.assertIn("直接出力", AQOD_QA_PROMPT)
-
-    def test_qa_apply_prompt_preserves_aqod_body_format(self) -> None:
-        """QA_APPLY_PROMPT が AQOD 本体成果物を [Qxx] 補助形式へ変換しないよう指示している。"""
-        self.assertIn("# Original ドキュメント質問票", QA_APPLY_PROMPT)
-        self.assertIn("### Qxx", QA_APPLY_PROMPT)
-        self.assertIn("変換しない", QA_APPLY_PROMPT)
 
 
 # ---------------------------------------------------------------------------

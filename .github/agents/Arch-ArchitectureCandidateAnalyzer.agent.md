@@ -5,6 +5,35 @@ tools: ['read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/architectural-requirements-app-xx.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "knowledge/D01"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/catalog/app-arch-catalog.md"
+      required: true
+      mode: "create"
+    - path: "work/Arch-ArchitectureCandidateAnalyzer/Issue-<識別子>/plan.md"
+      required: true
+      mode: "create"
+    - path: "subissues.md"
+      required: true
+      mode: "create"
+    - path: "app-arch-catalog.md"
+      required: true
+      mode: "create"
+    - path: "❌未処理（矛盾検出/質問待ち）"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-ArchitectureCandidateAnalyzer/Issue-<識別子>/`
 
@@ -12,6 +41,27 @@ metadata:
 `docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-xx.md` を根拠に、APPごとに固定候補から1つの推薦アーキテクチャを選定し、`docs/catalog/app-arch-catalog.md` に統合レポートとして出力する分析専用エージェント。
 共通ルールは `.github/copilot-instructions.md` と Skill `agent-common-preamble` を継承する。
 </role>
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — 必読ファイル（`docs/catalog/app-catalog.md` 等）の存在確認と欠損時 TBD 処理
+- `work-artifacts-layout` — `work/Arch-ArchitectureCandidateAnalyzer/Issue-<識別子>/` 配下の成果物構造に準拠
+- `app-scope-resolution` — APP-ID から対象サービス・画面・エンティティを特定
+- `architecture-questionnaire` — 固定候補からのアーキテクチャ選定ロジック・適合度判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の非機能要件・業務制約参照
 
 <when_to_invoke>
 - APP単位でアーキテクチャ候補を比較し、最終候補を1つ選ぶ必要があるとき
@@ -37,7 +87,7 @@ metadata:
   - デスクトップアプリ + クラウド / デスクトップアプリ + オンプレミス
   - スタンドアロンPCアプリ / 組み込みシステム（スタンドアロン）
   - IoTデバイス + クラウド / IoTデバイス + エッジ+クラウド
-  - ハイブリッドクラウド / データバッチ処理
+  - ハイブリッドクラウド / データデータフロー処理
 </inputs>
 
 <task>
@@ -45,14 +95,18 @@ metadata:
    - `app-catalog.md` からAPP一覧を取得。
    - 各APPの `architectural-requirements` ファイル存在を確認。
 2. 欠損時処理
-   - APP入力ファイルがない場合は、**デフォルト推薦** `Webフロントエンド + クラウド` を適用し、`⚠️デフォルト適用（入力ファイルなし）` で記録（処理済み扱い）。
+   - APP入力ファイルがない場合は、`app-catalog.md` の `client_type` / `system_overview` / `app_name` 等からAPPの性質を判定し、下記いずれかの**デフォルト推薦**を適用する。
+     - 「データ中心」（`client_type=batch` または `system_overview` / `app_name` に「バッチ」「ETL」「集計」「データ処理」「データパイプライン」等のキーワードを含む場合）: `データデータフロー処理`
+     - それ以外（アプリケーションより）: `Webフロントエンド + クラウド`
+   - 判定根拠（参照したフィールド・キーワード）はAPP詳細セクションに明記する。判定材料が `app-catalog.md` 側にも無い場合は `Webフロントエンド + クラウド` を採用する。
+   - 入力ステータスは `⚠️デフォルト適用（入力ファイルなし）` で記録（処理済み扱い）。サマリ表・APP詳細・処理統計の出力にも分岐結果を反映する。
    - ファイルはあるが核心入力（例: `system_overview`, `client_type`, `priorities`）が欠ける場合は、APP単位で質問して判定中断。他APPは継続。
 3. 矛盾検出（APP単位）
    - 例: `cloud_allowed=no` と高スケール必須、`client_type=batch` と realtime/offline 必須など。
    - 矛盾時は APP-ID・矛盾一覧・優先確認質問（最大3問）を返し、当該APPのみ停止。
 4. hard constraints 除外
    - `cloud_allowed`, `offline.required`, `realtime.required`, `data_residency`, `client_type` で候補除外。
-   - `client_type=batch` ではフロントエンド系候補を除外。逆に web/mobile/desktop では「データバッチ処理」を除外。
+   - `client_type=batch` ではフロントエンド系候補を除外。逆に web/mobile/desktop では「データデータフロー処理」を除外。
 5. スコアリングと同点処理
    - 適合度: `◎=3, ○=2, △=1`。
    - 軸: realtime / scalability / offline / security / cost。

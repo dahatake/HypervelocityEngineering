@@ -979,24 +979,37 @@ class TestStepIOSummary(unittest.TestCase):
             c.step_io_summary("1")
         self.assertEqual(cap.stdout.strip(), "")
 
-    def test_verbosity_1_write_shows_summary_only(self) -> None:
-        """verbosity=1 で write がある場合は件数サマリーのみ確定行表示する。"""
+    def test_verbosity_1_write_shows_summary_and_file(self) -> None:
+        """verbosity=1 で write がある場合、件数サマリーと write ファイル名が確定行表示される。"""
         c = Console(verbosity=1)
         c.track_file("1", "docs/file.md", "write")
         with _CaptureOutput() as cap:
             c.step_io_summary("1")
         self.assertIn("Files:", cap.stdout)
-        self.assertNotIn("docs/file.md", cap.stdout)
+        self.assertIn("docs/file.md", cap.stdout)
+        self.assertIn("→", cap.stdout)
 
-    def test_verbosity_1_read_only_updates_spinner(self) -> None:
-        """verbosity=1 で write がない場合はスピナー更新のみ。"""
+    def test_verbosity_1_read_only_shows_summary(self) -> None:
+        """verbosity=1 で read のみの場合、件数サマリーを確定行で表示する（read ファイル名本体は verbose 限定）。"""
         c = Console(verbosity=1)
         c.track_file("1", "docs/input.md", "read")
-        with unittest.mock.patch.object(c, "_print") as mock_print, \
-                unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+        with _CaptureOutput() as cap:
             c.step_io_summary("1")
-        mock_print.assert_not_called()
-        mock_spinner.assert_called_once()
+        self.assertIn("Files:", cap.stdout)
+        self.assertIn("1 read", cap.stdout)
+        self.assertNotIn("docs/input.md", cap.stdout)
+
+    def test_verbosity_1_read_and_write_both_shown(self) -> None:
+        """verbosity=1 で read+write 両方ある場合、write ファイル名とサマリーが確定行表示される。"""
+        c = Console(verbosity=1)
+        c.track_file("1", "docs/input.md", "read")
+        c.track_file("1", "docs/output.md", "write")
+        with _CaptureOutput() as cap:
+            c.step_io_summary("1")
+        self.assertIn("1 read", cap.stdout)
+        self.assertIn("1 written", cap.stdout)
+        self.assertIn("docs/output.md", cap.stdout)
+        self.assertIn("→", cap.stdout)
 
     def test_verbosity_2_write_shown(self) -> None:
         """verbosity=2 で write ファイルが確定行表示される。"""
@@ -1065,13 +1078,19 @@ class TestFileIO(unittest.TestCase):
             c.file_io("1", "docs/file.md", "read")
         self.assertEqual(cap.stdout.strip(), "")
 
-    def test_verbosity_1_updates_spinner(self) -> None:
+    def test_verbosity_1_prints_fixed_line_read(self) -> None:
+        """verbosity=1 で read を確定行で表示し、← 矢印が含まれる。"""
         c = Console(verbosity=1)
-        with unittest.mock.patch.object(c, "_print") as mock_print, \
-                unittest.mock.patch.object(c, "_update_spinner_msg") as mock_spinner:
+        with _CaptureOutput() as cap:
+            c.file_io("1", "docs/file.md", "read")
+        self.assertIn("← [1] docs/file.md", cap.stdout)
+
+    def test_verbosity_1_prints_fixed_line_write(self) -> None:
+        """verbosity=1 で write を確定行で表示し、→ 矢印が含まれる。"""
+        c = Console(verbosity=1)
+        with _CaptureOutput() as cap:
             c.file_io("1", "docs/file.md", "write")
-        mock_print.assert_not_called()
-        mock_spinner.assert_called_once()
+        self.assertIn("→ [1] docs/file.md", cap.stdout)
 
     def test_verbosity_2_prints_fixed_line(self) -> None:
         c = Console(verbosity=2)

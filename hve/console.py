@@ -850,6 +850,15 @@ class Console:
             title=title,
             agent=agent,
         )
+        # GUI 向け構造化 stats イベント（stdout）。
+        # quiet/final_only 時は stdout 抑制要件を守るためスキップ。
+        # workbench_logger._try_consume_stats_event("step_status") が消費し、
+        # current_running_step_id / last_known_step_id を更新する。
+        if not (self.quiet or self.final_only):
+            try:
+                self.stats_event("step_status", step_id=step_id, status="running", title=title)
+            except Exception:
+                pass
 
     def step_end(self, step_id: str, status: str, elapsed: float = 0.0) -> None:
         """ステップ完了。quiet 以外で表示。Usage 累計サマリーを付加。"""
@@ -886,6 +895,18 @@ class Console:
             status=status,
             elapsed=elapsed,
         )
+        # GUI 向け構造化 stats イベント（stdout）。quiet/final_only 時はスキップ。
+        if not (self.quiet or self.final_only):
+            try:
+                mapped_status = _wb_status_map.get(status, "done")
+                self.stats_event(
+                    "step_status",
+                    step_id=step_id,
+                    status=mapped_status,
+                    elapsed=float(elapsed),
+                )
+            except Exception:
+                pass
         # クリーンアップ
         self._step_usage.pop(step_id, None)
         self._step_tool_count.pop(step_id, None)
@@ -980,9 +1001,11 @@ class Console:
 
         verbosity に応じた制御:
           0 (quiet)  : 非表示
-          1 (compact): write がある場合は確定行表示、ない場合は件数のみスピナー更新
+          1 (compact): 件数サマリー + write ファイルを確定行表示
           2 (normal) : 件数サマリー + write ファイルを確定行表示
           3 (verbose): 件数サマリー + read・write 全ファイルを確定行表示
+
+        Read/Write の区別は矢印記号で行う（← = read, → = write）。
 
         Args:
             step_id: ステップ ID。
@@ -1003,15 +1026,7 @@ class Console:
         write_count = len(write_files)
         summary_msg = f"📂 [{step_id}] Files: {read_count} read, {write_count} written"
 
-        if self._verbosity == 1:
-            # compact: write がある場合は件数サマリーを確定行で表示
-            if write_count > 0:
-                self._print(f"  {s.DIM}┊{s.RESET} {summary_msg}")
-            else:
-                self._update_spinner_msg(summary_msg)
-            return
-
-        # Level 2+: 確定行で表示
+        # Level 1+ (quiet 以外): 件数サマリーを確定行で表示
         self._print(f"  {s.DIM}┊{s.RESET} {summary_msg}")
 
         # Level 3: read ファイルも表示
@@ -1172,9 +1187,11 @@ class Console:
 
         verbosity に応じた制御:
           0 (quiet)  : 非表示
-          1 (compact): スピナー更新のみ
-          2 (normal) : 確定行で表示
-          3 (verbose): 確定行で表示
+          1 (compact): 確定行で表示（← read, → write）
+          2 (normal) : 確定行で表示（← read, → write）
+          3 (verbose): 確定行で表示（← read, → write）
+
+        Read/Write の区別は矢印記号で行う（← = read, → = write）。
 
         Args:
             step_id: ステップ ID。
@@ -1187,10 +1204,7 @@ class Console:
         arrow = "←" if mode == "read" else "→"
         s = self.s
         msg = f"{arrow} {prefix}{path}"
-        if self._verbosity >= 2:
-            self._print(f"  {s.DIM}┊  {msg}{s.RESET}")
-        else:
-            self._update_spinner_msg(msg)
+        self._print(f"  {s.DIM}┊  {msg}{s.RESET}")
 
     def tool_result(self, step_id: str, success: bool, error_msg: str = "") -> None:
         """ツール実行完了。Level 3 で成功・失敗ともに確定行、Level 1-2 で失敗のみ確定行。"""
@@ -1368,7 +1382,15 @@ class Console:
             self._update_spinner_msg(msg)
 
     def subagent_completed(self, step_id: str, name: str) -> None:
-        """Sub-agent 完了。Level 2+ で確定行、Level 1 でスピナー更新。"""
+        """Sub-agent 完了。Level 1+ で確定行を出力する。
+
+        Note: 以前は Level 2+ のみ確定行・Level 1 はスピナー更新のみだったが、
+        GUI ActivityStatusWidget は `✅ Sub-agent 完了: ...` ログ行を
+        パースして Sub-agent 状態を「実行中」→「完了」に遷移させるため、
+        compact (=1) でも確定行を出力しないとサブタスクが永続「実行中」と
+        なり経過時間が止まらない（hve/gui/workbench_logger.py の
+        `_SUBAGENT_DONE_PATTERN` が唯一の完了検知経路）。
+        """
         wb = getattr(self, "_workbench", None)
         if wb is not None and step_id:
             try:
@@ -1383,13 +1405,14 @@ class Console:
             return
         prefix = f"[{step_id}] " if step_id else ""
         msg = f"✅ {prefix}Sub-agent 完了: {name}"
-        if self._verbosity >= 2:
-            self._print(f"  {msg}")
-        else:
-            self._update_spinner_msg(msg)
+        self._print(f"  {msg}")
 
     def subagent_failed(self, step_id: str, name: str, error: str = "") -> None:
-        """Sub-agent 失敗。Level 2+ で確定行、Level 1 でスピナー更新。"""
+        """Sub-agent 失敗。Level 1+ で確定行を出力する。
+
+        subagent_completed と同じ理由で compact (=1) でも確定行が必要
+        （GUI が `❌ Sub-agent 失敗: ...` のログ行で「失敗」状態へ遷移する）。
+        """
         wb = getattr(self, "_workbench", None)
         if wb is not None and step_id:
             try:
@@ -1405,10 +1428,7 @@ class Console:
         prefix = f"[{step_id}] " if step_id else ""
         err = f" - {error}" if error else ""
         msg = f"❌ {prefix}Sub-agent 失敗: {name}{err}"
-        if self._verbosity >= 2:
-            self._print(f"  {msg}")
-        else:
-            self._update_spinner_msg(msg)
+        self._print(f"  {msg}")
 
     def subagent_selected(self, step_id: str, name: str) -> None:
         """Agent 選択。サブタスクのエージェント名可視化のため Level 1+ で確定行。"""
@@ -1423,6 +1443,12 @@ class Console:
 
     def skill_invoked(self, step_id: str, name: str) -> None:
         """Skill 読み込み。Level 3 で確定行、Level 1-2 でスピナー更新。"""
+        # GUI 用構造化イベント（verbosity に依存せず発火、quiet/final_only 時は除く）
+        if not (self.quiet or self.final_only):
+            try:
+                self.stats_event("skill_invoked", step_id=step_id, name=str(name or ""))
+            except Exception:
+                pass
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1454,6 +1480,37 @@ class Console:
                 self._workbench.set_context(current_tokens, token_limit, msgs)
             except Exception:
                 pass
+
+    def stats_event(self, kind: str, step_id: str = "", **fields: object) -> None:
+        """構造化統計ログ行を stdout へ 1 行 JSON で出力する。
+
+        GUI 側 (workbench_logger) が解析してポップアップの詳細統計を構築する。
+        emoji の人間可読ログは別途出力されるため、ここでは機械可読のみ。
+
+        フォーマット:
+            ``[hve:stats] {"kind":"<kind>","step":"<step_id>", ...}``
+
+        Args:
+            kind: イベント種別 (例: "session_usage_detail", "assistant_usage",
+                  "assistant_ttft", "permission_count").
+            step_id: ステップ ID（空可）。
+            **fields: 任意の JSON シリアライズ可能なフィールド。
+        """
+        if self.final_only:
+            return
+        import json as _json
+
+        payload: dict = {"kind": kind, "step": step_id or ""}
+        for k, v in fields.items():
+            if v is None:
+                continue
+            payload[k] = v
+        try:
+            line = "[hve:stats] " + _json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError):
+            return
+        # always=True で stdout へ確定出力（spinner や verbosity の影響を受けない）
+        self._emit(line, always=True, ts=False)
 
     def compaction(self, step_id: str, phase: str, pre_tokens: int = 0, post_tokens: int = 0) -> None:
         """コンテキスト圧縮。Level 3 で確定行、Level 1-2 でスピナー更新。"""

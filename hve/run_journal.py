@@ -73,6 +73,19 @@ KIND_DELETE_HARD_END: str = "delete-hard.end"
 
 KIND_STEP_CHECKPOINT: str = "step.checkpoint"
 
+# markdown-query Skill 利用イベント種別（mdq CLI から ``.mdq/usage.jsonl`` へ
+# 追記される単発イベント。RunJournal とは別ファイルに格納するが、識別子はここに
+# 集約して命名規約を一元化する。``read_mdq_usage_records`` で run_id 紐付け読込）。
+KIND_MDQ_SEARCH: str = "mdq.search"
+KIND_MDQ_GET: str = "mdq.get"
+KIND_MDQ_INDEX: str = "mdq.index"
+KIND_MDQ_LIST: str = "mdq.list"
+KIND_MDQ_STATS: str = "mdq.stats"
+KIND_MDQ_WATCH: str = "mdq.watch"
+
+MDQ_USAGE_LOG_RELATIVE: str = ".mdq/usage.jsonl"
+"""mdq 利用ログのリポジトリルート相対パス。``mdq.usage_log`` と一致させる。"""
+
 
 # ---------------------------------------------------------------------------
 # 例外
@@ -423,6 +436,61 @@ def scan_archive_for_pending(archive_dir: Path) -> List[Path]:
     return result
 
 
+# ---------------------------------------------------------------------------
+# markdown-query Skill 利用ログ（.mdq/usage.jsonl）読み込み
+# ---------------------------------------------------------------------------
+
+def read_mdq_usage_records(
+    repo_root: Path,
+    *,
+    run_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    since_iso: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """``.mdq/usage.jsonl`` のレコードを読み込んで返す。
+
+    Args:
+        repo_root: リポジトリルート。``<repo_root>/.mdq/usage.jsonl`` を読む。
+        run_id: 指定時は ``record["context"]["run_id"]`` が一致するもののみ返す。
+        workflow_id: 指定時は ``record["context"]["workflow_id"]`` が一致するもののみ返す。
+        since_iso: 指定時は ``record["ts"] >= since_iso`` のもののみ返す
+                   （文字列比較で動作する ISO8601 UTC 前提）。
+
+    Returns:
+        条件を満たすレコードのリスト。ファイル不存在時は空リスト。
+        パース不能行はスキップする（観測用ログのため例外を投げない）。
+    """
+    path = (Path(repo_root) / MDQ_USAGE_LOG_RELATIVE).resolve()
+    if not path.exists():
+        return []
+    result: List[Dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if since_iso is not None:
+                    ts = str(rec.get("ts", ""))
+                    if ts < since_iso:
+                        continue
+                ctx = rec.get("context") or {}
+                if run_id is not None and ctx.get("run_id") != run_id:
+                    continue
+                if workflow_id is not None and ctx.get("workflow_id") != workflow_id:
+                    continue
+                result.append(rec)
+    except OSError:
+        return []
+    return result
+
+
 __all__ = [
     "JournalError",
     "JOURNAL_FILENAME",
@@ -434,6 +502,14 @@ __all__ = [
     "KIND_DELETE_HARD_DIR_REMOVED",
     "KIND_DELETE_HARD_END",
     "KIND_STEP_CHECKPOINT",
+    "KIND_MDQ_SEARCH",
+    "KIND_MDQ_GET",
+    "KIND_MDQ_INDEX",
+    "KIND_MDQ_LIST",
+    "KIND_MDQ_STATS",
+    "KIND_MDQ_WATCH",
+    "MDQ_USAGE_LOG_RELATIVE",
     "RunJournal",
+    "read_mdq_usage_records",
     "scan_archive_for_pending",
 ]

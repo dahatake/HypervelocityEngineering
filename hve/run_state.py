@@ -148,6 +148,7 @@ _SAFE_CONFIG_FIELDS: frozenset[str] = frozenset({
     "max_parallel",
     # QA / Review
     "auto_qa", "qa_answer_mode", "qa_auto_defaults",
+    "qa_ipc_dir", "qa_gui_input_timeout_seconds",
     "auto_contents_review", "auto_coding_agent_review",
     "auto_coding_agent_review_auto_approval",
     "review_timeout_seconds", "review_base_ref",
@@ -162,7 +163,8 @@ _SAFE_CONFIG_FIELDS: frozenset[str] = frozenset({
     "workiq_enabled", "workiq_qa_enabled", "workiq_akm_review_enabled",
     "workiq_akm_ingest_enabled", "workiq_akm_ingest_dxx",
     "workiq_draft_mode", "workiq_draft_output_dir",
-    "workiq_per_question_timeout", "workiq_max_draft_questions",
+    "workiq_per_question_timeout", "workiq_request_timeout",
+    "workiq_max_draft_questions",
     "workiq_priority_filter",
     # Self-Improve
     "auto_self_improve", "self_improve_max_iterations",
@@ -459,6 +461,14 @@ class RunState:
     lock_holder: Optional[LockInfo] = None
     """最後にロックを保持したプロセスの情報。Phase 2 で更新される。"""
 
+    # 致命的エラー検知メタ情報。orchestrator が `fatal` と判定した例外を検出した際に
+    # `True` / 理由文字列を保存し、Resume 一覧 (`hve resume list`) や `show` で表示する。
+    fatal: bool = False
+    """orchestrator が致命的エラー（KeyboardInterrupt / FileNotFoundError 等）で
+    実行を中断した際に True になる。後方互換のため省略可（デフォルト False）。"""
+    fatal_reason: Optional[str] = None
+    """致命的エラーの理由 (`<ExceptionType>: <message>` 形式)。`fatal=True` 時のみ意味を持つ。"""
+
     # asdict で除外するためアンダースコア prefix
     _work_dir: Path = field(default=DEFAULT_RUNS_DIR, repr=False, compare=False)
 
@@ -634,6 +644,9 @@ class RunState:
             intent_log=intent_log,
             sdk_session_index=dict(data.get("sdk_session_index") or {}),
             lock_holder=lock_holder,
+            # 致命的エラーメタ（後方互換のため get-with-default）
+            fatal=bool(data.get("fatal", False)),
+            fatal_reason=data.get("fatal_reason"),
             _work_dir=work_dir,
         )
 

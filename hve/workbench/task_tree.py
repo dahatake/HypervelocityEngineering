@@ -151,15 +151,29 @@ class TaskTree:
         *,
         max_lines: int,
         max_width: int = 120,
+        scroll_mode: bool = False,
+        offset: int = 0,
     ) -> List[Text]:
         """ツリーを 1 行ごとの Rich.Text として返す。
 
-        max_lines 超過時は優先順位ルールで圧縮し、末尾に `... (+N hidden)` を加える。
+        - `scroll_mode=False` (既定): 優先順位圧縮ロジック。
+          末尾に `... (+N hidden)` を加える。
+        - `scroll_mode=True`: DFS フラット順 + `offset` でウィンドウ抽出。
+          `offset=0` は末尾追従、>0 で過去方向。圧縮表記は出さない。
         """
         if max_lines <= 0 or self._root is None:
             return []
 
         all_nodes = self.iter_flatten()
+
+        if scroll_mode:
+            total = len(all_nodes)
+            off = max(0, min(int(offset), max(0, total - max_lines)))
+            end = total - off
+            start = max(0, end - max_lines)
+            picked = all_nodes[start:end]
+            return self._format_nodes(picked, now_monotonic, max_width)
+
         # workflow ルートは常に含める
         visible: List[TaskNode] = []
         if max_lines >= 1:
@@ -188,12 +202,26 @@ class TaskTree:
             picked_set = {id(n) for n in picked}
             visible.extend([n for n in rest if id(n) in picked_set])
 
+        lines: List[Text] = self._format_nodes(visible, now_monotonic, max_width)
+
+        if hidden_count > 0:
+            t = Text()
+            t.append(f"... (+{hidden_count} hidden)", style="dim italic")
+            lines.append(t)
+
+        return lines
+
+    def _format_nodes(
+        self,
+        nodes: List[TaskNode],
+        now_monotonic: float,
+        max_width: int,
+    ) -> List[Text]:
         lines: List[Text] = []
-        for node in visible:
+        for node in nodes:
             depth = self._depth_of(node.id)
             indent = "|  " * max(0, depth - 1) + ("|- " if depth >= 1 else "")
             if node.kind == "workflow":
-                # ルートは階層的合計（並列実行で sum > wall になる）
                 elapsed_sec = self.aggregate_elapsed(node.id, now_monotonic)
                 elapsed_label = f"合計 {_format_elapsed(elapsed_sec)}"
             else:
@@ -214,12 +242,6 @@ class TaskTree:
             if max_width > 0:
                 text.truncate(max_width, overflow="ellipsis")
             lines.append(text)
-
-        if hidden_count > 0:
-            t = Text()
-            t.append(f"... (+{hidden_count} hidden)", style="dim italic")
-            lines.append(t)
-
         return lines
 
 

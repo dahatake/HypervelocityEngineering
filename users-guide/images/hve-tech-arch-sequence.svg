@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .lane  { font-size: 13px; font-weight: bold; }
+      .ln    { stroke: #888; stroke-width: 1; stroke-dasharray: 3 3; }
+      .lifeline { stroke: #aaa; stroke-width: 1; }
+      .arr   { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .ret   { stroke: #1a7f37; stroke-width: 1.4; fill: none; marker-end: url(#arr); stroke-dasharray: 5 3; }
+      .lbl   { font-size: 12px; }
+      .head  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="28">CLI / GUI 起動時のメッセージシーケンス（1 ステップ実行）</text>
+
+  <!-- Lane headers -->
+  <g>
+    <rect class="head" x="20"   y="50" width="140" height="34" rx="4"/>
+    <text class="lane" x="40"  y="73">ユーザー</text>
+
+    <rect class="head" x="180"  y="50" width="150" height="34" rx="4"/>
+    <text class="lane" x="200" y="73">GUI (PySide6)</text>
+
+    <rect class="head" x="350"  y="50" width="160" height="34" rx="4"/>
+    <text class="lane" x="370" y="73">hve CLI Process</text>
+
+    <rect class="head" x="530"  y="50" width="160" height="34" rx="4"/>
+    <text class="lane" x="550" y="73">DAGExecutor</text>
+
+    <rect class="head" x="710"  y="50" width="160" height="34" rx="4"/>
+    <text class="lane" x="730" y="73">StepRunner</text>
+
+    <rect class="head" x="890"  y="50" width="120" height="34" rx="4"/>
+    <text class="lane" x="910" y="73">Copilot SDK</text>
+
+    <rect class="head" x="1030" y="50" width="130" height="34" rx="4"/>
+    <text class="lane" x="1050" y="73">copilot CLI</text>
+  </g>
+
+  <!-- Lifelines -->
+  <line class="lifeline" x1="90"   y1="84" x2="90"   y2="740"/>
+  <line class="lifeline" x1="255"  y1="84" x2="255"  y2="740"/>
+  <line class="lifeline" x1="430"  y1="84" x2="430"  y2="740"/>
+  <line class="lifeline" x1="610"  y1="84" x2="610"  y2="740"/>
+  <line class="lifeline" x1="790"  y1="84" x2="790"  y2="740"/>
+  <line class="lifeline" x1="950"  y1="84" x2="950"  y2="740"/>
+  <line class="lifeline" x1="1095" y1="84" x2="1095" y2="740"/>
+
+  <!-- Messages -->
+  <g class="lbl">
+    <path class="arr" d="M90,110 L255,110"/>
+    <text x="100" y="104">1. Wizard 操作 (Step1→2→3)</text>
+
+    <path class="arr" d="M255,140 L430,140"/>
+    <text x="265" y="134">2. Popen([python, -m, hve, orchestrate, --workbench off, ...])</text>
+
+    <path class="arr" d="M430,170 L610,170"/>
+    <text x="440" y="164">3. orchestrator.run() → build_dag_plan()</text>
+
+    <path class="arr" d="M610,200 L790,200"/>
+    <text x="620" y="194">4. StepRunner.run(step)（asyncio.Semaphore で並列度制御）</text>
+
+    <path class="arr" d="M790,230 L790,230"/>
+    <text x="620" y="224">5. agent_loader.load(.github/agents/&lt;Agent&gt;.agent.md)</text>
+
+    <path class="arr" d="M790,260 L790,260"/>
+    <text x="620" y="254">6. skill_resolver / template_engine でプロンプト生成</text>
+
+    <path class="arr" d="M790,290 L950,290"/>
+    <text x="800" y="284">7. CopilotClient.create_session(SubprocessConfig)</text>
+
+    <path class="arr" d="M950,320 L1095,320"/>
+    <text x="960" y="314">8. spawn `copilot` プロセス</text>
+
+    <path class="arr" d="M790,360 L950,360"/>
+    <text x="800" y="354">9. session.send_and_wait(prompt)</text>
+
+    <path class="arr" d="M950,390 L1095,390"/>
+    <text x="960" y="384">10. プロンプト送信（推論 / MCP / Skill 解決）</text>
+
+    <path class="ret" d="M1095,420 L950,420"/>
+    <text x="970" y="414">11. event stream: text / tool_use / permission_request</text>
+
+    <path class="ret" d="M950,450 L790,450"/>
+    <text x="800" y="444">12. PermissionHandler 評価（許可ポリシー適用）</text>
+
+    <path class="ret" d="M1095,480 L950,480"/>
+    <text x="970" y="474">13. 完了イベント（最終応答）</text>
+
+    <path class="ret" d="M950,510 L790,510"/>
+    <text x="800" y="504">14. 応答テキスト / 成果物パス</text>
+
+    <path class="arr" d="M790,540 L790,540"/>
+    <text x="620" y="534">15. artifact_validation: output_paths の存在確認</text>
+
+    <path class="ret" d="M790,570 L610,570"/>
+    <text x="620" y="564">16. ステップ完了 (success / failed)</text>
+
+    <path class="arr" d="M610,600 L610,600"/>
+    <text x="450" y="594">17. 失敗時: HVE_FORK_ON_RETRY=true なら新 session_id で 1 回再試行</text>
+
+    <path class="ret" d="M610,630 L430,630"/>
+    <text x="440" y="624">18. 次ステップへ（DAG 依存解決）→ 全完了で run 終了</text>
+
+    <path class="arr" d="M430,660 L255,660"/>
+    <text x="265" y="654">19. stdout 行を QThread が読取 → Workbench Pane へ Signal</text>
+
+    <path class="arr" d="M255,690 L90,690"/>
+    <text x="100" y="684">20. ユーザーは TUI/GUI で進捗確認・QA 応答 (IPC dir)</text>
+
+    <text x="20" y="730">※ Cloud Agent Orchestrator では 2〜19 が「Sub-Issue 作成 → assign-copilot.sh → Coding Agent → PR」に置換される</text>
+  </g>
+</svg>

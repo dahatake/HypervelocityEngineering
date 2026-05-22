@@ -425,3 +425,98 @@ class TestMetadataVersion:
         rc, out = _run([], base)
         assert rc == 1, out
         assert "metadata.version" in out
+
+
+class TestSkillsSectionEmpty:
+    """R18: edge cases for _is_skills_section_empty().
+
+    Covers: section at EOF (no trailing heading), section followed by
+    H1/H2/H3, and section with only whitespace.
+    """
+
+    def test_returns_none_when_section_absent(self, va):
+        content = "# Body\nNo skills section here.\n"
+        assert va._is_skills_section_empty(content) is None
+
+    def test_empty_section_at_eof(self, va):
+        content = "# Body\n\n## Agent 固有の Skills 依存\n\n"
+        assert va._is_skills_section_empty(content) is True
+
+    def test_empty_section_followed_by_h2(self, va):
+        content = (
+            "# Body\n\n## Agent 固有の Skills 依存\n\n"
+            "## 次のセクション\n本文。\n"
+        )
+        assert va._is_skills_section_empty(content) is True
+
+    def test_empty_section_followed_by_h1(self, va):
+        content = (
+            "# Body\n\n## Agent 固有の Skills 依存\n\n"
+            "# 別 H1\n本文。\n"
+        )
+        assert va._is_skills_section_empty(content) is True
+
+    def test_non_empty_section(self, va):
+        content = (
+            "# Body\n\n## Agent 固有の Skills 依存\n\n"
+            "- `skill-a` — purpose\n"
+        )
+        assert va._is_skills_section_empty(content) is False
+
+    def test_whitespace_only_section_is_empty(self, va):
+        content = "## Agent 固有の Skills 依存\n   \n\t\n\n"
+        assert va._is_skills_section_empty(content) is True
+
+
+# ---------------------------------------------------------------------------
+# check_heading_order tests (R07)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckHeadingOrder:
+    STANDARD_OK = (
+        "## 共通ルール\n\n"
+        "## 1) 目的と非目的\n\n"
+        "## 2) 入力（必ず参照）\n\n"
+        "## 3) 出力フォーマット（Markdown固定スキーマ）\n\n"
+        "## 4) 実行手順（順序固定）\n\n"
+        "## 5) 品質原則（必ず守る）\n\n"
+        "## 6) セルフチェック（出力前に必ず確認）\n\n"
+        "## 7) 完了条件\n\n"
+        "## Agent 固有の Skills 依存\n\n"
+    )
+
+    def test_standard_passes(self, va):
+        assert va.check_heading_order(self.STANDARD_OK, "Foo.agent.md") == []
+
+    def test_missing_required(self, va):
+        content = "## 共通ルール\n## 1) 目的と非目的\n"
+        issues = va.check_heading_order(content, "Foo.agent.md")
+        assert any("Missing required" in i for i in issues)
+
+    def test_order_violation(self, va):
+        content = (
+            "## 共通ルール\n"
+            "## 2) 入力（必ず参照）\n"
+            "## 1) 目的と非目的\n"
+            "## 3) 出力フォーマット（Markdown固定スキーマ）\n"
+            "## 4) 実行手順（順序固定）\n"
+            "## 5) 品質原則（必ず守る）\n"
+            "## 6) セルフチェック（出力前に必ず確認）\n"
+            "## 7) 完了条件\n"
+            "## Agent 固有の Skills 依存\n"
+        )
+        issues = va.check_heading_order(content, "Foo.agent.md")
+        assert any("order violation" in i for i in issues)
+
+    def test_xml_template_skipped(self, va):
+        content = "<role>\n</role>\n## 禁止事項\n"
+        issues = va.check_heading_order(
+            content, "Arch-ArchitectureCandidateAnalyzer.agent.md"
+        )
+        assert issues == []
+
+    def test_dispatcher_skipped(self, va):
+        content = "## 0) モードディスパッチ\n## 共通ルール\n"
+        issues = va.check_heading_order(content, "Foo.agent.md")
+        assert issues == []

@@ -19,6 +19,16 @@ class TestOrchestratorContext(unittest.TestCase):
         self.assertEqual(ctx.split_fork_depth, 0)
         self.assertEqual(ctx.split_fork_max_depth, 2)
         self.assertGreaterEqual(ctx.max_parallel_subtasks, 1)
+        self.assertFalse(ctx.continue_on_error)
+
+    def test_continue_on_error_can_be_enabled(self):
+        ctx = OrchestratorContext(continue_on_error=True)
+        self.assertTrue(ctx.continue_on_error)
+
+    def test_continue_on_error_preserved_on_depth_increase(self):
+        ctx = OrchestratorContext(continue_on_error=True, split_fork_depth=1)
+        nxt = ctx.with_increased_depth()
+        self.assertTrue(nxt.continue_on_error)
 
     def test_with_increased_depth(self):
         ctx = OrchestratorContext(split_fork_depth=1)

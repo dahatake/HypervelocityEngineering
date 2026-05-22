@@ -112,6 +112,8 @@ def _state_summary_dict(state: RunState) -> Dict[str, Any]:
         "created_at": state.created_at,
         "last_updated_at": state.last_updated_at,
         "pause_reason": state.pause_reason,
+        "fatal": bool(getattr(state, "fatal", False)),
+        "fatal_reason": getattr(state, "fatal_reason", None),
     }
 
 
@@ -163,11 +165,21 @@ def cmd_list(args: argparse.Namespace) -> int:
         progress = f"{r.completed_count}/{r.total_count or len(r.step_states)}"
         updated = to_local_time_str(r.last_updated_at)
         name = (r.session_name or "(無名)")
+        # 致命的エラーで中断した run は STATUS ラベルを `✖ failed` に変えて見るぶユーザーに警告
+        # し、NAME 末尾に「[FATAL: 原因]」を prefix として付与する。
+        status_label = r.status
+        if getattr(r, "fatal", False):
+            reason_short = (getattr(r, "fatal_reason", None) or "").split("\n", 1)[0]
+            if reason_short:
+                name = f"[FATAL: {reason_short[:60]}] {name}"
+            else:
+                name = f"[FATAL] {name}"
+            status_label = f"✖ {r.status}"
         # name はターミナル幅を圧迫しないよう 40 文字までで切り詰める
         if len(name) > 40:
             name = name[:39] + "…"
         print(
-            f"{r.run_id:<32} {r.status:<10} {progress:<10} "
+            f"{r.run_id:<32} {status_label:<10} {progress:<10} "
             f"{r.workflow_id:<12} {updated:<14} {name}"
         )
     return 0
@@ -204,6 +216,12 @@ def cmd_show(args: argparse.Namespace) -> int:
     print(f"作成日時        : {to_local_time_str(state.created_at)}")
     print(f"最終更新        : {to_local_time_str(state.last_updated_at)}")
     print(f"中断理由        : {state.pause_reason or '(不明)'}")
+    if getattr(state, "fatal", False):
+        print("致命的エラー  : ✖ あり（fatal=True）")
+        reason = getattr(state, "fatal_reason", None) or "(詳細不明)"
+        for i, ln in enumerate(reason.splitlines() or [reason]):
+            label = "致命的エラー理由" if i == 0 else " " * 18
+            print(f"{label}: {ln}")
     print(f"SDK バージョン  : {state.host.copilot_sdk_version or '(不明)'}")
     snap_model = state.config_snapshot.get("model") if state.config_snapshot else None
     print(f"モデル          : {snap_model or '(snapshot に無し)'}")

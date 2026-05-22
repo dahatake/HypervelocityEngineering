@@ -268,10 +268,10 @@ Describe 'orchestrate.ps1' {
         $output | Should -Match 'ドライラン'
     }
 
-    It 'shows execution plan for ABD with step filter' {
+    It 'shows execution plan for ADFD with step filter' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
-        $output = & $ScriptPath -Workflow abd -Steps '1.1,1.2' -DryRun *>&1 | Out-String
-        $output | Should -Match 'ABD.*Batch Design'
+        $output = & $ScriptPath -Workflow adfd -Steps '1.1,1.2' -DryRun *>&1 | Out-String
+        $output | Should -Match 'ADFD.*Dataflow Design'
         $output | Should -Match 'Step\.1\.1:.*バッチドメイン分析'
         $output | Should -Match 'Step\.1\.2:.*データソース'
         $output | Should -Match 'スキップされるステップ'
@@ -281,8 +281,8 @@ Describe 'orchestrate.ps1' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $workflows = @(
             @{ id = 'aas';  prefix = 'AAS';  count = 2 },
-            @{ id = 'abd';  prefix = 'ABD';  count = 9 },
-            @{ id = 'abdv'; prefix = 'ABDV'; count = 7 }
+            @{ id = 'adfd';  prefix = 'ADFD';  count = 9 },
+            @{ id = 'adfdv'; prefix = 'ADFDV'; count = 7 }
         )
         foreach ($wf in $workflows) {
             $output = & $ScriptPath -Workflow $wf.id -DryRun *>&1 | Out-String

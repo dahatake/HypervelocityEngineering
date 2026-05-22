@@ -1,4 +1,4 @@
-﻿# orchestrate.ps1 — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
+# orchestrate.ps1 — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
 #
 # ============================================================
 # DEPRECATED: このスクリプトは GitHub Actions ワークフローからは
@@ -13,7 +13,7 @@
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   .\orchestrate.ps1 -Workflow abd -Branch main -Steps "1.1,1.2" -Model claude-opus-4.7 -DryRun
+#   .\orchestrate.ps1 -Workflow adfd -Branch main -Steps "1.1,1.2" -Model claude-opus-4.7 -DryRun
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format
@@ -33,7 +33,7 @@ param(
     [string]$AppId = '',
     [string]$ResourceGroup = '',
     [string]$UsecaseId = '',
-    [string]$BatchJobId = '',
+    [string]$AppId = '',
     [string]$Comment = '',
     [switch]$SkipReview,
     [switch]$SkipQa,
@@ -66,20 +66,20 @@ $TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
 
 $script:WorkflowDisplayNames = @{
     aas  = 'App Architecture Design'
-    abd  = 'Batch Design'
-    abdv = 'Batch Dev'
+    adfd  = 'Dataflow Design'
+    adfdv = 'Dataflow Dev'
 }
 
 $script:TriggerLabels = @{
     aas  = 'auto-app-selection'
-    abd  = 'auto-batch-design'
-    abdv = 'auto-batch-dev'
+    adfd  = 'auto-dataflow-design'
+    adfdv = 'auto-dataflow-dev'
 }
 
 $script:WorkflowPrefixMap = @{
     aas  = 'AAS'
-    abd  = 'ABD'
-    abdv = 'ABDV'
+    adfd  = 'ADFD'
+    adfdv = 'ADFDV'
 }
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ function script:BuildRootRef {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefBatchJobId = '',
+        [string]$RefAppId = '',
         [string]$AutoReview = 'true',
         [string]$AutoQa = 'true'
     )
@@ -112,7 +112,7 @@ function script:BuildRootRef {
     $parts += "<!-- branch: $RefBranch -->"
     if ($RefResourceGroup) { $parts += "<!-- resource-group: $RefResourceGroup -->" }
     if ($RefAppId) { $parts += "<!-- app-id: $RefAppId -->" }
-    if ($RefBatchJobId) { $parts += "<!-- batch-job-ids: $RefBatchJobId -->" }
+    if ($RefAppId) { $parts += "<!-- app-ids: $RefAppId -->" }
     $parts += "<!-- auto-review: $AutoReview -->"
     $parts += "<!-- auto-context-review: true -->"
     $parts += "<!-- auto-qa: $AutoQa -->"
@@ -140,9 +140,9 @@ function script:BuildRgSection {
 }
 
 function script:BuildJobSection {
-    param([string]$RefBatchJobId)
-    if (-not $RefBatchJobId) { return '' }
-    return "`n`n## 対象バッチジョブ ID`n``$RefBatchJobId``"
+    param([string]$RefAppId)
+    if (-not $RefAppId) { return '' }
+    return "`n`n## 対象データフローアプリ ID`n``$RefAppId``"
 }
 
 function script:RenderTemplate {
@@ -152,7 +152,7 @@ function script:RenderTemplate {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefBatchJobId = '',
+        [string]$RefAppId = '',
         [string]$RefUsecaseId = '',
         [string]$AdditionalComment = '',
         [string]$AutoReview = 'true',
@@ -162,11 +162,11 @@ function script:RenderTemplate {
     $bodyContent = LoadTemplate -TemplatePath $TemplatePath
     if (-not $bodyContent) { return '' }
 
-    $rootRef = BuildRootRef -RootIssueNum $RootIssueNum -RefBranch $RefBranch -RefResourceGroup $RefResourceGroup -RefAppId $RefAppId -RefBatchJobId $RefBatchJobId -AutoReview $AutoReview -AutoQa $AutoQa
+    $rootRef = BuildRootRef -RootIssueNum $RootIssueNum -RefBranch $RefBranch -RefResourceGroup $RefResourceGroup -RefAppId $RefAppId -RefAppId $RefAppId -AutoReview $AutoReview -AutoQa $AutoQa
     $additionalSection = BuildAdditionalSection -AdditionalComment $AdditionalComment
     $appIdSection = BuildAppIdSection -RefAppId $RefAppId
     $rgSection = BuildRgSection -RefResourceGroup $RefResourceGroup
-    $jobSection = BuildJobSection -RefBatchJobId $RefBatchJobId
+    $jobSection = BuildJobSection -RefAppId $RefAppId
 
     $bodyContent = $bodyContent -replace '\{root_ref\}', $rootRef
     $bodyContent = $bodyContent -replace '\{additional_section\}', $additionalSection
@@ -191,7 +191,7 @@ function script:BuildRootIssueBody {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefBatchJobId = '',
+        [string]$RefAppId = '',
         [string]$RefUsecaseId = '',
         [string]$AdditionalComment = '',
         [string]$SkipReviewStr = 'false',
@@ -210,7 +210,7 @@ function script:BuildRootIssueBody {
     $lines += "<!-- branch: $RefBranch -->"
     if ($RefResourceGroup) { $lines += "<!-- resource-group: $RefResourceGroup -->" }
     if ($RefAppId) { $lines += "<!-- app-id: $RefAppId -->" }
-    if ($RefBatchJobId) { $lines += "<!-- batch-job-ids: $RefBatchJobId -->" }
+    if ($RefAppId) { $lines += "<!-- app-ids: $RefAppId -->" }
     $lines += "<!-- auto-review: $autoReview -->"
     $lines += "<!-- auto-context-review: true -->"
     $lines += "<!-- auto-qa: $autoQa -->"
@@ -221,7 +221,7 @@ function script:BuildRootIssueBody {
     if ($RefAppId) { $lines += "APP-ID: ``$RefAppId``" }
     if ($RefResourceGroup) { $lines += "リソースグループ: ``$RefResourceGroup``" }
     if ($RefUsecaseId) { $lines += "ユースケースID: ``$RefUsecaseId``" }
-    if ($RefBatchJobId) { $lines += "バッチジョブ ID: ``$RefBatchJobId``" }
+    if ($RefAppId) { $lines += "データフローアプリ ID: ``$RefAppId``" }
 
     if ($AdditionalComment) {
         $lines += ''
@@ -242,13 +242,13 @@ Usage:
   orchestrate.ps1 -Workflow <id> [options]
 
 Options:
-  -Workflow, -w <id>     Workflow ID: aas|abd|abdv (required)
+  -Workflow, -w <id>     Workflow ID: aas|adfd|adfdv (required)
   -Branch <name>         Target branch (default: main)
   -Steps <csv>           Comma-separated step IDs (default: all)
   -AppId <id>            ASDW: Application ID
-  -ResourceGroup <name>  ASDW/ABDV: Resource group name
+  -ResourceGroup <name>  ASDW/ADFDV: Resource group name
   -UsecaseId <id>        ASDW: Usecase ID
-  -BatchJobId <ids>      ABDV: Batch job IDs (comma-separated)
+  -AppId <ids>      ADFDV: Batch job IDs (comma-separated)
   -Comment <text>        Additional comment
   -SkipReview            Skip self-review
   -SkipQa                Skip QA questionnaire
@@ -410,7 +410,7 @@ try { New-GitHubLabel -Name 'auto-qa' -Color 'BFD4F2' -Repo $Repo -Confirm:$fals
 # 2. Create Root Issue
 Write-Information ''
 Write-Information '📝 Root Issue 作成...'
-$rootBody = BuildRootIssueBody -WorkflowId $workflowId -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefBatchJobId $BatchJobId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -SkipReviewStr $(if ($SkipReview) { 'true' } else { 'false' }) -SkipQaStr $(if ($SkipQa) { 'true' } else { 'false' })
+$rootBody = BuildRootIssueBody -WorkflowId $workflowId -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -SkipReviewStr $(if ($SkipReview) { 'true' } else { 'false' }) -SkipQaStr $(if ($SkipQa) { 'true' } else { 'false' })
 $rootTitle = "[$prefix] $displayName"
 $initializedLabel = $wf.state_labels.initialized
 $rootLabelsJson = ConvertTo-Json @($triggerLabel, $initializedLabel) -Compress
@@ -447,10 +447,10 @@ foreach ($step in $wf.steps) {
     $issueBody = ''
 
     if ($step.body_template_path) {
-        $issueBody = RenderTemplate -TemplatePath $step.body_template_path -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefBatchJobId $BatchJobId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -AutoReview $autoReview -AutoQa $autoQa
+        $issueBody = RenderTemplate -TemplatePath $step.body_template_path -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -AutoReview $autoReview -AutoQa $autoQa
     }
     if (-not $issueBody) {
-        $rootRef = BuildRootRef -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefBatchJobId $BatchJobId -AutoReview $autoReview -AutoQa $autoQa
+        $rootRef = BuildRootRef -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -AutoReview $autoReview -AutoQa $autoQa
         $additionalSection = BuildAdditionalSection -AdditionalComment $Comment
         $issueBody = "$rootRef`n`nStep.${sid}: $($step.title)$additionalSection"
     }

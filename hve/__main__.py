@@ -1,10 +1,14 @@
 """__main__.py — CLI エントリポイント
 
 使い方:
-    # (A) インタラクティブモード（推奨）
+    # (A) GUI モード（引数なし時の既定。PySide6 未導入時は自動で CLI へフォールバック）
     python -m hve
+    python -m hve gui   # 明示指定（後方互換）
 
-    # (B) python -m で直接実行
+    # (B) CLI 対話ウィザードモード
+    python -m hve cli
+
+    # (C) python -m で直接実行（サブコマンド指定）
     python -m hve orchestrate --workflow aad
 
     # (C) ディレクトリに移動して __main__.py を直接実行
@@ -76,6 +80,35 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 
+
+def _configure_stdio_encoding() -> None:
+    """stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。
+
+    `hve gui` などから ``subprocess.Popen(..., stdout=PIPE)`` で起動された場合、
+    Python の標準出力ストリームはコンソール直結時の UTF-8 ではなく OS ロケール
+    （Windows なら cp932）にフォールバックする。この状態で console.py が出力する
+    ``▸`` (U+25B8) 等の Unicode 記号を ``print()`` すると ``UnicodeEncodeError``
+    で落ちる。本関数で起動時に UTF-8 を強制し、全モードで一貫した出力にする。
+
+    - ``errors="replace"`` により、万一エンコード不能文字が混入しても例外で
+      落ちず置換文字に置き換える。
+    - コンソール直結時（既に UTF-8 ベース）でも冪等に動作する。
+    - ``reconfigure`` が無い環境（Python 3.6 以前等）では no-op。
+    """
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # pragma: no cover - top-level guard
+            pass
+
+
+_configure_stdio_encoding()
+
+
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
 except ImportError:
@@ -146,8 +179,8 @@ _ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
 _APP_ID_AUTO_HINTS = {
     "aad-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
     "asdw-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
-    "abd": "データバッチ処理 / バッチの APP-ID を自動選択",
-    "abdv": "データバッチ処理 / バッチの APP-ID を自動選択",
+    "adfd": "データデータフロー処理 / バッチの APP-ID を自動選択",
+    "adfdv": "データデータフロー処理 / バッチの APP-ID を自動選択",
 }
 
 _PARAM_PROMPT_LABELS = {
@@ -155,13 +188,12 @@ _PARAM_PROMPT_LABELS = {
     "app_id": "対象 APP-ID（単一）",
     "resource_group": "Azure リソースグループ名（任意）",
     "usecase_id": "対象ユースケースID（任意）",
-    "batch_job_id": "対象バッチジョブID（カンマ区切り・任意）",
+    "app_id": "対象データフローアプリID（カンマ区切り・任意）",
     "target_scope": "対象スコープ",
     "focus_areas": "重点観点（任意）",
     "target_dirs": "ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）",
     "exclude_patterns": "除外パターン（カンマ区切り）",
     "issue_title": "GitHub Issue タイトル（任意）",
-    "additional_comment": "GitHub Issue への追加コメント（任意）",
     "sources": "取り込みソース",
     "target_files": "対象ファイルパス",
     "force_refresh": "knowledge/ 完全再生成",
@@ -183,7 +215,7 @@ _PARAM_PROMPT_LABELS = {
 _PARAM_DEFAULTS = {
     "resource_group": "",
     "usecase_id": "",
-    "batch_job_id": "",
+    "app_id": "",
     "target_scope": _AQOD_DEFAULT_TARGET_SCOPE,
     "focus_areas": "",
     "target_dirs": "",
@@ -286,26 +318,35 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
 
     Returns:
         (params, selected_steps) のタプル。
-        - selected_steps: ウィザードでユーザーが選択した Step ID 一覧。
-          Enter 時の初期値は ["2", "3"]。
+        - selected_steps: ウィザードでユーザーが選択したグループ ID 一覧（"1" / "2" / "3" / "4"）。
+          Enter 時の初期値は ["2", "3", "4"]。
+          グループ ID は orchestrator 側の `_ARD_GROUP_MAP` で実 Step ID に展開される:
+            "1" → ["1", "1.1", "1.2"]（企業の事業分析）
+            "2" → ["2"]（要求定義書作成）
+            "3" → ["3"]（KPI/OKR 定義・任意）
+            "4" → ["4.1", "4.2", "4.3"]（ユースケース作成）
     """
     from datetime import date
 
     params: dict = {}
-    _ard_step_ids = ["1", "2", "3"]
+    # 4 グループ体系。各グループは内部で複数 Step を順次実行する。
+    # Step 3（KPI/OKR）も既定で選択に含める（Step 2 / 4 と同時実行することで戦略的記述から
+    # KPI/OKR・計測データ・データ収集設計まで一気通貫で生成する運用に合わせる）。
+    _ard_step_ids = ["1", "2", "3", "4"]
     _ard_step_options = [
-        "[1] 事業分析（対象業務 未定）",
-        "[2] 事業分析（対象業務 指定済）",
-        "[3] ユースケース作成",
+        "[1] 企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）",
+        "[2] 要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）",
+        "[3] KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）",
+        "[4] ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）",
     ]
     selected_indices = con.prompt_multi_select(
         "ARD で実行するステップを選択",
         _ard_step_options,
-        default_indices=[1, 2],
+        default_indices=[1, 2, 3],
     )
     selected_steps = [_ard_step_ids[i] for i in selected_indices if 0 <= i < len(_ard_step_ids)]
     if not selected_steps:
-        selected_steps = ["2", "3"]
+        selected_steps = ["2", "3", "4"]
 
     requires_company_name = "1" in selected_steps
     requires_target_business = ("2" in selected_steps) and ("1" not in selected_steps)
@@ -331,6 +372,9 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
         params["target_region"] = _ARD_DEFAULT_TARGET_REGION
         params["analysis_purpose"] = _ARD_DEFAULT_ANALYSIS_PURPOSE
         params["attached_docs"] = []
+        # quick-auto モードでも Step 3 (KPI/OKR 定義) を既定で有効化する（GUI/CLI 対話ウィザードと整合）。
+        # orchestrator 側で selected_steps に "3" が含まれれば自動同期されるが、明示的に True を記録する。
+        params["include_kpi_okr"] = True
     else:
         params["company_name"] = con.prompt_input(
             _PARAM_PROMPT_LABELS["company_name"],
@@ -370,6 +414,19 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
             _PARAM_PROMPT_LABELS["attached_docs"], default="", required=False,
         )
         params["attached_docs"] = _split_csv(attached_raw or "")
+        # Step 3 (KPI/OKR 定義・任意): Step 2 または Step 4 が選択時のみプロンプト。
+        # 他の場合は自動的に False（DAG にも組み込まれない）。
+        if ("2" in selected_steps or "4" in selected_steps):
+            params["include_kpi_okr"] = con.prompt_yes_no(
+                "KPI/OKR 定義 (Step 3・任意) を実行しますか？"
+                "（戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）",
+                default=False,
+            )
+        else:
+            params["include_kpi_okr"] = False
+
+    # グループ ID ("1"/"2"/"3"/"4") は orchestrator 側の _ARD_GROUP_MAP で実 Step ID に展開される。
+    # （旧仕様の "1.1 選択時に Step '1' を自動前提" は撤廃。グループ "1" 自体が 1,1.1,1.2 を包含する。）
 
     return params, selected_steps
 
@@ -657,22 +714,59 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ワークフローを選択し、DAG に従って各ステップをローカル実行する",
     )
 
-    # 必須
+    # 必須（--autopilot-chain 指定時は省略可）
     orch.add_argument(
         "--workflow", "-w",
-        required=True,
+        required=False,
+        default=None,
         metavar="WORKFLOW_ID",
         help=(
             "ワークフロー ID: "
             "aas(App Architecture Design) / "
             "aad(App Detail Design) / "
             "asdw(App Dev Microservice Azure) / "
-            "abd(Batch Design) / "
-            "abdv(Batch Dev) / "
+            "adfd(Dataflow Design) / "
+            "adfdv(Dataflow Dev) / "
             "akm(Knowledge Management) / "
             "aqod(Original Docs Review) / "
             "adoc(Source Codeからのドキュメント作成)"
+            " — `--autopilot-chain` 指定時は省略可（排他）"
         ),
+    )
+
+    # Autopilot チェーン実行（GUI Autopilot と同等の挙動を CLI で再現）
+    orch.add_argument(
+        "--autopilot-chain",
+        default=None,
+        metavar="WORKFLOW_IDS",
+        help=(
+            "Autopilot チェーン実行で許可する Workflow ID をカンマ区切りで指定する "
+            "(例: --autopilot-chain aad-web,asdw-web)。"
+            "`docs/catalog/app-arch-catalog.md` から APP 一覧を取得し、APP 単位の"
+            "並列レーン × チェーン内直列で `python -m hve orchestrate` を起動する。"
+            "※ 実際の実行順序は APP アーキ種別ごとの固定チェーン（web-cloud=aad-web→asdw-web、"
+            "batch=adfd→adfdv）で決まり、本引数はその中から実行する workflow をフィルタする。"
+            "未対応 ID は警告のみで無視される。`--workflow` とは排他指定。"
+        ),
+    )
+    orch.add_argument(
+        "--autopilot-dry-run",
+        action="store_true",
+        default=False,
+        help="--autopilot-chain の実行計画のみ表示して終了する（サブプロセスは起動しない）。",
+    )
+    orch.add_argument(
+        "--autopilot-catalog",
+        default=None,
+        metavar="PATH",
+        help="--autopilot-chain で参照するカタログファイル（既定: docs/catalog/app-arch-catalog.md）。",
+    )
+    orch.add_argument(
+        "--autopilot-max-parallel",
+        type=int,
+        default=4,
+        metavar="N",
+        help="--autopilot-chain の APP 並列度（既定: 4、1〜16 にクリップ）。",
     )
 
     # モデル
@@ -698,6 +792,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）",
     )
 
+    # reasoning effort (SDK ModelInfo.supported_reasoning_efforts から選択)
+    orch.add_argument(
+        "--reasoning-effort",
+        default=None,
+        metavar="EFFORT",
+        help=(
+            "モデルの reasoning effort 値 (モデルが supportedReasoningEfforts を返す場合のみ有効。"
+            "例: low/medium/high)。省略時は Auto モデルでは high をフォールバック、"
+            "明示モデルでは SDK 既定動作。サポート外の値は SDK エラーとなる可能性がある。"
+        ),
+    )
+    orch.add_argument(
+        "--review-reasoning-effort",
+        default=None,
+        metavar="EFFORT",
+        help="レビュー用モデルの reasoning effort（省略時は --reasoning-effort を継承）",
+    )
+    orch.add_argument(
+        "--qa-reasoning-effort",
+        default=None,
+        metavar="EFFORT",
+        help="QA 用モデルの reasoning effort（省略時は --reasoning-effort を継承）",
+    )
+
     # 並列実行
     orch.add_argument(
         "--max-parallel",
@@ -721,6 +839,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "QA 回答入力の TTY 判定をバイパスしてインタラクティブモードを強制する"
             " (デフォルト: 無効。IDE ターミナル等で stdin が非 TTY 扱いになる場合に使用)"
+        ),
+    )
+    orch.add_argument(
+        "--qa-answer-mode",
+        choices=["autopilot", "gui-file"],
+        default=None,
+        help=(
+            "QA 回答モード（GUI からの利用想定）:"
+            " 'autopilot' = 全問既定値自動採用、"
+            " 'gui-file' = --qa-ipc-dir で指定したディレクトリ経由で GUI から回答を受け取る。"
+            " 未指定時は既存挙動（非 TTY フォールバック or 対話）。"
+        ),
+    )
+    orch.add_argument(
+        "--qa-ipc-dir",
+        default=None,
+        metavar="PATH",
+        help=(
+            "--qa-answer-mode=gui-file 時の IPC ディレクトリパス。"
+            " CLI は <step_id>.request.json を書き出し <step_id>.answers.md / <step_id>.cancel を待機する。"
         ),
     )
     orch.add_argument(
@@ -822,8 +960,25 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
         help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（未指定時: 環境変数/設定（既定 1200 秒 = 20 分））",
     )
+    orch.add_argument(
+        "--workiq-request-timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（未指定時: 環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分））。Copilot SDK MCPServerConfigLocal.timeout にミリ秒として渡される。",
+    )
 
     # Issue/PR 作成
+    orch.add_argument(
+        "--strict",
+        action="store_true",
+        default=False,
+        help=(
+            "local 実行モード既定の continue-on-precheck を無効化する。"
+            " Pre-check（入力成果物・必須 Skill）失敗時に従来通り中断する。"
+            " github 実行モード（Cloud）では本フラグは無視される。"
+        ),
+    )
     orch.add_argument(
         "--create-issues",
         action="store_true",
@@ -984,7 +1139,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--app-id",
         default=None,
         metavar="APP_ID",
-        help="アプリ ID (ASDW/ABDV 等で使用)。後方互換のため残す。複数指定は --app-ids を使用",
+        help="アプリ ID (ASDW/ADFDV 等で使用)。後方互換のため残す。複数指定は --app-ids を使用",
     )
     orch.add_argument(
         "--app-ids",
@@ -993,7 +1148,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。\n"
             "AAD-WEB/ASDW-WEB は Webフロントエンド + クラウド、\n"
-            "ABD/ABDV は データバッチ処理/バッチ の APP-ID のみ採用します。\n"
+            "ADFD/ADFDV は データデータフロー処理/バッチ の APP-ID のみ採用します。\n"
             "未指定時は docs/catalog/app-arch-catalog.md から自動選択します。"
         ),
     )
@@ -1002,15 +1157,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="RG",
         help="Azure リソースグループ名",
-    )
-    orch.add_argument(
-        "--batch-job-id",
-        default=None,
-        metavar="JOB_ID",
-        help=(
-            "バッチジョブ ID (ABDV 等で使用、カンマ区切り可)。"
-            "APP-ID フィルタ後、対象 Batch APP の文脈で実行します。"
-        ),
     )
     orch.add_argument(
         "--usecase-id",
@@ -1157,6 +1303,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATHS",
         help="ARD: 添付資料パス（カンマ区切り・省略可）",
     )
+    orch.add_argument(
+        "--include-kpi-okr",
+        action="store_true",
+        default=False,
+        help=(
+            "ARD: Step 3 (KPI/OKR 定義) を実行する（任意・既定 false）。"
+            "true の場合、戦略的記述から KPI/OKR・計測データ定義・データ収集設計を生成し "
+            "docs/recommended-kpi-okr.md を出力する。後続 UC・APP 設計が任意参照する。"
+        ),
+    )
 
     # repo / token
     orch.add_argument(
@@ -1179,14 +1335,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help="各フェーズで注入するコンテキストの最大文字数（未指定時: SDKConfig 既定値 20,000）",
-    )
-
-    # 追加コメント
-    orch.add_argument(
-        "--additional-comment",
-        default=None,
-        metavar="COMMENT",
-        help="追加コメント（Issue body の ## 追加コメント セクションに反映される）",
     )
 
     # Issue タイトル
@@ -1235,10 +1383,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=None,
         help=(
-            "Markdown ファイルの追加/更新/削除を OS イベントで検知し .hve/mdq.sqlite を逐次更新する。"
+            "Markdown ファイルの追加/更新/削除を OS イベントで検知し .mdq/index.sqlite を逐次更新する。"
             " 既定 ON。watchdog 未導入時は自動で無効化（警告ログのみ）。"
             " 環境変数 HVE_MDQ_WATCH=0 または --no-mdq-watch で無効化できる。"
-            " 既存の `python -m hve.mdq index` による手動索引更新は維持される。"
+            " 既存の `python -m mdq index` による手動索引更新は維持される。"
         ),
     )
     orch.add_argument(
@@ -1271,9 +1419,9 @@ def _build_parser() -> argparse.ArgumentParser:
     orch.add_argument(
         "--workbench-body-lines",
         type=int,
-        default=20,
+        default=10,
         metavar="N",
-        help="Workbench Body のコンテンツ行数（10〜20 にクランプ。既定: 20。環境変数 HVE_WORKBENCH_BODY_LINES でも指定可）。",
+        help="Workbench Body のコンテンツ行数（10〜20 にクランプ。既定: 10。環境変数 HVE_WORKBENCH_BODY_LINES でも指定可）。",
     )
     orch.add_argument(
         "--workbench-history",
@@ -1432,6 +1580,103 @@ def _build_parser() -> argparse.ArgumentParser:
         from resume_cli import add_resume_parser  # type: ignore[no-redef]
     add_resume_parser(sub)
 
+    # --- gui サブコマンド ---
+    gui_parser = sub.add_parser(
+        "gui",
+        help="PySide6 ベースの HVE GUI Orchestrator を起動する (pip install -e .[gui] が必要)",
+    )
+    # Autopilot モード関連フラグ
+    gui_parser.add_argument(
+        "--autopilot-child",
+        action="store_true",
+        help="（内部用）Autopilot 親 GUI から起動される子 GUI モード。"
+             " Wizard をバイパスし、--app-id / --chain で指定されたチェーンを直接実行する。",
+    )
+    gui_parser.add_argument(
+        "--app-id",
+        default=None,
+        help="（--autopilot-child 用）対象 APP-ID（例: APP-01）",
+    )
+    gui_parser.add_argument(
+        "--chain",
+        default=None,
+        help="（--autopilot-child 用）実行する workflow_id のカンマ区切りリスト。"
+             " 許可値: aad-web, asdw-web, adfd, adfdv",
+    )
+    gui_parser.add_argument(
+        "--app-arch-catalog",
+        default=None,
+        help="Application Architecture Catalog ファイルのパス"
+             " (既定: docs/catalog/app-arch-catalog.md)。"
+             " Autopilot モードのカタログ指定にも使用する。",
+    )
+
+    # --- cli サブコマンド ---
+    # `run` のエイリアス。引数なし起動が GUI 既定に変わったため、CLI 対話ウィザードを
+    # 明示的に起動するエントリポイントとして追加。
+    cli_parser = sub.add_parser(
+        "cli",
+        help="対話型 CLI ウィザードでワークフローを実行する (旧: 引数なし時の既定挙動)",
+    )
+    cli_parser.add_argument(
+        "--banner",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="banner",
+        help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 表示)",
+    )
+
+    # --- login サブコマンド ---
+    # GitHub Copilot へ OAuth Device Flow でログインし、利用可能モデル一覧を
+    # キャッシュに保存する。認証付与は SDK 同梱 `copilot login` が担当。
+    login_parser = sub.add_parser(
+        "login",
+        help="GitHub Copilot へログインし、利用可能モデル一覧をキャッシュする",
+    )
+    login_parser.add_argument(
+        "--host",
+        default="https://github.com",
+        help="GitHub ホスト URL (GHEC データレジデンシー時のみ変更)",
+    )
+    login_parser.add_argument(
+        "--skip-fetch",
+        action="store_true",
+        help="ログイン後のモデル一覧取得をスキップする",
+    )
+    login_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="ログインを起動せず、現在の認証状態とキャッシュされたモデル一覧を表示する",
+    )
+
+    # --- pricing サブコマンド ---
+    # GitHub Copilot の AI Credit 料金表（モデル別 multiplier + プラン別追加料金）を
+    # クロール & キャッシュし、`show` で人間可読に確認するためのユーティリティ。
+    pricing_parser = sub.add_parser(
+        "pricing",
+        help="GitHub Copilot AI Credit 料金表を取得・表示する",
+    )
+    pricing_sub = pricing_parser.add_subparsers(dest="pricing_command")
+    pricing_show = pricing_sub.add_parser(
+        "show",
+        help="現在キャッシュされている料金表を表示する（無ければ取得を試行）",
+    )
+    pricing_show.add_argument(
+        "--json",
+        action="store_true",
+        help="JSON 形式で出力する",
+    )
+    pricing_refresh = pricing_sub.add_parser(
+        "refresh",
+        help="docs.github.com / github.com/pricing から料金表を強制再取得する",
+    )
+    pricing_refresh.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="HTTP タイムアウト秒（デフォルト: 10.0）",
+    )
+
     return parser
 
 
@@ -1512,9 +1757,15 @@ def _build_config(args: argparse.Namespace):
     elif getattr(cfg, "qa_model", None):
         cfg.qa_model, _ = _resolve_model(cfg.qa_model)
         cfg.qa_model = _normalize_model_with_warning(cfg.qa_model)
+    # reasoning_effort (ユーザー明示指定を SDKConfig に転送)
+    cfg.reasoning_effort = getattr(args, "reasoning_effort", None) or None
+    cfg.review_reasoning_effort = getattr(args, "review_reasoning_effort", None) or None
+    cfg.qa_reasoning_effort = getattr(args, "qa_reasoning_effort", None) or None
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
     cfg.force_interactive = getattr(args, "force_interactive", False)
+    cfg.qa_answer_mode = getattr(args, "qa_answer_mode", None)
+    cfg.qa_ipc_dir = getattr(args, "qa_ipc_dir", None)
     cfg.auto_contents_review = args.auto_contents_review
     cfg.auto_coding_agent_review = args.auto_coding_agent_review
     cfg.auto_coding_agent_review_auto_approval = args.auto_coding_agent_review_auto_approval
@@ -1533,11 +1784,11 @@ def _build_config(args: argparse.Namespace):
     # --- Workbench UI（Phase 5）---
     _wb_mode = getattr(args, "workbench", "auto")
     cfg.no_workbench = (_wb_mode == "off")
-    # 優先順位: CLI 明示値 > 環境変数 HVE_WORKBENCH_BODY_LINES > 既定 20
-    _wb_lines_raw = int(getattr(args, "workbench_body_lines", 20) or 20)
+    # 優先順位: CLI 明示値 > 環境変数 HVE_WORKBENCH_BODY_LINES > 既定 10
+    _wb_lines_raw = int(getattr(args, "workbench_body_lines", 10) or 10)
     import os as _os_wb
     _env_wb_lines = _os_wb.environ.get("HVE_WORKBENCH_BODY_LINES", "").strip()
-    if _env_wb_lines and _wb_lines_raw == 20:
+    if _env_wb_lines and _wb_lines_raw == 10:
         try:
             _wb_lines_raw = int(_env_wb_lines)
         except ValueError:
@@ -1654,6 +1905,9 @@ def _build_config(args: argparse.Namespace):
     _workiq_pq_timeout = getattr(args, "workiq_per_question_timeout", None)
     if _workiq_pq_timeout is not None and _workiq_pq_timeout > 0:
         cfg.workiq_per_question_timeout = _workiq_pq_timeout
+    _workiq_req_timeout = getattr(args, "workiq_request_timeout", None)
+    if _workiq_req_timeout is not None and _workiq_req_timeout > 0:
+        cfg.workiq_request_timeout = _workiq_req_timeout
     # 旧 --aqod-post-qa / aqod_post_qa_enabled は廃止済み。
 
     # 無視パス（CLI 引数が指定された場合のみ上書き）
@@ -1696,8 +1950,8 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["app_id"] = args.app_id  # 後方互換
     if args.resource_group:
         params["resource_group"] = args.resource_group
-    if args.batch_job_id:
-        params["batch_job_id"] = args.batch_job_id
+    if args.app_id:
+        params["app_id"] = args.app_id
     if args.usecase_id:
         params["usecase_id"] = args.usecase_id
 
@@ -1726,35 +1980,36 @@ def _build_params(args: argparse.Namespace) -> dict:
         company_name = getattr(args, "company_name", None)
         target_business = getattr(args, "target_business", None) or ""
         requested_steps = list(params.get("steps") or [])
+        # 4 グループ体系 ("1"/"2"/"3"/"4") を主とし、実 Step ID も許容する。
+        # グループ ID は orchestrator の _ARD_GROUP_MAP で実 Step ID に展開される:
+        #   "1" → [1, 1.1, 1.2]、"2" → [2]、"3" → [3]、"4" → [4.1, 4.2, 4.3]
+        _valid_step_ids = {"1", "2", "3", "4", "1.1", "1.2", "4.1", "4.2", "4.3"}
         normalized_steps = requested_steps
         if requested_steps:
-            # ARD Step ID リネーム後の互換変換（旧指定: 1.1/1.2/2）
-            legacy_mode = any(s in {"1.1", "1.2"} for s in requested_steps)
-            mapped_steps: list[str] = []
-            for sid in requested_steps:
-                if sid == "1.1":
-                    mapped_steps.append("1")
-                elif sid == "1.2":
-                    mapped_steps.append("2")
-                elif sid == "2" and legacy_mode:
-                    mapped_steps.append("3")
-                else:
-                    mapped_steps.append(sid)
-
-            invalid_steps = [sid for sid in mapped_steps if sid not in {"1", "2", "3"}]
+            invalid_steps = [sid for sid in requested_steps if sid not in _valid_step_ids]
             if invalid_steps:
                 raise SystemExit(
                     f"ERROR: ARD の無効な --steps が指定されました: {', '.join(invalid_steps)} "
-                    "(有効値: 1,2,3)"
+                    "(有効値: 1, 2, 3, 4 / 実 Step ID: 1.1, 1.2, 4.1, 4.2, 4.3)"
                 )
-            normalized_steps = mapped_steps
-            params["steps"] = mapped_steps
+            normalized_steps = list(requested_steps)
+            # 旧 実 Step ID '1.1' 指定時は Step '1' を自動前提として付与
+            if "1.1" in normalized_steps and "1" not in normalized_steps:
+                normalized_steps = ["1"] + normalized_steps
+            params["steps"] = normalized_steps
         else:
-            normalized_steps = ["2", "3"] if target_business.strip() else ["1", "2", "3"]
+            # 既定は Step 2/3/4（Step 1 は --steps で明示的に有効化する必要がある）。
+            # help_content.py の説明（「既定で Step 2/3/4 が ON、Step 1 は明示的に有効化」）
+            # および Autopilot 事前実行（素の `orchestrate --workflow ard`）の仕様に合わせる。
+            normalized_steps = ["2", "3", "4"]
+            params["steps"] = normalized_steps
 
-        if "1" in normalized_steps and not company_name:
+        # グループ "1" または実 Step "1.1" / "1.2"（ARD グループ 1 系列）を含む場合は
+        # company_name 必須。Step 1.2 は Step 1.1 (企業の事業分析) に依存するため。
+        _requires_company = bool({"1", "1.1", "1.2"} & set(normalized_steps))
+        if _requires_company and not company_name:
             raise SystemExit(
-                "ERROR: ARD Step 1 を実行する場合は --company-name が必須です"
+                "ERROR: ARD グループ 1（Step 1.1: 企業の事業分析 / Step 1.2 を含む）を実行する場合は --company-name が必須です"
             )
 
         params["company_name"] = company_name or ""
@@ -1776,6 +2031,7 @@ def _build_params(args: argparse.Namespace) -> dict:
             params["target_recommendation_id"] = target_recommendation_id
         attached = getattr(args, "attached_docs", None)
         params["attached_docs"] = _split_csv(attached) if attached else []
+        params["include_kpi_okr"] = bool(getattr(args, "include_kpi_okr", False))
         if not params.get("steps"):
             params["steps"] = normalized_steps
     else:
@@ -1798,10 +2054,6 @@ def _build_params(args: argparse.Namespace) -> dict:
     # Issue タイトル上書き
     if args.issue_title:
         params["issue_title"] = args.issue_title
-
-    # 追加コメント
-    if args.additional_comment:
-        params["additional_comment"] = args.additional_comment
 
     return params
 
@@ -1944,7 +2196,33 @@ def main(argv: Optional[List[str]] = None) -> int:
             from resume_cli import dispatch as _resume_dispatch  # type: ignore[no-redef]
         return _resume_dispatch(args)
 
-    # "run" サブコマンド、または引数なし → インタラクティブモード
+    if args.command == "gui":
+        from .gui import run_gui
+        return run_gui(args)
+
+    if args.command == "cli":
+        return _cmd_run_interactive(args)
+
+    if args.command == "login":
+        return _cmd_login(args)
+
+    if args.command == "pricing":
+        return _cmd_pricing(args)
+
+    # 引数なし → GUI を既定として起動。PySide6 未導入時は CLI 対話ウィザードへ自動フォールバック。
+    if args.command is None:
+        try:
+            from .gui import run_gui
+        except ImportError as exc:
+            print(
+                f"{_ts()} ℹ️  PySide6 未導入のため CLI モードにフォールバックします。"
+                f' GUI を使う場合は `pip install -e ".[gui]"` を実行してください。 ({exc})',
+                file=sys.stderr,
+            )
+            return _cmd_run_interactive(args)
+        return run_gui()
+
+    # "run" サブコマンド → インタラクティブモード
     return _cmd_run_interactive(args)
 
 
@@ -2361,6 +2639,177 @@ def _maybe_show_resume_prompt(con: Any) -> Optional[int]:
     return _show_resume_menu(con, resumable, allow_cancel=False)
 
 
+def _cmd_pricing(args: argparse.Namespace) -> int:
+    """`hve pricing {show|refresh}` ハンドラー。
+
+    show:    キャッシュ済み料金表を表示。無い/破損時のみ取得を試行。
+    refresh: 強制再取得し、成功時のみキャッシュを上書き保存する。
+    """
+    try:
+        from .pricing import (
+            PricingFetchError,
+            default_cache_path,
+            fetch_copilot_pricing,
+            load_cached_pricing,
+            save_cached_pricing,
+        )
+    except ImportError:
+        from pricing import (  # type: ignore[no-redef]
+            PricingFetchError,
+            default_cache_path,
+            fetch_copilot_pricing,
+            load_cached_pricing,
+            save_cached_pricing,
+        )
+
+    sub = getattr(args, "pricing_command", None) or "show"
+    cache_path = default_cache_path()
+
+    if sub == "refresh":
+        timeout = float(getattr(args, "timeout", 10.0))
+        try:
+            pricing = fetch_copilot_pricing(timeout=timeout)
+        except PricingFetchError as exc:
+            print(f"❌ 料金表の取得に失敗しました: {exc}", file=sys.stderr)
+            return 1
+        ok = save_cached_pricing(pricing, cache_path)
+        print(
+            f"✅ 取得完了 (status={pricing.status}, models={len(pricing.models)}, "
+            f"plans={len(pricing.plans)}) → {cache_path} (saved={ok})"
+        )
+        return 0
+
+    # show
+    pricing = load_cached_pricing(cache_path)
+    if pricing is None:
+        print(f"ℹ️  キャッシュが見つかりません ({cache_path})。取得を試行します...")
+        try:
+            pricing = fetch_copilot_pricing()
+        except PricingFetchError as exc:
+            print(f"❌ 取得に失敗しました: {exc}", file=sys.stderr)
+            return 1
+        save_cached_pricing(pricing, cache_path)
+
+    if getattr(args, "json", False):
+        print(json.dumps(pricing.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+
+    print(f"# GitHub Copilot 料金表")
+    print(f"- fetched_at : {pricing.fetched_at}")
+    print(f"- status     : {pricing.status}")
+    print(f"- source     :")
+    for k, v in (pricing.source_urls or {}).items():
+        print(f"    - {k}: {v}")
+    print(f"\n## モデル別 multiplier ({len(pricing.models)})")
+    for m in sorted(pricing.models.values(), key=lambda x: x.model_id):
+        mult = "?" if m.multiplier is None else f"{m.multiplier}x"
+        print(f"  - {m.model_id:<35} multiplier={mult}")
+    print(f"\n## プラン ({len(pricing.plans)})")
+    for p in sorted(pricing.plans.values(), key=lambda x: x.plan_id):
+        addl = "?" if p.additional_request_usd is None else f"${p.additional_request_usd}"
+        monthly = "?" if p.monthly_usd is None else f"${p.monthly_usd}"
+        print(
+            f"  - {p.plan_id:<22} monthly={monthly:<8} "
+            f"included={p.included_premium_requests} additional={addl}"
+        )
+    return 0
+
+
+def _cmd_login(args: argparse.Namespace) -> int:
+    """`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。
+
+    --status 指定時はログインを起動せず、現在の認証状態とキャッシュ状態のみ表示する。
+    """
+    try:
+        from . import auth as _auth
+        from . import models_api as _models_api
+        from . import models_cache as _models_cache
+    except ImportError:
+        import auth as _auth  # type: ignore[no-redef]
+        import models_api as _models_api  # type: ignore[no-redef]
+        import models_cache as _models_cache  # type: ignore[no-redef]
+
+    # --- --status: 認証状態とキャッシュ状態を表示して終了 ---
+    if getattr(args, "status", False):
+        print(f"{_ts()} 🔍 認証状態を確認中...")
+        info = _auth.get_auth_status()
+        if info.is_authenticated:
+            print(f"  ✅ ログイン済み: {info.login or '(unknown)'}")
+            if info.copilot_plan:
+                print(f"     プラン: {info.copilot_plan}")
+            if info.host:
+                print(f"     ホスト: {info.host}")
+        else:
+            print(f"  ❌ 未ログイン")
+            if info.status_message:
+                print(f"     詳細: {info.status_message}")
+            print(f"     ヒント: `hve login` でログインしてください。")
+
+        cache_path = _models_cache.get_cache_path()
+        cached = _models_cache.load(allow_stale=True)
+        if cached:
+            from datetime import datetime as _dt
+            ts = _dt.fromtimestamp(cached.fetched_at).strftime("%Y-%m-%d %H:%M:%S")
+            fresh = _models_cache.is_fresh(cached)
+            print(
+                f"\n  📦 モデルキャッシュ: {len(cached.models)} 件 "
+                f"({'fresh' if fresh else 'stale'}, 取得: {ts})"
+            )
+            print(f"     {cache_path}")
+        else:
+            print(f"\n  📦 モデルキャッシュ: なし ({cache_path})")
+        return 0 if info.is_authenticated else 1
+
+    # --- 通常: copilot login 起動 ---
+    print(f"{_ts()} 🔐 GitHub Copilot へログインします...")
+    print(f"   ブラウザでデバイスフロー認証が開かれます。")
+
+    try:
+        rc = _auth.run_login(host=args.host)
+    except _auth.AuthError as exc:
+        print(f"{_ts()} ❌ ログイン失敗: {exc}", file=sys.stderr)
+        return 2
+
+    if rc != 0:
+        print(f"{_ts()} ❌ copilot login が異常終了しました (exit={rc})", file=sys.stderr)
+        return rc
+
+    print(f"{_ts()} ✅ ログイン完了")
+
+    # --- 認証状態の検証 ---
+    info = _auth.get_auth_status()
+    if info.is_authenticated and info.login:
+        print(f"   ユーザー: {info.login}"
+              + (f" (プラン: {info.copilot_plan})" if info.copilot_plan else ""))
+
+    # --- モデル一覧取得 + キャッシュ書込 ---
+    if getattr(args, "skip_fetch", False):
+        print(f"{_ts()} ⏭️  --skip-fetch 指定のためモデル一覧取得をスキップしました。")
+        return 0
+
+    print(f"{_ts()} 📥 利用可能なモデル一覧を取得中...")
+    try:
+        entries = _models_api.fetch_model_entries()
+    except _models_api.ModelsAPIError as exc:
+        print(f"{_ts()} ⚠️  モデル一覧取得に失敗しました: {exc}", file=sys.stderr)
+        print("     `hve` 実行時はフォールバック一覧が使用されます。")
+        return 0  # ログイン自体は成功しているため非エラー終了
+
+    models = [e.id for e in entries]
+    if not models:
+        print(f"{_ts()} ⚠️  モデル一覧が空でした。フォールバック一覧が使用されます。")
+        return 0
+
+    try:
+        path = _models_cache.save_entries(entries)
+        print(f"{_ts()} 💾 {len(models)} 件のモデルをキャッシュに保存しました。")
+        print(f"     {path}")
+    except OSError as exc:
+        print(f"{_ts()} ⚠️  キャッシュ書込失敗 (処理は続行): {exc}", file=sys.stderr)
+
+    return 0
+
+
 def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     """インタラクティブ wizard モードのハンドラー。
 
@@ -2564,7 +3013,21 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     # モデル選択 (Phase C) は分岐内でそれぞれ実行する:
     #   - クイック全自動: メインモデルのみ即座に選択 (QA/Review 別モデルは既定 OFF)
     #   - カスタム全自動 / 手動: Phase A' (機能要件詳細) の後にメイン/QA/Review をまとめて選択
-    model_options = [MODEL_AUTO, *MODEL_CHOICES]
+    # モデル一覧はキャッシュ→SDK→フォールバックの順で動的取得 (Phase 3 で追加)
+    # 取得失敗 / 戻り値が想定外型の場合は静的フォールバック ([MODEL_AUTO, *MODEL_CHOICES]) を使用する。
+    model_options: list = [MODEL_AUTO, *MODEL_CHOICES]
+    try:
+        try:
+            from .config import get_model_choices as _get_model_choices
+        except ImportError:
+            from config import get_model_choices as _get_model_choices  # type: ignore[no-redef]
+        _dynamic = _get_model_choices(include_auto=True)
+        # 受け取りは list[str] のみ採用 (test_main.py の mock_config_mod 経由で MagicMock が来る場合をガード)
+        if isinstance(_dynamic, list) and _dynamic and all(isinstance(x, str) for x in _dynamic):
+            model_options = _dynamic
+    except Exception:
+        # 動的取得が何らかの理由で失敗しても静的フォールバックで続行
+        pass
     model = None
     model_display = None
     review_model = None
@@ -2605,8 +3068,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         workiq_akm_ingest_dxx: list = []
         workiq_draft_mode = False
         workiq_per_question_timeout = 1200.0
+        workiq_request_timeout = 300.0
         issue_title = ""
-        issue_additional_comment = ""
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
@@ -2805,6 +3268,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         workiq_draft_mode = False
         _show_workiq_option = auto_qa or is_akm or is_ard
         workiq_per_question_timeout = 1200.0
+        workiq_request_timeout = 300.0
 
         if _show_workiq_option and is_workiq_available():
             if is_ard:
@@ -2867,6 +3331,18 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     if workiq_per_question_timeout <= 0:
                         con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
                         workiq_per_question_timeout = 1200.0
+                    _wiq_req_timeout_str = con.prompt_input(
+                        "Work IQ Request Timeout（秒。MCP ツール呼び出し 1 回あたり。デフォルト: 300 = 5 分）",
+                        default="300",
+                    )
+                    try:
+                        workiq_request_timeout = float(_wiq_req_timeout_str or "300")
+                    except ValueError:
+                        con.warning("無効な値のため、デフォルトの 300 秒（5 分）を使用します。")
+                        workiq_request_timeout = 300.0
+                    if workiq_request_timeout <= 0:
+                        con.warning("0 以下の値は無効なため、デフォルトの 300 秒（5 分）を使用します。")
+                        workiq_request_timeout = 300.0
 
         # ── Code Review Agent ─────────────────────────────
         auto_coding_agent_review = con.prompt_yes_no(
@@ -2975,14 +3451,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
         issue_title = ""
-        issue_additional_comment = ""
         if create_issues:
             issue_title = con.prompt_input(
                 _PARAM_PROMPT_LABELS["issue_title"],
-                default="",
-            )
-            issue_additional_comment = con.prompt_input(
-                _PARAM_PROMPT_LABELS["additional_comment"],
                 default="",
             )
 
@@ -3006,12 +3477,18 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             params_extra["ard_workiq_enabled"] = ard_workiq_enabled
         if issue_title:
             params_extra["issue_title"] = issue_title
-        if issue_additional_comment:
-            params_extra["additional_comment"] = issue_additional_comment
 
         # ── Phase G: 実行計画プレビュー ────────────────────────
         dry_run = con.prompt_yes_no("実行計画のプレビュー（実際の SDK 呼び出しをせず、DAG の実行計画のみ表示）？", default=False)
 
+    # ── Phase H: ワークベンチ UI 起動有無（全モード共通）──────
+    # ウィザード末尾で 4 ペイン固定レイアウト UI（Workbench）を起動するか確認する。
+    # 既定 Yes。No の場合は cfg.no_workbench=True を設定し、`--workbench off` 相当の動作になる。
+    # TTY / quiet / final_only / HVE_NO_WORKBENCH=1 等での自動降格条件は orchestrator/Console 側に従う。
+    enable_workbench = con.prompt_yes_no(
+        "ワークベンチ（4 ペイン UI）を起動しますか？",
+        default=True,
+    )
 
     # ── 確認パネル ────────────────────────────────────────
     s = con.s
@@ -3052,6 +3529,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         if workiq_additional_prompt:
             summary_lines.append(f"Work IQ Prompt: {workiq_additional_prompt[:50]}{'...' if len(workiq_additional_prompt) > 50 else ''}")
         summary_lines.append(f"Work IQ タイムアウト: {workiq_per_question_timeout:.0f} 秒")
+        summary_lines.append(f"Work IQ Request Timeout: {workiq_request_timeout:.0f} 秒")
     summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
@@ -3068,6 +3546,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     summary_lines += [
         f"リポジトリ   : {repo_input or '(なし)'}",
         f"実行計画のプレビュー : {'ON' if dry_run else 'OFF'}",
+        f"ワークベンチ : {'ON' if enable_workbench else 'OFF'}",
         f"自己改善     : {'ON' if auto_self_improve else 'OFF'}",
     ]
     if auto_self_improve:
@@ -3167,6 +3646,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     cfg.workiq_draft_mode = workiq_draft_mode
     cfg.workiq_draft_output_dir = "qa"
     cfg.workiq_per_question_timeout = workiq_per_question_timeout
+    cfg.workiq_request_timeout = workiq_request_timeout
     cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
     cfg.qa_answer_mode = qa_answer_mode
@@ -3189,6 +3669,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     )
     cfg.timeout_seconds = timeout_val
     cfg.review_timeout_seconds = review_timeout
+    # ウィザード末尾の「ワークベンチを起動しますか？」選択を反映
+    # （Yes → cfg.no_workbench=False で既定挙動 / No → True で `--workbench off` 相当）
+    cfg.no_workbench = not enable_workbench
     if workiq_additional_prompt:
         for attr, mode in [
             ("workiq_prompt_qa", "qa"),
@@ -3600,11 +4083,134 @@ def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
     return 1 if has_fail else 0
 
 
+def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
+    """orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。"""
+    try:
+        from .autopilot import (
+            AutopilotSelection,
+            build_plan,
+            default_catalog_path,
+        )
+        from .autopilot.cli_runner import CliAutopilotRunner
+    except ImportError:
+        from autopilot import (  # type: ignore[no-redef]
+            AutopilotSelection,
+            build_plan,
+            default_catalog_path,
+        )
+        from autopilot.cli_runner import CliAutopilotRunner  # type: ignore[no-redef]
+
+    chain_raw: str = args.autopilot_chain
+    chain_ids = [w.strip() for w in chain_raw.split(",") if w.strip()]
+    if not chain_ids:
+        print(
+            f"{_ts()} ❌ --autopilot-chain に有効な workflow ID が含まれていません: {chain_raw!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # selection は workflow ID リストから構築（未対応 ID は ignored_workflows へ）
+    selection = AutopilotSelection.from_workflow_ids(chain_ids)
+    if selection.ignored_workflows:
+        print(
+            f"{_ts()} ⚠️  --autopilot-chain の未対応 workflow ID を無視します: "
+            f"{','.join(selection.ignored_workflows)}",
+            file=sys.stderr,
+        )
+
+    # カタログパス解決
+    repo_root = Path.cwd()
+    if args.autopilot_catalog:
+        catalog_path = Path(args.autopilot_catalog)
+        if not catalog_path.is_absolute():
+            catalog_path = repo_root / catalog_path
+    else:
+        catalog_path = default_catalog_path(repo_root)
+
+    plan = build_plan(
+        catalog_path,
+        max_parallel=args.autopilot_max_parallel,
+        selection=selection,
+    )
+
+    # 計画サマリ出力
+    print(f"{_ts()} 🤖 Autopilot Chain Plan")
+    print(f"  catalog: {plan.catalog_path}")
+    print(f"  catalog_exists: {plan.catalog_exists}")
+    print(f"  requires_aas: {plan.requires_aas}")
+    print(f"  max_parallel: {plan.max_parallel}")
+    print(f"  pre_phases: {plan.pre_phases}")
+    print(f"  main_workflows: {plan.main_workflows}")
+    print(f"  ignored_workflows: {plan.ignored_workflows}")
+    print(f"  app_chains ({len(plan.app_chains)}):")
+    for ch in plan.app_chains:
+        print(f"    - {ch.app_id} [{ch.architecture}] → {','.join(ch.workflows)}")
+    if plan.skipped:
+        print(f"  skipped ({len(plan.skipped)}):")
+        for sk in plan.skipped:
+            print(f"    - {sk.app_id} [{sk.architecture}] reason={sk.reason}")
+
+    if args.autopilot_dry_run:
+        print(f"{_ts()} ✅ --autopilot-dry-run: 計画のみ表示しました。")
+        return 0
+
+    if plan.is_empty():
+        if plan.requires_aas:
+            print(
+                f"{_ts()} ❌ Autopilot 実行には AAS（App Architecture Design）の出力カタログが必要です。"
+                f"\n   先に `python -m hve orchestrate --workflow aas` を実行してください。",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"{_ts()} ⚠️  実行対象の APP チェーンがありません。",
+            file=sys.stderr,
+        )
+        return 0
+
+    runner = CliAutopilotRunner(
+        plan,
+        progress_callback=lambda done, total: print(
+            f"{_ts()} progress: {done}/{total}"
+        ),
+    )
+    summary = runner.run()
+    print(
+        f"{_ts()} Autopilot result: completed={summary.completed_apps}/{summary.total_apps}"
+        f" aborted={len(summary.aborted_apps)}"
+    )
+    if summary.aborted_apps:
+        for app_id in summary.aborted_apps:
+            print(
+                f"  - aborted: {app_id} (exit={summary.aborted_codes.get(app_id)})",
+                file=sys.stderr,
+            )
+        return 1
+    return 0
+
+
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
     # HVE CLI Orchestrator 実行配下シグナルは OrchestratorContext を明示引数で
     # 伝播させる方式へ移行済み（copilot-instructions.md §0 Orchestrator 例外）。
     # 環境変数 `HVE_ORCHESTRATOR_ACTIVE` は使用しない。
+
+    # --autopilot-chain と --workflow の排他チェック
+    _autopilot_chain_raw = getattr(args, "autopilot_chain", None)
+    if _autopilot_chain_raw and args.workflow:
+        print(
+            f"{_ts()} ❌ --autopilot-chain と --workflow は同時に指定できません。",
+            file=sys.stderr,
+        )
+        return 1
+    if _autopilot_chain_raw:
+        return _cmd_orchestrate_autopilot_chain(args)
+    if not args.workflow:
+        print(
+            f"{_ts()} ❌ --workflow または --autopilot-chain のいずれかを指定してください。",
+            file=sys.stderr,
+        )
+        return 1
 
     # バリデーション: --auto-coding-agent-review-auto-approval は --auto-coding-agent-review と併用必須
     if args.auto_coding_agent_review_auto_approval and not args.auto_coding_agent_review:
@@ -3658,7 +4264,12 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
 
     # HVE CLI Orchestrator 配下シグナル: OrchestratorContext を生成して伝播。
     # `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
-    orchestrator_ctx = OrchestratorContext(run_id=config.run_id or "")
+    # local 実行モード既定で continue_on_error=True、`--strict` でオプトアウト。
+    _strict = bool(getattr(args, "strict", False))
+    orchestrator_ctx = OrchestratorContext(
+        run_id=config.run_id or "",
+        continue_on_error=not _strict,
+    )
 
     result = asyncio.run(
         run_workflow(

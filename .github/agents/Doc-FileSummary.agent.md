@@ -5,6 +5,19 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs-generated/inventory.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Doc-FileInventory"
+  outputs:
+    - path: "docs-generated/files/{relative-path}.md"
+      required: true
+      mode: "create"
+    - path: "| インポート先 | 種別(内部/外部) | 用途 |"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-FileSummary/Issue-<識別子>/`
 

@@ -117,7 +117,7 @@ def _patched_modules(*, run_workflow_side_effect=None, **overrides) -> tuple:
         "akm": "AKM",
         "aad": "AAD",
         "aas": "AAS",
-        "abd": "ABD",
+        "adfd": "ADFD",
         "asdw": "ASDW",
         "aag": "AAG",
         "aagd": "AAGD",

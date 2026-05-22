@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" font-family="system-ui, -apple-system, sans-serif">
+  <title>HVE Orchestrator アーキテクチャ比較</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="580" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">HVE Orchestrator アーキテクチャ比較</text>
+  <text x="450" y="52" text-anchor="middle" font-size="11" fill="#586069">3 種類の Orchestrator と共通エンジン</text>
+
+  <!-- ===== Column 1: Cloud Agent Orchestrator ===== -->
+  <!-- Header -->
+  <rect x="20" y="68" width="254" height="36" rx="6" fill="#0366d6"/>
+  <text x="147" y="82" text-anchor="middle" font-size="10" font-weight="bold" fill="white">① HVE Cloud Agent Orchestrator</text>
+  <text x="147" y="96" text-anchor="middle" font-size="9" fill="#cce0ff">GitHub Issue / PR ベース</text>
+
+  <!-- Cloud: Entry -->
+  <rect x="36" y="118" width="222" height="34" rx="6" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="147" y="131" text-anchor="middle" font-size="10" font-weight="bold" fill="#0366d6">GitHub Issue 作成</text>
+  <text x="147" y="145" text-anchor="middle" font-size="9" fill="#586069">Issue Template → ラベル付け</text>
+  <!-- Arrow -->
+  <line x1="147" y1="152" x2="147" y2="174" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Cloud: Dispatcher -->
+  <rect x="36" y="176" width="222" height="34" rx="6" fill="#dfe6ff" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="147" y="189" text-anchor="middle" font-size="10" font-weight="bold" fill="#0366d6">auto-orchestrator-dispatcher.yml</text>
+  <text x="147" y="203" text-anchor="middle" font-size="9" fill="#586069">GitHub Actions ワークフロー</text>
+  <!-- Arrow -->
+  <line x1="147" y1="210" x2="147" y2="232" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Cloud: Copilot -->
+  <rect x="36" y="234" width="222" height="34" rx="6" fill="#dfe6ff" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="147" y="247" text-anchor="middle" font-size="10" font-weight="bold" fill="#0366d6">GitHub Copilot Cloud Agent</text>
+  <text x="147" y="261" text-anchor="middle" font-size="9" fill="#586069">MCP サーバー経由で実行</text>
+
+  <!-- ===== Column 2: CLI Orchestrator ===== -->
+  <!-- Header -->
+  <rect x="323" y="68" width="254" height="36" rx="6" fill="#6f42c1"/>
+  <text x="450" y="82" text-anchor="middle" font-size="10" font-weight="bold" fill="white">② HVE CLI Orchestrator</text>
+  <text x="450" y="96" text-anchor="middle" font-size="9" fill="#d5aaff">ターミナル Rich Live ベース</text>
+
+  <!-- CLI: Entry -->
+  <rect x="339" y="118" width="222" height="34" rx="6" fill="#ede8ff" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="450" y="131" text-anchor="middle" font-size="10" font-weight="bold" fill="#6f42c1">python -m hve orchestrate</text>
+  <text x="450" y="145" text-anchor="middle" font-size="9" fill="#586069">コマンドライン引数で設定</text>
+  <!-- Arrow -->
+  <line x1="450" y1="152" x2="450" y2="174" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- CLI: Interactive -->
+  <rect x="339" y="176" width="222" height="34" rx="6" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="450" y="189" text-anchor="middle" font-size="10" font-weight="bold" fill="#6f42c1">Rich Live インタラクティブ UI</text>
+  <text x="450" y="203" text-anchor="middle" font-size="9" fill="#586069">ターミナル Workbench / ログ表示</text>
+  <!-- Arrow -->
+  <line x1="450" y1="210" x2="450" y2="232" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- CLI: Copilot -->
+  <rect x="339" y="234" width="222" height="34" rx="6" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="450" y="247" text-anchor="middle" font-size="10" font-weight="bold" fill="#6f42c1">GitHub Copilot CLI</text>
+  <text x="450" y="261" text-anchor="middle" font-size="9" fill="#586069">サブプロセスとして起動</text>
+
+  <!-- ===== Column 3: GUI Orchestrator ===== -->
+  <!-- Header -->
+  <rect x="626" y="68" width="254" height="36" rx="6" fill="#28a745"/>
+  <text x="753" y="82" text-anchor="middle" font-size="10" font-weight="bold" fill="white">③ HVE GUI Orchestrator  ★ NEW</text>
+  <text x="753" y="96" text-anchor="middle" font-size="9" fill="#c3f5cf">PySide6 GUI ウィザード ベース</text>
+
+  <!-- GUI: Entry -->
+  <rect x="642" y="118" width="222" height="34" rx="6" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="753" y="131" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">python -m hve gui</text>
+  <text x="753" y="145" text-anchor="middle" font-size="9" fill="#586069">GUI ウィンドウ起動</text>
+  <!-- Arrow -->
+  <line x1="753" y1="152" x2="753" y2="174" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- GUI: QWizard -->
+  <rect x="642" y="176" width="222" height="34" rx="6" fill="#c3f5cf" stroke="#28a745" stroke-width="1.5"/>
+  <text x="753" y="189" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">PySide6 QWizard (3 ステップ)</text>
+  <text x="753" y="203" text-anchor="middle" font-size="9" fill="#586069">ワークフロー選択 → オプション → 実行</text>
+  <!-- Arrow -->
+  <line x1="753" y1="210" x2="753" y2="232" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- GUI: Copilot -->
+  <rect x="642" y="234" width="222" height="34" rx="6" fill="#c3f5cf" stroke="#28a745" stroke-width="1.5"/>
+  <text x="753" y="247" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">GitHub Copilot CLI</text>
+  <text x="753" y="261" text-anchor="middle" font-size="9" fill="#586069">サブプロセスとして起動（CLI と同じ）</text>
+
+  <!-- ===== Converging Arrows ===== -->
+  <line x1="147" y1="268" x2="147" y2="305" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <line x1="450" y1="268" x2="450" y2="305" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <line x1="753" y1="268" x2="753" y2="305" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <!-- Horizontal bar -->
+  <line x1="147" y1="305" x2="753" y2="305" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <line x1="450" y1="305" x2="450" y2="318" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ===== Common Engine: hve orchestrate ===== -->
+  <rect x="220" y="320" width="460" height="44" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
+  <text x="450" y="337" text-anchor="middle" font-size="12" font-weight="bold" fill="#e36209">共通エンジン: python -m hve orchestrate</text>
+  <text x="450" y="355" text-anchor="middle" font-size="10" fill="#586069">CLI・GUI いずれも同じオーケストレーションエンジンを使用</text>
+  <!-- Arrow -->
+  <line x1="450" y1="364" x2="450" y2="386" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ===== Custom Agent DAG ===== -->
+  <rect x="220" y="388" width="460" height="44" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="450" y="405" text-anchor="middle" font-size="12" font-weight="bold" fill="#6f42c1">Custom Agent DAG（ワークフロー定義）</text>
+  <text x="450" y="421" text-anchor="middle" font-size="10" fill="#586069">plan.md → subissues.md → 各 Custom Agent を並列/直列で実行</text>
+  <!-- Arrow -->
+  <line x1="450" y1="432" x2="450" y2="454" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ===== Output Files ===== -->
+  <rect x="220" y="456" width="460" height="44" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="2"/>
+  <text x="450" y="473" text-anchor="middle" font-size="12" font-weight="bold" fill="#28a745">成果物ファイル</text>
+  <text x="450" y="489" text-anchor="middle" font-size="10" fill="#586069">work/ | docs/ | knowledge/ | docs-generated/（ワークフローにより異なる）</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="522" width="860" height="46" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="50" y="539" font-size="10" font-weight="bold" fill="#24292e">凡例:</text>
+  <rect x="85" y="528" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="102" y="539" font-size="10" fill="#24292e">Cloud Orchestrator</text>
+  <rect x="230" y="528" width="12" height="12" rx="2" fill="#ede8ff" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="247" y="539" font-size="10" fill="#24292e">CLI Orchestrator</text>
+  <rect x="370" y="528" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="387" y="539" font-size="10" fill="#24292e">GUI Orchestrator</text>
+  <rect x="510" y="528" width="12" height="12" rx="2" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
+  <text x="527" y="539" font-size="10" fill="#24292e">共通エンジン</text>
+  <line x1="628" y1="534" x2="658" y2="534" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="668" y="539" font-size="10" fill="#24292e">3 系統から収束</text>
+
+  <text x="85" y="558" font-size="10" fill="#586069">① Cloud: GitHub UI からノーコードで操作</text>
+  <text x="310" y="558" font-size="10" fill="#586069">② CLI: ターミナルで直接実行</text>
+  <text x="510" y="558" font-size="10" fill="#586069">③ GUI: PySide6 ウィザードで GUI 操作（CLI エンジン共有）</text>
+</svg>

@@ -5,6 +5,28 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/test-specs/{screenId}-test-spec.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestSpec"
+    - path: "test/e2e/playwright/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+  outputs:
+    - path: "test/e2e/playwright/"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/E2ETesting-Playwright/Issue-<識別子>/`
 
@@ -13,18 +35,27 @@ UIDeploy 後の実環境 E2E 検証専用 Agent。
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — デプロイ済み URL・テストシナリオ定義の存在確認
+- `work-artifacts-layout` — `work/E2ETesting-Playwright/Issue-<識別子>/` 配下の成果物（screenshot/trace/report）構造に準拠
+- `harness/harness-verification-loop` — E2E テスト結果の検証ループ
+- `harness/harness-error-recovery` — テスト失敗時の artifact 収集と E-01〜E-05 リカバリ
+- `testing/test-strategy-template` — E2E シナリオ設計テンプレートに準拠
+
 # 1) 目的
 - Step.3.2 でデプロイ済みの SWA URL に対して Playwright E2E を実行し、操作シナリオレベルの品質ギャップを埋める。
 
 # 2) 入力
 - `docs/catalog/service-catalog-matrix.md`（SWA URL / API エンドポイント）
 - `docs/test-specs/{screenId}-test-spec.md`（UI テスト仕様）
-- `tests/e2e/playwright/`（Playwright 設定・シナリオ雛形）
+- `test/e2e/playwright/`（Playwright 設定・シナリオ雛形）
 - 必要に応じて `docs/catalog/app-catalog.md`
 
 # 3) 実行手順
 1. SWA URL を `E2E_BASE_URL` として確定する（Issue 入力優先、未指定時は service-catalog から抽出）。
-2. `tests/e2e/playwright/` で依存をインストールし、Playwright を headless 実行する。
+2. `test/e2e/playwright/` で依存をインストールし、Playwright を headless 実行する。
 3. 以下 5 シナリオを対象に検証する（Issue 指示で増減可）:
    - ログイン / 認証導線（該当なしの場合は代表的な初期画面遷移）
    - 主要 CRUD 操作（リソース別に最低 1 件）

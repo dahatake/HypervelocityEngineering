@@ -131,4 +131,104 @@ def save_useractions_report(
     raise RuntimeError(f"failed to create unique report path under {target_dir}: {last_err}")
 
 
-__all__ = ["save_useractions_report"]
+__all__ = ["save_useractions_report", "save_tasktree_report"]
+
+
+def _build_tasktree_markdown(
+    state: "WorkbenchState",
+    *,
+    workflow_id: str,
+    run_id: str,
+    started_at_wall: float,
+    ended_at_wall: float,
+) -> str:
+    import time as _t
+    nodes = state.task_tree.iter_flatten()
+    now_mono = _t.monotonic()
+    lines = []
+    lines.append("# TaskTree Report (作業用)")
+    lines.append("")
+    lines.append(f"- workflow_id: {workflow_id}")
+    lines.append(f"- run_id: {run_id}")
+    lines.append(
+        f"- started_at: {_format_wall(started_at_wall)} (local) / epoch={started_at_wall:.3f}"
+    )
+    lines.append(
+        f"- ended_at: {_format_wall(ended_at_wall)} (local) / epoch={ended_at_wall:.3f}"
+    )
+    lines.append(f"- total_nodes: {len(nodes)}")
+    lines.append("")
+    lines.append("## Nodes (DFS順)")
+    lines.append("")
+    lines.append("| # | depth | id | title | kind | status | elapsed | activity |")
+    lines.append("|---|-------|----|-------|------|--------|---------|----------|")
+    for i, n in enumerate(nodes, start=1):
+        depth = state.task_tree._depth_of(n.id)
+        if n.kind == "workflow":
+            elapsed_sec = state.task_tree.aggregate_elapsed(n.id, now_mono)
+        elif n.started_at_monotonic is None:
+            elapsed_sec = 0.0
+        elif n.finished_at_monotonic is not None:
+            elapsed_sec = max(0.0, n.finished_at_monotonic - n.started_at_monotonic)
+        else:
+            elapsed_sec = max(0.0, now_mono - n.started_at_monotonic)
+        total = int(elapsed_sec)
+        elapsed_label = f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
+        lines.append(
+            f"| {i} | {depth} | {_escape_cell(n.id)} | {_escape_cell(n.title)} | "
+            f"{_escape_cell(n.kind)} | {_escape_cell(n.status)} | "
+            f"{elapsed_label} | {_escape_cell(n.current_activity or '')} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def save_tasktree_report(
+    state: "WorkbenchState",
+    *,
+    workflow_id: str,
+    run_id: str,
+    started_at_wall: Optional[float] = None,
+    base_dir: Path = Path("work"),
+) -> Path:
+    """TaskTree を Markdown レポートとして保存する（作業用、work/ 配下）。
+
+    冪等性: state.tasktree_report_saved=True の場合は no-op で Path("") を返す。
+    """
+    if getattr(state, "tasktree_report_saved", False):
+        return Path("")
+
+    if started_at_wall is None:
+        started_at_wall = state.workflow_started_at_wall
+    ended_at_wall = time.time()
+
+    ts = _format_path_ts(started_at_wall)
+    target_dir = base_dir / workflow_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    base_path = target_dir / f"{run_id}-{ts}-tasktree-report.md"
+
+    content = _build_tasktree_markdown(
+        state,
+        workflow_id=workflow_id,
+        run_id=run_id,
+        started_at_wall=started_at_wall,
+        ended_at_wall=ended_at_wall,
+    )
+
+    last_err: Optional[Exception] = None
+    for _ in range(10000):
+        cand = _resolve_unique_path(base_path)
+        try:
+            with cand.open("x", encoding="utf-8") as f:
+                f.write(content)
+            try:
+                setattr(state, "tasktree_report_saved", True)
+            except Exception:
+                pass
+            return cand
+        except FileExistsError as exc:
+            last_err = exc
+            continue
+    raise RuntimeError(
+        f"failed to create unique tasktree report path under {target_dir}: {last_err}"
+    )

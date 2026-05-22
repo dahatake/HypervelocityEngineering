@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install pytest
-        run: pip install pytest --quiet
+        run: pip install pytest pyyaml --quiet
 
       - name: Run unit tests for validate-agents
         run: |
@@ -38,3 +38,7 @@ jobs:
       - name: Validate .agent.md files
         run: |
           python3 .github/scripts/validate-agents.py
+
+      - name: Validate io_contract integrity
+        run: |
+          python3 .github/scripts/validate-io-contract.py

@@ -5,6 +5,64 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/services/{serviceId}-{serviceNameSlug}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceDetail"
+    - path: "docs/test-specs/{serviceId}-test-spec.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestSpec"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/azure/azure-services-*.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+  outputs:
+    - path: "src/api/{サービスID}-{サービス名}/"
+      required: true
+      mode: "create"
+    - path: "test/api/"
+      required: true
+      mode: "create"
+    - path: "test/api/smoke-ui/index.html"
+      required: true
+      mode: "create"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "knowledge/"
+      required: false
+      mode: "create"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D10-API-Event-File-連携契約パック.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D20-セキュア設計-実装ガードレール.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-<識別子>/`
 
@@ -17,7 +75,26 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `microservice-design-guide` — サービス実装時の API/イベント契約参照
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
+- `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
+- `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
+- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 
 # 入力（不足なら Questions：必要な項目をすべて）
 最低限ほしい情報：
@@ -117,7 +194,7 @@ metadata:
 - **2回目：ユーザー/運用視点**：単体テストが実運用環境で再現可能か、スモークUIは手動検証に十分か、README/作業ログから設定・実行・検証手順が明確か、PR本文（または作業ログ）に「変更点」「設定キー」「実行/検証」が揃っているか、外部依存やセットアップ要件は文書化されているか
 - **3回目：保守性・堅牢性・スケーラビリティ**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、テスト拡張性と再利用可能性、他サービスへの波及リスク、スコープは1サービスのみか（他サービスへ波及していないか）
 
-## 出力方法
+## 3) 出力フォーマット（Markdown固定スキーマ）
 レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）

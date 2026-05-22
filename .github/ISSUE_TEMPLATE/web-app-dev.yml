@@ -30,7 +30,7 @@ body:
           - `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（ユーザーによる Secret 作成は不要）
           - HVE CLI Orchestrator 用の `GH_TOKEN` はこの Cloud 実行では必須ではありません
           - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` の手動設定は不要
-          - 詳細方針: `users-guide/getting-started.md`（認証・認可 / Azure OIDC Secrets）, `users-guide/web-ui-guide.md`
+          - 詳細方針: `users-guide/hve-cloud-getting-started.md`（認証・認可 / Azure OIDC Secrets）, `users-guide/web-ui-guide.md`
 
         ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
         | ステップ | 内容 | サブステップ |

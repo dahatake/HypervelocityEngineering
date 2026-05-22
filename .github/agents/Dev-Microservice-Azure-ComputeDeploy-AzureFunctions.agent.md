@@ -5,6 +5,61 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "src/api/{サービスID}-{サービス名}/"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-ServiceCoding-AzureFunctions"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "knowledge/D15"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "infra/azure/create-azure-api-resources-prep.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/create-azure-api-resources.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/verify-azure-resources.sh"
+      required: true
+      mode: "create"
+    - path: ".github/workflows/*"
+      required: true
+      mode: "create"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      mode: "upsert"
+    - path: "test/{サービスID}-{サービス名}/"
+      required: true
+      mode: "create"
+    - path: "infra/README.md"
+      required: true
+      mode: "create"
+    - path: "infra/azure/rollback/compute-functions-rollback.md"
+      required: true
+      mode: "create"
+    - path: "work/Dev-Microservice-Azure-ComputeDeploy-AzureFunctions/Issue-<識別子>/api-azure-deploy-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "work/Dev-Microservice-Azure-ComputeDeploy-AzureFunctions/Issue-<識別子>/ac-verification.md"
+      required: true
+      mode: "create"
+    - path: "compute-functions-rollback.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDeploy-AzureFunctions/Issue-<識別子>/`
 
@@ -12,6 +67,27 @@ metadata:
 Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Actions CI/CD・サービスカタログ更新・スモークテスト・AC検証を一体で実装/記録するデプロイ専用エージェント。
 共通ルールは `.github/copilot-instructions.md` と Skill `agent-common-preamble` を継承する。
 </role>
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — サービスカタログ・実装成果物の存在確認
+- `work-artifacts-layout` — `work/Dev-Microservice-Azure-ComputeDeploy-AzureFunctions/Issue-<識別子>/` 配下の成果物構造に準拠
+- `harness/harness-safety-guard` — `az delete` / `rm -rf` 等の破壊的コマンドを実行前検出
+- `harness/harness-verification-loop` — Build / Lint / Test / Security / Diff の 5 段階検証
+- `cicd/github-actions-cicd` — GitHub Actions による CI/CD パイプライン構築
 
 <when_to_invoke>
 - API系マイクロサービスを Azure Functions に実デプロイし、運用可能な CI/CD まで整備するとき

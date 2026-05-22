@@ -5,6 +5,16 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: ".github/workflows/*.yml"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "docs-generated/files/{relative-path}.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-CICDSummary/Issue-<識別子>/`
 

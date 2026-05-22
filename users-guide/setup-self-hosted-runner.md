@@ -1,17 +1,17 @@
 # Self-hosted Runner セットアップ手順書（Azure Container Apps）
 
-← [README](../README.md) | ← [getting-started.md](./getting-started.md)
+← [README](../README.md) | ← [hve-cloud-getting-started.md](./hve-cloud-getting-started.md)
 
 この手順書は、`tools/runner/README.md` と `tools/runner/SETUP.md` を統合した単一ドキュメントです。  
 以下の順番で実行すれば、GitHub Actions Self-hosted Runner を Azure Container Apps Jobs にデプロイして検証できます。
 
-> **HVE Cloud Agent Orchestrator における位置づけ（省略可能）**: この手順は**オプション**です。GitHub-hosted runner（`ubuntu-latest` 等）を使う場合はスキップして [getting-started.md の Step.5（ラベル設定）](./getting-started.md#step5-ラベル設定) に進んでください。Self-hosted runner が必要なのは、組織のセキュリティ要件・閉域ネットワーク・固定 IP・専用ツール利用などの理由で自前の実行環境でワークフローを動かしたい場合です。設定タイミングは **認証・認可設定（Step.4）の後、Setup Labels 実行（Step.5）の前** が推奨です。なお、Self-hosted runner 側に設定した runner label（デフォルト: `self-hosted,linux,x64,aca`）は、Issue Template や workflow の `runs-on:` に指定する label と**一致している必要があります**。ラベルが不一致の場合、ジョブが `Waiting for a runner...` のまま進まなくなります。
+> **HVE Cloud Agent Orchestrator における位置づけ（省略可能）**: この手順は**オプション**です。GitHub-hosted runner（`ubuntu-latest` 等）を使う場合はスキップして [hve-cloud-getting-started.md の Step.5（ラベル設定）](./hve-cloud-getting-started.md#step5-ラベル設定) に進んでください。Self-hosted runner が必要なのは、組織のセキュリティ要件・閉域ネットワーク・固定 IP・専用ツール利用などの理由で自前の実行環境でワークフローを動かしたい場合です。設定タイミングは **認証・認可設定（Step.4）の後、Setup Labels 実行（Step.5）の前** が推奨です。なお、Self-hosted runner 側に設定した runner label（デフォルト: `self-hosted,linux,x64,aca`）は、Issue Template や workflow の `runs-on:` に指定する label と**一致している必要があります**。ラベルが不一致の場合、ジョブが `Waiting for a runner...` のまま進まなくなります。
 >
-> **⚠️ 認証トークンに関する注意**: この手順で必要なトークンは、getting-started.md Step.4 の `COPILOT_PAT`（Copilot 自動アサイン用 Fine-grained PAT）とは**別物**です。Self-hosted runner のデプロイには **GitHub Personal Access Token (classic)** が必要です（スコープ: `repo` + `admin:repo_hook`）。詳細は [Step 2: GitHub PAT を発行](#step-2-github-pat-を発行) を参照してください。
+> **⚠️ 認証トークンに関する注意**: この手順で必要なトークンは、hve-cloud-getting-started.md Step.4 の `COPILOT_PAT`（Copilot 自動アサイン用 Fine-grained PAT）とは**別物**です。Self-hosted runner のデプロイには **GitHub Personal Access Token (classic)** が必要です（スコープ: `repo` + `admin:repo_hook`）。詳細は [Step 2: GitHub PAT を発行](#step-2-github-pat-を発行) を参照してください。
 >
 > **対象読者**: Azure Container Apps で Self-hosted Runner を構築・運用するリポジトリ管理者  
 > **前提**: Azure サブスクリプション権限、GitHub リポジトリアクセス権、`tools/runner/` を実行できるローカル環境があること  
-> **次のステップ**: セットアップ後は [getting-started.md の Step.5（ラベル設定）](./getting-started.md#step5-ラベル設定) へ戻り、Setup Labels を実行してください。運用時の詳細は [troubleshooting.md の Self-hosted runner（オプション）](./troubleshooting.md#7-self-hosted-runnerオプション) と `tools/runner/` 配下ドキュメントを参照してください。
+> **次のステップ**: セットアップ後は [hve-cloud-getting-started.md の Step.5（ラベル設定）](./hve-cloud-getting-started.md#step5-ラベル設定) へ戻り、Setup Labels を実行してください。運用時の詳細は [troubleshooting.md の Self-hosted runner（オプション）](./troubleshooting.md#7-self-hosted-runnerオプション) と `tools/runner/` 配下ドキュメントを参照してください。
 
 ## 目次
 - [1. 概要](#1-概要)

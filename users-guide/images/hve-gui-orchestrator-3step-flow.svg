@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 820" font-family="system-ui, -apple-system, sans-serif">
+  <title>HVE GUI Orchestrator 3 ステップ操作フロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="820" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="350" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">HVE GUI Orchestrator 操作フロー</text>
+  <text x="350" y="52" text-anchor="middle" font-size="11" fill="#586069">python -m hve gui — 3 ステップ ウィザード</text>
+
+  <!-- ===== Progress Header ===== -->
+  <rect x="60" y="64" width="580" height="44" rx="8" fill="#24292e"/>
+  <!-- Step circles -->
+  <circle cx="176" cy="86" r="14" fill="#28a745"/>
+  <text x="176" y="91" text-anchor="middle" font-size="13" font-weight="bold" fill="white">①</text>
+  <text x="176" y="103" text-anchor="middle" font-size="9" fill="#adb5bd">ワークフロー選択</text>
+  <!-- Connector line -->
+  <line x1="190" y1="86" x2="310" y2="86" stroke="#586069" stroke-width="1.5"/>
+  <circle cx="350" cy="86" r="14" fill="#6f42c1"/>
+  <text x="350" y="91" text-anchor="middle" font-size="13" font-weight="bold" fill="white">②</text>
+  <text x="350" y="103" text-anchor="middle" font-size="9" fill="#adb5bd">オプション選択</text>
+  <line x1="364" y1="86" x2="484" y2="86" stroke="#586069" stroke-width="1.5"/>
+  <circle cx="524" cy="86" r="14" fill="#0366d6"/>
+  <text x="524" y="91" text-anchor="middle" font-size="13" font-weight="bold" fill="white">③</text>
+  <text x="524" y="103" text-anchor="middle" font-size="9" fill="#adb5bd">実行 (Workbench)</text>
+
+  <!-- ===== STEP 1 ===== -->
+  <rect x="60" y="120" width="580" height="180" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="2"/>
+  <text x="100" y="143" font-size="13" font-weight="bold" fill="#28a745">Step 1: ワークフロー選択</text>
+
+  <!-- Workflow list - left column -->
+  <rect x="76" y="152" width="260" height="138" rx="6" fill="white" stroke="#28a745" stroke-width="1"/>
+  <text x="206" y="168" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">ラジオボタンで選択（全11ワークフロー）</text>
+  <text x="90" y="184" font-size="9" fill="#586069">◉ AAS — App Architecture Design</text>
+  <text x="90" y="197" font-size="9" fill="#586069">○  AAD-Web — Auto Architecture Design</text>
+  <text x="90" y="210" font-size="9" fill="#586069">○  ASDW — Auto Service Design Workflow</text>
+  <text x="90" y="223" font-size="9" fill="#586069">○  ABD — Auto Business Design</text>
+  <text x="90" y="236" font-size="9" fill="#586069">○  ABDV — Auto Business Design V2</text>
+  <text x="90" y="249" font-size="9" fill="#586069">○  AAG — Auto Agent Generation…</text>
+  <text x="90" y="262" font-size="9" fill="#586069">○  AKM / AQOD / ARD / ADOC / AAGD</text>
+  <text x="206" y="281" text-anchor="middle" font-size="9" fill="#959da5">workflow_registry.list_workflows() から動的取得</text>
+
+  <!-- Description box - right column -->
+  <rect x="352" y="152" width="272" height="138" rx="6" fill="white" stroke="#28a745" stroke-width="1"/>
+  <text x="488" y="168" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">選択中ワークフロー情報</text>
+  <text x="370" y="186" font-size="9" font-weight="bold" fill="#28a745">ID:</text>
+  <text x="395" y="186" font-size="9" fill="#24292e">aas</text>
+  <text x="370" y="201" font-size="9" font-weight="bold" fill="#28a745">名称:</text>
+  <text x="400" y="201" font-size="9" fill="#24292e">App Architecture Design</text>
+  <text x="370" y="216" font-size="9" font-weight="bold" fill="#28a745">説明:</text>
+  <text x="370" y="230" font-size="9" fill="#586069">ユースケースカタログから</text>
+  <text x="370" y="243" font-size="9" fill="#586069">アーキテクチャ設計書を生成</text>
+  <rect x="490" y="262" width="120" height="22" rx="4" fill="#28a745"/>
+  <text x="550" y="277" text-anchor="middle" font-size="10" font-weight="bold" fill="white">次へ →</text>
+
+  <!-- Arrow -->
+  <line x1="350" y1="300" x2="350" y2="322" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ===== STEP 2 ===== -->
+  <rect x="60" y="324" width="580" height="245" rx="8" fill="#ede8ff" stroke="#6f42c1" stroke-width="2"/>
+  <text x="100" y="347" font-size="13" font-weight="bold" fill="#6f42c1">Step 2: オプション選択（16 カテゴリ・アコーディオン）</text>
+
+  <!-- Category grid: 2x8 -->
+  <rect x="76" y="356" width="264" height="198" rx="6" fill="white" stroke="#6f42c1" stroke-width="1"/>
+  <text x="208" y="371" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">QToolBox アコーディオン</text>
+  <text x="90" y="385" font-size="9" fill="#586069">▼ C1 基本設定  --model / --review-model</text>
+  <text x="90" y="397" font-size="9" fill="#959da5">▶ C2 並列実行  --max-parallel</text>
+  <text x="90" y="409" font-size="9" fill="#959da5">▶ C3 自動プロンプト  --auto-qa</text>
+  <text x="90" y="421" font-size="9" fill="#959da5">▶ C4 Work IQ ⚠ CLI 固有  --workiq 系 11 個</text>
+  <text x="90" y="433" font-size="9" fill="#959da5">▶ C5 Issue/PR 作成  --create-issues</text>
+  <text x="90" y="445" font-size="9" fill="#959da5">▶ C6 出力制御  --verbose / --quiet</text>
+  <text x="90" y="457" font-size="9" fill="#959da5">▶ C7 MCP/CLI 接続  --mcp-config</text>
+  <text x="90" y="469" font-size="9" fill="#959da5">▶ C8 タイムアウト  --timeout</text>
+  <text x="90" y="481" font-size="9" fill="#959da5">▶ C9 ブランチ/ステップ  --branch / --steps</text>
+  <text x="90" y="493" font-size="9" fill="#959da5">▶ C10–C16 アプリ ID / ワークフロー固有 / 拡張</text>
+  <text x="208" y="544" text-anchor="middle" font-size="9" fill="#959da5">合計 80 以上のオプション</text>
+
+  <!-- Preview box -->
+  <rect x="356" y="356" width="268" height="198" rx="6" fill="white" stroke="#6f42c1" stroke-width="1"/>
+  <text x="490" y="371" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">コマンドプレビュー</text>
+  <rect x="366" y="378" width="248" height="50" rx="4" fill="#f6f8fa" stroke="#d1d5da" stroke-width="1"/>
+  <text x="490" y="393" text-anchor="middle" font-size="8" fill="#24292e" font-family="monospace">python -m hve orchestrate</text>
+  <text x="490" y="406" text-anchor="middle" font-size="8" fill="#24292e" font-family="monospace">--workflow aas --model gpt-4o</text>
+  <text x="490" y="419" text-anchor="middle" font-size="8" fill="#24292e" font-family="monospace">--auto-qa --max-parallel 4</text>
+  <!-- Copy & Execute buttons -->
+  <rect x="366" y="435" width="70" height="22" rx="4" fill="#6f42c1"/>
+  <text x="401" y="450" text-anchor="middle" font-size="9" fill="white">📋 コピー</text>
+  <rect x="446" y="435" width="168" height="22" rx="4" fill="#28a745"/>
+  <text x="530" y="450" text-anchor="middle" font-size="9" font-weight="bold" fill="white">実行 ▶ → Step 3 へ</text>
+
+  <!-- D&D note for ARD -->
+  <rect x="366" y="465" width="248" height="82" rx="4" fill="#fff8e6" stroke="#e36209" stroke-width="1"/>
+  <text x="490" y="479" text-anchor="middle" font-size="9" font-weight="bold" fill="#e36209">ARD のみ: 添付資料 D&amp;D 対応</text>
+  <text x="490" y="493" text-anchor="middle" font-size="9" fill="#586069">📥 ドロップ領域（C14 セクション末尾）</text>
+  <text x="490" y="507" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv（追加依存なし）</text>
+  <text x="490" y="521" text-anchor="middle" font-size="9" fill="#586069">.docx / .pdf / .xlsx（gui-docconvert 必要）</text>
+  <text x="490" y="535" text-anchor="middle" font-size="9" fill="#586069">→ docs/attached/ に Markdown として保存</text>
+
+  <!-- Arrow -->
+  <line x1="350" y1="569" x2="350" y2="591" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ===== STEP 3 ===== -->
+  <rect x="60" y="593" width="580" height="175" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="2"/>
+  <text x="100" y="616" font-size="13" font-weight="bold" fill="#0366d6">Step 3: Workbench 実行</text>
+
+  <!-- Workbench mockup -->
+  <rect x="76" y="624" width="548" height="128" rx="6" fill="white" stroke="#0366d6" stroke-width="1"/>
+
+  <!-- Header bar -->
+  <rect x="76" y="624" width="548" height="22" rx="6" fill="#0366d6"/>
+  <text x="320" y="639" text-anchor="middle" font-size="9" fill="white">Step 3: 実行 (aas — App Architecture Design)</text>
+
+  <!-- Command row -->
+  <rect x="82" y="648" width="460" height="18" rx="3" fill="#f6f8fa" stroke="#d1d5da" stroke-width="1"/>
+  <text x="90" y="660" font-size="8" fill="#586069" font-family="monospace">実行コマンド: python -m hve orchestrate --workflow aas …</text>
+  <rect x="551" y="648" width="66" height="18" rx="3" fill="#6f42c1"/>
+  <text x="584" y="660" text-anchor="middle" font-size="8" fill="white">📋 コピー</text>
+
+  <!-- Log area -->
+  <rect x="82" y="672" width="460" height="46" rx="3" fill="#1e1e1e"/>
+  <text x="90" y="686" font-size="8" fill="#28a745" font-family="monospace">✔ Step 1/8: Arch-ApplicationAnalytics ... 完了</text>
+  <text x="90" y="699" font-size="8" fill="#28a745" font-family="monospace">⠼ Step 2/8: Arch-ArchitectureCandidateAnalyzer ... 実行中</text>
+  <text x="90" y="712" font-size="8" fill="#adb5bd" font-family="monospace">  ログをスクロール / Ctrl+A で全選択 / Ctrl+C でコピー</text>
+  <rect x="551" y="672" width="66" height="18" rx="3" fill="#6f42c1"/>
+  <text x="584" y="684" text-anchor="middle" font-size="8" fill="white">📋 コピー</text>
+
+  <!-- Stop button -->
+  <rect x="551" y="696" width="66" height="22" rx="4" fill="#d73a49"/>
+  <text x="584" y="711" text-anchor="middle" font-size="9" font-weight="bold" fill="white">■ 停止</text>
+
+  <!-- Features note -->
+  <text x="90" y="735" font-size="9" fill="#586069">📋 コピーアイコン: 実行コマンド / ログ / ユーザーアクション 各ペインを 1 クリックコピー</text>
+  <text x="90" y="748" font-size="9" fill="#586069">メニュー「セッション」→「新規セッション...」で複数ウィンドウを同時起動可能</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="783" width="660" height="28" rx="6" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <circle cx="50" cy="797" r="8" fill="#28a745"/>
+  <text x="38" y="801" font-size="9" font-weight="bold" fill="white">①</text>
+  <text x="64" y="801" font-size="10" fill="#24292e">Step 1: ワークフロー選択</text>
+  <circle cx="216" cy="797" r="8" fill="#6f42c1"/>
+  <text x="204" y="801" font-size="9" font-weight="bold" fill="white">②</text>
+  <text x="230" y="801" font-size="10" fill="#24292e">Step 2: オプション選択（80+ オプション）</text>
+  <circle cx="468" cy="797" r="8" fill="#0366d6"/>
+  <text x="456" y="801" font-size="9" font-weight="bold" fill="white">③</text>
+  <text x="482" y="801" font-size="10" fill="#24292e">Step 3: Workbench 実行</text>
+</svg>

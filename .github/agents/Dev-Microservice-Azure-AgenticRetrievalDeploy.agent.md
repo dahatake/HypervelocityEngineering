@@ -5,6 +5,41 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/azure/agentic-retrieval/{serviceId}-design.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-AgenticRetrievalDesign"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+  outputs:
+    - path: "infra/azure/create-azure-agentic-retrieval/prep.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/create-azure-agentic-retrieval/create.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/create-azure-agentic-retrieval/services/{serviceId}.sh"
+      required: true
+      mode: "create"
+    - path: "{WORK}plan.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}contracts/agentic-retrieval-resources.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}artifacts/created-resources.json"
+      required: true
+      mode: "create"
+    - path: "{WORK}artifacts/cli-evidence.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}artifacts/ac-verification.md"
+      required: true
+      mode: "create"
 ---
 <!-- markdownlint-disable MD013 MD022 MD031 MD032 MD041 MD058 MD060 -->
 > **WORK**: `work/Dev-Microservice-Azure-AgenticRetrievalDeploy/Issue-<識別子>/`
@@ -13,6 +48,18 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 本 PR では IaC スクリプト本体を固定生成しない。Agent 実行時に
   `azure-prepare` / `azure-deploy` を使って生成する。
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 - `.github/skills/agent-common-preamble/SKILL.md`
@@ -41,7 +88,7 @@ metadata:
 ## 1) スコープ
 4-A の `docs/azure/agentic-retrieval/{serviceId}-design.md` を入力に、Azure CLI / `az rest` で Agentic Retrieval リソースを冪等作成するための実行骨子を定義する。
 
-## 2) 入力（必読）
+## 2) 入力（必ず参照）
 - リソースグループ名
 - `docs/azure/agentic-retrieval/{serviceId}-design.md`
 - ワークフロー入力フラグ（Q1〜Q6 全て）
@@ -49,7 +96,7 @@ metadata:
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
 
-## 3) 出力（必須）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 ### インフラ（Agent 実行時に生成）
 - `infra/azure/create-azure-agentic-retrieval/prep.sh`
 - `infra/azure/create-azure-agentic-retrieval/create.sh`

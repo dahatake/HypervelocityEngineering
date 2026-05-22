@@ -5,6 +5,38 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+  outputs:
+    - path: "docs/azure/azure-services-compute.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}services-azure-compute-design-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}subissues.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
 
@@ -13,7 +45,25 @@ metadata:
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `microservice-design-guide` — コンピュート選定時のサービス境界・非機能要件参照
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
 ## 1) 目的 / スコープ
 ### 目的
@@ -87,7 +137,7 @@ metadata:
 6) Done（受け入れ基準）に対して自己チェックし、漏れを修正。
 
 ## 5) 出力フォーマット（設計書は固定）
-## 1. 概要
+## 1) 目的と非目的
 - ユースケースID:
 - 参照ドキュメント（パス列挙）:
 - 前提（リージョン / SLA / 運用体制 など）:

@@ -40,7 +40,7 @@ class TestMakeForkSessionId(unittest.TestCase):
         fork_id = runner._make_fork_session_id("2.3", fork_index=1)
         self.assertNotEqual(main_id, fork_id)
         self.assertIn("fork1", fork_id)
-        self.assertIn("step-2.3", fork_id)
+        self.assertIn("step-2-3", fork_id)
 
     def test_determinism(self) -> None:
         runner = _make_runner(run_id="run-X")

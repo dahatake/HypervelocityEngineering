@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 740" font-family="system-ui, -apple-system, sans-serif">
+  <title>HVE GUI Orchestrator データフロー</title>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
+    </marker>
+    <marker id="arrg" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#28a745"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="740" fill="#f6f8fa" rx="12"/>
+
+  <!-- Title -->
+  <text x="550" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">HVE GUI Orchestrator データフロー</text>
+  <text x="550" y="52" text-anchor="middle" font-size="11" fill="#586069">GUI 操作 → 共通エンジン → Custom Agent → 成果物ファイル</text>
+
+  <!-- ============================================================ -->
+  <!-- ROW 1: ユーザー入力 (左) → GUIウィンドウ (中央) -->
+  <!-- ============================================================ -->
+
+  <!-- Column Header: 入力 -->
+  <text x="152" y="76" text-anchor="middle" font-size="12" font-weight="bold" fill="#0366d6">ユーザー入力</text>
+  <!-- Column Header: GUI -->
+  <text x="430" y="76" text-anchor="middle" font-size="12" font-weight="bold" fill="#28a745">GUI ウィンドウ（PySide6）</text>
+  <!-- Column Header: エンジン -->
+  <text x="700" y="76" text-anchor="middle" font-size="12" font-weight="bold" fill="#e36209">共通エンジン</text>
+  <!-- Column Header: 出力 -->
+  <text x="960" y="76" text-anchor="middle" font-size="12" font-weight="bold" fill="#6f42c1">成果物ファイル</text>
+
+  <!-- Dividers -->
+  <line x1="272" y1="64" x2="272" y2="680" stroke="#d1d5da" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="570" y1="64" x2="570" y2="680" stroke="#d1d5da" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="840" y1="64" x2="840" y2="680" stroke="#d1d5da" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- ===== Input: GUI 操作 ===== -->
+  <rect x="20" y="90" width="236" height="44" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="138" y="107" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">① GUI 操作</text>
+  <text x="138" y="122" text-anchor="middle" font-size="9" fill="#586069">Step1 ワークフロー選択 + Step2 オプション設定</text>
+
+  <!-- Arrow -->
+  <line x1="256" y1="112" x2="294" y2="112" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- GUI: Step 1+2 Processing -->
+  <rect x="296" y="90" width="260" height="44" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="426" y="107" text-anchor="middle" font-size="11" font-weight="bold" fill="#28a745">QWizard (3 ステップ)</text>
+  <text x="426" y="122" text-anchor="middle" font-size="9" fill="#586069">WizardResult → argv 構築 → WorkbenchWindow</text>
+
+  <!-- Arrow down to engine -->
+  <line x1="426" y1="134" x2="426" y2="155" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- GUI: state_bridge -->
+  <rect x="296" y="157" width="260" height="34" rx="8" fill="#c3f5cf" stroke="#28a745" stroke-width="1.5"/>
+  <text x="426" y="170" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">state_bridge.py</text>
+  <text x="426" y="182" text-anchor="middle" font-size="9" fill="#586069">GUI 状態 ↔ hve orchestrate 引数 の橋渡し</text>
+
+  <!-- Arrow to engine -->
+  <line x1="556" y1="174" x2="594" y2="174" stroke="#e36209" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Engine: orchestrate -->
+  <rect x="596" y="90" width="228" height="130" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
+  <text x="710" y="107" text-anchor="middle" font-size="11" font-weight="bold" fill="#e36209">python -m hve orchestrate</text>
+  <text x="710" y="121" text-anchor="middle" font-size="9" fill="#586069">（CLI・GUI 共通エンジン）</text>
+  <line x1="625" y1="128" x2="795" y2="128" stroke="#d1d5da" stroke-width="1"/>
+  <text x="710" y="141" text-anchor="middle" font-size="9" fill="#586069">--workflow &lt;id&gt;</text>
+  <text x="710" y="154" text-anchor="middle" font-size="9" fill="#586069">--model &lt;name&gt;</text>
+  <text x="710" y="167" text-anchor="middle" font-size="9" fill="#586069">--workbench off  ← GUI で自動注入</text>
+  <text x="710" y="180" text-anchor="middle" font-size="9" fill="#586069">--auto-qa / --max-parallel …</text>
+  <text x="710" y="197" text-anchor="middle" font-size="9" fill="#e36209">サブプロセス (subprocess.Popen) として起動</text>
+
+  <!-- Engine → Custom Agent -->
+  <line x1="710" y1="220" x2="710" y2="244" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Engine: plan.md generation -->
+  <rect x="596" y="246" width="228" height="44" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
+  <text x="710" y="262" text-anchor="middle" font-size="10" font-weight="bold" fill="#e36209">plan.md / subissues.md 生成</text>
+  <text x="710" y="276" text-anchor="middle" font-size="9" fill="#586069">Orchestrator が DAG を解析・Wave 分割</text>
+
+  <!-- plan.md / subissues.md output (early) -->
+  <line x1="824" y1="268" x2="858" y2="268" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="860" y="246" width="218" height="44" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="969" y="262" text-anchor="middle" font-size="10" fill="#24292e">work/Issue-&lt;id&gt;/plan.md</text>
+  <text x="969" y="277" text-anchor="middle" font-size="10" fill="#24292e">work/Issue-&lt;id&gt;/subissues.md</text>
+
+  <!-- Engine → Custom Agent DAG -->
+  <line x1="710" y1="290" x2="710" y2="313" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Custom Agent DAG box -->
+  <rect x="596" y="315" width="228" height="44" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="710" y="332" text-anchor="middle" font-size="11" font-weight="bold" fill="#6f42c1">Custom Agent DAG</text>
+  <text x="710" y="346" text-anchor="middle" font-size="9" fill="#586069">ワークフロー定義 → 並列/直列 実行</text>
+
+  <!-- Custom Agent → 各出力 -->
+  <line x1="824" y1="337" x2="858" y2="337" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ===== ファイル D&D 入力 (Input column, lower) ===== -->
+  <rect x="20" y="240" width="236" height="60" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
+  <text x="138" y="258" text-anchor="middle" font-size="11" font-weight="bold" fill="#e36209">② ファイル D&amp;D（ARD のみ）</text>
+  <text x="138" y="273" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv（追加依存なし）</text>
+  <text x="138" y="287" text-anchor="middle" font-size="9" fill="#586069">.docx / .pdf / .xlsx（gui-docconvert 必要）</text>
+
+  <!-- D&D → doc_convert.py -->
+  <line x1="256" y1="268" x2="294" y2="268" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- GUI: doc_convert -->
+  <rect x="296" y="240" width="260" height="60" rx="8" fill="#c3f5cf" stroke="#28a745" stroke-width="1.5"/>
+  <text x="426" y="257" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">doc_convert.py</text>
+  <text x="426" y="272" text-anchor="middle" font-size="9" fill="#586069">PDF/DOCX/XLSX → Markdown 変換</text>
+  <text x="426" y="286" text-anchor="middle" font-size="9" fill="#586069">docs/attached/ に保存</text>
+
+  <!-- doc_convert → docs/attached/ -->
+  <line x1="556" y1="268" x2="594" y2="337" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- ===== Output: docs/attached/ ===== -->
+  <rect x="860" y="90" width="218" height="140" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="969" y="107" text-anchor="middle" font-size="10" font-weight="bold" fill="#28a745">docs/attached/</text>
+  <text x="969" y="121" text-anchor="middle" font-size="9" fill="#586069">D&amp;D ファイルの変換後 Markdown</text>
+  <line x1="875" y1="128" x2="1067" y2="128" stroke="#d1d5da" stroke-width="1"/>
+  <text x="969" y="143" text-anchor="middle" font-size="9" fill="#24292e">business-requirement-input.md</text>
+  <text x="969" y="158" text-anchor="middle" font-size="9" fill="#24292e">（ARD の場合、起点ファイルとして採用）</text>
+  <text x="969" y="175" text-anchor="middle" font-size="9" fill="#586069">--attached-docs &lt;paths&gt;</text>
+  <text x="969" y="190" text-anchor="middle" font-size="9" fill="#586069">--target-business &lt;起点ファイルパス&gt;</text>
+  <text x="969" y="208" text-anchor="middle" font-size="9" fill="#586069">→ hve orchestrate へ自動渡し</text>
+
+  <!-- ===== Output: ワークフロー別成果物 (lower section) ===== -->
+  <rect x="860" y="315" width="218" height="350" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="969" y="332" text-anchor="middle" font-size="10" font-weight="bold" fill="#6f42c1">成果物ファイル（ワークフロー依存）</text>
+  <line x1="875" y1="340" x2="1067" y2="340" stroke="#d1d5da" stroke-width="1"/>
+
+  <!-- work/ -->
+  <text x="875" y="358" font-size="10" font-weight="bold" fill="#586069">work/</text>
+  <text x="886" y="372" font-size="9" fill="#24292e">Issue-&lt;id&gt;/plan.md</text>
+  <text x="886" y="385" font-size="9" fill="#24292e">Issue-&lt;id&gt;/subissues.md</text>
+  <text x="886" y="398" font-size="9" fill="#24292e">Issue-&lt;id&gt;/completion-report.md</text>
+
+  <!-- docs/ -->
+  <text x="875" y="418" font-size="10" font-weight="bold" fill="#586069">docs/</text>
+  <text x="886" y="432" font-size="9" fill="#24292e">catalog/use-case-catalog.md</text>
+  <text x="886" y="445" font-size="9" fill="#24292e">catalog/app-catalog.md</text>
+  <text x="886" y="458" font-size="9" fill="#24292e">domain-analytics.md</text>
+  <text x="886" y="471" font-size="9" fill="#24292e">test-strategy.md（ほか多数）</text>
+
+  <!-- knowledge/ -->
+  <text x="875" y="491" font-size="10" font-weight="bold" fill="#586069">knowledge/</text>
+  <text x="886" y="505" font-size="9" fill="#24292e">D01〜D21-*.md</text>
+  <text x="886" y="518" font-size="9" fill="#24292e">（AKM ワークフローで生成）</text>
+
+  <!-- docs-generated/ -->
+  <text x="875" y="538" font-size="10" font-weight="bold" fill="#586069">docs-generated/</text>
+  <text x="886" y="552" font-size="9" fill="#24292e">*.md（ADOC ワークフローで生成）</text>
+
+  <!-- qa/ -->
+  <text x="875" y="572" font-size="10" font-weight="bold" fill="#586069">qa/</text>
+  <text x="886" y="586" font-size="9" fill="#24292e">question-*.md（AQOD ワークフロー）</text>
+
+  <text x="969" y="652" text-anchor="middle" font-size="9" fill="#959da5">どのワークフローを選択したかにより</text>
+  <text x="969" y="664" text-anchor="middle" font-size="9" fill="#959da5">生成されるファイルが決まる</text>
+
+  <!-- ===== 複数セッション注記 ===== -->
+  <rect x="20" y="330" width="236" height="44" rx="8" fill="#ffeef0" stroke="#d73a49" stroke-width="1.5"/>
+  <text x="138" y="347" text-anchor="middle" font-size="10" font-weight="bold" fill="#d73a49">複数セッション同時起動</text>
+  <text x="138" y="361" text-anchor="middle" font-size="9" fill="#586069">メニュー「セッション → 新規セッション」</text>
+  <line x1="138" y1="374" x2="138" y2="396" stroke="#d73a49" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="398" width="236" height="34" rx="6" fill="white" stroke="#d73a49" stroke-width="1"/>
+  <text x="138" y="411" text-anchor="middle" font-size="9" fill="#d73a49">Session #1 (aas)</text>
+  <text x="138" y="424" text-anchor="middle" font-size="9" fill="#d73a49">Session #2 (ard) — 独立サブプロセス</text>
+
+  <!-- GUI → State Bridge → Engine note -->
+  <rect x="296" y="320" width="260" height="50" rx="8" fill="#f6f8fa" stroke="#d1d5da" stroke-width="1"/>
+  <text x="426" y="337" text-anchor="middle" font-size="9" font-weight="bold" fill="#24292e">GUI 強制制約（自動注入）</text>
+  <text x="426" y="351" text-anchor="middle" font-size="9" fill="#586069">--workbench off  を常に付与</text>
+  <text x="426" y="363" text-anchor="middle" font-size="9" fill="#586069">ターミナル UI 系オプションを Step2 から除外</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="685" width="1060" height="44" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="50" y="702" font-size="10" font-weight="bold" fill="#24292e">凡例:</text>
+  <rect x="85" y="691" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="102" y="702" font-size="10" fill="#24292e">ユーザー入力</text>
+  <rect x="200" y="691" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="217" y="702" font-size="10" fill="#24292e">GUI コンポーネント</text>
+  <rect x="345" y="691" width="12" height="12" rx="2" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
+  <text x="362" y="702" font-size="10" fill="#24292e">共通エンジン（CLI と同一）</text>
+  <rect x="530" y="691" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="547" y="702" font-size="10" fill="#24292e">Custom Agent / 成果物</text>
+  <line x1="690" y1="697" x2="720" y2="697" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="730" y="702" font-size="10" fill="#24292e">D&amp;D 経由の入力フロー</text>
+  <text x="86" y="722" font-size="9" fill="#586069">GUI は hve orchestrate の UI ラッパー。エンジンは CLI と完全共通。GUI 固有処理は ①ウィザードによる argv 構築 ②D&amp;D ファイル変換 ③--workbench off 自動注入 の 3 点のみ。</text>
+</svg>

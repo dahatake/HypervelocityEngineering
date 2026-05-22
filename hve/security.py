@@ -1,6 +1,6 @@
 """security.py — ユーザー入力サニタイズ関数
 
-Issue Template の free-text 入力（additional_comment 等）を
+Issue Template の free-text 入力を
 LLM プロンプトへ埋め込む前にサニタイズするためのモジュール。
 
 既存のセキュリティ機構（permission_handler.py / workiq.py トークンマスク /

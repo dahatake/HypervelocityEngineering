@@ -28,7 +28,7 @@
 
 - AAS の成果物が存在すること（`docs/catalog/app-catalog.md`、`docs/catalog/service-catalog-matrix.md` など）
 - `COPILOT_PAT` が設定済みであること
-- セットアップ手順は [getting-started.md](./getting-started.md) を参照
+- セットアップ手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照
 
 ## 次のステップ
 

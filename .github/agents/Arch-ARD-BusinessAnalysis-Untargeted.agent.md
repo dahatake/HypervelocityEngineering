@@ -5,12 +5,48 @@ tools: ['read', 'edit', 'search', 'web']
 metadata:
   version: "1.1.0"
 
+io_contract:
+  inputs:
+    - path: "users-guide/01-business-requirement.md"
+      required: true
+      kind: "static"
+    - path: "<details><summary>Prompt を表示</summary>"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "docs/company-business-requirement.md"
+      required: true
+      mode: "create"
+    - path: "copilot-instructions.md"
+      required: true
+      mode: "create"
 ---
-
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-## 1) 目的
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — 必読ファイル（公開情報・前提資料）の存在確認と欠損時 TBD 処理
+- `work-artifacts-layout` — `work/Arch-ARD-BusinessAnalysis-Untargeted/Issue-<識別子>/` 配下の成果物構造に準拠
+- `task-questionnaire` — 対象事業未定段階での調査範囲・前提質問票作成
+- `knowledge-lookup` — 既存ドメイン知識・業界前提の参照
+- `output/large-output-chunking` — 企業全体事業分析レポートの分割出力
+
+## 1) 目的と非目的
 - 対象企業の過去から現在までの事業変遷と現状を As-Is として把握する。
 - 中長期的な成長戦略を検討するための主要課題と戦略オプションを抽出する。
 - 個別事業の深掘り前に、企業全体の事業構造・収益構造・成長ドライバー・競争優位性・課題・将来機会を整理する。
@@ -32,10 +68,16 @@ metadata:
 | `{分析目的}` | `analysis_purpose` | 短文を想定（例: `中長期成長戦略の立案`）。Untargeted でも分析目的を Prompt 冒頭に明示する |
 | `{添付資料}` | `attached_docs` | カンマ区切り文字列をそのまま投入。空の場合は `添付なし` を使用 |
 
-## 3) 出力先（成果物）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 - `docs/company-business-requirement.md`
 
 ## 4) Prompt 本文（LLM へ渡す本体）
+
+> **スコープ決定 (2026-05)**: 本セクションは 約 360 行と大きいが、`users-guide/` への外部化は実施しない。理由：
+> ・ LLM 実行時に追加のファイル読み込みステップが生じ、トークン量が増える可能性がある。
+> ・ 本文は出力レポートの **構造仕様（章立て・必須項目）**であり、Agent のコア責務。外部化は SoT の二重化を招く。
+> ・ 詳細の決定経緯は `work/Issue-orchestration-refactor/phase-4/decision-rationale.md` 参照。
+
 ```text
 # 最終出力
 - 出力ファイル: `docs/company-business-requirement.md`（1 本のみ。他のファイルは生成しない）
@@ -382,7 +424,7 @@ As-IsとTo-Beの差分を以下の形式で整理してください。
 | As-Is、To-Be、Gap、Recommendationが論理的につながっているか | OK / 要修正 |
 | 不足データと追加調査論点が明記されているか | OK / 要修正 |
 
-## 禁止事項
+### 禁止事項（プロンプト本文内テンプレート）
 - 根拠のない断定
 - 出典不明情報の事実扱い
 - 一般論だけの記述
@@ -392,8 +434,9 @@ As-IsとTo-Beの差分を以下の形式で整理してください。
 - 推奨施策とKPIがつながっていない提言
 ```
 
-## 5) 出力ルール
-出力形式・品質基準・禁止事項は、本ファイル **§4 Prompt 本文末尾の「## 品質基準」「## 禁止事項」** を Single Source of Truth とする（重複定義は廃止）。
+### 5) 出力ルール
+- **出力レポートの形式・品質基準・禁止事項（コンサルティング観点）** は、本ファイル **§4 Prompt 本文末尾の「## 品質基準」「## 禁止事項」** を Single Source of Truth とする（出力レポート観点の重複定義は廃止）。
+- **Agent 実行レベルの禁止事項（共通プリアンブル継承）** は、本ファイル冒頭の **`## 禁止事項`** セクションに別途定義する（R06 で追加。`copilot-instructions.md` §0 / Skill `agent-common-preamble` 由来）。両者は対象スコープが異なるため併存する。
 
 ## 6) セルフチェック（出力前に必ず確認）
 §4 Prompt 本文末尾の「## 品質基準」テーブルを実行時のセルフチェックとしてそのまま使用すること（本セクションでの重複列挙は廃止）。

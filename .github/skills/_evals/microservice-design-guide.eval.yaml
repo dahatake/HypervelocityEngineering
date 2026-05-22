@@ -32,8 +32,8 @@ test_cases:
   - id: not-for-batch-design
     input: "月次ポイント集計バッチのジョブ設計書を作成してほしい"
     expected_trigger: false
-    expected_skill: "batch-design-guide"
-    reason: "DO NOT USE FOR: batch design (use batch-design-guide) に該当する"
+    expected_skill: "dataflow-design-guide"
+    reason: "DO NOT USE FOR: batch design (use dataflow-design-guide) に該当する"
 
   - id: not-for-microservice-implementation
     input: "SVC-10 の function_app.py を Python で実装してほしい"

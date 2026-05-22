@@ -140,7 +140,7 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
             if "unexpected keyword argument" not in msg:
                 raise
             # Skill 系 / config discovery を未サポートの SDK に対するフォールバック
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent"):
                 if _kw in msg and _kw in opts:
                     _stripped = {k: v for k, v in opts.items() if k != _kw}
                     return await _attempt(_stripped)
@@ -150,6 +150,47 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
             raise
 
     return await _attempt(_opts_with_skills)
+
+
+def _apply_reasoning_effort(
+    session_opts: Dict[str, Any],
+    config: Any,
+    *,
+    model_value: Optional[str] = None,
+    kind: str = "main",
+) -> None:
+    """ユーザー指定の reasoning_effort を session_opts へ適用する。
+
+    優先順位:
+      1. ユーザーが明示指定した reasoning_effort (config.{kind}_reasoning_effort) を最優先で適用。
+      2. 未指定 + モデルが Auto/DEFAULT_MODEL → MODEL_AUTO_REASONING_EFFORT をフォールバック適用。
+      3. 未指定 + モデル明示 → 何もしない (SDK 既定動作)。
+
+    Args:
+        session_opts: SDK create_session に渡す dict (in-place 更新)。
+        config: SDKConfig 互換 (reasoning_effort / review_reasoning_effort / qa_reasoning_effort 属性を参照)。
+        model_value: 評価対象のモデル文字列 (None なら config.model)。
+        kind: "main" | "review" | "qa"。
+
+    注意:
+        - 呼び出し側は事前に `session_opts["model"]` を設定済みであること。
+        - 既存ハードコード `session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT` の置換用途。
+    """
+    if kind == "review":
+        user_effort = getattr(config, "review_reasoning_effort", None)
+    elif kind == "qa":
+        user_effort = getattr(config, "qa_reasoning_effort", None)
+    else:
+        user_effort = getattr(config, "reasoning_effort", None)
+
+    if user_effort:
+        session_opts["reasoning_effort"] = user_effort
+        return
+
+    mv = model_value if model_value is not None else getattr(config, "model", None)
+    # Auto 経路 (= モデル未指定 or MODEL_AUTO_VALUE) のみフォールバック適用
+    if not mv or mv == MODEL_AUTO_VALUE:
+        session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
 
 
 # -----------------------------------------------------------------------
@@ -471,11 +512,10 @@ def _collect_params_non_interactive(
         "selected_steps": steps_value,
         "skip_review": not args.get("auto_contents_review", False),
         "skip_qa": not args.get("auto_qa", False),
-        "additional_comment": args.get("additional_comment", ""),
     }
 
     # ワークフロー固有パラメータ
-    # app_ids/app_id は AAD-WEB・ASDW-WEB・ABD・ABDV で使用。
+    # app_ids/app_id は AAD-WEB・ASDW-WEB・ADFD・ADFDV で使用。
     # 未指定時は app-arch filter で推薦アーキテクチャに合致する APP-ID が自動選択される。
     if args.get("app_ids"):
         params["app_ids"] = args["app_ids"]  # リストとしてそのまま渡す
@@ -488,8 +528,8 @@ def _collect_params_non_interactive(
         params["resource_group"] = args["resource_group"]
     if args.get("usecase_id"):
         params["usecase_id"] = args["usecase_id"]
-    if args.get("batch_job_id"):
-        params["batch_job_id"] = args["batch_job_id"]
+    if args.get("app_id"):
+        params["app_id"] = args["app_id"]
 
     # AKM 固有パラメータ
     if wf.id == "akm":
@@ -531,6 +571,7 @@ def _collect_params_non_interactive(
         params["analysis_purpose"] = args.get("analysis_purpose") or _ARD_DEFAULT_ANALYSIS_PURPOSE
         attached = args.get("attached_docs")
         params["attached_docs"] = attached if attached else []
+        params["include_kpi_okr"] = bool(args.get("include_kpi_okr", False))
     else:
         if args.get("sources"):
             params["sources"] = args["sources"]
@@ -812,6 +853,11 @@ def _build_step_prompt(
     いずれの場合も additional_prompt が指定された場合は、
     末尾に空行を挟んで追記する。
     """
+    # P-B: Custom Agent が割り当たる Step には subissues.md フォーマット最小例を
+    # `_LANGUAGE_DIRECTIVE_JA` 直後に挿入する。プロンプト末尾 (`additional_prompt`)
+    # は変更しないため、`endswith()` を検証する既存テストを破壊しない。
+    _subissues_hint = _subissues_format_hint_for_step(step)
+
     if step.body_template_path:
         try:
             prompt = render_template_fn(
@@ -824,7 +870,7 @@ def _build_step_prompt(
             if prompt:
                 if additional_prompt:
                     prompt = prompt + "\n\n" + additional_prompt
-                return _LANGUAGE_DIRECTIVE_JA + prompt
+                return _LANGUAGE_DIRECTIVE_JA + _subissues_hint + prompt
         except Exception:
             pass
 
@@ -842,7 +888,46 @@ def _build_step_prompt(
     fallback = "\n".join(parts)
     if additional_prompt:
         fallback = fallback + "\n\n" + additional_prompt
-    return _LANGUAGE_DIRECTIVE_JA + fallback
+    return _LANGUAGE_DIRECTIVE_JA + _subissues_hint + fallback
+
+
+# P-B: subissues.md フォーマット最小例（インライン注入用）。
+# Agent が `task-dag-planning` Skill を読まずにテーブル形式で subissues.md を
+# 生成する事例が観測されたため、Custom Agent 割当 Step のプロンプト冒頭に
+# 直接フォーマット必須ルールを埋め込む。
+# 詳細仕様: `.github/skills/task-dag-planning/references/subissues-template.md`
+_SUBISSUES_FORMAT_HINT = (
+    "**subissues.md フォーマット必須ルール（task_scope=multi / context_size=large 時）**:\n"
+    "- 各サブタスクは下記 HTML コメントブロック形式で記述すること。**Markdown テーブル形式は禁止**。\n"
+    "- 詳細仕様: `.github/skills/task-dag-planning/references/subissues-template.md`\n"
+    "\n"
+    "```markdown\n"
+    "<!-- parent_issue: <番号 or TBD> -->\n"
+    "\n"
+    "<!-- subissue -->\n"
+    "<!-- title: <タイトル> -->\n"
+    "<!-- custom_agent: <Agent 名> -->\n"
+    "<!-- depends_on: <番号カンマ区切り or 空> -->\n"
+    "## Sub-1\n"
+    "- 対象: ...\n"
+    "- AC: ...\n"
+    "```\n"
+    "\n"
+)
+
+
+def _subissues_format_hint_for_step(step) -> str:
+    """Step に対して subissues.md フォーマット hint を返す。
+
+    Custom Agent が割り当てられたコンテナ以外の Step に対してのみ hint を返す。
+    それ以外（コンテナ Step / custom_agent=None）は空文字列を返し、プロンプトに
+    変更を加えない。
+    """
+    custom_agent = getattr(step, "custom_agent", None)
+    is_container = bool(getattr(step, "is_container", False))
+    if not custom_agent or is_container:
+        return ""
+    return _SUBISSUES_FORMAT_HINT
 
 
 # -----------------------------------------------------------------------
@@ -884,10 +969,10 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
         "test_strategy": "docs/catalog/test-strategy.md",
         "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
         "use_case_catalog": "docs/catalog/use-case-catalog.md",
-        "batch_job_catalog": "docs/batch/batch-job-catalog.md",
-        "batch_service_catalog": "docs/batch/batch-service-catalog.md",
-        "batch_data_model": "docs/batch/batch-data-model.md",
-        "batch_domain_analytics": "docs/batch/batch-domain-analytics.md",
+        "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
+        "batch_service_catalog": "docs/dataflow/dataflow-service-catalog.md",
+        "batch_data_model": "docs/dataflow/dataflow-data-model.md",
+        "batch_domain_analytics": "docs/dataflow/dataflow-domain-analytics.md",
     }
 
     for key, path in catalog_files.items():
@@ -929,10 +1014,10 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     if agent_specs:
         existing["agent_specs"] = agent_specs
 
-    # バッチジョブ仕様書の検出
-    batch_job_specs = _glob.glob("docs/batch/jobs/*.md")
-    if batch_job_specs:
-        existing["batch_job_specs"] = batch_job_specs
+    # データフローアプリ仕様書の検出
+    dataflow_specs = _glob.glob("docs/dataflow/apps/*.md")
+    if dataflow_specs:
+        existing["dataflow_specs"] = dataflow_specs
 
     # ADOC (docs-generated/) の既存成果物検出
     if workflow_id == "adoc":
@@ -961,10 +1046,10 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "test_strategy": "docs/catalog/test-strategy.md",
     "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
     "use_case_catalog": "docs/catalog/use-case-catalog.md",
-    "batch_job_catalog": "docs/batch/batch-job-catalog.md",
-    "batch_service_catalog": "docs/batch/batch-service-catalog.md",
-    "batch_data_model": "docs/batch/batch-data-model.md",
-    "batch_domain_analytics": "docs/batch/batch-domain-analytics.md",
+    "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
+    "batch_service_catalog": "docs/dataflow/dataflow-service-catalog.md",
+    "batch_data_model": "docs/dataflow/dataflow-data-model.md",
+    "batch_domain_analytics": "docs/dataflow/dataflow-domain-analytics.md",
     "service_specs": "docs/services/*.md",
     "screen_specs": "docs/screen/*.md",
     "test_specs": "docs/test-specs/*.md",
@@ -972,7 +1057,7 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "test_files": "test/**/*",
     "knowledge": "knowledge/*.md",
     "agent_specs": "docs/agent/*.md",
-    "batch_job_specs": "docs/batch/jobs/*.md",
+    "dataflow_specs": "docs/dataflow/apps/*.md",
     "doc_generated": "docs-generated/**/*.md",
 }
 
@@ -991,18 +1076,18 @@ _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
     "use_case_catalog": "user_provided",  # ユーザーが手動で作成するユースケースカタログ
-    "batch_job_catalog": "abd",
-    "batch_service_catalog": "abd",
-    "batch_data_model": "abd",
-    "batch_domain_analytics": "abd",
+    "dataflow_catalog": "adfd",
+    "batch_service_catalog": "adfd",
+    "batch_data_model": "adfd",
+    "batch_domain_analytics": "adfd",
     "service_specs": "aad-web",
     "screen_specs": "aad-web",
     "test_specs": "aad-web",        # aad-web Step 2.3 / asdw-web 内でも生成されるが確定できない
-    "src_files": None,              # 要確認: ユーザーコードまたは asdw-web / abdv の出力
-    "test_files": None,             # 要確認: ユーザーコードまたは asdw-web / abdv の出力
+    "src_files": None,              # 要確認: ユーザーコードまたは asdw-web / adfdv の出力
+    "test_files": None,             # 要確認: ユーザーコードまたは asdw-web / adfdv の出力
     "knowledge": "akm",
     "agent_specs": "aag",
-    "batch_job_specs": "abd",
+    "dataflow_specs": "adfd",
     "doc_generated": "adoc",
 }
 
@@ -1245,12 +1330,18 @@ def _compute_step_additional_prompt(
         return base_additional_prompt
 
     # consumed_artifacts に未知キーが含まれている場合は警告
-    missing_keys = [k for k in step.consumed_artifacts if k not in existing_artifacts]
-    if missing_keys:
+    # ただし `_ARTIFACT_KEY_TO_EXPECTED_PATH` に登録済みのキーは「同一ワークフロー内の
+    # 先行 Step が生成するが現時点ではディスクに存在しない」forward-reference として
+    # 正常扱いし、警告を抑制する（false-positive の主要因だった）。
+    truly_unknown = [
+        k for k in step.consumed_artifacts
+        if k not in existing_artifacts and k not in _ARTIFACT_KEY_TO_EXPECTED_PATH
+    ]
+    if truly_unknown:
         import warnings as _warnings
         _warnings.warn(
-            f"Step.{step.id}: consumed_artifacts に未知のキーが含まれています: {missing_keys}。"
-            f"利用可能なキー: {sorted(existing_artifacts.keys())}",
+            f"Step.{step.id}: consumed_artifacts に未知のキーが含まれています: {truly_unknown}。"
+            f"登録済みキー: {sorted(_ARTIFACT_KEY_TO_EXPECTED_PATH.keys())}",
             stacklevel=2,
         )
 
@@ -1272,6 +1363,17 @@ def _compute_step_additional_prompt(
             step.id, list(filtered_artifacts.keys()), _injection_chars, step_kind,
         )
     return result
+
+
+# NOTE: subissues.md フォーマット遵守は以下の 2 経路で担保する:
+#   1. **Orchestrator 側のインライン注入** (P-B / `_subissues_format_hint_for_step`):
+#      Custom Agent 割当 Step のプロンプト冒頭に最小例を直接埋め込む。
+#      Agent が Skill を読み飛ばしてもフォーマットを誤らせない一次防御。
+#   2. **Skill 経由の規約**:
+#      - Skill `task-dag-planning` §subissues.md 作成規約（SKILL.md 本体に明記）
+#      - Skill `agent-common-preamble` §subissues.md コミット前バリデーション
+#        （`.github/scripts/{bash,powershell}/validate-subissues.{sh,ps1}` を全 Agent 必須化）
+# 失敗時は `parse_subissues_md` がテーブル形式を検知して actionable なエラーを返す (P-A)。
 
 
 # Sub-2 (A-2): step 種別ごとの再利用ルール文（既存成果物再利用のヒント）。
@@ -1445,7 +1547,7 @@ async def _prefetch_workiq_detailed(
     await client.start()
 
     try:
-        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id, request_timeout=config.workiq_request_timeout)
         _session_opts: dict = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
@@ -1464,7 +1566,7 @@ async def _prefetch_workiq_detailed(
             _session_opts["model"] = config.model
         else:
             _session_opts["model"] = DEFAULT_MODEL
-            _session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(_session_opts, config, kind="main")
         session = await _create_session_with_auto_reasoning_fallback(client, _session_opts)
 
         # ツール呼び出し追跡
@@ -1787,7 +1889,7 @@ async def _run_akm_workiq_verification(
 
     try:
         # Work IQ MCP 付きセッションを作成
-        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id, request_timeout=config.workiq_request_timeout)
         session_opts: dict = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
@@ -1802,7 +1904,7 @@ async def _run_akm_workiq_verification(
             session_opts["model"] = config.model
         else:
             session_opts["model"] = DEFAULT_MODEL
-            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(session_opts, config, kind="main")
 
         session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
 
@@ -2063,7 +2165,7 @@ async def _run_akm_workiq_ingest(
     error_count = 0
 
     try:
-        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id, request_timeout=config.workiq_request_timeout)
         session_opts: dict = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
@@ -2076,7 +2178,7 @@ async def _run_akm_workiq_ingest(
             session_opts["model"] = config.model
         else:
             session_opts["model"] = DEFAULT_MODEL
-            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(session_opts, config, kind="main")
 
         session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
 
@@ -2347,7 +2449,7 @@ async def _run_ard_workiq_usecase(
     await client.start()
 
     try:
-        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id)
+        _mcp = build_workiq_mcp_config(tenant_id=config.workiq_tenant_id, request_timeout=config.workiq_request_timeout)
         session_opts: dict = {
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
@@ -2361,7 +2463,7 @@ async def _run_ard_workiq_usecase(
             session_opts["model"] = config.model
         else:
             session_opts["model"] = DEFAULT_MODEL
-            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(session_opts, config, kind="main")
 
         session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
 
@@ -2508,7 +2610,7 @@ async def _generate_target_business_from_sr(
             session_opts["model"] = config.model
         else:
             session_opts["model"] = DEFAULT_MODEL
-            session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(session_opts, config, kind="main")
         session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
         try:
             prompt = ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT.format(
@@ -2671,6 +2773,27 @@ async def run_workflow(
     if not config.run_id:
         config.run_id = generate_run_id()
 
+    # GUI/外部プロセスから run_id を観測できるよう、確定後に 1 行のマーカーを
+    # stderr へ出力する（GUI は stderr=STDOUT で受け取る）。
+    # フォーマットは workbench_logger._RUN_ID_PATTERN と一致させること。
+    try:
+        print(f"[hve] run_id={config.run_id}", file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+    # markdown-query Skill 利用ログ (.mdq/usage.jsonl) と run_journal の
+    # 紐付けのため、子プロセスへ実行コンテキストを環境変数で伝播する。
+    # 設定は os.environ への書き込みに留め、Skill / CLI 側で読み取る。
+    # 既知の制約: 本関数は async で複数の return path を持つため env の
+    # 完全な復元 (try/finally) は v1.1 スコープ外。同一プロセスで複数
+    # workflow を直列実行する場合、最後に設定された run_id が残る点に注意。
+    # 通常運用 (1 プロセス = 1 workflow) では問題ない。
+    try:
+        os.environ["HVE_RUN_ID"] = str(config.run_id)
+        os.environ["HVE_WORKFLOW_ID"] = str(workflow_id)
+    except Exception:
+        pass
+
     console = Console(
         verbose=config.verbose,
         quiet=config.quiet,
@@ -2690,16 +2813,16 @@ async def run_workflow(
     start_total = time.time()
 
     # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
-    # ファイル追加・更新・削除を OS イベントで検知し .hve/mdq.sqlite を逐次更新する。
-    # 既存の `python -m hve.mdq index` による手動索引更新は維持されている。
+    # ファイル追加・更新・削除を OS イベントで検知し .mdq/index.sqlite を逐次更新する。
+    # 既存の `python -m mdq index` による手動索引更新は維持されている。
     # watchdog 未導入や起動失敗は警告ログのみで本体実行を妨げない。
     # Cloud Agent / GitHub Actions では本機能を使用しない（config.mdq_watch=False で無効化）。
     _mdq_watcher = None
     if getattr(config, "mdq_watch", True) and not getattr(config, "dry_run", False):
         try:
-            from .mdq.watcher import MdqWatcher  # type: ignore
-            from .mdq.cli import DEFAULT_ROOTS as _MDQ_ROOTS  # type: ignore
-            from .mdq.store import DEFAULT_DB_PATH as _MDQ_DB  # type: ignore
+            from mdq.watcher import MdqWatcher  # type: ignore
+            from mdq.cli import DEFAULT_ROOTS as _MDQ_ROOTS  # type: ignore
+            from mdq.store import DEFAULT_DB_PATH as _MDQ_DB  # type: ignore
             _mdq_watcher = MdqWatcher(
                 repo_root=Path.cwd(),
                 roots=_MDQ_ROOTS,
@@ -2828,7 +2951,7 @@ async def run_workflow(
     console.phase_end(p, _total_phases, "パラメータ収集", time.time() - phase_start)
 
     # --- 2.5. 推薦アーキテクチャ APP-ID フィルタ ---
-    _ARCH_FILTER_WORKFLOWS = {"aad-web", "asdw-web", "abd", "abdv"}
+    _ARCH_FILTER_WORKFLOWS = {"aad-web", "asdw-web", "adfd", "adfdv"}
     if wf.id in _ARCH_FILTER_WORKFLOWS:
         _requested_ids = effective_params.get("app_ids") or (
             [effective_params["app_id"]] if effective_params.get("app_id") else None
@@ -2890,18 +3013,40 @@ async def run_workflow(
     console.phase_start(p, _total_phases, "ステップフィルタリング")
 
     selected_step_ids: List[str] = effective_params.get("selected_steps") or []
-    # ARD: グループ ID (1/2/3) を実 Step ID (1,1.1,1.2 / 2 / 3.1,3.2,3.3) に展開する。
+    # ARD: グループ ID (1/2/4) を実 Step ID (1,1.1,1.2 / 2 / 4.1,4.2,4.3) に展開する。
     # Wizard / CLI 側はグループ ID を返す契約のため、フィルタ前にここで展開する。
-    # 既に実 Step ID が直接渡された場合は fallback `[sid]` で素通し（後方互換）。
+    # 既に実 Step ID が直接渡された場合は素通し（後方互換）。
+    # 展開ロジックは hve.workflow_registry の SSOT (expand_group_step_ids) を使用。
     if workflow_id == "ard" and selected_step_ids:
-        _ARD_GROUP_MAP = {
-            "1": ["1", "1.1", "1.2"],
-            "2": ["2"],
-            "3": ["3.1", "3.2", "3.3"],
-        }
-        _expanded: List[str] = []
-        for _sid in selected_step_ids:
-            _expanded.extend(_ARD_GROUP_MAP.get(_sid, [_sid]))
+        from hve.workflow_registry import expand_group_step_ids
+        _expanded: List[str] = expand_group_step_ids("ard", selected_step_ids)
+        # ARD Step 3 (任意): 以下のいずれかで active_steps に含まれる。
+        #   (a) `include_kpi_okr=True` パラメータ（CLI `--include-kpi-okr` / 対話ウィザード）
+        #   (b) `selected_steps` に "3" が直接含まれる（GUI ワークフロー選択画面のグループ "3" チェック / CLI `--steps 3`）
+        # Step 3 は Step 2 出力（または skip_fallback で Step 1.2 出力）を入力として
+        # docs/recommended-kpi-okr.md を生成し、後続 Step 4.x / aas が任意参照する。
+        _include_kpi_okr = bool(effective_params.get("include_kpi_okr", False))
+        _step_3_selected_directly = "3" in _expanded
+        if _step_3_selected_directly and not _include_kpi_okr:
+            # GUI / CLI 経路: "3" が直接選択されたら include_kpi_okr フラグも True に同期させ、
+            # 後続の任意参照（Step 4.x / aas）が一貫して動作するようにする。
+            effective_params["include_kpi_okr"] = True
+            _include_kpi_okr = True
+        _has_step2_or_group4 = any(sid == "2" or sid.startswith("4") for sid in _expanded)
+        if _include_kpi_okr and _has_step2_or_group4:
+            if "3" not in _expanded:
+                # Step 2 の直後、Step 4.x の直前に挿入する（実行順序の見やすさのため）
+                _insert_idx = len(_expanded)
+                for _i, _sid in enumerate(_expanded):
+                    if _sid.startswith("4"):
+                        _insert_idx = _i
+                        break
+                _expanded.insert(_insert_idx, "3")
+        elif _include_kpi_okr and not _has_step2_or_group4 and not _step_3_selected_directly:
+            console.warning(
+                "include_kpi_okr=True が指定されましたが、Step 2 / Step 4 が選択されていないため "
+                "Step 3 (KPI/OKR 定義) は実行されません。"
+            )
         _seen: Set[str] = set()
         selected_step_ids = [s for s in _expanded if not (s in _seen or _seen.add(s))]
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
@@ -2914,6 +3059,10 @@ async def run_workflow(
     effective_max_parallel = 1 if _ard_force_serial else config.max_parallel
     wf_for_dag = wf
     if _ard_force_serial:
+        # bridge mode: target_business 未指定 + Step 1 & 2 同時実行時、
+        # Step 2 を Step 1 に依存させて直列化する。
+        # Step 3 は静的に depends_on=["2"] のため Step 2 完了後に自動的に直列化される
+        # （effective_max_parallel=1 のため Step 3 と Step 4.1 は順次実行）。
         try:
             wf_for_dag = copy.deepcopy(wf)
             _step2 = wf_for_dag.get_step("2")
@@ -3066,8 +3215,8 @@ async def run_workflow(
     # --- 成果物ディレクトリの事前作成 ---
     _REQUIRED_DIRS = [
         "docs/catalog",
-        "docs/batch",
-        "docs/batch/jobs",
+        "docs/dataflow",
+        "docs/dataflow/apps",
         "docs/services",
         "docs/screen",
         "docs/test-specs",
@@ -3210,7 +3359,30 @@ async def run_workflow(
     else:
         effective_additional_prompt = config.additional_prompt
 
+    # GUI 設定 [mdq] target_folders が非空時、Markdown-Query Skill 強制ブロックを前置する。
+    # 設定が空のとき、もしくは読込失敗時は何もしない（要件: 「設定がなければ、何もしない」）。
+    try:
+        from .gui import settings_store as _mdq_settings_store
+        from . import mdq_enforcement as _mdq_enforcement
+        _mdq_block = _mdq_enforcement.build_enforcement_prompt(
+            _mdq_settings_store.get_mdq_target_folders()
+        )
+    except Exception:
+        _mdq_block = None
+    if _mdq_block:
+        if effective_additional_prompt:
+            effective_additional_prompt = _mdq_block + "\n\n" + effective_additional_prompt
+        else:
+            effective_additional_prompt = _mdq_block
+
     # --- Phase 8: ステップ前提成果物チェック ---
+    # local 実行モード (continue_on_error=True) では Pre-check 失敗を警告に降格し
+    # 続行する（R1: Step 自体の失敗時の停止は維持。`--strict` でオプトアウト可）。
+    _continue_on_error = bool(
+        getattr(orchestrator_ctx, "continue_on_error", False)
+    )
+    _precheck_warnings: List[str] = []
+
     _artifact_check = _check_workflow_input_artifacts(
         wf=wf,
         active_steps=active_steps,
@@ -3219,14 +3391,26 @@ async def run_workflow(
         console=console,
     )
     if _artifact_check["should_abort"]:
-        return {
-            "workflow_id": workflow_id,
-            "completed": [],
-            "failed": [],
-            "skipped": [],
-            "elapsed_total": time.time() - start_total,
-            "error": _artifact_check["error"],
-        }
+        if _continue_on_error:
+            _precheck_warnings.append(
+                "[Pre-check: 入力成果物不足] " + (_artifact_check.get("error") or "")
+            )
+            try:
+                console.warning(
+                    "⚠️ Pre-check (入力成果物) 失敗を警告に降格して続行します "
+                    "（continue-on-precheck モード）。"
+                )
+            except Exception:
+                pass
+        else:
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "elapsed_total": time.time() - start_total,
+                "error": _artifact_check["error"],
+            }
 
     _skill_check = _check_required_skills_for_active_steps(
         wf=wf,
@@ -3235,14 +3419,40 @@ async def run_workflow(
         console=console,
     )
     if _skill_check["should_abort"]:
-        return {
-            "workflow_id": workflow_id,
-            "completed": [],
-            "failed": [],
-            "skipped": [],
-            "elapsed_total": time.time() - start_total,
-            "error": _skill_check["error"],
-        }
+        if _continue_on_error:
+            _precheck_warnings.append(
+                "[Pre-check: 必須 Skill 不足] " + (_skill_check.get("error") or "")
+            )
+            try:
+                console.warning(
+                    "⚠️ Pre-check (必須 Skill) 失敗を警告に降格して続行します "
+                    "（continue-on-precheck モード）。"
+                )
+            except Exception:
+                pass
+        else:
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "elapsed_total": time.time() - start_total,
+                "error": _skill_check["error"],
+            }
+
+    # Pre-check 警告を additional_prompt に注入し、LLM が認識できるようにする
+    # （R1 緩和策: 必須入力が無い状態でも品質を保つため "TBD" 記載で続行可と伝達）。
+    if _precheck_warnings:
+        _warn_block = (
+            "\n\n## Pre-check 警告（continue-on-precheck モード）\n"
+            "以下の Pre-check が失敗しましたが、警告に降格して続行しています。"
+            "対応する成果物・Skill が未確定の場合は `TBD（推論: <根拠>）` と"
+            "明記したうえで続行してください。\n\n"
+            + "\n\n".join(_precheck_warnings)
+        )
+        effective_additional_prompt = (
+            (effective_additional_prompt or "") + _warn_block
+        ).strip()
 
     # ステップ → プロンプト の事前構築
     step_prompts: Dict[str, str] = {}
@@ -3435,7 +3645,7 @@ async def run_workflow(
                 run_id=str(getattr(resume_state, "run_id", "")),
                 model=getattr(config, "model", "unknown"),
                 steps=steps_view,
-                body_window=int(getattr(config, "workbench_body_lines", 20)),
+                body_window=int(getattr(config, "workbench_body_lines", 10)),
             )
             # --workbench-history 配線: 既定 RingBuffer の容量を置換する
             _hist = int(getattr(config, "workbench_history", 10000) or 10000)
@@ -3519,7 +3729,98 @@ async def run_workflow(
                 await pause_task
             except (asyncio.CancelledError, Exception):  # noqa: BLE001
                 pass
-            results = await executor_task
+            # T4: continue_on_error=True かつ executor 側で fatal 例外が発生した場合は
+            # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
+            # recoverable 例外は従来通り再送出。
+            try:
+                results = await executor_task
+            except BaseException as _exec_exc:  # noqa: BLE001
+                try:
+                    from .error_severity import classify_error as _classify_err
+                except ImportError:  # pragma: no cover
+                    from error_severity import classify_error as _classify_err  # type: ignore[no-redef]
+                _severity = _classify_err(_exec_exc)
+                if _continue_on_error and _severity == "fatal":
+                    try:
+                        console.error(
+                            f"⚠️ 致命的エラーを検出: {type(_exec_exc).__name__}: {_exec_exc} "
+                            "（残ステップを skip マークして正常終了します）"
+                        )
+                    except Exception:
+                        pass
+                    # GUI Orchestrator が致命的エラー発生を検知して
+                    # 後続ワークフローのキュー実行を停止できるよう、stdout に
+                    # 構造化マーカーを 1 行出力する（console 経由ではなく素の
+                    # print を使うことで timestamp/絵文字置換等の影響を避ける）。
+                    #
+                    # 出力条件:
+                    #   - GUI 経路 (cfg.no_workbench=True / `--workbench=off`) → 必須
+                    #   - CLI 経路 (Workbench UI 起動 or 通常 plain 出力) → ノイズ抑制のため出さない
+                    #   - 環境変数 HVE_EMIT_FATAL_MARKER=1 で強制 ON (E2E テスト用)
+                    #
+                    # NOTE: ensure_ascii=True にして Windows + cp932 環境で
+                    # `_configure_stdio_encoding` の errors="replace" による
+                    # 多バイト文字置換が起きても JSON 構造が壊れないようにする。
+                    try:
+                        import os as _os_fatal
+                        _force_marker = (
+                            _os_fatal.environ.get("HVE_EMIT_FATAL_MARKER", "")
+                            .strip().lower()
+                            in {"1", "true", "yes"}
+                        )
+                        _gui_mode = bool(getattr(config, "no_workbench", False))
+                        if _force_marker or _gui_mode:
+                            import json as _json_fatal
+                            import sys as _sys_fatal
+                            _fatal_payload = _json_fatal.dumps(
+                                {
+                                    "kind": "fatal_abort",
+                                    "exception_type": type(_exec_exc).__name__,
+                                    "message": str(_exec_exc),
+                                },
+                                ensure_ascii=True,
+                            )
+                            print(
+                                f"[hve:fatal] {_fatal_payload}",
+                                file=_sys_fatal.stdout,
+                                flush=True,
+                            )
+                    except Exception:
+                        pass
+                    # 残ステップを skip マーク
+                    _all_step_ids = {
+                        s.id for s in wf.steps
+                        if not s.is_container and s.id in active_steps
+                    }
+                    _processed = (
+                        set(executor.completed)
+                        | set(executor.failed)
+                        | set(executor.skipped)
+                    )
+                    for _sid in sorted(_all_step_ids - _processed):
+                        try:
+                            executor.skipped.add(_sid)
+                            from .dag_executor import StepResult as _SR
+                        except ImportError:  # pragma: no cover
+                            from dag_executor import StepResult as _SR  # type: ignore[no-redef]
+                        _skip_res = _SR(
+                            _sid, success=True, elapsed=0.0,
+                            skipped=True, state="skipped",
+                            reason="fatal-abort",
+                        )
+                        executor._results[_sid] = _skip_res
+                    # journal に fatal=true を記録（best effort）
+                    try:
+                        resume_state.fatal = True
+                        resume_state.fatal_reason = (
+                            f"{type(_exec_exc).__name__}: {_exec_exc}"
+                        )
+                        resume_state.save()
+                    except Exception:
+                        pass
+                    results = dict(getattr(executor, "_results", {}) or {})
+                else:
+                    raise
     finally:
         if _monitor_started:
             monitor.stop()
@@ -4137,7 +4438,7 @@ async def _request_code_review(
             _review_session_opts["model"] = _review_model
         else:
             _review_session_opts["model"] = DEFAULT_MODEL
-            _review_session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+        _apply_reasoning_effort(_review_session_opts, config, model_value=_review_model, kind="review")
         session = await _create_session_with_auto_reasoning_fallback(client, _review_session_opts)
         if _review_model != config.model:
             console.event(f"Code Review Agent モデル: {_review_model}")

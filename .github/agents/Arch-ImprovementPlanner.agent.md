@@ -5,6 +5,46 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "{scan_result_json}"
+      required: true
+      kind: "runtime_param"
+    - path: "{WORK}../QA-CodeQualityScan/artifacts/scan-result.json"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "{target_scope}"
+      required: true
+      kind: "runtime_param"
+    - path: "{iteration}"
+      required: true
+      kind: "runtime_param"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D15-非機能-運用-監視-DR-仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D17-品質保証-UAT-受入パッケージ.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "{WORK}plan.md"
+      required: true
+      mode: "create"
+    - path: ".github/skills/task-dag-planning/references/plan-template.md"
+      required: true
+      mode: "create"
+    - path: "bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}subissues.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-ImprovementPlanner/Issue-<識別子>/`
 
@@ -13,9 +53,26 @@ metadata:
 - 目的は **改善計画策定（設計）**。明示依頼が無い限り **コードの変更はしない**（計画フェーズ専用）。
 - §2.2 分割判定を機械的に実行し、結果を plan.md の `## 分割判定` セクションに記録する。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
 
-## 1) 入力（置換必須）
+- `task-dag-planning` — 改善タスクの DAG 分解・見積・分割判定
+- `work-artifacts-layout` — `work/` 配下に改善計画を出力
+- `task-questionnaire` — 改善方針の不明点を優先度付き質問票として整理
+- `karpathy-guidelines` — 計画策定時の LLM 共通ミス防止指針
+
+## 2) 入力（必ず参照）
 > `{...}` が残っている場合は実行しない。
 
 - スキャン結果: `{scan_result_json}` または `{WORK}../QA-CodeQualityScan/artifacts/scan-result.json`
@@ -57,7 +114,7 @@ metadata:
 ### 3.3 §2.2 分割判定（機械的に実行）
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
-## 4) 成果物保存
+### 4.1) 成果物保存
 - `{WORK}plan.md` を作成する（Skill work-artifacts-layout §4.1 準拠: delete → create）。本エージェントは計画フェーズ専用のため、plan.md のメタデータでは `implementation_files` を必ず `false` に設定する。
 - **plan.md 作成時の必須手順（省略禁止）**:
   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
@@ -73,7 +130,7 @@ metadata:
   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - SPLIT_REQUIRED の場合は `{WORK}subissues.md` も作成する
 
-## 5) 出力（copilot-instructions.md §8 準拠）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 
 改善不要の場合:
 ```

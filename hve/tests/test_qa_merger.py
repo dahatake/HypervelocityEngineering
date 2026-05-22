@@ -189,6 +189,36 @@ class TestParseAnswersWithComments(unittest.TestCase):
         self.assertEqual(answers, {})
 
 
+class TestParseAnswersFreeText(unittest.TestCase):
+    """`N:: <text>` 形式の自由記述回答パース"""
+
+    def test_freetext_basic(self):
+        text = "1:: 自由記述の回答"
+        answers = QAMerger.parse_answers(text)
+        self.assertEqual(answers, {1: "自由記述の回答"})
+
+    def test_freetext_and_label_mixed(self):
+        text = "1: A\n2:: 自由記述コンテンツ\n3: C"
+        answers = QAMerger.parse_answers(text)
+        self.assertEqual(answers, {1: "A", 2: "自由記述コンテンツ", 3: "C"})
+
+    def test_freetext_with_colons_inside(self):
+        text = "1:: foo: bar: baz"
+        answers = QAMerger.parse_answers(text)
+        self.assertEqual(answers, {1: "foo: bar: baz"})
+
+    def test_freetext_empty_is_ignored(self):
+        text = "1::   \n2: A"
+        answers = QAMerger.parse_answers(text)
+        self.assertEqual(answers, {2: "A"})
+
+    def test_label_format_unaffected_by_freetext_addition(self):
+        # 単一英字ラベルは従来通り
+        text = "1: A) はい"
+        answers = QAMerger.parse_answers(text)
+        self.assertEqual(answers, {1: "A"})
+
+
 class TestMergeAllAnswers(unittest.TestCase):
     """全問回答ありでマージ → 6列テーブル + 状態「回答済み」"""
 

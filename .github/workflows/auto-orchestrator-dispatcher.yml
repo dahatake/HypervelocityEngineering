@@ -58,8 +58,8 @@ jobs:
               ('auto-app-selection',              'AAS'),
               ('auto-app-detail-design-web',      'AAD-WEB'),
               ('auto-app-dev-microservice-web',   'ASDW-WEB'),
-              ('auto-batch-design',               'ABD'),
-              ('auto-batch-dev',                  'ABDV'),
+              ('auto-dataflow-design',               'ADFD'),
+              ('auto-dataflow-dev',                  'ADFDV'),
               ('auto-ai-agent-design',            'AAG'),
               ('auto-ai-agent-dev',               'AAGD'),
               ('auto-app-documentation',          'ADOC'),
@@ -72,8 +72,8 @@ jobs:
               'aas:done':      'AAS',
               'aad-web:done':  'AAD-WEB',
               'asdw-web:done': 'ASDW-WEB',
-              'abd:done':      'ABD',
-              'abdv:done':     'ABDV',
+              'adfd:done':      'ADFD',
+              'adfdv:done':     'ADFDV',
               'aag:done':      'AAG',
               'aagd:done':     'AAGD',
               'adoc:done':     'ADOC',
@@ -87,7 +87,7 @@ jobs:
           # ここでは冪等性のために明示的にスキップする（再初期化を防止）。
           qa_ready_labels = {
               'aas:qa-ready', 'aad:qa-ready', 'asdw:qa-ready',
-              'abd:qa-ready', 'abdv:qa-ready', 'aag:qa-ready',
+              'adfd:qa-ready', 'adfdv:qa-ready', 'aag:qa-ready',
               'aagd:qa-ready', 'akm:qa-ready', 'aqod:qa-ready', 'adoc:qa-ready',
               'aad-web:qa-ready', 'asdw-web:qa-ready',
           }
@@ -98,8 +98,8 @@ jobs:
               ('[AAGD]', 'AAGD'),
               ('[ADOC]', 'ADOC'),
               ('[AAS]', 'AAS'),
-              ('[ABD]', 'ABD'),
-              ('[ABDV]', 'ABDV'),
+              ('[ADFD]', 'ADFD'),
+              ('[ADFDV]', 'ADFDV'),
               ('[AKM]', 'AKM'),
               # 後方互換
               ('[AAD]', 'AAD-WEB'),
@@ -324,10 +324,10 @@ jobs:
       runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
-  abd:
+  adfd:
     needs: detect
-    if: needs.detect.outputs.target == 'ABD'
-    uses: ./.github/workflows/auto-batch-design-reusable.yml
+    if: needs.detect.outputs.target == 'ADFD'
+    uses: ./.github/workflows/auto-dataflow-design-reusable.yml
     with:
       mode: ${{ needs.detect.outputs.mode }}
       issue_number: ${{ needs.detect.outputs.issue_number }}
@@ -337,10 +337,10 @@ jobs:
       runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
-  abdv:
+  adfdv:
     needs: detect
-    if: needs.detect.outputs.target == 'ABDV'
-    uses: ./.github/workflows/auto-batch-dev-reusable.yml
+    if: needs.detect.outputs.target == 'ADFDV'
+    uses: ./.github/workflows/auto-dataflow-dev-reusable.yml
     with:
       mode: ${{ needs.detect.outputs.mode }}
       issue_number: ${{ needs.detect.outputs.issue_number }}
@@ -402,9 +402,9 @@ jobs:
           import os, subprocess
 
           chain_map = {
-              "AAS":      [("AAD-WEB", "Web App Design"), ("ABD", "Batch Design"), ("AAG", "AI Agent Design")],
+              "AAS":      [("AAD-WEB", "Web App Design"), ("ADFD", "Dataflow Design"), ("AAG", "AI Agent Design")],
               "AAD-WEB":  [("ASDW-WEB", "Web App Dev & Deploy")],
-              "ABD":      [("ABDV", "Batch Dev & Deploy")],
+              "ADFD":      [("ADFDV", "Dataflow Dev & Deploy")],
               "AAG":      [("AAGD", "AI Agent Dev & Deploy")],
           }
 

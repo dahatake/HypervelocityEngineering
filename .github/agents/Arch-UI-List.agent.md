@@ -5,13 +5,70 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D05-ユースケース-シナリオカタログ.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D11-画面-UX-操作意味仕様書.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/catalog/screen-catalog.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}screen-modeling-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "screen-list.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-UI-List/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
 ## 1) このエージェントの目的
 `docs/` の資料を根拠に、ユースケースとUI(画面)の関係性のベストプラクティスを示したうえで、アクターの中の「人」毎のUIを
@@ -32,7 +89,7 @@ metadata:
 - `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
 - `knowledge/D11-画面-UX-操作意味仕様書.md` — 画面UX・操作仕様
 
-## 3) 出力（必須）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 - 主要成果物：`docs/catalog/screen-catalog.md`
 - 進捗ログ：`{WORK}screen-modeling-work-status.md`
 

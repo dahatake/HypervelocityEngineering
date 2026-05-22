@@ -8,8 +8,8 @@ _WF = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 _TARGETS = {
     "auto-app-detail-design-web-reusable.yml": "aad-web",
     "auto-app-dev-microservice-web-reusable.yml": "asdw-web",
-    "auto-batch-design-reusable.yml": "abd",
-    "auto-batch-dev-reusable.yml": "abdv",
+    "auto-dataflow-design-reusable.yml": "adfd",
+    "auto-dataflow-dev-reusable.yml": "adfdv",
 }
 
 

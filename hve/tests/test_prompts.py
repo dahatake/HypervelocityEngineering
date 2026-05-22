@@ -11,12 +11,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from prompts import (
     ADVERSARIAL_RECHECK_PROMPT,
-    AQOD_PROMPT,
     CODE_REVIEW_AGENT_FIX_PROMPT,
     MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     PRE_EXECUTION_QA_COMMENT_MARKER,
     PRE_EXECUTION_QA_PROMPT_V2,
-    QA_APPLY_PROMPT,
     QA_PROMPT_V2,
     REVIEW_PROMPT,
     render_pre_execution_qa_comment_body,
@@ -26,21 +24,11 @@ from prompts import (
 class TestPromptsNotEmpty(unittest.TestCase):
     """プロンプト定数が文字列であり、空でないことを検証する。"""
 
-    def test_qa_apply_prompt_is_str(self) -> None:
-        self.assertIsInstance(QA_APPLY_PROMPT, str)
-
-    def test_qa_apply_prompt_not_empty(self) -> None:
-        self.assertTrue(QA_APPLY_PROMPT.strip(), "QA_APPLY_PROMPT should not be empty")
-
     def test_review_prompt_is_str(self) -> None:
         self.assertIsInstance(REVIEW_PROMPT, str)
 
     def test_review_prompt_not_empty(self) -> None:
         self.assertTrue(REVIEW_PROMPT.strip(), "REVIEW_PROMPT should not be empty")
-
-    def test_qa_apply_prompt_has_placeholder(self) -> None:
-        """QA_APPLY_PROMPT には {user_answers} プレースホルダーが含まれる。"""
-        self.assertIn("{user_answers}", QA_APPLY_PROMPT)
 
     def test_review_prompt_mentions_adversarial_review(self) -> None:
         """REVIEW_PROMPT には敵対的レビューの5軸検証に関する記述が含まれる。"""
@@ -111,20 +99,13 @@ class TestQaPromptV2(unittest.TestCase):
 
 
 class TestAqodPrompt(unittest.TestCase):
-    """AQOD_PROMPT の検証。"""
+    """AQOD_PROMPT は R3.5 (2026-05-20) で死コードとして削除済み。
 
-    def test_aqod_prompt_is_str(self) -> None:
-        self.assertIsInstance(AQOD_PROMPT, str)
+    本テストクラスは互換性のため空殻として残置し、リグレッション検出時に
+    削除経緯を追跡できるようにする。次マイナーリリースで完全削除予定。
+    """
 
-    def test_aqod_prompt_not_empty(self) -> None:
-        self.assertTrue(AQOD_PROMPT.strip(), "AQOD_PROMPT should not be empty")
-
-    def test_aqod_prompt_mentions_original_docs(self) -> None:
-        self.assertIn("original-docs/", AQOD_PROMPT)
-
-    def test_aqod_prompt_mentions_dedup_and_severity(self) -> None:
-        self.assertIn("重大度", AQOD_PROMPT)
-        self.assertIn("重複", AQOD_PROMPT)
+    pass
 
 
 class TestPreExecutionQaPromptV2(unittest.TestCase):
@@ -484,8 +465,8 @@ class TestQaDraftingLabels(unittest.TestCase):
             "aad-web:qa-drafting",
             "asdw:qa-drafting",
             "asdw-web:qa-drafting",
-            "abd:qa-drafting",
-            "abdv:qa-drafting",
+            "adfd:qa-drafting",
+            "adfdv:qa-drafting",
             "aag:qa-drafting",
             "aagd:qa-drafting",
             "akm:qa-drafting",

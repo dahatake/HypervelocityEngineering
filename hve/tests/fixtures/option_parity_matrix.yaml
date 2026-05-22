@@ -82,7 +82,7 @@ issue_form_internal_fields:
   - additional_comment      # ユーザー向けテキスト補足（UI 用、web-app-dev.yml 等）
   - additional_context      # self-improve.yml 専用テキスト補足
   - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
-  - batch_job_ids           # ワークフロー固有パラメータ（batch-dev.yml 専用）
+  - app_ids           # ワークフロー固有パラメータ（batch-dev.yml 専用）
   - confirmation            # self-improve.yml UI 確認ゲート
   - depth                   # AQOD 専用パラメータ（original-docs-review.yml）
   - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）

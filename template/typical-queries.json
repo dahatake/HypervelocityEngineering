@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "description": "markdown-query Skill の D3 指標『典型クエリ出現率』算出に使うクエリパターン辞書の初期セット。各エントリの patterns はクエリ文字列に対する正規表現（部分一致、大文字小文字無視）。需要に応じて拡張することを前提とし、各 workflow の凡てを網羅するとは主張しない。対象 workflow は workflows キー配下に <workflow_id> ごとに定義する（現状は aad-web のみ patterns 定義済み。asdw-web / adfd / adfdv は未定義）。",
+  "workflows": {
+    "aad-web": [
+      {
+        "id": "screen_def",
+        "label": "画面定義",
+        "patterns": ["画面定義", "screen[-_ ]?def", "screen.*md"]
+      },
+      {
+        "id": "service_def",
+        "label": "サービス定義",
+        "patterns": ["サービス定義", "service[-_ ]?def", "service.*spec"]
+      },
+      {
+        "id": "test_spec",
+        "label": "TDD テスト仕様",
+        "patterns": ["test[-_ ]?spec", "テスト仕様", "TDD", "test_spec"]
+      },
+      {
+        "id": "app_id",
+        "label": "APP-ID",
+        "patterns": ["APP[-_]?ID", "AAD[-_ ]?WEB[-_ ]?\\d+"]
+      },
+      {
+        "id": "service_catalog",
+        "label": "サービスカタログ",
+        "patterns": ["service[-_ ]?catalog", "サービスカタログ"]
+      },
+      {
+        "id": "data_model",
+        "label": "データモデル",
+        "patterns": ["data[-_ ]?model", "データモデル", "ER[-_ ]?diagram", "entity[-_ ]?model"]
+      }
+    ]
+  }
+}

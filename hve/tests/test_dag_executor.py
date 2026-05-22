@@ -152,7 +152,7 @@ class TestDAGExecutorAAS(unittest.TestCase):
 
 
 class TestDAGExecutorABD(unittest.TestCase):
-    """ABD ライクな 並列 fork → AND join の DAG テスト。
+    """ADFD ライクな 並列 fork → AND join の DAG テスト。
 
     DAG: 1 → 2a ‖ 2b → 3 (AND join)
     """

@@ -51,7 +51,7 @@ class TestResolveAppArchScope(unittest.TestCase):
 
         cat = self._make_catalog([
             ("APP-01", "Web App", "Webフロントエンド + クラウド"),
-            ("APP-02", "Batch App", "データバッチ処理"),
+            ("APP-02", "Batch App", "データデータフロー処理"),
         ], self._tmp)
         result = resolve_app_arch_scope("aad-web", catalog_path=cat)
         self.assertEqual(result.matched_app_ids, ["APP-01"])
@@ -62,14 +62,14 @@ class TestResolveAppArchScope(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_batch_app_ids_only(self):
-        """abd で データバッチ処理 の APP-ID のみ抽出されること。"""
+        """adfd で データデータフロー処理 の APP-ID のみ抽出されること。"""
         from hve.app_arch_filter import resolve_app_arch_scope
 
         cat = self._make_catalog([
             ("APP-01", "Web App", "Webフロントエンド + クラウド"),
-            ("APP-02", "Batch App", "データバッチ処理"),
+            ("APP-02", "Batch App", "データデータフロー処理"),
         ], self._tmp)
-        result = resolve_app_arch_scope("abd", catalog_path=cat)
+        result = resolve_app_arch_scope("adfd", catalog_path=cat)
         self.assertEqual(result.matched_app_ids, ["APP-02"])
         self.assertEqual(result.target_kind, "batch")
 
@@ -84,7 +84,7 @@ class TestResolveAppArchScope(unittest.TestCase):
         cat = self._make_catalog([
             ("APP-03", "Batch App 2", "バッチ"),
         ], self._tmp)
-        result = resolve_app_arch_scope("abdv", catalog_path=cat)
+        result = resolve_app_arch_scope("adfdv", catalog_path=cat)
         self.assertIn("APP-03", result.matched_app_ids)
         self.assertEqual(result.target_kind, "batch")
 
@@ -98,7 +98,7 @@ class TestResolveAppArchScope(unittest.TestCase):
 
         cat = self._make_catalog([
             ("APP-01", "Web App", "Webフロントエンド + クラウド"),
-            ("APP-02", "Batch App", "データバッチ処理"),
+            ("APP-02", "Batch App", "データデータフロー処理"),
         ], self._tmp)
         result = resolve_app_arch_scope("aad-web", requested_app_ids=["APP-01", "APP-02"], catalog_path=cat)
         self.assertEqual(result.matched_app_ids, ["APP-01"])
@@ -117,7 +117,7 @@ class TestResolveAppArchScope(unittest.TestCase):
         cat = self._make_catalog([
             ("APP-01", "Web App", "Webフロントエンド + クラウド"),
         ], self._tmp)
-        result = resolve_app_arch_scope("abd", requested_app_ids=["APP-01"], catalog_path=cat)
+        result = resolve_app_arch_scope("adfd", requested_app_ids=["APP-01"], catalog_path=cat)
         self.assertEqual(result.matched_app_ids, [])
         self.assertEqual(len(result.excluded_app_ids), 1)
 
@@ -294,13 +294,43 @@ class TestResolveAppArchScope(unittest.TestCase):
         from hve.app_arch_filter import AppArchFilterResult
 
         r = AppArchFilterResult(
-            workflow_id="abd",
+            workflow_id="adfd",
             target_kind="batch",
-            target_architectures=["データバッチ処理"],
+            target_architectures=["データデータフロー処理"],
             requested_app_ids=["APP-01"],
             matched_app_ids=[],
         )
         self.assertEqual(r.to_markdown_section(), "")
+
+    # ------------------------------------------------------------------
+    # 見出し表記揺れ: `A.` / `A:` / 内部スペースは loose 経路で受理し WARN を出す
+    # ------------------------------------------------------------------
+
+    def test_loose_heading_dot_variant_accepted_with_warning(self):
+        """`## A. サマリ表（全 APP 横断）` (ピリオド + 内部スペース) は loose 経路で受理され、stderr に WARN が出力されること。"""
+        import io
+        import sys
+        from contextlib import redirect_stderr
+        from hve.app_arch_filter import resolve_app_arch_scope
+
+        p = self._tmp / "app-arch-catalog.md"
+        content = textwrap.dedent("""\
+            ## A. サマリ表（全 APP 横断）
+
+            | APP-ID | APP名 | 推薦アーキテクチャ |
+            |--------|-------|-------------------|
+            | APP-01 | Web App | Webフロントエンド + クラウド |
+        """)
+        p.write_text(content, encoding="utf-8")
+
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            result = resolve_app_arch_scope("aad-web", catalog_path=str(p))
+
+        self.assertEqual(result.matched_app_ids, ["APP-01"])
+        stderr_text = buf.getvalue()
+        self.assertIn("WARNING", stderr_text)
+        self.assertIn("canonical", stderr_text)
 
 
 if __name__ == "__main__":

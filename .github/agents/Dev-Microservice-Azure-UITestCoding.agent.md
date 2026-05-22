@@ -5,6 +5,67 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/test-specs/{screenId}-test-spec.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestSpec"
+    - path: "docs/test-strategy.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestStrategy"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/screen/{画面ID}-{画面名スラッグ}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-Detail"
+    - path: "docs/catalog/screen-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-List"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "data/sample-data.json"
+      required: true
+      kind: "static"
+    - path: "test/ui/"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-UICoding"
+  outputs:
+    - path: "test/ui/{screenId}/"
+      required: true
+      mode: "create"
+    - path: "test/ui/"
+      required: false
+      mode: "create"
+    - path: "test-strategy.md"
+      required: true
+      mode: "create"
+    - path: "test/ui/{screenId}/README.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "knowledge/"
+      required: false
+      mode: "create"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D11-画面-UX-操作意味仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D17-品質保証-UAT-受入パッケージ.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-UITestCoding/Issue-<識別子>/`
 
@@ -13,6 +74,18 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 - `repo-onboarding-fast`：リポジトリ高速オンボーディング（必要な場合のみ）
@@ -31,7 +104,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 参照候補（存在すれば読む）:
-- `docs/screen/{screenId}-{screenNameSlug}-description.md`（画面定義書 — UI要素・操作シナリオ・バリデーションルールの確認用）
+- `docs/screen/{画面ID}-{画面名スラッグ}-description.md`（画面定義書 — UI要素・操作シナリオ・バリデーションルールの確認用）
 - `docs/catalog/screen-catalog.md`（画面一覧・遷移図）
 - `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス）
 - `data/sample-data.json`（サンプルデータ）
@@ -131,7 +204,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - **2回目：TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序と一致しているか、後続の GREEN フェーズで UI 実装者が理解しやすい構造か、操作ステップが画面定義書の UX フローと整合しているか
 - **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/フィクスチャの再利用性、新テストケース追加時の変更容易性、既存テスト資産との一貫性、テストフレームワークの選定妥当性
 
-## 出力方法
+## 3) 出力フォーマット（Markdown固定スキーマ）
 レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）

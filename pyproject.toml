@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hve"
+version = "0.1.0"
+description = "HVE CLI Orchestrator package"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+  "github-copilot-sdk>=0.3.0",
+  "platformdirs>=4.0",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+mdq = [
+  "rank_bm25>=0.2.2",
+  "tiktoken>=0.7.0",
+]
+# mdq-watch: HVE CLI Orchestrator 実行中に *.md の追加/更新/削除を OS イベントで検知し
+# `.mdq/index.sqlite` を逐次更新するためのオプション依存。Cloud Agent では使用しない。
+mdq-watch = [
+  "rank_bm25>=0.2.2",
+  "tiktoken>=0.7.0",
+  "watchdog>=4.0",
+]
+# mdq-ja: 日本語 Markdown 索引用のオプション依存。Q5=A 採用のため、
+# 現状は SQLite 3.34+ 標準搭載の `trigram` FTS5 tokenizer のみで成立し、
+# 追加 wheel は不要（プレースホルダー extras）。将来 fugashi/sudachipy 等の
+# 形態素解析器に切り替える際に依存をここへ追加する。
+mdq-ja = []
+# semantic: `--strategy semantic_paragraph` 用の任意依存（work/semantic-paragraph/plan.md 参照）。
+# - fastembed: ONNX ベースのローカル埋め込み（既定 model = BAAI/bge-m3、Q2=C）。
+#   初回 DL ~2GB。MDQ_EMBED_MODEL 環境変数で軽量モデル（例: BAAI/bge-small-en-v1.5）に切替可。
+# - nltk: 文分割（Q3=C）。初回呼び出し時に `punkt_tab` を自動 DL（失敗時は regex フォールバック）。
+# - numpy: コサイン距離計算とパーセンタイル算出。
+# 手動インストール: pip install -e .[semantic]
+semantic = [
+  "fastembed>=0.3.0",
+  "nltk>=3.8",
+  "numpy>=1.26",
+]
+# gui: HVE GUI Orchestrator（PySide6/Qt6 ベース GUI フロントエンド）。
+# `python -m hve gui` または `--ui gui` フラグでの GUI モード起動に必要。
+# ターミナル/CLI モード（既定）では本依存は不要。
+gui = [
+  "PySide6>=6.6",
+]
+# gui-pty: HVE GUI Orchestrator で Plugin / MCP Server 認証時にインタラクティブ
+# 端末（PTY）を起動するためのオプション依存。`copilot` / `az` / `gh` 等の対話 CLI を
+# GUI 内ターミナルで実行し、Device Flow / サブスクリプション選択等の対話を完走させる
+# 用途に使用する（hve/gui/pty_backend.py）。本 extras 未インストール時は
+# GUI 側で `is_pty_available()` が False を返し、既存の疎通確認のみへフォールバックする。
+# 手動インストール: pip install -e .[gui,gui-pty]
+gui-pty = [
+  "pywinpty>=2.0; sys_platform == 'win32'",
+  "ptyprocess>=0.7; sys_platform != 'win32'",
+]
+# gui-docconvert: HVE GUI Orchestrator で添付ファイル D&D 時の Markdown 変換に必要な任意依存。
+# .md / .markdown / .txt / .csv は標準ライブラリで対応するため不要だが、
+# PDF / DOCX / HTML / XLSX / PPTX / XLS を変換する場合は本 extras を追加インストールする。
+# 変換エンジンは microsoft/markitdown 単一に統合済み（旧 pypdf/mammoth/markdownify/openpyxl は廃止）。
+# 通常は hve/setup-hve.ps1 --WithGui または hve/setup-hve.sh --with-gui で自動インストールされる。
+# 手動インストール: pip install -e .[gui,gui-docconvert]
+#
+# NOTE: `markitdown[all]` は YouTube/音声書き起こし等まで含み、
+#   `youtube-transcript-api~=1.0.0` を要求するため Python 3.14 では解決不能（該当 wheel 不在）。
+#   GUI D&D 用途で必要な PDF/DOCX/PPTX/XLSX/XLS/Outlook のみを明示指定する。
+gui-docconvert = [
+  "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1.5",
+]
+
+[project.scripts]
+hve = "hve.__main__:main"
+hve-mdq = "mdq.cli:main"
+mdq = "mdq.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hve*", "mdq*", "tools*"]
+exclude = ["hve.tests*"]
+
+# 非 Python 同梱データ (wheel 配布時に必須):
+#   - xterm.js アセット (T02): HTML / JS / CSS / vendor 配下
+#   - 認証 manifest (T04): YAML
+# これらを宣言しないと `pip install hve` で配布された wheel に含まれず、
+# インタラクティブ認証機能 (T06 PluginAuthDialog の PTY 経路) が壊れる。
+[tool.setuptools.package-data]
+"hve.gui.widgets.xterm_assets" = [
+  "*.html",
+  "*.js",
+  "vendor/**/*",
+  "VERSIONS.txt",
+]
+"hve.gui.auth_providers.manifests" = [
+  "*.yml",
+  "*.yaml",
+]

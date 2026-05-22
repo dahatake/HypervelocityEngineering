@@ -146,3 +146,28 @@ def test_tick_loop_skips_refresh_when_all_done() -> None:
     t.join(timeout=1.0)
     assert calls == []  # all_done のため一度も呼ばれない
 
+
+def test_enable_mouse_tracking_on_tty() -> None:
+    import io
+    from unittest.mock import patch
+
+    wb = WorkbenchController(_state())
+    with patch("hve.workbench.controller.sys.stdout", new=io.StringIO()) as out:
+        out.isatty = lambda: True  # type: ignore[method-assign]
+        wb._enable_mouse_tracking()
+        assert wb._mouse_tracking_enabled is True
+        assert "\x1b[?1000h\x1b[?1006h" in out.getvalue()
+
+
+def test_disable_mouse_tracking_on_tty() -> None:
+    import io
+    from unittest.mock import patch
+
+    wb = WorkbenchController(_state())
+    wb._mouse_tracking_enabled = True
+    with patch("hve.workbench.controller.sys.stdout", new=io.StringIO()) as out:
+        out.isatty = lambda: True  # type: ignore[method-assign]
+        wb._disable_mouse_tracking()
+        assert wb._mouse_tracking_enabled is False
+        assert "\x1b[?1000l\x1b[?1006l" in out.getvalue()
+

@@ -1,0 +1,38 @@
+# GitHub MCP Server 認証フロー manifest
+#
+# 適用条件: MCP サーバ名が "github" / "github-mcp"。
+# 認証フロー:
+#   1. `gh auth login` を PTY 実行 (Device Flow またはトークン入力モード)
+#   2. 完了後、`copilot` から GitHub MCP の疎通確認
+
+id: github_mcp
+display_name: "GitHub MCP"
+
+match:
+  mcp_server_name_regex: "^github(-mcp)?$"
+
+pre_auth_commands:
+  - argv: ["gh", "auth", "login"]
+    # gh CLI が認証成功時に出すメッセージ:
+    #   "✓ Authentication complete." / "Logged in as <user>"
+    success_regex: "(?i)(Authentication complete|Logged in as)"
+    failure_regex: "(?i)(error|failed to authenticate)"
+    timeout: 600
+
+copilot_seed_prompt: |
+  GitHub MCP サーバから利用可能なツール一覧を取得し、認証状態を確認してください。
+
+success_regex: "(?i)(tool|tools).{0,40}(available|registered|listed)"
+failure_regex: "(?i)(unauthorized|forbidden|bad credentials)"
+timeout_total: 900
+
+notes_md: |
+  ## GitHub MCP 認証手順
+
+  1. `gh auth login` 実行時に対話メニューが表示されます。
+  2. 矢印キーで以下を選択してください:
+     - 認証先: **GitHub.com** (または GHES)
+     - 認証方式: **Login with a web browser** を推奨
+  3. 8 桁のワンタイムコードがターミナルに表示されます。**コピー**してください。
+  4. ブラウザが自動で開きます。表示されたコードを貼り付けて承認してください。
+  5. "Authentication complete." が出れば成功です。

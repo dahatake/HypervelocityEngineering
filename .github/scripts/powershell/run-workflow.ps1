@@ -1,4 +1,4 @@
-﻿# run-workflow.ps1 — ユーザーエントリポイント
+# run-workflow.ps1 — ユーザーエントリポイント
 #
 # 設計ワークフロー全体実行、ステップ遷移、Copilot CLI 連携など
 # すべてのコマンドを1つのスクリプトから実行できるエントリポイント。
@@ -6,10 +6,10 @@
 # Usage:
 #   # 設計ワークフロー全体実行
 #   $env:REPO = "owner/repo"
-#   .\run-workflow.ps1 -Workflow abd -Branch main
+#   .\run-workflow.ps1 -Workflow adfd -Branch main
 #
 #   # dry-run + ステップ限定
-#   .\run-workflow.ps1 -Workflow abd -Steps "1.1,1.2" -DryRun
+#   .\run-workflow.ps1 -Workflow adfd -Steps "1.1,1.2" -DryRun
 #
 #   # 完了 → 次ステップ遷移
 #   .\run-workflow.ps1 -Action advance -Issue 123 -DryRun
@@ -122,7 +122,7 @@ Actions:
   help              Show this help
 
 Orchestrate Parameters (default action):
-  -Workflow, -w <id>    Workflow ID (aas|abd|abdv)
+  -Workflow, -w <id>    Workflow ID (aas|adfd|adfdv)
   -Branch <name>        Target branch (default: main)
   -Steps <csv>          Comma-separated step IDs
 
@@ -152,10 +152,10 @@ Common Parameters:
 Examples:
   # Full workflow execution
   $env:REPO = "owner/repo"
-  .\run-workflow.ps1 -Workflow abd -Branch main
+  .\run-workflow.ps1 -Workflow adfd -Branch main
 
   # Dry-run with step filter
-  .\run-workflow.ps1 -Workflow abd -Steps "1.1,1.2" -DryRun
+  .\run-workflow.ps1 -Workflow adfd -Steps "1.1,1.2" -DryRun
 
   # Advance to next steps
   .\run-workflow.ps1 -Action advance -Issue 123 -DryRun

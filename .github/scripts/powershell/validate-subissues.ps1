@@ -44,6 +44,33 @@ function script:ValidateSubissues {
     $blocks = @([regex]::Split($content, '<!--\s*subissue\s*-->') | Select-Object -Skip 1)
 
     if ($blocks.Count -eq 0) {
+        # P-C: Markdown テーブル形式で書かれた subissues.md を検知してエラー化する。
+        # 連続する 3 行以上の `^\s*\|.*\|\s*$` パターンを検出した場合、Agent が
+        # `task-dag-planning` Skill を読まずにテーブル形式で生成した可能性が高い。
+        $lines = $content -split "\r?\n|\r"
+        $consecutive = 0
+        $tableDetected = $false
+        foreach ($line in $lines) {
+            if ($line -match '^\s*\|.*\|\s*$') {
+                $consecutive++
+                if ($consecutive -ge 3) {
+                    $tableDetected = $true
+                    break
+                }
+            }
+            else {
+                $consecutive = 0
+            }
+        }
+
+        if ($tableDetected) {
+            Write-Warning ("::error::${SubissuesPath}: " +
+                '`<!-- subissue -->` ブロックが 0 件 だが Markdown テーブル形式が検出されました。' +
+                'テーブル形式は禁止です。各行を `<!-- subissue -->` ブロックに展開してください。' +
+                '規約: .github/skills/task-dag-planning/references/subissues-template.md')
+            return $false
+        }
+
         Write-Information '  ⚠️ No <!-- subissue --> blocks found'
         return $true
     }

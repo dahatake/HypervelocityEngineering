@@ -100,7 +100,7 @@
 
 | カテゴリ | 用途 | 例 |
 |---------|------|-----|
-| `planning/` | 計画・コンテキスト収集・設計ガイド | `task-dag-planning`, `batch-design-guide` |
+| `planning/` | 計画・コンテキスト収集・設計ガイド | `task-dag-planning`, `dataflow-design-guide` |
 | `harness/` | 検証・安全ガード・エラーリカバリ | `harness-verification-loop`, `adversarial-review` |
 | `output/` | 出力フォーマット・分割・可視化 | `large-output-chunking`, `svg-renderer` |
 | `azure-skills/` | Azure サービス固有のリファレンス | `azure-deploy`, `microsoft-foundry` |
@@ -193,7 +193,7 @@ description: >
   USE FOR: data catalog, entity mapping, table definition, ER diagram generation,
   data model documentation, physical table design, entity relationship.
   DO NOT USE FOR: API design (use microservice-design-guide), batch job design
-  (use batch-design-guide), infrastructure deployment (use azure-deploy).
+  (use dataflow-design-guide), infrastructure deployment (use azure-deploy).
   WHEN: データカタログを生成したい、エンティティとテーブルのマッピングを整理したい、
   ER 図を作成したい、物理テーブル設計を文書化したい。
 ```

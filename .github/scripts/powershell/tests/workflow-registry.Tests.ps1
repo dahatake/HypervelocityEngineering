@@ -14,17 +14,17 @@ Describe 'workflow-registry.ps1' {
             $wf.steps.Count | Should -Be 2
         }
 
-        It 'retrieves ABD workflow' {
-            $wf = Get-Workflow -WorkflowId 'abd'
-            $wf.id | Should -Be 'abd'
-            $wf.name | Should -Be 'Batch Design'
+        It 'retrieves ADFD workflow' {
+            $wf = Get-Workflow -WorkflowId 'adfd'
+            $wf.id | Should -Be 'adfd'
+            $wf.name | Should -Be 'Dataflow Design'
             $wf.steps.Count | Should -Be 9
         }
 
-        It 'retrieves ABDV workflow' {
-            $wf = Get-Workflow -WorkflowId 'abdv'
-            $wf.id | Should -Be 'abdv'
-            $wf.name | Should -Be 'Batch Dev'
+        It 'retrieves ADFDV workflow' {
+            $wf = Get-Workflow -WorkflowId 'adfdv'
+            $wf.id | Should -Be 'adfdv'
+            $wf.name | Should -Be 'Dataflow Dev'
             $wf.steps.Count | Should -Be 7
         }
 
@@ -46,18 +46,18 @@ Describe 'workflow-registry.ps1' {
             $wf.state_labels.blocked | Should -Be 'aas:blocked'
         }
 
-        It 'includes params for ABDV' {
-            $wf = Get-Workflow -WorkflowId 'abdv'
+        It 'includes params for ADFDV' {
+            $wf = Get-Workflow -WorkflowId 'adfdv'
             $wf.params | Should -Contain 'resource_group'
-            $wf.params | Should -Contain 'batch_job_id'
+            $wf.params | Should -Contain 'app_id'
         }
     }
 
     Context 'Get-Step' {
         It 'retrieves a specific step' {
-            $step = Get-Step -WorkflowId 'abd' -StepId '1.1'
+            $step = Get-Step -WorkflowId 'adfd' -StepId '1.1'
             $step.id | Should -Be '1.1'
-            $step.custom_agent | Should -Be 'Arch-Batch-DomainAnalytics'
+            $step.custom_agent | Should -Be 'Arch-Dataflow-DomainAnalytics'
             $step.is_container | Should -Be $false
         }
 
@@ -66,7 +66,7 @@ Describe 'workflow-registry.ps1' {
         }
 
         It 'returns correct depends_on' {
-            $step = Get-Step -WorkflowId 'abd' -StepId '6.3'
+            $step = Get-Step -WorkflowId 'adfd' -StepId '6.3'
             $step.depends_on | Should -Contain '6.1'
             $step.depends_on | Should -Contain '6.2'
         }
@@ -79,8 +79,8 @@ Describe 'workflow-registry.ps1' {
             $next[0].id | Should -Be '1'
         }
 
-        It 'returns root steps for ABD' {
-            $next = Get-NextStep -WorkflowId 'abd' -Completed @()
+        It 'returns root steps for ADFD' {
+            $next = Get-NextStep -WorkflowId 'adfd' -Completed @()
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '1.1'
             $ids | Should -Contain '1.2'
@@ -99,20 +99,20 @@ Describe 'workflow-registry.ps1' {
             $next.Count | Should -Be 0
         }
 
-        It 'advances with dependency resolution in ABD' {
-            $next = Get-NextStep -WorkflowId 'abd' -Completed @('1.1')
+        It 'advances with dependency resolution in ADFD' {
+            $next = Get-NextStep -WorkflowId 'adfd' -Completed @('1.1')
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '1.2'
             $ids | Should -Not -Contain '2'
         }
 
-        It 'handles multiple dependencies in ABD' {
+        It 'handles multiple dependencies in ADFD' {
             # Step 2 depends on both 1.1 and 1.2
-            $next = Get-NextStep -WorkflowId 'abd' -Completed @('1.1')
+            $next = Get-NextStep -WorkflowId 'adfd' -Completed @('1.1')
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Not -Contain '2'
 
-            $next2 = Get-NextStep -WorkflowId 'abd' -Completed @('1.1', '1.2')
+            $next2 = Get-NextStep -WorkflowId 'adfd' -Completed @('1.1', '1.2')
             $ids2 = $next2 | ForEach-Object { $_.id }
             $ids2 | Should -Contain '2'
         }
@@ -120,7 +120,7 @@ Describe 'workflow-registry.ps1' {
 
     Context 'Get-NextStep (with skipped steps)' {
         It 'treats skipped steps as resolved dependencies' {
-            $next = Get-NextStep -WorkflowId 'abd' -Completed @('1.1', '1.2') -Skipped @('2')
+            $next = Get-NextStep -WorkflowId 'adfd' -Completed @('1.1', '1.2') -Skipped @('2')
             $ids = $next | ForEach-Object { $_.id }
             $ids | Should -Contain '3'
         }

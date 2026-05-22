@@ -5,6 +5,52 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/screen/{画面ID}-{画面名スラッグ}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-Detail"
+    - path: "docs/catalog/screen-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-List"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+    - path: "src/data/sample-data.json"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/test-specs/{screenId}-test-spec.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestSpec"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+  outputs:
+    - path: "src/app/"
+      required: true
+      mode: "create"
+    - path: "src/app/package.json"
+      required: true
+      mode: "create"
+    - path: "src/app/main.js"
+      required: true
+      mode: "create"
+    - path: "{WORK}work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "test/ui/"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-UICoding/Issue-<識別子>/`
 
@@ -17,11 +63,29 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
+- `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
+- `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
+- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 
 # 入力（参照順）
 
-1. 画面定義書: `docs/screen/{画面ID}-description.md`
+1. 画面定義書: `docs/screen/{画面ID}-{画面名スラッグ}-description.md`
 2. 画面一覧・遷移: `docs/catalog/screen-catalog.md`
 3. サービスカタログ: `docs/catalog/service-catalog-matrix.md`
 4. UI実装技術: HTML5/CSS/JavaScript を基本とする。Vue SFC (.vue) / React (JSX/TSX) 等のフレームワークを使用する場合は、ビルド基盤（package.json + ビルドツール設定）を必ず同時に生成すること。画面定義書の複雑度が「静的ページ + API 呼び出し」程度であれば素の HTML/JS を優先する

@@ -12,7 +12,7 @@
 - "app_catalog"        : docs/catalog/app-catalog.md
 - "screen_catalog"     : docs/catalog/screen-catalog.md
 - "service_catalog"    : docs/catalog/service-catalog.md
-- "batch_job_catalog"  : docs/batch/batch-job-catalog.md
+- "dataflow_catalog"  : docs/dataflow/dataflow-app-catalog.md
 - "agent_catalog"      : docs/agent/agent-application-definition.md
 
 == 設計方針 ==
@@ -109,7 +109,7 @@ def _extract_ids_from_headings(text: str, *, id_pattern: str) -> List[str]:
 _APP_ID_PATTERN = r"APP-\d{2,3}"
 _SCREEN_ID_PATTERN = r"SC-[A-Za-z0-9_\-]+"
 _SERVICE_ID_PATTERN = r"SVC-[A-Za-z0-9_\-]+"
-_BATCH_JOB_ID_PATTERN = r"JOB-[A-Za-z0-9_\-]+"
+_APP_ID_PATTERN_DATAFLOW = r"JOB-[A-Za-z0-9_\-]+"
 _AGENT_ID_PATTERN = r"AG-[A-Za-z0-9_\-]+"
 # Sub-9 (D-2 / ADR-0003): ARD fan-out 用 ID パターン
 _BIZ_ID_PATTERN = r"BIZ-\d{2,3}"
@@ -150,14 +150,14 @@ def parse_service_catalog(repo_root: Path) -> List[str]:
     return ids
 
 
-def parse_batch_job_catalog(repo_root: Path) -> List[str]:
-    """docs/batch/batch-job-catalog.md から ``JOB-*`` 形式の ID を抽出する。"""
-    text = _read_text(repo_root, "docs/batch/batch-job-catalog.md")
+def parse_dataflow_catalog(repo_root: Path) -> List[str]:
+    """docs/dataflow/dataflow-app-catalog.md から ``JOB-*`` 形式の ID を抽出する。"""
+    text = _read_text(repo_root, "docs/dataflow/dataflow-app-catalog.md")
     if text is None:
         return []
-    ids = _extract_ids_from_table(text, id_pattern=_BATCH_JOB_ID_PATTERN)
+    ids = _extract_ids_from_table(text, id_pattern=_APP_ID_PATTERN_DATAFLOW)
     if not ids:
-        ids = _extract_ids_from_headings(text, id_pattern=_BATCH_JOB_ID_PATTERN)
+        ids = _extract_ids_from_headings(text, id_pattern=_APP_ID_PATTERN_DATAFLOW)
     return ids
 
 
@@ -194,8 +194,8 @@ def parse_business_candidate(repo_root: Path) -> List[str]:
 def parse_use_case_skeleton(repo_root: Path) -> List[str]:
     """docs/catalog/use-case-skeleton.md から ``UC-*`` 形式の ID を抽出する。
 
-    Sub-9 (D-2 / ADR-0003): ARD Step 3.2 fan-out 用。
-    Step 3.1（ユースケース骨格抽出）の出力ファイルを parse する。
+    Sub-9 (D-2 / ADR-0003): ARD Step 4.2 fan-out 用。
+    Step 4.1（ユースケース骨格抽出）の出力ファイルを parse する。
     既存 ``docs/catalog/use-case-catalog.md``（完成版）は対象外。
     """
     text = _read_text(repo_root, "docs/catalog/use-case-skeleton.md")
@@ -215,7 +215,7 @@ _PARSERS: Dict[str, Callable[[Path], List[str]]] = {
     "app_catalog": parse_app_catalog,
     "screen_catalog": parse_screen_catalog,
     "service_catalog": parse_service_catalog,
-    "batch_job_catalog": parse_batch_job_catalog,
+    "dataflow_catalog": parse_dataflow_catalog,
     "agent_catalog": parse_agent_catalog,
     # Sub-9 (D-2 / ADR-0003): ARD fan-out 用
     "business_candidate": parse_business_candidate,

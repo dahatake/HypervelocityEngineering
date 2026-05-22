@@ -5,11 +5,50 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "qa/*.md"
+      required: true
+      kind: "static"
+    - path: "original-docs/*"
+      required: true
+      kind: "static"
+    - path: "knowledge/Dxx-*.md"
+      required: true
+      kind: "static"
+    - path: "qa/*-workiq-*.md"
+      required: true
+      kind: "static"
+    - path: "template/business-requirement-document-master-list.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "knowledge/business-requirement-document-status.md"
+      required: true
+      mode: "upsert"
+    - path: "knowledge/D{NN}-*.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D{NN}-*-ChangeLog.md"
+      required: true
+      mode: "create"
+    - path: "work/KnowledgeManager/Issue-<識別子>/artifacts/*"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/KnowledgeManager/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — `qa/` および `original-docs/` 配下の入力ファイル存在確認
+- `work-artifacts-layout` — `work/KnowledgeManager/Issue-<識別子>/` 配下および `knowledge/` の「削除→新規作成」ルールに準拠
+- `knowledge-management` — `knowledge/` 配下 D01〜D21 の分類・命名・更新手順を権威ソースとして適用
+- `knowledge-lookup` — 既存 D01〜D21 の参照・差分判定
+- `markdown-query` — `mdq search` による横断検索で既存知識との重複・矛盾を検出
 
 ## §1 目的
 - `qa/` または `original-docs/` または両方から knowledge/ D01〜D21 を生成・更新する

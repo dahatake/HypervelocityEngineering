@@ -6,7 +6,7 @@ stdout: error フィールドの値（存在しない・パース失敗時は空
 exit code: 常に 0（呼び出し側の bash がエラー判定に使うため非ゼロを返さない）
 
 呼び出し側との契約:
-- auto-batch-design-reusable.yml / auto-batch-dev-reusable.yml などの
+- auto-dataflow-design-reusable.yml / auto-dataflow-dev-reusable.yml などの
   _post_app_arch_filter_error() から
   `python3 .github/scripts/python/parse_filter_error.py` として呼び出される。
 - 旧インライン実装（python3 -c "...") の挙動を完全に踏襲する。

@@ -37,7 +37,7 @@ SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV: str = "HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER"
 # ワークフロー種別に応じたデフォルト target_scope（フィーチャーフラグ ON 時のフォールバック用）
 SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
     "aas": "docs/", "aad-web": "docs/", "asdw-web": ".",
-    "abd": "docs/", "abdv": ".",
+    "adfd": "docs/", "adfdv": ".",
     "aag": "docs/", "aagd": ".",
     "akm": "knowledge/", "aqod": "qa/", "adoc": "docs/",
 }
@@ -60,6 +60,71 @@ MODEL_CHOICES: tuple[str, ...] = (
     "gpt-5.5",
     "gpt-5.4",
 )
+
+# `MODEL_CHOICES` のフォールバック用途を明示する別名。
+# オンライン取得（get_model_choices）失敗時・オフライン環境でこの値を使用する。
+FALLBACK_MODEL_CHOICES: tuple[str, ...] = MODEL_CHOICES
+
+
+def get_model_choices(
+    *,
+    force_refresh: bool = False,
+    include_auto: bool = False,
+    timeout: float = 30.0,
+) -> list[str]:
+    """利用可能なモデル ID 一覧を取得する。
+
+    解決順:
+        1. force_refresh=False かつキャッシュが TTL 内 → キャッシュを返す
+        2. SDK `list_models()` で取得 → 成功時はキャッシュへ保存して返す
+        3. SDK 失敗時 stale キャッシュ（TTL 切れ）があれば返す
+        4. それも無ければ `FALLBACK_MODEL_CHOICES` を返す
+
+    Args:
+        force_refresh: True で 1. をスキップし強制再取得する。
+        include_auto: True で先頭に MODEL_AUTO_VALUE ("Auto") を付加する。
+        timeout: SDK 取得タイムアウト秒。
+
+    Returns:
+        モデル ID のリスト（include_auto=True 時は "Auto" が先頭）。
+    """
+    from hve import models_api, models_cache
+
+    ids: Optional[list[str]] = None
+
+    # 1) フレッシュなキャッシュ
+    if not force_refresh:
+        cached = models_cache.load()
+        if cached and cached.models:
+            ids = list(cached.models)
+
+    # 2) SDK 再取得
+    if ids is None:
+        try:
+            entries = models_api.fetch_model_entries(timeout=timeout)
+            if entries:
+                ids = [e.id for e in entries]
+                try:
+                    models_cache.save_entries(entries)
+                except OSError:
+                    # キャッシュ書込失敗は致命的でない
+                    pass
+        except models_api.ModelsAPIError:
+            ids = None
+
+    # 3) stale キャッシュ
+    if ids is None:
+        stale = models_cache.load(allow_stale=True)
+        if stale and stale.models:
+            ids = list(stale.models)
+
+    # 4) 最終フォールバック
+    if ids is None:
+        ids = list(FALLBACK_MODEL_CHOICES)
+
+    if include_auto:
+        return [MODEL_AUTO_VALUE, *ids]
+    return ids
 
 
 def normalize_model(name: str) -> str:
@@ -155,6 +220,12 @@ class SDKConfig:
     model: str = DEFAULT_MODEL              # デフォルトモデル
     review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
     qa_model: Optional[str] = None          # QA 専用モデル（未指定時は model）
+    # --- reasoning_effort (SDK が返す supported_reasoning_efforts から選択された値) ---
+    # None: 未指定。Auto モデル時は MODEL_AUTO_REASONING_EFFORT ("high") をフォールバック、
+    # 明示モデル時は SDK 既定振る舞いを使う。
+    reasoning_effort: Optional[str] = None
+    review_reasoning_effort: Optional[str] = None
+    qa_reasoning_effort: Optional[str] = None
     timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
     base_branch: str = "main"               # ベースブランチ
     cli_path: Optional[str] = None          # Copilot CLI のパス (COPILOT_CLI_PATH)
@@ -168,11 +239,13 @@ class SDKConfig:
     # --- Post-step 自動プロンプト ---
     auto_qa: bool = False                   # QA 自動投入（デフォルト: 無効）
     auto_contents_review: bool = False      # Review 自動投入（デフォルト: 無効）
-    qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, None = 実行時に選択
+    qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, "autopilot" = 全問既定値自動採用（GUI）, "gui-file" = GUI 経由 IPC ファイル, None = 実行時に選択
     qa_auto_defaults: bool = False          # True: QA Phase 2b で全問デフォルト値を自動採用（設定元: __main__.py wizard / 消費先: runner.py _collect_qa_answers）
+    qa_ipc_dir: Optional[str] = None        # qa_answer_mode="gui-file" 時の IPC ディレクトリパス（GUI ↔ CLI ファイルベース通信）
 
     force_interactive: bool = False         # True のとき sys.stdin.isatty() 判定をバイパスしてインタラクティブモードを強制する（--force-interactive）
     qa_input_timeout_seconds: float = 300.0  # QA 回答入力専用タイムアウト秒数（デフォルト: 300 秒）
+    qa_gui_input_timeout_seconds: float = 3600.0  # GUI 経由 QA 回答待ちタイムアウト秒数（デフォルト: 3600 秒 = 1 時間）
 
     # --- Code Review Agent ---
     auto_coding_agent_review: bool = False              # Code Review Agent 呼び出し（デフォルト: 無効）
@@ -210,7 +283,7 @@ class SDKConfig:
 
     # --- Workbench UI（Phase 5）---
     no_workbench: bool = False              # True: Workbench UI を無効化（--workbench off 相当）
-    workbench_body_lines: int = 20          # Body コンテンツ行数（10〜20 にクランプ）
+    workbench_body_lines: int = 10          # Body コンテンツ行数（10〜20 にクランプ）
     workbench_history: int = 10000          # 履歴バッファ容量
     workbench_flush_on_exit: bool = True    # 終了時に履歴を stdout フラッシュ
 
@@ -282,6 +355,7 @@ class SDKConfig:
     workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
     workiq_draft_output_dir: str = "qa"                   # Work IQ 補助レポート出力先ディレクトリ（互換のため設定名は据え置き）
     workiq_per_question_timeout: float = 1200.0           # QA: 質問ごとの Work IQ クエリタイムアウト秒数（既定 20 分）
+    workiq_request_timeout: float = 300.0                 # Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK MCPServerConfigLocal.timeout にミリ秒として渡される。
     workiq_max_draft_questions: int = 10                  # QA: ドラフト生成対象の最大質問数（Wave 2: 30→10 に削減）
     # Wave 2-6: デフォルトを 30 から 10 に削減。WORKIQ_MAX_DRAFT_QUESTIONS 環境変数で上書き可能。
     # 重要度フィルタ（workiq_priority_filter）により "最重要"/"高" の質問を優先し、不足分は残りの質問で補填する。
@@ -313,6 +387,13 @@ class SDKConfig:
     # "disabled"  : Self-Improve を一切実行しない（auto_self_improve の値に関係なく）。
     # "step"      : Step-level（runner.py Phase 4）のみ実行。Issue Template 外のローカル実行向け。
 
+    # --- Pricing / Cost 表示 ---
+    pricing_usd_jpy_rate: float = 150.0        # USD → JPY 換算レート（固定値）。HVE_USD_JPY_RATE で上書き可能
+    pricing_currency: str = "auto"             # "auto" (locale=ja → both, それ以外 → usd) / "usd" / "jpy" / "both"
+    pricing_auto_refresh: bool = True          # 月初判定で価格表を自動再取得する。HVE_PRICING_AUTO_REFRESH で上書き可能
+    pricing_statusline_enabled: bool = True    # CUI 1Hz ステータスラインを有効化。HVE_NO_STATUSLINE=1 / --no-statusline で抑止可能
+    pricing_plan_id: str = ""                  # 料金計算で使う plan_id (空=自動推定)。HVE_PRICING_PLAN_ID で上書き可能
+
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
     session_id_prefix: str = ""             # SDK session_id の prefix。Resume 時に固定値を強制したい場合のみ非空にする。
@@ -341,13 +422,13 @@ class SDKConfig:
 
     # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
     mdq_watch: bool = True
-    """``True`` で run_workflow 起動時に hve.mdq.watcher を起動し、Markdown
-    ファイルの追加/更新/削除を ``.hve/mdq.sqlite`` へ逐次反映する。
+    """``True`` で run_workflow 起動時に mdq.watcher を起動し、Markdown
+    ファイルの追加/更新/削除を ``.mdq/index.sqlite`` へ逐次反映する。
 
     - 既定 ON。watchdog 未導入時は自動で無効化（警告ログのみ）。
     - ``--no-mdq-watch`` / 環境変数 ``HVE_MDQ_WATCH=0`` で OFF。
     - Cloud Agent / GitHub Actions では使用しない（本機能は CLI 専用）。
-    - 既存の ``python -m hve.mdq index`` による手動索引更新は維持される。
+    - 既存の ``python -m mdq index`` による手動索引更新は維持される。
     """
     mdq_watch_debounce_ms: int = 500
     """watcher のデバウンス間隔（ms）。既定 500ms。"""
@@ -459,6 +540,12 @@ class SDKConfig:
         except (TypeError, ValueError):
             env_workiq_per_question_timeout = 1200.0
         try:
+            env_workiq_request_timeout = float(
+                os.environ.get("WORKIQ_REQUEST_TIMEOUT", "300.0")
+            )
+        except (TypeError, ValueError):
+            env_workiq_request_timeout = 300.0
+        try:
             env_workiq_max_draft_questions = int(
                 os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "10")
             )
@@ -532,6 +619,7 @@ class SDKConfig:
             workiq_draft_mode=os.environ.get("WORKIQ_DRAFT_MODE", "").lower() in ("true", "1", "yes"),
             workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
             workiq_per_question_timeout=env_workiq_per_question_timeout,
+            workiq_request_timeout=env_workiq_request_timeout,
             workiq_max_draft_questions=env_workiq_max_draft_questions,
             workiq_priority_filter=_env_bool("WORKIQ_PRIORITY_FILTER", default=True),
             auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),
@@ -551,6 +639,15 @@ class SDKConfig:
             fork_on_retry=_env_bool("HVE_FORK_ON_RETRY", default=False),
             mdq_watch=_env_bool("HVE_MDQ_WATCH", default=True),
             mdq_watch_debounce_ms=int(os.environ.get("HVE_MDQ_WATCH_DEBOUNCE_MS", "500") or "500"),
+            pricing_usd_jpy_rate=float(os.environ.get("HVE_USD_JPY_RATE", "150.0") or "150.0"),
+            pricing_currency=(os.environ.get("HVE_PRICING_CURRENCY", "auto") or "auto").strip().lower(),
+            pricing_auto_refresh=_env_bool("HVE_PRICING_AUTO_REFRESH", default=True),
+            pricing_statusline_enabled=(
+                False
+                if os.environ.get("HVE_NO_STATUSLINE", "").strip().lower() in ("1", "true", "yes")
+                else _env_bool("HVE_PRICING_STATUSLINE_ENABLED", default=True)
+            ),
+            pricing_plan_id=(os.environ.get("HVE_PRICING_PLAN_ID", "") or "").strip(),
         )
 
     def get_review_model(self) -> str:

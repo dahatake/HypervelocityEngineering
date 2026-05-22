@@ -319,10 +319,10 @@ class TestFormatAgenticRetrievalBlock:
         assert format_agentic_retrieval_block("aas") == ""
 
     def test_non_target_workflow_abd_returns_empty(self):
-        """Agentic Retrieval 非対象の abd では空文字列が返ること。"""
+        """Agentic Retrieval 非対象の adfd では空文字列が返ること。"""
         from hve.template_engine import format_agentic_retrieval_block
 
-        assert format_agentic_retrieval_block("abd") == ""
+        assert format_agentic_retrieval_block("adfd") == ""
 
     def test_alias_aad_same_as_aad_web(self):
         """後方互換エイリアス 'aad' と 'aad-web' の出力が同一であること。"""

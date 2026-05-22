@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 14px; font-weight: bold; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .cloud { fill: #e8f1fb; stroke: #1f6feb; }
+      .cli   { fill: #eaf6ee; stroke: #1a7f37; }
+      .gui   { fill: #f8eaf6; stroke: #8250df; }
+      .shared { fill: #fff5d6; stroke: #9a6700; }
+      .sdk   { fill: #fbe9e7; stroke: #b91c1c; }
+      .ext   { fill: #efefef; stroke: #666; }
+      .arr   { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .dashed { stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">HVE 3 Orchestrator 全体俯瞰（疎結合レイヤ構造）</text>
+
+  <!-- Top: 3 Orchestrator entry layer -->
+  <rect class="box cloud" x="30"  y="60" width="320" height="120" rx="6"/>
+  <text class="h" x="50" y="84">① HVE Cloud Agent Orchestrator</text>
+  <text x="50" y="106">入口: GitHub Issue Template</text>
+  <text x="50" y="124">実行: GitHub Actions (reusable workflows)</text>
+  <text x="50" y="142">UI 層: GitHub Web UI / Sub-Issue</text>
+  <text x="50" y="162">エンジン: bash + assign-copilot.sh + Coding Agent</text>
+
+  <rect class="box cli" x="390" y="60" width="320" height="120" rx="6"/>
+  <text class="h" x="410" y="84">② HVE CLI Orchestrator</text>
+  <text x="410" y="106">入口: `python -m hve orchestrate ...`</text>
+  <text x="410" y="124">実行: ローカル端末 (asyncio)</text>
+  <text x="410" y="142">UI 層: Rich Live Workbench (TUI)</text>
+  <text x="410" y="162">エンジン: hve.orchestrator + DAGExecutor</text>
+
+  <rect class="box gui" x="750" y="60" width="320" height="120" rx="6"/>
+  <text class="h" x="770" y="84">③ HVE GUI Orchestrator</text>
+  <text x="770" y="106">入口: `python -m hve` / `... gui`</text>
+  <text x="770" y="124">実行: ローカル端末 (PySide6)</text>
+  <text x="770" y="142">UI 層: 3-step Wizard + Workbench Pane</text>
+  <text x="770" y="162">エンジン: subprocess → CLI を流用</text>
+
+  <!-- Shared engine layer -->
+  <rect class="box shared" x="390" y="210" width="680" height="110" rx="6"/>
+  <text class="h" x="410" y="234">共有実行エンジン（HVE 独自 Python）</text>
+  <text x="410" y="254">hve.orchestrator / dag_planner / dag_executor / runner.StepRunner</text>
+  <text x="410" y="272">workflow_registry (WorkflowDef + StepDef DAG) / agent_loader / skill_resolver</text>
+  <text x="410" y="290">run_state (resume) / fork_kpi_logger / qa_merger / template_engine</text>
+  <text x="410" y="308">並列制御: asyncio.Semaphore(max_parallel) / Fan-out 展開 / Fork-on-Retry</text>
+
+  <!-- Cloud-specific path (bash) -->
+  <rect class="box cloud" x="30" y="210" width="320" height="110" rx="6"/>
+  <text class="h" x="50" y="234">Cloud 専用パス（bash）</text>
+  <text x="50" y="254">.github/workflows/auto-*-reusable.yml</text>
+  <text x="50" y="272">.github/scripts/bash/lib/assign-copilot.sh</text>
+  <text x="50" y="290">Sub-Issue 作成 → Copilot Coding Agent アサイン</text>
+  <text x="50" y="308">PR 生成・ラベル遷移自動化</text>
+
+  <!-- SDK layer -->
+  <rect class="box sdk" x="30" y="360" width="1040" height="80" rx="6"/>
+  <text class="h" x="50" y="384">GitHub Copilot CLI SDK（外部 PyPI: github-copilot-sdk）</text>
+  <text x="50" y="406">CopilotClient(SubprocessConfig | ExternalServerConfig) / CopilotSession / PermissionHandler</text>
+  <text x="50" y="424">create_session() → send_and_wait() / event stream (text / tool_use / permission_request)</text>
+
+  <!-- External: Copilot CLI process -->
+  <rect class="box ext" x="30" y="480" width="500" height="100" rx="6"/>
+  <text class="h" x="50" y="504">外部プロセス: GitHub Copilot CLI（`copilot`）</text>
+  <text x="50" y="524">モデル選択・推論呼び出し・MCP 管理・Plugin 管理</text>
+  <text x="50" y="542">認証ストア: OS Credential Manager / Keychain / Secret Service</text>
+  <text x="50" y="560">`copilot mcp list` / `copilot plugin list` / `copilot login`</text>
+
+  <!-- MCP / Plugin / Skills (Copilot-managed) -->
+  <rect class="box ext" x="550" y="480" width="520" height="100" rx="6"/>
+  <text class="h" x="570" y="504">Copilot CLI 管理リソース（HVE は透過利用）</text>
+  <text x="570" y="524">MCP Server: azure-mcp / github / workiq / 任意</text>
+  <text x="570" y="542">Plugin: workiq@work-iq / 任意</text>
+  <text x="570" y="560">Skills: .github/skills/*/SKILL.md（マニフェストで検索）</text>
+
+  <!-- HVE-managed agents/workflows/skills -->
+  <rect class="box shared" x="30" y="610" width="1040" height="90" rx="6"/>
+  <text class="h" x="50" y="634">HVE 管理: Custom Agent / Workflow / Skill（リポジトリ内ファイル）</text>
+  <text x="50" y="654">.github/agents/*.agent.md（Arch-*, Dev-*, QA-*, Doc-*, KnowledgeManager 等）</text>
+  <text x="50" y="672">hve/workflow_registry.py（AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC/ARD）</text>
+  <text x="50" y="690">.github/skills/*/SKILL.md（task-dag-planning / work-artifacts-layout / markdown-query 等）</text>
+
+  <!-- Arrows -->
+  <path class="arr" d="M190,180 L190,210"/>
+  <path class="arr" d="M550,180 L550,210"/>
+  <path class="arr" d="M910,180 L730,210"/>
+  <path class="arr" d="M730,320 L730,360"/>
+  <path class="arr" d="M190,320 L190,440 L280,440 L280,480"/>
+  <path class="arr" d="M550,440 L550,480"/>
+  <path class="arr dashed" d="M810,580 L810,610"/>
+  <path class="arr dashed" d="M730,440 L730,610"/>
+</svg>

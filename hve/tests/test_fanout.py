@@ -46,13 +46,13 @@ def test_akm_max_parallel_is_21():
 
 def test_all_known_fanout_parsers_registered():
     expected = {"app_catalog", "screen_catalog", "service_catalog",
-                "batch_job_catalog", "agent_catalog"}
+                "dataflow_catalog", "agent_catalog"}
     assert expected.issubset(KNOWN_PARSERS)
 
 
 def test_all_workflows_fanout_parsers_are_known():
     """全 WorkflowDef の fanout_parser 名が catalog_parsers に登録されている。"""
-    for wf_id in ("ard", "aas", "aad-web", "asdw-web", "abd", "abdv",
+    for wf_id in ("ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
                   "aag", "aagd", "akm", "aqod", "adoc"):
         wf = wr.get_workflow(wf_id)
         for s in wf.steps:

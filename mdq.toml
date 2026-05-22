@@ -1,0 +1,23 @@
+# mdq configuration for this repository.
+#
+# Without this file, `python -m mdq index` would scan only the generic
+# defaults (`docs/`, `users-guide/`). This repository has additional
+# documentation roots produced by the HVE orchestrator and design phases
+# (knowledge/, qa/, original-docs/, etc.), so they are enumerated here.
+#
+# Schema reference: mdq/config.py
+
+[index]
+roots = [
+    "docs",
+    "docs-generated",
+    "users-guide",
+    "template",
+    "knowledge",
+    "qa",
+    "original-docs",
+    "work",
+    "sample",
+    "session-state",
+    "hve-dev",
+]

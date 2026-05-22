@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 14px; font-weight: bold; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .user { fill: #fff5d6; stroke: #9a6700; }
+      .py   { fill: #eaf6ee; stroke: #1a7f37; }
+      .sdk  { fill: #fbe9e7; stroke: #b91c1c; }
+      .ext  { fill: #efefef; stroke: #666; }
+      .arr  { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .dashed { stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">HVE CLI Orchestrator: 内部構造</text>
+
+  <rect class="box user" x="30" y="60" width="260" height="60" rx="6"/>
+  <text class="h" x="50" y="84">ユーザー端末</text>
+  <text x="50" y="106">`python -m hve orchestrate --workflow aas ...`</text>
+
+  <rect class="box py" x="320" y="60" width="200" height="60" rx="6"/>
+  <text class="h" x="340" y="84">hve/__main__.py</text>
+  <text x="340" y="106">サブコマンド分岐</text>
+
+  <rect class="box py" x="550" y="60" width="240" height="60" rx="6"/>
+  <text class="h" x="570" y="84">hve/orchestrator.py</text>
+  <text x="570" y="106">分岐→DAG 構築→Issue/PR 連携</text>
+
+  <rect class="box py" x="820" y="60" width="240" height="60" rx="6"/>
+  <text class="h" x="840" y="84">hve/dag_planner.py</text>
+  <text x="840" y="106">build_dag_plan()</text>
+
+  <!-- Mid: DAGExecutor + Runner -->
+  <rect class="box py" x="30"  y="170" width="500" height="220" rx="6"/>
+  <text class="h" x="50" y="194">hve/dag_executor.py — DAGExecutor</text>
+  <text x="50" y="216">asyncio.Semaphore(max_parallel)</text>
+  <text x="50" y="234">workflow.get_next_steps() で依存解決</text>
+  <text x="50" y="252">fanout_expander によるテンプレート展開</text>
+  <text x="50" y="270">Fork-on-Retry: HVE_FORK_ON_RETRY=true 時に</text>
+  <text x="50" y="288">  1 回限定で新 session_id にフォーク</text>
+  <text x="50" y="306">fork_kpi_logger に JSONL 出力</text>
+  <text x="50" y="324">recovery / run_lock / run_state による再開支援</text>
+  <text x="50" y="350">▶ 各ステップを StepRunner.run() で起動</text>
+  <text x="50" y="372">▶ block_unless / skip_fallback_deps 条件評価</text>
+
+  <rect class="box py" x="560" y="170" width="500" height="220" rx="6"/>
+  <text class="h" x="580" y="194">hve/runner.py — StepRunner</text>
+  <text x="580" y="216">workflow_registry.StepDef を 1 ステップ実行</text>
+  <text x="580" y="234">prompt_templates / template_engine でプロンプト生成</text>
+  <text x="580" y="252">agent_loader: .github/agents/&lt;Agent&gt;.agent.md 読込</text>
+  <text x="580" y="270">skill_resolver: SKILL.md frontmatter から候補抽出</text>
+  <text x="580" y="288">artifact_validation: output_paths の存在確認</text>
+  <text x="580" y="306">qa_merger / mdq_enforcement / app_arch_filter</text>
+  <text x="580" y="324">existing_artifact_snapshot / knowledge_versions</text>
+  <text x="580" y="350">▶ CopilotClient.create_session().send_and_wait()</text>
+  <text x="580" y="372">▶ permission_handler でツール許可制御</text>
+
+  <!-- SDK -->
+  <rect class="box sdk" x="30" y="430" width="1030" height="110" rx="6"/>
+  <text class="h" x="50" y="454">GitHub Copilot CLI SDK（PyPI: github-copilot-sdk）</text>
+  <text x="50" y="476">from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig, PermissionHandler</text>
+  <text x="50" y="494">SubprocessConfig: ローカル `copilot` バイナリを子プロセス起動</text>
+  <text x="50" y="512">ExternalServerConfig: 既存 Copilot サーバへ接続（再利用）</text>
+  <text x="50" y="530">イベント駆動: text / tool_use / permission_request / completion</text>
+
+  <!-- External Copilot CLI -->
+  <rect class="box ext" x="30" y="580" width="500" height="100" rx="6"/>
+  <text class="h" x="50" y="604">外部プロセス: `copilot` (GitHub Copilot CLI)</text>
+  <text x="50" y="624">モデル選択（hve/models_api.py で `copilot model list --json` 呼出）</text>
+  <text x="50" y="642">Custom Agent 解釈 / MCP 呼出 / Skill 検索</text>
+  <text x="50" y="662">認証: copilot login（OS 認証ストアに格納、HVE は触らない）</text>
+
+  <rect class="box ext" x="560" y="580" width="500" height="100" rx="6"/>
+  <text class="h" x="580" y="604">Workbench (TUI) — hve/workbench/</text>
+  <text x="580" y="624">Rich Live: ステップ状態・トークン消費・経過時間</text>
+  <text x="580" y="642">Permission 要求のインタラクティブ承認</text>
+  <text x="580" y="662">--workbench off で非表示モード（GUI から流用時など）</text>
+
+  <!-- Arrows -->
+  <path class="arr" d="M290,90 L320,90"/>
+  <path class="arr" d="M520,90 L550,90"/>
+  <path class="arr" d="M790,90 L820,90"/>
+  <path class="arr" d="M670,120 L280,170"/>
+  <path class="arr" d="M530,280 L560,280"/>
+  <path class="arr" d="M790,390 L790,430"/>
+  <path class="arr" d="M280,540 L280,580"/>
+  <path class="arr dashed" d="M790,540 L790,580"/>
+</svg>

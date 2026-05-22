@@ -5,6 +5,16 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    []  # no required inputs extracted (or all are runtime params)
+  outputs:
+    - path: "{WORK}artifacts/scan-result.json"
+      required: true
+      mode: "create"
+    - path: "{WORK}artifacts/scan-summary.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/QA-CodeQualityScan/Issue-<識別子>/`
 
@@ -13,9 +23,26 @@ metadata:
 - 目的は **コード品質スキャン（読み取り＋評価）**。明示依頼が無い限り **コードの変更はしない**。
 - Skill harness-safety-guard: `rm -rf`・`git push --force`・`az delete` 系は絶対に実行しない。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
 
-## 1) 入力（置換必須）
+- `harness-verification-loop`: Build / Lint / Test / Security / Diff の 5 段階検証を実行
+- `harness-error-recovery`: スキャン失敗・タイムアウト時の E-01〜E-05 リカバリ
+- `harness-safety-guard`: ruff/pytest/markdownlint 実行時の破壊的操作検出
+- `work-artifacts-layout`: スキャン結果を `work/QA-CodeQualityScan/Issue-<識別子>/artifacts/` に保存
+- `karpathy-guidelines`: スコア算定時の LLM ミス防止指針
+
 > `{...}` が残っている場合は実行しない。
 
 - スキャン対象スコープ: `{target_scope}`（空 = 全体）
@@ -31,7 +58,7 @@ metadata:
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する。
 - ruff / pytest / markdownlint が未インストールの場合は「ツール未インストール」として明記し、インストール可能なツールのみ実行する。
 
-## 3) 実行手順
+## 4) 実行手順（順序固定）
 
 ### 3.1 ruff チェック
 ```bash
@@ -77,11 +104,11 @@ markdownlint "**/*.md" --ignore node_modules
 
 quality_score は 0〜100 の整数（100 = 完全に問題なし）。
 
-## 4) 成果物保存
+### 4.1) 成果物保存
 - スキャン結果を `{WORK}artifacts/scan-result.json` に保存する（Skill work-artifacts-layout §4.1 準拠: delete → create）
 - サマリーを `{WORK}artifacts/scan-summary.md` に保存する
 
-## 5) 出力（copilot-instructions.md §8 準拠）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 ```
 ## 成果物サマリー
 - status: 成功/失敗/部分完了

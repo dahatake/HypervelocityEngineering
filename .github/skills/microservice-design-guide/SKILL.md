@@ -16,7 +16,7 @@ metadata:
 ## Non-goals（このスキルの範囲外）
 
 - **マイクロサービスの実装** — Dev-Microservice-Azure-ServiceCoding 等の Agent が担当
-- **バッチ処理設計** — Skill `batch-design-guide` が担当
+- **データフロー処理設計** — Skill `dataflow-design-guide` が担当
 - **デプロイ** — Dev-Microservice-Azure-ComputeDeploy 等の Agent が担当
 
 ## ガイド一覧（references/）
@@ -43,7 +43,7 @@ metadata:
 
 | Skill | 関係 | 説明 |
 |-------|------|------|
-| `batch-design-guide` | 代替 | バッチ処理設計が必要な場合 |
+| `dataflow-design-guide` | 代替 | データフロー処理設計が必要な場合 |
 | `work-artifacts-layout` | 出力先 | サービス定義書の docs/usecase/... 配下への保存先 |
 | `task-dag-planning` | 先行 | マイクロサービス設計作業の計画 |
 | `architecture-questionnaire` | 先行 | アーキテクチャ選定後にサービス設計へ遷移 |

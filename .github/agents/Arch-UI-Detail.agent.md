@@ -5,6 +5,64 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/screen-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-List"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/test-strategy.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestStrategy"
+    - path: "data/sample-data.json"
+      required: true
+      kind: "static"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D05-ユースケース-シナリオカタログ.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D11-画面-UX-操作意味仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D12-権限-認可-職務分掌設計書.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/screen/sample-data-appendix.md"
+      required: false
+      mode: "create"
+    - path: "docs/screen/{画面ID}-{画面名スラッグ}-description.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}screen-detail-work-status.md"
+      required: true
+      mode: "upsert"
 ---
 > **WORK**: `work/Arch-UI-Detail/Issue-<識別子>/`
 
@@ -12,7 +70,24 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - この agent は **docs/screen/** と **work/** 以外を原則変更しない（例外が必要なら理由を明記）。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
 ## 1) 目的（このagent固有）
 `docs/catalog/screen-catalog.md` に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
@@ -74,9 +149,29 @@ metadata:
 > 分割判定の詳細手順は Skill `task-dag-planning` を参照。
 
 ### 4.2 Split Mode（task_scope=multi または context_size=large）
-- `{WORK}subissues.md` を作成し、**そのままSub Issue化できる本文**を出力する
+
+> ⚠️ **subissues.md フォーマット規約は厳守（Orchestrator がパース失敗で停止する）**。以下の順序を必ず遵守すること。独自フォーマットでの出力は禁止。
+
+#### 4.2.1 必須手順（順序固定・省略禁止）
+
+1. **template を read してコピー元とする**（再発明禁止）:
+   - `.github/skills/task-dag-planning/references/subissues-template.md` を read
+   - 各サブブロックは template の構造（`<!-- subissue -->` → `<!-- title: -->` → `<!-- custom_agent: -->` → `<!-- depends_on: -->` → `## Sub-N: ...`）を踏襲
+2. **各 `<!-- subissue -->` 直下に HTML コメントメタを必ず記載**:
+   - `<!-- title: <Markdown 見出しと一致するタイトル> -->`（必須・空値/`REPLACE_ME` 禁止）
+   - `<!-- custom_agent: Arch-UI-Detail -->`（必須）
+   - `<!-- depends_on: <1-indexed カンマ区切り、なければ空> -->`（任意。前方参照禁止）
+3. **ファイル保存後、validate-subissues を必ず execute で実行し PASS を確認**（PASS まで完了報告禁止）:
+   - Windows: `pwsh -NoProfile -File .github/scripts/powershell/validate-subissues.ps1 -Path {WORK}subissues.md`
+   - bash:    `bash .github/scripts/bash/validate-subissues.sh --path {WORK}subissues.md`
+4. PASS が出ない場合は **その場で修正して再実行**し、完了報告に validator 実行結果（`✅ PASS` ログ）を添付する。
+
+> ⚠️ Markdown 見出し（`## Sub-N: ...`）のみで `<!-- title: -->` を省略すると、パーサ `hve/split_fork.py` が即失敗し Step 全体が停止する。**Markdown 見出しと `<!-- title: -->` の両方が必須**である点に注意。
+
+#### 4.2.2 サブタスク分割方針
+
 - 1サブあたりの目安: 3〜5画面（または context_size ≤ medium になるよう調整）
-- 各Subには以下を必ず含める:
+- 各Subの本文（`## Sub-N:` 以降）には以下を必ず含める:
   - 対象画面ID一覧
   - 成果物（生成するファイル）
   - 手順（参照する入力 / 生成順 / 更新ルール）
@@ -97,10 +192,10 @@ metadata:
 
 2) 各画面の画面定義書を作成/更新
 - 出力先:
-  - `docs/screen/<画面-ID>-<画面名>-description.md`
+  - `docs/screen/{画面ID}-{画面名スラッグ}-description.md`
 - 命名:
-  - `<画面-ID>` は screen-list のID
-  - `<画面名>` は screen-list の名称（ファイル名に不適な文字は `-` へ置換）
+  - `{画面ID}` は screen-list のID
+  - `{画面名スラッグ}` は screen-list の名称をスラッグ化（小文字/空白は `-` / 英数と `-` のみ。ファイル名に不適な文字は `-` へ置換）
 - 各ファイルは idempotent に更新（生成ブロックのみ更新）:
   - ブロック外の手書き内容は保持する
 
@@ -147,7 +242,7 @@ metadata:
 以下のテンプレートを各画面の定義書に使用する（内容は例示）。不明点は捏造せず、TODO/Questions に落とすこと。
 
 ```md
-## 1. 概要
+## 1) 目的と非目的
 * 所属アプリケーション: APP-xx（`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照）
 * 目的 / 想定ユーザー / 前提
 

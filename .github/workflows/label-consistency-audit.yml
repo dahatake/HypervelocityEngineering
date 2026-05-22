@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
 
           # 対象 12 系列プレフィックス
-          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm adoc aqod"
+          PREFIXES="aas aad aad-web asdw asdw-web adfd adfdv aag aagd akm adoc aqod"
 
           # 自動修復対象: done が存在する場合に除去すべき古いラベル
           # 形式: "stale_suffix"（done と共存不可）

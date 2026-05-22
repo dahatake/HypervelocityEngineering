@@ -13,7 +13,7 @@ try:
     from .config import SDKConfig
     from .console import Console
     from .prompts import (
-        QA_APPLY_PROMPT, REVIEW_PROMPT,
+        REVIEW_PROMPT,
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
@@ -25,7 +25,7 @@ except ImportError:
     from config import SDKConfig  # type: ignore[no-redef]
     from console import Console  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
-        QA_APPLY_PROMPT, REVIEW_PROMPT,
+        REVIEW_PROMPT,
         CODE_REVIEW_AGENT_FIX_PROMPT, CODE_REVIEW_CLI_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2, QA_MERGE_SAVE_PROMPT, QA_CONSOLIDATE_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
@@ -38,7 +38,6 @@ __all__ = [
     "__version__",
     "SDKConfig",
     "Console",
-    "QA_APPLY_PROMPT",
     "REVIEW_PROMPT",
     "CODE_REVIEW_AGENT_FIX_PROMPT",
     "CODE_REVIEW_CLI_PROMPT",

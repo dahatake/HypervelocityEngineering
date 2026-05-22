@@ -71,7 +71,7 @@ Custom Agent の入出力ファイルを示します（`hve/workflow_registry.py
 
 - `qa/` または `original-docs/` に対象ファイルが存在すること
 - GitHub Copilot が有効であること
-- セットアップ手順は [getting-started.md](./getting-started.md) を参照
+- セットアップ手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照
 
 ## 完了条件
 
@@ -141,4 +141,4 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 
 ## セットアップ・トラブルシューティング
 
-共通手順は [getting-started.md](./getting-started.md) を参照してください。問題切り分けは [troubleshooting.md](./troubleshooting.md) を参照してください。
+共通手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。問題切り分けは [troubleshooting.md](./troubleshooting.md) を参照してください。

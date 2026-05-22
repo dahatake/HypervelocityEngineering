@@ -1,10 +1,10 @@
-﻿# workflow-registry.ps1 — ワークフロー定義レジストリ
+# workflow-registry.ps1 — ワークフロー定義レジストリ
 #
 # Migrated from:
 #   - .github/scripts/bash/lib/workflow-registry.sh
 #   - .github/cli/lib/workflow_registry.py
 #
-# 5 workflows (AAS/AAD/ASDW/ABD/ABDV) with step DAG definitions stored
+# 5 workflows (AAS/AAD/ASDW/ADFD/ADFDV) with step DAG definitions stored
 # as PSCustomObject structures.
 #
 # Prerequisites:
@@ -67,53 +67,53 @@ $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     )
 }
 
-# ABD — Batch Design (9 steps)
-$script:WorkflowRegistryData['abd'] = [PSCustomObject]@{
-    id            = 'abd'
-    name          = 'Batch Design'
-    label_prefix  = 'abd'
+# ADFD — Dataflow Design (9 steps)
+$script:WorkflowRegistryData['adfd'] = [PSCustomObject]@{
+    id            = 'adfd'
+    name          = 'Dataflow Design'
+    label_prefix  = 'adfd'
     state_labels  = [PSCustomObject]@{
-        initialized = 'abd:initialized'
-        ready       = 'abd:ready'
-        running     = 'abd:running'
-        done        = 'abd:done'
-        blocked     = 'abd:blocked'
+        initialized = 'adfd:initialized'
+        ready       = 'adfd:ready'
+        running     = 'adfd:running'
+        done        = 'adfd:done'
+        blocked     = 'adfd:blocked'
     }
     params        = @()
     steps         = @(
-        (NewWorkflowStep -Id '1.1' -Title 'バッチドメイン分析' -CustomAgent 'Arch-Batch-DomainAnalytics' -BodyTemplatePath 'templates/abd/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title 'データソース/デスティネーション分析' -CustomAgent 'Arch-Batch-DataSourceAnalysis' -BodyTemplatePath 'templates/abd/step-1.2.md')
-        (NewWorkflowStep -Id '2' -Title 'バッチデータモデル' -CustomAgent 'Arch-Batch-DataModel' -DependsOn @('1.1', '1.2') -BodyTemplatePath 'templates/abd/step-2.md')
-        (NewWorkflowStep -Id '3' -Title 'ジョブ設計書' -CustomAgent 'Arch-Batch-JobCatalog' -DependsOn @('2') -SkipFallbackDeps @('2') -BodyTemplatePath 'templates/abd/step-3.md')
-        (NewWorkflowStep -Id '4' -Title 'サービスカタログ' -CustomAgent 'Arch-Batch-ServiceCatalog' -DependsOn @('3') -SkipFallbackDeps @('3') -BodyTemplatePath 'templates/abd/step-4.md')
-        (NewWorkflowStep -Id '5' -Title 'テスト戦略書' -CustomAgent 'Arch-Batch-TestStrategy' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/abd/step-5.md')
-        (NewWorkflowStep -Id '6.1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Batch-JobSpec' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/abd/step-6.1.md')
-        (NewWorkflowStep -Id '6.2' -Title '監視・運用設計書' -CustomAgent 'Arch-Batch-MonitoringDesign' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/abd/step-6.2.md')
-        (NewWorkflowStep -Id '6.3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Batch-TDD-TestSpec' -DependsOn @('6.1', '6.2') -BodyTemplatePath 'templates/abd/step-6.3.md')
+        (NewWorkflowStep -Id '1.1' -Title 'バッチドメイン分析' -CustomAgent 'Arch-Dataflow-DomainAnalytics' -BodyTemplatePath 'templates/adfd/step-1.1.md')
+        (NewWorkflowStep -Id '1.2' -Title 'データソース/デスティネーション分析' -CustomAgent 'Arch-Dataflow-DataSourceAnalysis' -BodyTemplatePath 'templates/adfd/step-1.2.md')
+        (NewWorkflowStep -Id '2' -Title 'バッチデータモデル' -CustomAgent 'Arch-Dataflow-DataModel' -DependsOn @('1.1', '1.2') -BodyTemplatePath 'templates/adfd/step-2.md')
+        (NewWorkflowStep -Id '3' -Title 'ジョブ設計書' -CustomAgent 'Arch-Dataflow-AppCatalog' -DependsOn @('2') -SkipFallbackDeps @('2') -BodyTemplatePath 'templates/adfd/step-3.md')
+        (NewWorkflowStep -Id '4' -Title 'サービスカタログ' -CustomAgent 'Arch-Dataflow-ServiceCatalog' -DependsOn @('3') -SkipFallbackDeps @('3') -BodyTemplatePath 'templates/adfd/step-4.md')
+        (NewWorkflowStep -Id '5' -Title 'テスト戦略書' -CustomAgent 'Arch-Dataflow-TestStrategy' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-5.md')
+        (NewWorkflowStep -Id '6.1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Dataflow-AppSpec' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-6.1.md')
+        (NewWorkflowStep -Id '6.2' -Title '監視・運用設計書' -CustomAgent 'Arch-Dataflow-MonitoringDesign' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-6.2.md')
+        (NewWorkflowStep -Id '6.3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Dataflow-TDD-TestSpec' -DependsOn @('6.1', '6.2') -BodyTemplatePath 'templates/adfd/step-6.3.md')
     )
 }
 
-# ABDV — Batch Dev (7 steps)
-$script:WorkflowRegistryData['abdv'] = [PSCustomObject]@{
-    id            = 'abdv'
-    name          = 'Batch Dev'
-    label_prefix  = 'abdv'
+# ADFDV — Dataflow Dev (7 steps)
+$script:WorkflowRegistryData['adfdv'] = [PSCustomObject]@{
+    id            = 'adfdv'
+    name          = 'Dataflow Dev'
+    label_prefix  = 'adfdv'
     state_labels  = [PSCustomObject]@{
-        initialized = 'abdv:initialized'
-        ready       = 'abdv:ready'
-        running     = 'abdv:running'
-        done        = 'abdv:done'
-        blocked     = 'abdv:blocked'
+        initialized = 'adfdv:initialized'
+        ready       = 'adfdv:ready'
+        running     = 'adfdv:running'
+        done        = 'adfdv:done'
+        blocked     = 'adfdv:blocked'
     }
-    params        = @('resource_group', 'batch_job_id')
+    params        = @('resource_group', 'app_id')
     steps         = @(
-        (NewWorkflowStep -Id '1.1' -Title 'データサービス選定' -CustomAgent 'Dev-Batch-DataServiceSelect' -BodyTemplatePath 'templates/abdv/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title 'Azure データリソース Deploy' -CustomAgent 'Dev-Batch-DataDeploy' -DependsOn @('1.1') -BodyTemplatePath 'templates/abdv/step-1.2.md')
-        (NewWorkflowStep -Id '2.1' -Title 'TDD RED — テストコード作成' -CustomAgent 'Dev-Batch-TestCoding' -DependsOn @('1.2') -BodyTemplatePath 'templates/abdv/step-2.1.md')
-        (NewWorkflowStep -Id '2.2' -Title 'TDD GREEN — バッチジョブ本実装' -CustomAgent 'Dev-Batch-ServiceCoding' -DependsOn @('2.1') -BodyTemplatePath 'templates/abdv/step-2.2.md')
-        (NewWorkflowStep -Id '3' -Title 'Azure Functions/コンテナ Deploy' -CustomAgent 'Dev-Batch-FunctionsDeploy' -DependsOn @('2.2') -BodyTemplatePath 'templates/abdv/step-3.md')
-        (NewWorkflowStep -Id '4.1' -Title 'WAF レビュー' -CustomAgent 'QA-AzureArchitectureReview' -DependsOn @('3') -BodyTemplatePath 'templates/abdv/step-4.1.md')
-        (NewWorkflowStep -Id '4.2' -Title '整合性チェック' -CustomAgent 'QA-AzureDependencyReview' -DependsOn @('3') -BodyTemplatePath 'templates/abdv/step-4.2.md')
+        (NewWorkflowStep -Id '1.1' -Title 'データサービス選定' -CustomAgent 'Dev-Dataflow-DataServiceSelect' -BodyTemplatePath 'templates/adfdv/step-1.1.md')
+        (NewWorkflowStep -Id '1.2' -Title 'Azure データリソース Deploy' -CustomAgent 'Dev-Dataflow-DataDeploy' -DependsOn @('1.1') -BodyTemplatePath 'templates/adfdv/step-1.2.md')
+        (NewWorkflowStep -Id '2.1' -Title 'TDD RED — テストコード作成' -CustomAgent 'Dev-Dataflow-TestCoding' -DependsOn @('1.2') -BodyTemplatePath 'templates/adfdv/step-2.1.md')
+        (NewWorkflowStep -Id '2.2' -Title 'TDD GREEN — データフローアプリ本実装' -CustomAgent 'Dev-Dataflow-ServiceCoding' -DependsOn @('2.1') -BodyTemplatePath 'templates/adfdv/step-2.2.md')
+        (NewWorkflowStep -Id '3' -Title 'Azure Functions/コンテナ Deploy' -CustomAgent 'Dev-Dataflow-FunctionsDeploy' -DependsOn @('2.2') -BodyTemplatePath 'templates/adfdv/step-3.md')
+        (NewWorkflowStep -Id '4.1' -Title 'WAF レビュー' -CustomAgent 'QA-AzureArchitectureReview' -DependsOn @('3') -BodyTemplatePath 'templates/adfdv/step-4.1.md')
+        (NewWorkflowStep -Id '4.2' -Title '整合性チェック' -CustomAgent 'QA-AzureDependencyReview' -DependsOn @('3') -BodyTemplatePath 'templates/adfdv/step-4.2.md')
     )
 }
 
@@ -126,7 +126,7 @@ function Get-Workflow {
     .SYNOPSIS
         Retrieve full workflow definition as PSCustomObject.
     .PARAMETER WorkflowId
-        Workflow identifier (aas, aad, asdw, abd, abdv)
+        Workflow identifier (aas, aad, asdw, adfd, adfdv)
     #>
     [CmdletBinding()]
     param(

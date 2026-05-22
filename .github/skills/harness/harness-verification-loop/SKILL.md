@@ -1,10 +1,10 @@
 ---
 name: harness-verification-loop
 description: >
-  コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順。 USE FOR: build check, lint, test execution. DO NOT USE FOR: error recovery (use harness-error-recovery). WHEN: コードを変更した後の検証、ビルド確認。
+  コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順。 PHASE: 実行後（コード変更・生成・デプロイを行った**後**に使用）。 USE FOR: build check, lint, test execution. DO NOT USE FOR: error recovery (use harness-error-recovery), pre-execution safety check (use harness-safety-guard). WHEN: コードを変更した後の検証、ビルド確認。
 metadata:
   origin: user
-  version: 2.0.0
+  version: 2.0.1
 ---
 
 # harness-verification-loop

@@ -314,7 +314,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["ard", "aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd", "akm", "aqod", "adoc"]
+        valid_ids = ["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "adoc"]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
@@ -758,6 +758,72 @@ class TestAdditionalPrompt(unittest.TestCase):
         )
         # 空文字と None は同じ結果（追記なし）
         self.assertEqual(result_none, result_empty)
+
+    # ------------------------------------------------------------------
+    # P-B: subissues.md フォーマット最小例のインライン注入
+    # ------------------------------------------------------------------
+
+    def test_PB_subissues_hint_injected_for_custom_agent_step(self) -> None:
+        """P-B: Custom Agent が割当られた Step のプロンプトに subissues.md hint が
+        冒頭（言語ルール直後）に注入されること。"""
+        from orchestrator import _build_step_prompt
+        step = self._build_mock_step()
+        step.custom_agent = "Arch-TDD-TestSpec"
+        step.is_container = False
+        step.body_template_path = "dummy_template.md"
+        wf = self._build_mock_wf()
+
+        result = _build_step_prompt(
+            step=step,
+            params={"branch": "main"},
+            root_issue_num=None,
+            render_template_fn=lambda **kw: "テンプレート本文",
+            wf=wf,
+            additional_prompt="追加指示",
+        )
+        self.assertIn("subissues.md フォーマット必須ルール", result)
+        self.assertIn("<!-- subissue -->", result)
+        self.assertIn("Markdown テーブル形式は禁止", result)
+        # endswith() ベースの既存テストは hint 冒頭注入により壊れない
+        self.assertTrue(result.endswith("テンプレート本文\n\n追加指示"))
+
+    def test_PB_subissues_hint_skipped_for_container_step(self) -> None:
+        """P-B: コンテナ Step (is_container=True) には hint を注入しない。"""
+        from orchestrator import _build_step_prompt
+        step = self._build_mock_step()
+        step.custom_agent = "SomeAgent"
+        step.is_container = True
+        step.body_template_path = None
+        wf = self._build_mock_wf()
+
+        result = _build_step_prompt(
+            step=step,
+            params={"branch": "main"},
+            root_issue_num=None,
+            render_template_fn=lambda **kw: "",
+            wf=wf,
+            additional_prompt=None,
+        )
+        self.assertNotIn("subissues.md フォーマット必須ルール", result)
+
+    def test_PB_subissues_hint_skipped_when_custom_agent_is_none(self) -> None:
+        """P-B: custom_agent=None の Step には hint を注入しない。"""
+        from orchestrator import _build_step_prompt
+        step = self._build_mock_step()
+        step.custom_agent = None
+        step.is_container = False
+        step.body_template_path = None
+        wf = self._build_mock_wf()
+
+        result = _build_step_prompt(
+            step=step,
+            params={"branch": "main"},
+            root_issue_num=None,
+            render_template_fn=lambda **kw: "",
+            wf=wf,
+            additional_prompt=None,
+        )
+        self.assertNotIn("subissues.md フォーマット必須ルール", result)
 
 
 class TestCopilotUsernames(unittest.TestCase):
@@ -2136,8 +2202,8 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
             "aas": "",        # output_paths 定義済み → scope="" でパス直指定
             "aad-web": "",    # Sub-7 (C-4): Step 3 で output_paths 定義済み → scope=""
             "asdw-web": ".",
-            "abd": "docs/",
-            "abdv": ".",
+            "adfd": "docs/",
+            "adfdv": ".",
             "aag": "docs/",
             "aagd": ".",
             "akm": "knowledge/",
@@ -2395,12 +2461,12 @@ class TestAppArchFilterInOrchestrator(unittest.TestCase):
             matched_app_ids=["APP-01"],
         )
 
-    def _batch_result(self, workflow_id: str = "abd"):
+    def _batch_result(self, workflow_id: str = "adfd"):
         from hve.app_arch_filter import AppArchFilterResult
         return AppArchFilterResult(
             workflow_id=workflow_id,
             target_kind="batch",
-            target_architectures=["データバッチ処理"],
+            target_architectures=["データデータフロー処理"],
             requested_app_ids=None,
             matched_app_ids=["APP-02"],
         )
@@ -2437,14 +2503,14 @@ class TestAppArchFilterInOrchestrator(unittest.TestCase):
         self.assertIsNone(result.get("error"))
 
     def test_abd_batch_app_ids_only(self) -> None:
-        """abd ワークフローで Batch APP のみ対象になること。"""
+        """adfd ワークフローで Batch APP のみ対象になること。"""
         cfg = SDKConfig(dry_run=False, quiet=True)
 
         with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch("orchestrator.resolve_app_arch_scope", return_value=self._batch_result("abd")), \
+             patch("orchestrator.resolve_app_arch_scope", return_value=self._batch_result("adfd")), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()):
             result = _run(run_workflow(
-                workflow_id="abd",
+                workflow_id="adfd",
                 params={"branch": "main", "selected_steps": []},
                 config=cfg,
             ))

@@ -37,7 +37,7 @@ def test_body_window_range_is_10_to_20() -> None:
     from hve.workbench.state import BODY_WINDOW_DEFAULT
     assert BODY_WINDOW_MIN == 10
     assert BODY_WINDOW_MAX == 20
-    assert BODY_WINDOW_DEFAULT == 20
+    assert BODY_WINDOW_DEFAULT == 10
     assert clamp_body_window(20) == 20
     assert clamp_body_window(21) == 20
     assert clamp_body_window(10) == 10

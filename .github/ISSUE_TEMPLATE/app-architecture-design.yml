@@ -30,7 +30,7 @@ body:
 
         ✅ **完了後の次ステップ**:
         - Web App Design（`web-app-design.yml`）
-        - Batch Design（`batch-design.yml`）
+        - Dataflow Design（`batch-design.yml`）
         - AI Agent Design（`ai-agent-design.yml`）
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。

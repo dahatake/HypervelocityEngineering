@@ -26,7 +26,7 @@ _VALID_STATUS: frozenset = frozenset(
 # Body コンテンツ行数の許容範囲（要件: 10〜20 行）。
 BODY_WINDOW_MIN = 10
 BODY_WINDOW_MAX = 20
-BODY_WINDOW_DEFAULT = 20
+BODY_WINDOW_DEFAULT = 10
 
 # UserActions ペインの仕様定数。
 USER_ACTIONS_VISIBLE = 5
@@ -90,6 +90,10 @@ class WorkbenchState:
     user_actions: List[UserAction] = field(default_factory=list)
     user_actions_scroll: int = 0
 
+    # --- TaskTree スクロール ---
+    # 0 = 末尾追従（最新可視）、>0 で過去方向へスクロール
+    task_tree_scroll: int = 0
+
     # --- Command Input ---
     cmd_mode: bool = False
     cmd_buffer: str = ""
@@ -100,6 +104,7 @@ class WorkbenchState:
     all_done: bool = False
     exit_requested: bool = False
     report_saved: bool = False
+    tasktree_report_saved: bool = False
 
     # --- TaskTree ---
     task_tree: TaskTree = field(default_factory=TaskTree)
@@ -347,6 +352,14 @@ class WorkbenchState:
 
     def user_actions_max_offset(self) -> int:
         return max(0, len(self.user_actions) - USER_ACTIONS_VISIBLE)
+
+    def task_tree_total_nodes(self) -> int:
+        return len(self.task_tree.iter_flatten())
+
+    def task_tree_max_offset(self, visible: int) -> int:
+        if visible <= 0:
+            return 0
+        return max(0, self.task_tree_total_nodes() - visible)
 
     def user_actions_view(self) -> List[UserAction]:
         total = len(self.user_actions)

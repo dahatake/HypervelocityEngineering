@@ -33,13 +33,13 @@ metadata:
 | knowledge/ 管理 | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | D01〜D21 分類・状態判定・ステータス管理 |
 | タスク実行中に業務要件が不明瞭 | `knowledge-lookup` | `.github/skills/knowledge-lookup/SKILL.md` | knowledge/ D01〜D21 の条件付き参照ルール |
 | MCP Server 設計 | `mcp-server-design` | `.github/skills/mcp-server-design/SKILL.md` | Skills と MCP Server の責務分離・API設計 |
-| バッチ処理設計 | `batch-design-guide` | `.github/skills/batch-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
+| データフロー処理設計 | `dataflow-design-guide` | `.github/skills/dataflow-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
 | マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
 | original-docs/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | original-docs/ → D01〜D21 分類・矛盾検出 |
-| Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | ローカル完結の Markdown 検索・該当チャンクのみ返却で Context 最小化。HVE CLI Orchestrator 実行中はリアルタイム索引更新が並走する（既定 ON、`--no-mdq-watch` で無効化、Cloud Agent では非対応） |
+| Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | ローカル完結の Markdown 検索・該当チャンクのみ返却で Context 最小化。**対象が `.md` のみであれば `grep_search` より優先**。索引未作成時は `python -m mdq index` を先に実行。HVE CLI Orchestrator 実行中はリアルタイム索引更新が並走する（既定 ON、`--no-mdq-watch` で無効化、Cloud Agent では非対応） |
 
 **Workflow 一覧（Issue Template / hve）**
-- `aas`, `aad`, `asdw`, `abd`, `abdv`, `aag`, `aagd`, `akm`, `aqod`, `adoc`
+- `aas`, `aad`, `asdw`, `adfd`, `adfdv`, `aag`, `aagd`, `akm`, `aqod`, `adoc`
 
 **【出力 / output】**
 
@@ -107,3 +107,41 @@ metadata:
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
 | テスト戦略テンプレート | `test-strategy-template` | `.github/skills/testing/test-strategy-template/SKILL.md` | テストピラミッド・テストダブル・データ戦略・カバレッジ方針 |
+
+## Skill Deprecation スキーマ（W6-2: 廃止予定 Skill の標準マーカー）
+
+Skill を非推奨化する場合、その SKILL.md の frontmatter に以下のメタデータを追加すること：
+
+```yaml
+---
+name: <skill-name>
+description: >
+  ⚠️ DEPRECATED — <代替 Skill 名> を使用してください。
+  （元の description は維持。先頭に DEPRECATED マーカーを追加）
+metadata:
+  origin: user
+  version: <現バージョン>
+  deprecation:
+    status: deprecated          # values: deprecated | legacy | removed-planned
+    since: YYYY-MM-DD            # 非推奨化した日付
+    replacement: <skill-name>    # 代替先 Skill 名（無い場合は null）
+    removal_planned: YYYY-MM-DD  # 削除予定日（無い場合は null）
+    reason: |
+      非推奨化の理由を 1-3 行で記述
+---
+```
+
+**運用ルール**:
+
+1. `deprecation.status` が設定された Skill は **本ルーティング表から削除し**、別途「廃止予定 Skill」セクション（下記）へ移動する。
+2. `removal_planned` 経過後、**次マイナーリリースまたは関係者合意** をもってファイルを削除してよい（固定 SLA は設けない）。
+3. Skill 参照側（Agent / 他 Skill / copilot-instructions.md）は `replacement` への置換コミットを優先する。
+4. `validate-skills.yml` CI で deprecation メタデータの形式を検証する（実装は次サイクル）。
+
+### 現在の廃止予定 Skill（W6-2 時点）
+
+| Skill | status | since | replacement | removal_planned |
+|---|---|---|---|---|
+| （該当なし） | - | - | - | - |
+
+> 過去の Phase 0 W7-14 で発見された参照頻度低 Skill（`svg-renderer`, `appinsights-instrumentation`, `input-file-validation`）は **意図的なニッチユースケース** のため非推奨化していない。削除判断には Skill `_routing` §「3 条件 AND」を適用する（過去 6 ヶ月 0 参照 AND 機能代替可能 AND deprecated 標記でユーザー影響なし）。

@@ -1,6 +1,6 @@
 # Web Application の作成（ASDW-WEB）
 
-← [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | [06-app-dev-batch-azure.md](./06-app-dev-batch-azure.md) →
+← [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | [06-app-dev-dataflow-azure.md](./06-app-dev-dataflow-azure.md) →
 
 ---
 
@@ -30,7 +30,7 @@
 - 設計成果物が存在すること（`docs/catalog/service-catalog-matrix.md`、`docs/services/`、`docs/screen/` など）
 - `COPILOT_PAT`、`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID` が設定済みであること
 - `AZURE_STATIC_WEB_APPS_API_TOKEN` は手動設定不要（OIDC + `az staticwebapp secrets list` で deploy token を動的取得する運用）
-- セットアップ手順は [getting-started.md](./getting-started.md) を参照
+- セットアップ手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照
 
 ## 次のステップ
 
@@ -191,8 +191,6 @@ ASDW-WEB は TDD を前提とし、次を順守します。
 
 - `.github/workflows/auto-blocked-to-human-required.yml`
 - `.github/workflows/auto-human-resolved-to-ready.yml`
-
-詳細: [`docs/hitl/escalation-sla.md`](../docs/hitl/escalation-sla.md)
 
 ---
 

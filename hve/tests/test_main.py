@@ -79,7 +79,7 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.app_id)
         self.assertIsNone(args.app_ids)
         self.assertIsNone(args.resource_group)
-        self.assertIsNone(args.batch_job_id)
+        self.assertIsNone(args.app_id)
         self.assertIsNone(args.usecase_id)
         # Sub-D-1: --sources の argparse 既定値は None。
         # 実行時に _build_params / _collect_params_non_interactive が _AKM_DEFAULT_SOURCES
@@ -611,7 +611,6 @@ class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
     """_prompt_akm_params: GitHub 系質問は呼び出し元で扱い、AKM 固有値だけ収集する。"""
 
     _AUTO_MERGE_LABEL = "PR の自動 Approve & Auto-merge を有効にする？"
-    _COMMENT_LABEL = "GitHub Issue への追加コメント（任意）"
 
     def _make_con(self):
         con = mock.MagicMock()
@@ -632,7 +631,6 @@ class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
         params = _prompt_akm_params(con, is_quick_auto=False, will_create_pr=False)
         self.assertFalse(params["enable_auto_merge"])
         self.assertNotIn(self._AUTO_MERGE_LABEL, self._called_labels(con))
-        self.assertNotIn(self._COMMENT_LABEL, self._called_input_labels(con))
 
     def test_delegates_auto_merge_when_pr(self) -> None:
         """will_create_pr=True でも auto_merge 質問は呼び出し元に委譲する。"""
@@ -818,7 +816,7 @@ class TestMainDryRun(unittest.TestCase):
 
     def test_main_all_valid_workflows_dry_run(self) -> None:
         """全ての有効なワークフローで dry_run が成功することを確認。"""
-        for wf_id in ["aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd", "akm", "aqod", "adoc"]:
+        for wf_id in ["aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "adoc"]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
                     "orchestrate",
@@ -1130,6 +1128,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         use_different_qa_model: bool = False,
         auto_review: bool = False,
         use_different_review_model: bool = False,
+        enable_workbench: bool = True,
     ) -> "SDKConfig":
         """Console メソッドをモックして _cmd_run_interactive を実行し、
         構築された SDKConfig を返す。
@@ -1156,7 +1155,8 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 8. Issue 作成 → create_issues (Phase F)
         # 9. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる) (Phase F)
         # 10. ドライラン → False (Phase G)
-        # 11. 実行確認 → True
+        # 11. ワークベンチ起動 → enable_workbench (Phase H、既定 True)
+        # 12. 実行確認 → True
         yes_no_answers = [auto_qa]
         if auto_qa:
             yes_no_answers.append(use_different_qa_model)
@@ -1171,6 +1171,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         if not create_issues:
             yes_no_answers.append(create_pr)
         yes_no_answers.append(False)  # dry_run
+        yes_no_answers.append(enable_workbench)  # Phase H: Workbench 起動有無
         yes_no_answers.append(True)  # 実行確認
 
         yes_no_iter = iter(yes_no_answers)
@@ -1181,14 +1182,14 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 3. ブランチ → "main"               (Phase D)
         # 4. 並列数 → "15"                   (Phase D)
         # 5. Review タイムアウト (code_review=True 時のみ) (Phase E)
-        # 6. Issue タイトル/追加コメント (create_issues=True 時のみ) (Phase F)
+        # 6. Issue タイトル (create_issues=True 時のみ) (Phase F)
         # 7. repo_input (create_issues or create_pr の場合)        (Phase F)
         # 8. セッション名（Phase 4 Resume）→ "" で既定使用
         input_answers = ["", "7200", "main", "15"]
         if code_review:
             input_answers.append(review_timeout)
         if create_issues:
-            input_answers += ["", ""]
+            input_answers += [""]
         if create_issues or create_pr:
             input_answers.append("owner/repo")
         input_answers.append("")  # Phase 4: セッション名（既定値を使用）
@@ -1350,6 +1351,18 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertEqual(cfg.review_model, "claude-opus-4.6")
 
+    def test_interactive_workbench_yes_sets_no_workbench_false(self) -> None:
+        """ウィザード末尾の Workbench 質問で Yes を選ぶと cfg.no_workbench=False。"""
+        cfg = self._run_interactive_with_inputs(enable_workbench=True)
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.no_workbench)
+
+    def test_interactive_workbench_no_sets_no_workbench_true(self) -> None:
+        """ウィザード末尾の Workbench 質問で No を選ぶと cfg.no_workbench=True（--workbench off 相当）。"""
+        cfg = self._run_interactive_with_inputs(enable_workbench=False)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.no_workbench)
+
 
 class TestInteractiveModeAutoExecModes(unittest.TestCase):
     """インタラクティブモードのクイック全自動/カスタム全自動モードのテスト。"""
@@ -1360,6 +1373,7 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         *,
         auto_coding_agent_review: bool = False,
         custom_timeout: str = "86400",
+        enable_workbench: bool = True,
     ) -> "SDKConfig":
         """Console メソッドをモックして指定した全自動モードで _cmd_run_interactive を実行し、
         構築された SDKConfig を返す。
@@ -1386,8 +1400,8 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         if exec_mode == 0:
             # クイック全自動: workflow, exec_mode(0), model のみ（Phase 再編後）
             con.menu_select.side_effect = [0, 0, 0]
-            # 実行確認
-            con.prompt_yes_no.side_effect = [True]
+            # Phase H: enable_workbench, 実行確認 → True
+            con.prompt_yes_no.side_effect = [enable_workbench, True]
         else:
             # カスタム全自動（Phase 再編後）: workflow, exec_mode(1), model, verbosity
             con.menu_select.side_effect = [0, 1, 0, 1]
@@ -1397,13 +1411,14 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             #            自己改善→False
             #   Phase F: Issue→False, PR→False
             #   Phase G: dry_run→False
+            #   Phase H: enable_workbench
             #   最終  : 実行確認→True
             yes_no_answers = [False, False, auto_coding_agent_review]
             if auto_coding_agent_review:
                 yes_no_answers.append(False)  # use_different_review_model
             yes_no_answers += [False]   # auto_self_improve
             yes_no_answers += [False, False]  # create_issues, create_pr
-            yes_no_answers += [False, True]   # dry_run, 実行確認
+            yes_no_answers += [False, enable_workbench, True]   # dry_run, enable_workbench, 実行確認
             con.prompt_yes_no.side_effect = yes_no_answers
             # 追加プロンプト, タイムアウト, ブランチ, 並列数, (review_timeout), セッション名
             input_answers = ["", custom_timeout, "main", "15"]
@@ -1473,6 +1488,18 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertEqual(cfg.qa_answer_mode, "all")
 
+    def test_quick_auto_workbench_yes_default(self) -> None:
+        """クイック全自動でも Phase H が表示され、Yes 既定で cfg.no_workbench=False。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0)
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.no_workbench)
+
+    def test_quick_auto_workbench_no_sets_no_workbench_true(self) -> None:
+        """クイック全自動で Phase H に No を選ぶと cfg.no_workbench=True。"""
+        cfg = self._run_interactive_auto_mode(exec_mode=0, enable_workbench=False)
+        self.assertIsNotNone(cfg)
+        self.assertTrue(cfg.no_workbench)
+
     def test_custom_auto_sets_unattended_true(self) -> None:
         """カスタム全自動: cfg.unattended=True が設定される。"""
         cfg = self._run_interactive_auto_mode(exec_mode=1)
@@ -1518,8 +1545,8 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         #   Phase E: auto_qa=True, (auto_qa=Trueなので) use_different_qa_model=False,
         #            auto_review=False, code_review=False, self_improve=False
         #   Phase F: create_issues=False, create_pr=False
-        #   Phase G: dry_run=False / 実行確認=True
-        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True]
+        #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
+        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True, True]
         # Phase 再編後の input 順: addl_prompt, timeout, branch, parallel, session_name (Phase 4)
         con.prompt_input.side_effect = ["", "21600", "main", "15", ""]
         con.prompt_multi_select.return_value = []
@@ -1586,8 +1613,8 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         # Phase 再編後の yes_no 順:
         #   force_refresh=False(Phase A' AKM, 差分マージが既定), AKM QA=False, WorkIQ review=False,
         #   CodeReview=False, auto_self_improve=False,
-        #   Issue=False, PR=False, dry_run=False, confirm=True
-        con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, False, True]
+        #   Issue=False, PR=False, dry_run=False, enable_workbench=True, confirm=True
+        con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, False, True, True]
         # Phase 再編後の input 順:
         #   target_files, custom_source_dir, additional_prompt, timeout, branch, session_name
         con.prompt_input.side_effect = [
@@ -1751,7 +1778,7 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         if exec_mode == 0:
             # workflow, exec_mode(0), model（Phase 再編後。クイック全自動は ADOC パラメータも既定値採用）
             con.menu_select.side_effect = [0, 0, 0]
-            con.prompt_yes_no.side_effect = [True]  # confirmation
+            con.prompt_yes_no.side_effect = [True, True]  # Phase H enable_workbench, confirmation
         else:
             # Phase 再編後の menu_select 順:
             #   workflow, exec_mode(2=手動), doc_purpose(1=onboarding), max_file_lines(0=300), model, verbosity(1)
@@ -1760,8 +1787,8 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             # Phase 再編後の yes_no 順:
             #   Phase E: auto_qa=False, auto_review=False, code_review=False, self_improve=False
             #   Phase F: create_issues=False, create_pr=False
-            #   Phase G: dry_run=False / 実行確認=True
-            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
+            #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True, True]
             # Phase 再編後の input 順: additional_prompt, timeout, branch, parallel, session_name
             con.prompt_input.side_effect = ["", "7200", "main", "15", ""]
 
@@ -1832,15 +1859,15 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
 
         if exec_mode == 0:
             con.menu_select.side_effect = [0, 0, 0]
-            con.prompt_yes_no.side_effect = [True]
+            con.prompt_yes_no.side_effect = [True, True]  # Phase H enable_workbench, confirmation
         else:
             # Phase 再編後: workflow, exec_mode(2=手動), model, verbosity
             con.menu_select.side_effect = [0, 2, 0, 1]
             # Phase 再編後の yes_no 順:
             #   Phase E: auto_qa=False, auto_review=False, code_review=False, self_improve=False
             #   Phase F: create_issues=False, create_pr=False
-            #   Phase G: dry_run=False / 実行確認=True
-            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True]
+            #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
+            con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True, True]
             # Phase 再編後の input 順:
             #   app_ids(Phase A'), resource_group(Phase A'), additional_prompt(Phase A'),
             #   timeout, branch, parallel(Phase D), session_name

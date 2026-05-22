@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 720" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 14px; font-weight: bold; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .user { fill: #fff5d6; stroke: #9a6700; }
+      .qt   { fill: #f8eaf6; stroke: #8250df; }
+      .py   { fill: #eaf6ee; stroke: #1a7f37; }
+      .proc { fill: #fbe9e7; stroke: #b91c1c; }
+      .arr  { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .dashed { stroke-dasharray: 4 3; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">HVE GUI Orchestrator: PySide6 → subprocess アーキテクチャ</text>
+
+  <!-- User -->
+  <rect class="box user" x="30" y="60" width="220" height="60" rx="6"/>
+  <text class="h" x="50" y="84">ユーザー</text>
+  <text x="50" y="106">ランチャ / `python -m hve`</text>
+
+  <!-- Entry -->
+  <rect class="box py" x="280" y="60" width="220" height="60" rx="6"/>
+  <text class="h" x="300" y="84">hve/__main__.py</text>
+  <text x="300" y="106">既定 / `gui` サブコマンド</text>
+
+  <!-- PySide6 Main -->
+  <rect class="box qt" x="530" y="60" width="540" height="120" rx="6"/>
+  <text class="h" x="550" y="84">PySide6 GUI（hve/gui/）</text>
+  <text x="550" y="104">MainWindow + QStackedWidget（3 ステップ Wizard）</text>
+  <text x="550" y="122">Step1: WorkflowSelector / Step2: OptionPanel + AttachmentDropZone</text>
+  <text x="550" y="140">Step3: WorkbenchPane（既存 WorkbenchWindow 機能を埋め込み）</text>
+  <text x="550" y="158">menu: 新規セッション...（複数ウィンドウ独立起動）</text>
+
+  <!-- State bridge -->
+  <rect class="box qt" x="30" y="210" width="500" height="140" rx="6"/>
+  <text class="h" x="50" y="234">hve/gui/state_bridge.py</text>
+  <text x="50" y="254">launch_orchestrator(workflow, options):</text>
+  <text x="50" y="272">  argv = ["orchestrate", "--workflow", w, ...]</text>
+  <text x="50" y="290">  argv += ["--workbench", "off"]（自動注入）</text>
+  <text x="50" y="308">  subprocess.Popen(</text>
+  <text x="50" y="326">    [sys.executable, "-m", "hve"] + argv,</text>
+  <text x="50" y="344">    stdout=PIPE, stderr=STDOUT, text=True, bufsize=1)</text>
+
+  <!-- Attachment pipeline -->
+  <rect class="box qt" x="560" y="210" width="510" height="140" rx="6"/>
+  <text class="h" x="580" y="234">添付ファイルパイプライン（ARD ワークフロー）</text>
+  <text x="580" y="254">D&amp;D 受領 → MIME 判定</text>
+  <text x="580" y="272">変換: docx / pdf / xlsx → markdown</text>
+  <text x="580" y="290">保存: original-docs/&lt;timestamp&gt;-&lt;name&gt;/ （読取専用領域）</text>
+  <text x="580" y="308">起点ファイル選択 → `--attached-docs` 引数を自動生成</text>
+  <text x="580" y="326">エラーは Step2 のエラーパネルに表示（実行ボタン無効化）</text>
+
+  <!-- Auth panel -->
+  <rect class="box qt" x="30" y="380" width="500" height="140" rx="6"/>
+  <text class="h" x="50" y="404">認証パネル（hve/gui/auth_providers/）</text>
+  <text x="50" y="424">manifests/*.yaml で MCP/Plugin 単位に認証ハンドラ宣言</text>
+  <text x="50" y="442">PTY 統合（pty / pywinpty）で `copilot mcp login ...` を埋込起動</text>
+  <text x="50" y="460">success_regex で完了判定 → 結果のみ HVE に通知</text>
+  <text x="50" y="478">資格情報自体は HVE に保存せず OS の認証ストアへ委譲</text>
+  <text x="50" y="496">「利用できるモデルの取得」: models_api を呼び models_cache 更新</text>
+
+  <!-- subprocess output -->
+  <rect class="box proc" x="560" y="380" width="510" height="140" rx="6"/>
+  <text class="h" x="580" y="404">サブプロセス（CLI Orchestrator 流用）</text>
+  <text x="580" y="424">`python -m hve orchestrate ... --workbench off`</text>
+  <text x="580" y="442">stdout/stderr 行を QThread でリアルタイム読取</text>
+  <text x="580" y="460">→ Workbench Pane へ Signal 経由で行追加</text>
+  <text x="580" y="478">QA 要求は IPC ディレクトリ経由（qa_ipc_dir）で双方向通信</text>
+  <text x="580" y="496">停止: Popen.terminate() / 再開: hve resume コマンド</text>
+
+  <!-- Bottom: CLI engine reuse -->
+  <rect class="box py" x="200" y="560" width="700" height="100" rx="6"/>
+  <text class="h" x="220" y="584">サブプロセス内部（= CLI Orchestrator と完全同一）</text>
+  <text x="220" y="604">hve.orchestrator → DAGExecutor → StepRunner → Copilot SDK</text>
+  <text x="220" y="622">GUI は Python API を直接呼ばない（疎結合: プロセス境界で分離）</text>
+  <text x="220" y="640">GUI が落ちても DAG は継続可能（PID 管理は GUI 側のみ）</text>
+
+  <!-- Arrows -->
+  <path class="arr" d="M250,90 L280,90"/>
+  <path class="arr" d="M500,90 L530,90"/>
+  <path class="arr" d="M620,180 L280,210"/>
+  <path class="arr" d="M820,180 L820,210"/>
+  <path class="arr" d="M280,350 L820,380"/>
+  <path class="arr dashed" d="M280,520 L500,560"/>
+  <path class="arr" d="M820,520 L700,560"/>
+</svg>

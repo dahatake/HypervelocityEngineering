@@ -3,7 +3,7 @@
 #
 # Migrated from:
 #   - .github/cli/lib/github_api.py
-#   - .github/scripts/abd-common.sh (api_call, create_issue, link_sub_issue, add_label, post_comment)
+#   - .github/scripts/adfd-common.sh (api_call, create_issue, link_sub_issue, add_label, post_comment)
 #
 # Prerequisites:
 #   - bash 4.0+ (associative arrays)

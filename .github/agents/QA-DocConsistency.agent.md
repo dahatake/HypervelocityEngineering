@@ -5,6 +5,25 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "{target_scope}"
+      required: true
+      kind: "runtime_param"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D07-用語集-ドメインモデル定義書.md"
+      required: true
+      kind: "static"
+    - path: "work/kpi/fork-kpi-<run_id>.jsonl"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "{WORK}artifacts/doc-consistency-report.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/QA-DocConsistency/Issue-<識別子>/`
 
@@ -26,8 +45,24 @@ metadata:
 - 本 Agent の主目的は、Markdown 形式の正しさではなく、**文書内容が業務要件・設計・実装・他文書と論理的に整合しているか**を確認することである。
 - 構造・リンク切れ・表記揺れなどの形式的な問題は、内容理解を妨げる場合を除き補助的に扱う。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
 
+- `markdown-query`: `docs/` 全体検索を `python -m mdq search` で最優先実行（大規模 Markdown を一度に読まない）
+- `knowledge-lookup`: 業務要件 D01〜D21 との整合性確認時に参照
+- `harness-verification-loop`: 検証ステップ統合
+- `work-artifacts-layout`: 結果を `qa/QA-DocConsistency-Issue-<N>.md` に保存（Skill §4.3 qa/ 構造規約準拠）
 ## 1) 入力（置換必須）
 > `{...}` が残っている場合は実行しない。
 

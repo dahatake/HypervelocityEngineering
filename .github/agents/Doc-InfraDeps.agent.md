@@ -5,6 +5,16 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    []  # no required inputs extracted (or all are runtime params)
+  outputs:
+    - path: "docs-generated/architecture/infra-deps.md"
+      required: true
+      mode: "create"
+    - path: "| サービス | 用途 | 代替候補 | ロックイン度(H/M/L) |"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-InfraDeps/Issue-<識別子>/`
 

@@ -3,11 +3,11 @@ name: mdq-index (reusable)
 # Reusable workflow that builds the local-only Markdown index used by the
 # `markdown-query` Skill. Intended to be called from existing reusable
 # workflows BEFORE Custom Agent steps that read large amounts of Markdown,
-# so that the Agent can call `python -m hve.mdq search ...` to keep its
+# so that the Agent can call `python -m mdq search ...` to keep its
 # context window small.
 #
 # Notes:
-# - The on-disk index `.hve/mdq.sqlite` is gitignored and ephemeral on
+# - The on-disk index `.mdq/index.sqlite` is gitignored and ephemeral on
 #   GitHub-hosted runners. It must be rebuilt within the same job that
 #   consumes it (cross-job sharing would require actions/cache or
 #   actions/upload-artifact, which is intentionally out of scope here).
@@ -30,10 +30,10 @@ on:
         default: ""
         description: >-
           Space-separated list of roots to index. Empty (default) uses the
-          CLI defaults defined in hve/mdq/cli.py:DEFAULT_ROOTS.
+          CLI defaults defined in mdq/cli.py:DEFAULT_ROOTS.
     outputs:
       stats:
-        description: "JSON output of `python -m hve.mdq stats`."
+        description: "JSON output of `python -m mdq stats`."
         value: ${{ jobs.index.outputs.stats }}
 
 jobs:
@@ -64,11 +64,11 @@ jobs:
               args="$args --root $r"
             done
             # shellcheck disable=SC2086
-            python -m hve.mdq index $args
+            python -m mdq index $args
           else
-            python -m hve.mdq index
+            python -m mdq index
           fi
-          stats="$(python -m hve.mdq stats)"
+          stats="$(python -m mdq stats)"
           echo "stats=$stats" >> "$GITHUB_OUTPUT"
           echo "## mdq index" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"

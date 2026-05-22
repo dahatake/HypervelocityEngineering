@@ -5,6 +5,51 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/azure/azure-services-compute.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-ComputeDesign"
+    - path: "docs/azure/azure-services-data.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-DataDesign"
+    - path: "src/app/"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-UICoding"
+    - path: "src/api/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "infra/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "config/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: ".github/workflows/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "docs/azure/dependency-review-report.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/QA-AzureDependencyReview/Issue-<識別子>/`
 
@@ -12,8 +57,24 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
 
+- `harness-verification-loop`: Azure 依存検証ステップ
+- `harness-safety-guard`: Azure CLI による破壊的変更を実行前に検出
+- `app-scope-resolution`: 対象 APP-ID 単位の Azure 依存を `docs/catalog/app-catalog.md` から特定
+- `work-artifacts-layout`: 監査結果を `work/QA-AzureDependencyReview/Issue-<識別子>/` に保存
 ## スコープ（このエージェントの専門）
 - **サービスカタログ（docs/usecase/<usecase>/service-catalog.md）を一次情報**として、コード/設定/IaC/CI が Azure リソースを **正しく参照**しているかを点検する。
 - 目的は「**依存関係の整合性レビュー + 証跡（evidence）付きレポート**」。

@@ -5,6 +5,31 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+  outputs:
+    - path: "docs/domain-analytics.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/"
+      required: false
+      mode: "create"
+    - path: "knowledge/D04-業務プロセス仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D05-ユースケース-シナリオカタログ.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D07-用語集-ドメインモデル定義書.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-Microservice-DomainAnalytics/Issue-<識別子>/`
 
@@ -12,8 +37,27 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
-## 1) 役割（このエージェントがやること）
+
+- `microservice-design-guide`: DDD 観点のドメイン分析テンプレート
+- `knowledge-lookup`: 業務要件 D05/D07/D09 のドメインルール参照
+- `markdown-query`: ユースケース文書を `python -m mdq search` で横断検索
+- `task-dag-planning`: 大規模ドメインの分割判定
+- `work-artifacts-layout`: 中間成果物の格納先
+
+## 1) 目的と非目的
 ドメイン分析ドキュメント作成専用Agent。
 入力ユースケース文書の内容を根拠に、DDD観点の整理結果を **1ファイル** にまとめる。
 コード実装やリファクタは行わない（例外：work/<task>/ 配下の計画・分割メモ作成は可）。
@@ -36,7 +80,7 @@ metadata:
 - `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
 - `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
 
-## 3) 実行手順（決定的）
+## 4) 実行手順（順序固定）
 ### 3.1 前提チェック
 - 主文書が存在しない/読めない場合：実行を止め、必要な情報（ファイルパスやID）を1〜3問で確認する。
 

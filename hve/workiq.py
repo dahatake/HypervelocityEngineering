@@ -838,13 +838,22 @@ def run_workiq_event_extractor_self_test() -> WorkIQDiagnosticCheck:
     )
 
 
-def build_workiq_mcp_config(tenant_id: Optional[str] = None, *, tools_all: bool = False) -> dict:
+def build_workiq_mcp_config(
+    tenant_id: Optional[str] = None,
+    *,
+    tools_all: bool = False,
+    request_timeout: Optional[float] = None,
+) -> dict:
     """Work IQ MCP サーバー設定 dict を返す。
 
     Args:
         tenant_id: マルチテナント環境でのテナント ID（省略時は既定テナント）。
         tools_all: True の場合、tools を ``["*"]``（全ツール許可）にする。
             **診断・切り分け用途のみ**。本番では最小権限の固定 allowlist（既定値）を使うこと。
+        request_timeout: Work IQ MCP サーバーへのツール呼び出し 1 回あたりの
+            タイムアウト秒数。None または 0 以下の場合は dict に ``timeout`` を含めない
+            （Copilot SDK の既定値が適用される）。Copilot SDK
+            ``MCPServerConfigLocal.timeout`` に渡されるためミリ秒 ``int`` に変換する。
 
     Returns:
         Copilot SDK の ``mcp_servers`` に渡す dict。
@@ -856,13 +865,19 @@ def build_workiq_mcp_config(tenant_id: Optional[str] = None, *, tools_all: bool 
 
     tools: list = ["*"] if tools_all else list(WORKIQ_MCP_TOOL_NAMES)
 
+    server_cfg: dict = {
+        "type": "local",  # Copilot SDK の MCP ローカルサーバー設定に必要
+        "command": npx_cmd,
+        "args": args,
+        "tools": tools,
+    }
+    # Copilot SDK MCPServerConfigLocal.timeout はミリ秒 (int)。
+    # rpc.py 内の "Timeout in milliseconds for tool calls to this server." を参照。
+    if request_timeout is not None and request_timeout > 0:
+        server_cfg["timeout"] = int(request_timeout * 1000)
+
     return {
-        WORKIQ_MCP_SERVER_NAME: {
-            "type": "local",  # Copilot SDK の MCP ローカルサーバー設定に必要
-            "command": npx_cmd,
-            "args": args,
-            "tools": tools,
-        }
+        WORKIQ_MCP_SERVER_NAME: server_cfg,
     }
 
 

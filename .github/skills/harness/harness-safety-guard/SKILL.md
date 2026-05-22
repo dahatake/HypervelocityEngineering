@@ -1,10 +1,10 @@
 ---
 name: harness-safety-guard
 description: >
-  破壊的操作を事前に検出・阻止する安全ガードの詳細パターンリストと判定フロー。 USE FOR: destructive operation detection, rm -rf detection, DROP TABLE detection. DO NOT USE FOR: error recovery after failure (use harness-error-recovery). WHEN: コマンドを実行する前の安全確認、破壊的操作の検出。
+  破壊的操作を事前に検出・阫止する安全ガードの詳細パターンリストと判定フロー。 PHASE: 実行前（コマンド・スクリプト実行前に使用）。 USE FOR: destructive operation detection, rm -rf detection, DROP TABLE detection. DO NOT USE FOR: error recovery after failure (use harness-error-recovery), post-execution verification (use harness-verification-loop). WHEN: コマンドを実行する前の安全確認、破壊的操作の検出。
 metadata:
   origin: user
-  version: 2.0.0
+  version: 2.0.1
 ---
 
 # harness-safety-guard

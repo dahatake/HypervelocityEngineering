@@ -5,8 +5,8 @@
     "aas": ["task-dag-planning", "architecture-questionnaire"],
     "aad-web": ["task-dag-planning", "microservice-design-guide"],
     "asdw-web": ["microservice-design-guide"],
-    "abd": ["batch-design-guide"],
-    "abdv": ["batch-design-guide", "test-strategy-template"],
+    "adfd": ["dataflow-design-guide"],
+    "adfdv": ["dataflow-design-guide", "test-strategy-template"],
     "aag": ["task-dag-planning"],
     "aagd": ["test-strategy-template"],
     "akm": ["knowledge-management"],
@@ -19,9 +19,10 @@
       "1.1": ["knowledge-management"],
       "1.2": ["knowledge-management"],
       "2": ["knowledge-management"],
-      "3.1": ["knowledge-management"],
-      "3.2": ["knowledge-management"],
-      "3.3": ["knowledge-management"]
+      "3": ["knowledge-management"],
+      "4.1": ["knowledge-management"],
+      "4.2": ["knowledge-management"],
+      "4.3": ["knowledge-management"]
     },
     "akm": {
       "1": ["knowledge-management"]

@@ -69,7 +69,7 @@ test_cases:
 | work-artifacts-layout | 7 | 2026-04-10 |
 | app-scope-resolution | 6 | 2026-04-10 |
 | architecture-questionnaire | 6 | 2026-04-10 |
-| batch-design-guide | 6 | 2026-04-10 |
+| dataflow-design-guide | 6 | 2026-04-10 |
 | input-file-validation | 6 | 2026-04-10 |
 | knowledge-management | 6 | 2026-04-10 |
 | mcp-server-design | 6 | 2026-04-10 |

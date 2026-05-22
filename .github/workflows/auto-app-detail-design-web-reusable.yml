@@ -286,8 +286,8 @@ jobs:
         run: |
           # 成果物ディレクトリの事前作成
           mkdir -p docs/catalog
-          mkdir -p docs/batch
-          mkdir -p docs/batch/jobs
+          mkdir -p docs/dataflow
+          mkdir -p docs/dataflow/apps
           mkdir -p docs/services
           mkdir -p docs/screen
           mkdir -p docs/test-specs
@@ -1017,7 +1017,7 @@ jobs:
             fi
 
             # Step.7.1
-            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+            BODY_S71=$(printf '%s\n## 目的\n画面一覧に基づき、各画面の詳細定義書を作成する。\n\n## 入力\n- `docs/catalog/screen-catalog.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/screen/{画面ID}-{画面名スラッグ}-description.md`（画面ごとに1ファイル）\n\n## Custom Agent\n`Arch-UI-Detail` を使用\n\n## 依存\n- %s\n\n## アプリケーション粒度\n📋 各画面定義書の「§1 概要」に所属 APP-ID（1:1）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。\n\n## 完了条件\n- 画面定義書が画面一覧に基づいて全て作成されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
               "${ROOT_REF}" "${_S71_DEP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
             if RESP=$(create_issue \
               "[AAD-WEB] Step.7.1: 画面定義書" \
@@ -1122,7 +1122,7 @@ jobs:
 
             # Step.8.3
             if ! skip_step "8.3"; then
-              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign-Step3` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+              BODY_S83=$(printf '%s\n## 目的\nStep.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し、Agent 一覧を更新する。\n\n## 入力\n- `docs/agent/agent-architecture.md`（Step.8.2 の成果物）\n- `docs/agent/agent-application-definition.md`（Step.8.1 の成果物）\n- `docs/catalog/service-catalog-matrix.md`\n- `docs/services/SVC-*.md`（関連サービスのみ）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）\n\n## 出力\n- `docs/agent/agent-detail-{AgentID}-{AgentName}.md`（Agent ごとに1ファイル）\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n\n## Custom Agent\n`Arch-AIAgentDesign-Step3` を使用\n\n## 依存\n- Step.8.2（AI Agent 粒度設計）が `aad-web:done` であること\n\n## 完了条件\n- `docs/agent/` 配下に Agent ごとの詳細設計書が作成されている\n- `docs/ai-agent-catalog.md` が作成/更新されている\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
                 "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
               if RESP=$(create_issue \
                 "[AAD-WEB] Step.8.3: AI Agent 詳細設計" \

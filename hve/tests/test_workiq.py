@@ -96,6 +96,24 @@ class TestWorkIQMcpConfig(unittest.TestCase):
             cfg = workiq.build_workiq_mcp_config()
         self.assertEqual(cfg["_hve_workiq"]["command"], "npx")
 
+    def test_build_mcp_config_request_timeout_in_ms(self) -> None:
+        """request_timeout (秒) をミリ秒 int として timeout キーに反映する。"""
+        with mock.patch("workiq.resolve_npx_command", return_value="npx"):
+            cfg = workiq.build_workiq_mcp_config(request_timeout=300.0)
+        self.assertEqual(cfg["_hve_workiq"]["timeout"], 300_000)
+
+    def test_build_mcp_config_request_timeout_omitted_when_none(self) -> None:
+        """request_timeout=None のとき timeout キーを含めない。"""
+        with mock.patch("workiq.resolve_npx_command", return_value="npx"):
+            cfg = workiq.build_workiq_mcp_config(request_timeout=None)
+        self.assertNotIn("timeout", cfg["_hve_workiq"])
+
+    def test_build_mcp_config_request_timeout_omitted_when_zero(self) -> None:
+        """request_timeout<=0 のとき timeout キーを含めない。"""
+        with mock.patch("workiq.resolve_npx_command", return_value="npx"):
+            cfg = workiq.build_workiq_mcp_config(request_timeout=0.0)
+        self.assertNotIn("timeout", cfg["_hve_workiq"])
+
 
 class TestWorkIQSanitizeAndPrompt(unittest.TestCase):
     def test_sanitize_preserves_newline_tab_and_removes_control(self) -> None:

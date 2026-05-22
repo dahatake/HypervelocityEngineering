@@ -5,7 +5,7 @@ name: TDD Retry Metrics Dashboard
 # 設計メモ:
 #   - schedule: daily（UTC 02:00）+ workflow_dispatch で手動実行可能。
 #   - lookback_days は workflow_dispatch 入力で可変（デフォルト 30 日）。
-#   - 集計対象: 全ワークフロー（aas/aad/aad-web/asdw/asdw-web/abd/abdv/aag/aagd/akm/aqod/adoc）の
+#   - 集計対象: 全ワークフロー（aas/aad/aad-web/asdw/asdw-web/adfd/adfdv/aag/aagd/akm/aqod/adoc）の
 #     :blocked / :human-required / :human-resolved ラベル付き Issue。
 #   - 出力: work/dashboards/tdd-metrics.md を commit。
 
@@ -51,7 +51,7 @@ jobs:
           echo "集計開始日: ${SINCE_DATE}"
 
           # 対象ワークフロープレフィックス一覧
-          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+          PREFIXES="aas aad aad-web asdw asdw-web adfd adfdv aag aagd akm aqod adoc"
 
           # データを CSV 形式で一時ファイルに書き出す（ヘッダー行）
           METRICS_CSV="/tmp/tdd-metrics.csv"

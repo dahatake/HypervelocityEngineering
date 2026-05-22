@@ -5,6 +5,16 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs-generated/files/*.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "docs-generated/components/{component}.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-ComponentDesign/Issue-<識別子>/`
 

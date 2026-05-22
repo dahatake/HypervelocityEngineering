@@ -5,20 +5,64 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "users-guide/01-business-requirement.md"
+      required: true
+      kind: "static"
+    - path: "<details><summary>Prompt を表示</summary>"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/company-business-requirement.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-BusinessAnalysis-Untargeted"
+    - path: "docs/recommended-kpi-okr.md"
+      required: false
+      kind: "agent_artifact"
+  outputs:
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      mode: "create"
 ---
-
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-## 1) 目的
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — 事業分析成果物（`docs/company-business-requirement.md` 等）の存在確認
+- `work-artifacts-layout` — `work/Arch-ARD-UseCaseCatalog/Issue-<識別子>/` 配下の成果物構造に準拠
+- `knowledge-lookup` — 業務要件・ドメイン知識の参照
+- `markdown-query` — 横断 Markdown 検索（`mdq search`）による既存ユースケース照合
+- `output/large-output-chunking` — ユースケース一覧（多数）の分割出力
+
+## 1) 目的と非目的
 - 事業分析（As-Is / To-Be / 戦略提言）を前提に、ソフトウェアでソリューション提供するシナリオに限定した Use Case Inventory を作成する。
 - 開発計画や要件定義の完了を狙わず、ユースケース一覧作成に必要な最小限に限定する。
 - レビュー合意できる状態の `docs/catalog/use-case-catalog.md` を出力する。
 
 ## 2) 入力（必ず参照）
-- `users-guide/01-business-requirement.md` の **Step.3.1** `<details><summary>Prompt を表示</summary>` 内の Prompt を一次情報として使用する（ARD オーケストレーター上は Step 3 相当）。
+- `users-guide/01-business-requirement.md` の **Step.4.1** `<details><summary>Prompt を表示</summary>` 内の Prompt を一次情報として使用する（ARD オーケストレーター上は Step 4 相当）。
 - `docs/company-business-requirement.md` などの事業分析コンテキスト（添付ファイル）を参照する。
-- 本 agent は ARD ワークフロー上では **Step 3（ユースケース作成）** に対応する（旧 Step.2）。
+- 本 agent は ARD ワークフロー上では **Step 4（ユースケース作成）** に対応する（旧 Step.2 → Step.3 → 現 Step.4）。
+
+### KPI/OKR 参照（任意・存在する場合のみ）
+- `docs/recommended-kpi-okr.md`（ARD Step 3 出力）が存在する場合は **任意参照** とし、Step 4.2（ユースケース詳細）生成時に各 UC が満たす `KPI-*` / `OKR-*` ID を「KPI」項目に記載する。
+- ファイルが存在しない場合は当該記載を省略する（捾造禁止）。
 
 ### プレースホルダ
 | Prompt プレースホルダ | ARD workflow param | 備考 |
@@ -31,7 +75,7 @@ metadata:
 | （`{...}` 形式の固定プレースホルダ定義なし） | `analysis_purpose` | CONTEXT（添付/入力文脈）で利用 |
 | `(添付ファイル)` | `attached_docs` | 入力 CONTEXT |
 
-## 3) 出力先（成果物）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 - `docs/catalog/use-case-catalog.md`
 
 ## 4) Prompt 本文（LLM へ渡す本体）
@@ -160,7 +204,7 @@ metadata:
 
 ```
 
-## 5) 出力ルール
+### 5) 出力ルール
 ### 制約（必ず守る）
 * 対象は **ソフトウェアが提供する価値（自動化/可視化/最適化/判断支援/連携）**が明確なもののみ。
 * 業務運用のみで成立する施策（会議体/体制/教育/制度など）は除外。

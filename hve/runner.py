@@ -39,6 +39,29 @@ def _safe_run_id(run_id: str) -> str:
     # 除去の結果が空になった場合もフォールバック生成
     return rid or generate_run_id()
 
+
+def _combine_additional_prompt_with_mdq(base: Optional[str]) -> Optional[str]:
+    """``base`` の additional_prompt に Markdown-Query 強制ブロックを前置する。
+
+    GUI 設定 ``[mdq] target_folders`` が空のとき: ``base`` をそのまま返す
+    （要件: 「設定がなければ、何もしない」）。
+
+    例外で設定読込に失敗した場合は ``base`` をそのまま返す（強制注入の失敗が
+    Agent 実行を止めないよう防御的に握りつぶす）。
+    """
+    try:
+        from .gui import settings_store  # 遅延 import: GUI 依存を最小化
+        from . import mdq_enforcement
+        folders = settings_store.get_mdq_target_folders()
+        block = mdq_enforcement.build_enforcement_prompt(folders)
+    except Exception:
+        return base
+    if not block:
+        return base
+    if not base:
+        return block
+    return block + "\n\n" + base
+
 try:
     from .config import (
         DEFAULT_MODEL,
@@ -274,7 +297,7 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
             msg = str(exc)
             if "unexpected keyword argument" not in msg:
                 raise
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent"):
                 if _kw in msg and _kw in opts:
                     _stripped = {k: v for k, v in opts.items() if k != _kw}
                     return await _attempt(_stripped)
@@ -445,6 +468,149 @@ def _is_review_fail(content: str) -> bool:
     return not has_judgement_line
 
 
+async def _collect_qa_answers_via_ipc(
+    console: "Console",
+    doc: "QADocument",
+    step_id: str,
+    config: "SDKConfig",
+) -> Tuple[str, bool]:
+    """qa_answer_mode="gui-file" モード: GUI からの回答を IPC ファイル経由で受け取る。
+
+    フロー:
+        1. <ipc_dir>/<step_id>.questionnaire.md に質問票を書き出す
+        2. <ipc_dir>/<step_id>.request.json を書き出して GUI に通知
+        3. <ipc_dir>/<step_id>.answers.md または <ipc_dir>/<step_id>.cancel を polling
+        4. タイムアウト時は既定値全採用にフォールバック
+
+    Returns:
+        (user_answers_raw, skip_input) — 既存 _collect_qa_answers と同形式
+
+    Raises:
+        RuntimeError: ユーザーが GUI 側でキャンセルした場合（cancel ファイル検出）
+    """
+    from datetime import datetime, timezone
+
+    if not config.qa_ipc_dir:
+        console.warning(
+            "qa_answer_mode=gui-file が指定されましたが qa_ipc_dir が空のため"
+            " 全問既定値候補を採用します。"
+        )
+        return "", True
+
+    try:
+        ipc_dir = Path(config.qa_ipc_dir)
+        ipc_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        console.warning(
+            f"IPC ディレクトリの作成に失敗しました ({config.qa_ipc_dir}): {exc}。"
+            " 全問既定値候補を採用します。"
+        )
+        return "", True
+
+    questionnaire_path = ipc_dir / f"{step_id}.questionnaire.md"
+    request_path = ipc_dir / f"{step_id}.request.json"
+    answers_path = ipc_dir / f"{step_id}.answers.md"
+    cancel_path = ipc_dir / f"{step_id}.cancel"
+
+    def _atomic_write(path: Path, content: str) -> None:
+        """tmp + os.replace でアトミックに書き込む。"""
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        os.replace(tmp, path)
+
+    # 1. 質問票（rendered）を IPC dir に書き出す
+    try:
+        from .qa_merger import QAMerger
+    except ImportError:  # pragma: no cover
+        from qa_merger import QAMerger  # type: ignore[no-redef]
+    try:
+        questionnaire_md = QAMerger.render_merged(doc)
+    except Exception:
+        # render に失敗した場合は最低限のフォーマットで保存
+        _lines = [f"# QA 質問票 (step {step_id})\n"]
+        for q in doc.questions:
+            _lines.append(f"\n## Q{q.no}: {q.question}\n")
+            if q.choices:
+                for c in q.choices:
+                    _lines.append(f"- {c.label}) {c.text}")
+            if q.default_answer:
+                _lines.append(f"\n既定値候補: {q.default_answer}\n")
+        questionnaire_md = "\n".join(_lines)
+    _atomic_write(questionnaire_path, questionnaire_md)
+
+    # 2. request JSON
+    request_data = {
+        "schema_version": 1,
+        "step_id": step_id,
+        "pid": os.getpid(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "questionnaire_path": str(questionnaire_path.resolve()),
+        "qa_input_timeout_seconds": config.qa_gui_input_timeout_seconds,
+    }
+    _atomic_write(request_path, json.dumps(request_data, ensure_ascii=False, indent=2))
+
+    console.status(
+        f"GUI からの QA 回答待ち... (IPC dir: {ipc_dir.as_posix()},"
+        f" タイムアウト: {config.qa_gui_input_timeout_seconds:.0f}s)"
+    )
+
+    # 3. polling
+    timeout = config.qa_gui_input_timeout_seconds
+    poll_interval = 1.0
+    start = time.monotonic()
+    user_answers_raw = ""
+    cancelled = False
+    timed_out = False
+    while True:
+        if cancel_path.exists():
+            cancelled = True
+            break
+        if answers_path.exists():
+            try:
+                user_answers_raw = answers_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                console.warning(
+                    f"answers ファイル読み込みに失敗しました ({answers_path}): {exc}。"
+                    " 既定値候補を採用します。"
+                )
+                user_answers_raw = ""
+            break
+        if time.monotonic() - start > timeout:
+            timed_out = True
+            break
+        await asyncio.sleep(poll_interval)
+
+    # 4. cleanup (best-effort)
+    for _p in (request_path, answers_path, questionnaire_path, cancel_path):
+        try:
+            if _p.exists():
+                _p.unlink()
+        except OSError:
+            pass
+
+    if cancelled:
+        raise RuntimeError(
+            f"QA 回答が GUI 側でキャンセルされました (step={step_id})"
+        )
+
+    if timed_out:
+        console.warning(
+            f"GUI 回答待ちタイムアウト ({timeout:.0f}s) — 全問既定値候補を採用します。"
+        )
+        return "", True
+
+    skip_input = (user_answers_raw.strip() == "")
+    if skip_input:
+        console.status("GUI: 全問既定値候補を採用しました。")
+    else:
+        try:
+            _parsed_answers = QAMerger.parse_answers(user_answers_raw)
+            console.answer_summary(doc.questions, _parsed_answers)
+        except Exception as exc:  # pragma: no cover - 防御的
+            console.warning(f"GUI 回答サマリー表示に失敗: {exc}")
+    return user_answers_raw, skip_input
+
+
 async def _collect_qa_answers(
     console: "Console",
     doc: "QADocument",
@@ -465,6 +631,12 @@ async def _collect_qa_answers(
         questionnaire_table() のみ表示し、全問既定値候補を自動採用する。
         ウィザードモードの auto_qa=y で設定される。
 
+    qa_answer_mode="autopilot" 時 (GUI Autopilot):
+        テーブル表示後、全問既定値を自動採用。
+
+    qa_answer_mode="gui-file" 時 (GUI ユーザー回答):
+        IPC ファイル経由で GUI からの回答を待つ。
+
     Args:
         console: Console インスタンス。
         doc: パース済み QADocument（questions > 0 が前提）。
@@ -477,6 +649,20 @@ async def _collect_qa_answers(
         - skip_input: True のとき全問デフォルト採用。
     """
     console.questionnaire_table(doc.questions)
+
+    # GUI 由来モード分岐（非 TTY 判定より前に処理する）
+    if config.qa_answer_mode == "gui-file":
+        console.status(
+            f"[QA-DIAG] qa_answer_mode=gui-file 検出 → IPC モードへ遷移"
+            f" (step={step_id}, ipc_dir={config.qa_ipc_dir})"
+        )
+        return await _collect_qa_answers_via_ipc(console, doc, step_id, config)
+
+    if config.qa_answer_mode == "autopilot":
+        console.status(
+            "Autopilot モード: 全問既定値候補を自動採用します。"
+        )
+        return "", True
 
     _is_interactive = (
         not config.unattended
@@ -692,6 +878,16 @@ class StepRunner:
         # DAGExecutor が `set_fork_index(step_id, n)` で更新し、_make_step_session_id
         # から参照することで session_id に `-fork{n}` suffix を付与する。
         self._fork_indices: Dict[str, int] = {}
+        # TTFT (Time-to-First-Token) 計測: step_id -> turn_start time.monotonic()。
+        # assistant.turn_start で記録、最初の assistant.message_delta で差分を計測し
+        # console.stats_event("assistant_ttft", ...) として GUI へ通知後、削除。
+        # assistant.usage / turn_end でもリセットする（取りこぼし防止）。
+        self._ttft_pending: Dict[str, float] = {}
+        # permission.requested の累積回数（GUI 詳細ポップアップ用）。
+        self._permission_count: int = 0
+        # T4 (GUI 統計): Skill 名の重複発火抑制。step_id -> set[skill_name]。
+        # SDK skill.invoked と SKILL.md パス検出フォールバックの両方から書き込まれる。
+        self._skill_invoked_seen: Dict[str, set] = {}
 
     def _record_checkpoint(self, step_id: str, marker: str) -> None:
         """Phase 6 (Resume 2-layer txn): ステップ内 checkpoint を記録する。
@@ -1268,6 +1464,46 @@ class StepRunner:
                 self.console.track_file(step_id, os.path.normpath(path), "read")
                 self.console.file_io(step_id, os.path.normpath(path), "read")
 
+    def _detect_skill_load_from_args(self, step_id: str, args: dict) -> None:
+        """ツール引数中のパスから `.github/skills/<name>/` 配下の読込を検出し、
+        skill_invoked stats イベントを発火する（SDK skill.invoked 未発火時の
+        フォールバック）。重複発火は ``self._skill_invoked_seen`` で抑制。
+        """
+        import re as _re
+
+        # `.github/skills/<name>/` 配下 (SKILL.md / references/*.md 等) を捕捉。
+        # Windows パス区切り `\` と Unix `/` の両方に対応。
+        pattern = _re.compile(
+            r"[\\/]\.github[\\/]skills[\\/]([^\\/]+)[\\/]",
+            _re.IGNORECASE,
+        )
+        seen = self._skill_invoked_seen.setdefault(step_id, set())
+
+        def _scan(val: object) -> None:
+            if isinstance(val, str):
+                m = pattern.search(val)
+                if m:
+                    name = m.group(1).strip()
+                    if name and name not in seen:
+                        seen.add(name)
+                        try:
+                            self.console.stats_event(
+                                "skill_invoked",
+                                step_id=step_id,
+                                name=name,
+                                source="path_detect",
+                            )
+                        except Exception:
+                            pass
+            elif isinstance(val, dict):
+                for v in val.values():
+                    _scan(v)
+            elif isinstance(val, list):
+                for v in val:
+                    _scan(v)
+
+        _scan(args)
+
     def _track_powershell_files(self, step_id: str, command: str) -> None:
         """PowerShell コマンド文字列からファイル操作を簡易抽出する（best-effort）。
 
@@ -1517,14 +1753,34 @@ class StepRunner:
                         pass
 
             # QAMerger でパース
+            # 例外/0件のいずれも単一の skip_reason に集約し、後段で 1 度だけ通知する
+            # （Phase 0b/0c で同じ条件を再評価するため、対称性も担保）。
+            # 注: 型・属性不整合等のプログラミングエラーをサイレントに握りつぶさず、
+            # 観測可能にするため except Exception で捕捉のうえ理由を保持する。
             _parse_succeeded = False
             parsed_pre_qa = QADocument(questions=[])
-            if pre_qa_raw:
+            _pre_qa_skip_reason: Optional[str] = None
+            if not pre_qa_raw:
+                _pre_qa_skip_reason = "LLM 応答が空のため事前 QA をスキップします。"
+            else:
                 try:
-                    parsed_pre_qa = QAMerger.parse_qa(pre_qa_raw)
+                    parsed_pre_qa = QAMerger.parse_qa_content(pre_qa_raw)
                     _parse_succeeded = bool(parsed_pre_qa.questions)
-                except Exception:
-                    pass
+                    if not _parse_succeeded:
+                        _pre_qa_skip_reason = (
+                            "事前 QA 質問票から質問を抽出できませんでした"
+                            "（Phase 0b/0c をスキップしてメインタスクへ進みます）。"
+                        )
+                except Exception as _parse_exc:
+                    _pre_qa_skip_reason = (
+                        f"事前 QA 質問票のパースに失敗しました "
+                        f"({type(_parse_exc).__name__}: {_parse_exc})。"
+                        " Phase 0b/0c をスキップしてメインタスクへ進みます。"
+                    )
+            if _pre_qa_skip_reason is not None:
+                self.console.warning(
+                    f"事前 QA スキップ (step={step_id}): {_pre_qa_skip_reason}"
+                )
 
             # Phase 0b: 回答収集
             user_answers_raw = ""
@@ -1708,8 +1964,36 @@ class StepRunner:
         """
         ctx = self._orchestrator_ctx
         # 単独実行モード or 機能無効 → 素通し（従来挙動）
-        if ctx is None or not ctx.split_fork_enabled:
+        # 観測性: なぜ fork が走らないかを必ず journal/console に残す（無音 return 禁止）
+        if ctx is None:
+            self.console.event(
+                f"  ⏭ [{step_id}] split-fork: 単独実行モード (orchestrator_ctx=None) — fork スキップ"
+            )
+            self._record_checkpoint(step_id, "split-fork-skipped-no-orchestrator")
             return True
+        if not ctx.split_fork_enabled:
+            self.console.event(
+                f"  ⏭ [{step_id}] split-fork: 機能無効 (split_fork_enabled=False) — fork スキップ"
+            )
+            self._record_checkpoint(step_id, "split-fork-skipped-disabled")
+            return True
+
+        # F2-4: Resume 高速化 — 前回実行で split-fork-all-done 済みなら即 True 返却。
+        # 再 fork に伴うサブセッション再生成と API 呼び出しコストを節約する。
+        try:
+            prev_marker: Optional[str] = None
+            if self._resume_state is not None:
+                state = self._resume_state.step_states.get(step_id)
+                if state is not None:
+                    prev_marker = getattr(state, "checkpoint_marker", None)
+            if prev_marker == "split-fork-all-done":
+                self.console.event(
+                    f"  ⏭ [{step_id}] split-fork: 前回完了済み (checkpoint=split-fork-all-done) — 再 fork スキップ"
+                )
+                self._record_checkpoint(step_id, "split-fork-resume-shortcut")
+                return True
+        except Exception:  # pragma: no cover - 防御的: resume 短絡で例外を起こさない
+            pass
 
         try:
             from .split_fork import (
@@ -1717,9 +2001,10 @@ class StepRunner:
                 build_subtask_prompt,
                 check_subtask_completion,
                 compute_waves,
-                discover_subissues_md,
+                discover_subissues_md_verbose,
                 make_subtask_work_subdir,
                 parse_subissues_md,
+                resolve_work_root,
             )
         except ImportError:  # pragma: no cover - script execution path
             from split_fork import (  # type: ignore[no-redef]
@@ -1727,19 +2012,104 @@ class StepRunner:
                 build_subtask_prompt,
                 check_subtask_completion,
                 compute_waves,
-                discover_subissues_md,
+                discover_subissues_md_verbose,
                 make_subtask_work_subdir,
                 parse_subissues_md,
+                resolve_work_root,
             )
 
-        work_root = Path("work")
-        subissues_path = discover_subissues_md(
+        # custom_agent 欠落は致命ではないが SPLIT_REQUIRED 検出精度を下げるため警告。
+        if not custom_agent:
+            self.console.event(
+                f"  ⚠ [{step_id}] split-fork: custom_agent 未指定 — "
+                f"agent-scoped 探索をスキップし fallback-glob に依存します"
+            )
+            self._record_checkpoint(step_id, "split-fork-warn-no-agent")
+
+        work_root = resolve_work_root()
+        # GUI セッション隔離 (Issue-gui-session-workdir-isolation T1):
+        # run_id / step_id を伝播してスコープ外の subissues.md 誤検出を防ぐ。
+        # self.config.run_id は generate_run_id() で必ず生成されているが、
+        # 防御的に空文字を None に正規化する。
+        _scope_run_id = self.config.run_id or None
+        discover_result = discover_subissues_md_verbose(
             work_root=work_root,
             custom_agent=custom_agent,
             parent_step_id=step_id,
+            run_id=_scope_run_id,
+            step_id=step_id,
         )
+        subissues_path = discover_result.path
         if subissues_path is None:
-            return True  # SPLIT 未発生
+            # SPLIT 未発生 — ただし「実際に subissues.md が存在するのに発見できない」
+            # ケースを後追いできるよう、探索条件を必ず journal/console に残す。
+            try:
+                _cwd = str(Path.cwd())
+            except Exception:
+                _cwd = "<unknown>"
+
+            # F2-5: 整合性チェック — plan.md が SPLIT_REQUIRED を宣言しているのに
+            # subissues.md が存在しないケースは Agent 仕様違反 (§0)。Step を失敗化する。
+            # Issue-gui-session-workdir-isolation Critical#1:
+            # 過去 run の plan.md が残存しているとここで誤検出されるため、
+            # discover_subissues_md_verbose と同じ run_id スコープでフィルタする。
+            try:
+                from .split_fork import matches_run_scope as _matches_run_scope
+            except ImportError:  # pragma: no cover
+                from split_fork import matches_run_scope as _matches_run_scope  # type: ignore[no-redef]
+            inconsistent_plans: List[Path] = []
+            try:
+                if work_root.is_dir():
+                    plan_globs = [
+                        work_root.glob("Issue-*/plan.md"),
+                        work_root.glob("*/Issue-*/plan.md"),
+                    ]
+                    seen_plans: set = set()
+                    for g in plan_globs:
+                        for plan_path in g:
+                            if plan_path in seen_plans:
+                                continue
+                            seen_plans.add(plan_path)
+                            # run_id スコープに合致しない過去 run の plan.md は除外
+                            if not _matches_run_scope(
+                                plan_path.parent.name, _scope_run_id
+                            ):
+                                continue
+                            try:
+                                head = plan_path.read_text(
+                                    encoding="utf-8", errors="replace"
+                                )[:2048]
+                            except OSError:
+                                continue
+                            if "split_decision: SPLIT_REQUIRED" in head:
+                                inconsistent_plans.append(plan_path)
+            except Exception:  # pragma: no cover - 防御的: 整合性チェックで例外起こさない
+                inconsistent_plans = []
+
+            if inconsistent_plans:
+                self.console.error(
+                    f"  ✗ [{step_id}] split-fork 整合性違反: "
+                    f"plan.md が SPLIT_REQUIRED を宣言しているが subissues.md が未検出 "
+                    f"(plans={[str(p) for p in inconsistent_plans]}, "
+                    f"work_root={work_root}, custom_agent={custom_agent!r})"
+                )
+                self._record_checkpoint(step_id, "split-fork-failed-inconsistent")
+                return False
+
+            self.console.event(
+                f"  ⏭ [{step_id}] split-fork: subissues.md 未検出 — fork スキップ "
+                f"(work_root={work_root}, custom_agent={custom_agent!r}, "
+                f"work_root_exists={work_root.is_dir()}, cwd={_cwd})"
+            )
+            self._record_checkpoint(step_id, "split-fork-skipped-no-subissues")
+            return True
+
+        # 観測性: どの glob パターンでヒットしたかを残す（fallback-glob 経由なら要注意）
+        self.console.event(
+            f"  🔍 [{step_id}] split-fork: subissues.md 検出 "
+            f"(pattern={discover_result.matched_pattern}, "
+            f"candidates={discover_result.candidates_examined}, path={subissues_path})"
+        )
 
         depth = ctx.split_fork_depth
         max_depth = ctx.split_fork_max_depth
@@ -1748,6 +2118,7 @@ class StepRunner:
                 f"  ✗ [{step_id}] SPLIT fork 深度上限到達 (depth={depth}, max={max_depth}) "
                 f"— subissues.md 発見も実行をスキップして Step failed 化"
             )
+            self._record_checkpoint(step_id, "split-fork-failed-max-depth")
             return False
 
         try:
@@ -1756,6 +2127,7 @@ class StepRunner:
             self.console.error(
                 f"  ✗ [{step_id}] subissues.md パース失敗: {exc}"
             )
+            self._record_checkpoint(step_id, "split-fork-failed-parse")
             return False
 
         try:
@@ -1764,6 +2136,7 @@ class StepRunner:
             self.console.error(
                 f"  ✗ [{step_id}] subissues.md depends_on 解決失敗: {exc}"
             )
+            self._record_checkpoint(step_id, "split-fork-failed-deps")
             return False
 
         self.console.event(
@@ -1771,6 +2144,7 @@ class StepRunner:
             f"— {len(subissues)} サブタスクを {len(waves)} wave で並列 fork "
             f"(depth={depth}/{max_depth}, max_parallel={ctx.max_parallel_subtasks})"
         )
+        self._record_checkpoint(step_id, "split-fork-detected")
 
         # parent_work_identifier を subissues.md のパスから推定する
         # 例: work/Arch-UI-Detail/Issue-screen-detail/subissues.md
@@ -1801,6 +2175,7 @@ class StepRunner:
                     parent_step_id=step_id,
                     parent_custom_agent=custom_agent,
                     work_subdir=work_subdir,
+                    repo_root=Path.cwd(),
                 )
 
                 sub_opts = self._build_sub_session_opts(
@@ -1811,7 +2186,21 @@ class StepRunner:
                     custom_agent=sub.custom_agent or custom_agent,
                 )
 
+                # Workbench tasks ペインに並列子セッションを登録する。
+                # name に sub.index を含めるため (step_id, name) キーで一意。
+                # 注: 入れ子再帰 fork（runner 1786 行の child_ctx）が将来有効化
+                # された際は depth プレフィックスを name に追加すること。
+                agent_label = sub.custom_agent or custom_agent or ""
+                sub_name = (
+                    f"split-{sub.index:03d} ({agent_label})"
+                    if agent_label
+                    else f"split-{sub.index:03d}"
+                )
+                self.console.subagent_started(step_id, sub_name)
+
                 sub_session = None
+                success = False
+                error_text = ""
                 try:
                     sub_session = await _create_session_with_auto_reasoning_fallback(
                         client, sub_opts,
@@ -1826,22 +2215,23 @@ class StepRunner:
 
                     ok, reason = check_subtask_completion(work_root, work_subdir)
                     if ok:
+                        success = True
                         self.console.event(
                             f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功"
                         )
                         self._record_checkpoint(
                             step_id, f"split-fork-{sub.index:03d}-done",
                         )
-                        return True
-                    self.console.error(
-                        f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
-                    )
-                    return False
+                    else:
+                        error_text = reason
+                        self.console.error(
+                            f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
+                        )
                 except Exception as exc:
+                    error_text = str(exc)
                     self.console.error(
                         f"  ✗ [{step_id}/sub-{sub.index:03d}] 実行中にエラー: {exc}"
                     )
-                    return False
                 finally:
                     if sub_session is not None:
                         try:
@@ -1850,6 +2240,13 @@ class StepRunner:
                             self.console.warning(
                                 f"[cleanup] sub_session.disconnect() failed: {cleanup_exc}"
                             )
+                    # Workbench tasks への完了/失敗通知（disconnect 失敗時も必ず発火）
+                    if success:
+                        self.console.subagent_completed(step_id, sub_name)
+                    else:
+                        self.console.subagent_failed(step_id, sub_name, error=error_text)
+
+                return success
 
         # Wave 単位で並列実行。失敗 wave があっても wave 内は全件実行し、
         # 後続 wave へは進まない（依存先が未完了のため、空振りを避ける）。
@@ -1901,6 +2298,21 @@ class StepRunner:
             True: 成功, False: 失敗
         """
         start = time.time()
+        # markdown-query Skill 利用ログ (.mdq/usage.jsonl) と Step 紐付けのため
+        # 環境変数を伝播する。子プロセス（Copilot SDK 経由含む）が継承し、
+        # mdq CLI から mdq.usage_log が読み取る。
+        # 注意: 並列 Step 実行時は同一 os.environ を共有するため step_id 属性は
+        # ベストエフォート（A2 指標の精度に影響）。workflow_id 単位の集計
+        # （Skill 利用統計のメイン用途）は run_workflow 側で設定済みのため不変。
+        try:
+            os.environ["HVE_STEP_ID"] = str(step_id)
+            if custom_agent:
+                os.environ["HVE_AGENT_ID"] = str(custom_agent)
+            else:
+                os.environ.pop("HVE_AGENT_ID", None)
+        except Exception:
+            pass
+
         # ADR-0002: fan-out per-key プロンプト注入 (T3B) と per-key MCP 上書き (T3A)
         if fanout_meta:
             try:
@@ -2044,8 +2456,9 @@ class StepRunner:
             )
 
             # additional_prompt をグローバル定義の各 agent の prompt に追記
-            if self.config.additional_prompt:
-                suffix = self.config.additional_prompt
+            # GUI 設定 [mdq] target_folders が非空のとき、Markdown-Query 強制ブロックを前置する。
+            suffix = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
+            if suffix:
                 for agent_def in custom_agents:
                     existing = agent_def.get("prompt", "")
                     if existing:
@@ -2094,8 +2507,9 @@ class StepRunner:
                         f"作業開始時は .github/skills/agent-common-preamble/SKILL.md を参照し、"
                         f"共通ルールを確認してください。"
                     )
-                    if self.config.additional_prompt:
-                        base_prompt = base_prompt + "\n\n" + self.config.additional_prompt
+                    _eff = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
+                    if _eff:
+                        base_prompt = base_prompt + "\n\n" + _eff
                     custom_agents.insert(
                         0,
                         {
@@ -2650,6 +3064,18 @@ class StepRunner:
             # SDK 仕様では deltaContent (camelCase) のみ。Python SDK の snake_case 変換に備え delta_content も受ける。
             token = _get(data, "delta_content", "deltaContent") or ""
             if token:
+                # TTFT 計測: turn_start 以降初めてのトークンならポップ
+                ttft_start = self._ttft_pending.pop(step_id, None)
+                if ttft_start is not None:
+                    try:
+                        elapsed_ms = (time.monotonic() - ttft_start) * 1000.0
+                        self.console.stats_event(
+                            "assistant_ttft",
+                            step_id=step_id,
+                            ttft_ms=round(elapsed_ms, 2),
+                        )
+                    except Exception:
+                        pass
                 self.console.stream_token(step_id, token)
                 # ADR-0002 E-1: stderr JSON へトークン長を出力（verbosity 不問）
                 try:
@@ -2700,6 +3126,16 @@ class StepRunner:
                 # verbose 時のみ表示、それ以外はスキップ
                 if self.console.verbose:
                     self.console.event(f"  🔧 [{step_id}] task (internal)")
+                # GUI 用構造化イベント（verbose 依存せず常時発火）
+                try:
+                    self.console.stats_event(
+                        "tool_invoked",
+                        step_id=step_id,
+                        tool_name="task",
+                        action_name="task (internal)",
+                    )
+                except Exception:
+                    pass
                 return
 
             action_name, detail = self._build_action_display(tool_name, args)
@@ -2715,6 +3151,24 @@ class StepRunner:
                         f"🔍 Work IQ ツール '{workiq_tool_name}' が呼び出されました"
                     )
             self.console.action_start(step_id, action_name, detail)
+            # GUI 用構造化イベント：tool_name を集計キーとして送出。
+            # action_name は表示用の整形済み文字列 (Run (PowerShell) 等)。
+            try:
+                self.console.stats_event(
+                    "tool_invoked",
+                    step_id=step_id,
+                    tool_name=str(tool_name or ""),
+                    action_name=str(action_name or ""),
+                )
+            except Exception:
+                pass
+            # T4 フォールバック: SDK が skill.invoked を発火しない経路で
+            # Skill が SKILL.md / references の view として読まれた場合に検出。
+            try:
+                if args and isinstance(args, dict):
+                    self._detect_skill_load_from_args(step_id or "", args)
+            except Exception:
+                pass
             return
 
         if etype == "tool.execution_complete":
@@ -2894,11 +3348,15 @@ class StepRunner:
         if etype == "assistant.turn_start":
             turn_id = _get(data, "turn_id", "turnId") or ""
             self.console.turn_start(step_id, turn_id)
+            # TTFT 計測開始
+            self._ttft_pending[step_id] = time.monotonic()
             return
 
         if etype == "assistant.turn_end":
             self.console.stream_end(step_id)
             self.console.turn_end(step_id)
+            # TTFT 未観測のまま turn が終わったケースはクリア
+            self._ttft_pending.pop(step_id, None)
             return
 
         if etype == "assistant.message":
@@ -2930,6 +3388,63 @@ class StepRunner:
             dur = _get(data, "duration", default=None)
             self.console.usage(step_id, model, int(inp), int(out),
                                duration_ms=int(dur) if dur else None)
+            # デバッグ採取: HVE_DEBUG_ASSISTANT_USAGE=1 で生 SDK ペイロードを
+            # 1 行 JSON として stats_event 経由で出力する（フィールド名特定用、
+            # 出力量が増えるため通常は無効）。
+            if os.environ.get("HVE_DEBUG_ASSISTANT_USAGE", "").strip() in ("1", "true", "True"):
+                try:
+                    import json as _json
+                    self.console.stats_event(
+                        "assistant_usage_raw",
+                        step_id=step_id,
+                        payload_json=_json.dumps(data, ensure_ascii=False, default=str),
+                    )
+                except Exception:
+                    pass
+            # 詳細 (キャッシュ / reasoning / inter_token_latency / billing)を GUI へ
+            try:
+                cache_read = _get(data, "cache_read_tokens", "cacheReadTokens", default=None)
+                cache_write = _get(data, "cache_write_tokens", "cacheWriteTokens", default=None)
+                reasoning = _get(data, "reasoning_tokens", "reasoningTokens", default=None)
+                itl = _get(data, "inter_token_latency_ms", "interTokenLatencyMs", default=None)
+                copilot_usage = _get(data, "copilot_usage", "copilotUsage", default=None)
+                token_details_raw = (
+                    _get(copilot_usage, "token_details", "tokenDetails", default=None)
+                    if copilot_usage is not None
+                    else None
+                )
+                token_details: list = []
+                if token_details_raw:
+                    for td in token_details_raw:
+                        try:
+                            token_details.append(
+                                {
+                                    "type": _get(td, "token_type", "tokenType", default="") or "",
+                                    "count": int(
+                                        _get(td, "token_count", "tokenCount", default=0) or 0
+                                    ),
+                                }
+                            )
+                        except Exception:
+                            continue
+                self.console.stats_event(
+                    "assistant_usage",
+                    step_id=step_id,
+                    model=str(model),
+                    input=int(inp),
+                    output=int(out),
+                    reasoning=int(reasoning) if reasoning is not None else None,
+                    cache_read=int(cache_read) if cache_read is not None else None,
+                    cache_write=int(cache_write) if cache_write is not None else None,
+                    inter_token_latency_ms=(
+                        float(itl) if itl is not None else None
+                    ),
+                    token_details=token_details or None,
+                )
+            except Exception:
+                pass
+            # TTFT 計測終了タイミング（turn 完了）フラグをリセット
+            self._ttft_pending.pop(step_id, None)
             return
 
         # --- サブエージェント / スキル ---
@@ -2960,6 +3475,13 @@ class StepRunner:
 
         if etype == "skill.invoked":
             name = _get(data, "name") or ""
+            # SDK 経由の skill.invoked は SKILL.md パス検出フォールバックと
+            # 二重発火しないよう seen セットへ記録してから console へ。
+            if name:
+                seen = self._skill_invoked_seen.setdefault(step_id or "", set())
+                if name in seen:
+                    return
+                seen.add(str(name))
             self.console.skill_invoked(step_id, name)
             return
 
@@ -2982,6 +3504,24 @@ class StepRunner:
             current = int(_get(data, "current_tokens", "currentTokens", default=0) or 0)
             msgs = int(_get(data, "messages_length", "messagesLength", default=0) or 0)
             self.console.context_usage(step_id, current, limit, msgs)
+            # 詳細内訳を構造化ログとして出力（GUI ポップアップ用）
+            try:
+                self.console.stats_event(
+                    "session_usage_detail",
+                    step_id=step_id,
+                    current=current,
+                    limit=limit,
+                    msgs=msgs,
+                    system=_get(data, "system_tokens", "systemTokens", default=None),
+                    tool_definitions=_get(
+                        data, "tool_definitions_tokens", "toolDefinitionsTokens", default=None
+                    ),
+                    conversation=_get(
+                        data, "conversation_tokens", "conversationTokens", default=None
+                    ),
+                )
+            except Exception:
+                pass
             return
 
         if etype == "session.compaction_start":
@@ -2992,6 +3532,19 @@ class StepRunner:
             pre = int(_get(data, "pre_compaction_tokens", "preCompactionTokens", default=0) or 0)
             post = int(_get(data, "post_compaction_tokens", "postCompactionTokens", default=0) or 0)
             self.console.compaction(step_id, "complete", pre_tokens=pre, post_tokens=post)
+            try:
+                tokens_removed = int(
+                    _get(data, "tokens_removed", "tokensRemoved", default=max(0, pre - post)) or 0
+                )
+                self.console.stats_event(
+                    "compaction_complete",
+                    step_id=step_id,
+                    pre=pre,
+                    post=post,
+                    removed=tokens_removed,
+                )
+            except Exception:
+                pass
             return
 
         if etype == "session.task_complete":
@@ -3008,6 +3561,17 @@ class StepRunner:
             files_mod = int(_get(changes, "files_modified", "filesModified", default=0) or 0) if changes else 0
             self.console.shutdown_stats(step_id, lines_added, lines_removed,
                                         files_mod, reqs, dur_ms)
+            # GUI 連携: premium_requests を累積コスト計算に渡すための stats_event
+            if reqs > 0:
+                try:
+                    self.console.stats_event(
+                        "premium_requests",
+                        step_id=step_id,
+                        count=reqs,
+                        model=getattr(self.config, "model", "") or "",
+                    )
+                except Exception:
+                    pass
             return
 
         # --- パーミッション ---
@@ -3016,6 +3580,17 @@ class StepRunner:
             kind_obj = _get(req, "kind", default="") if req else ""
             kind_str = getattr(kind_obj, "value", str(kind_obj)) if kind_obj else ""
             self.console.permission(step_id, kind_str, resolved=False)
+            # GUI 詳細ポップアップ用に累計数を通知
+            self._permission_count += 1
+            try:
+                self.console.stats_event(
+                    "permission_count",
+                    step_id=step_id,
+                    count=self._permission_count,
+                    kind=kind_str,
+                )
+            except Exception:
+                pass
             return
 
         if etype == "permission.completed":

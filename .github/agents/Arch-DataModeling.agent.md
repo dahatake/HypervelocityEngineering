@@ -5,14 +5,80 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D07-用語集-ドメインモデル定義書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/catalog/data-model.md"
+      required: true
+      mode: "create"
+    - path: "data/sample-data.json"
+      required: true
+      mode: "create"
+    - path: "data/sample-data.index.md"
+      required: true
+      mode: "create"
+    - path: "data/sample-data.part-0001.json"
+      required: true
+      mode: "create"
+    - path: "sample-data.json"
+      required: true
+      mode: "create"
+    - path: "{WORK}work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}plan.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}subissues.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Arch-DataModeling/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
-## 1) 入力（必読ソース）
+
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
+
+## 2) 入力（必ず参照）
 ユーザーからタスクを受け取ったら、まず以下を読む（存在しない場合は search で探し、見つからなければ質問へ）。
 - `docs/domain-analytics.md`
 - `docs/catalog/service-catalog.md`
@@ -26,7 +92,7 @@ metadata:
 - `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
 - `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
 
-## 2) 成果物（固定）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 ### A) モデリングドキュメント
 - `docs/catalog/data-model.md`
 

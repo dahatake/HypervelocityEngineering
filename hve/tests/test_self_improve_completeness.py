@@ -100,8 +100,8 @@ class TestReusableWorkflowSelfImprove(unittest.TestCase):
         "auto-app-selection-reusable.yml",
         "auto-app-detail-design-web-reusable.yml",
         "auto-app-dev-microservice-web-reusable.yml",
-        "auto-batch-design-reusable.yml",
-        "auto-batch-dev-reusable.yml",
+        "auto-dataflow-design-reusable.yml",
+        "auto-dataflow-dev-reusable.yml",
         "auto-ai-agent-design-reusable.yml",
         "auto-ai-agent-dev-reusable.yml",
         "auto-app-documentation-reusable.yml",
@@ -143,10 +143,10 @@ class TestReusableWorkflowSelfImprove(unittest.TestCase):
         self._assert_workflow_has_self_improve("auto-app-dev-microservice-web-reusable.yml")
 
     def test_auto_batch_design_reusable(self) -> None:
-        self._assert_workflow_has_self_improve("auto-batch-design-reusable.yml")
+        self._assert_workflow_has_self_improve("auto-dataflow-design-reusable.yml")
 
     def test_auto_batch_dev_reusable(self) -> None:
-        self._assert_workflow_has_self_improve("auto-batch-dev-reusable.yml")
+        self._assert_workflow_has_self_improve("auto-dataflow-dev-reusable.yml")
 
     def test_auto_ai_agent_design_reusable(self) -> None:
         self._assert_workflow_has_self_improve("auto-ai-agent-design-reusable.yml")

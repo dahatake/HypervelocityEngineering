@@ -106,16 +106,16 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         )
 
     def test_abd_workflow_auto_qa_dynamic(self) -> None:
-        """ABD ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
-        content = self._read_workflow("auto-batch-design-reusable.yml")
+        """ADFD ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-dataflow-design-reusable.yml")
         self.assertIn("###\\s*質問票設定", content)
         self.assertIn('"auto_qa": auto_qa', content)
         self.assertIn('<!-- auto-qa: %s -->', content)
         self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
 
     def test_abdv_workflow_auto_qa_dynamic(self) -> None:
-        """ABDV ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
-        content = self._read_workflow("auto-batch-dev-reusable.yml")
+        """ADFDV ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
+        content = self._read_workflow("auto-dataflow-dev-reusable.yml")
         self.assertIn("###\\s*質問票設定", content)
         self.assertIn('"auto_qa": auto_qa', content)
         self.assertIn('<!-- auto-qa: %s -->', content)
@@ -154,8 +154,8 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
             "auto-app-dev-microservice-web-reusable.yml",
             "auto-app-documentation-reusable.yml",
             "auto-app-selection-reusable.yml",
-            "auto-batch-design-reusable.yml",
-            "auto-batch-dev-reusable.yml",
+            "auto-dataflow-design-reusable.yml",
+            "auto-dataflow-dev-reusable.yml",
             "auto-knowledge-management-reusable.yml",
         ]
         for filename in targets:

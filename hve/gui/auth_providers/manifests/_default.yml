@@ -1,0 +1,33 @@
+# 既定 manifest — 個別 manifest が存在しない MCP サーバ向けの包括フォールバック。
+#
+# pre_auth_commands を持たず、`copilot` に汎用的な疎通プロンプトのみを流す。
+# サーバ固有の認証 (API キーや個別ログイン) は事前にユーザーが完了している前提。
+# 個別 manifest が無い場合に限り、loader が最後にこの manifest をマッチング対象とする。
+
+id: _default
+display_name: "汎用 MCP 認証 (既定)"
+
+match:
+  # すべてのプロバイダ ID にマッチ。
+  provider_id_regex: ".*"
+
+# 既定では認証必須扱い (個別 manifest が無い MCP サーバは
+# 「未知 = サーバ固有認証が必要かもしれない」ため安全側に倒す)。
+# 認証不要な MCP は専用 manifest で `auth_required: false` を明示すること。
+auth_required: true
+
+copilot_seed_prompt: |
+  この MCP サーバから利用可能なツール一覧を取得し、認証状態を確認してください。
+
+success_regex: "(?i)(tool|tools).{0,40}(available|registered|listed)"
+failure_regex: "(?i)(unauthorized|forbidden|authentication failed)"
+timeout_total: 600
+
+notes_md: |
+  ## 汎用 MCP 認証
+
+  この MCP サーバ用の専用 manifest は同梱されていません。
+  サーバが API キー / 環境変数 / 個別ログインを必要とする場合は、
+  事前にその準備を完了してから本ダイアログを進めてください。
+
+  Copilot CLI からの疎通確認のみが実施されます。

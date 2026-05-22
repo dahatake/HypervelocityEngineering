@@ -17,7 +17,7 @@ class TestWorkbenchCLIArgs(unittest.TestCase):
     def test_default_workbench_is_auto(self):
         args = _parse_orch([])
         self.assertEqual(args.workbench, "auto")
-        self.assertEqual(args.workbench_body_lines, 20)
+        self.assertEqual(args.workbench_body_lines, 10)
         self.assertEqual(args.workbench_history, 10000)
         self.assertTrue(args.workbench_flush_on_exit)
 
@@ -46,9 +46,9 @@ class TestSDKConfigPropagation(unittest.TestCase):
         # __main__.py の該当部抜粋を再現（テスト目的）
         _wb_mode = getattr(args, "workbench", "auto")
         cfg.no_workbench = (_wb_mode == "off")
-        _raw = int(getattr(args, "workbench_body_lines", 20) or 20)
+        _raw = int(getattr(args, "workbench_body_lines", 10) or 10)
         env_v = (env or {}).get("HVE_WORKBENCH_BODY_LINES", "").strip()
-        if env_v and _raw == 20:
+        if env_v and _raw == 10:
             try:
                 _raw = int(env_v)
             except ValueError:
@@ -71,9 +71,9 @@ class TestSDKConfigPropagation(unittest.TestCase):
         cfg = self._apply(["--workbench-body-lines", "99"])
         self.assertEqual(cfg.workbench_body_lines, 20)
 
-    def test_default_is_20(self):
+    def test_default_is_10(self):
         cfg = self._apply([])
-        self.assertEqual(cfg.workbench_body_lines, 20)
+        self.assertEqual(cfg.workbench_body_lines, 10)
 
     def test_env_var_overrides_default(self):
         cfg = self._apply([], env={"HVE_WORKBENCH_BODY_LINES": "13"})

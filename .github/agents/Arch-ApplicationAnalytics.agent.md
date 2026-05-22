@@ -5,13 +5,69 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+    - path: "docs/recommended-kpi-okr.md"
+      required: false
+      kind: "agent_artifact"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D01-事業意図-成功条件定義書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D02-スコープ-対象境界定義書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D05-ユースケース-シナリオカタログ.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D06-業務ルール-判定表仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D07-用語集-ドメインモデル定義書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      mode: "create"
 ---
-
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `task-questionnaire`: UC 解析時の不明点を質問票で補強
+- `knowledge-lookup`: D01/D02/D05/D06/D07/D09 の業務要件参照
+- `markdown-query`: `docs/usecase/` 全体を `python -m mdq search` で検索
+- `task-dag-planning`: 多数 UC を扱う際の SPLIT 判定
+- `work-artifacts-layout`: アプリリスト中間成果物の格納
+
 ## 1) 目的と非目的
 ### 目的（MUST）
 入力のユースケース文書から、根拠付きで以下を作成する。
@@ -47,6 +103,12 @@ metadata:
 
 ## 3) 入力（必ず参照）
 - ユースケース文書: `docs/catalog/use-case-catalog.md`
+
+### KPI/OKR 参照（任意・存在する場合のみ）
+- `docs/recommended-kpi-okr.md`（ARD Step 3 出力）が存在する場合、各アプリ（APP-*）と KPI/OKR ID の紐付けを必須とする。
+  - `docs/catalog/app-catalog.md` の APP 一覧テーブルに「対応 KPI/OKR」列を含め、各 APP 行に対応する `KPI-*` / `OKR-*` ID を記載する（カンマ区切り、1 APP あたり 5 件超となる場合は「KPI-01, KPI-02, ... 他 N 件」と省略表記可）。
+  - 紐付け不能な APP がある場合は当該列に `（未対応）` と記載し、Decision Log にその理由を残す。
+- `docs/recommended-kpi-okr.md` が存在しない場合は「対応 KPI/OKR」列を空欄として出力する（KPI/OKR ファイル未生成の運用を許容）。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

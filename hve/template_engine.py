@@ -11,11 +11,6 @@ from typing import Any, Dict, List, Optional, Set
 
 from .workflow_registry import WorkflowDef
 
-try:
-    from .security import sanitize_user_input as _sanitize_user_input
-except ImportError:
-    from security import sanitize_user_input as _sanitize_user_input  # type: ignore[no-redef]
-
 # ---------------------------------------------------------------------------
 # 定数
 # ---------------------------------------------------------------------------
@@ -53,8 +48,8 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "aas": "Architecture Design",
     "aad-web": "Web App Design",
     "asdw-web": "Web App Dev & Deploy",
-    "abd": "Batch Design",
-    "abdv": "Batch Dev & Deploy",
+    "adfd": "Dataflow Design",
+    "adfdv": "Dataflow Dev & Deploy",
     "aag": "AI Agent Design",
     "aagd": "AI Agent Dev & Deploy",
     "akm": "Knowledge Management",
@@ -71,8 +66,8 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "aas": "AAS",
     "aad-web": "AAD-WEB",
     "asdw-web": "ASDW-WEB",
-    "abd": "ABD",
-    "abdv": "ABDV",
+    "adfd": "ADFD",
+    "adfdv": "ADFDV",
     "aag": "AAG",
     "aagd": "AAGD",
     "akm": "AKM",
@@ -321,8 +316,8 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
 
     Returns:
         dict with keys:
-          branch, selected_steps, skip_review, skip_qa, additional_comment,
-          + ワークフロー固有パラメータ (app_ids, app_id, resource_group, usecase_id, batch_job_id)
+          branch, selected_steps, skip_review, skip_qa,
+          + ワークフロー固有パラメータ (app_ids, app_id, resource_group, usecase_id, app_id)
     """
     print(f"\n{'='*60}")
     print(f" ワークフロー: {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}")
@@ -338,8 +333,8 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
         _arch_hint = {
             "aad-web": "Webフロントエンド + クラウド",
             "asdw-web": "Webフロントエンド + クラウド",
-            "abd": "データバッチ処理 / バッチ",
-            "abdv": "データバッチ処理 / バッチ",
+            "adfd": "データデータフロー処理 / バッチ",
+            "adfdv": "データデータフロー処理 / バッチ",
         }.get(wf.id, "")
         if _arch_hint:
             _prompt_label = (
@@ -361,9 +356,9 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
         params["resource_group"] = _prompt("リソースグループ名", default="", required=False)
     if "usecase_id" in wf.params:
         params["usecase_id"] = _prompt("ユースケースID", default="", required=False)
-    if "batch_job_id" in wf.params:
-        params["batch_job_id"] = _prompt(
-            "対象バッチジョブ ID（カンマ区切り）", default="", required=False
+    if "app_id" in wf.params:
+        params["app_id"] = _prompt(
+            "対象データフローアプリ ID（カンマ区切り）", default="", required=False
         )
     if "tdd_max_retries" in wf.params:
         import re as _re
@@ -497,9 +492,6 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
     params["skip_review"] = _prompt_yes_no("セルフレビューをスキップする？", default=False)
     params["skip_qa"] = _prompt_yes_no("質問票の作成をスキップする？", default=False)
 
-    # 追加コメント
-    params["additional_comment"] = _prompt("GitHub Issue への追加コメント（任意）", default="")
-
     return params
 
 
@@ -561,9 +553,9 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     if app_ids:
         parts.append(f"<!-- app-ids: {', '.join(app_ids)} -->")
 
-    batch_job_id = params.get("batch_job_id", "")
-    if batch_job_id:
-        parts.append(f"<!-- batch-job-ids: {batch_job_id} -->")
+    app_id = params.get("app_id", "")
+    if app_id:
+        parts.append(f"<!-- app-ids: {app_id} -->")
 
     parts.append(f"<!-- auto-review: {auto_review} -->")
     parts.append(f"<!-- auto-context-review: {auto_context_review} -->")
@@ -577,15 +569,6 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     parts.append(f"<!-- create-remote-mcp-server: {create_remote_mcp_server} -->")
 
     return "\n".join(parts)
-
-
-def _build_additional_section(params: dict) -> str:
-    """テンプレートの ``{additional_section}`` を展開する。"""
-    additional = params.get("additional_comment", "")
-    if additional:
-        additional = _sanitize_user_input(additional)
-        return f"\n\n## 追加コメント\n{additional}"
-    return ""
 
 
 def _build_qa_review_context_section() -> str:
@@ -620,7 +603,7 @@ def _build_app_id_section(app_id) -> str:
         ids = [app_id] if app_id else []
     if not ids:
         # APP-ID 未指定時: スコープセクションを挿入しない。
-        # aad-web / asdw-web / abd / abdv では、orchestrator の app-arch filter が
+        # aad-web / asdw-web / adfd / adfdv では、orchestrator の app-arch filter が
         # 推薦アーキテクチャに合致する APP-ID を effective_params に設定するため、
         # 通常このパスには到達しない。
         return ""
@@ -635,17 +618,17 @@ def _build_app_id_section(app_id) -> str:
 
 
 def _build_rg_section(resource_group: str) -> str:
-    """ABDV テンプレートの ``{rg_section}`` を展開する。"""
+    """ADFDV テンプレートの ``{rg_section}`` を展開する。"""
     if not resource_group:
         return ""
     return f"\n\n## リソースグループ\n`{resource_group}`"
 
 
-def _build_job_section(batch_job_id: str) -> str:
-    """ABDV テンプレートの ``{job_section}`` を展開する。"""
-    if not batch_job_id:
+def _build_job_section(app_id: str) -> str:
+    """ADFDV テンプレートの ``{job_section}`` を展開する。"""
+    if not app_id:
         return ""
-    return f"\n\n## 対象バッチジョブ ID\n`{batch_job_id}`"
+    return f"\n\n## 対象データフローアプリ ID\n`{app_id}`"
 
 
 def _build_target_files_section(target_files: str) -> str:
@@ -828,11 +811,10 @@ def render_template(
         return ""
 
     root_ref = _build_root_ref(root_issue_num, params)
-    additional_section = _build_additional_section(params)
     qa_review_section = _build_qa_review_context_section()
 
     body = body.replace("{root_ref}", root_ref)
-    body = body.replace("{additional_section}", qa_review_section + additional_section)
+    body = body.replace("{additional_section}", qa_review_section)
     if "{existing_artifact_policy}" in body:
         body = body.replace(
             "{existing_artifact_policy}",
@@ -864,15 +846,15 @@ def render_template(
         ),
     )
 
-    # 推薦アーキテクチャ スコープセクション（aad-web / asdw-web / abd / abdv 共通）
+    # 推薦アーキテクチャ スコープセクション（aad-web / asdw-web / adfd / adfdv 共通）
     body = body.replace(
         "{app_arch_scope_section}",
         params.get("app_arch_scope_section", ""),
     )
 
-    # ABDV 固有プレースホルダ
+    # ADFDV 固有プレースホルダ
     body = body.replace("{rg_section}", _build_rg_section(params.get("resource_group", "")))
-    body = body.replace("{job_section}", _build_job_section(params.get("batch_job_id", "")))
+    body = body.replace("{job_section}", _build_job_section(params.get("app_id", "")))
 
     # AKM 固有プレースホルダ
     body = body.replace("{akm_sources}", params.get("sources", "qa,original-docs"))
@@ -1027,8 +1009,8 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     app_ids = _resolve_app_ids(params)
     if app_ids:
         lines.append(f"<!-- app-ids: {', '.join(app_ids)} -->")
-    if params.get("batch_job_id"):
-        lines.append(f"<!-- batch-job-ids: {params['batch_job_id']} -->")
+    if params.get("app_id"):
+        lines.append(f"<!-- app-ids: {params['app_id']} -->")
     lines.append(f"<!-- auto-review: {auto_review} -->")
     lines.append(f"<!-- auto-context-review: {auto_context_review} -->")
     lines.append(f"<!-- auto-qa: {auto_qa} -->")
@@ -1049,8 +1031,8 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"リソースグループ: `{params['resource_group']}`")
     if params.get("usecase_id"):
         lines.append(f"ユースケースID: `{params['usecase_id']}`")
-    if params.get("batch_job_id"):
-        lines.append(f"バッチジョブ ID: `{params['batch_job_id']}`")
+    if params.get("app_id"):
+        lines.append(f"データフローアプリ ID: `{params['app_id']}`")
     if params.get("sources"):
         lines.append(f"sources: `{params['sources']}`")
     if params.get("target_files"):
@@ -1067,9 +1049,5 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"focus_areas: `{params['focus_areas']}`")
     if params.get("app_arch_scope_section"):
         lines.append(params["app_arch_scope_section"])
-    additional = params.get("additional_comment", "")
-    if additional:
-        additional = _sanitize_user_input(additional)
-        lines.append(f"\n## 追加コメント\n{additional}")
 
     return "\n".join(lines)

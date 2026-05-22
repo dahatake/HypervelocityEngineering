@@ -106,6 +106,18 @@ class TestKeyReaderDispatch(unittest.TestCase):
         kr._dispatch("]")
         wb.scroll_actions_down.assert_called_once_with(1)
 
+    def test_dispatch_mouse_wheel_up_scrolls_tasks_up(self):
+        wb = self._mk_wb()
+        kr = KeyReader(wb)
+        kr._dispatch("MOUSE_WHEEL_UP")
+        wb.scroll_tasks_up.assert_called_once_with(1)
+
+    def test_dispatch_mouse_wheel_down_scrolls_tasks_down(self):
+        wb = self._mk_wb()
+        kr = KeyReader(wb)
+        kr._dispatch("MOUSE_WHEEL_DOWN")
+        wb.scroll_tasks_down.assert_called_once_with(1)
+
     def test_colon_enters_command_mode(self):
         wb = self._mk_wb()
         kr = KeyReader(wb)
@@ -148,6 +160,31 @@ class TestKeyReaderDispatch(unittest.TestCase):
         kr._dispatch("j")
         wb.scroll_down.assert_not_called()
         wb.cmd_append.assert_called_once_with("j")
+
+
+class TestKeyReaderEscapeDecoding(unittest.TestCase):
+    def test_decode_arrow_and_page_keys(self):
+        kr = KeyReader(MagicMock())
+        self.assertEqual(kr._decode_escape_sequence("[A"), "UP")
+        self.assertEqual(kr._decode_escape_sequence("[B"), "DOWN")
+        self.assertEqual(kr._decode_escape_sequence("[5~"), "PGUP")
+        self.assertEqual(kr._decode_escape_sequence("[6~"), "PGDN")
+
+    def test_decode_sgr_mouse_wheel(self):
+        kr = KeyReader(MagicMock())
+        self.assertEqual(
+            kr._decode_escape_sequence("[<64;120;20M"),
+            "MOUSE_WHEEL_UP",
+        )
+        self.assertEqual(
+            kr._decode_escape_sequence("[<65;120;20M"),
+            "MOUSE_WHEEL_DOWN",
+        )
+
+    def test_decode_unknown_escape_returns_none(self):
+        kr = KeyReader(MagicMock())
+        self.assertIsNone(kr._decode_escape_sequence("[<1;2;3M"))
+        self.assertIsNone(kr._decode_escape_sequence("[XYZ"))
 
 
 if __name__ == "__main__":

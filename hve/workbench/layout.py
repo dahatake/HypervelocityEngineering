@@ -40,7 +40,7 @@ HEADER2_MAX_LINES = 3
 USER_ACTIONS_PANEL_HEIGHT = 5 + 2
 USER_INTERACTION_PANEL_HEIGHT = 1 + 2
 
-TASKTREE_DEFAULT_HEIGHT = 5
+TASKTREE_DEFAULT_HEIGHT = 7
 TASKTREE_MIN_HEIGHT = 3
 TASKTREE_MAX_HEIGHT = 12
 
@@ -201,10 +201,10 @@ def _render_summary_line(state: "WorkbenchState") -> Text:
 def render_body(state: "WorkbenchState") -> Panel:
     lines = state.body.view(window=state.body_window, offset=state.scroll_offset)
     text = Text("\n".join(lines))
-    title = "output"
+    title = "ログ"
     if state.scroll_offset > 0:
         max_off = state.body.max_offset(state.body_window)
-        title = f"output  [scroll -{state.scroll_offset}/{max_off}]"
+        title = f"ログ  [スクロール -{state.scroll_offset}/{max_off}]"
     return Panel(text, title=title, title_align="left", border_style="dim", padding=(0, 1))
 
 
@@ -214,17 +214,27 @@ def render_task_tree(
     max_lines: int = TASKTREE_DEFAULT_HEIGHT,
     max_width: int = 120,
 ) -> Panel:
-    """タスクツリーペイン: workflow ルート + サブタスクを階層表示。"""
+    """タスクツリーペイン: workflow ルート + サブタスクを階層表示。スクロール対応。"""
+    offset = max(0, int(getattr(state, "task_tree_scroll", 0) or 0))
     lines = state.task_tree.render_lines(
         time.monotonic(),
         max_lines=max_lines,
         max_width=max_width,
+        scroll_mode=True,
+        offset=offset,
     )
     if not lines:
         body = Text("（タスクなし）", style="dim")
     else:
         body = Group(*lines)
-    title = "tasks"
+    total = state.task_tree_total_nodes()
+    max_off = state.task_tree_max_offset(max_lines)
+    if offset > 0:
+        title = f"セッションツリー  [スクロール -{offset}/{max_off}] ({total})"
+    elif total > 0:
+        title = f"セッションツリー ({total})"
+    else:
+        title = "セッションツリー"
     return Panel(body, title=title, title_align="left", border_style="dim", padding=(0, 1))
 
 
@@ -254,25 +264,25 @@ def render_user_actions(state: "WorkbenchState") -> Panel:
             line.append(a.message, style="white")
             lines.append(line)
         body = Group(*lines)
-    title = "user actions"
+    title = "実行中の課題"
     total = len(state.user_actions)
     max_off = state.user_actions_max_offset()
     if total > 0:
         if state.user_actions_scroll > 0:
-            title = f"user actions  [scroll -{state.user_actions_scroll}/{max_off}] ({total})"
+            title = f"実行中の課題  [スクロール -{state.user_actions_scroll}/{max_off}] ({total})"
         else:
-            title = f"user actions ({total})"
+            title = f"実行中の課題 ({total})"
     return Panel(body, title=title, title_align="left", border_style="dim", padding=(0, 1))
 
 
 # userinteraction ペインの待機時ヘルプ文（`/session-store` 削除済み）。
 _USER_INTERACTION_HELP = (
     "Press `:` to enter command  |  /help  "
-    "|  Esc to cancel  |  Scroll: ↑↓ body, [ ] actions, g/G top/bottom"
+    "|  Esc to cancel  |  Scroll: ↑↓ ログ, [ ] 課題, { } ツリー, g/G top/bottom, マウスホイール=ツリー"
 )
 
 _USER_INTERACTION_HELP_DONE = (
-    "> /exit  （タスク完了：/exit で終了 | スクロール可: ↑↓ body, [ ] actions, g/G）"
+    "> /exit  （タスク完了：/exit で終了 | スクロール可: ↑↓ ログ, [ ] 課題, { } ツリー, g/G, マウスホイール=ツリー）"
 )
 
 
@@ -286,12 +296,13 @@ def render_user_interaction(state: "WorkbenchState") -> Panel:
         line = Text(_USER_INTERACTION_HELP_DONE, style="bold yellow")
     else:
         line = Text(_USER_INTERACTION_HELP, style="dim")
-    title = "userinteraction"
+    title = "入力エリア"
     return Panel(line, title=title, title_align="left", border_style="dim", padding=(0, 1))
 
 
 def render_footer(state: "WorkbenchState") -> Text:
     t = Text()
+    t.append("[統計情報] ", style="bold dim")
     if state.context_limit > 0:
         pct = state.context_current / state.context_limit * 100
         t.append("Context: ", style="dim")

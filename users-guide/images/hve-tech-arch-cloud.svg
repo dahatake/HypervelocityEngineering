@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 14px; font-weight: bold; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .user { fill: #fff5d6; stroke: #9a6700; }
+      .gh   { fill: #e8f1fb; stroke: #1f6feb; }
+      .yml  { fill: #eaf6ee; stroke: #1a7f37; }
+      .agent { fill: #f8eaf6; stroke: #8250df; }
+      .copilot { fill: #fbe9e7; stroke: #b91c1c; }
+      .arr  { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">HVE Cloud Agent Orchestrator: 制御フロー</text>
+
+  <!-- User -->
+  <rect class="box user" x="30" y="60" width="200" height="70" rx="6"/>
+  <text class="h" x="50" y="84">ユーザー</text>
+  <text x="50" y="104">Issue Template 入力</text>
+  <text x="50" y="122">→ ラベル付き Issue 作成</text>
+
+  <!-- Issue -->
+  <rect class="box gh" x="280" y="60" width="240" height="70" rx="6"/>
+  <text class="h" x="300" y="84">GitHub Issue（ラベル付）</text>
+  <text x="300" y="104">.github/ISSUE_TEMPLATE/*.yml</text>
+  <text x="300" y="122">例: auto-app-selection</text>
+
+  <!-- Dispatcher -->
+  <rect class="box yml" x="570" y="60" width="500" height="100" rx="6"/>
+  <text class="h" x="590" y="84">Dispatcher (GitHub Actions)</text>
+  <text x="590" y="104">auto-orchestrator-dispatcher.yml</text>
+  <text x="590" y="122">on: issues [opened, labeled, closed]</text>
+  <text x="590" y="140">ラベルから target を判定 → 対応する reusable workflow を `uses:` で起動</text>
+
+  <!-- Reusable workflow -->
+  <rect class="box yml" x="280" y="200" width="540" height="120" rx="6"/>
+  <text class="h" x="300" y="224">Reusable Workflow</text>
+  <text x="300" y="244">auto-&lt;target&gt;-reusable.yml（AAS / AAD-WEB / ASDW-WEB ...）</text>
+  <text x="300" y="262">env: COPILOT_PAT, GH_TOKEN</text>
+  <text x="300" y="280">.github/scripts/bash/lib/assign-copilot.sh</text>
+  <text x="300" y="298">Step ごとに: Sub-Issue 作成 → Copilot Coding Agent をアサイン</text>
+  <text x="300" y="316">ラベル遷移ワークフロー: qa-to-review / review-to-approve / auto-approve-and-merge</text>
+
+  <!-- python -m hve (limited) -->
+  <rect class="box yml" x="850" y="200" width="220" height="120" rx="6"/>
+  <text class="h" x="870" y="224">python3 -m hve.* 補助</text>
+  <text x="870" y="244">app_arch_filter</text>
+  <text x="870" y="262">artifact_validation</text>
+  <text x="870" y="280">qa_merger</text>
+  <text x="870" y="298">（DAG 実行本体は</text>
+  <text x="870" y="316">  bash + Coding Agent）</text>
+
+  <!-- Coding Agent -->
+  <rect class="box copilot" x="280" y="370" width="540" height="100" rx="6"/>
+  <text class="h" x="300" y="394">GitHub Copilot Coding Agent（クラウド側）</text>
+  <text x="300" y="414">Sub-Issue body をプロンプトとして実行</text>
+  <text x="300" y="432">.github/agents/*.agent.md（Custom Agent 定義）+ .github/skills/ を参照</text>
+  <text x="300" y="450">MCP / Plugin: Copilot CLI 設定を継承</text>
+
+  <!-- PR -->
+  <rect class="box gh" x="280" y="510" width="540" height="100" rx="6"/>
+  <text class="h" x="300" y="534">PR（Sub-Issue ごと）</text>
+  <text x="300" y="554">create-subissues-from-pr.yml → Sub-Issue 自動連鎖生成</text>
+  <text x="300" y="572">auto-approve-and-merge.yml が検証マーカー判定 → 自動マージ</text>
+  <text x="300" y="590">merge 後にラベル `*:done` 付与 → Dispatcher が次フェーズ起動</text>
+
+  <!-- Arrows -->
+  <path class="arr" d="M230,95 L280,95"/>
+  <path class="arr" d="M520,95 L570,95"/>
+  <path class="arr" d="M820,160 L600,200"/>
+  <path class="arr" d="M820,260 L850,260"/>
+  <path class="arr" d="M550,320 L550,370"/>
+  <path class="arr" d="M550,470 L550,510"/>
+  <path class="arr" d="M820,560 L990,560 L990,160" />
+</svg>

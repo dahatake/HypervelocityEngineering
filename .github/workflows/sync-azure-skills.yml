@@ -1,8 +1,12 @@
 name: Sync Azure Skills
 
 on:
-  schedule:
-    - cron: '0 9 * * 1'  # 毎週月曜 9:00 UTC
+  # 自動 cron は無効化済み: .github/skills/azure-skills/ は .gitignore で除外され、
+  # 各開発者の手元で hve/setup-hve.{ps1,sh,cmd} の --with-skills フラグから
+  # npx skills add microsoft/skills を実行してローカルにのみ展開する運用に変更したため。
+  # 手動で同期 PR を作成したい場合は workflow_dispatch から実行する。
+  # schedule:
+  #   - cron: '0 9 * * 1'  # 毎週月曜 9:00 UTC
   workflow_dispatch:
 
 permissions:

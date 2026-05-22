@@ -1,4 +1,4 @@
-"""Tests for hve.mdq.indexer per-file helpers and (optionally) MdqWatcher.
+"""Tests for mdq.indexer per-file helpers and (optionally) MdqWatcher.
 
 watchdog 未導入の場合、watcher 統合テストは skip される（CI 環境互換）。
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from hve.mdq import indexer, store
+from mdq import indexer, store
 
 
 SAMPLE_MD = """---
@@ -40,7 +40,7 @@ def test_index_one_file_creates_chunks(tmp_path: Path):
     repo = tmp_path
     md = repo / "docs" / "x.md"
     _write(md, SAMPLE_MD)
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     res = indexer.index_one_file(repo, md, conn)
     conn.commit()
     assert res["action"] == "indexed"
@@ -53,7 +53,7 @@ def test_index_one_file_skips_unchanged(tmp_path: Path):
     repo = tmp_path
     md = repo / "docs" / "x.md"
     _write(md, SAMPLE_MD)
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     indexer.index_one_file(repo, md, conn)
     conn.commit()
     res2 = indexer.index_one_file(repo, md, conn)
@@ -66,7 +66,7 @@ def test_index_one_file_updates_changed(tmp_path: Path):
     repo = tmp_path
     md = repo / "docs" / "x.md"
     _write(md, SAMPLE_MD)
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     indexer.index_one_file(repo, md, conn)
     conn.commit()
     _write(md, SAMPLE_MD + "\n\n# Heading Three\n\n本文 C。\n")
@@ -79,7 +79,7 @@ def test_index_one_file_updates_changed(tmp_path: Path):
 
 def test_index_one_file_missing(tmp_path: Path):
     repo = tmp_path
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     res = indexer.index_one_file(repo, repo / "docs" / "nope.md", conn)
     assert res["action"] == "missing"
     assert res["chunks"] == 0
@@ -90,7 +90,7 @@ def test_delete_one_file_removes_chunks(tmp_path: Path):
     repo = tmp_path
     md = repo / "docs" / "x.md"
     _write(md, SAMPLE_MD)
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     indexer.index_one_file(repo, md, conn)
     conn.commit()
     assert store.stats(conn)["files"] == 1
@@ -110,7 +110,7 @@ def test_build_index_uses_per_file_helper_no_regression(tmp_path: Path):
     repo = tmp_path
     _write(repo / "docs" / "a.md", SAMPLE_MD)
     _write(repo / "docs" / "b.md", SAMPLE_MD)
-    conn = store.open_store(repo / ".hve" / "mdq.sqlite")
+    conn = store.open_store(repo / ".mdq" / "index.sqlite")
     summary = indexer.build_index(repo, ["docs"], conn)
     assert summary["files_indexed"] == 2
     assert summary["files_skipped"] == 0
@@ -140,11 +140,11 @@ def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.1) -> bool:
 
 
 def test_watcher_detects_create_modify_delete(tmp_path: Path):
-    from hve.mdq import watcher as watcher_mod
+    from mdq import watcher as watcher_mod
 
     repo = tmp_path
     (repo / "docs").mkdir()
-    db = repo / ".hve" / "mdq.sqlite"
+    db = repo / ".mdq" / "index.sqlite"
 
     w = watcher_mod.MdqWatcher(
         repo_root=repo,
@@ -193,12 +193,12 @@ def test_watcher_detects_create_modify_delete(tmp_path: Path):
 
 
 def test_watcher_ignores_out_of_scope(tmp_path: Path):
-    from hve.mdq import watcher as watcher_mod
+    from mdq import watcher as watcher_mod
 
     repo = tmp_path
     (repo / "docs").mkdir()
     (repo / "outside").mkdir()
-    db = repo / ".hve" / "mdq.sqlite"
+    db = repo / ".mdq" / "index.sqlite"
 
     w = watcher_mod.MdqWatcher(
         repo_root=repo, roots=["docs"], db_path=db, debounce_ms=100,
@@ -234,9 +234,9 @@ def test_watcher_start_returns_false_when_watchdog_missing(tmp_path: Path, monke
             monkeypatch.delitem(sys.modules, k, raising=False)
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    from hve.mdq import watcher as watcher_mod
+    from mdq import watcher as watcher_mod
 
     w = watcher_mod.MdqWatcher(repo_root=tmp_path, roots=["docs"],
-                               db_path=tmp_path / ".hve" / "mdq.sqlite")
+                               db_path=tmp_path / ".mdq" / "index.sqlite")
     assert w.start() is False
     w.stop()  # 二重停止安全性

@@ -5,11 +5,88 @@ tools: ['execute', 'read', 'edit', 'search', 'web', 'todo']
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/test-strategy.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-TDD-TestStrategy"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/templates/atdd-template.md"
+      required: true
+      kind: "static"
+    - path: "docs/services/{serviceId}-{serviceNameSlug}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceDetail"
+    - path: "docs/screen/{画面ID}-{画面名スラッグ}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-UI-Detail"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "test/api/<ServiceName>.Tests/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "knowledge/D05"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/test-specs/{serviceId}-test-spec.md"
+      required: true
+      mode: "create"
+    - path: "docs/test-specs/{screenId}-test-spec.md"
+      required: true
+      mode: "create"
+    - path: "docs/test-specs/{agentId}-test-spec.md"
+      required: true
+      mode: "create"
+    - path: "work/Arch-TDD-TestSpec/Issue-<識別子>/plan.md"
+      required: true
+      mode: "create"
+    - path: "subissues.md"
+      required: true
+      mode: "create"
 ---
 <role>
 `docs/test-strategy.md` と Step 7.1/7.2 成果物を根拠に、`docs/test-specs/` のサービス別・画面別・AI Agent別テスト仕様書を作成するテスト仕様専用エージェント。
 共通ルールは `.github/copilot-instructions.md` と Skill `agent-common-preamble` を継承する。
 </role>
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — テスト戦略書・画面/サービス定義書の存在確認
+- `work-artifacts-layout` — `work/Arch-TDD-TestSpec/Issue-<識別子>/` 配下の成果物構造に準拠
+- `testing/test-strategy-template` — TDD Red フェーズ test-spec テンプレートに準拠
+- `knowledge-lookup` — 業務要件・受け入れ基準の参照
+- `markdown-query` — 既存 test-spec / 設計書の横断検索
 
 <when_to_invoke>
 - TDD Redフェーズ着手前に、実装より先にテスト仕様（ケース/データ/ダブル/契約）を確定したいとき
@@ -24,7 +101,7 @@ metadata:
   - `docs/templates/atdd-template.md`
 - 対象仕様:
   - `docs/services/{serviceId}-{serviceNameSlug}-description.md`
-  - `docs/screen/{screenId}-{screenNameSlug}-description.md`
+  - `docs/screen/{画面ID}-{画面名スラッグ}-description.md`
 - 任意補助:
   - `docs/catalog/app-catalog.md`, `docs/catalog/data-model.md`, `docs/domain-analytics.md`, `test/api/<ServiceName>.Tests/`
   - `knowledge/D05`, `D06`, `D17`

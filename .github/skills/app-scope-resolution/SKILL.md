@@ -39,7 +39,7 @@ Issue body の `<!-- app-id: XXX -->` または `<!-- app-ids: ... -->` HTML コ
 
 ## APP-ID 未指定時の動作（新仕様）
 
-AAD-WEB / ASDW-WEB / ABD / ABDV では、APP-ID 未指定時に全対象とはしない。
+AAD-WEB / ASDW-WEB / ADFD / ADFDV では、APP-ID 未指定時に全対象とはしない。
 
 `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` を参照し、
 workflow に対応する推薦アーキテクチャの APP-ID のみを対象とする。
@@ -47,7 +47,7 @@ workflow に対応する推薦アーキテクチャの APP-ID のみを対象と
 | workflow | 対象推薦アーキテクチャ |
 |---------|---------------------|
 | `aad-web` / `asdw-web` | `Webフロントエンド + クラウド` |
-| `abd` / `abdv` | `データバッチ処理` または `バッチ` |
+| `adfd` / `adfdv` | `データデータフロー処理` または `バッチ` |
 
 - `docs/catalog/app-arch-catalog.md` が存在しない場合 → fail-fast（非 dry-run）または warning 継続（dry-run）
 - APP-ID が `docs/catalog/app-arch-catalog.md` に存在しない場合 → unknown として除外

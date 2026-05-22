@@ -424,19 +424,23 @@ class QAMerger:
 
     @staticmethod
     def parse_answers(answer_text: str) -> Dict[int, str]:
-        """回答テキストを解析して {質問番号: 選択肢ラベル} の辞書を返す。
+        """回答テキストを解析して {質問番号: 値} の辞書を返す。
 
         入力形式:
             # コメント行（無視）
-            1: A
+            1: A                  ← 選択肢ラベル（単一英字、A-Z）
             2: B
-            3: C
+            3:: 自由記述の回答内容  ← `::`（コロン2個）区切りで自由記述
+
+        値の意味:
+            - 選択肢ラベル形式（`N: X`）: 単一英字ラベル（大文字化）を格納
+            - 自由記述形式（`N:: <text>`）: テキストをそのまま格納（複数文字可）
 
         Args:
-            answer_text: "番号: 選択肢" 形式のテキスト。
+            answer_text: "番号: 選択肢" または "番号:: 自由記述" 形式のテキスト。
 
         Returns:
-            {int: str} の辞書（例: {1: "A", 2: "B"}）。
+            {int: str} の辞書（例: {1: "A", 3: "自由記述の回答内容"}）。
         """
         answers: Dict[int, str] = {}
         for line in answer_text.splitlines():
@@ -444,7 +448,15 @@ class QAMerger:
             # コメント行・空行をスキップ
             if not stripped or stripped.startswith("#"):
                 continue
-            # "番号: 選択肢" パターン（例: "1: A" または "1: A) テキスト"）
+            # 自由記述形式: "番号:: 自由記述" を先に試す（より特殊なため優先）
+            m_free = re.match(r"^(\d+)\s*::\s*(.+)$", stripped)
+            if m_free:
+                no = int(m_free.group(1))
+                text = m_free.group(2).strip()
+                if text:
+                    answers[no] = text
+                continue
+            # 単一英字ラベル形式: "番号: 選択肢"（例: "1: A" または "1: A) テキスト"）
             m = re.match(r"^(\d+)\s*:\s*([A-Za-z])", stripped)
             if m:
                 no = int(m.group(1))

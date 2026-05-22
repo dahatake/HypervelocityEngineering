@@ -23,8 +23,8 @@ from typing import Dict, List, Optional
 _WORKFLOW_TARGET_KIND: Dict[str, str] = {
     "aad-web":  "web-cloud",
     "asdw-web": "web-cloud",
-    "abd":      "batch",
-    "abdv":     "batch",
+    "adfd":      "batch",
+    "adfdv":     "batch",
 }
 
 # 推薦アーキテクチャ文字列 → 内部分類
@@ -32,7 +32,7 @@ _ARCH_KIND_MAP: Dict[str, str] = {
     "Webフロントエンド + クラウド":  "web-cloud",
     "Webフロントエンド+クラウド":    "web-cloud",
     "Webフロントエンド ＋ クラウド": "web-cloud",
-    "データバッチ処理":              "batch",
+    "データデータフロー処理":              "batch",
     "バッチ":                        "batch",
 }
 
@@ -143,12 +143,18 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
     content = path.read_text(encoding="utf-8")
 
     # セクション抽出
+    # canonical: `## A) サマリ表（全APP横断）` を厳格に判定する（出力契約の正本）。
+    # loose: `A` 直後の記号揺れ（`A.` `A:` `A、` `A`）、半角/全角括弧、
+    #        「全APP横断」内部スペース有無、および
+    #        本文中の代替キーワード（_CATALOG_SECTION_ACCEPTED_KEYWORDS）を受理する。
+    #        loose 経路にヒットした場合は stderr に WARN を出し、出力契約への
+    #        修正を促す（黙認しない）。
     canonical_re = re.compile(
         r"##\s*A\)\s*サマリ表（全APP横断）\s*\n(.*?)(?=\n##\s|\Z)",
         re.DOTALL,
     )
     loose_re = re.compile(
-        r"##\s*A\)[^\n]*?(?:"
+        r"##\s*A[).:、]?\s*[^\n]*?(?:"
         + "|".join(map(re.escape, _CATALOG_SECTION_ACCEPTED_KEYWORDS))
         + r")[^\n]*\n(.*?)(?=\n##\s|\Z)",
         re.DOTALL,
@@ -158,7 +164,7 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
     if not m:
         m = loose_re.search(content)
         if m:
-            actual_heading = re.search(r"^##\s*A\)[^\n]*", content, re.MULTILINE)
+            actual_heading = re.search(r"^##\s*A[).:、]?[^\n]*", content, re.MULTILINE)
             actual = actual_heading.group(0) if actual_heading else "(unknown)"
             print(
                 f"⚠️ WARNING: catalog の見出しが canonical (`## {_CATALOG_SECTION_CANONICAL}`) と異なります: "
@@ -236,7 +242,7 @@ def resolve_app_arch_scope(
     """推薦アーキテクチャに基づいて APP-ID をフィルタリングする。
 
     Args:
-        workflow_id: ワークフロー ID（"aad-web", "asdw-web", "abd", "abdv"）
+        workflow_id: ワークフロー ID（"aad-web", "asdw-web", "adfd", "adfdv"）
         requested_app_ids: 指定 APP-ID リスト。None / 空の場合は全 APP が対象。
         catalog_path: app-arch-catalog.md のパス（デフォルト: docs/catalog/app-arch-catalog.md）
         dry_run: True の場合、catalog 不在でも warning を出して空リストを返す。
@@ -347,6 +353,28 @@ def resolve_app_arch_scope(
 
 
 # ---------------------------------------------------------------------------
+# 公開エイリアス（autopilot 等の外部モジュール向け、private 関数の薄いラッパ）
+# ---------------------------------------------------------------------------
+
+
+def parse_catalog(catalog_path: str) -> Dict[str, str]:
+    """``app-arch-catalog.md`` をパースし APP-ID → 推薦アーキテクチャ文字列の dict を返す。
+
+    `FileNotFoundError` / `ValueError` は内部の `_parse_catalog` と同じ条件で送出する。
+    """
+    return _parse_catalog(catalog_path)
+
+
+def classify_architecture(arch: str) -> Optional[str]:
+    """推薦アーキテクチャ文字列を内部分類に変換する。
+
+    Returns:
+        "web-cloud" | "batch" | None（未知 / 未マッピング）
+    """
+    return _classify_arch(arch)
+
+
+# ---------------------------------------------------------------------------
 # CLI エントリポイント
 # ---------------------------------------------------------------------------
 
@@ -357,7 +385,7 @@ def _main() -> None:
     parser = argparse.ArgumentParser(
         description="推薦アーキテクチャによる APP-ID フィルタリング"
     )
-    parser.add_argument("--workflow", required=True, help="ワークフロー ID (例: aad-web, abd)")
+    parser.add_argument("--workflow", required=True, help="ワークフロー ID (例: aad-web, adfd)")
     parser.add_argument(
         "--app-ids",
         default=None,

@@ -7,7 +7,7 @@ name: Auto Blocked to Human Required
 #   - SLA 閾値は vars.HITL_BLOCKED_SLA_HOURS で可変。未設定時 24 時間。
 #   - workflow_dispatch の sla_hours 入力が最優先（テスト・デバッグ用）。
 #   - 重複付与防止: 既に :human-required がある Issue はスキップ。
-#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / abd / abdv / aag / aagd / akm / aqod / adoc
+#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / adfd / adfdv / aag / aagd / akm / aqod / adoc
 #   - schedule トリガーは fork 環境では動作しない。本リポジトリ上でのみ有効。
 
 on:
@@ -52,7 +52,7 @@ jobs:
           echo "Cutoff epoch: ${CUTOFF_EPOCH} ($(date -u -d "@${CUTOFF_EPOCH}" --iso-8601=seconds))"
 
           # 対象ワークフロープレフィックス一覧
-          PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+          PREFIXES="aas aad aad-web asdw asdw-web adfd adfdv aag aagd akm aqod adoc"
 
           TOTAL_ESCALATED=0
 

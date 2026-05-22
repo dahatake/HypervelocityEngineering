@@ -65,7 +65,7 @@
 [Step 3.1] ユースケース骨格抽出（depends_on=[2] / skip_fallback_deps=[1.2]）
    ↓ docs/catalog/use-case-skeleton.md（UC-* リスト）
 [Step 3.2] ユースケース詳細生成（fan-out: use_case_skeleton / N 並列）
-   ↓ docs/use-cases/{UC-*}-detail.md（N 件）
+   ↓ docs/usecase/{UC-*}-detail.md（N 件）
 [Step 3.3] ユースケースカタログ統合（join）
    ↓ docs/catalog/use-case-catalog.md
 ```
@@ -118,7 +118,7 @@ ARD = WorkflowDef(
                 depends_on=["3.1"],
                 consumed_artifacts=[],
                 fanout_parser="use_case_skeleton",
-                output_paths_template=["docs/use-cases/{key}-detail.md"],
+                output_paths_template=["docs/usecase/{key}-detail.md"],
                 body_template_path="templates/ard/step-3.2.md",
                 additional_prompt_template_path="hve/prompt/fanout/ard/_common.md"),
         StepDef(id="3.3", title="ユースケースカタログ統合",

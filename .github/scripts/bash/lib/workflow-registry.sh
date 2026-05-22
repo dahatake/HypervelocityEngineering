@@ -9,8 +9,8 @@
 #
 # Registered workflow IDs:
 #   - aas   (App Architecture Design)       : step execution
-#   - abd   (Batch Design)                  : step execution
-#   - abdv  (Batch Dev)                     : step execution + QA/review feedback
+#   - adfd   (Dataflow Design)                  : step execution
+#   - adfdv  (Dataflow Dev)                     : step execution + QA/review feedback
 #   - aag   (AI Agent Design)               : step execution
 #   - aagd  (AI Agent Dev & Deploy)         : step execution (deploy step を含む)
 #   - adoc  (Source Codeからのドキュメント作成) : step execution
@@ -22,7 +22,7 @@
 #   - QA/Review feedback flow: keep workflow-local feedback steps in DAG order
 #
 # Naming conventions (current registry):
-#   - workflow_id: lowercase identifier (e.g. aas, abdv, aagd)
+#   - workflow_id: lowercase identifier (e.g. aas, adfdv, aagd)
 #   - step.id: "N" or "N.M" (dot-separated numeric segments)
 #   - state label prefix: equals workflow_id
 #
@@ -84,55 +84,55 @@ JSONEOF
 
 
 
-_WORKFLOW_REGISTRY[abd]=$(cat <<'JSONEOF'
+_WORKFLOW_REGISTRY[adfd]=$(cat <<'JSONEOF'
 {
-  "id": "abd",
-  "name": "Batch Design",
-  "label_prefix": "abd",
+  "id": "adfd",
+  "name": "Dataflow Design",
+  "label_prefix": "adfd",
   "state_labels": {
-    "initialized": "abd:initialized",
-    "ready": "abd:ready",
-    "running": "abd:running",
-    "done": "abd:done",
-    "blocked": "abd:blocked"
+    "initialized": "adfd:initialized",
+    "ready": "adfd:ready",
+    "running": "adfd:running",
+    "done": "adfd:done",
+    "blocked": "adfd:blocked"
   },
   "params": [],
   "steps": [
-    {"id":"1.1","title":"バッチドメイン分析","custom_agent":"Arch-Batch-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abd/step-1.1.md"},
-    {"id":"1.2","title":"データソース/デスティネーション分析","custom_agent":"Arch-Batch-DataSourceAnalysis","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abd/step-1.2.md"},
-    {"id":"2","title":"バッチデータモデル","custom_agent":"Arch-Batch-DataModel","depends_on":["1.1","1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abd/step-2.md"},
-    {"id":"3","title":"ジョブ設計書","custom_agent":"Arch-Batch-JobCatalog","depends_on":["2"],"is_container":false,"skip_fallback_deps":["2"],"block_unless":[],"body_template_path":"templates/abd/step-3.md"},
-    {"id":"4","title":"サービスカタログ","custom_agent":"Arch-Batch-ServiceCatalog","depends_on":["3"],"is_container":false,"skip_fallback_deps":["3"],"block_unless":[],"body_template_path":"templates/abd/step-4.md"},
-    {"id":"5","title":"テスト戦略書","custom_agent":"Arch-Batch-TestStrategy","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/abd/step-5.md"},
-    {"id":"6.1","title":"ジョブ詳細仕様書","custom_agent":"Arch-Batch-JobSpec","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/abd/step-6.1.md"},
-    {"id":"6.2","title":"監視・運用設計書","custom_agent":"Arch-Batch-MonitoringDesign","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/abd/step-6.2.md"},
-    {"id":"6.3","title":"TDDテスト仕様書","custom_agent":"Arch-Batch-TDD-TestSpec","depends_on":["6.1","6.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abd/step-6.3.md"}
+    {"id":"1.1","title":"バッチドメイン分析","custom_agent":"Arch-Dataflow-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-1.1.md"},
+    {"id":"1.2","title":"データソース/デスティネーション分析","custom_agent":"Arch-Dataflow-DataSourceAnalysis","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-1.2.md"},
+    {"id":"2","title":"バッチデータモデル","custom_agent":"Arch-Dataflow-DataModel","depends_on":["1.1","1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-2.md"},
+    {"id":"3","title":"ジョブ設計書","custom_agent":"Arch-Dataflow-AppCatalog","depends_on":["2"],"is_container":false,"skip_fallback_deps":["2"],"block_unless":[],"body_template_path":"templates/adfd/step-3.md"},
+    {"id":"4","title":"サービスカタログ","custom_agent":"Arch-Dataflow-ServiceCatalog","depends_on":["3"],"is_container":false,"skip_fallback_deps":["3"],"block_unless":[],"body_template_path":"templates/adfd/step-4.md"},
+    {"id":"5","title":"テスト戦略書","custom_agent":"Arch-Dataflow-TestStrategy","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-5.md"},
+    {"id":"6.1","title":"ジョブ詳細仕様書","custom_agent":"Arch-Dataflow-AppSpec","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-6.1.md"},
+    {"id":"6.2","title":"監視・運用設計書","custom_agent":"Arch-Dataflow-MonitoringDesign","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-6.2.md"},
+    {"id":"6.3","title":"TDDテスト仕様書","custom_agent":"Arch-Dataflow-TDD-TestSpec","depends_on":["6.1","6.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-6.3.md"}
   ]
 }
 JSONEOF
 )
 
-_WORKFLOW_REGISTRY[abdv]=$(cat <<'JSONEOF'
+_WORKFLOW_REGISTRY[adfdv]=$(cat <<'JSONEOF'
 {
-  "id": "abdv",
-  "name": "Batch Dev",
-  "label_prefix": "abdv",
+  "id": "adfdv",
+  "name": "Dataflow Dev",
+  "label_prefix": "adfdv",
   "state_labels": {
-    "initialized": "abdv:initialized",
-    "ready": "abdv:ready",
-    "running": "abdv:running",
-    "done": "abdv:done",
-    "blocked": "abdv:blocked"
+    "initialized": "adfdv:initialized",
+    "ready": "adfdv:ready",
+    "running": "adfdv:running",
+    "done": "adfdv:done",
+    "blocked": "adfdv:blocked"
   },
-  "params": ["resource_group", "batch_job_id"],
+  "params": ["resource_group", "app_id"],
   "steps": [
-    {"id":"1.1","title":"データサービス選定","custom_agent":"Dev-Batch-DataServiceSelect","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.1.md"},
-    {"id":"1.2","title":"Azure データリソース Deploy","custom_agent":"Dev-Batch-DataDeploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-1.2.md"},
-    {"id":"2.1","title":"TDD RED — テストコード作成","custom_agent":"Dev-Batch-TestCoding","depends_on":["1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-2.1.md"},
-    {"id":"2.2","title":"TDD GREEN — バッチジョブ本実装","custom_agent":"Dev-Batch-ServiceCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-2.2.md"},
-    {"id":"3","title":"Azure Functions/コンテナ Deploy","custom_agent":"Dev-Batch-FunctionsDeploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-3.md"},
-    {"id":"4.1","title":"WAF レビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-4.1.md"},
-    {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/abdv/step-4.2.md"}
+    {"id":"1.1","title":"データサービス選定","custom_agent":"Dev-Dataflow-DataServiceSelect","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-1.1.md"},
+    {"id":"1.2","title":"Azure データリソース Deploy","custom_agent":"Dev-Dataflow-DataDeploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-1.2.md"},
+    {"id":"2.1","title":"TDD RED — テストコード作成","custom_agent":"Dev-Dataflow-TestCoding","depends_on":["1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-2.1.md"},
+    {"id":"2.2","title":"TDD GREEN — データフローアプリ本実装","custom_agent":"Dev-Dataflow-ServiceCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-2.2.md"},
+    {"id":"3","title":"Azure Functions/コンテナ Deploy","custom_agent":"Dev-Dataflow-FunctionsDeploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-3.md"},
+    {"id":"4.1","title":"WAF レビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.1.md"},
+    {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.2.md"}
   ]
 }
 JSONEOF
@@ -235,7 +235,7 @@ JSONEOF
 # Retrieve full workflow definition as JSON.
 #
 # Args:
-#   WORKFLOW_ID — Workflow identifier (aas, abd, abdv, aag, aagd, adoc)
+#   WORKFLOW_ID — Workflow identifier (aas, adfd, adfdv, aag, aagd, adoc)
 #
 # Output:
 #   Workflow JSON on stdout.

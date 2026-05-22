@@ -5,6 +5,13 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    []  # no required inputs extracted (or all are runtime params)
+  outputs:
+    - path: "docs-generated/architecture/dependency-map.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-DependencyMap/Issue-<識別子>/`
 

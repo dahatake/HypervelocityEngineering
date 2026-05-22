@@ -345,10 +345,10 @@ class TestCheckStepInputArtifactsUnknownKey(unittest.TestCase):
 _KNOWN_ARTIFACT_KEYS = frozenset([
     "app_catalog", "service_catalog", "data_model", "domain_analytics",
     "screen_catalog", "test_strategy", "service_catalog_matrix", "use_case_catalog",
-    "batch_job_catalog", "batch_service_catalog", "batch_data_model", "batch_domain_analytics",
+    "dataflow_catalog", "batch_service_catalog", "batch_data_model", "batch_domain_analytics",
     "service_specs", "screen_specs", "test_specs",
     "src_files", "test_files", "knowledge",
-    "agent_specs", "batch_job_specs", "doc_generated",
+    "agent_specs", "dataflow_specs", "doc_generated",
 ])
 
 

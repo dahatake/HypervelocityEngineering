@@ -5,6 +5,80 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "src/agent/{AgentID}-{AgentName}/"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-AgentCoding"
+    - path: "docs/ai-agent-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-AIAgentDesign-Step3"
+    - path: "docs/azure/azure-services-additional.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-AddServiceDesign"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/agent/agent-detail-{agentId}-*.md"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "infra/azure/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: ".github/workflows/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+  outputs:
+    - path: "infra/azure/create-azure-agent-resources-prep.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/create-azure-agent-resources.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/verify-agent-resources.sh"
+      required: true
+      mode: "create"
+    - path: ".github/workflows/deploy-agent-{agentId}-{agentName}.yml"
+      required: true
+      mode: "create"
+    - path: "docs/test-specs/deploy-step2-agent-test-spec.md"
+      required: true
+      mode: "create"
+    - path: "docs/azure/azure-service-catalog.md"
+      required: true
+      mode: "upsert"
+    - path: "infra/azure/README-agent-deploy.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "knowledge/"
+      required: false
+      mode: "create"
+    - path: "knowledge/D15-非機能-運用-監視-DR-仕様書.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D18-Prompt-ガバナンス-入力統制パック.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D20-セキュア設計-実装ガードレール.md"
+      required: true
+      mode: "create"
+    - path: "knowledge/D21-CI-CD-ビルド-リリース-供給網管理仕様書.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AgentDeploy/Issue-<識別子>/`
 
@@ -12,6 +86,18 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
@@ -51,7 +137,7 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 - **デプロイテスト仕様書**:
   - `docs/test-specs/deploy-step2-agent-test-spec.md` — デプロイ後の検証項目一覧
 - **サービスカタログ更新**:
-  - `docs/azure/service-catalog.md` — Agent エンドポイント URL・リソース ID を追記（重複行を作らない）
+  - `docs/azure/azure-service-catalog.md` — Agent エンドポイント URL・リソース ID を追記（重複行を作らない）
 
 任意だが推奨:
 - `infra/azure/README-agent-deploy.md`（デプロイ手順・トラブルシューティング）
@@ -139,15 +225,15 @@ A) スクリプト作成（prep + create + verify）
 | 3 | エンドポイントが HTTP 200 を返す | `curl -s -o /dev/null -w "%{http_code}" <endpoint>/health` 等でヘルスチェック |
 | 4 | 代表クエリへの応答が正常 | Agent に簡単なテストメッセージを送信して応答が空でないことを確認 |
 | 5 | GitHub Actions ワークフローが存在する | `.github/workflows/deploy-agent-*.yml` の存在確認 |
-| 6 | サービスカタログに Agent エンドポイントが記録されている | `docs/azure/service-catalog.md` の内容確認 |
+| 6 | サービスカタログに Agent エンドポイントが記録されている | `docs/azure/azure-service-catalog.md` の内容確認 |
 | 7 | **ロールバック手順 README が存在する** — `infra/azure/rollback/agent-foundry-rollback.md` が存在し、テンプレ（`docs/templates/rollback-readme-template.md`）に定義された 4 必須セクション（直前バージョン特定 / ロールバック実行 / 検証スクリプト再実行 / service-catalog 巻き戻し）を満たすこと。新規サービス/リソース追加時はこの README も更新する。 | `infra/azure/rollback/agent-foundry-rollback.md` の存在確認と 4 必須セクション（§2〜§5）の記載確認 |
 | 8 | NFR（性能/可用性/セキュリティ）の該当項目を `docs/templates/nfr-acceptance-template.md` から選択し検証している | `verify-agent-resources.sh` で NFR 測定/確認を実行し、しきい値は環境変数で可変化されていること |
 | 9 | Key Vault Secret 依存がある場合、期限検出が実装されている（依存なしは N/A） | `verify-agent-resources.sh` から `infra/azure/verify-secrets-expiry.sh` を呼び出し、`SECRET_EXPIRY_WARN_DAYS` 未満は警告、期限切れは FAIL として扱う |
 | 10 | verify 項目と TestSpec が AC-ID ↔ Test-ID で双方向に追跡できる | TestSpec の AC-ID 列付きマトリクスと逆引き表（`docs/templates/traceability-matrix-template.md` 準拠）を確認 |
 
 # 9) サービスカタログ更新ガイドライン
-- `docs/azure/service-catalog.md`（存在する場合）または `docs/catalog/service-catalog-matrix.md` に Agent エンドポイントを追記する
-- 追記対象ファイルはリポジトリに存在するファイルを優先する（存在しない場合は `docs/azure/service-catalog.md` を新規作成する）
+- `docs/azure/azure-service-catalog.md`（存在する場合）または `docs/catalog/service-catalog-matrix.md` に Agent エンドポイントを追記する
+- 追記対象ファイルはリポジトリに存在するファイルを優先する（存在しない場合は `docs/azure/azure-service-catalog.md` を新規作成する）
 - 追記形式は既存の記載形式に合わせる（重複行を作らない）
 - 記録する情報: Agent ID・Agent 名・エンドポイント URL・モデル名・デプロイ日時
 
@@ -165,7 +251,7 @@ A) スクリプト作成（prep + create + verify）
 - Azure AI Foundry Agent Service に Agent がデプロイされている。
 - `verify-agent-resources.sh` で全項目が PASS している。
 - GitHub Actions ワークフローが存在し、スモークテストが PASS している。
-- `docs/azure/service-catalog.md` に Agent エンドポイントが記録されている。
+- `docs/azure/azure-service-catalog.md` に Agent エンドポイントが記録されている。
 - `docs/test-specs/deploy-step2-agent-test-spec.md` が作成されている。
 - 作業ログと README が更新されている。
 
@@ -179,7 +265,7 @@ A) スクリプト作成（prep + create + verify）
 > **ロールバック手順の正本**: デプロイ失敗時のロールバック手順詳細は [`infra/azure/rollback/agent-foundry-rollback.md`](../../infra/azure/rollback/agent-foundry-rollback.md) を参照。  
 > 本セクション（§13）は正本 README へのリンクとサマリとして機能する。新規サービス/リソース追加時は正本 README も更新すること。
 
-## 出力方法
+## 3) 出力フォーマット（Markdown固定スキーマ）
 レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
 
 ### knowledge/ 参照（任意・存在する場合のみ）

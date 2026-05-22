@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" font-family="system-ui, -apple-system, sans-serif">
-  <title>AKM: Knowledge Management データフロー（Work IQ 入力対応）</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" font-family="system-ui, -apple-system, sans-serif">
+  <title>AKM: Knowledge Management データフロー（D01〜D21 fan-out + 横断レビュー）</title>
   <defs>
     <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
@@ -10,52 +10,95 @@
     </marker>
   </defs>
 
-  <rect width="1200" height="330" fill="#f6f8fa" rx="12"/>
+  <rect width="1200" height="620" fill="#f6f8fa" rx="12"/>
 
-  <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AKM: Knowledge Management データフロー（Work IQ 入力対応）</text>
-  <text x="600" y="50" text-anchor="middle" font-size="11" fill="#586069">sources は qa / original-docs / workiq のカンマ区切りマルチ選択。workiq 選択時は Pre-DAG ステージが先行（hve ローカル CLI のみ）。</text>
+  <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AKM: Knowledge Management データフロー</text>
+  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">Step 1 は D01〜D21 を 21 並列 fan-out（max_parallel=21）。Step 2 で横断整合性レビュー。</text>
 
   <text x="175" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル / ソース</text>
-  <text x="565" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">処理ステージ</text>
+  <text x="565" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent（タスク）</text>
   <text x="980" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
 
-  <!-- Pre-DAG: Work IQ ingest -->
-  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Pre-DAG（workiq 選択時のみ）</text>
-  <rect x="20" y="108" width="310" height="62" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
-  <text x="175" y="130" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Work IQ (Microsoft 365)</text>
-  <text x="175" y="148" text-anchor="middle" font-size="9" fill="#9a3412">メール / チャット / 会議 / ファイル</text>
-  <text x="175" y="162" text-anchor="middle" font-size="9" fill="#586069">--workiq-dxx で対象 Dxx 絞り込み可</text>
-  <rect x="430" y="108" width="270" height="62" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
-  <text x="565" y="130" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">_run_akm_workiq_ingest</text>
-  <text x="565" y="146" text-anchor="middle" font-size="9" fill="#586069">Copilot session が直接 Dxx を書き込み</text>
-  <text x="565" y="160" text-anchor="middle" font-size="9" fill="#586069">D01〜D21（または絞込）に対し起票/差分更新</text>
+  <!-- Pre-DAG: Work IQ ingest (optional) -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Pre-DAG（sources に workiq 指定時のみ）</text>
+  <rect x="20" y="108" width="310" height="58" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <text x="175" y="128" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Work IQ (Microsoft 365)</text>
+  <text x="175" y="144" text-anchor="middle" font-size="9" fill="#9a3412">メール / チャット / 会議 / ファイル</text>
+  <text x="175" y="158" text-anchor="middle" font-size="9" fill="#586069">--workiq-dxx で対象 Dxx 絞り込み可</text>
+  <rect x="430" y="108" width="270" height="58" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
+  <text x="565" y="128" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">_run_akm_workiq_ingest</text>
+  <text x="565" y="144" text-anchor="middle" font-size="9" fill="#586069">Copilot session が直接 Dxx を書き込み</text>
+  <text x="565" y="158" text-anchor="middle" font-size="9" fill="#586069">D01〜D21（または絞込）に対し差分更新</text>
+  <line x1="330" y1="137" x2="430" y2="137" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
+  <line x1="700" y1="137" x2="800" y2="137" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
 
-  <line x1="330" y1="139" x2="430" y2="139" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
-  <line x1="700" y1="139" x2="800" y2="139" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
+  <!-- ==================== Step 1 fan-out ==================== -->
+  <text x="565" y="195" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1: knowledge/ ドキュメント生成・管理（fan-out: D01〜D21 を 21 並列）</text>
+  <rect x="20" y="205" width="310" height="120" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="227" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa 指定）</text>
+  <text x="175" y="242" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
+  <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">original-docs/*（sources に original-docs 指定）</text>
+  <text x="175" y="277" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
+  <text x="175" y="298" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: sources / target_files /</text>
+  <text x="175" y="313" text-anchor="middle" font-size="10" fill="#24292e">force_refresh / custom_source_dir</text>
 
-  <!-- DAG step-1 -->
-  <text x="565" y="195" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">DAG Step 1（knowledge/ ドキュメント生成・管理）</text>
-  <rect x="20" y="205" width="310" height="100" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="225" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa を含む場合）</text>
-  <text x="175" y="240" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
-  <text x="175" y="258" text-anchor="middle" font-size="10" fill="#24292e">original-docs/*（sources に original-docs を含む場合）</text>
-  <text x="175" y="273" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
-  <text x="175" y="293" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: target_files / force_refresh</text>
-  <rect x="430" y="220" width="270" height="70" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="243" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">KnowledgeManager Agent</text>
-  <text x="565" y="261" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / original-docs セクション分割</text>
-  <text x="565" y="278" text-anchor="middle" font-size="9" fill="#9a3412">Work IQ 由来の既存 Dxx を保護しつつ差分マージ</text>
+  <rect x="430" y="205" width="270" height="120" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="228" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">KnowledgeManager</text>
+  <text x="565" y="248" text-anchor="middle" font-size="9" fill="#9a3412" font-weight="bold">[fan-out × 21: D01, D02, ..., D21]</text>
+  <text x="565" y="266" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / original-docs セクション分割</text>
+  <text x="565" y="282" text-anchor="middle" font-size="10" fill="#586069">Dxx ごとに独立 Copilot session</text>
+  <text x="565" y="302" text-anchor="middle" font-size="9" fill="#9a3412">Work IQ 由来既存 Dxx を保護しつつ差分マージ</text>
+  <text x="565" y="316" text-anchor="middle" font-size="9" fill="#586069">required_skills: knowledge-management</text>
 
-  <!-- Output -->
-  <rect x="800" y="115" width="360" height="180" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="137" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D{NN}-*.md（D01〜D21）</text>
-  <text x="980" y="155" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D{NN}-*-ChangeLog.md</text>
-  <text x="980" y="173" text-anchor="middle" font-size="10" fill="#24292e">knowledge/business-requirement-</text>
-  <text x="980" y="187" text-anchor="middle" font-size="10" fill="#24292e">document-status.md</text>
-  <text x="980" y="220" text-anchor="middle" font-size="9" fill="#586069">Pre-DAG → DAG の二段階で</text>
-  <text x="980" y="234" text-anchor="middle" font-size="9" fill="#586069">同一 Dxx ファイルを差分マージ</text>
-  <text x="980" y="258" text-anchor="middle" font-size="9" fill="#9a3412">workiq による出典は KM Agent が保護</text>
+  <rect x="800" y="205" width="360" height="120" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="228" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D01-*.md ... knowledge/D21-*.md</text>
+  <text x="980" y="246" text-anchor="middle" font-size="9" fill="#586069">（21 個の独立ファイル）</text>
+  <text x="980" y="268" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D{NN}-*-ChangeLog.md</text>
+  <text x="980" y="286" text-anchor="middle" font-size="9" fill="#586069">（変更履歴）</text>
+  <text x="980" y="308" text-anchor="middle" font-size="10" fill="#24292e">knowledge/business-requirement-</text>
+  <text x="980" y="322" text-anchor="middle" font-size="10" fill="#24292e">document-status.md</text>
 
-  <line x1="330" y1="255" x2="430" y2="255" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="255" x2="800" y2="255" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="330" y1="265" x2="430" y2="265" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="265" x2="800" y2="265" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Step 2 ==================== -->
+  <text x="565" y="355" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 2: knowledge/ 横断整合性レビュー</text>
+  <line x1="565" y1="325" x2="565" y2="358" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="20" y="365" width="310" height="56" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="386" text-anchor="middle" font-size="10" fill="#24292e">knowledge/D01〜D21-*.md（全 21 件）</text>
+  <text x="175" y="402" text-anchor="middle" font-size="10" fill="#24292e">knowledge/business-requirement-</text>
+  <text x="175" y="416" text-anchor="middle" font-size="10" fill="#24292e">document-status.md</text>
+
+  <rect x="430" y="365" width="270" height="56" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="388" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">QA-DocConsistency</text>
+  <text x="565" y="405" text-anchor="middle" font-size="10" fill="#586069">D01〜D21 の横断整合性レビュー</text>
+  <text x="565" y="418" text-anchor="middle" font-size="9" fill="#959da5">論理矛盾・欠落・捏造リスク検出</text>
+
+  <rect x="800" y="370" width="360" height="46" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="392" text-anchor="middle" font-size="10" fill="#24292e">qa/QA-DocConsistency-*.md</text>
+  <text x="980" y="408" text-anchor="middle" font-size="9" fill="#586069">（整合性レビュー結果）</text>
+
+  <line x1="330" y1="393" x2="430" y2="393" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="393" x2="800" y2="393" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ==================== Legend ==================== -->
+  <rect x="20" y="445" width="1160" height="155" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="40" y="468" font-size="12" font-weight="bold" fill="#9a3412">凡例 / 読み方</text>
+  <rect x="40" y="478" width="22" height="14" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="72" y="490" font-size="11" fill="#24292e">入力ファイル / パラメータ</text>
+  <rect x="240" y="478" width="22" height="14" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="272" y="490" font-size="11" fill="#24292e">Custom Agent</text>
+  <rect x="400" y="478" width="22" height="14" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="432" y="490" font-size="11" fill="#24292e">成果物ファイル</text>
+  <rect x="560" y="478" width="22" height="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+  <text x="592" y="490" font-size="11" fill="#24292e">Pre-DAG（workiq 選択時の特別ステージ）</text>
+  <line x1="880" y1="485" x2="920" y2="485" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="930" y="489" font-size="11" fill="#24292e">データフロー</text>
+  <line x1="1040" y1="480" x2="1080" y2="490" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <text x="1088" y="489" font-size="11" fill="#24292e">ステップ依存</text>
+  <text x="40" y="516" font-size="11" fill="#24292e">• Step 1 は D01〜D21 を 21 並列で fan-out（hve/workflow_registry.py AKM.max_parallel=21）。</text>
+  <text x="40" y="534" font-size="11" fill="#24292e">• Step 2 は全 21 件の生成完了を待って AND join し、横断整合性をレビューします。</text>
+  <text x="40" y="552" font-size="11" fill="#24292e">• Work IQ は Pre-DAG ステージで先行投入され、KnowledgeManager Agent が既存 Dxx を保護しつつ差分マージします。</text>
+  <text x="40" y="570" font-size="11" fill="#24292e">• 出典: hve/workflow_registry.py AKM WorkflowDef（fanout_static_keys = D01〜D21）。</text>
+  <text x="40" y="592" font-size="10" fill="#24292e">関連 Agent: .github/agents/KnowledgeManager.agent.md / QA-DocConsistency.agent.md</text>
 </svg>

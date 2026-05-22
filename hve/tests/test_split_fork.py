@@ -15,6 +15,7 @@ from hve.split_fork import (
     build_subtask_prompt,
     check_subtask_completion,
     discover_subissues_md,
+    discover_subissues_md_verbose,
     make_subtask_work_subdir,
     parse_subissues_md,
 )
@@ -98,6 +99,42 @@ class TestParseSubissues:
         with pytest.raises(SubIssuesParseError, match="ブロックが 0 件"):
             parse_subissues_md(p)
 
+    def test_table_format_raises_with_actionable_message(self, tmp_path: Path):
+        """P-A: テーブル形式の subissues.md は専用メッセージで早期失敗する。"""
+        p = tmp_path / "subissues.md"
+        p.write_text(
+            "<!-- parent_issue: 1 -->\n\n"
+            "# Sub-tasks\n\n"
+            "| id | depends_on | input | output |\n"
+            "|---|---|---|---|\n"
+            "| W1-SVC-01 | - | a.md | b.md |\n"
+            "| W1-SVC-02 | - | c.md | d.md |\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SubIssuesParseError) as exc_info:
+            parse_subissues_md(p)
+        msg = str(exc_info.value)
+        assert "ブロックが 0 件" in msg
+        assert "Markdown テーブル形式" in msg
+        assert "<!-- subissue -->" in msg
+        assert "<!-- title:" in msg
+        assert "subissues-template.md" in msg
+
+    def test_short_table_not_detected_as_table_format(self, tmp_path: Path):
+        """テーブル行が `_TABLE_MIN_CONSECUTIVE_ROWS` 未満なら判定しない。"""
+        p = tmp_path / "subissues.md"
+        p.write_text(
+            "<!-- parent_issue: 1 -->\n\n"
+            "| a | b |\n"
+            "|---|---|\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SubIssuesParseError) as exc_info:
+            parse_subissues_md(p)
+        msg = str(exc_info.value)
+        assert "ブロックが 0 件" in msg
+        assert "Markdown テーブル形式" not in msg
+
     def test_missing_title_raises(self, tmp_path: Path):
         p = tmp_path / "subissues.md"
         p.write_text(
@@ -150,6 +187,59 @@ class TestParseSubissues:
         result = parse_subissues_md(p)
         assert len(result) == 3
 
+    def test_preflight_reports_all_missing_blocks(self, tmp_path: Path):
+        """全ブロックで title 欠落 → 一括で全ブロック番号と H2 候補が報告される。"""
+        p = tmp_path / "subissues.md"
+        p.write_text(
+            "<!-- parent_issue: 1 -->\n\n"
+            "<!-- subissue -->\n## Sub 01: ACT-01 会員ポータル系\n\n"
+            "<!-- subissue -->\n## Sub 02: ACT-01 残高・リワード系\n\n"
+            "<!-- subissue -->\n## Sub 03: ACT-01 通知系\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SubIssuesParseError) as exc_info:
+            parse_subissues_md(p)
+        msg = str(exc_info.value)
+        assert "欠落ブロック: [1,2,3]" in msg
+        assert "Sub 01: ACT-01 会員ポータル系" in msg
+        assert "Sub 02: ACT-01 残高・リワード系" in msg
+        assert "Sub 03: ACT-01 通知系" in msg
+        assert "task-dag-planning" in msg
+        assert "validate-subissues.sh" in msg
+
+    def test_preflight_reports_partial_missing(self, tmp_path: Path):
+        """一部ブロックのみ title 欠落 → 該当ブロックのみ報告される。"""
+        p = tmp_path / "subissues.md"
+        p.write_text(
+            "<!-- parent_issue: 1 -->\n\n"
+            "<!-- subissue -->\n<!-- title: First -->\n## Sub-1\n\n"
+            "<!-- subissue -->\n## Sub 02: 二番目\n\n"
+            "<!-- subissue -->\n<!-- title: Third -->\n## Sub-3\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SubIssuesParseError) as exc_info:
+            parse_subissues_md(p)
+        msg = str(exc_info.value)
+        assert "欠落ブロック: [2]" in msg
+        assert "Sub 02: 二番目" in msg
+        # 既存ブロック (1, 3) は欠落リストに含まれない
+        assert "ブロック 1:" not in msg
+        assert "ブロック 3:" not in msg
+
+    def test_preflight_reports_no_h2(self, tmp_path: Path):
+        """title も H2 も無いブロック → 'H2 見出しも未検出' と明示される。"""
+        p = tmp_path / "subissues.md"
+        p.write_text(
+            "<!-- parent_issue: 1 -->\n\n"
+            "<!-- subissue -->\nplain text only, no heading\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SubIssuesParseError) as exc_info:
+            parse_subissues_md(p)
+        msg = str(exc_info.value)
+        assert "欠落ブロック: [1]" in msg
+        assert "H2 見出しも未検出" in msg
+
 
 # ---------------------------------------------------------------------------
 # discover_subissues_md
@@ -193,6 +283,83 @@ class TestDiscoverSubissues:
         found = discover_subissues_md(tmp_path, "Arch-UI-Detail", "2.1")
         assert found == new
 
+    def test_agent_scoped_preferred_over_fallback_glob(self, tmp_path: Path):
+        """custom_agent 指定時、他 Agent の後発書き込みに mtime で負けないこと。
+
+        再発防止: AAD-WEB 実行時に Step.2.1 (Arch-UI-Detail) の subissues.md 探索が
+        並列実行中の Step.2.2 (Arch-Microservice-ServiceDetail) のファイルを
+        mtime 勝ちで採用していたバグの回帰テスト。
+        """
+        import time
+
+        # 自 Agent の subissues.md（先に書く＝古い mtime）
+        own_dir = tmp_path / "Arch-UI-Detail" / "Issue-step-2-1"
+        own_dir.mkdir(parents=True)
+        own = own_dir / "subissues.md"
+        own.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        time.sleep(0.05)
+
+        # 他 Agent の subissues.md（後に書く＝新しい mtime、fallback-glob で拾われる）
+        other_dir = tmp_path / "Arch-Microservice-ServiceDetail" / "Issue-step-2-2"
+        other_dir.mkdir(parents=True)
+        other = other_dir / "subissues.md"
+        other.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        # custom_agent 指定時は agent-scoped 候補を優先し、自 Agent のファイルが返る
+        found = discover_subissues_md(tmp_path, "Arch-UI-Detail", "2.1")
+        assert found == own, (
+            f"agent-scoped 候補があるのに fallback-glob が選ばれた: {found}"
+        )
+
+    def test_run_id_filter_excludes_stale_subissues(self, tmp_path: Path):
+        """Issue-gui-session-workdir-isolation T1/T2 回帰テスト。
+
+        過去 run の `Issue-<old_run>-...` 配下の subissues.md が、
+        現在 run の探索結果に紛れ込まないことを確認する。
+        """
+        current_run = "20260521T074921-f707d7"
+        old_run = "20260101T000000-aaaaaa"
+
+        # 過去 run の subissues.md（mtime は新しい = フィルタ無しなら勝ってしまう）
+        stale_dir = tmp_path / f"Issue-{old_run}-step-2"
+        stale_dir.mkdir(parents=True)
+        stale = stale_dir / "subissues.md"
+        stale.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        # 現在 run の subissues.md
+        current_dir = tmp_path / f"Issue-{current_run}-step-2"
+        current_dir.mkdir(parents=True)
+        current = current_dir / "subissues.md"
+        current.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        # run_id フィルタなし: 順序は mtime 次第なのでアサートしない
+        # run_id フィルタあり: 現在 run のみが返る
+        result = discover_subissues_md_verbose(
+            work_root=tmp_path,
+            custom_agent=None,
+            parent_step_id="2",
+            run_id=current_run,
+        )
+        assert result.path == current, (
+            f"run_id={current_run} で過去 run の subissues.md が選ばれた: {result.path}"
+        )
+
+    def test_run_id_none_keeps_backward_compatibility(self, tmp_path: Path):
+        """run_id=None なら従来通り全候補が探索対象になる (Q9: 後方互換)。"""
+        issue_dir = tmp_path / "Issue-some-identifier"
+        issue_dir.mkdir(parents=True)
+        target = issue_dir / "subissues.md"
+        target.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        result = discover_subissues_md_verbose(
+            work_root=tmp_path,
+            custom_agent=None,
+            parent_step_id="1",
+            run_id=None,
+        )
+        assert result.path == target
+
 
 # ---------------------------------------------------------------------------
 # build_subtask_prompt
@@ -226,6 +393,17 @@ class TestBuildSubtaskPrompt:
         prompt = build_subtask_prompt(sub, "1", None, "Issue-x/sub-001")
         assert "なし" in prompt  # depends_on 表示
         assert "(none)" in prompt  # parent_custom_agent
+
+    def test_includes_absolute_output_path(self, tmp_path: Path):
+        sub = SubIssueDef(index=2, title="T", body="b")
+        prompt = build_subtask_prompt(
+            sub, "1", None, "Issue-x/sub-002", repo_root=tmp_path,
+        )
+        expected_abs = (tmp_path / "work" / "Issue-x" / "sub-002").as_posix() + "/"
+        assert expected_abs in prompt
+        # 正例/誤例の対比が含まれる
+        assert "work/Issue-x/sub-002/completion-report.md" in prompt
+        assert "hve/work/Issue-x/sub-002/completion-report.md" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -293,3 +471,20 @@ class TestCheckSubtaskCompletion:
         ok, reason = check_subtask_completion(tmp_path, "Issue-x/sub-001")
         assert ok is False
         assert "マーカー" in reason
+
+    def test_detects_misplaced_hve_work(self, tmp_path: Path):
+        """LLM が hve/work/ 側に completion-report.md を誤書き込みしたケースの検出。"""
+        repo_root = tmp_path
+        work_root = repo_root / "work"  # work_root.name == "work" でないと検出ロジックは作動しない
+        work_root.mkdir()
+        # 正規パスには報告ファイルなし
+        # 誤書き込み先に作成
+        misplaced = repo_root / "hve" / "work" / "Issue-x" / "sub-002"
+        misplaced.mkdir(parents=True)
+        (misplaced / "completion-report.md").write_text(
+            "<!-- validation-confirmed -->\n", encoding="utf-8",
+        )
+        ok, reason = check_subtask_completion(work_root, "Issue-x/sub-002")
+        assert ok is False
+        assert "[MISPLACED]" in reason
+        assert "hve/work" in reason.replace("\\", "/")

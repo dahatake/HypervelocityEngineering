@@ -46,7 +46,7 @@ metadata:
 
 **例1（SVC-10 Azure Functions マイクロサービス）**: Unit Test(pytest + unittest.mock) 75% / Integration Test(pytest + Testcontainers + WireMock) 20% / E2E Test 5%
 
-**例2（バッチ処理テストダブル設計）**: Azure Blob Storage → Azurite（優先順位1）/ Cosmos DB → Testcontainers（優先順位2）/ 外部REST API → WireMock（優先順位3）
+**例2（データフロー処理テストダブル設計）**: Azure Blob Storage → Azurite（優先順位1）/ Cosmos DB → Testcontainers（優先順位2）/ 外部REST API → WireMock（優先順位3）
 
 ## 参照元
 

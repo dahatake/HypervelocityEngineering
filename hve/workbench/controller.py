@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import threading
 import time
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional
 
@@ -50,6 +51,8 @@ class WorkbenchController:
         self._fallback_lines: List[str] = []
         self._key_reader: Any = None
         self._report_path: Optional[Path] = None
+        self._tasktree_report_path: Optional[Path] = None
+        self._mouse_tracking_enabled: bool = False
         # 1 Hz 自動カウントアップ tick。
         self._tick_thread: Optional[threading.Thread] = None
         self._tick_stop: threading.Event = threading.Event()
@@ -73,6 +76,7 @@ class WorkbenchController:
             self._active = False
             self._live = None
         if self._active:
+            self._enable_mouse_tracking()
             try:
                 from hve.workbench.keyreader import KeyReader
                 self._key_reader = KeyReader(self)
@@ -106,6 +110,7 @@ class WorkbenchController:
             except Exception:
                 pass
             self._key_reader = None
+        self._disable_mouse_tracking()
         self.stop()
 
     # ------------------------------------------------------------------
@@ -246,6 +251,44 @@ class WorkbenchController:
     def scroll_actions_down(self, n: int = 1) -> None:
         with self._lock:
             self.state.user_actions_scroll = max(self.state.user_actions_scroll - n, 0)
+            self._refresh_layout()
+
+    # ------------------------------------------------------------------
+    # TaskTree スクロール
+    # ------------------------------------------------------------------
+
+    def _tasks_visible(self) -> int:
+        # layout.TASKTREE_DEFAULT_HEIGHT に依存（循環 import 回避のため遅延 import）
+        from .layout import TASKTREE_DEFAULT_HEIGHT
+        return TASKTREE_DEFAULT_HEIGHT
+
+    def scroll_tasks_up(self, n: int = 1) -> None:
+        with self._lock:
+            max_off = self.state.task_tree_max_offset(self._tasks_visible())
+            self.state.task_tree_scroll = min(self.state.task_tree_scroll + n, max_off)
+            self._refresh_layout()
+
+    def scroll_tasks_down(self, n: int = 1) -> None:
+        with self._lock:
+            self.state.task_tree_scroll = max(self.state.task_tree_scroll - n, 0)
+            self._refresh_layout()
+
+    def page_tasks_up(self) -> None:
+        self.scroll_tasks_up(self._tasks_visible())
+
+    def page_tasks_down(self) -> None:
+        self.scroll_tasks_down(self._tasks_visible())
+
+    def tasks_home(self) -> None:
+        with self._lock:
+            self.state.task_tree_scroll = self.state.task_tree_max_offset(
+                self._tasks_visible()
+            )
+            self._refresh_layout()
+
+    def tasks_end(self) -> None:
+        with self._lock:
+            self.state.task_tree_scroll = 0
             self._refresh_layout()
 
     # ------------------------------------------------------------------
@@ -390,6 +433,25 @@ class WorkbenchController:
                 )
             except Exception:
                 pass
+        # TaskTree レポートも併せて保存（work/ 配下、作業用）
+        try:
+            from .report import save_tasktree_report
+            tt_path = save_tasktree_report(
+                self.state,
+                workflow_id=self.state.workflow_id or "unknown",
+                run_id=self.state.run_id or "unknown",
+                started_at_wall=self.state.workflow_started_at_wall,
+            )
+            if tt_path.name:
+                self._tasktree_report_path = tt_path
+        except Exception as exc:  # pragma: no cover
+            try:
+                self.append_user_action(
+                    "ERROR",
+                    f"tasktree レポート保存失敗: {exc}",
+                )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # ライフサイクル
@@ -401,6 +463,7 @@ class WorkbenchController:
                 self._key_reader.stop()
             except Exception:
                 pass
+        self._disable_mouse_tracking()
         if self._active and self._live is not None:
             try:
                 self._live.stop()
@@ -413,6 +476,7 @@ class WorkbenchController:
             try:
                 self._live.start()
                 self._active = True
+                self._enable_mouse_tracking()
             except Exception:
                 self._active = False
         if self._active and self._key_reader is not None:
@@ -441,6 +505,7 @@ class WorkbenchController:
                 self._live.__exit__(None, None, None)
             except Exception:
                 pass
+        self._disable_mouse_tracking()
         self._active = False
         self._live = None
 
@@ -482,6 +547,33 @@ class WorkbenchController:
         if not self._active or self._live is None:
             return
         update_layout(self._layout, self.state)
+
+    def _enable_mouse_tracking(self) -> None:
+        """端末の mouse tracking を有効化（best effort）。"""
+        if self._mouse_tracking_enabled:
+            return
+        try:
+            if not sys.stdout.isatty():
+                return
+            # 1000: button-event, 1006: SGR mouse mode
+            sys.stdout.write("\x1b[?1000h\x1b[?1006h")
+            sys.stdout.flush()
+            self._mouse_tracking_enabled = True
+        except Exception:
+            self._mouse_tracking_enabled = False
+
+    def _disable_mouse_tracking(self) -> None:
+        if not self._mouse_tracking_enabled:
+            return
+        try:
+            if not sys.stdout.isatty():
+                return
+            sys.stdout.write("\x1b[?1000l\x1b[?1006l")
+            sys.stdout.flush()
+        except Exception:
+            pass
+        finally:
+            self._mouse_tracking_enabled = False
 
     def _tick_loop(self) -> None:
         """1 Hz で layout を再描画し TaskTree elapsed をカウントアップさせる。

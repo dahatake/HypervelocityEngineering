@@ -5,6 +5,55 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/data-model.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-DataModeling"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/domain-analytics.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-DomainAnalytics"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: ".github/skills/agent-common-preamble/references/agent-playbook.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/"
+      required: false
+      kind: "static"
+    - path: "knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md"
+      required: true
+      kind: "static"
+    - path: "knowledge/D15-非機能-運用-監視-DR-仕様書.md"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "docs/azure/azure-services-data.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}data-azure-design-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}"
+      required: true
+      mode: "create"
+    - path: "plan.md"
+      required: true
+      mode: "create"
+    - path: "README.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
 
@@ -12,14 +61,32 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
 
-## 1) 適用範囲（このエージェントの役割）
+- `microservice-design-guide` — Polyglot Persistence のサービス境界・データ整合性参照
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
+
+## 1) 目的と非目的
 - 対象：ユースケースの **全エンティティ**について、Azure のデータストア（および必要なら補助コンポーネント）を選定し、根拠と整合性/運用方針を文書化する。
 - 目的：後続の実装・運用・レビューができる **決定と根拠の記録**を作る（「なぜそれが最適か」「代替は何で、なぜ採用しないか」まで）。
 - 非対象：実装（コード追加）、インフラ構築、コスト試算の詳細、未提示要件の推測による断定。
 
-## 2) 入力（必読）
+## 2) 入力（必ず参照）
 - 必読ファイル
   - `docs/catalog/data-model.md`
   - `docs/catalog/service-catalog.md`
@@ -35,7 +102,7 @@ metadata:
 - `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
-## 3) 成果物（必須）
+## 3) 出力フォーマット（Markdown固定スキーマ）
 1) 設計ドキュメント（作成/更新）
 - `docs/azure/azure-services-data.md`
 
@@ -44,11 +111,11 @@ metadata:
 
 ※`{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
-## 4) 重要制約（品質と安全）
+## 5) 品質原則（必ず守る）
 - 公式根拠を優先（Microsoft Learn / 公式ドキュメントが取得できる場合はリンクを残す）。取得できない場合は「確認できていない」旨を明記してTBDにする。
 - ツールは **必要なときだけ**使う（無目的な全探索は禁止）。
 
-## 5) 作業手順（この順番で）
+## 4) 実行手順（順序固定）
 ### 5.1 まずスコープ固定（AC/非対象）
 - `azure-services-data.md` の「0. 概要」に入れる粒度で、ユースケース要約と評価軸を確定する。
 - 受け入れ条件（AC）を最低3つ定義（例：全エンティティ行が埋まっている／各行に根拠リンクがある／整合性方針が記述されている）。
@@ -116,7 +183,7 @@ metadata:
 - まず `large-output-chunking` スキルのルールに従う。
 - それでも書き込みが失敗する場合のみ、見出し境界で **小さめのチャンク（例：1〜2千文字）**にして追記で復旧する（全置換を避ける）。
 
-## 8) 最終チェックと品質レビュー（必須）
+## 6) セルフチェック（出力前に必ず確認）
 
 ### 8.1 事前チェック（実装後の簡潔検証）
 成果物をレビューに入れる前に、以下が満たされているか確認する：

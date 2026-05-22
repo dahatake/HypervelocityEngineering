@@ -1,0 +1,29 @@
+# Microsoft Learn / Microsoft Docs MCP Server manifest (認証不要)
+#
+# 適用条件: MCP サーバ名が "microsoft-learn" / "microsoft-docs" / "ms-learn" 等。
+# 認証フロー: 不要。`auth_required: false` で Step 2→3 ガード対象外となる。
+
+id: microsoft_learn
+display_name: "Microsoft Learn / Docs"
+
+match:
+  # 想定サーバ名:
+  #   microsoft-learn / microsoft_learn / microsoft-docs / microsoft-lea
+  #   ms-learn / ms_learn / mslearn / learn-mcp / docs-mcp
+  #   microsoft-learn-mcp-server 等の suffix 付き
+  mcp_server_name_regex: "^((microsoft|ms)[-_]?)?(learn|docs|lea)([-_].*)?$"
+
+# 認証不要 (パブリックドキュメント参照のみ)。
+auth_required: false
+
+copilot_seed_prompt: |
+  Microsoft Learn / Docs MCP サーバから利用可能なツール一覧を取得し、疎通を確認してください。
+
+success_regex: "(?i)(tool|tools).{0,40}(available|registered|listed)"
+failure_regex: "(?i)(unauthorized|forbidden|authentication failed)"
+timeout_total: 300
+
+notes_md: |
+  ## Microsoft Learn / Docs MCP
+
+  認証は不要です。MCP サーバが起動していれば疎通確認のみ実施します。

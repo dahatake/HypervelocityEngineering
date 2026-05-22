@@ -1,10 +1,10 @@
 ---
 name: harness-error-recovery
 description: >
-  エラー発生時の統一リカバリ契約。エラー分類（Build失敗・Test失敗・書き込み失敗・ API制限・権限不足）ごとのリカバリフロー、3要素出力（root_cause_hint / safe_retry_instruction / stop_condition）テンプレートを提供する。 USE FOR: error recovery, build failure recovery, test failure recovery. DO NOT USE FOR: verification pipeline execution (use harness-verification-loop). WHEN: エラーが発生した、ビルドが失敗した。
+  エラー発生時の統一リカバリ契約。エラー分類（Build失敗・Test失敗・書き込み失敗・ API制限・権限不足）ごとのリカバリフロー、3要素出力（root_cause_hint / safe_retry_instruction / stop_condition）テンプレートを提供する。 PHASE: エラー発生時（実行中または検証中にエラーを検知したとき）。 USE FOR: error recovery, build failure recovery, test failure recovery. DO NOT USE FOR: verification pipeline execution (use harness-verification-loop), pre-execution safety check (use harness-safety-guard). WHEN: エラーが発生した、ビルドが失敗した。
 metadata:
   origin: user
-  version: 2.0.0
+  version: 2.0.1
 ---
 
 # harness-error-recovery

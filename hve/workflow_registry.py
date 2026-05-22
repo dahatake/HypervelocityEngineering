@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-10 個のオーケストレーションワークフロー (AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC) の
+10 個のオーケストレーションワークフロー (AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AKM/AQOD/ADOC) の
 ステップ DAG 定義をデータとして保持する。
 
 Step ID スコープ規則:
@@ -101,7 +101,7 @@ class StepDef:
     fanout_parser: Optional[str] = None
     """動的解決パーサ名。catalog_parsers の登録済みキー
     ("app_catalog" / "screen_catalog" / "service_catalog"
-     / "batch_job_catalog" / "agent_catalog")。
+     / "dataflow_catalog" / "agent_catalog")。
     指定時、依存元 step 完了後に dag_executor が動的展開する（F-2）。
     fanout_static_keys と同時指定された場合は静的優先。
     """
@@ -136,7 +136,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "abd", "abdv", "akm", "aqod", "adoc"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "adfd", "adfdv", "akm", "aqod", "adoc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -391,21 +391,27 @@ AAD_WEB = WorkflowDef(
                 consumed_artifacts=["screen_catalog", "app_catalog"],
                 body_template_path="templates/aad-web/step-2.1.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                output_paths_template=["docs/screen/{screenId}-{screenNameSlug}-description.md"]),
         StepDef(id="2.2", title="マイクロサービス定義書",
                 custom_agent="Arch-Microservice-ServiceDetail",
                 depends_on=["1"],
                 consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics", "service_catalog_matrix"],
                 body_template_path="templates/aad-web/step-2.2.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                output_paths_template=["docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         StepDef(id="2.3", title="TDDテスト仕様書",
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["2.1", "2.2"],
                 consumed_artifacts=["test_strategy", "screen_specs", "service_specs", "service_catalog_matrix", "data_model", "domain_analytics", "app_catalog"],
                 body_template_path="templates/aad-web/step-2.3.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                output_paths_template=[
+                    "docs/test-specs/{serviceId}-test-spec.md",
+                    "docs/test-specs/{screenId}-test-spec.md",
+                ]),
         # Sub-7 (C-4): 2.1/2.2/2.3 fan-out 完了後の横断整合性レビュー join step
         StepDef(id="3", title="画面 ↔ サービス整合性レビュー",
                 custom_agent="QA-DocConsistency",
@@ -469,7 +475,8 @@ ASDW_WEB = WorkflowDef(
                 consumed_artifacts=["test_strategy", "service_catalog_matrix", "service_specs", "data_model", "domain_analytics", "app_catalog", "test_files"],
                 body_template_path="templates/asdw-web/step-2.3T.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
+                output_paths_template=["docs/test-specs/{serviceId}-test-spec.md"]),
         StepDef(id="2.3TC", title="サービス テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-ServiceTestCoding",
                 depends_on=["2.3T"],
@@ -499,7 +506,8 @@ ASDW_WEB = WorkflowDef(
                 consumed_artifacts=["test_strategy", "service_catalog_matrix", "screen_specs", "data_model", "domain_analytics", "app_catalog"],
                 body_template_path="templates/asdw-web/step-3.0T.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
+                output_paths_template=["docs/test-specs/{screenId}-test-spec.md"]),
         StepDef(id="3.0TC", title="UI テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-UITestCoding",
                 depends_on=["3.0T"],
@@ -541,57 +549,64 @@ ASDW_WEB = WorkflowDef(
     ],
 )
 
-# --- ABD: Batch Design ---
-ABD = WorkflowDef(
-    id="abd",
-    name="Batch Design",
-    label_prefix="abd",
-    state_labels=_make_state_labels("abd"),
+# --- ADFD: Dataflow Design ---
+ADFD = WorkflowDef(
+    id="adfd",
+    name="Dataflow Design",
+    label_prefix="adfd",
+    state_labels=_make_state_labels("adfd"),
     params=["app_ids", "app_id"],
     steps=[
-        StepDef(id="1.1", title="バッチドメイン分析", custom_agent="Arch-Batch-DomainAnalytics", consumed_artifacts=["use_case_catalog"], body_template_path="templates/abd/step-1.1.md"),
-        StepDef(id="1.2", title="データソース/デスティネーション分析", custom_agent="Arch-Batch-DataSourceAnalysis", consumed_artifacts=["use_case_catalog"], body_template_path="templates/abd/step-1.2.md"),
-        # docs/batch/batch-data-source-analysis.md は既知 key なし → スキップ
-        StepDef(id="2", title="バッチデータモデル", custom_agent="Arch-Batch-DataModel", depends_on=["1.1", "1.2"], consumed_artifacts=["batch_domain_analytics", "data_model"], body_template_path="templates/abd/step-2.md"),
-        StepDef(id="3", title="ジョブ設計書", custom_agent="Arch-Batch-JobCatalog", depends_on=["2"], skip_fallback_deps=["2"], consumed_artifacts=["batch_domain_analytics", "batch_data_model"], body_template_path="templates/abd/step-3.md"),
-        StepDef(id="4", title="サービスカタログ", custom_agent="Arch-Batch-ServiceCatalog", depends_on=["3"], skip_fallback_deps=["3"], consumed_artifacts=["batch_job_catalog", "batch_data_model", "batch_domain_analytics"], body_template_path="templates/abd/step-4.md"),
-        StepDef(id="5", title="テスト戦略書", custom_agent="Arch-Batch-TestStrategy", depends_on=["4"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "batch_data_model"], body_template_path="templates/abd/step-5.md"),
-        StepDef(id="6.1", title="ジョブ詳細仕様書", custom_agent="Arch-Batch-JobSpec", depends_on=["5"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "batch_job_catalog", "batch_data_model"], body_template_path="templates/abd/step-6.1.md",
-                fanout_parser="batch_job_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/abd/_common.md"),
-        StepDef(id="6.2", title="監視・運用設計書", custom_agent="Arch-Batch-MonitoringDesign", depends_on=["5"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "batch_job_catalog"], body_template_path="templates/abd/step-6.2.md"),
-        # docs/batch/batch-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="6.3", title="TDDテスト仕様書", custom_agent="Arch-Batch-TDD-TestSpec", depends_on=["6.1", "6.2"], consumed_artifacts=["batch_service_catalog", "batch_job_specs"], body_template_path="templates/abd/step-6.3.md",
-                fanout_parser="batch_job_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/abd/_common.md"),
+        StepDef(id="1.1", title="バッチドメイン分析", custom_agent="Arch-Dataflow-DomainAnalytics", consumed_artifacts=["use_case_catalog"], body_template_path="templates/adfd/step-1.1.md",
+                output_paths=["docs/dataflow/dataflow-domain-analytics.md"]),
+        StepDef(id="1.2", title="データソース/デスティネーション分析", custom_agent="Arch-Dataflow-DataSourceAnalysis", consumed_artifacts=["use_case_catalog"], body_template_path="templates/adfd/step-1.2.md",
+                output_paths=["docs/dataflow/dataflow-data-source-analysis.md"]),
+        StepDef(id="2", title="バッチデータモデル", custom_agent="Arch-Dataflow-DataModel", depends_on=["1.1", "1.2"], consumed_artifacts=["batch_domain_analytics", "data_model"], body_template_path="templates/adfd/step-2.md",
+                output_paths=["docs/dataflow/dataflow-data-model.md"]),
+        StepDef(id="3", title="ジョブ設計書", custom_agent="Arch-Dataflow-AppCatalog", depends_on=["2"], skip_fallback_deps=["2"], consumed_artifacts=["batch_domain_analytics", "batch_data_model"], body_template_path="templates/adfd/step-3.md",
+                output_paths=["docs/dataflow/dataflow-app-catalog.md"]),
+        StepDef(id="4", title="サービスカタログ", custom_agent="Arch-Dataflow-ServiceCatalog", depends_on=["3"], skip_fallback_deps=["3"], consumed_artifacts=["dataflow_catalog", "batch_data_model", "batch_domain_analytics"], body_template_path="templates/adfd/step-4.md",
+                output_paths=["docs/dataflow/dataflow-service-catalog.md"]),
+        StepDef(id="5", title="テスト戦略書", custom_agent="Arch-Dataflow-TestStrategy", depends_on=["4"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "batch_data_model"], body_template_path="templates/adfd/step-5.md",
+                output_paths=["docs/dataflow/dataflow-test-strategy.md"]),
+        StepDef(id="6.1", title="ジョブ詳細仕様書", custom_agent="Arch-Dataflow-AppSpec", depends_on=["5"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "dataflow_catalog", "batch_data_model"], body_template_path="templates/adfd/step-6.1.md",
+                fanout_parser="dataflow_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/adfd/_common.md",
+                output_paths_template=["docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md"]),
+        StepDef(id="6.2", title="監視・運用設計書", custom_agent="Arch-Dataflow-MonitoringDesign", depends_on=["5"], skip_fallback_deps=["4"], consumed_artifacts=["batch_service_catalog", "dataflow_catalog"], body_template_path="templates/adfd/step-6.2.md",
+                output_paths=["docs/dataflow/dataflow-monitoring-design.md"]),
+        StepDef(id="6.3", title="TDDテスト仕様書", custom_agent="Arch-Dataflow-TDD-TestSpec", depends_on=["6.1", "6.2"], consumed_artifacts=["batch_service_catalog", "dataflow_specs"], body_template_path="templates/adfd/step-6.3.md",
+                fanout_parser="dataflow_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/adfd/_common.md",
+                output_paths_template=["docs/test-specs/{jobId}-test-spec.md"]),
     ],
 )
 
-# --- ABDV: Batch Dev ---
-ABDV = WorkflowDef(
-    id="abdv",
-    name="Batch Dev",
-    label_prefix="abdv",
-    state_labels=_make_state_labels("abdv"),
-    params=["app_ids", "app_id", "resource_group", "batch_job_id", "tdd_max_retries"],
+# --- ADFDV: Dataflow Dev ---
+ADFDV = WorkflowDef(
+    id="adfdv",
+    name="Dataflow Dev",
+    label_prefix="adfdv",
+    state_labels=_make_state_labels("adfdv"),
+    params=["app_ids", "app_id", "resource_group", "app_id", "tdd_max_retries"],
     steps=[
-        # docs/batch/batch-data-source-analysis.md, batch-test-strategy.md は既知 key なし → スキップ
-        StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Batch-DataServiceSelect", consumed_artifacts=["batch_domain_analytics", "batch_data_model", "batch_job_catalog", "batch_service_catalog"], body_template_path="templates/abdv/step-1.1.md"),
+        # docs/dataflow/dataflow-data-source-analysis.md, dataflow-test-strategy.md は既知 key なし → スキップ
+        StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Dataflow-DataServiceSelect", consumed_artifacts=["batch_domain_analytics", "batch_data_model", "dataflow_catalog", "batch_service_catalog"], body_template_path="templates/adfdv/step-1.1.md"),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="1.2", title="Azure データリソース Deploy", custom_agent="Dev-Batch-DataDeploy", depends_on=["1.1"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/abdv/step-1.2.md"),
-        # docs/batch/batch-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="2.1", title="TDD RED — テストコード作成", custom_agent="Dev-Batch-TestCoding", depends_on=["1.2"], consumed_artifacts=["test_specs", "batch_job_catalog", "batch_service_catalog", "batch_job_specs"], body_template_path="templates/abdv/step-2.1.md",
-                fanout_parser="batch_job_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/abdv/_common.md"),
-        # docs/azure/azure-services-data.md, batch-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="2.2", title="TDD GREEN — バッチジョブ本実装", custom_agent="Dev-Batch-ServiceCoding", depends_on=["2.1"], consumed_artifacts=["test_files", "batch_job_specs", "batch_service_catalog"], body_template_path="templates/abdv/step-2.2.md",
-                fanout_parser="batch_job_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/abdv/_common.md"),
+        StepDef(id="1.2", title="Azure データリソース Deploy", custom_agent="Dev-Dataflow-DataDeploy", depends_on=["1.1"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-1.2.md"),
+        # docs/dataflow/dataflow-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
+        StepDef(id="2.1", title="TDD RED — テストコード作成", custom_agent="Dev-Dataflow-TestCoding", depends_on=["1.2"], consumed_artifacts=["test_specs", "dataflow_catalog", "batch_service_catalog", "dataflow_specs"], body_template_path="templates/adfdv/step-2.1.md",
+                fanout_parser="dataflow_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/adfdv/_common.md"),
+        # docs/azure/azure-services-data.md, dataflow-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
+        StepDef(id="2.2", title="TDD GREEN — データフローアプリ本実装", custom_agent="Dev-Dataflow-ServiceCoding", depends_on=["2.1"], consumed_artifacts=["test_files", "dataflow_specs", "batch_service_catalog"], body_template_path="templates/adfdv/step-2.2.md",
+                fanout_parser="dataflow_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/adfdv/_common.md"),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md, azure-services-compute.md は既知 key なし → スキップ
-        StepDef(id="3", title="Azure Functions/コンテナ Deploy", custom_agent="Dev-Batch-FunctionsDeploy", depends_on=["2.2"], consumed_artifacts=["src_files", "batch_service_catalog"], body_template_path="templates/abdv/step-3.md"),
+        StepDef(id="3", title="Azure Functions/コンテナ Deploy", custom_agent="Dev-Dataflow-FunctionsDeploy", depends_on=["2.2"], consumed_artifacts=["src_files", "batch_service_catalog"], body_template_path="templates/adfdv/step-3.md"),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md, azure-services-compute.md は既知 key なし → スキップ
-        StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/abdv/step-4.1.md"),
-        StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/abdv/step-4.2.md"),
+        StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-4.1.md"),
+        StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-4.2.md"),
     ],
 )
 
@@ -607,7 +622,8 @@ AAG = WorkflowDef(
                 custom_agent="Arch-AIAgentDesign-Step1",
                 # users-guide/08-ai-agent.md は既知 key なし → スキップ
                 consumed_artifacts=["use_case_catalog", "service_catalog_matrix", "domain_analytics", "data_model", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/aag/step-1.md"),
+                body_template_path="templates/aag/step-1.md",
+                output_paths=["docs/agent/agent-application-definition.md"]),
         StepDef(id="2", title="AI Agent 粒度設計",
                 custom_agent="Arch-AIAgentDesign-Step2",
                 depends_on=["1"],
@@ -616,7 +632,8 @@ AAG = WorkflowDef(
                 consumed_artifacts=["agent_specs", "service_catalog_matrix", "domain_analytics", "data_model", "app_catalog"],
                 body_template_path="templates/aag/step-2.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aag/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aag/_common.md",
+                output_paths=["docs/agent/agent-architecture.md"]),
         StepDef(id="3", title="AI Agent 詳細設計",
                 custom_agent="Arch-AIAgentDesign-Step3",
                 depends_on=["2"],
@@ -624,7 +641,9 @@ AAG = WorkflowDef(
                 consumed_artifacts=["agent_specs", "service_catalog_matrix", "service_specs", "app_catalog"],
                 body_template_path="templates/aag/step-3.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aag/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aag/_common.md",
+                output_paths=["docs/ai-agent-catalog.md"],
+                output_paths_template=["docs/agent/agent-detail-{agentId}-{agentName}.md"]),
     ],
 )
 
@@ -640,7 +659,8 @@ AAGD = WorkflowDef(
                 custom_agent="Arch-AIAgentDesign-Step1",
                 # docs/azure/azure-services-data.md, azure-services-additional.md は既知 key なし → スキップ
                 consumed_artifacts=["app_catalog", "service_catalog_matrix", "service_catalog", "data_model", "domain_analytics", "use_case_catalog", "service_specs"],
-                body_template_path="templates/aagd/step-1.md"),
+                body_template_path="templates/aagd/step-1.md",
+                output_paths=["docs/agent/agent-application-definition.md"]),
         StepDef(id="2.1", title="AI Agent テスト仕様書 (TDD RED)",
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["1"],
@@ -648,7 +668,8 @@ AAGD = WorkflowDef(
                 consumed_artifacts=["test_strategy", "agent_specs", "service_catalog_matrix", "data_model", "app_catalog"],
                 body_template_path="templates/aagd/step-2.1.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md"),
+                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                output_paths_template=["docs/test-specs/{agentId}-test-spec.md"]),
         StepDef(id="2.2", title="AI Agent テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-AgentTestCoding",
                 depends_on=["2.1"],
@@ -819,6 +840,7 @@ ARD = WorkflowDef(
         "target_region",
         "analysis_purpose",
         "attached_docs",
+        "include_kpi_okr",
     ],
     steps=[
         # Sub-10 (ADR-0003): ARD は 7 step に再設計され、Step 1.1 / 3.2 で fan-out する。
@@ -866,8 +888,23 @@ ARD = WorkflowDef(
             output_paths=["docs/business-requirement.md"],
             body_template_path="templates/ard/step-2.md",
         ),
+        # Step 3: KPI/OKR 定義（任意ステップ）
+        # ARD パラメータ `include_kpi_okr=true` の場合のみ active_steps に含まれる
+        # （orchestrator 側で展開）。後続 Step 4.1 / 4.2 / aas が任意参照する。
+        # Step 2 経路がスキップされた場合は Step 1.2 出力をソースとしてフォールバック。
         StepDef(
-            id="3.1",
+            id="3",
+            title="KPI/OKR 定義（任意）",
+            custom_agent="Arch-ARD-KPIOKRDefinition",
+            depends_on=["2"],
+            skip_fallback_deps=["1.2"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-management"],
+            output_paths=["docs/recommended-kpi-okr.md"],
+            body_template_path="templates/ard/step-3.md",
+        ),
+        StepDef(
+            id="4.1",
             title="ユースケース骨格抽出",
             custom_agent="Arch-ARD-UseCaseCatalog",
             depends_on=["2"],
@@ -875,33 +912,34 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-skeleton.md"],
+            # docs/company-business-requirement.md は Step 1.2 の任意成果物のため
+            # required_input_paths には含めない（存在すれば参考コンテキストとして利用）。
             required_input_paths=[
                 "docs/business-requirement.md",
-                "docs/company-business-requirement.md",
             ],
-            body_template_path="templates/ard/step-3.1.md",
+            body_template_path="templates/ard/step-4.1.md",
         ),
         StepDef(
-            id="3.2",
+            id="4.2",
             title="ユースケース詳細生成",
             custom_agent="Arch-ARD-UseCaseCatalog",
-            depends_on=["3.1"],
+            depends_on=["4.1"],
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             fanout_parser="use_case_skeleton",
-            output_paths_template=["docs/use-cases/{key}-detail.md"],
-            body_template_path="templates/ard/step-3.2.md",
+            output_paths_template=["docs/usecase/{key}-detail.md"],
+            body_template_path="templates/ard/step-4.2.md",
             additional_prompt_template_path="hve/prompt/fanout/ard/_common.md",
         ),
         StepDef(
-            id="3.3",
+            id="4.3",
             title="ユースケースカタログ統合",
             custom_agent="Arch-ARD-UseCaseCatalog",
-            depends_on=["3.2"],
+            depends_on=["4.2"],
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-catalog.md"],
-            body_template_path="templates/ard/step-3.3.md",
+            body_template_path="templates/ard/step-4.3.md",
         ),
     ],
     max_parallel=15,
@@ -910,7 +948,7 @@ ARD = WorkflowDef(
 
 FULL_PIPELINE = MetaWorkflowDef(
     id="full-pipeline",
-    workflows=["aas", "aad-web", "asdw-web", "abd", "abdv", "aag", "aagd"],
+    workflows=["aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd"],
     dependencies={
         "aas": [],
         "aad-web": [
@@ -935,7 +973,7 @@ FULL_PIPELINE = MetaWorkflowDef(
                 ],
             ),
         ],
-        "abd": [
+        "adfd": [
             WorkflowDependency(
                 workflow_id="aas",
                 required_artifacts=[
@@ -945,16 +983,16 @@ FULL_PIPELINE = MetaWorkflowDef(
                 soft=True,
             ),
         ],
-        "abdv": [
+        "adfdv": [
             WorkflowDependency(
-                workflow_id="abd",
+                workflow_id="adfd",
                 required_artifacts=[
-                    "docs/batch/batch-domain-analytics.md",
-                    "docs/batch/batch-data-model.md",
-                    "docs/batch/batch-job-catalog.md",
-                    "docs/batch/batch-service-catalog.md",
-                    "docs/batch/batch-test-strategy.md",
-                    "docs/batch/jobs/*.md",
+                    "docs/dataflow/dataflow-domain-analytics.md",
+                    "docs/dataflow/dataflow-data-model.md",
+                    "docs/dataflow/dataflow-app-catalog.md",
+                    "docs/dataflow/dataflow-service-catalog.md",
+                    "docs/dataflow/dataflow-test-strategy.md",
+                    "docs/dataflow/apps/*.md",
                     "docs/test-specs/*-test-spec.md",
                 ],
             ),
@@ -993,7 +1031,7 @@ FULL_PIPELINE = MetaWorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ABD, ABDV, AAG, AAGD, AKM, AQOD, ADOC]
+    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AKM, AQOD, ADOC]
 }
 
 _META_REGISTRY: Dict[str, MetaWorkflowDef] = {
@@ -1039,6 +1077,105 @@ def get_meta_dependencies(workflow_id: str) -> List[WorkflowDependency]:
         if resolved in mwf.dependencies:
             return mwf.dependencies[resolved]
     return []
+
+
+# ---------------------------------------------------------------------------
+# 必須入力ファイル (required_artifacts) の説明文マスタ
+# ---------------------------------------------------------------------------
+# 各 path / glob に対して 1 行の文書名（説明文）を対応付ける。
+# GUI の Step 2 → Step 3 遷移時の precheck と、users-guide/workflow-reference.md
+# の表生成に使用する。FULL_PIPELINE.dependencies の required_artifacts に出現
+# する全 path / glob を網羅する。新規 required_artifacts を追加する際は本マス
+# タにも対応エントリを追加すること（未登録は precheck で path 文字列をそのま
+# ま表示する）。
+ARTIFACT_DESCRIPTIONS: Dict[str, str] = {
+    "docs/catalog/app-catalog.md": "アプリケーションカタログ",
+    "docs/catalog/domain-analytics.md": "ドメイン分析",
+    "docs/catalog/service-catalog.md": "サービスカタログ",
+    "docs/catalog/data-model.md": "データモデル",
+    "docs/catalog/test-strategy.md": "TDD テスト戦略",
+    "docs/screen/*.md": "画面定義書（一覧）",
+    "docs/services/*.md": "サービス定義書（一覧）",
+    "docs/test-specs/*-test-spec.md": "TDD テスト仕様書（一覧）",
+    "docs/dataflow/dataflow-domain-analytics.md": "バッチドメイン分析",
+    "docs/dataflow/dataflow-data-model.md": "バッチデータモデル",
+    "docs/dataflow/dataflow-app-catalog.md": "データフローアプリカタログ",
+    "docs/dataflow/dataflow-service-catalog.md": "バッチサービスカタログ",
+    "docs/dataflow/dataflow-test-strategy.md": "データフローテスト戦略",
+    "docs/dataflow/dataflow-data-source-analysis.md": "バッチデータソース/デスティネーション分析",
+    "docs/dataflow/dataflow-monitoring-design.md": "バッチ監視・運用設計",
+    "docs/dataflow/apps/*.md": "データフローアプリ詳細仕様書（一覧）",
+    "docs/agent/*.md": "AI Agent 設計書（一覧）",
+}
+
+
+def get_artifact_description(pattern: str) -> str:
+    """required_artifacts の path/glob から文書名（説明文）を取得する。
+
+    マスタ未登録の場合は path 文字列そのものを返す（捏造防止のため推測しない）。
+    """
+    return ARTIFACT_DESCRIPTIONS.get(pattern, pattern)
+
+
+# ---------------------------------------------------------------------------
+# Workflow ステップ ID グループマップ (SSOT)
+# ---------------------------------------------------------------------------
+# GUI / CLI 側で表示するグループ ID と registry の実 Step ID の対応表。
+# 旧 hve/orchestrator.py:_ARD_GROUP_MAP / hve/autopilot/plan_review_gap.py:
+# _ARD_STEP_TO_GROUP / hve/gui/page_workflow_select.py:_ARD_GROUPS の
+# 重複定義を本モジュールに集約する（SSOT）。
+#
+# 未登録 workflow / 未登録 group ID は素通し（``[sid]`` フォールバック）。
+# これにより orchestrator の旧挙動 ``_ARD_GROUP_MAP.get(_sid, [_sid])`` と
+# 完全に等価となる。
+_WORKFLOW_GROUP_MAPS: Dict[str, Dict[str, List[str]]] = {
+    "ard": {
+        "1": ["1", "1.1", "1.2"],
+        "2": ["2"],
+        # "3" は素通し（KPI/OKR 任意ステップ、実 Step ID と同名）
+        "4": ["4.1", "4.2", "4.3"],
+    },
+}
+
+
+def expand_group_step_ids(workflow_id: str, step_ids: List[str]) -> List[str]:
+    """GUI/CLI 形式のグループ step ID を registry の実 step ID 列に展開する。
+
+    未登録 workflow / 未登録 group ID は元の ID をそのまま返す（順序保持、
+    重複排除なし。旧 ``_ARD_GROUP_MAP.get(sid, [sid])`` と等価）。
+
+    Args:
+        workflow_id: 対象 workflow ID（小文字想定）。
+        step_ids: GUI または CLI から渡された step ID 列（グループ ID 含む）。
+
+    Returns:
+        実 step ID の列。順序は入力順、重複は維持する（呼び出し側で必要なら排除）。
+
+    Examples:
+        >>> expand_group_step_ids("ard", ["1", "2", "4"])
+        ['1', '1.1', '1.2', '2', '4.1', '4.2', '4.3']
+        >>> expand_group_step_ids("aas", ["1", "3.1"])
+        ['1', '3.1']
+    """
+    group_map = _WORKFLOW_GROUP_MAPS.get(workflow_id.lower(), {})
+    if not group_map:
+        return list(step_ids)
+    expanded: List[str] = []
+    for sid in step_ids:
+        expanded.extend(group_map.get(sid, [sid]))
+    return expanded
+
+
+def group_id_for_step(workflow_id: str, step_id: str) -> Optional[str]:
+    """実 step ID から GUI グループ ID への逆引き。未登録は None。
+
+    旧 ``hve.autopilot.plan_review_gap._ARD_STEP_TO_GROUP`` の代替。
+    """
+    group_map = _WORKFLOW_GROUP_MAPS.get(workflow_id.lower(), {})
+    for group_id, member_step_ids in group_map.items():
+        if step_id in member_step_ids:
+            return group_id
+    return None
 
 
 def get_step(workflow_id: str, step_id: str) -> Optional[StepDef]:

@@ -5,6 +5,64 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "app_location=src/app/"
+      required: true
+      kind: "agent_artifact"
+      producer: ""  # TBD: no producer found in inventory
+    - path: "src/app/package.json"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-UICoding"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceCatalog"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "knowledge/D15"
+      required: true
+      kind: "static"
+  outputs:
+    - path: "infra/azure/create-azure-webui-resources.sh"
+      required: true
+      mode: "create"
+    - path: "src/app/staticwebapp.config.json"
+      required: true
+      mode: "create"
+    - path: ".github/workflows/azure-static-web-apps-*.yml"
+      required: true
+      mode: "create"
+    - path: "infra/azure/switch-swa-to-main.sh"
+      required: true
+      mode: "create"
+    - path: "infra/azure/verify-webui-resources.sh"
+      required: true
+      mode: "create"
+    - path: "docs/catalog/service-catalog-matrix.md"
+      required: true
+      mode: "upsert"
+    - path: "infra/azure/rollback/ui-staticwebapps-rollback.md"
+      required: true
+      mode: "create"
+    - path: "work/Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps/Issue-<識別子>/screen-azure-deploy-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "work/Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps/Issue-<識別子>/ac-verification.md"
+      required: true
+      mode: "create"
+    - path: "Azure/static-web-apps-deploy@v1"
+      required: true
+      mode: "create"
+    - path: "switch-swa-to-main.sh"
+      required: true
+      mode: "create"
+    - path: "verify-webui-resources.sh"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps/Issue-<識別子>/`
 
@@ -12,6 +70,27 @@ metadata:
 Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理）+ GitHub Actions（OIDC + `Azure/static-web-apps-deploy@v1`）で実装し、切替・検証・証跡まで完了させる専用エージェント。
 共通ルールは `.github/copilot-instructions.md` と Skill `agent-common-preamble` を継承する。
 </role>
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
+- `input-file-validation` — UI 実装成果物（`web/`, `swa-cli.config.json` 等）の存在確認
+- `work-artifacts-layout` — `work/Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps/Issue-<識別子>/` 配下の成果物構造に準拠
+- `harness/harness-safety-guard` — 破壊的 Azure コマンドの実行前検出
+- `harness/harness-verification-loop` — ビルド / デプロイ / スモークテストの 5 段階検証
+- `cicd/github-actions-cicd` — OIDC ベース GitHub Actions CD 構築
 
 <when_to_invoke>
 - SWA をデプロイ先に採用し、リソース作成と CI/CD を同時に整備するとき

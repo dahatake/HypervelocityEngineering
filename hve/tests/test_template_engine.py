@@ -10,7 +10,6 @@ import pytest
 from hve.template_engine import (
     _WORKFLOW_DISPLAY_NAMES,
     _WORKFLOW_PREFIX,
-    _build_additional_section,
     _build_app_id_section,
     _build_completion_instruction,
     _build_existing_artifact_policy_section,
@@ -102,7 +101,7 @@ class TestBuildRootRef:
                 "enable_auto_merge": True,
                 "resource_group": "rg-test",
                 "app_ids": ["APP-01", "APP-02"],
-                "batch_job_id": "JOB-1,JOB-2",
+                "app_id": "JOB-1,JOB-2",
             },
         )
         assert "<!-- branch: develop -->" in ref
@@ -111,7 +110,7 @@ class TestBuildRootRef:
         assert "<!-- auto-merge: true -->" in ref
         assert "<!-- resource-group: rg-test -->" in ref
         assert "<!-- app-ids: APP-01, APP-02 -->" in ref
-        assert "<!-- batch-job-ids: JOB-1,JOB-2 -->" in ref
+        assert "<!-- app-ids: JOB-1,JOB-2 -->" in ref
 
     def test_with_app_id_legacy(self):
         """旧形式 app_id 単体でも app-ids として出力されること。"""
@@ -133,16 +132,6 @@ class TestBuildRootRef:
 # ---------------------------------------------------------------------------
 # _build_additional_section
 # ---------------------------------------------------------------------------
-
-
-class TestBuildAdditionalSection:
-    def test_empty(self):
-        assert _build_additional_section({}) == ""
-
-    def test_with_comment(self):
-        result = _build_additional_section({"additional_comment": "テスト用"})
-        assert "## 追加コメント" in result
-        assert "テスト用" in result
 
 
 # ---------------------------------------------------------------------------
@@ -618,23 +607,14 @@ class TestBuildRootIssueBody:
         assert "<!-- app-ids: APP-01, APP-02 -->" in body
         assert "APP-ID: `APP-01`, `APP-02`" in body
 
-    def test_additional_comment(self):
-        wf = get_workflow("abd")
+    def test_abdv_app_id(self):
+        wf = get_workflow("adfdv")
         body = build_root_issue_body(wf, {
             "branch": "main",
-            "additional_comment": "初回テスト",
+            "app_id": "JOB-A,JOB-B",
         })
-        assert "## 追加コメント" in body
-        assert "初回テスト" in body
-
-    def test_abdv_batch_job_id(self):
-        wf = get_workflow("abdv")
-        body = build_root_issue_body(wf, {
-            "branch": "main",
-            "batch_job_id": "JOB-A,JOB-B",
-        })
-        assert "<!-- batch-job-ids: JOB-A,JOB-B -->" in body
-        assert "バッチジョブ ID: `JOB-A,JOB-B`" in body
+        assert "<!-- app-ids: JOB-A,JOB-B -->" in body
+        assert "データフローアプリ ID: `JOB-A,JOB-B`" in body
 
     def test_adoc_title_prefix(self):
         wf = get_workflow("adoc")
@@ -697,8 +677,8 @@ class TestExistingArtifactPolicyIntegration:
         "aas",
         "aad-web",
         "asdw-web",
-        "abd",
-        "abdv",
+        "adfd",
+        "adfdv",
         "aag",
         "aagd",
         "akm",
@@ -723,8 +703,8 @@ class TestExistingArtifactPolicyIntegration:
             ("aas", "templates/aas/step-1.md"),
             ("aad-web", "templates/aad-web/step-1.md"),
             ("asdw-web", "templates/asdw-web/step-1.1.md"),
-            ("abd", "templates/abd/step-1.1.md"),
-            ("abdv", "templates/abdv/step-1.1.md"),
+            ("adfd", "templates/adfd/step-1.1.md"),
+            ("adfdv", "templates/adfdv/step-1.1.md"),
             ("aag", "templates/aag/step-1.md"),
             ("aagd", "templates/aagd/step-1.md"),
             ("akm", "templates/akm/step-1.md"),
@@ -774,32 +754,6 @@ class TestExistingArtifactPolicyIntegration:
 # ---------------------------------------------------------------------------
 
 
-class TestRenderTemplateAdditionalComment:
-    def test_additional_comment_rendered_in_body(self):
-        """追加コメントが render_template で展開されること。"""
-        wf = get_workflow("asdw")
-        body = render_template(
-            "templates/asdw/step-2.1.md",
-            root_issue_num=99,
-            params={"additional_comment": "Vue.jsで作成する", "branch": "main"},
-            wf=wf,
-        )
-        assert "## 追加コメント" in body
-        assert "Vue.jsで作成する" in body
-
-    def test_no_additional_comment_leaves_no_placeholder(self):
-        """追加コメントなしの場合 {additional_section} が残らないこと。"""
-        wf = get_workflow("asdw")
-        body = render_template(
-            "templates/asdw/step-2.1.md",
-            root_issue_num=99,
-            params={"branch": "main"},
-            wf=wf,
-        )
-        assert "{additional_section}" not in body
-        assert "## 追加コメント" not in body
-
-
 # ---------------------------------------------------------------------------
 # Phase 3: QA / Review コンテキスト参照セクションの注入検証
 # ---------------------------------------------------------------------------
@@ -845,21 +799,6 @@ class TestQaReviewContextSection:
         )
         assert "## 追加コンテキストの参照" in body
         assert "qa/" in body
-
-    def test_rendered_template_qa_section_precedes_additional_comment(self):
-        """QA / Review コンテキストセクションが追加コメントより前に現れること。"""
-        wf = get_workflow("aas")
-        body = render_template(
-            "templates/aas/step-1.md",
-            root_issue_num=1,
-            params={"branch": "main", "additional_comment": "追加テスト"},
-            wf=wf,
-        )
-        qa_pos = body.find("## 追加コンテキストの参照")
-        comment_pos = body.find("追加テスト")
-        assert qa_pos != -1
-        assert comment_pos != -1
-        assert qa_pos < comment_pos
 
     def test_all_templates_get_qa_review_section(self):
         """全テンプレートのレンダリング結果に QA/Review 参照セクションが含まれること。"""

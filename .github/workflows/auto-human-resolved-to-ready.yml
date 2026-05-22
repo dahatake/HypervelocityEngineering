@@ -6,7 +6,7 @@ name: Human Resolved to Ready Transition
 #   - トリガー: issues.labeled — endsWith(':human-resolved') で該当ラベルを検出。
 #   - 遷移内容: :human-required / :blocked を剥がし → :ready を付与。
 #   - :blocked の自動剥離は「人間の :human-resolved 経由のみ」という要件に準拠。
-#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / abd / abdv / aag / aagd / akm / aqod / adoc
+#   - 対象ワークフロー: aas / aad / aad-web / asdw / asdw-web / adfd / adfdv / aag / aagd / akm / aqod / adoc
 
 on:
   issues:
@@ -38,7 +38,7 @@ jobs:
           echo "Detected workflow prefix: ${PREFIX}"
 
           # 許可プレフィックスの検証
-          VALID_PREFIXES="aas aad aad-web asdw asdw-web abd abdv aag aagd akm aqod adoc"
+          VALID_PREFIXES="aas aad aad-web asdw asdw-web adfd adfdv aag aagd akm aqod adoc"
           VALID="false"
           for P in ${VALID_PREFIXES}; do
             if [ "${PREFIX}" = "${P}" ]; then

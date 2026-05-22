@@ -286,8 +286,8 @@ jobs:
         run: |
           # 成果物ディレクトリの事前作成
           mkdir -p docs/catalog
-          mkdir -p docs/batch
-          mkdir -p docs/batch/jobs
+          mkdir -p docs/dataflow
+          mkdir -p docs/dataflow/apps
           mkdir -p docs/services
           mkdir -p docs/screen
           mkdir -p docs/test-specs

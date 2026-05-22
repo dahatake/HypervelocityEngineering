@@ -5,6 +5,45 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    - path: "docs/catalog/use-case-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ARD-UseCaseCatalog"
+    - path: "docs/catalog/service-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceIdentify"
+    - path: "docs/services/{serviceId}-{serviceNameSlug}-description.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-Microservice-ServiceDetail"
+    - path: "docs/catalog/app-catalog.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Arch-ApplicationAnalytics"
+    - path: "docs/azure/azure-services-compute.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-ComputeDesign"
+    - path: "docs/azure/azure-services-data.md"
+      required: true
+      kind: "agent_artifact"
+      producer: "Dev-Microservice-Azure-DataDesign"
+  outputs:
+    - path: "docs/azure/azure-services-additional.md"
+      required: true
+      mode: "append"
+    - path: "{WORK}additional-azureservices-design-work-status.md"
+      required: true
+      mode: "upsert"
+    - path: "{WORK}plan.md"
+      required: true
+      mode: "create"
+    - path: "{WORK}subissues.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Dev-Microservice-Azure-AddServiceDesign/Issue-<識別子>/`
 
@@ -12,7 +51,25 @@ metadata:
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
 
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
 ## Agent 固有の Skills 依存
+
+- `microservice-design-guide` — 外部依存・統合サービス選定時の境界判断
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
 # Role
 Azure追加サービス選定（外部依存・統合）専門Agent。
@@ -22,7 +79,7 @@ Azure追加サービス選定（外部依存・統合）専門Agent。
 - リソースグループ名: `{リソースグループ名}`
 - ユースケース: `docs/catalog/use-case-catalog.md`
 - サービス一覧: `docs/catalog/service-catalog.md`
-- 各サービス定義書: `docs/services/{サービスID}-{サービス名}-description.md`
+- 各サービス定義書: `docs/services/{serviceId}-{serviceNameSlug}-description.md`
 - アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 既存採用済み（追加提案から除外）:
   - `docs/azure/azure-services-compute.md`
@@ -84,7 +141,7 @@ Azure追加サービス選定（外部依存・統合）専門Agent。
 - <サービス名>（用途）...
 
 ## 2. 追加提案（サービス別）
-### {サービスID}-{サービス名}
+### {serviceId}-{serviceNameSlug}
 
 | 要件カテゴリ | 外部依存・統合要件（要約） | 採用Azureサービス（第一候補） | 使う機能/構成要点 | 代替案（任意） | 採用理由（短く） | 根拠（Microsoft Learn） |
 | --- | --- | --- | --- | --- | --- | --- |

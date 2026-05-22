@@ -56,11 +56,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[mdq]"
       - name: Build mdq index
-        run: python -m hve.mdq index
+        run: python -m mdq index
       - name: Verify stats
         run: |
           set -euo pipefail
-          python -m hve.mdq stats > mdq-stats.json
+          python -m mdq stats > mdq-stats.json
           cat mdq-stats.json
           python - <<'PY'
           import json, sys

@@ -14,7 +14,7 @@
 # links, and assigns Copilot to the first executable step.
 #
 # Usage:
-#   ./orchestrate.sh --workflow abd --branch main --steps 1.1,1.2 --dry-run
+#   ./orchestrate.sh --workflow adfd --branch main --steps 1.1,1.2 --dry-run
 #
 # Environment:
 #   REPO        — Repository in "owner/repo" format
@@ -42,22 +42,22 @@ _TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
 
 declare -A _WORKFLOW_DISPLAY_NAMES=(
   [aas]="App Architecture Design"
-  [abd]="Batch Design"
-  [abdv]="Batch Dev"
+  [adfd]="Dataflow Design"
+  [adfdv]="Dataflow Dev"
   [adoc]="Source Codeからのドキュメント作成"
 )
 
 declare -A _TRIGGER_LABELS=(
   [aas]="auto-app-selection"
-  [abd]="auto-batch-design"
-  [abdv]="auto-batch-dev"
+  [adfd]="auto-dataflow-design"
+  [adfdv]="auto-dataflow-dev"
   [adoc]="auto-app-documentation"
 )
 
 declare -A _WORKFLOW_PREFIX=(
   [aas]="AAS"
-  [abd]="ABD"
-  [abdv]="ABDV"
+  [adfd]="ADFD"
+  [adfdv]="ADFDV"
   [adoc]="ADOC"
 )
 
@@ -80,7 +80,7 @@ _build_root_ref() {
   local branch="${2:-main}"
   local resource_group="${3:-}"
   local app_id="${4:-}"
-  local batch_job_id="${5:-}"
+  local app_id="${5:-}"
   local auto_review="${6:-true}"
   local auto_qa="${7:-true}"
 
@@ -90,7 +90,7 @@ _build_root_ref() {
 
   [[ -n "${resource_group}" ]] && parts+=("<!-- resource-group: ${resource_group} -->")
   [[ -n "${app_id}" ]]         && parts+=("<!-- app-id: ${app_id} -->")
-  [[ -n "${batch_job_id}" ]]   && parts+=("<!-- batch-job-ids: ${batch_job_id} -->")
+  [[ -n "${app_id}" ]]   && parts+=("<!-- app-ids: ${app_id} -->")
 
   parts+=("<!-- auto-review: ${auto_review} -->")
   parts+=("<!-- auto-context-review: true -->")
@@ -120,9 +120,9 @@ _build_rg_section() {
 }
 
 _build_job_section() {
-  local batch_job_id="${1:-}"
-  [[ -z "${batch_job_id}" ]] && return 0
-  printf '\n\n## 対象バッチジョブ ID\n`%s`' "${batch_job_id}"
+  local app_id="${1:-}"
+  [[ -z "${app_id}" ]] && return 0
+  printf '\n\n## 対象データフローアプリ ID\n`%s`' "${app_id}"
 }
 
 render_template() {
@@ -131,7 +131,7 @@ render_template() {
   local branch="${3:-main}"
   local resource_group="${4:-}"
   local app_id="${5:-}"
-  local batch_job_id="${6:-}"
+  local app_id="${6:-}"
   local usecase_id="${7:-}"
   local additional_comment="${8:-}"
   local auto_review="${9:-true}"
@@ -145,7 +145,7 @@ render_template() {
   body=$(_load_template "${template_path}") || return 1
 
   local root_ref
-  root_ref=$(_build_root_ref "${root_issue_num}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${auto_review}" "${auto_qa}")
+  root_ref=$(_build_root_ref "${root_issue_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${auto_review}" "${auto_qa}")
   local additional_section
   additional_section=$(_build_additional_section "${additional_comment}")
   local app_id_section
@@ -153,7 +153,7 @@ render_template() {
   local rg_section
   rg_section=$(_build_rg_section "${resource_group}")
   local job_section
-  job_section=$(_build_job_section "${batch_job_id}")
+  job_section=$(_build_job_section "${app_id}")
 
   # Perform placeholder substitutions
   body="${body//\{root_ref\}/${root_ref}}"
@@ -182,7 +182,7 @@ _build_root_issue_body() {
   local branch="${2:-main}"
   local resource_group="${3:-}"
   local app_id="${4:-}"
-  local batch_job_id="${5:-}"
+  local app_id="${5:-}"
   local usecase_id="${6:-}"
   local additional_comment="${7:-}"
   local skip_review="${8:-false}"
@@ -206,7 +206,7 @@ _build_root_issue_body() {
   lines+=("<!-- branch: ${branch} -->")
   [[ -n "${resource_group}" ]] && lines+=("<!-- resource-group: ${resource_group} -->")
   [[ -n "${app_id}" ]]         && lines+=("<!-- app-id: ${app_id} -->")
-  [[ -n "${batch_job_id}" ]]   && lines+=("<!-- batch-job-ids: ${batch_job_id} -->")
+  [[ -n "${app_id}" ]]   && lines+=("<!-- app-ids: ${app_id} -->")
   lines+=("<!-- auto-review: ${auto_review} -->")
   lines+=("<!-- auto-context-review: true -->")
   lines+=("<!-- auto-qa: ${auto_qa} -->")
@@ -217,7 +217,7 @@ _build_root_issue_body() {
   [[ -n "${app_id}" ]]         && lines+=("APP-ID: \`${app_id}\`")
   [[ -n "${resource_group}" ]] && lines+=("リソースグループ: \`${resource_group}\`")
   [[ -n "${usecase_id}" ]]     && lines+=("ユースケースID: \`${usecase_id}\`")
-  [[ -n "${batch_job_id}" ]]   && lines+=("バッチジョブ ID: \`${batch_job_id}\`")
+  [[ -n "${app_id}" ]]   && lines+=("データフローアプリ ID: \`${app_id}\`")
   if [[ "${workflow_id}" == "adoc" ]]; then
     [[ -n "${target_dirs}" ]]      && lines+=("target_dirs: \`${target_dirs}\`")
     [[ -n "${exclude_patterns}" ]] && lines+=("exclude_patterns: \`${exclude_patterns}\`")
@@ -268,7 +268,7 @@ orchestrate() {
   local steps_csv="${3:-}"
   local resource_group="${4:-}"
   local app_id="${5:-}"
-  local batch_job_id="${6:-}"
+  local app_id="${6:-}"
   local usecase_id="${7:-}"
   local additional_comment="${8:-}"
   local skip_review="${9:-false}"
@@ -465,7 +465,7 @@ orchestrate() {
   echo ""
   echo "📝 Root Issue 作成..."
   local root_body
-  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}")
+  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}")
   local root_title="[${prefix}] ${display_name}"
   local initialized_label
   initialized_label=$(echo "${wf_json}" | jq -r '.state_labels.initialized // ""')
@@ -530,11 +530,11 @@ orchestrate() {
     local issue_body=""
 
     if [[ -n "${template_path}" ]]; then
-      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${usecase_id}" "${additional_comment}" "${auto_review}" "${auto_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}") || true
+      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${usecase_id}" "${additional_comment}" "${auto_review}" "${auto_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}") || true
     fi
     if [[ -z "${issue_body}" ]]; then
       local root_ref
-      root_ref=$(_build_root_ref "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${batch_job_id}" "${auto_review}" "${auto_qa}")
+      root_ref=$(_build_root_ref "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${auto_review}" "${auto_qa}")
       local additional_section
       additional_section=$(_build_additional_section "${additional_comment}")
       issue_body="${root_ref}"$'\n\n'"Step.${sid}: ${step_title}${additional_section}"
@@ -708,13 +708,13 @@ Usage:
   orchestrate.sh --workflow <id> [options]
 
 Options:
-  --workflow, -w <id>      Workflow ID: aas|abd|abdv|adoc (required)
+  --workflow, -w <id>      Workflow ID: aas|adfd|adfdv|adoc (required)
   --branch <name>          Target branch (default: main)
   --steps <csv>            Comma-separated step IDs (default: all)
   --app-id <id>            ASDW: Application ID
-  --resource-group <name>  ASDW/ABDV: Resource group name
+  --resource-group <name>  ASDW/ADFDV: Resource group name
   --usecase-id <id>        ASDW: Usecase ID
-  --batch-job-id <ids>     ABDV: Batch job IDs (comma-separated)
+  --app-id <ids>     ADFDV: Batch job IDs (comma-separated)
   --comment <text>         Additional comment
   --skip-review            Skip self-review
   --skip-qa                Skip QA questionnaire
@@ -731,7 +731,7 @@ EOF
 
 main() {
   local workflow="" branch="main" steps="" app_id="" resource_group="" usecase_id="" model=""
-  local batch_job_id="" comment="" skip_review="false" skip_qa="false"
+  local app_id="" comment="" skip_review="false" skip_qa="false"
   local target_dirs="" exclude_patterns="node_modules/,vendor/,dist/,*.lock,__pycache__/" doc_purpose="all" max_file_lines="500"
 
   while (( $# > 0 )); do
@@ -742,7 +742,7 @@ main() {
       --app-id)          app_id="${2:?--app-id requires an argument}"; shift 2 ;;
       --resource-group)  resource_group="${2:?--resource-group requires an argument}"; shift 2 ;;
       --usecase-id)      usecase_id="${2:?--usecase-id requires an argument}"; shift 2 ;;
-      --batch-job-id)    batch_job_id="${2:?--batch-job-id requires an argument}"; shift 2 ;;
+      --app-id)    app_id="${2:?--app-id requires an argument}"; shift 2 ;;
       --comment)         comment="${2:?--comment requires an argument}"; shift 2 ;;
       --skip-review)     skip_review="true"; shift ;;
       --skip-qa)         skip_qa="true"; shift ;;
@@ -782,7 +782,7 @@ main() {
   fi
 
   orchestrate "${workflow}" "${branch}" "${steps}" "${resource_group}" "${app_id}" \
-    "${batch_job_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}" \
+    "${app_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}" \
     "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}"
 }
 

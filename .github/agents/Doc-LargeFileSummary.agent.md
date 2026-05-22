@@ -5,6 +5,13 @@ tools: ["*"]
 metadata:
   version: "1.0.0"
 
+io_contract:
+  inputs:
+    []  # no required inputs extracted (or all are runtime params)
+  outputs:
+    - path: "docs-generated/files/{relative-path}.md"
+      required: true
+      mode: "create"
 ---
 > **WORK**: `work/Doc-LargeFileSummary/Issue-<識別子>/`
 

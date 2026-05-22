@@ -21,12 +21,12 @@ from hve.workflow_registry import (
 # ---------------------------------------------------------------------------
 
 EXPECTED_STEP_COUNTS = {
-    "ard": 7,
+    "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
     "aas": 9,
     "aad-web": 5,
     "asdw-web": 20,  # 4 containers + 16 real steps
-    "abd": 9,
-    "abdv": 7,
+    "adfd": 9,
+    "adfdv": 7,
     "aag": 3,
     "aagd": 5,
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
@@ -35,12 +35,12 @@ EXPECTED_STEP_COUNTS = {
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
-    "ard": 7,
+    "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
     "aas": 9,
     "aad-web": 5,
     "asdw-web": 16,
-    "abd": 9,
-    "abdv": 7,
+    "adfd": 9,
+    "adfdv": 7,
     "aag": 3,
     "aagd": 5,
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
@@ -153,21 +153,21 @@ class TestWorkflowDef:
         assert wf.params == ["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"]
 
     def test_params_abdv(self):
-        wf = get_workflow("abdv")
+        wf = get_workflow("adfdv")
         assert "app_ids" in wf.params
         assert "app_id" in wf.params
         assert "resource_group" in wf.params
-        assert "batch_job_id" in wf.params
+        assert "app_id" in wf.params
 
     def test_params_abd(self):
-        wf = get_workflow("abd")
+        wf = get_workflow("adfd")
         assert "app_ids" in wf.params
         assert "app_id" in wf.params
 
     def test_ard_steps_require_knowledge_management(self):
         wf = get_workflow("ard")
         assert wf is not None
-        for step_id in ["1", "1.1", "1.2", "2", "3.1", "3.2", "3.3"]:
+        for step_id in ["1", "1.1", "1.2", "2", "3", "4.1", "4.2", "4.3"]:
             step = wf.get_step(step_id)
             assert step is not None
             assert "knowledge-management" in step.required_skills
@@ -193,7 +193,7 @@ class TestGetRootSteps:
         assert [s.id for s in roots] == ["1"]
 
     def test_abd_roots(self):
-        roots = get_root_steps("abd")
+        roots = get_root_steps("adfd")
         root_ids = sorted(s.id for s in roots)
         assert root_ids == ["1.1", "1.2"]
 
@@ -244,24 +244,24 @@ class TestGetNextSteps:
         assert "4.2" in nexts and "5" in nexts
 
     def test_abd_step61_and_step62_are_parallel(self):
-        """Sub-6 (C-3 確認): ABD の Step 6.1 (ジョブ詳細仕様) と Step 6.2 (監視・運用設計) が
+        """Sub-6 (C-3 確認): ADFD の Step 6.1 (ジョブ詳細仕様) と Step 6.2 (監視・運用設計) が
         Step 5 完了後に並列起動可能であることを保証する（既存挙動の回帰防止）。
 
         Sub-6 当初プランでは Step 6.3 も並列化する案だったが、Step 6.3 は consumed_artifacts に
-        ``batch_job_specs`` (= Step 6.1 fan-out 子の出力) を含むため、現状の AND 結合
+        ``dataflow_specs`` (= Step 6.1 fan-out 子の出力) を含むため、現状の AND 結合
         (depends_on=["6.1", "6.2"]) を維持する。
         """
-        step_61 = get_step("abd", "6.1")
-        step_62 = get_step("abd", "6.2")
-        step_63 = get_step("abd", "6.3")
+        step_61 = get_step("adfd", "6.1")
+        step_62 = get_step("adfd", "6.2")
+        step_63 = get_step("adfd", "6.3")
         assert step_61.depends_on == ["5"]
         assert step_62.depends_on == ["5"]
-        # 6.3 は 6.1 と 6.2 の両方に依存（batch_job_specs が必須）
+        # 6.3 は 6.1 と 6.2 の両方に依存（dataflow_specs が必須）
         assert sorted(step_63.depends_on) == ["6.1", "6.2"]
         # 6.1 / 6.2 は同 wave で並列起動可能
         nexts = sorted(
             s.id for s in get_next_steps(
-                "abd", completed_step_ids=["1.1", "1.2", "2", "3", "4", "5"]
+                "adfd", completed_step_ids=["1.1", "1.2", "2", "3", "4", "5"]
             )
         )
         assert "6.1" in nexts and "6.2" in nexts
@@ -340,18 +340,18 @@ class TestGetNextSteps:
         assert get_step("aagd", "3").custom_agent == "Dev-Microservice-Azure-AgentDeploy"
 
     def test_and_join(self):
-        nexts = get_next_steps("abd", completed_step_ids=["1.1"])
+        nexts = get_next_steps("adfd", completed_step_ids=["1.1"])
         next_ids = [s.id for s in nexts]
         assert "2" not in next_ids
         assert "1.2" in next_ids
 
-        nexts = get_next_steps("abd", completed_step_ids=["1.1", "1.2"])
+        nexts = get_next_steps("adfd", completed_step_ids=["1.1", "1.2"])
         next_ids = [s.id for s in nexts]
         assert "2" in next_ids
 
     def test_skipped_resolves_dependency(self):
         nexts = get_next_steps(
-            "abd",
+            "adfd",
             completed_step_ids=["1.1"],
             skipped_step_ids=["1.2"],
         )
@@ -532,16 +532,16 @@ class TestAAGAgentNames:
 
 
 class TestABDVAgentNames:
-    """ABDV ワークフローの各 Step が新しい Agent 名を使用していること（P3-2）。"""
+    """ADFDV ワークフローの各 Step が新しい Agent 名を使用していること（P3-2）。"""
 
     def test_abdv_step11_uses_new_agent(self):
-        assert get_step("abdv", "1.1").custom_agent == "Dev-Batch-DataServiceSelect"
+        assert get_step("adfdv", "1.1").custom_agent == "Dev-Dataflow-DataServiceSelect"
 
     def test_abdv_step12_uses_new_agent(self):
-        assert get_step("abdv", "1.2").custom_agent == "Dev-Batch-DataDeploy"
+        assert get_step("adfdv", "1.2").custom_agent == "Dev-Dataflow-DataDeploy"
 
     def test_abdv_step3_uses_new_agent(self):
-        assert get_step("abdv", "3").custom_agent == "Dev-Batch-FunctionsDeploy"
+        assert get_step("adfdv", "3").custom_agent == "Dev-Dataflow-FunctionsDeploy"
 
 
 # ---------------------------------------------------------------------------
@@ -557,8 +557,8 @@ ALLOWED_EMPTY_OUTPUT_PATHS_STEPS: dict[str, list[str]] = {
         "1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5",
         "3.0T", "3.0TC", "3.1", "3.2", "3.3", "4.1", "4.2",
     ],
-    "abd": ["1.1", "1.2", "2", "3", "4", "5", "6.1", "6.2", "6.3"],
-    "abdv": ["1.1", "1.2", "2.1", "2.2", "3", "4.1", "4.2"],
+    "adfd": ["1.1", "1.2", "2", "3", "4", "5", "6.1", "6.2", "6.3"],
+    "adfdv": ["1.1", "1.2", "2.1", "2.2", "3", "4.1", "4.2"],
     "aag": ["1", "2", "3"],
     "aagd": ["1", "2.1", "2.2", "2.3", "3"],
     "akm": ["1", "2"],

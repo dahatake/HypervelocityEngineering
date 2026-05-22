@@ -74,7 +74,7 @@ class TestLabelConsistencyAuditPrefixes(unittest.TestCase):
 
     _PREFIXES = [
         "aas", "aad", "aad-web", "asdw", "asdw-web",
-        "abd", "abdv", "aag", "aagd", "akm", "adoc", "aqod",
+        "adfd", "adfdv", "aag", "aagd", "akm", "adoc", "aqod",
     ]
 
     def test_all_prefixes_present_in_workflow(self):

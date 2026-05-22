@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .title { font-size: 18px; font-weight: bold; }
+      .h    { font-size: 15px; font-weight: bold; }
+      .zone { stroke-width: 2; fill-opacity: 0.5; }
+      .a    { fill: #d6eaff; stroke: #1f6feb; }
+      .b    { fill: #ffe4d6; stroke: #b91c1c; }
+      .c    { fill: #d6f0d6; stroke: #1a7f37; }
+      .d    { fill: #f0d6f0; stroke: #8250df; }
+      .box  { fill: #fff; stroke: #444; stroke-width: 1.0; }
+      .arr  { stroke: #444; stroke-width: 1.4; fill: none; marker-end: url(#arr); }
+      .note { font-size: 12px; fill: #333; }
+      .bar  { stroke: #c00; stroke-width: 2; stroke-dasharray: 8 4; fill: none; }
+    </style>
+  </defs>
+
+  <text class="title" x="20" y="30">疎結合境界 4 ゾーン: 責務分離マップ（本ドキュメントの中核）</text>
+  <text class="note" x="20" y="50">赤破線 = 境界（ファイルパス・プロセス境界・API 境界）。HVE は他ゾーンへ直接書き込まず、規定インターフェース経由でのみ通信する。</text>
+
+  <!-- Zone A: HVE Python -->
+  <rect class="zone a" x="20"   y="70" width="570" height="320" rx="10"/>
+  <text class="h" x="40" y="96">A. HVE 独自 Python 制御コード（リポジトリ内）</text>
+  <text class="note" x="40" y="116">DAG / Workflow / Agent ローダ / GUI 制御 / 認証 UI / KPI / Resume 等</text>
+
+  <rect class="box" x="40"  y="130" width="170" height="56" rx="4"/>
+  <text x="55" y="150">hve/orchestrator.py</text>
+  <text x="55" y="170" class="note">DAG 構築・Issue/PR 連携</text>
+
+  <rect class="box" x="220" y="130" width="170" height="56" rx="4"/>
+  <text x="235" y="150">hve/dag_executor.py</text>
+  <text x="235" y="170" class="note">並列実行・Fork-on-Retry</text>
+
+  <rect class="box" x="400" y="130" width="170" height="56" rx="4"/>
+  <text x="415" y="150">hve/runner.py</text>
+  <text x="415" y="170" class="note">StepRunner / SDK 呼出口</text>
+
+  <rect class="box" x="40"  y="200" width="170" height="56" rx="4"/>
+  <text x="55" y="220">hve/gui/</text>
+  <text x="55" y="240" class="note">PySide6 + state_bridge</text>
+
+  <rect class="box" x="220" y="200" width="170" height="56" rx="4"/>
+  <text x="235" y="220">hve/workflow_registry</text>
+  <text x="235" y="240" class="note">StepDef / WorkflowDef</text>
+
+  <rect class="box" x="400" y="200" width="170" height="56" rx="4"/>
+  <text x="415" y="220">hve/skill_resolver</text>
+  <text x="415" y="240" class="note">SKILL.md frontmatter 解析</text>
+
+  <rect class="box" x="40"  y="270" width="170" height="56" rx="4"/>
+  <text x="55" y="290">hve/agent_loader</text>
+  <text x="55" y="310" class="note">.agent.md → 内部 dict</text>
+
+  <rect class="box" x="220" y="270" width="170" height="56" rx="4"/>
+  <text x="235" y="290">hve/run_state / lock</text>
+  <text x="235" y="310" class="note">resume 復元</text>
+
+  <rect class="box" x="400" y="270" width="170" height="56" rx="4"/>
+  <text x="415" y="290">hve/fork_kpi_logger</text>
+  <text x="415" y="310" class="note">work/kpi/*.jsonl</text>
+
+  <text class="note" x="40" y="360">▶ 制約: ゾーン B (SDK) は import 経由のみ。ゾーン C (CLI 資源) は CLI コマンド経由のみ。ゾーン D (Agent/Skill) はファイル経由のみ。</text>
+  <text class="note" x="40" y="378">▶ 認証情報は一切保持しない（OS 認証ストア委譲）。</text>
+
+  <!-- Zone B: SDK -->
+  <rect class="zone b" x="610" y="70" width="550" height="160" rx="10"/>
+  <text class="h" x="630" y="96">B. GitHub Copilot CLI SDK（外部 PyPI: github-copilot-sdk）</text>
+  <text class="note" x="630" y="116">CopilotClient / Session / PermissionHandler / SubprocessConfig / ExternalServerConfig</text>
+  <rect class="box" x="630" y="130" width="510" height="86" rx="4"/>
+  <text x="650" y="152">公開 API のみ使用（内部実装に依存しない）</text>
+  <text x="650" y="174" class="note">create_session() / send_and_wait() / event stream</text>
+  <text x="650" y="196" class="note">バージョン: pyproject.toml の依存指定で固定。SDK アップグレードは別タスクで実施。</text>
+
+  <!-- Zone C: CLI resources -->
+  <rect class="zone c" x="610" y="250" width="550" height="240" rx="10"/>
+  <text class="h" x="630" y="276">C. GitHub Copilot CLI 管理リソース（HVE は透過利用）</text>
+  <text class="note" x="630" y="296">MCP Server / Plugin / Skill / モデル選択 / 認証情報</text>
+  <rect class="box" x="630" y="310" width="250" height="60" rx="4"/>
+  <text x="645" y="332">MCP Server</text>
+  <text x="645" y="350" class="note">copilot mcp add / list --json</text>
+
+  <rect class="box" x="890" y="310" width="250" height="60" rx="4"/>
+  <text x="905" y="332">Plugin</text>
+  <text x="905" y="350" class="note">copilot plugin list</text>
+
+  <rect class="box" x="630" y="380" width="250" height="60" rx="4"/>
+  <text x="645" y="402">モデル一覧</text>
+  <text x="645" y="420" class="note">copilot model list --json</text>
+
+  <rect class="box" x="890" y="380" width="250" height="60" rx="4"/>
+  <text x="905" y="402">認証ストア</text>
+  <text x="905" y="420" class="note">Win Cred Manager / Keychain / Secret Service</text>
+
+  <text class="note" x="630" y="466">▶ HVE は CLI コマンド呼出 (`copilot ...`) または SDK 経由でのみアクセス。直接ファイルを覗かない。</text>
+  <text class="note" x="630" y="482">▶ 認証情報は HVE のメモリ・ディスクに 1 バイトも保存しない。</text>
+
+  <!-- Zone D: HVE-managed Agents / Workflows / Skills -->
+  <rect class="zone d" x="20" y="410" width="570" height="320" rx="10"/>
+  <text class="h" x="40" y="436">D. HVE 管理: Custom Agent / Workflow / Skill（リポジトリ内ファイル）</text>
+  <text class="note" x="40" y="456">.github/agents/, .github/skills/, hve/workflow_registry.py の定義群</text>
+
+  <rect class="box" x="40"  y="470" width="250" height="60" rx="4"/>
+  <text x="55" y="492">.github/agents/*.agent.md</text>
+  <text x="55" y="510" class="note">Arch-* / Dev-* / QA-* / Doc-* など</text>
+
+  <rect class="box" x="300" y="470" width="270" height="60" rx="4"/>
+  <text x="315" y="492">.github/skills/*/SKILL.md</text>
+  <text x="315" y="510" class="note">task-dag-planning / markdown-query 等</text>
+
+  <rect class="box" x="40"  y="540" width="530" height="60" rx="4"/>
+  <text x="55" y="562">hve/workflow_registry.py — WorkflowDef + StepDef DAG</text>
+  <text x="55" y="580" class="note">AAS / AAD-WEB / ASDW-WEB / ABD / ABDV / AAG / AAGD / AKM / AQOD / ADOC / ARD</text>
+
+  <rect class="box" x="40"  y="610" width="530" height="60" rx="4"/>
+  <text x="55" y="632">.github/copilot-instructions.md（最上位ルール）</text>
+  <text x="55" y="650" class="note">Custom Agent は本ルールを継承（agent-common-preamble 経由）</text>
+
+  <text class="note" x="40" y="698">▶ ゾーン A はファイルパスとして読み込むのみ。Agent/Skill の文面に Python 制御を埋め込まない。</text>
+  <text class="note" x="40" y="716">▶ Workflow の追加は workflow_registry.py に StepDef を追加して再ビルドのみで実現可能（疎結合の利点）。</text>
+
+  <!-- Boundary connectors (legend) -->
+  <line class="bar" x1="595" y1="70"  x2="595" y2="730"/>
+  <line class="bar" x1="20"  y1="395" x2="595" y2="395"/>
+  <line class="bar" x1="610" y1="240" x2="1160" y2="240"/>
+
+  <!-- Allowed comms -->
+  <path class="arr" d="M570,158 L630,158"/>
+  <path class="arr" d="M570,338 L630,338"/>
+  <path class="arr" d="M310,400 L310,470"/>
+</svg>
