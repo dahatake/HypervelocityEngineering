@@ -9,7 +9,7 @@ Embedding 類似度に基づくチャンキング戦略。設計プラン: [work
 | 実装 | [mdq/strategies_semantic.py](../../../../mdq/strategies_semantic.py) |
 | extras | `pip install -e .[semantic]`（fastembed + nltk + numpy） |
 | 既定 provider | `fastembed`（ONNX, CPU。`MDQ_EMBED_PROVIDER` で override） |
-| 既定 model | `BAAI/bge-m3`（多言語・初回 ~2GB DL。`MDQ_EMBED_MODEL` で override） |
+| 既定 model | `intfloat/multilingual-e5-large`（多言語・MIT・初回 ~2.2GB DL。`MDQ_EMBED_MODEL` で override） |
 | sentence splitter | `nltk.sent_tokenize`（`punkt_tab` を初回自動 DL、失敗時 regex fallback） |
 | heading 境界 | **hard boundary**（絶対跨がない） |
 | contextualizer | **既定 ON**（`[Context] {path} > {heading_path}\n\n{body}` を prepend、`text_raw` 列に原文保持） |
@@ -36,7 +36,7 @@ python -m mdq index --strategy semantic_paragraph \
     --breakpoint-percentile-hi 99 \
     --min-chars 200 \
     --embed-provider fastembed \
-    --embed-model BAAI/bge-m3 \
+    --embed-model intfloat/multilingual-e5-large \
     [--no-semantic-contextualize] \
     [--late-chunking]
 ```
@@ -79,7 +79,7 @@ score / snippet 列のテーブルで確認できる。
 | 状況 | 挙動 |
 |---|---|
 | `[semantic]` extra 未インストール | `heading_recursive` へ降格し stderr に警告 |
-| bge-m3 モデル DL 失敗 | `EmbeddingsUnavailable` → `heading_recursive` へ降格 |
+| multilingual-e5-large モデル DL 失敗 | `EmbeddingsUnavailable` → `heading_recursive` へ降格 |
 | nltk `punkt_tab` DL 失敗 | regex 文分割で続行（出力品質はやや低下） |
 | 1 heading chunk が `max_chars` 以下 | embedding 計算スキップで heading そのまま |
 

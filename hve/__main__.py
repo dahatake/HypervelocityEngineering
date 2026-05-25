@@ -4127,10 +4127,18 @@ def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
     else:
         catalog_path = default_catalog_path(repo_root)
 
+    # ユーザー指定の --app-ids を Autopilot 計画にも反映する（未指定なら catalog 全件）。
+    # --app-id（単数、後方互換）でも同様に動作させる。
+    requested_app_ids: Optional[List[str]] = None
+    raw_app_ids = getattr(args, "app_ids", None) or getattr(args, "app_id", None)
+    if raw_app_ids:
+        requested_app_ids = [s.strip() for s in raw_app_ids.split(",") if s.strip()] or None
+
     plan = build_plan(
         catalog_path,
         max_parallel=args.autopilot_max_parallel,
         selection=selection,
+        requested_app_ids=requested_app_ids,
     )
 
     # 計画サマリ出力

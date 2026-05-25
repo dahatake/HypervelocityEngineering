@@ -99,6 +99,47 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "sources_qa": True,
             "sources_original_docs": True,
             "sources_workiq": False,
+            # C4 (Work IQ) 既定値。`_SECTION_FIELDS` に登録済みだが
+            # `defaults()` に未登録だったため、_coerce(default=None) フォールバックで
+            # 文字列 "false" が QCheckBox に渡り bool("false")=True で反転していた。
+            # 明示既定値で型情報を確保する（_C4WorkIQ の初期値と整合）。
+            # セクション C4 / C5 / C10 以下は UI グルーピング名で、
+            # 保存先は全て [options] セクションとなる（collect_from_widgets の仕様）。
+            "workiq": False,
+            "workiq_draft": False,
+            "workiq_akm_review": "",  # tri-state: "" = 未指定 / "on" / "off"
+            "workiq_akm_ingest": "",
+            "workiq_dxx": "",
+            "workiq_draft_output_dir": "",
+            "workiq_prompt_qa": "",
+            "workiq_prompt_km": "",
+            "workiq_prompt_review": "",
+            # C5 (Issue/PR) 追加既定値。_SECTION_FIELDS 登録済みだが defaults 未登録だった。
+            "enable_auto_merge": False,
+            # C10 (App ID) 既定値。
+            "app_id": "",
+            "app_ids": "",
+            "usecase_id": "",
+            # C11 (AKM) 既定値（sources_* 以外）。
+            "target_files": "",
+            "force_refresh": "",  # tri-state
+            "custom_source_dir": "",
+            # C12 (AQOD) 既定値（depth は既存）。
+            "target_scope": "",
+            "focus_areas": "",
+            # C13 (ADOC) 既定値（exclude_patterns/doc_purpose/max_file_lines は既存）。
+            "target_dirs": "",
+            # C14 (ARD) 既定値。
+            "company_name": "",
+            "target_business": "",
+            "survey_base_date": "",
+            "survey_period_years": 0,
+            "target_region": "",
+            "analysis_purpose": "",
+            "target_recommendation_id": "",
+            "attached_docs": "",
+            # AZURE セクション既定値。
+            "resource_group": "",
             # ADOC 既定
             "doc_purpose": "all",
             "max_file_lines": 0,

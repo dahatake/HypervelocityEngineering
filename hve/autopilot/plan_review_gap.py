@@ -33,7 +33,7 @@ from .plan_review_model import (
 # canonical order (hve/gui/page_options.py:_WORKFLOW_CANONICAL_ORDER と同期必須)
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "aag", "aagd", "akm", "aqod", "adoc",
+    "akm", "aqod", "adoc",
 ]
 
 # ARD: 実 Step ID → グループ ID 逆マップ。

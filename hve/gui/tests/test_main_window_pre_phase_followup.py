@@ -106,7 +106,7 @@ def test_starts_autopilot_controller_on_success(qapp, tmp_path: Path) -> None:
     """catalog 準備 OK + plan 非空 + Yes → AutopilotController が起動する。
 
     NOTE: 成功パスでは `_activate_autopilot_workbench()` / `_setup_autopilot_log_routing()`
-    / `_update_title()` 等の UI 更新が走り、`MainWindow` のフルセット（AuthMonitor /
+    / `_update_title()` 等の UI 更新が走り、`MainWindow` のフルセット（
     CopilotChatPanel / PTY 依存）と組み合わせて Qt イベントループ起因のハングを引き起こす
     観測あり（既知の問題、本テスト固有）。Controller 起動の確認に絞るため UI 更新側は
     patch でスタブ化する。

@@ -5,7 +5,6 @@
 2. MainWindow 配置 — central layout 内で nav 行の直前に配置されている
 3. MainWindow._set_status — kind/message が StatusBanner に反映される
 4. QStatusBar 撤去 — 左側に _status_label 相当のラベルが追加されていない
-   （_auth_status_label のみが残置）
 """
 from __future__ import annotations
 
@@ -138,15 +137,11 @@ def test_main_window_set_status_reflects_on_banner(main_window):
 def test_qstatusbar_has_no_left_status_label(main_window):
     """T5-4: QStatusBar 左側から _status_label 相当の QLabel が撤去されている。
 
-    残置すべきは右側の `_auth_status_label` のみ。
+    認証ステータス表示は廃止済み。残置するのは
+    [利用できるモデルの取得] ボタンのみ。
     """
     sb = main_window.statusBar()
-    # 認証ラベルは存在
-    assert main_window._auth_status_label is not None
-    # QStatusBar 内の QLabel は _auth_status_label のみであることを期待
     labels = sb.findChildren(QLabel)
-    # 子孫として _auth_status_label が含まれる
-    assert main_window._auth_status_label in labels
     # 旧 _status_label（初期値「ワークフローを選択してください」）が QStatusBar 内に居ないこと
     for lab in labels:
         # _status_label は description_label にエイリアスされており、

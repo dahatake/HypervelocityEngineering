@@ -40,7 +40,6 @@ def _make_self(tmp_path: Path, *, prompt_text: str) -> MagicMock:
     fake._page_workflow.selected_workflow_ids.return_value = ["aas", "aad-web"]
     fake._page_workflow.autopilot_catalog_path.return_value = ""
     fake._collect_ard_attachment_paths.return_value = []
-    fake._refresh_auth_states_sync.return_value = ([], {}, {})
     # OptionsPage の additional_prompt: QPlainTextEdit を MagicMock で模擬。
     fake._page_options.additional_prompt.toPlainText.return_value = prompt_text
     return fake

@@ -28,7 +28,7 @@ python -m mdq index [--root PATH ...] [--rebuild] [--no-prune]
 - `--overlap-paragraphs N`: `heading_recursive` 戦略専用。サブチャンク間で前から N 段落を重ねる（既定 `1`、`0` で無効化）。コードフェンスは overlap されない。
 - `--breakpoint-percentile-lo F` / `--breakpoint-percentile-hi F`: `semantic_paragraph` 専用。Kamradt-modified バイナリサーチの探索区間（既定 `50` / `99`）。
 - `--min-chars N`: `semantic_paragraph` 専用。最小チャンク文字数（既定 `200`、未満なら直前へ merge）。
-- `--embed-provider NAME` / `--embed-model NAME`: `semantic_paragraph` 専用。埋め込み provider と model（既定 `fastembed` / `BAAI/bge-m3`、env override 可）。
+- `--embed-provider NAME` / `--embed-model NAME`: `semantic_paragraph` 専用。埋め込み provider と model（既定 `fastembed` / `intfloat/multilingual-e5-large`、env override 可）。
 - `--no-semantic-contextualize`: `semantic_paragraph` 専用。既定 ON のテンプレ contextualizer (`[Context] {path} > {heading_path}\n\n{body}`) を無効化。
 - `--late-chunking`: `semantic_paragraph` 専用。最終 chunk 本文を再 embed して `chunk_embedding` 列へ float32 ベクトルを保存。検索時 `--fusion-alpha` で線形加重統合。
 

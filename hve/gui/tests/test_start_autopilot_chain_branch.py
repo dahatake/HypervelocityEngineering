@@ -46,7 +46,6 @@ def _make_mock_main_window(repo_root: Path) -> MainWindow:
     # 連結経路で参照されるメソッドを mock 化（実行検証用に呼び出し記録のみ）
     mw._activate_autopilot_workbench = MagicMock()
     mw._launch_autopilot_main_workflow_queue = MagicMock()
-    mw._verify_required_auth_before_run = MagicMock(return_value=True)
     return mw
 
 
@@ -85,7 +84,7 @@ def test_start_autopilot_takes_chain_continuation_branch_when_both_nonempty(
     with patch("hve.gui.autopilot.build_plan", return_value=fake_plan), \
          patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl, \
          patch("hve.gui.settings_store.get_option", return_value=4):
-        mw._start_autopilot(skip_auth_recheck=True)
+        mw._start_autopilot()
 
     # 検証 1: pre_phases キューが ["ard", "aas"] の順で起動された
     mw._launch_autopilot_main_workflow_queue.assert_called_once()
@@ -135,7 +134,7 @@ def test_start_autopilot_takes_app_chains_branch_when_no_pre_phases(
     with patch("hve.gui.autopilot.build_plan", return_value=fake_plan), \
          patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl, \
          patch("hve.gui.settings_store.get_option", return_value=4):
-        mw._start_autopilot(skip_auth_recheck=True)
+        mw._start_autopilot()
 
     # 検証: AutopilotController が起動され、pre_phases キューは起動されない
     mock_ctrl.assert_called_once()

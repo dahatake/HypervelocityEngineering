@@ -51,7 +51,8 @@ def defaults() -> Dict[str, Any]:
         "semantic_contextualize": True,       # Q11=B 既定 ON
         "semantic_late_chunking": False,      # Q9=B opt-in
         "semantic_fusion_alpha": 0.5,         # late_chunking ON 時の検索融合係数
-        # Q6=B: bge-m3 初回 DL 確認ダイアログを「以後表示しない」フラグ
+        # Q6=B: 大容量モデル初回 DL 確認ダイアログを「以後表示しない」フラグ
+        # (key 名は QSettings 下位互換性のため bge_m3 のまま保持)
         "semantic_bge_m3_warning_dismissed": False,
         # --- pageindex 戦略専用 ---------------------------------------
         # CLI フラグと 1:1 対応。0 / "" 値は mdq.strategies の

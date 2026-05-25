@@ -18,15 +18,25 @@ from typing import Dict, List, Optional
 class AppEntry:
     app_id: str
     name: str
+    architecture: str = ""
 
     @property
     def display_label(self) -> str:
         return f"{self.app_id}: {self.name}" if self.name else self.app_id
 
+    def display_label_with_kind(self, kind: str = "") -> str:
+        """アーキタグ付きラベル。``kind`` が空文字なら従来の表示を返す。"""
+        base = self.display_label
+        return f"{base} [{kind}]" if kind else base
+
 
 _CACHE: Dict[Path, List[AppEntry]] = {}
 
-_APP_ROW_RE = re.compile(r"^\|\s*(APP-\d+[A-Za-z0-9_-]*)\s*\|\s*([^|]+?)\s*\|")
+# 3 列目（推薦アーキテクチャ）まで任意で抽出する。3 列目がない catalog でも
+# 後方互換のため app_id / name のみで AppEntry を生成可能。
+_APP_ROW_RE = re.compile(
+    r"^\|\s*(APP-\d+[A-Za-z0-9_-]*)\s*\|\s*([^|]+?)\s*\|(?:\s*([^|]*?)\s*\|)?"
+)
 
 
 def _catalog_path(repo_root: Path) -> Path:
@@ -62,10 +72,11 @@ def parse(text: str) -> List[AppEntry]:
             continue
         app_id = m.group(1).strip()
         name = m.group(2).strip()
+        arch = (m.group(3) or "").strip()
         if app_id in seen:
             continue
         seen.add(app_id)
-        entries.append(AppEntry(app_id=app_id, name=name))
+        entries.append(AppEntry(app_id=app_id, name=name, architecture=arch))
     return entries
 
 

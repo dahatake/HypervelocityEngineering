@@ -41,6 +41,17 @@ def _get(widget: Any) -> Any:
         return widget.text()
     if isinstance(widget, QPlainTextEdit):
         return widget.toPlainText()
+    # QLineEdit 互換 wrapper（例: _FilePickerWidget は QWidget サブクラスだが
+    # text()/setText() を duck-type で公開する）。`isinstance(QLineEdit)` では
+    # 捕捉できないため、明示的な text() 呼び出し可能性で判定する。
+    text_attr = getattr(widget, "text", None)
+    if callable(text_attr):
+        try:
+            value = text_attr()
+        except TypeError:
+            return None
+        if isinstance(value, str):
+            return value
     return None
 
 
@@ -84,6 +95,14 @@ def _set(widget: Any, value: Any) -> None:
         return
     if isinstance(widget, QPlainTextEdit):
         widget.setPlainText("" if value is None else str(value))
+        return
+    # QLineEdit 互換 wrapper（例: _FilePickerWidget）への duck-type 経路。
+    set_text_attr = getattr(widget, "setText", None)
+    if callable(set_text_attr):
+        try:
+            set_text_attr("" if value is None else str(value))
+        except TypeError:
+            pass
         return
 
 
@@ -140,6 +159,7 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "workiq_draft_output_dir": "workiq_draft_output_dir",
         "workiq_prompt_qa": "workiq_prompt_qa",
         "workiq_prompt_km": "workiq_prompt_km",
+        "workiq_prompt_review": "workiq_prompt_review",
         "workiq_per_question_timeout": "workiq_per_question_timeout",
         "workiq_request_timeout": "workiq_request_timeout",
         # tri-state: workiq_akm_review / workiq_akm_ingest
@@ -266,3 +286,11 @@ def _connect_changed(widget: Any, callback: Callable[[], None]) -> None:
         widget.editingFinished.connect(callback)
     elif isinstance(widget, QPlainTextEdit):
         widget.textChanged.connect(callback)
+    else:
+        # QLineEdit 互換 wrapper（_FilePickerWidget 等）。内部の QLineEdit
+        # (`_edit`) があれば editingFinished を購読する。Browse ボタン経由の
+        # setText でも editingFinished が emit されない仕様だが、closeEvent の
+        # 強制保存により最終的に値は保持される。
+        inner = getattr(widget, "_edit", None)
+        if isinstance(inner, QLineEdit):
+            inner.editingFinished.connect(callback)

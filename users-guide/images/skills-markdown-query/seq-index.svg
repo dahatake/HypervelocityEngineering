@@ -94,7 +94,7 @@
   <!-- 8. semantic optional -->
   <rect x="595" y="345" width="350" height="55" rx="4" class="note-box"/>
   <text x="605" y="362" class="note" font-weight="700" fill="#6B2C91">opt: strategy == "semantic_paragraph"</text>
-  <text x="605" y="378" class="sm">embeddings.embed_texts(BAAI/bge-m3) → Kamradt 二分探索で境界決定</text>
+  <text x="605" y="378" class="sm">embeddings.embed_texts(intfloat/multilingual-e5-large) → Kamradt 二分探索で境界決定</text>
   <text x="605" y="392" class="sm">contextualize() で `[Context] path > heading_path\n\nbody` を前置</text>
 
   <!-- 9. strategies → indexer -->

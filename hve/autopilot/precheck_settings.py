@@ -1,17 +1,18 @@
-"""hve.autopilot.precheck_settings — 認証・workflow-specific 設定の必須判定。
+"""hve.autopilot.precheck_settings — workflow-specific 設定の必須判定。
 
-Qt 非依存。GUI 側で構築済みの providers リスト・settings dict・auth_states を
-受け取り、必須プロバイダのうち未認証のものを ``PrecheckItem`` 列として返す。
+Qt 非依存。
+
+旧版で扱っていた以下は撤去:
+  - ``collect_missing_auth``: Plugin/MCP Server 認証は GitHub Copilot CLI 側で
+    完結するため HVE 側の AUTH カテゴリ機構ごと削除。
 
 Workflow-specific 設定（例: ARD の target_business が CLI 引数として必須等）の
-拡張点もここに集約する。
+拡張点はここに集約する。
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping
-
-from .precheck_model import PrecheckCategory, PrecheckItem
+from typing import Dict, List
 
 
 # Workflow ごとに「Autopilot 実行で必須」な workflow-specific 設定キー。
@@ -19,54 +20,4 @@ from .precheck_model import PrecheckCategory, PrecheckItem
 _REQUIRED_SETTING_KEYS: Dict[str, List[str]] = {}
 
 
-def collect_missing_auth(
-    providers: Iterable[Any],
-    settings: Mapping[str, Any],
-    auth_states: Mapping[str, Any],
-    *,
-    authenticated_marker: Any,
-) -> List[PrecheckItem]:
-    """必須認証プロバイダのうち未認証のものを返す。
-
-    Args:
-        providers: ``provider.id``/``display_name``/``is_required`` を持つプロバイダ列。
-        settings: 現在の設定 dict。``provider.is_required(settings)`` の引数。
-        auth_states: ``provider.id`` → ``AuthState`` のマッピング。
-        authenticated_marker: ``AuthState.AUTHENTICATED`` と等価な比較値。
-            （Qt 非依存にするため呼び出し側から注入）
-
-    Returns:
-        未認証 ``PrecheckItem`` リスト。
-    """
-    from hve.gui.auth_providers import provider_is_required  # local import (Qt なし)
-
-    items: List[PrecheckItem] = []
-    for p in providers:
-        try:
-            if not provider_is_required(p, dict(settings)):
-                continue
-        except Exception:
-            continue
-        state = auth_states.get(getattr(p, "id", None))
-        if state is authenticated_marker:
-            continue
-        items.append(
-            PrecheckItem(
-                category=PrecheckCategory.AUTH,
-                workflow_id="",
-                step_id=None,
-                field_name=getattr(p, "id", "") or "",
-                description=(
-                    f"必須プロバイダ '{getattr(p, 'display_name', '')}' の認証が完了していません。"
-                ),
-                remediation_hint=(
-                    "メイン画面の [PluginやMCP Serverへの認証] から認証を完了してください。"
-                ),
-            )
-        )
-    return items
-
-
-__all__ = [
-    "collect_missing_auth",
-]
+__all__: list = []

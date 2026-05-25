@@ -394,3 +394,114 @@ def test_execution_order_dedup_across_apps(tmp_path: Path) -> None:
     order = plan.execution_order()
     assert order == ["ard", "aas", "aad-web", "asdw-web"]
     assert len(order) == len(set(order))
+
+
+# ============================================================
+# requested_app_ids フィルタ（ユーザー指定 APP-ID 絞り込み）
+# ============================================================
+
+
+def _selection_all_downstream() -> AutopilotSelection:
+    return AutopilotSelection(
+        run_ard=False,
+        run_aas=False,
+        run_aad_web=True,
+        run_asdw_web=True,
+        run_abd=True,
+        run_abdv=True,
+    )
+
+
+def test_build_plan_requested_app_ids_filters_chains(tmp_path: Path) -> None:
+    """requested_app_ids 指定時、catalog 内の指定 ID のみ chain 生成される。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(
+        p,
+        [
+            ("APP-01", "Webフロントエンド + クラウド"),
+            ("APP-02", "Webフロントエンド + クラウド"),
+            ("APP-03", "データデータフロー処理"),
+        ],
+    )
+    plan = build_plan(
+        p,
+        selection=_selection_all_downstream(),
+        requested_app_ids=["APP-01"],
+    )
+
+    assert [c.app_id for c in plan.app_chains] == ["APP-01"]
+    # 指定外の APP-02 / APP-03 は skipped にも残さない（明示除外）
+    assert all(s.app_id not in {"APP-02", "APP-03"} for s in plan.skipped)
+
+
+def test_build_plan_requested_app_ids_unknown_marked_skipped(tmp_path: Path) -> None:
+    """catalog に存在しない指定 ID は SkippedApp(reason=unknown app_id...) で記録。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(p, [("APP-01", "Webフロントエンド + クラウド")])
+    plan = build_plan(
+        p,
+        selection=_selection_all_downstream(),
+        requested_app_ids=["APP-01", "APP-XX"],
+    )
+
+    assert [c.app_id for c in plan.app_chains] == ["APP-01"]
+    unknown = [s for s in plan.skipped if s.app_id == "APP-XX"]
+    assert len(unknown) == 1
+    assert "unknown app_id" in unknown[0].reason
+
+
+def test_build_plan_requested_app_ids_none_keeps_legacy_behavior(tmp_path: Path) -> None:
+    """requested_app_ids=None は既存挙動を維持（catalog 全件対象、回帰防止）。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(
+        p,
+        [
+            ("APP-01", "Webフロントエンド + クラウド"),
+            ("APP-02", "Webフロントエンド + クラウド"),
+        ],
+    )
+    plan = build_plan(p, selection=_selection_all_downstream(), requested_app_ids=None)
+
+    assert sorted(c.app_id for c in plan.app_chains) == ["APP-01", "APP-02"]
+
+
+def test_build_plan_requested_app_ids_architecture_mismatch(tmp_path: Path) -> None:
+    """指定 ID が workflow 選択と architecture 不一致のときは既存 reason で skipped。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(
+        p,
+        [
+            ("APP-01", "Webフロントエンド + クラウド"),
+            ("APP-02", "データデータフロー処理"),
+        ],
+    )
+    # web 系のみ選択 + batch APP-02 を要求 → APP-02 は filtered として skipped
+    selection = AutopilotSelection(
+        run_ard=False,
+        run_aas=False,
+        run_aad_web=True,
+        run_asdw_web=True,
+        run_abd=False,
+        run_abdv=False,
+    )
+    plan = build_plan(p, selection=selection, requested_app_ids=["APP-01", "APP-02"])
+
+    assert [c.app_id for c in plan.app_chains] == ["APP-01"]
+    mismatched = [s for s in plan.skipped if s.app_id == "APP-02"]
+    assert len(mismatched) == 1
+    assert "filtered by selection" in mismatched[0].reason or "unmapped" in mismatched[0].reason
+
+
+def test_build_plan_requested_app_ids_case_insensitive(tmp_path: Path) -> None:
+    """APP-ID 比較は大文字小文字を正規化する（catalog 側 'APP-01' に 'app-01' で一致）。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(p, [("APP-01", "Webフロントエンド + クラウド")])
+    plan = build_plan(
+        p,
+        selection=_selection_all_downstream(),
+        requested_app_ids=["app-01"],  # 小文字
+    )
+
+    assert [c.app_id for c in plan.app_chains] == ["APP-01"]
+    # unknown としても扱われないことを確認
+    assert not any(s.reason.startswith("unknown") for s in plan.skipped)

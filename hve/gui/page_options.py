@@ -1045,16 +1045,8 @@ class _C4WorkIQ(QWidget):
             input_widget=self.workiq_draft_output_dir,
         ))
 
-        self.workiq_tenant_id = QLineEdit()
-        self.workiq_tenant_id.setPlaceholderText(self.tr("例: common, contoso.onmicrosoft.com, <UUID>"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ テナント ID"),
-            description=(
-                self.tr("Work IQ の Entra テナント ID（省略時: common）。"
-                "複数テナント選択可能なアカウントで特定テナントを固定したい場合に使用。")
-            ),
-            input_widget=self.workiq_tenant_id,
-        ))
+        # workiq_tenant_id の GUI 入力経路は廃止 (Wave 3 / Q9=b、_OBSOLETE_KEYS と整合)。
+        # CLI 引数 --workiq-tenant-id / 環境変数 WORKIQ_TENANT_ID 経由は引き続き有効。
 
         self.workiq_prompt_qa = QPlainTextEdit()
         self.workiq_prompt_qa.setFixedHeight(60)
@@ -1123,7 +1115,7 @@ class _C4WorkIQ(QWidget):
         args.workiq_dxx = self.workiq_dxx.text().strip() or None
         args.workiq_draft = self.workiq_draft.isChecked()
         args.workiq_draft_output_dir = self.workiq_draft_output_dir.text().strip() or None
-        args.workiq_tenant_id = self.workiq_tenant_id.text().strip() or None
+        args.workiq_tenant_id = None  # GUI 経路は廃止。CLI/env 経路は config.py / orchestrate_args.py で上書きされる。
         args.workiq_prompt_qa = self.workiq_prompt_qa.toPlainText().strip() or None
         args.workiq_prompt_km = self.workiq_prompt_km.toPlainText().strip() or None
         args.workiq_prompt_review = self.workiq_prompt_review.toPlainText().strip() or None
@@ -1606,6 +1598,8 @@ class _C10AppId(QWidget):
             description=(
                 self.tr("対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。"
                 "AAD-WEB/ASDW-WEB は Web フロントエンド + クラウド、ADFD/ADFDV はデータデータフロー処理の APP-ID のみ採用します。"
+                "downstream workflow（AAD-WEB/ASDW-WEB/ADFD/ADFDV）選択時はチェックリスト表示され、"
+                "選択した APP-ID のみが Autopilot ON/OFF いずれの経路でも実行対象となります。"
                 "未指定時は docs/catalog/app-arch-catalog.md から自動選択します。")
             ),
             input_widget=self.app_ids,
@@ -1978,8 +1972,6 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c13", "除外パターン"),
         ("c13", "ドキュメントの主目的"),
     ],
-    "aag": [],
-    "aagd": [],
 }
 
 # 全ワークフロー共通で常に表示するフィールド（最下段）。
@@ -2011,7 +2003,7 @@ _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
 # `_refresh_specific_categories` が選択 Workflow 群を本リスト順で並べてグループ枠を生成する。
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "aag", "aagd", "akm", "aqod", "adoc",
+    "akm", "aqod", "adoc",
 ]
 
 # Step 1 右ペインのワークフロー単位グループ枠（QGroupBox）共通スタイル。
@@ -2719,28 +2711,43 @@ class OptionsPage(QWidget):
         layout.insertWidget(0, c3)
 
     def _refresh_app_id_checklist(self, selected_workflows: List[str]) -> None:
-        """`aad-web` 選択時に APP-ID チェックリスト Widget を注入する。
+        """downstream workflow 選択時に APP-ID チェックリスト Widget を注入する。
 
         - 元の `app_ids` QLineEdit を含む _LabeledField の入力部分の下に追加する。
         - チェックリストの変更を `app_ids` QLineEdit テキストへ同期する。
-        - aad-web 非選択時はチェックリストを隠す。
+        - downstream workflow（aad-web/asdw-web/adfd/adfdv）が 1 つも選択されて
+          いないときはチェックリストを隠す。
+        - 選択されている workflow に応じて表示候補を architecture kind で絞り込む
+          （aad-web/asdw-web → web-cloud、adfd/adfdv → batch）。
         - カタログが空（候補なし）の場合は元の QLineEdit を残し手入力可能とする。
         """
-        is_aad_web = "aad-web" in selected_workflows
+        # workflow → architecture kind マッピング
+        wf_to_kind = {
+            "aad-web": "web-cloud",
+            "asdw-web": "web-cloud",
+            "adfd": "batch",
+            "adfdv": "batch",
+        }
+        kinds = {wf_to_kind[w] for w in selected_workflows if w in wf_to_kind}
+        show_checklist = bool(kinds)
 
-        # 既に注入済みなら可視性のみ切り替え + LineEdit からチェック状態を再同期
+        # 既に注入済みなら kind 切り替え + 可視性のみ更新
         if getattr(self, "_app_id_checklist", None) is not None:
             cl = self._app_id_checklist
+            try:
+                cl.set_architecture_kinds(kinds if kinds else None)
+            except AttributeError:
+                # 後方互換: 古い AppIdChecklist では set_architecture_kinds 未実装
+                pass
             has_entries = bool(getattr(cl, "_entries", []))
-            cl.setVisible(is_aad_web and has_entries)
-            # カタログが空のときは LineEdit を残し、ある場合は隠す
-            self.c10.app_ids.setVisible(not is_aad_web or not has_entries)
-            # LineEdit テキストからチェックリストへ再同期（aad-web 表示時のみ）
-            if is_aad_web and has_entries:
+            cl.setVisible(show_checklist and has_entries)
+            # カタログが空 or downstream 未選択のときは LineEdit を残す
+            self.c10.app_ids.setVisible(not show_checklist or not has_entries)
+            if show_checklist and has_entries:
                 cl.set_selected_csv(self.c10.app_ids.text().strip())
             return
 
-        if not is_aad_web:
+        if not show_checklist:
             return
 
         try:
@@ -2748,7 +2755,11 @@ class OptionsPage(QWidget):
         except ImportError:
             return
 
-        self._app_id_checklist = AppIdChecklist(self._repo_root, parent=self.c10)
+        self._app_id_checklist = AppIdChecklist(
+            self._repo_root,
+            architecture_kinds=kinds,
+            parent=self.c10,
+        )
 
         # `app_ids` の _LabeledField を取得し、その入力ウィジェットの下にチェックリスト追加。
         # `_LabeledField` は workflow group box へ reparent 済みの可能性があるため、

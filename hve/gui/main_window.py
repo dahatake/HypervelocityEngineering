@@ -59,10 +59,6 @@ from .page_workbench import WorkbenchPage
 from .page_workflow_select import WorkflowSelectPage
 from .session_menu import build_session_menu
 from .settings_window import SettingsWindow
-from .auth_monitor import AuthMonitor
-from .auth_providers import AuthState
-from .auth_providers.registry import discover_providers
-from .plugin_auth_dialog import PluginAuthDialog
 from hve.workflow_registry import (
     WorkflowDependency,
     expand_group_step_ids,
@@ -294,9 +290,6 @@ class MainWindow(QMainWindow):
         # Step 1 統合 precheck のプランレビュー反復回数。
         # 旧名: _autopilot_plan_review_iterations。両モード共通カウンタへ統合した際にリネーム。
         self._step1_plan_review_iterations: int = 0
-        # T12 (Wave 4 / A1) — 起動時 GitHub 認証強制モーダル進行中フラグ。
-        # 現状参照は無いが、デバッグ・将来の closeEvent ガード等で利用可。
-        self._startup_auth_blocking: bool = False
 
         # Issue-gui-session-workdir-isolation T5a/T9:
         # MainWindow 1 インスタンス = 1 GUI セッションとして、独立した
@@ -364,10 +357,6 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, lambda: setattr(self, "_width_persist_enabled", True))
 
         self._update_title()
-
-        # T12 (Wave 4 / A1): アプリ起動時に GitHub Copilot 認証を強制。
-        # 未認証の場合は他 UI 操作不可のモーダルを表示し、認証完了まで待機。
-        QTimer.singleShot(0, self._enforce_startup_github_auth)
 
     # ----------------------------------------------------------
     # UI セットアップ
@@ -439,27 +428,12 @@ class MainWindow(QMainWindow):
         # --- アプリ識別タイトルは画面内からは削除（要件: 「Windowのタイトルに: HVE Workbench。この文字は画面内からは削除」）。
         # 以前の self._title_label は本リファクタリングで取り除き、ウィンドウタイトル (setWindowTitle) で表示される。
 
-        # --- Plugin / MCP Server 認証ボタン (Q1=A 同列右側) ---
-        self._btn_plugin_auth = QPushButton(self.tr("🔐 PluginやMCP Serverへの認証"))
-        self._btn_plugin_auth.setToolTip(
-            self.tr("GitHub / Work IQ / MCP Server / 外部 CLI の認証をまとめて実行します")
-        )
-        self._btn_plugin_auth.clicked.connect(self._on_plugin_auth_clicked)
-        # B-1: 長文ボタンが最小幅を支配するのを防ぐため minimumWidth=0。
-        # 横方向 Ignored は addStretch() と組み合わさるとボタン幅が 0 に潰れて
-        # 表示されなくなるため、Preferred を維持する。
-        self._btn_plugin_auth.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
-        )
-        self._btn_plugin_auth.setMinimumWidth(0)
-        # Q8=B: 初期状態は強調 (未認証想定)。後続 AuthMonitor で更新。
-        self._apply_plugin_auth_button_style(highlighted=True)
+        # Plugin / MCP Server 認証ボタンは廃止（認証は GitHub Copilot CLI 側で完結）。
 
         top_row = QHBoxLayout()
         self._top_file_toggles = TopFileTogglesBar()
         top_row.addWidget(self._top_file_toggles)
         top_row.addStretch()
-        top_row.addWidget(self._btn_plugin_auth)
         top_row.addWidget(self._btn_session)
         top_row.addWidget(self._btn_settings)
         top_row.addWidget(self._btn_copilot)
@@ -784,22 +758,15 @@ class MainWindow(QMainWindow):
         sb = QStatusBar()
         self.setStatusBar(sb)
         # T3 (gui-status-banner / Q1=B): 左側の _status_label は撤去。
-        # 状況メッセージは central の _status_banner へ一本化し、
-        # QStatusBar には認証ステータス（右側の永続ウィジェット）のみ残置する。
-        # --- 認証ステータス (右側) ---
-        self._auth_status_label = QLabel(self.tr("🔄 認証状態確認中..."))
-        self._auth_status_label.setMinimumWidth(0)
-        self._auth_status_label.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
-        )
-        sb.addPermanentWidget(self._auth_status_label)
-        # Q4=A: 「利用できるモデルの取得」ボタンは常時可視・初期 disabled。
-        # GitHub 認証成功時のみ enabled になり、押下で models_api.fetch_models() のみ実行する。
+        # 状況メッセージは central の _status_banner へ一本化する。
+        # 認証ステータス表示は廃止（認証は GitHub Copilot CLI 側で完結）。
+        # 「利用できるモデルの取得」ボタンは常時有効。押下で
+        # models_api.fetch_model_entries() を実行しキャッシュへ保存する。
         self._btn_login = QPushButton(self.tr("利用できるモデルの取得"))
         self._btn_login.setVisible(True)
-        self._btn_login.setEnabled(False)
+        self._btn_login.setEnabled(True)
         self._btn_login.setToolTip(
-            self.tr("GitHub 認証が完了するまで無効です。\n[PluginやMCP Serverへの認証] から認証してください。")
+            self.tr("利用できるモデル一覧を取得しキャッシュへ保存します。")
         )
         self._btn_login.clicked.connect(self._on_login_clicked)
         # 横方向 Ignored は addStretch() と組み合わさるとボタン幅が 0 に潰れて
@@ -810,229 +777,12 @@ class MainWindow(QMainWindow):
         self._btn_login.setMinimumWidth(0)
         sb.addPermanentWidget(self._btn_login)
 
-        # --- AuthMonitor 起動 (Q6=C 多重化) ---
-        self._auth_monitor = AuthMonitor(self)
-        self._auth_monitor.provider_state_changed.connect(self._on_auth_provider_state_changed)
-        self._auth_monitor.snapshot_changed.connect(self._on_auth_snapshot_changed)
-        self._auth_monitor.any_expired.connect(self._on_auth_any_expired)
-        self._refresh_auth_providers()
-        self._auth_monitor.start()
-        self._auth_monitor.force_refresh()  # 起動直後 1 回実行
-
     # ----------------------------------------------------------
-    # T12 (Wave 4 / A1): 起動時 GitHub Copilot 認証強制
+    # モデル一覧の取得
     # ----------------------------------------------------------
-    def _enforce_startup_github_auth(self) -> None:
-        """起動直後に GitHub Copilot 認証を確認し、未認証ならモーダルで強制する。
-
-        - 同期的に最新状態を取得 (force_refresh + worker.wait + processEvents)。
-        - 認証済みなら何もしない。
-        - 未認証なら central widget を `setEnabled(False)` にし、modal QMessageBox
-          で「認証する / 終了」を提示。「認証する」を選んだ場合は
-          ``PluginAuthDialog`` を開き、認証完了 (= GitHub が AUTHENTICATED) になるまで
-          ループ。「終了」を選んだ場合はアプリを閉じる。
-
-        実装ノート (敵対的レビュー対応):
-            - ``worker.wait()`` はメインスレッドをブロックするため、worker thread から
-              emit された ``done`` シグナルの queued slot は実行されない。``processEvents()``
-              を明示的に呼んで slot を消化してから state を再評価する。
-            - 起動時モーダルでは ``_startup_auth_blocking`` フラグを立て、closeEvent で
-              認証完了まで × ボタン経由の close を ignore する。
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-
-        def _sync_refresh(wait_ms: int = 30_000) -> None:
-            """force_refresh → worker.wait → processEvents で state を確実に最新化。"""
-            self._auth_monitor.force_refresh()
-            worker = getattr(self._auth_monitor, "_worker", None)
-            if worker is not None:
-                worker.wait(wait_ms)
-            # Critical: queued slot 消化のため明示的に event を処理
-            QApplication.processEvents()
-
-        # 初回 state が UNKNOWN なら 1 度同期更新
-        if self._auth_monitor.latest_state("github") is AuthState.UNKNOWN:
-            logger.info("startup auth: initial state UNKNOWN, syncing")
-            _sync_refresh()
-
-        if self._auth_monitor.latest_state("github") is AuthState.AUTHENTICATED:
-            logger.info("startup auth: GitHub already authenticated")
-            return
-
-        logger.warning("startup auth: GitHub NOT authenticated, entering modal loop")
-        self._startup_auth_blocking = True
-        central = self.centralWidget()
-        if central is not None:
-            central.setEnabled(False)
-
-        user_quit = False
-        try:
-            while self._auth_monitor.latest_state("github") is not AuthState.AUTHENTICATED:
-                box = QMessageBox(self)
-                box.setIcon(QMessageBox.Icon.Warning)
-                box.setWindowTitle(self.tr("GitHub Copilot 認証が必要"))
-                box.setText(
-                    self.tr(
-                        "本アプリケーションは GitHub Copilot 認証必須です。\n"
-                        "認証が完了するまで操作できません。"
-                    )
-                )
-                btn_auth = box.addButton(
-                    self.tr("認証する"), QMessageBox.ButtonRole.AcceptRole
-                )
-                btn_quit = box.addButton(
-                    self.tr("終了"), QMessageBox.ButtonRole.RejectRole
-                )
-                box.setDefaultButton(btn_auth)
-                box.exec()
-                if box.clickedButton() is btn_quit:
-                    logger.warning("startup auth: user chose Quit")
-                    user_quit = True
-                    break
-                logger.info("startup auth: opening PluginAuthDialog")
-                self._on_plugin_auth_clicked()
-                # 認証ダイアログ閉鎖後に同期で最新状態を取得
-                _sync_refresh(wait_ms=60_000)
-        finally:
-            self._startup_auth_blocking = False
-            if not user_quit and central is not None:
-                central.setEnabled(True)
-
-        if user_quit:
-            # close は finally の後で実行 (setEnabled の余計な復元を避ける)
-            QTimer.singleShot(0, self.close)
-
-    # ----------------------------------------------------------
-    # 認証状態 (Plugin / MCP Server)
-    # ----------------------------------------------------------
-
-    def _apply_plugin_auth_button_style(self, *, highlighted: bool) -> None:
-        """Q8=B: 認証ボタンを状態に応じて強調 / 通常表示。"""
-        if highlighted:
-            self._btn_plugin_auth.setStyleSheet(
-                "QPushButton { background-color: #ef6c00; color: white; "
-                "padding: 6px 12px; font-weight: bold; border-radius: 4px; }"
-                "QPushButton:hover { background-color: #f57c00; }"
-            )
-        else:
-            self._btn_plugin_auth.setStyleSheet(
-                "QPushButton { color: #555; padding: 6px 12px; }"
-            )
-
-    def _refresh_auth_providers(self) -> None:
-        """Copilot CLI からプロバイダを再列挙して AuthMonitor へ反映。
-
-        ``discover_providers()`` は内部で ``copilot mcp list`` / ``copilot plugin list``
-        を呼び出すため、GUI 設定値の依存は無い。``settings`` は後方互換用に渡す。
-
-        T10 (Wave 3): settings に ``mcp_enabled`` セクションを併合し、AuthMonitor
-        へ供給する (provider.is_required(settings) で動的判定するため)。
-        """
-        try:
-            from . import settings_store
-            settings = settings_store.load()
-        except Exception:
-            settings = {}
-        # mcp_enabled セクションを併合 (load() でも取得されるが明示的に上書き)
-        try:
-            from . import settings_store as _ss
-            mcp_enabled = _ss.load_mcp_enabled()
-            if mcp_enabled:
-                settings = dict(settings)
-                settings["mcp_enabled"] = mcp_enabled
-        except Exception:
-            pass
-        providers = discover_providers(settings)
-        self._auth_monitor.set_providers(providers, settings)
-
-    @Slot(str, str)
-    def _on_auth_provider_state_changed(self, provider_id: str, state_value: str) -> None:
-        # T11: GitHub 認証成功時のみ [利用できるモデルの取得] を有効化
-        if provider_id == "github":
-            ok = state_value == AuthState.AUTHENTICATED.value
-            self._btn_login.setEnabled(ok)
-            if ok:
-                self._btn_login.setToolTip(self.tr("利用できるモデル一覧を取得しキャッシュへ保存します。"))
-            else:
-                self._btn_login.setToolTip(
-                    self.tr("GitHub 認証が完了するまで無効です。\n[PluginやMCP Serverへの認証] から認証してください。")
-                )
-
-    @Slot(dict)
-    def _on_auth_snapshot_changed(self, snapshot: dict) -> None:
-        # T16: ステータスバー右側に複数プロバイダのサマリを表示
-        if not snapshot:
-            self._auth_status_label.setText(self.tr("認証対象なし"))
-            return
-        icon_map = {
-            AuthState.AUTHENTICATED.value: "✅",
-            AuthState.NOT_AUTHENTICATED.value: "❌",
-            AuthState.EXPIRED.value: "⚠️",
-            AuthState.UNKNOWN.value: "❔",
-            AuthState.CHECKING.value: "🔄",
-            AuthState.NOT_APPLICABLE.value: "—",
-        }
-        parts = []
-        all_ok = True
-        for pid, sv in snapshot.items():
-            short = pid if not pid.startswith("mcp:") else pid[4:]
-            parts.append(f"{icon_map.get(sv, '?')}{short}")
-            if sv != AuthState.AUTHENTICATED.value:
-                all_ok = False
-        self._auth_status_label.setText(" ".join(parts))
-        self._apply_plugin_auth_button_style(highlighted=not all_ok)
-
-    @Slot()
-    def _on_auth_any_expired(self) -> None:
-        # T15: 実行中に失効を検知したら自動停止して再認証を促す
-        if self._page_workbench.is_running():
-            try:
-                self._page_workbench.stop_orchestrator()
-            except Exception:
-                pass
-            QMessageBox.warning(
-                self,
-                self.tr("認証失効"),
-                self.tr(
-                    "実行中に Plugin / MCP Server の認証が失効しました。\n"
-                    "ワークフローを停止しました。再認証してください。"
-                ),
-            )
-        self._on_plugin_auth_clicked()
-
-    def _on_plugin_auth_clicked(self) -> None:
-        """Q1=A: 「PluginやMCP Serverへの認証」ボタン押下時のメイン処理。"""
-        # 設定更新を反映してプロバイダを再列挙
-        self._refresh_auth_providers()
-        providers = self._auth_monitor.providers()
-        if not providers:
-            QMessageBox.information(
-                self,
-                self.tr("認証対象なし"),
-                self.tr("認証対象の Plugin / MCP Server が設定されていません。"),
-            )
-            return
-        dlg = PluginAuthDialog(providers, parent=self)
-        dlg.completed.connect(self._auth_monitor.force_refresh)
-        # T07: 個別プロバイダ認証完了の都度、当該プロバイダを invalidate して即時再チェック
-        dlg.provider_authenticated.connect(
-            lambda pid, _ok: self._auth_monitor.refresh_provider(pid)
-        )
-        dlg.exec()
-        # ダイアログ閉じた後も明示的に状態を更新
-        self._auth_monitor.force_refresh()
 
     def _on_login_clicked(self) -> None:
-        """T11/T12: 「利用できるモデルの取得」押下時はモデル取得のみを行う。"""
-        # GitHub 認証は新ボタン経由で完了している前提 (T11 で disabled 制御)
-        if self._auth_monitor.latest_state("github") is not AuthState.AUTHENTICATED:
-            QMessageBox.warning(
-                self,
-                self.tr("未認証"),
-                self.tr("GitHub 認証が完了していません。[PluginやMCP Serverへの認証] から認証してください。"),
-            )
-            return
+        """「利用できるモデルの取得」押下時はモデル取得のみを行う。"""
         self._btn_login.setEnabled(False)
         self._set_status(StatusKind.RUNNING, self.tr("モデル一覧を取得中..."))
         from PySide6.QtCore import QThread, Signal
@@ -1242,7 +992,7 @@ class MainWindow(QMainWindow):
                 pane.set_repo_root(self._repo_root)
 
             # --- Step 1 統合 precheck（両モード共通） ---
-            # FILE/WIZARD_INPUT/SETTING/AUTH の 4 カテゴリ統合検査 + プランレビュー +
+            # FILE/WIZARD_INPUT の統合検査 + プランレビュー +
             # ギャップ適用ループ（最大 3 回）を Autopilot ON/OFF 共通で実行する。
             # Autopilot 固有の暗黙依存 / catalog 必須要求は autopilot_mode=True のときのみ
             # 追加で渡される（_run_step1_unified_precheck 内部で分岐）。
@@ -1258,12 +1008,12 @@ class MainWindow(QMainWindow):
                 if not self._confirm_autopilot_start(wf_ids):
                     return
 
-                # Step 2 「実行」へ直接遷移し Autopilot 開始 (auth は precheck で検査済み)
-                self._start_autopilot(skip_auth_recheck=True)
+                # Step 2 「実行」へ直接遷移し Autopilot 開始
+                self._start_autopilot()
                 return
 
             # Autopilot OFF: OptionsPage の入力検証 + 実行起動。
-            # precheck / auth は _run_step1_unified_precheck で実施済みのため、
+            # precheck は _run_step1_unified_precheck で実施済みのため、
             # `_on_run_clicked` 側では skip する。
             self._on_run_clicked(skip_step1_precheck=True)
 
@@ -1329,65 +1079,6 @@ class MainWindow(QMainWindow):
             if tb:
                 paths.append(str(tb))
         return paths
-
-    def _refresh_auth_states_sync(self) -> tuple:
-        """T5: 認証プロバイダ状態を同期的に最新化する共通ヘルパ。
-
-        ON/OFF 両経路で重複していた以下のシーケンスを集約:
-          - _refresh_auth_providers() で設定反映
-          - force_refresh() + worker.wait(30s) + processEvents()
-          - providers / settings / states 取得
-
-        Returns:
-            (providers: list, settings: dict, states: dict[provider_id -> AuthState])
-        """
-        self._refresh_auth_providers()
-        self._auth_monitor.force_refresh()
-        worker = getattr(self._auth_monitor, "_worker", None)
-        if worker is not None:
-            worker.wait(30_000)
-        # worker.wait() 中は queued slot が動かないため processEvents で消化。
-        QApplication.processEvents()
-        providers = list(self._auth_monitor.providers())
-        settings = self._auth_monitor.current_settings()
-        states = {p.id: self._auth_monitor.latest_state(p.id) for p in providers}
-        return providers, settings, states
-
-    def _verify_required_auth_before_run(self, *, skip_refresh: bool = False) -> bool:
-        """ワークフロー実行直前に必須プロバイダの認証を再確認する (Q6=C, T14)。
-
-        T11 (Wave 4): 必須判定は ``provider.is_required(settings)`` の動的判定に
-        変更。Step 2 の Work IQ 設定 ON / `mcp_enabled` で ON の MCP サーバなどを
-        実行時に評価し、認証が完了していなければ中断する。
-
-        Returns:
-            True なら実行続行可。False なら中断 (再認証ダイアログ起動済)。
-        """
-        from .auth_providers import provider_is_required
-        # T5: skip_refresh=True なら直近 _refresh_auth_states_sync の結果を流用。
-        if skip_refresh:
-            providers = list(self._auth_monitor.providers())
-            settings = self._auth_monitor.current_settings()
-        else:
-            providers, settings, _states = self._refresh_auth_states_sync()
-        missing = []
-        for p in providers:
-            if not provider_is_required(p, settings):
-                continue
-            if self._auth_monitor.latest_state(p.id) is not AuthState.AUTHENTICATED:
-                missing.append(p.display_name)
-        if missing:
-            QMessageBox.warning(
-                self,
-                self.tr("認証未完了"),
-                self.tr(
-                    "以下の必須プロバイダの認証が完了していません:\n  - {names}\n\n"
-                    "[PluginやMCP Serverへの認証] から認証してください。"
-                ).format(names="\n  - ".join(missing)),
-            )
-            self._on_plugin_auth_clicked()
-            return False
-        return True
 
     # ------------------------------------------------------------------
     # Step 1 ステップ選択 → 実行構成 / 進捗表示の解決ヘルパー
@@ -1520,14 +1211,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self.tr("入力エラー"), self.tr("ワークフローが選択されていません。"))
             return
 
-        # T14: ワークフロー実行ガード — Q6=C ワークフロー実行直前にも認証再確認
-        # skip_step1_precheck=True のとき: Step 1 [次へ] の統合 precheck で AUTH を
-        # 検査済みのため再確認を省略する（_on_next_clicked からの遷移）。
-        # Falseのとき: Step 2 → 実行直接呼び出し等の経路から、念のため再確認する。
-        if not skip_step1_precheck:
-            if not self._verify_required_auth_before_run():
-                return
-
         try:
             ordered_workflows = _sort_workflows_by_dependencies(workflow_ids)
         except ValueError as e:
@@ -1582,7 +1265,7 @@ class MainWindow(QMainWindow):
 
         # --- 必須入力ファイル precheck ---
         # skip_step1_precheck=True のとき: Step 1 [次へ] で `_run_step1_unified_precheck`
-        # により FILE/WIZARD_INPUT/SETTING/AUTH の 4 カテゴリ統合検査 + プランレビューが
+        # により FILE/WIZARD_INPUT の統合検査 + プランレビューが
         # 既に実施済みのため、ここでは再実行しない。
         # False のとき: Step 2 直接呼び出し等の経路から、必須入力ファイル検査のみ実行する。
         # 追加プロンプト / 添付ファイル等は ``_run_step1_unified_precheck`` 内で
@@ -1636,7 +1319,7 @@ class MainWindow(QMainWindow):
                 Autopilot 仮想ワークフロー単独で評価される。
 
         フロー:
-          1. precheck（FILE / WIZARD_INPUT / AUTH）を実行。不足ありなら
+          1. precheck（FILE / WIZARD_INPUT）を実行。不足ありなら
              ``Step1PrecheckDialog`` で通知し False。
           2. 不足なしなら ``build_step1_plan_review()`` でプランを構築し、
              ``Step1PlanReviewDialog`` で表示（ギャップ 0 件かつ設定 OFF なら skip）。
@@ -1651,7 +1334,6 @@ class MainWindow(QMainWindow):
         """
         from hve.autopilot.precheck_runner import run_step1_precheck
         from hve.autopilot.plan_review_runner import build_step1_plan_review
-        from .auth_providers import AuthState
         from .autopilot.planner import default_catalog_path
         from .autopilot.precheck_dialog import Step1PrecheckDialog
         from .autopilot.plan_review_dialog import Step1PlanReviewDialog
@@ -1659,9 +1341,6 @@ class MainWindow(QMainWindow):
         repo_root = Path(self._repo_root) if self._repo_root else Path.cwd()
         MAX_ITER = 3
         self._step1_plan_review_iterations = 0
-
-        # 認証情報の同期取得をループ外に移動（ループ毎の 30s wait を排除）。
-        providers, auth_settings, auth_states = self._refresh_auth_states_sync()
 
         while True:
             self._step1_plan_review_iterations += 1
@@ -1735,10 +1414,6 @@ class MainWindow(QMainWindow):
                 origin_chosen=origin_chosen,
                 autopilot_mode=autopilot_mode,
                 autopilot_catalog_path=catalog_rel,
-                providers=providers,
-                auth_settings=auth_settings,
-                auth_states=auth_states,
-                authenticated_marker=AuthState.AUTHENTICATED,
             )
 
             if not result.is_ok():
@@ -1808,7 +1483,6 @@ class MainWindow(QMainWindow):
                     plan_review=review,
                     additional_prompts={},
                     extra_provided={},
-                    auth_states=auth_states,
                 )
                 # ギャップ適用 → workflow_select に反映 → ループ続行（再 precheck）
                 self._page_workflow.apply_plan_review_gaps(applied_gaps)
@@ -1833,7 +1507,6 @@ class MainWindow(QMainWindow):
                     plan_review=review,
                     additional_prompts={},
                     extra_provided={},
-                    auth_states=auth_states,
                 )
                 return True
             # Cancel
@@ -1909,16 +1582,26 @@ class MainWindow(QMainWindow):
         )
         return answer == QMessageBox.StandardButton.Yes
 
-    def _start_autopilot(self, *, skip_auth_recheck: bool = False) -> None:
+    def _collect_requested_app_ids(self) -> "Optional[List[str]]":
+        """page_options の c10.app_ids QLineEdit から CSV 形式で APP-ID を収集する。
+
+        Returns:
+            ユーザーが指定した APP-ID のリスト。未指定（空文字 / 取得失敗）のときは
+            ``None`` を返し、build_plan() 側で catalog 全件対象として扱わせる。
+        """
+        try:
+            raw = self._page_options.c10.app_ids.text()
+        except AttributeError:
+            return None
+        ids = [s.strip() for s in (raw or "").split(",") if s.strip()]
+        return ids or None
+
+    def _start_autopilot(self) -> None:
         """Autopilot 計画 → Preview → 子プロセス並列起動。
 
         旧「事前ワークフロー」概念は廃止。依存ファイルのギャップ提案は Step 1 [次へ]
         押下時の `_run_step1_unified_precheck` 内で統合 precheck + プランレビュー
         として処理され、ユーザー確認後に workflow チェックへ反映される。
-
-        Args:
-            skip_auth_recheck: True のとき認証再確認をスキップする。
-                Autopilot 経路では既に `_run_step1_unified_precheck` 内で AUTH 検査済み。
         """
         from .autopilot import AutopilotSelection, build_plan
         from .autopilot.child_launcher import AutopilotController
@@ -1933,10 +1616,6 @@ class MainWindow(QMainWindow):
             self._page_workbench.reset_for_autopilot()
         except (AttributeError, RuntimeError):
             pass
-
-        if not skip_auth_recheck:
-            if not self._verify_required_auth_before_run():
-                return
 
         custom = self._page_workflow.autopilot_catalog_path()
         if custom:
@@ -1955,7 +1634,13 @@ class MainWindow(QMainWindow):
 
         selected_workflows = self._page_workflow.selected_workflow_ids()
         selection = AutopilotSelection.from_workflow_ids(selected_workflows)
-        plan = build_plan(catalog_path, max_parallel=max_parallel, selection=selection)
+        requested_app_ids = self._collect_requested_app_ids()
+        plan = build_plan(
+            catalog_path,
+            max_parallel=max_parallel,
+            selection=selection,
+            requested_app_ids=requested_app_ids,
+        )
 
         if custom and not plan.catalog_exists:
             QMessageBox.critical(
@@ -2549,7 +2234,13 @@ class MainWindow(QMainWindow):
         from .autopilot.planner import build_plan
         from .autopilot.child_launcher import AutopilotController
 
-        plan = build_plan(catalog_path, max_parallel=max_parallel, selection=selection)
+        requested_app_ids = self._collect_requested_app_ids()
+        plan = build_plan(
+            catalog_path,
+            max_parallel=max_parallel,
+            selection=selection,
+            requested_app_ids=requested_app_ids,
+        )
         if plan.is_empty():
             QMessageBox.warning(
                 self,
@@ -2963,10 +2654,6 @@ class MainWindow(QMainWindow):
         self._persist_dock_visibility()
         self._page_workbench.cleanup()
         self._copilot_dock.shutdown()
-        try:
-            self._auth_monitor.stop()
-        except Exception:
-            pass
         # --- Autopilot Controller の参照解放（detached の子プロセスは継続） ---
         ctrl = getattr(self, "_autopilot_controller", None)
         if ctrl is not None:

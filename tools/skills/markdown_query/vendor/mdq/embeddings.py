@@ -2,7 +2,7 @@
 
 Design (per work/semantic-paragraph/plan.md):
 - Q1=A: default provider = **fastembed** (ONNX, CPU-only).
-- Q2=C: default model    = **BAAI/bge-m3** (multilingual, ~2GB first DL).
+- Q2=C: default model    = **intfloat/multilingual-e5-large** (multilingual, MIT, ~2.2GB first DL).
 - Q8=A: every default is overridable via env var or CLI flag.
 
 Public API:
@@ -11,7 +11,7 @@ Public API:
 - :func:`get_provider(name=None, model=None) -> EmbeddingProvider`
   factory. ``name`` defaults to the value of ``MDQ_EMBED_PROVIDER`` env var
   or ``"fastembed"``. ``model`` defaults to ``MDQ_EMBED_MODEL`` env var
-  or ``"BAAI/bge-m3"``.
+  or ``"intfloat/multilingual-e5-large"``.
 - :func:`cosine_distances(vecs: np.ndarray) -> np.ndarray`
   helper returning the `(n-1,)` array of distances between consecutive rows.
 
@@ -64,7 +64,7 @@ class FastEmbedProvider(EmbeddingProvider):
 
     name = "fastembed"
 
-    def __init__(self, model: str = "BAAI/bge-m3"):
+    def __init__(self, model: str = "intfloat/multilingual-e5-large"):
         try:
             from fastembed import TextEmbedding  # type: ignore
             import numpy as np  # noqa: F401  # imported for type contract
@@ -150,7 +150,7 @@ def get_provider(name: str | None = None, model: str | None = None) -> Embedding
     Resolution order:
       1. Explicit ``name``/``model`` arguments.
       2. Environment variables ``MDQ_EMBED_PROVIDER`` / ``MDQ_EMBED_MODEL``.
-      3. Defaults: provider=``fastembed``, model=``BAAI/bge-m3``.
+      3. Defaults: provider=``fastembed``, model=``intfloat/multilingual-e5-large``.
     """
     n = (name or os.environ.get("MDQ_EMBED_PROVIDER") or "fastembed").lower()
     m = model or os.environ.get("MDQ_EMBED_MODEL") or None

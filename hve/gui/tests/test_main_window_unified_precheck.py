@@ -46,8 +46,6 @@ def _make_self(tmp_path: Path) -> MagicMock:
     fake._page_workflow.selected_workflow_ids.return_value = ["aas"]
     fake._page_workflow.autopilot_catalog_path.return_value = ""
     fake._collect_ard_attachment_paths.return_value = []
-    # _refresh_auth_states_sync は (providers, settings, states) の 3 タプルを返す
-    fake._refresh_auth_states_sync.return_value = ([], {}, {})
     return fake
 
 

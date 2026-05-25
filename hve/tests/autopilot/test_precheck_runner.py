@@ -127,32 +127,10 @@ def test_runner_autopilot_custom_catalog_path(tmp_path: Path) -> None:
     assert r.is_ok() is True
 
 
-def test_runner_auth_category_evaluated(tmp_path: Path) -> None:
-    class _P:
-        id = "p1"
-        display_name = "P1"
-
-        def is_required(self, _s):  # noqa: ANN001
-            return True
-
-    marker = object()
-    r = run_step1_precheck(
-        [],
-        tmp_path,
-        providers=[_P()],
-        auth_settings={},
-        auth_states={"p1": object()},
-        authenticated_marker=marker,
-    )
-    auth_items = r.by_category(PrecheckCategory.AUTH)
-    assert len(auth_items) == 1
-    assert auth_items[0].field_name == "p1"
-
-
 def test_runner_no_legacy_setting_category(tmp_path: Path) -> None:
-    """v2: SETTING カテゴリは生成されない（enum 値自体は互換性のため温存）。
+    """v2: SETTING / AUTH カテゴリは生成されない（enum 値自体は互換性のため温存）。
 
-    生成され得るのは FILE / WIZARD_INPUT / AUTH のみ。
+    生成され得るのは FILE / WIZARD_INPUT のみ。
     """
     r = run_step1_precheck(
         ["ard"], tmp_path,
@@ -163,5 +141,4 @@ def test_runner_no_legacy_setting_category(tmp_path: Path) -> None:
         assert it.category in {
             PrecheckCategory.FILE,
             PrecheckCategory.WIZARD_INPUT,
-            PrecheckCategory.AUTH,
         }

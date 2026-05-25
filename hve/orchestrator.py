@@ -33,7 +33,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 # -----------------------------------------------------------------------
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
@@ -815,6 +815,81 @@ def _create_issues_if_needed(
             console.warning(f"Sub-Issue #{sub_num} の親子リンクに失敗しました: {exc}")
 
     return root_issue_num, step_issue_map
+
+
+# -----------------------------------------------------------------------
+# Fan-out 事前展開（ADR-0002 / 修正タスク fanout-fix）
+# -----------------------------------------------------------------------
+#
+# 背景:
+# - dag_executor.py の fan-out 展開は ``dag_plan is None`` 経路でのみ動作する。
+# - production の orchestrator は常に ``dag_plan`` を渡すため、fan-out は未起動。
+# - 修正方針 (C): orchestrator が ``build_dag_plan`` 直前に workflow を事前展開し、
+#   active_step_ids にも子 ID を同期して追加する。
+#
+def _expand_workflow_for_dag(
+    workflow: Any,
+    active_step_ids: Set[str],
+    repo_root: Any,
+) -> Tuple[Any, Set[str], Any]:
+    """fan-out 展開済み workflow と拡張済み active_step_ids を返す。
+
+    Args:
+        workflow: 元の WorkflowDef（``_ard_force_serial`` 等の deepcopy 改変後）。
+        active_step_ids: フィルタ済みアクティブ step_id 集合（ベース ID を含む）。
+        repo_root: catalog_parsers がカタログファイルを探すルート。
+
+    Returns:
+        ``(expanded_workflow, expanded_active_step_ids, info)``
+        - ``expanded_workflow``: 子 step を含む新 WorkflowDef
+          （fan-out 親 ID は steps から除外、K-1 空展開時のみ残置）。
+        - ``expanded_active_step_ids``: ベース ID に含まれる fan-out 親に対応する
+          子 ID を追加した集合（DAGExecutor L138-141 と同じロジック）。
+        - ``info``: ``ExpandedWorkflow``（fanout_map / empty_fanout_ids を保持）。
+
+    フォールバック:
+        展開中に例外が出た場合は ``(workflow, active_step_ids, None)`` を返す。
+        呼び出し側で warning を出力すること。
+    """
+    try:
+        from .fanout_expander import expand_workflow_fanout  # type: ignore[import]
+    except ImportError:  # pragma: no cover
+        from fanout_expander import expand_workflow_fanout  # type: ignore[no-redef]
+    try:
+        from .workflow_registry import WorkflowDef  # type: ignore[import]
+    except ImportError:  # pragma: no cover
+        from workflow_registry import WorkflowDef  # type: ignore[no-redef]
+
+    info = expand_workflow_fanout(workflow, repo_root)
+
+    # fan-out が 1 件もなかった場合は元 workflow をそのまま返す
+    if not info.fanout_map:
+        return workflow, set(active_step_ids), info
+
+    # 新 WorkflowDef（展開後 steps を持つ）を構築
+    expanded_workflow = WorkflowDef(
+        id=getattr(workflow, "id", "unknown"),
+        name=getattr(workflow, "name", ""),
+        label_prefix=getattr(workflow, "label_prefix", ""),
+        state_labels=dict(getattr(workflow, "state_labels", {}) or {}),
+        params=list(getattr(workflow, "params", []) or []),
+        steps=info.steps,
+        max_parallel=getattr(workflow, "max_parallel", None),
+    )
+
+    # active_step_ids 拡張: ベース ID が active なら子 ID もすべて active
+    # （dag_executor.py L138-141 と同じロジック）
+    expanded_active: Set[str] = set(active_step_ids)
+    for base_id, child_ids in info.fanout_map.items():
+        if base_id in expanded_active and child_ids:
+            expanded_active.update(child_ids)
+
+    # K-1: 0 件展開のベース ID は active から除外し auto_skipped 化する
+    # （dag_executor.py L274-283 の _fanout_empty_ids skip に相当）
+    for empty_id in info.empty_fanout_ids:
+        expanded_active.discard(empty_id)
+
+    return expanded_workflow, expanded_active, info
 
 
 # -----------------------------------------------------------------------
@@ -3079,6 +3154,23 @@ async def run_workflow(
         console.event("ARD bridge mode: Step 1 → Step 2 → Step 3 を直列実行します。")
     console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
+    # Fan-out 事前展開（fanout-fix）:
+    # build_dag_plan / DAGExecutor は dag_plan 併用時に fan-out 自動展開を行わないため、
+    # orchestrator 側で expand_workflow_fanout を呼び active_steps も同期拡張する。
+    # 注: dry-run 経路（直後の dry_run_plan）と本番経路（後段の dag_plan）の両方が
+    # 展開後 wf_for_dag / active_steps を参照するため、ここで一度だけ展開する。
+    _expand_info: Any = None
+    try:
+        _expanded_wf, _expanded_active, _expand_info = _expand_workflow_for_dag(
+            wf_for_dag, active_steps, Path(__file__).resolve().parent.parent
+        )
+        wf_for_dag = _expanded_wf
+        active_steps = _expanded_active
+    except Exception as exc:
+        console.warning(
+            f"fan-out 事前展開に失敗したため非展開 workflow で続行します: {exc}"
+        )
+
     dry_run_plan = build_dag_plan(
         wf_for_dag,
         active_steps,
@@ -3498,6 +3590,19 @@ async def run_workflow(
             additional_prompt=step_additional,
             execution_mode=execution_mode,
         )
+
+    # Fan-out 子ステップへ base prompt を伝播（fanout-fix）:
+    # step_prompts は wf.steps（非展開）を反復するためベース ID 分のみ構築済み。
+    # 展開後 wf_for_dag.steps に存在する子 ID は空 prompt で起動してしまうため、
+    # ここで base prompt を子 ID にコピーする。
+    # runner._apply_fanout_prompt_template が fanout_meta から
+    # addendum ({{key}} 置換済み) を base prompt の前段に付与する。
+    if _expand_info is not None and getattr(_expand_info, "fanout_map", None):
+        for _base_id, _child_ids in _expand_info.fanout_map.items():
+            if _base_id in step_prompts:
+                for _cid in _child_ids:
+                    if _cid not in step_prompts:
+                        step_prompts[_cid] = step_prompts[_base_id]
 
     dag_plan = build_dag_plan(
         wf_for_dag,

@@ -1,8 +1,8 @@
 """Tests for mdq.embeddings.
 
-We avoid downloading the BAAI/bge-m3 model (~2GB) in CI by exercising the
-:class:`NullProvider` for shape/math behaviour, and asserting the
-:class:`FastEmbedProvider` raises :class:`EmbeddingsUnavailable` cleanly
+We avoid downloading the intfloat/multilingual-e5-large model (~2.2GB) in CI
+by exercising the :class:`NullProvider` for shape/math behaviour, and asserting
+the :class:`FastEmbedProvider` raises :class:`EmbeddingsUnavailable` cleanly
 when fastembed is not installed.
 """
 from __future__ import annotations

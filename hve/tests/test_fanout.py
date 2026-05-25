@@ -217,3 +217,181 @@ def test_dag_executor_runs_all_children(tmp_path):
             assert c["fanout_meta"]["base_step_id"] == "1"
         else:
             assert "fanout_meta" not in c
+
+
+# ---------------------------------------------------------------------------
+# Production 経路 (dag_plan 併用): orchestrator が fan-out を事前展開する
+# ---------------------------------------------------------------------------
+
+def test_prepare_workflow_for_dag_expands_active_and_steps(tmp_path):
+    """orchestrator._expand_workflow_for_dag が steps と active_step_ids を
+    fan-out 子で拡張すること。
+    """
+    from hve.orchestrator import _expand_workflow_for_dag  # T3a で追加予定
+
+    akm = wr.get_workflow("akm")
+    active = {"1", "2"}
+    expanded_wf, expanded_active, info = _expand_workflow_for_dag(
+        akm, active, tmp_path
+    )
+    # active_step_ids に子 ID が含まれる
+    assert "1/D01" in expanded_active
+    assert "1/D21" in expanded_active
+    # ベース ID "1" は steps から除外される（K-1 空展開時のみ残る）
+    step_ids = {s.id for s in expanded_wf.steps}
+    assert "1" not in step_ids
+    assert "1/D01" in step_ids
+    assert "2" in step_ids
+    # info に fanout_map が含まれる
+    assert "1" in info.fanout_map
+    assert len(info.fanout_map["1"]) == 21
+
+
+def test_prepare_workflow_then_build_dag_plan_produces_parallel_wave(tmp_path):
+    """build_dag_plan が展開後 workflow から 21 並列子の Wave を生成すること。
+
+    本来 production 経路 (orchestrator → build_dag_plan → DAGExecutor with dag_plan)
+    が fan-out を起動できなかった根本問題の回帰テスト。
+    """
+    from hve.orchestrator import _expand_workflow_for_dag
+    from hve.dag_planner import build_dag_plan
+
+    akm = wr.get_workflow("akm")
+    active = {"1", "2"}
+    expanded_wf, expanded_active, _ = _expand_workflow_for_dag(
+        akm, active, tmp_path
+    )
+    plan = build_dag_plan(expanded_wf, expanded_active)
+    # Wave 1 に 21 子ステップ、Wave 2 に Step 2
+    wave_step_ids = [list(w.step_ids) for w in plan.waves]
+    assert len(wave_step_ids) == 2
+    assert len(wave_step_ids[0]) == 21
+    assert all(sid.startswith("1/D") for sid in wave_step_ids[0])
+    assert wave_step_ids[1] == ["2"]
+
+
+def test_dag_executor_with_dag_plan_runs_fanout_children(tmp_path):
+    """DAGExecutor が事前展開済み workflow + dag_plan で 21 子を実行する。"""
+    from hve.orchestrator import _expand_workflow_for_dag
+    from hve.dag_planner import build_dag_plan
+
+    akm = wr.get_workflow("akm")
+    active = {"1", "2"}
+    expanded_wf, expanded_active, _ = _expand_workflow_for_dag(
+        akm, active, tmp_path
+    )
+    plan = build_dag_plan(expanded_wf, expanded_active)
+    run_fn, calls = _make_dummy_run_step()
+    executor = DAGExecutor(
+        workflow=expanded_wf,
+        run_step_fn=run_fn,
+        active_step_ids=expanded_active,
+        repo_root=tmp_path,
+        dag_plan=plan,  # production 経路
+    )
+    asyncio.run(executor.execute())
+    called_ids = {c["step_id"] for c in calls}
+    assert "1/D01" in called_ids
+    assert "1/D21" in called_ids
+    assert "2" in called_ids
+    assert len(calls) == 22
+
+
+def test_prepare_workflow_for_dag_handles_empty_fanout(tmp_path):
+    """カタログファイルがない動的 fanout は empty とマークされ、active から除外される（K-1 skip）。"""
+    from hve.orchestrator import _expand_workflow_for_dag
+
+    fake = wr.StepDef(
+        id="X", title="fake", custom_agent="DummyAgent",
+        fanout_parser="app_catalog",
+    )
+    fake_wf = wr.WorkflowDef(
+        id="t_empty", name="t", label_prefix="t",
+        state_labels=wr._make_state_labels("t"),
+        params=[], steps=[fake],
+    )
+    expanded_wf, expanded_active, info = _expand_workflow_for_dag(
+        fake_wf, {"X"}, tmp_path
+    )
+    # 0 件展開 → ベース ID が info.empty_fanout_ids に記録され active から除外される
+    assert "X" in info.empty_fanout_ids
+    assert "X" not in expanded_active
+
+
+def test_prepare_workflow_for_dag_remaps_downstream_depends_on(tmp_path):
+    """fan-out 親に依存する下流ステップの depends_on が子 ID リストへ書き換わる。"""
+    from hve.orchestrator import _expand_workflow_for_dag
+
+    akm = wr.get_workflow("akm")
+    expanded_wf, _, _ = _expand_workflow_for_dag(akm, {"1", "2"}, tmp_path)
+    step2 = next(s for s in expanded_wf.steps if s.id == "2")
+    # Step 2 の depends_on は元々 ["1"]、展開後は ["1/D01", ..., "1/D21"]
+    assert "1" not in step2.depends_on
+    assert "1/D01" in step2.depends_on
+    assert len(step2.depends_on) == 21
+
+
+def test_step_prompts_propagate_to_fanout_children():
+    """fan-out 親の step_prompts が build_dag_plan を経由して子 ID にも届くこと。
+
+    fanout-fix の回帰テスト: orchestrator が step_prompts を base ID のみ構築した状態
+    （wf.steps を反復するため）でも、展開後 fanout_map を使った伝播ロジックで
+    子 ID が base prompt を継承することを保証する。
+    """
+    from hve.orchestrator import _expand_workflow_for_dag
+    from hve.dag_planner import build_dag_plan
+    import tempfile
+    from pathlib import Path as _Path
+
+    akm = wr.get_workflow("akm")
+    active = {"1", "2"}
+    with tempfile.TemporaryDirectory() as td:
+        expanded_wf, expanded_active, expand_info = _expand_workflow_for_dag(
+            akm, active, _Path(td)
+        )
+        # orchestrator と同じ伝播ロジックを直接適用
+        step_prompts = {"1": "BASE_PROMPT_FOR_STEP_1", "2": "BASE_PROMPT_FOR_STEP_2"}
+        for base_id, child_ids in expand_info.fanout_map.items():
+            if base_id in step_prompts:
+                for cid in child_ids:
+                    step_prompts.setdefault(cid, step_prompts[base_id])
+
+        plan = build_dag_plan(expanded_wf, expanded_active, step_prompts=step_prompts)
+
+    # 21 子全てに base prompt が伝播していること
+    assert plan.prompt_for("1/D01") == "BASE_PROMPT_FOR_STEP_1"
+    assert plan.prompt_for("1/D21") == "BASE_PROMPT_FOR_STEP_1"
+    assert plan.prompt_for("2") == "BASE_PROMPT_FOR_STEP_2"
+
+
+def test_dag_executor_passes_propagated_prompt_to_child(tmp_path):
+    """fan-out 子に伝播された prompt が DAGExecutor 経由で run_step_fn に届くこと。"""
+    from hve.orchestrator import _expand_workflow_for_dag
+    from hve.dag_planner import build_dag_plan
+
+    akm = wr.get_workflow("akm")
+    active = {"1", "2"}
+    expanded_wf, expanded_active, expand_info = _expand_workflow_for_dag(
+        akm, active, tmp_path
+    )
+    step_prompts = {"1": "BASE_PROMPT_FOR_STEP_1", "2": "BASE_PROMPT_FOR_STEP_2"}
+    for base_id, child_ids in expand_info.fanout_map.items():
+        if base_id in step_prompts:
+            for cid in child_ids:
+                step_prompts.setdefault(cid, step_prompts[base_id])
+    plan = build_dag_plan(expanded_wf, expanded_active, step_prompts=step_prompts)
+
+    run_fn, calls = _make_dummy_run_step()
+    executor = DAGExecutor(
+        workflow=expanded_wf,
+        run_step_fn=run_fn,
+        active_step_ids=expanded_active,
+        repo_root=tmp_path,
+        dag_plan=plan,
+    )
+    asyncio.run(executor.execute())
+    by_id = {c["step_id"]: c for c in calls}
+    # 子も親と同じ base prompt を受け取る（空ではない）
+    assert by_id["1/D01"]["prompt"] == "BASE_PROMPT_FOR_STEP_1"
+    assert by_id["1/D21"]["prompt"] == "BASE_PROMPT_FOR_STEP_1"
+    assert by_id["2"]["prompt"] == "BASE_PROMPT_FOR_STEP_2"

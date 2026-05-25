@@ -75,3 +75,29 @@ def test_duplicate_ids_take_first():
     entries = app_catalog_loader.parse(text)
     assert len(entries) == 1
     assert entries[0].name == "first"
+
+
+def test_parse_extracts_architecture_column():
+    entries = app_catalog_loader.parse(SAMPLE)
+    assert entries[0].architecture == "Webフロントエンド + クラウド"
+    assert entries[1].architecture == "Webフロントエンド + クラウド"
+
+
+def test_parse_two_column_table_backward_compat():
+    """3 列目がない catalog でも architecture='' で抽出される（後方互換）。"""
+    text = """| APP-ID | APP名 |
+|---|---|
+| APP-01 | foo |
+"""
+    entries = app_catalog_loader.parse(text)
+    assert len(entries) == 1
+    assert entries[0].architecture == ""
+    assert entries[0].display_label == "APP-01: foo"
+
+
+def test_display_label_with_kind():
+    entry = app_catalog_loader.AppEntry(
+        app_id="APP-01", name="foo", architecture="Webフロントエンド + クラウド"
+    )
+    assert entry.display_label_with_kind("web-cloud") == "APP-01: foo [web-cloud]"
+    assert entry.display_label_with_kind("") == "APP-01: foo"

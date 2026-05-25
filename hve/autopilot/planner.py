@@ -73,6 +73,7 @@ def build_plan(
     max_parallel: int = 4,
     *,
     selection: Optional[AutopilotSelection] = None,
+    requested_app_ids: Optional[List[str]] = None,
 ) -> AutopilotPlan:
     """カタログから Autopilot 実行計画を生成する。
 
@@ -80,7 +81,33 @@ def build_plan(
     - パース失敗 → requires_aas=True の空計画
     - サマリ表が空 → requires_aas=True の空計画
     - 未マッピング → SkippedApp として記録
+
+    Args:
+        requested_app_ids: ユーザーが明示指定した APP-ID のリスト。
+            None / 空のとき catalog 全件を対象とする（後方互換）。
+            指定時は catalog 内の対象を当該 ID に限定し、catalog に存在しない
+            ID は ``SkippedApp(reason="unknown app_id (not in catalog)")`` として
+            記録する。architecture / workflow 不一致でフィルタ落ちする ID は
+            従来通り ``SkippedApp(reason="unmapped architecture or filtered by
+            selection")`` として記録される。
+
+            比較は大文字小文字を正規化（`.upper()`）して行うため、`app-01` と
+            `APP-01` は同一視される（catalog 側 APP-ID は大文字想定）。
+
+            ``catalog_path`` 不在 / パース失敗等で `_empty_plan` 早期 return する
+            経路では、unknown_ids の skipped 登録は行われない（catalog 解決前は
+            検証材料がないため）。
     """
+    requested_set: Optional[set] = None
+    if requested_app_ids:
+        # 大文字正規化して比較（catalog 側 APP-ID は大文字 "APP-NN" 想定）。
+        requested_set = {
+            aid.strip().upper()
+            for aid in requested_app_ids
+            if aid and aid.strip()
+        }
+        if not requested_set:
+            requested_set = None
     catalog_path = Path(catalog_path)
     sel = selection or default_selection()
     pre_phases = sel.pre_phases()
@@ -125,6 +152,9 @@ def build_plan(
     chains: List[AppChain] = []
     skipped: List[SkippedApp] = []
     for app_id, arch in catalog.items():
+        if requested_set is not None and app_id.upper() not in requested_set:
+            # ユーザーが明示指定した APP-ID 以外は計画から除外（skipped にも残さない）。
+            continue
         kind = classify_architecture(arch)
         wf_chain = list(chain_for_kind(kind)) if kind else []
         wf_chain = _filter_chain_by_selection(wf_chain, sel)
@@ -134,6 +164,17 @@ def build_plan(
         else:
             skipped.append(SkippedApp(app_id=app_id, architecture=arch,
                                       reason="unmapped architecture or filtered by selection"))
+
+    # catalog に存在しない指定 APP-ID を skipped に追記（タイプミス検出用）。
+    if requested_set is not None:
+        catalog_ids_upper = {k.upper() for k in catalog.keys()}
+        unknown_ids = sorted(requested_set - catalog_ids_upper)
+        for aid in unknown_ids:
+            skipped.append(SkippedApp(
+                app_id=aid,
+                architecture="",
+                reason="unknown app_id (not in catalog)",
+            ))
 
     # catalog が解決され app_chains が 1 件でもあれば pre_phase_only は不要。
     # app_chains が 0 件（全 APP が selection でフィルタ落ち）かつ pre_phases

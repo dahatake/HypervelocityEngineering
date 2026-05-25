@@ -47,8 +47,6 @@ _WORKFLOW_DESCRIPTIONS = {
     "asdw-web": "Web App Dev & Deploy — Web アプリ開発とデプロイ（TDD RED/GREEN）",
     "adfd": "Dataflow Design — バッチドメイン分析・ジョブ設計",
     "adfdv": "Dataflow Dev — データフローアプリ実装と Azure デプロイ",
-    "aag": "AI Agent Design — AI Agent 構成設計（粒度・詳細）",
-    "aagd": "AI Agent Dev & Deploy — AI Agent 実装とデプロイ",
     "akm": "Knowledge Management — knowledge/ D01〜D21 を 21 並列で生成",
     "aqod": "Original Docs Review — original-docs/ 質問票生成・横断レビュー",
     "adoc": "Source Codeからのドキュメント作成 — レイヤー別ドキュメント自動生成",
@@ -64,7 +62,7 @@ _WORKFLOW_DESCRIPTIONS = {
 _WORKFLOW_CATEGORIES: List[Tuple[str, List[str]]] = [
     ("Business Engineering (要求定義)", ["ard"]),
     ("Architecture Design",             ["aas"]),
-    ("Software Engineering",            ["aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd"]),
+    ("Software Engineering",            ["aad-web", "asdw-web", "adfd", "adfdv"]),
     ("Knowledge Management",            ["akm", "aqod", "adoc"]),
 ]
 
@@ -86,8 +84,6 @@ def _load_workflow_choices() -> List[Tuple[str, str]]:
             ("asdw-web", "Web App Dev & Deploy"),
             ("adfd", "Dataflow Design"),
             ("adfdv", "Dataflow Dev"),
-            ("aag", "AI Agent Design"),
-            ("aagd", "AI Agent Dev & Deploy"),
             ("akm", "Knowledge Management"),
             ("aqod", "Original Docs Review"),
             ("adoc", "Source Codeからのドキュメント作成"),

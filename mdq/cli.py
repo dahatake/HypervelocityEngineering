@@ -511,7 +511,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_idx.add_argument(
         "--embed-model", default=None,
         help="semantic_paragraph: embedding model name. Falls back to "
-             "MDQ_EMBED_MODEL env or 'BAAI/bge-m3' (default; ~2GB first DL).",
+             "MDQ_EMBED_MODEL env or 'intfloat/multilingual-e5-large' (default; MIT, ~2.2GB first DL).",
     )
     p_idx.add_argument(
         "--no-semantic-contextualize", action="store_true",

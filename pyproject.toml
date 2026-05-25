@@ -32,7 +32,7 @@ mdq-watch = [
 # 形態素解析器に切り替える際に依存をここへ追加する。
 mdq-ja = []
 # semantic: `--strategy semantic_paragraph` 用の任意依存（work/semantic-paragraph/plan.md 参照）。
-# - fastembed: ONNX ベースのローカル埋め込み（既定 model = BAAI/bge-m3、Q2=C）。
+# - fastembed: ONNX ベースのローカル埋め込み（既定 model = intfloat/multilingual-e5-large、MIT、Q2=C）。
 #   初回 DL ~2GB。MDQ_EMBED_MODEL 環境変数で軽量モデル（例: BAAI/bge-small-en-v1.5）に切替可。
 # - nltk: 文分割（Q3=C）。初回呼び出し時に `punkt_tab` を自動 DL（失敗時は regex フォールバック）。
 # - numpy: コサイン距離計算とパーセンタイル算出。

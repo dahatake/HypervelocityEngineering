@@ -118,7 +118,9 @@ class DAGExecutor:
         self._fanout_parent_remaining: Dict[str, Set[str]] = {}
         self._fanout_parent_failed: Set[str] = set()
         if enable_fanout and dag_plan is None:
-            # dag_plan を併用する経路では事前展開で plan が壊れるため fan-out をスキップ
+            # dag_plan 併用経路（production）では orchestrator._expand_workflow_for_dag が
+            # build_dag_plan 直前に fan-out を事前展開済み。
+            # このブロックは dag_plan を渡さない経路（テスト等の旧 fallback）専用。
             try:
                 from pathlib import Path as _Path
                 from .fanout_expander import expand_workflow_fanout  # type: ignore[import]

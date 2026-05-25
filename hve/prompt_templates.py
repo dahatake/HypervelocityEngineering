@@ -124,6 +124,7 @@ def build_implementation(forbidden_actions: list[str] | None = None) -> str:
     """実装規約ブロックを生成する。"""
     forbidden_actions = forbidden_actions or [
         "捏造（ID/URL/固有名/数値/事実を根拠なく作成）",
+        "オーバーエンジニアリング（指示・要件にない汎用化・抽象化・将来拡張点の先回り追加、YAGNI 違反、未使用オプション/抽象レイヤーの導入）",
         "無関係な整形・一括リファクタ・不要な依存追加",
         "秘密情報（鍵・トークン・個人情報・内部 URL）の追加・出力",
         "ルート README.md の作成・変更",

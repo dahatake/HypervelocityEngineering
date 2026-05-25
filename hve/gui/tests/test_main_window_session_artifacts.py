@@ -54,7 +54,7 @@ class TestOfferSessionArtifacts(unittest.TestCase):
 
     def setUp(self) -> None:
         _ensure_app()
-        # 実 MainWindow は重い (auth_monitor 等) ため、ファクト関数のみ動的に検証する。
+        # 実 MainWindow は重い初期化を伴うため、ファクト関数のみ動的に検証する。
         # _offer_session_artifacts_to_attachment_pane は self._page_workbench /
         # self._page_options に依存するだけなので、最小モックで呼び出せる。
         from hve.gui.main_window import MainWindow

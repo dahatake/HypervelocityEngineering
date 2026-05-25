@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterable, List, Optional, Set
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -26,6 +26,13 @@ from PySide6.QtWidgets import (
 from .. import app_catalog_loader
 from ..app_catalog_loader import AppEntry
 
+try:
+    # architecture 文字列 → kind ("web-cloud" / "batch") へ正規化
+    from hve.app_arch_filter import classify_architecture as _classify_architecture
+except ImportError:  # pragma: no cover - import 失敗時は kind フィルタ無効化
+    def _classify_architecture(_arch: str) -> str:  # type: ignore[misc]
+        return ""
+
 
 class AppIdChecklist(QWidget):
     """APP-ID 選択チェックボックスリスト。"""
@@ -36,6 +43,7 @@ class AppIdChecklist(QWidget):
         self,
         repo_root: Path,
         *,
+        architecture_kinds: Optional[Iterable[str]] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -43,6 +51,13 @@ class AppIdChecklist(QWidget):
         self._entries: List[AppEntry] = []
         self._checkboxes: List[QCheckBox] = []
         self._suppress_signal = False
+        # 表示対象のアーキテクチャ kind 集合。空集合 / None なら全 kind 表示。
+        self._architecture_kinds: Optional[Set[str]] = (
+            set(architecture_kinds) if architecture_kinds else None
+        )
+        # kind 切替で一時的に非表示となった APP-ID のチェック状態を保持するための
+        # 永続セレクション集合（フィルタを跨いだ選択保持に使用）。
+        self._persistent_selection: Set[str] = set()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -73,14 +88,30 @@ class AppIdChecklist(QWidget):
     # ----------------------------------------------------------
 
     def reload(self) -> None:
-        """カタログを再読込してチェックボックスを再構築する。"""
+        """カタログを再読込してチェックボックスを再構築する。
+
+        ``architecture_kinds`` が指定されているとき、各エントリの architecture を
+        ``classify_architecture()`` で kind に変換し、当該 kind 集合に含まれる
+        エントリのみ表示する。architecture が空文字（旧 catalog 形式）の場合は
+        フィルタを通す（後方互換）。
+        """
         # 既存チェックボックスを削除
         for cb in self._checkboxes:
             self._items_layout.removeWidget(cb)
             cb.deleteLater()
         self._checkboxes = []
 
-        self._entries = app_catalog_loader.load_app_entries(self._repo_root)
+        all_entries = app_catalog_loader.load_app_entries(self._repo_root)
+        if self._architecture_kinds:
+            kinds = self._architecture_kinds
+            self._entries = [
+                e for e in all_entries
+                if (not e.architecture)  # 旧 catalog 形式は通す（後方互換）
+                or _classify_architecture(e.architecture) in kinds
+            ]
+        else:
+            self._entries = list(all_entries)
+
         if not self._entries:
             self._empty_label.setVisible(True)
             self._select_all.setEnabled(False)
@@ -89,27 +120,75 @@ class AppIdChecklist(QWidget):
         self._empty_label.setVisible(False)
         self._select_all.setEnabled(True)
         for e in self._entries:
-            cb = QCheckBox(e.display_label)
+            kind = _classify_architecture(e.architecture) if e.architecture else ""
+            label = e.display_label_with_kind(kind)
+            cb = QCheckBox(label)
             cb.setProperty("app_id", e.app_id)
             cb.stateChanged.connect(self._on_item_changed)
             self._items_layout.addWidget(cb)
             self._checkboxes.append(cb)
 
+    def set_architecture_kinds(self, kinds: Optional[Iterable[str]]) -> None:
+        """表示対象の architecture kind 集合を切り替えてリロードする。
+
+        ``None`` / 空集合 を渡すと全 kind 表示（フィルタ無効化）。
+        既に同じ集合が設定されている場合は no-op（チェック状態保持）。
+
+        フィルタ切替で一時的に非表示になった APP-ID のチェック状態は
+        ``_persistent_selection`` に保持され、再表示時に自動復元される。
+        """
+        new_set: Optional[Set[str]] = set(kinds) if kinds else None
+        if new_set == self._architecture_kinds:
+            return
+        self._architecture_kinds = new_set
+        self.reload()
+        # 永続セレクションから表示中エントリのチェック状態を復元
+        if self._persistent_selection:
+            self._suppress_signal = True
+            try:
+                for cb in self._checkboxes:
+                    cb.setChecked(cb.property("app_id") in self._persistent_selection)
+                # 全選択トグル状態を再計算
+                all_on = bool(self._checkboxes) and all(
+                    cb.isChecked() for cb in self._checkboxes
+                )
+                self._select_all.setChecked(all_on)
+            finally:
+                self._suppress_signal = False
+
     def selected_csv(self) -> str:
-        """選択された APP-ID の CSV を返す。空のときは空文字列。"""
-        ids = [cb.property("app_id") for cb in self._checkboxes if cb.isChecked()]
-        return ",".join(ids)
+        """選択された APP-ID の CSV を返す。空のときは空文字列。
+
+        フィルタで非表示中の APP-ID も ``_persistent_selection`` から復元される
+        ため、kind 切替を跨いだ選択は失われない。出力順は表示中エントリ →
+        非表示永続エントリ（アルファベット順）の順。
+        """
+        visible_ids = [
+            cb.property("app_id") for cb in self._checkboxes if cb.isChecked()
+        ]
+        visible_set = set(visible_ids)
+        hidden_ids = sorted(self._persistent_selection - visible_set)
+        return ",".join(visible_ids + hidden_ids)
 
     def set_selected_csv(self, csv: str) -> None:
-        """CSV 文字列から選択状態を復元する。"""
+        """CSV 文字列から選択状態を復元する。
+
+        表示中の APP-ID はチェックボックスに反映。表示外の ID は
+        ``_persistent_selection`` に保持し、フィルタ切替で再表示時に自動復元される。
+        """
         ids = {s.strip() for s in csv.split(",") if s.strip()}
+        # 永続セレクションを上書き（フィルタ外含む全指定 ID）
+        self._persistent_selection = set(ids)
         self._suppress_signal = True
         try:
-            all_on = bool(ids) and all(
-                cb.property("app_id") in ids for cb in self._checkboxes
-            )
+            visible_target_count = 0
             for cb in self._checkboxes:
-                cb.setChecked(cb.property("app_id") in ids)
+                target = cb.property("app_id") in ids
+                cb.setChecked(target)
+                if target:
+                    visible_target_count += 1
+            # 表示中の全項目が ON のときのみ全選択も ON にする
+            all_on = bool(self._checkboxes) and visible_target_count == len(self._checkboxes)
             self._select_all.setChecked(all_on)
         finally:
             self._suppress_signal = False
@@ -117,6 +196,21 @@ class AppIdChecklist(QWidget):
     # ----------------------------------------------------------
     # シグナルハンドラ
     # ----------------------------------------------------------
+
+    def _refresh_persistent_selection(self) -> None:
+        """表示中チェック状態を ``_persistent_selection`` に反映する。
+
+        ユーザー操作で表示中の APP-ID 選択が変わったとき、フィルタ外 ID の
+        永続状態を維持したまま、表示中 ID の状態だけを上書きする。
+        """
+        visible_ids = {cb.property("app_id") for cb in self._checkboxes}
+        checked_visible = {
+            cb.property("app_id") for cb in self._checkboxes if cb.isChecked()
+        }
+        # フィルタ外 ID は維持、表示中 ID のみ上書き
+        self._persistent_selection = (
+            self._persistent_selection - visible_ids
+        ) | checked_visible
 
     def _on_select_all_changed(self, _state: int) -> None:
         """全選択トグル: ON で全項目 ON、OFF で全項目 OFF。
@@ -133,6 +227,7 @@ class AppIdChecklist(QWidget):
                 cb.setChecked(checked)
         finally:
             self._suppress_signal = False
+        self._refresh_persistent_selection()
         self.selection_changed.emit(self.selected_csv())
 
     def _on_item_changed(self, _state: int) -> None:
@@ -147,4 +242,5 @@ class AppIdChecklist(QWidget):
             self._select_all.setChecked(all_on)
         finally:
             self._suppress_signal = False
+        self._refresh_persistent_selection()
         self.selection_changed.emit(self.selected_csv())

@@ -476,5 +476,64 @@ class TestQaDraftingLabels(unittest.TestCase):
             self.assertIn(label, content)
 
 
+class TestOverEngineeringBan(unittest.TestCase):
+    """質問票・レビュー系プロンプトに OE 禁止文言が含まれていること。"""
+
+    OE_MARKER = "オーバーエンジニアリングは絶対に禁止"
+
+    def test_oe_ban_text_constants_exist(self) -> None:
+        from prompts import OVERENGINEERING_BAN_TEXT, OVERENGINEERING_BAN_TEXT_QA
+        self.assertIn(self.OE_MARKER, OVERENGINEERING_BAN_TEXT)
+        self.assertIn(self.OE_MARKER, OVERENGINEERING_BAN_TEXT_QA)
+        self.assertIn("YAGNI", OVERENGINEERING_BAN_TEXT)
+
+    def test_review_prompts_contain_oe_ban(self) -> None:
+        from prompts import (
+            ADVERSARIAL_RECHECK_PROMPT,
+            CODE_REVIEW_CLI_PROMPT,
+            REVIEW_PROMPT,
+        )
+        for name, body in [
+            ("REVIEW_PROMPT", REVIEW_PROMPT),
+            ("ADVERSARIAL_RECHECK_PROMPT", ADVERSARIAL_RECHECK_PROMPT),
+            ("CODE_REVIEW_CLI_PROMPT", CODE_REVIEW_CLI_PROMPT),
+        ]:
+            self.assertIn(self.OE_MARKER, body, f"{name} missing OE ban")
+
+    def test_questionnaire_prompts_contain_oe_ban(self) -> None:
+        from prompts import (
+            AQOD_QA_PROMPT,
+            PRE_EXECUTION_QA_PROMPT_V2,
+            QA_PROMPT_V2,
+        )
+        for name, body in [
+            ("PRE_EXECUTION_QA_PROMPT_V2", PRE_EXECUTION_QA_PROMPT_V2),
+            ("QA_PROMPT_V2", QA_PROMPT_V2),
+            ("AQOD_QA_PROMPT", AQOD_QA_PROMPT),
+        ]:
+            self.assertIn(self.OE_MARKER, body, f"{name} missing OE ban")
+
+    def test_review_prompt_has_sixth_axis(self) -> None:
+        """REVIEW_PROMPT に第 6 軸（オーバーエンジニアリング検出）が追加されている。"""
+        from prompts import REVIEW_PROMPT
+        self.assertIn("6つの検証軸", REVIEW_PROMPT)
+        self.assertIn("オーバーエンジニアリング検出", REVIEW_PROMPT)
+
+    def test_build_implementation_forbids_overengineering(self) -> None:
+        from prompt_templates import build_implementation
+        out = build_implementation()
+        self.assertIn("オーバーエンジニアリング", out)
+        self.assertIn("YAGNI", out)
+
+    def test_fanout_common_files_contain_oe_ban(self) -> None:
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        fanout_root = repo_root / "hve" / "prompt" / "fanout"
+        common_files = sorted(fanout_root.glob("*/_common.md"))
+        self.assertEqual(len(common_files), 10, "Expected 10 fanout _common.md files")
+        for f in common_files:
+            content = f.read_text(encoding="utf-8")
+            self.assertIn(self.OE_MARKER, content, f"{f} missing OE ban")
+
+
 if __name__ == "__main__":
     unittest.main()

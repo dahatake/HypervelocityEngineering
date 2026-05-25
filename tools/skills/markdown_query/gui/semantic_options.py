@@ -117,9 +117,9 @@ class SemanticOptionsWidget(QWidget):
         form.addRow("Embed provider", self._embed_provider)
 
         self._embed_model = QLineEdit()
-        self._embed_model.setPlaceholderText("(既定 BAAI/bge-m3)")
+        self._embed_model.setPlaceholderText("(既定 intfloat/multilingual-e5-large)")
         self._embed_model.setToolTip(
-            "埋め込み model 名。空でコード既定 (BAAI/bge-m3、初回 ~2GB DL)。"
+            "埋め込み model 名。空でコード既定 (intfloat/multilingual-e5-large、MIT、初回 ~2.2GB DL)。"
         )
         form.addRow("Embed model", self._embed_model)
 

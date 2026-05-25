@@ -55,6 +55,34 @@ class TestDAGPlanner(unittest.TestCase):
         self.assertEqual(container_node.skip_reason, "container")
         self.assertTrue(all("1" not in wave.step_ids for wave in plan.waves))
 
+    def test_build_dag_plan_handles_fanout_expanded_workflow(self) -> None:
+        """fan-out 事前展開済み workflow から build_dag_plan が正しく Wave を生成すること。
+
+        production 経路 (orchestrator が wf_for_dag を事前展開) の回帰テスト。
+        """
+        import tempfile
+        from pathlib import Path
+        from hve.orchestrator import _expand_workflow_for_dag
+
+        akm = get_workflow("akm")
+        with tempfile.TemporaryDirectory() as td:
+            expanded_wf, expanded_active, _ = _expand_workflow_for_dag(
+                akm, {"1", "2"}, Path(td)
+            )
+            plan = build_dag_plan(expanded_wf, expanded_active)
+
+        # Wave 1 = 21 個の fan-out 子、Wave 2 = Step 2
+        self.assertEqual(len(plan.waves), 2)
+        self.assertEqual(len(plan.waves[0].step_ids), 21)
+        self.assertTrue(
+            all(sid.startswith("1/D") for sid in plan.waves[0].step_ids)
+        )
+        self.assertEqual(plan.waves[1].step_ids, ("2",))
+        # active_step_ids に子 ID が含まれている
+        self.assertIn("1/D01", plan.active_step_ids)
+        # 子ノードが auto_skipped に含まれない
+        self.assertNotIn("1/D01", plan.auto_skipped_step_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

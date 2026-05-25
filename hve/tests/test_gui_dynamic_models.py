@@ -63,4 +63,4 @@ class TestLoadModelChoices:
 
 
 # NOTE: 旧 TestLoginDialogImport は hve/gui/login_dialog.py 削除に伴い 2026-05 撤去。
-# 認証は plugin_auth_dialog.PluginAuthDialog + GitHubProvider に置き換え済み。
+# 認証は GitHub Copilot CLI 側で完結する想定。

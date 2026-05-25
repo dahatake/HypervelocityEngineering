@@ -11,21 +11,19 @@ v2 改訂（2026-05-24）:
   - Workflow-specific 設定（``precheck_settings.collect_missing_workflow_settings``）
   - Wizard Step 2 入力検査（``wizard_input_inspector.inspect_wizard_inputs``）
   - 追加プロンプト override / LLM 自然言語判定
-
-AUTH カテゴリは独立性が高いため ``collect_missing_auth`` を維持。
+  - AUTH カテゴリ（Plugin/MCP Server 認証は GitHub Copilot CLI 側で完結）
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable, List, Mapping, Optional
+from typing import Iterable, List, Mapping, Optional
 
 from hve.autopilot.precheck_model import (
     AutopilotPrecheckResult,
     PrecheckCategory,
     PrecheckItem,
 )
-from hve.autopilot.precheck_settings import collect_missing_auth
 
 
 def run_step1_precheck(
@@ -38,10 +36,6 @@ def run_step1_precheck(
     origin_chosen: bool = False,
     autopilot_mode: bool = False,
     autopilot_catalog_path: Optional[str] = None,
-    providers: Optional[Iterable[Any]] = None,
-    auth_settings: Optional[Mapping[str, Any]] = None,
-    auth_states: Optional[Mapping[str, Any]] = None,
-    authenticated_marker: Any = None,
 ) -> AutopilotPrecheckResult:
     """Step 1 事前検証を実行し統合結果を返す。
 
@@ -57,8 +51,6 @@ def run_step1_precheck(
         autopilot_mode: Autopilot ON フラグ。True のとき個別ワークフロー判定は
             行わず、Autopilot 仮想ワークフローのみ評価する。
         autopilot_catalog_path: Autopilot カタログファイルパス。
-        providers / auth_settings / auth_states / authenticated_marker: AUTH 検査用。
-            全て指定された場合のみ AUTH 検査を実行する。
 
     Returns:
         ``AutopilotPrecheckResult``: warn 項目のみを格納（ok は除外）。
@@ -117,22 +109,6 @@ def run_step1_precheck(
                 description=ri.detail or s.guidance_text,
                 remediation_hint=s.guidance_text,
             ))
-
-    # AUTH 検査（独立カテゴリ）。
-    if (
-        providers is not None
-        and auth_settings is not None
-        and auth_states is not None
-        and authenticated_marker is not None
-    ):
-        items.extend(
-            collect_missing_auth(
-                providers,
-                auth_settings,
-                auth_states,
-                authenticated_marker=authenticated_marker,
-            )
-        )
 
     return AutopilotPrecheckResult(items=items)
 
