@@ -24,7 +24,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
 
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QResizeEvent
@@ -63,7 +63,12 @@ from .auth_monitor import AuthMonitor
 from .auth_providers import AuthState
 from .auth_providers.registry import discover_providers
 from .plugin_auth_dialog import PluginAuthDialog
-from hve.workflow_registry import WorkflowDependency, get_meta_dependencies, get_workflow
+from hve.workflow_registry import (
+    WorkflowDependency,
+    expand_group_step_ids,
+    get_meta_dependencies,
+    get_workflow,
+)
 
 from .status_banner import StatusBanner
 from .status_kind import StatusKind
@@ -148,7 +153,10 @@ class _SessionArtifactPickerDialog(QDialog):
         return out
 
 
-def _build_step_seeds_for_workflow(workflow_id: str) -> list:
+def _build_step_seeds_for_workflow(
+    workflow_id: str,
+    enabled_step_ids: Optional[set] = None,
+) -> list:
     """``WorkflowDef.steps`` から container 階層を反映した ``StepSeed`` リストを構築する。
 
     Phase 2 (Q3=B): container Step を親ノードとして展開し、配下の非 container Step を
@@ -159,6 +167,11 @@ def _build_step_seeds_for_workflow(workflow_id: str) -> list:
         （例: "2.3T" → 親候補 "2.3"（存在しなければ）→ "2"）。
       - 親が見つからない場合は workflow 直下のトップレベル Step として返す。
       - 子を持たない container は表示価値が無いため除去する。
+
+    Q1=C + Q5=B: Autopilot 経路で Step 1 のステップ選択を進捗表示にも反映するため、
+    呼び出し側から ``enabled_step_ids`` (実 Step ID set) を渡すと、それに含まれない
+    非 container Step を除外する。``None`` または空 set のときは従来通り全 step を返す
+    （Plan モード経路 / 後方互換）。
     """
     from .workbench_state import StepSeed
 
@@ -183,10 +196,22 @@ def _build_step_seeds_for_workflow(workflow_id: str) -> list:
     top_level: list = []
     for s in wf.steps:
         kind = "container" if getattr(s, "is_container", False) else "step"
+        # Q1=C + Q5=B: enabled_step_ids が指定されていれば、非 container Step は
+        # Step 1 で選択されたものに限定する。container Step は配下次第なので
+        # ここでは除外せず、_prune_empty_containers で子なし時に除外する。
+        if (
+            enabled_step_ids
+            and kind == "step"
+            and s.id not in enabled_step_ids
+        ):
+            continue
         seed_by_id[s.id] = StepSeed(id=s.id, title=s.title, kind=kind)
 
     for s in wf.steps:
-        seed = seed_by_id[s.id]
+        seed = seed_by_id.get(s.id)
+        if seed is None:
+            # フィルタで除外された Step
+            continue
         parent = _parent_id(s.id)
         if parent is not None and parent in seed_by_id:
             seed_by_id[parent].children.append(seed)
@@ -1364,6 +1389,121 @@ class MainWindow(QMainWindow):
             return False
         return True
 
+    # ------------------------------------------------------------------
+    # Step 1 ステップ選択 → 実行構成 / 進捗表示の解決ヘルパー
+    # ------------------------------------------------------------------
+    def _resolve_steps_for_workflow(
+        self,
+        wf_id: str,
+        args_steps_csv: Optional[str],
+    ) -> Tuple[Optional[str], Set[str]]:
+        """Step 1 のステップ選択 + Step 2 のテキスト欄を合成して per-workflow の
+        ``--steps`` 値（CSV）と進捗表示用フィルタ集合（実 Step ID set）を返す。
+
+        Q1=C/Q2=C(AND)/Q3=B/Q4=A/Q5=B の採用結果に従う:
+          - Q1=C: 戻り値の 2 要素 (CSV, display_ids) で実行構成と進捗表示の両方に反映
+          - Q2=C(AND): テキスト欄が非空のときは set(Step1 選択) ∩ set(テキスト欄) を採用
+          - Q3=B: 結果集合が非空なら常に CSV 列挙して返す（テキスト欄が空でも明示）
+          - Q4=A: ARD グループ ID は CSV ではグループ ID のまま渡し（CLI/orchestrator で展開）、
+                  display_ids は ``expand_group_step_ids`` で実 Step ID 展開
+                  ※ ``"3"`` (KPI/OKR 任意ステップ) は ``_WORKFLOW_GROUP_MAPS`` 未登録で素通し
+                  （グループ ID = 実 Step ID）
+          - Q5=B: Plan モード経路だけでなく Autopilot Plan モード経路
+                  (``_argv_factory``) および Autopilot prephase 経路
+                  (``_create_autopilot_phase_window``) の 3 系統で本ヘルパーを共用する。
+                  Autopilot prephase 経路では Step 2 のテキスト欄を参照しないため
+                  ``args_steps_csv=None`` 固定で呼ばれる。
+
+        Args:
+            wf_id: workflow_id（``"ard"`` など）。
+            args_steps_csv: ``OrchestrateArgs.steps`` の現在値（CSV 文字列 / None）。
+                Plan モード / Autopilot Plan モード経路ではテキスト欄値が入る。
+                Autopilot prephase 経路では ``None`` 固定。
+
+        Returns:
+            (args_steps_csv, display_step_ids):
+              - args_steps_csv: CLI ``--steps`` 引数に渡す CSV 文字列、または ``None``
+                （AND 結果が空集合のとき or Step 1 / wf 情報を取得できないときは None）
+              - display_step_ids: ``workflow_plan.steps`` / Autopilot seed フィルタ用の
+                実 Step ID 集合（``Set[str]``）
+
+        既知の仕様限界:
+            - Step 1 で全 step を OFF にした場合 ``(None, set())`` を返し、orchestrator は
+              ``--steps`` なしで起動するため**全 step が実行**される（既定動作）。
+              UI 側の入力バリデーションは本ヘルパーの範囲外。
+            - ARD のテキスト欄入力もグループ ID 表記前提で AND 比較する。実 Step ID 形式
+              （例: ``"1.1"``）で入力された場合は Step 1 のグループ ID と一致せず、
+              AND の結果空となり ``None`` フォールバックする。
+
+        後方互換:
+            - ``all_enabled_steps()`` が当該 wf_id を含まない場合は「全ステップ ON」と解釈し、
+              既存テスト (``return_value = {}``) との互換を保つ。
+        """
+        # 1. Step 1 の有効ステップを取得（未登録 wf は全 ON 扱い → 後段で None フォールバック）
+        try:
+            enabled_by_wf = self._page_workflow.all_enabled_steps()
+        except (AttributeError, RuntimeError):
+            enabled_by_wf = {}
+
+        wf = get_workflow(wf_id)
+        if wf is None:
+            # workflow 不明: 表示集合は空、CSV は None（既定動作）
+            return None, set()
+
+        all_step_ids = [s.id for s in wf.steps if not s.is_container]
+
+        if wf_id in enabled_by_wf:
+            step1_ids = list(enabled_by_wf[wf_id])
+        else:
+            # 後方互換: テストモック等で未登録の場合は「全 ON」相当
+            step1_ids = list(all_step_ids)
+
+        # 2. テキスト欄 (Step 2 OrchestrateArgs.steps) または別経路で渡された CSV をパース。
+        #    Autopilot prephase 経路では None 固定で渡され、テキスト欄は参照されない。
+        text_ids: Optional[List[str]] = None
+        if args_steps_csv:
+            text_ids = [
+                s.strip() for s in args_steps_csv.split(",") if s.strip()
+            ]
+            if not text_ids:
+                text_ids = None
+
+        # 3. ARD の場合: Step 1 はグループ ID を返すため、display_ids は実 Step ID 展開、
+        #    args_steps_csv はグループ ID のまま渡す（CLI/orchestrator 既存仕様）。
+        if wf_id == "ard":
+            display_ids: set = set(expand_group_step_ids(wf_id, step1_ids))
+            # Q2=C(AND): テキスト欄あれば、グループ ID 同士で AND する
+            #            （テキスト欄も通常グループ ID で書かれる想定; 実 Step ID 混在時も AND）
+            if text_ids is not None:
+                step1_set = set(step1_ids)
+                merged_groups = step1_set & set(text_ids)
+                if not merged_groups:
+                    return None, set()
+                # display 表示も AND 結果のグループから展開し直す
+                display_ids = set(expand_group_step_ids(wf_id, list(merged_groups)))
+                # CSV は入力順序を保ちつつ AND 通過のみ
+                csv = ",".join(
+                    [sid for sid in step1_ids if sid in merged_groups]
+                )
+                return csv or None, display_ids
+            # テキスト欄なし: Q3=B 常に明示列挙
+            if not step1_ids:
+                return None, set()
+            return ",".join(step1_ids), display_ids
+
+        # 4. 非 ARD: Step 1 の ID は実 Step ID と一致
+        step1_set = set(step1_ids)
+        if text_ids is not None:
+            merged = step1_set & set(text_ids)
+            if not merged:
+                return None, set()
+            csv = ",".join([sid for sid in step1_ids if sid in merged])
+            return csv or None, merged
+        # テキスト欄なし: Q3=B 常に明示列挙
+        if not step1_ids:
+            return None, set()
+        return ",".join(step1_ids), step1_set
+
     def _on_run_clicked(self, *, skip_step1_precheck: bool = False) -> None:
         # --- Autopilot 分岐 ---
         if self._page_workflow.is_autopilot_enabled():
@@ -1402,6 +1542,13 @@ class MainWindow(QMainWindow):
                     wf_id,
                     repo_root=self._repo_root,
                 )
+                # Step 1 のステップ選択 + Step 2 テキスト欄を合成して
+                # ``args.steps`` (CLI ``--steps``) と進捗表示用フィルタ集合を解決。
+                # Q1=C/Q2=C(AND)/Q3=B/Q4=A の採用に従う。
+                args_steps_csv, display_step_ids = self._resolve_steps_for_workflow(
+                    wf_id, args.steps
+                )
+                args.steps = args_steps_csv
                 args_queue.append(args)
 
                 wf = get_workflow(wf_id)
@@ -1416,6 +1563,11 @@ class MainWindow(QMainWindow):
                         }
                         for s in wf.steps
                         if not s.is_container
+                        # Step 1 で選択された step のみ表示する（Q1=C）。
+                        # display_step_ids が空集合のときは「全 ON 扱い」とは
+                        # 区別できないため、Step 1 解決結果が空（フォールバック）
+                        # のときは従来通り全 step を表示する。
+                        and (not display_step_ids or s.id in display_step_ids)
                     ]
                 workflow_plan.append(
                     {
@@ -1472,22 +1624,19 @@ class MainWindow(QMainWindow):
     ) -> bool:
         """Step 1 [次へ] 押下時の統合 precheck + プランレビュー（両モード共通）。
 
-        Autopilot ON/OFF で同一アルゴリズム（FILE/WIZARD_INPUT/SETTING/AUTH の 4
-        カテゴリ統合 precheck → プランレビュー → ギャップ適用ループ）を実行する。
-        Autopilot 固有の暗黙依存（``_AUTOPILOT_IMPLICIT_REQUIRED_PATHS``）と
-        catalog 必須要求（``autopilot_required_artifacts``）は ``autopilot_mode``
-        が True のときのみ追加で渡される。
+        v2 統一版: バナーと同じ ``summarize_requirements_for_selection`` を経由する。
+        Autopilot ON 時は Autopilot 仮想ワークフローのカタログファイル存在のみを
+        評価し、個別ワークフローの要件は評価しない。
 
         Args:
             wf_ids: 呼び出し時の選択 workflow ID。**初回参照のみ**で、ループ内では
                 毎回 ``self._page_workflow.selected_workflow_ids()`` から再取得する
                 （ギャップ適用により選択範囲が変化するため）。
-            autopilot_mode: Autopilot 経路かどうか。True のとき以下を追加で渡す:
-                ``implicit_required_paths`` / ``autopilot_required_artifacts`` /
-                ``extra_provided[""]=[autopilot_catalog_path()]``。
+            autopilot_mode: Autopilot 経路かどうか。True のとき precheck は
+                Autopilot 仮想ワークフロー単独で評価される。
 
         フロー:
-          1. precheck（FILE/WIZARD_INPUT/SETTING/AUTH）を実行。不足ありなら
+          1. precheck（FILE / WIZARD_INPUT / AUTH）を実行。不足ありなら
              ``Step1PrecheckDialog`` で通知し False。
           2. 不足なしなら ``build_step1_plan_review()`` でプランを構築し、
              ``Step1PlanReviewDialog`` で表示（ギャップ 0 件かつ設定 OFF なら skip）。
@@ -1514,15 +1663,6 @@ class MainWindow(QMainWindow):
         # 認証情報の同期取得をループ外に移動（ループ毎の 30s wait を排除）。
         providers, auth_settings, auth_states = self._refresh_auth_states_sync()
 
-        # 追加プロンプトの LLM 自然言語判定を有効化するか（設定パネル トグル）。
-        # 既定 True。ループ内で変化しないためループ外で 1 回だけ取得する。
-        # 空 prompt の場合は collect_missing_files 側で LLM 呼出がスキップされる。
-        try:
-            from .settings_store import get_option as _get_opt
-            _use_llm_judge = bool(_get_opt("precheck_use_llm_judge"))
-        except Exception:
-            _use_llm_judge = True
-
         while True:
             self._step1_plan_review_iterations += 1
             if self._step1_plan_review_iterations > MAX_ITER:
@@ -1539,43 +1679,40 @@ class MainWindow(QMainWindow):
             steps_by_wf = self._page_workflow.all_enabled_steps()
             wf_ids_now = self._page_workflow.selected_workflow_ids()
 
-            # per-workflow wizard inputs は AutopilotInputPanel 廃止に伴い空とする。
+            # per-workflow wizard inputs（プラン構築側でなお参照されるため空 dict のまま渡す）。
             wizard_inputs: dict = {}
 
-            # --- 追加プロンプト / パラメータ指定ファイルを収集 ---
-            # OptionsPage 上の単一 additional_prompt 入力欄を、選択中の全 workflow_id に
-            # 同一文字列として複製してマップする（Q8=A: per-workflow 入力欄は未導入）。
-            # 空文字列／空白のみは無視（precheck_collector 側でも空文字は LLM 呼出スキップ）。
-            additional_prompts: dict = {}
+            # --- ARD 添付ペインの状態を取得（バナーと同じパラメータを Precheck にも渡す） ---
+            attached_count = 0
+            origin_chosen = False
             try:
-                _ap_text = (
-                    self._page_options.additional_prompt.toPlainText().strip()
-                )
+                attach_pane = self._page_options.attachment_pane()
             except Exception:
-                _ap_text = ""
-            if _ap_text:
-                for _wf in wf_ids_now:
-                    additional_prompts[_wf] = _ap_text
-            extra_provided: dict = {}
-            # Autopilot ON 時のみ catalog パスを extra_provided に追加。
-            if autopilot_mode:
-                custom_catalog_for_extra = self._page_workflow.autopilot_catalog_path()
-                if custom_catalog_for_extra:
-                    extra_provided.setdefault("", []).append(custom_catalog_for_extra)
-            # ARD: 添付ペイン由来の attached_docs / target_business_path（両モード共通）
-            paths_for_ard = self._collect_ard_attachment_paths()
-            if paths_for_ard:
-                extra_provided["ard"] = paths_for_ard
+                attach_pane = None
+            if attach_pane is not None:
+                ts = getattr(attach_pane, "target_business_path", None)
+                if callable(ts):
+                    try:
+                        origin_chosen = bool(ts())
+                    except Exception:
+                        origin_chosen = False
+                results = getattr(attach_pane, "_results", None)
+                if results is not None:
+                    try:
+                        attached_count = len(results)
+                    except Exception:
+                        attached_count = 0
 
-            # --- Phase A: precheck ---
-            # Autopilot 固有の暗黙依存と catalog 必須要求は autopilot_mode のときのみ渡す。
-            implicit_required_paths = None
-            autopilot_required: list = []
+            # --- 必須情報キー入力値の収集（バナーと同じ入口） ---
+            try:
+                input_values = self._page_options._collect_banner_input_values()
+            except Exception:
+                input_values = {}
+
+            # --- Autopilot 用カタログパス（autopilot_mode=True 時のみ使用） ---
+            catalog_rel: Optional[str] = None
+            catalog_path: Optional[Path] = None
             if autopilot_mode:
-                from hve.autopilot.plan_review_gap import (
-                    _AUTOPILOT_IMPLICIT_REQUIRED_PATHS,
-                )
-                implicit_required_paths = _AUTOPILOT_IMPLICIT_REQUIRED_PATHS
                 custom_catalog = self._page_workflow.autopilot_catalog_path()
                 if custom_catalog:
                     catalog_path = Path(custom_catalog)
@@ -1587,41 +1724,22 @@ class MainWindow(QMainWindow):
                     catalog_rel = str(catalog_path.relative_to(repo_root))
                 except ValueError:
                     catalog_rel = str(catalog_path)
-                autopilot_required = [catalog_rel]
 
-            # LLM 判定が走る条件（_use_llm_judge=True かつ追加プロンプト非空）で
-            # 数秒〜10s 程度ブロックされうるため、ビジーカーソルを表示する。
-            _llm_active = bool(_use_llm_judge and additional_prompts)
-            if _llm_active:
-                try:
-                    from PySide6.QtCore import Qt
-                    from PySide6.QtWidgets import QApplication as _QA
-                    _QA.setOverrideCursor(Qt.WaitCursor)
-                except Exception:
-                    _llm_active = False
-            try:
-                result = run_step1_precheck(
-                    wf_ids_now,
-                    repo_root,
-                    steps_by_workflow=steps_by_wf,
-                    wizard_inputs_by_workflow=wizard_inputs,
-                    providers=providers,
-                    auth_settings=auth_settings,
-                    auth_states=auth_states,
-                    authenticated_marker=AuthState.AUTHENTICATED,
-                    additional_prompts=additional_prompts,
-                    extra_provided_paths_by_workflow=extra_provided,
-                    implicit_required_paths=implicit_required_paths,
-                    autopilot_required_artifacts=autopilot_required or None,
-                    use_llm_judge=_use_llm_judge,
-                )
-            finally:
-                if _llm_active:
-                    try:
-                        from PySide6.QtWidgets import QApplication as _QA
-                        _QA.restoreOverrideCursor()
-                    except Exception:
-                        pass
+            # --- Phase A: precheck（バナーと統一ロジック） ---
+            result = run_step1_precheck(
+                wf_ids_now,
+                repo_root,
+                steps_by_workflow=steps_by_wf,
+                input_values=input_values,
+                attached_count=attached_count,
+                origin_chosen=origin_chosen,
+                autopilot_mode=autopilot_mode,
+                autopilot_catalog_path=catalog_rel,
+                providers=providers,
+                auth_settings=auth_settings,
+                auth_states=auth_states,
+                authenticated_marker=AuthState.AUTHENTICATED,
+            )
 
             if not result.is_ok():
                 dlg = Step1PrecheckDialog(result, parent=self)
@@ -1680,6 +1798,7 @@ class MainWindow(QMainWindow):
 
             if applied_gaps:
                 # ギャップ適用前の中間スナップショットを保存（is_final_accepted=False）
+                # v2: additional_prompts / extra_provided は precheck で撤去済み → 空 dict を渡す
                 self._save_step1_args_snapshot(
                     iteration=self._step1_plan_review_iterations,
                     is_final_accepted=False,
@@ -1687,8 +1806,8 @@ class MainWindow(QMainWindow):
                     autopilot_mode=autopilot_mode,
                     precheck_result=result,
                     plan_review=review,
-                    additional_prompts=additional_prompts,
-                    extra_provided=extra_provided,
+                    additional_prompts={},
+                    extra_provided={},
                     auth_states=auth_states,
                 )
                 # ギャップ適用 → workflow_select に反映 → ループ続行（再 precheck）
@@ -1704,6 +1823,7 @@ class MainWindow(QMainWindow):
 
             if ret == int(QDialog.DialogCode.Accepted):
                 # 最終承認スナップショット（is_final_accepted=True、latest-accepted/ も生成）
+                # v2: additional_prompts / extra_provided は precheck で撤去済み → 空 dict を渡す
                 self._save_step1_args_snapshot(
                     iteration=self._step1_plan_review_iterations,
                     is_final_accepted=True,
@@ -1711,8 +1831,8 @@ class MainWindow(QMainWindow):
                     autopilot_mode=autopilot_mode,
                     precheck_result=result,
                     plan_review=review,
-                    additional_prompts=additional_prompts,
-                    extra_provided=extra_provided,
+                    additional_prompts={},
+                    extra_provided={},
                     auth_states=auth_states,
                 )
                 return True
@@ -1923,6 +2043,11 @@ class MainWindow(QMainWindow):
                 repo_root=self._repo_root,
             )
             args.app_ids = app_id
+            # Q5=B: Autopilot 経路でも Step 1 のステップ選択を CLI --steps に反映する。
+            args_steps_csv, _ = self._resolve_steps_for_workflow(
+                workflow_id, args.steps
+            )
+            args.steps = args_steps_csv
             return args.to_argv()
 
         self._autopilot_controller = AutopilotController(
@@ -1973,6 +2098,11 @@ class MainWindow(QMainWindow):
         from .wizard import WizardResult
 
         result = WizardResult(workflow=workflow_id)
+        # Q5=B: Autopilot prephase / main_workflow 経路でも Step 1 のステップ選択を
+        # CLI ``--steps`` に反映する。テキスト欄 (OrchestrateArgs.steps) はこの経路では
+        # 参照しないため第 2 引数は None。
+        args_steps_csv, _ = self._resolve_steps_for_workflow(workflow_id, None)
+        result.steps = args_steps_csv
         argv = result.to_orchestrate_argv()
         # title はログ表示用 (同一シグネチャ保持のため計算のみ残置)
         _ = title_template.format(
@@ -2083,10 +2213,22 @@ class MainWindow(QMainWindow):
 
         Phase 2 (Q3=B): container Step を親ノードとして含め、配下の非 container Step
         を ``StepSeed.children`` に階層化する (任意ネスト、Q7=B)。
+
+        Q1=C + Q5=B: Step 1 のステップ選択を進捗表示にも反映するため、
+        ``_resolve_steps_for_workflow`` で算出した実 Step ID 集合を
+        ``_build_step_seeds_for_workflow`` に渡してフィルタする。
         """
         from .workbench_state import WorkflowInstanceSeed
 
         seeds: list = []
+
+        def _enabled_for(wf_id: str) -> Optional[set]:
+            """Step 1 選択を解決し、進捗表示フィルタ用の実 Step ID set を返す。
+
+            Autopilot 経路では Step 2 のテキスト欄を参照しないため第 2 引数は None。
+            """
+            _csv, display_ids = self._resolve_steps_for_workflow(wf_id, None)
+            return display_ids or None  # 空 set は「未指定（全 ON）」扱いに統一
 
         # pre_phases (ARD/AAS) — app_id なし、instance_id = workflow_id
         for wf_id in (getattr(plan, "pre_phases", None) or []):
@@ -2096,7 +2238,7 @@ class MainWindow(QMainWindow):
                     workflow_id=wf_id,
                     label=wf_id,
                     app_id=None,
-                    steps=_build_step_seeds_for_workflow(wf_id),
+                    steps=_build_step_seeds_for_workflow(wf_id, _enabled_for(wf_id)),
                 )
             )
 
@@ -2110,7 +2252,7 @@ class MainWindow(QMainWindow):
                     workflow_id=wf_id,
                     label=wf_id,
                     app_id=None,
-                    steps=_build_step_seeds_for_workflow(wf_id),
+                    steps=_build_step_seeds_for_workflow(wf_id, _enabled_for(wf_id)),
                 )
             )
 
@@ -2128,7 +2270,7 @@ class MainWindow(QMainWindow):
                         workflow_id=wf_id,
                         label=label,
                         app_id=app_id or None,
-                        steps=_build_step_seeds_for_workflow(wf_id),
+                        steps=_build_step_seeds_for_workflow(wf_id, _enabled_for(wf_id)),
                     )
                 )
 
@@ -2138,18 +2280,21 @@ class MainWindow(QMainWindow):
         """pre_phases / main_workflows キュー用 seed (app_id なし) を生成する。
 
         Phase 2 (Q3=B): container Step を親に持つ階層構造で生成する。
+        Q1=C + Q5=B: Step 1 のステップ選択を進捗表示にも反映する。
         """
         from .workbench_state import WorkflowInstanceSeed
 
         seeds: list = []
         for wf_id in workflows:
+            _csv, display_ids = self._resolve_steps_for_workflow(wf_id, None)
+            enabled = display_ids or None
             seeds.append(
                 WorkflowInstanceSeed(
                     instance_id=wf_id,
                     workflow_id=wf_id,
                     label=wf_id,
                     app_id=None,
-                    steps=_build_step_seeds_for_workflow(wf_id),
+                    steps=_build_step_seeds_for_workflow(wf_id, enabled),
                 )
             )
         return seeds
@@ -2419,6 +2564,11 @@ class MainWindow(QMainWindow):
                 repo_root=self._repo_root,
             )
             args.app_ids = app_id
+            # Q5=B: Autopilot 経路でも Step 1 のステップ選択を CLI --steps に反映する。
+            args_steps_csv, _ = self._resolve_steps_for_workflow(
+                workflow_id, args.steps
+            )
+            args.steps = args_steps_csv
             return args.to_argv()
 
         self._autopilot_controller = AutopilotController(

@@ -72,6 +72,9 @@ class WizardResult:
     # Work IQ ページで入力された CLI 引数（`--workiq*` 系のみ）。
     # 未入力（ページ未表示・全項目空）の場合は空リスト。
     workiq_argv: List[str] = field(default_factory=list)
+    # --- Step 1 ステップ選択 反映用（Q5=B Autopilot prephase 経路）---
+    # CSV 文字列。空 / None のとき --steps は付与されない。
+    steps: Optional[str] = None
 
     def to_orchestrate_argv(self) -> List[str]:
         """`python -m hve orchestrate ...` の引数リストに変換する。"""
@@ -84,6 +87,9 @@ class WizardResult:
             argv.append("--auto-qa")
         if self.app_id:
             argv.extend(["--app-id", self.app_id])
+        # Step 1 のステップ選択を CLI に反映（Q5=B）
+        if self.steps:
+            argv.extend(["--steps", self.steps])
         # Work IQ 系オプションをスプライス（Phase 1 / Sub-002）
         if self.workiq_argv:
             argv.extend(self.workiq_argv)

@@ -1,14 +1,16 @@
 """左 workflow チェック → 右 OptionsPage 即時同期の回帰テスト。
 
-T1〜T7 で導入した「左の workflow チェック操作が即時に右ペイン
-`OptionsPage` の表示カテゴリへ反映される」挙動を担保する。
-旧 `AutopilotInputPanel` を統合し、Autopilot ON/OFF いずれでも
-同等に動作することを検証する。
+Step 1 右ペインは「ワークフロー単位の QGroupBox」で固有設定を表示する設計のため、
+左の workflow 選択変更が `_workflow_group_boxes` に即時反映されることを検証する。
 """
 
 from __future__ import annotations
 
+import os
+
 import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6")
 
@@ -24,54 +26,46 @@ def qapp():
     yield app
 
 
-def _category_visible(options: OptionsPage, key: str) -> bool:
-    """`OptionsPage._category_groups[key]` の表示意図を取得。
-
-    isVisible() は親が未描画なら False を返すため、`isHidden()` の否定で
-    「明示的に hide されていない」を検査する。
-    """
-    g = options._category_groups.get(key)
-    assert g is not None, f"category {key} not found"
-    return not g.isHidden()
-
-
 def test_options_page_initially_empty(qapp) -> None:
-    """workflow 未選択時は C10〜C14 はすべて非表示。"""
+    """workflow 未選択時は workflow group box が 1 つも作られない。"""
     options = OptionsPage()
-    # 既定で hide される（Step 2 不要カテゴリ）
-    for hidden_key in ("C1", "C3", "C5", "C6", "C7", "AZURE"):
-        assert _category_visible(options, hidden_key) is False
-    # workflow 未選択 → C10〜C14 も非表示
-    for cond_key in ("C4", "C10", "C11", "C12", "C13", "C14"):
-        assert _category_visible(options, cond_key) is False
+    assert options._workflow_group_boxes == {}
 
 
 def test_options_page_updates_on_set_workflows_ard(qapp) -> None:
-    """ARD 選択 → C4 (Work IQ) と C14 (要求定義書) が表示される。"""
+    """ARD 選択 → `ard` の workflow group box が生成される。"""
     options = OptionsPage()
     options.set_workflows(["ard"], {"ard": "ARD"})
-    assert _category_visible(options, "C14") is True
-    assert _category_visible(options, "C4") is True
-    # 他は非表示
-    for cond_key in ("C10", "C11", "C12", "C13"):
-        assert _category_visible(options, cond_key) is False
+    assert "ard" in options._workflow_group_boxes
+    # 他のワークフロー枠は作られない
+    for other in ("aad-web", "asdw-web", "adfd", "adfdv", "akm", "aqod", "adoc"):
+        assert other not in options._workflow_group_boxes
 
 
 def test_options_page_updates_on_set_workflows_aad_web(qapp) -> None:
-    """aad-web 選択 → C10 (アプリケーション ID) が表示される。"""
+    """aad-web 選択 → `aad-web` の workflow group box が生成される。"""
     options = OptionsPage()
     options.set_workflows(["aad-web"], {"aad-web": "AAD Web"})
-    assert _category_visible(options, "C10") is True
+    assert "aad-web" in options._workflow_group_boxes
 
 
 def test_options_page_clears_when_workflow_unset(qapp) -> None:
-    """workflow を空に戻すと C10〜C14 はすべて非表示に戻る。"""
+    """workflow を空に戻すと workflow group box は全て破棄される。"""
     options = OptionsPage()
     options.set_workflows(["aad-web"], {"aad-web": "AAD Web"})
-    assert _category_visible(options, "C10") is True
+    assert "aad-web" in options._workflow_group_boxes
     options.set_workflows([], {})
-    for cond_key in ("C4", "C10", "C11", "C12", "C13", "C14"):
-        assert _category_visible(options, cond_key) is False
+    assert options._workflow_group_boxes == {}
+
+
+def test_options_page_category_groups_always_hidden(qapp) -> None:
+    """旧カテゴリ枠 (C4 / C10〜C14) は workflow 選択に関係なく常時非表示。"""
+    options = OptionsPage()
+    options.set_workflows(["ard", "aad-web"], {"ard": "ARD", "aad-web": "AAD Web"})
+    for key in ("C4", "C10", "C11", "C12", "C13", "C14"):
+        g = options._category_groups.get(key)
+        assert g is not None
+        assert g.isHidden(), f"{key} should be hidden"
 
 
 def test_workflow_select_page_has_no_autopilot_input_panel(qapp) -> None:

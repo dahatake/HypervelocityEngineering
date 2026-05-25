@@ -192,7 +192,6 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "AUTOPILOT": {
         "autopilot_max_parallel": "autopilot_max_parallel",
         "step1_show_plan_review_always": "step1_show_plan_review_always",
-        "precheck_use_llm_judge": "precheck_use_llm_judge",
     },
     "GUI_SESSION": {
         "gui_session_cleanup_policy": "gui_session_cleanup_policy",

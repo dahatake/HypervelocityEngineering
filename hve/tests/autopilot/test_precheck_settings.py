@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from hve.autopilot.precheck_model import PrecheckCategory
-from hve.autopilot.precheck_settings import (
-    _REQUIRED_SETTING_KEYS,
-    collect_missing_auth,
-    collect_missing_workflow_settings,
-)
+from hve.autopilot.precheck_settings import collect_missing_auth
 
 
 class _FakeProvider:
@@ -50,19 +46,3 @@ def test_collect_missing_auth_reports_required_unauth() -> None:
     it = items[0]
     assert it.category is PrecheckCategory.AUTH
     assert it.field_name == "p2"
-
-
-def test_collect_missing_workflow_settings_empty_when_no_keys() -> None:
-    items = collect_missing_workflow_settings(["ard", "aad-web"], {})
-    assert items == []
-
-
-def test_collect_missing_workflow_settings_detects_missing(monkeypatch) -> None:
-    monkeypatch.setitem(_REQUIRED_SETTING_KEYS, "ard", ["xkey"])
-    try:
-        items = collect_missing_workflow_settings(["ard"], {"ard": {}})
-        assert len(items) == 1
-        assert items[0].category is PrecheckCategory.SETTING
-        assert items[0].field_name == "xkey"
-    finally:
-        _REQUIRED_SETTING_KEYS.pop("ard", None)

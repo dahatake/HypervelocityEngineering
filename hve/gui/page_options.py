@@ -29,7 +29,9 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -1344,24 +1346,33 @@ class _C7Connection(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
+        # ----------------------------------------------------------
+        # 互換性のため属性は保持するが UI 上は非表示（この画面からは設定しない）。
+        # ``to_args`` で None を返すために空 QLineEdit / 隠し _FilePickerWidget を残置。
+        # ----------------------------------------------------------
         self.cli_path = _FilePickerWidget(
             mode="file",
             title=self.tr("Copilot CLI 実行ファイルを選択"),
         )
-        self.cli_path.setPlaceholderText(self.tr("Copilot CLI 実行ファイルパス"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("Copilot CLI 実行ファイルパス"),
-            description=self.tr("Copilot CLI 実行ファイルパス（省略時: PATH から自動検出）。"),
-            input_widget=self.cli_path,
-        ))
-
+        self.cli_path.hide()
         self.cli_url = QLineEdit()
-        self.cli_url.setPlaceholderText(self.tr("例: localhost:4321"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("外部 CLI サーバー URL"),
-            description=self.tr("外部 CLI サーバー URL（例: localhost:4321）。"),
-            input_widget=self.cli_url,
-        ))
+        self.cli_url.hide()
+
+        # ----------------------------------------------------------
+        # 再列挙ボタン (MCP Servers / Plugins を `copilot` CLI から再取得)
+        # ----------------------------------------------------------
+        refresh_row = QHBoxLayout()
+        self._refresh_btn = QPushButton(self.tr("MCP Server / Plugin を再列挙"))
+        self._refresh_btn.setToolTip(
+            self.tr("`copilot mcp list --json` と `copilot plugin list` を実行して一覧を再取得します。")
+        )
+        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
+        refresh_row.addWidget(self._refresh_btn)
+        self._refresh_status = QLabel("")
+        self._refresh_status.setStyleSheet("color: #6a737d; padding-left: 8px;")
+        refresh_row.addWidget(self._refresh_status)
+        refresh_row.addStretch(1)
+        layout.addLayout(refresh_row)
 
         # ----------------------------------------------------------
         # T5 (Wave 1 / C2): MCP Server 利用 ON/OFF 設定
@@ -1382,6 +1393,24 @@ class _C7Connection(QWidget):
         self._mcp_checkboxes: Dict[str, QCheckBox] = {}
         self._mcp_empty_label: Optional[QLabel] = None
         self._populate_mcp_servers()
+
+        # ----------------------------------------------------------
+        # Plugin 一覧 (`copilot plugin list`)
+        # ----------------------------------------------------------
+        self._plugin_section_label = QLabel(
+            self.tr("Plugin 一覧（`copilot plugin list`）— Plugin は OAuth 認証不要（インストール時の GitHub 認証を利用）")
+        )
+        self._plugin_section_label.setStyleSheet("color: #6a737d; padding: 6px 0 2px 0;")
+        layout.addWidget(self._plugin_section_label)
+
+        self._plugin_container = QWidget(self)
+        self._plugin_container_layout = QVBoxLayout(self._plugin_container)
+        self._plugin_container_layout.setContentsMargins(0, 0, 0, 0)
+        self._plugin_container_layout.setSpacing(2)
+        layout.addWidget(self._plugin_container)
+
+        self._plugin_empty_label: Optional[QLabel] = None
+        self._populate_plugins()
 
     # ----------------------------------------------------------
     def _populate_mcp_servers(self) -> None:
@@ -1415,18 +1444,108 @@ class _C7Connection(QWidget):
 
         if not server_names:
             self._mcp_empty_label = QLabel(
-                self.tr("MCP Server が登録されていません（`copilot mcp add` 後に再起動してください）。")
+                self.tr("MCP Server が登録されていません（`copilot mcp add` 後に「再列挙」ボタンを押してください）。")
             )
             self._mcp_empty_label.setStyleSheet("color: #888; padding: 2px;")
             self._mcp_container_layout.addWidget(self._mcp_empty_label)
             return
 
         for name in server_names:
+            row_widget = QWidget(self._mcp_container)
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(6)
             cb = QCheckBox(name)
             cb.setChecked(bool(mcp_enabled.get(name, False)))
             cb.toggled.connect(self._on_mcp_toggle)
-            self._mcp_container_layout.addWidget(cb)
+            row_layout.addWidget(cb)
+            row_layout.addStretch(1)
+            auth_btn = QPushButton(self.tr("認証手順..."))
+            auth_btn.setToolTip(
+                self.tr("OAuth を使う Remote MCP Server の再認証手順を表示します（ローカル stdio サーバーは認証不要）。")
+            )
+            auth_btn.clicked.connect(lambda _checked=False, n=name: self._show_auth_guidance(n))
+            row_layout.addWidget(auth_btn)
+            self._mcp_container_layout.addWidget(row_widget)
             self._mcp_checkboxes[name] = cb
+
+    # ----------------------------------------------------------
+    def _populate_plugins(self) -> None:
+        """``copilot plugin list`` から Plugin 一覧を取得し表示する。"""
+        try:
+            from .copilot_cli_bridge import CopilotCliBridge
+            plugins = CopilotCliBridge.list_plugins()
+        except Exception:
+            plugins = []
+
+        # 既存ウィジェットをクリア
+        while self._plugin_container_layout.count():
+            item = self._plugin_container_layout.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+        self._plugin_empty_label = None
+
+        if not plugins:
+            self._plugin_empty_label = QLabel(
+                self.tr("Plugin が登録されていません（`copilot plugin install <name>` 後に再列挙してください）。")
+            )
+            self._plugin_empty_label.setStyleSheet("color: #888; padding: 2px;")
+            self._plugin_container_layout.addWidget(self._plugin_empty_label)
+            return
+
+        for p in plugins:
+            lbl = QLabel(f"• {p.name}@{p.source} (v{p.version})")
+            lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            self._plugin_container_layout.addWidget(lbl)
+
+    # ----------------------------------------------------------
+    def _on_refresh_clicked(self) -> None:
+        """MCP / Plugin 一覧を再列挙する。
+
+        ``CopilotCliBridge`` は同期 ``subprocess.run`` を使うため UI スレッドが
+        一時的にブロックされる。ボタン無効化 + ステータス表示で UX を補う
+        （将来的には ``QThread`` 化が望ましい）。
+        """
+        self._refresh_btn.setEnabled(False)
+        self._refresh_status.setText(self.tr("列挙中..."))
+        try:
+            # イベントキューを 1 回処理してラベルを描画させる
+            from PySide6.QtCore import QCoreApplication
+            QCoreApplication.processEvents()
+            self._populate_mcp_servers()
+            self._populate_plugins()
+            self._refresh_status.setText(self.tr("完了"))
+        finally:
+            self._refresh_btn.setEnabled(True)
+
+    # ----------------------------------------------------------
+    def _show_auth_guidance(self, server_name: str) -> None:
+        """個別 MCP Server の OAuth 再認証手順をダイアログ表示する。
+
+        現時点の GitHub Copilot CLI 公式リファレンスでは、コマンドライン直接の
+        ``copilot mcp auth`` サブコマンドは記載がなく、OAuth 再認証はインタラクティブ
+        セッション内のスラッシュコマンド ``/mcp auth <name>`` のみが公式手段。
+        本ダイアログはユーザーが手動で実行する手順を案内する（捏造禁止のため自動化はしない）。
+        """
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setWindowTitle(self.tr("MCP Server 認証手順"))
+        msg.setTextFormat(Qt.TextFormat.PlainText)
+        msg.setText(
+            self.tr(
+                "MCP Server '{name}' の OAuth 再認証を行うには、ターミナルで以下を実行してください:\n\n"
+                "  1. `copilot` を起動（インタラクティブモード）\n"
+                "  2. プロンプトで `/mcp auth {name}` を入力して送信\n"
+                "  3. ブラウザが開いたら GitHub アカウントでサインイン\n"
+                "     （Headless OAuth: client_credentials 構成の場合はブラウザは開きません）\n"
+                "  4. 完了後、サーバーは自動的に再接続されます\n\n"
+                "出典: GitHub Copilot CLI 公式リファレンス\n"
+                "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#oauth-re-authentication"
+            ).format(name=server_name)
+        )
+        msg.exec()
 
     # ----------------------------------------------------------
     def _on_mcp_toggle(self, _checked: bool) -> None:
@@ -1440,8 +1559,9 @@ class _C7Connection(QWidget):
 
     # ----------------------------------------------------------
     def refresh_mcp_servers(self) -> None:
-        """外部から MCP サーバ一覧を再列挙したい場合のフック (現状未使用)。"""
+        """外部から MCP サーバ一覧を再列挙したい場合のフック。Plugin も同時更新する。"""
         self._populate_mcp_servers()
+        self._populate_plugins()
 
     def mcp_enabled_dict(self) -> Dict[str, bool]:
         """現在のチェック状態を ``{server_name: bool}`` で返す。"""
@@ -1887,35 +2007,22 @@ _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
     "コンテキスト最大文字数",
 )
 
-# Step 2 表示カテゴリの正準順 (Workflow Step 順, ARD 先頭)。
-# `_reorder_visible_categories` が選択 Workflow の集合から表示順を決定する際に参照。
-# - 各 Workflow の主カテゴリを正準順で並べる。
-# - Step 2 で固有カテゴリを持たない Workflow (aas / aag / aagd) は
-#   `_WORKFLOW_TO_PRIMARY_CATEGORY` に意図的に未登録。
-# - 共有カテゴリ C4 (Work IQ) は `_C4_OWNER_WORKFLOWS` (= `_STEP2_FIELDS_BY_WORKFLOW`
-#   から動的に導出される) のいずれかが選択された場合に
-#   「最初に出現した所有 Workflow の主カテゴリ直後」へ 1 回だけ挿入する。
+# Step 1 右ペインのワークフロー枠 表示順（正準順 — ARD 先頭）。
+# `_refresh_specific_categories` が選択 Workflow 群を本リスト順で並べてグループ枠を生成する。
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
     "aag", "aagd", "akm", "aqod", "adoc",
 ]
-_WORKFLOW_TO_PRIMARY_CATEGORY: Dict[str, str] = {
-    "ard": "C14",
-    "aad-web": "C10",
-    "asdw-web": "C10",
-    "adfd": "C10",
-    "adfdv": "C10",
-    "akm": "C11",
-    "aqod": "C12",
-    "adoc": "C13",
-}
-# C4 を所有する Workflow を `_STEP2_FIELDS_BY_WORKFLOW` から動的に導出する。
-# (`_STEP2_FIELDS_BY_WORKFLOW` との二重管理を避け、同期漏れを防止)。
-_C4_OWNER_WORKFLOWS: set = {
-    wf_id
-    for wf_id, fields in _STEP2_FIELDS_BY_WORKFLOW.items()
-    if any(attr == "c4" for attr, _ in fields)
-}
+
+# Step 1 右ペインのワークフロー単位グループ枠（QGroupBox）共通スタイル。
+# `_setup_ui` の (常時非表示の) カテゴリ枠初期生成時 / `_refresh_specific_categories` の動的生成枠で共有する。
+_WORKFLOW_GROUP_STYLE = (
+    "QGroupBox { font-size: 11pt; font-weight: bold; "
+    "border: 1px solid #d0d7de; border-radius: 6px; "
+    "margin-top: 12px; padding: 12px 8px 8px 8px; background: #f6f8fa; }"
+    " QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; "
+    " color: #1f2328; }"
+)
 
 
 class OptionsPage(QWidget):
@@ -1960,6 +2067,12 @@ class OptionsPage(QWidget):
         self._app_id_checklist: Optional[QWidget] = None
         self._aas_notice: Optional[QWidget] = None
         self._groups_layout: Optional[QVBoxLayout] = None
+
+        # ワークフロー単位グループ枠（右ペイン）関連のステート。
+        # `_ensure_lf_registry()` で populate される。
+        self._workflow_group_boxes: Dict[str, QGroupBox] = {}
+        self._lf_registry: Dict[Tuple[str, str], _LabeledField] = {}
+        self._lf_home_layout: Dict[Tuple[str, str], QLayout] = {}
 
         # 必須要件サマリーバナー（Task C 統合）
         # 単一インスタンスを保持し、選択ワークフローに応じて配置先を動的切替する。
@@ -2160,44 +2273,69 @@ class OptionsPage(QWidget):
     def update_requirements_banner(
         self,
         selected: List[Tuple[str, List[str]]],
+        *,
+        autopilot_mode: bool = False,
+        autopilot_catalog_path: Optional[str] = None,
     ) -> None:
         """外部（WorkflowSelectPage）から呼び出される公開 API。
 
         Args:
             selected: [(workflow_id, [step_id, ...]), ...]
+            autopilot_mode: Autopilot トグル ON フラグ。True のときバナーは
+                Autopilot 仮想ワークフローの要件のみを表示する。
+            autopilot_catalog_path: Autopilot カタログファイルパス（autopilot_mode
+                のみ有効）。
         """
         self._last_banner_selection = selected
+        self._last_banner_autopilot_mode = bool(autopilot_mode)
+        self._last_banner_autopilot_catalog_path = autopilot_catalog_path
         self._refresh_requirements_banner()
 
     def _refresh_requirements_banner(self) -> None:
         """内部: バナー内容と配置先を更新する。"""
+        from .workflow_step_requirements import (
+            AUTOPILOT_PSEUDO_STEP_ID,
+            AUTOPILOT_PSEUDO_WORKFLOW_ID,
+        )
+
         selected = getattr(self, "_last_banner_selection", None)
-        if not selected:
-            # 選択未確定なら非表示
-            self._move_banner_to_section(None)
-            return
+        autopilot_mode = bool(getattr(self, "_last_banner_autopilot_mode", False))
+        autopilot_catalog_path = getattr(
+            self, "_last_banner_autopilot_catalog_path", None,
+        )
 
-        target = pick_target_step(selected)
-        if target is None:
-            self._move_banner_to_section(None)
-            return
+        if autopilot_mode:
+            workflow_id = AUTOPILOT_PSEUDO_WORKFLOW_ID
+            step_id = AUTOPILOT_PSEUDO_STEP_ID
+            attached_count = 0
+            origin_chosen = False
+        else:
+            if not selected:
+                # 選択未確定なら非表示
+                self._move_banner_to_section(None)
+                return
 
-        workflow_id, step_id = target
+            target = pick_target_step(selected)
+            if target is None:
+                self._move_banner_to_section(None)
+                return
 
-        # ARD 添付ペインの状態を取得
-        attached_count = 0
-        origin_chosen = False
-        if self._attachment_pane is not None and workflow_id == "ard":
-            ts = getattr(self._attachment_pane, "target_business_path", None)
-            if callable(ts):
-                origin_chosen = bool(ts())
-            # 添付件数: _results 属性を参照（無ければ 0）
-            results = getattr(self._attachment_pane, "_results", None)
-            if results is not None:
-                try:
-                    attached_count = len(results)
-                except Exception:
-                    attached_count = 0
+            workflow_id, step_id = target
+
+            # ARD 添付ペインの状態を取得
+            attached_count = 0
+            origin_chosen = False
+            if self._attachment_pane is not None and workflow_id == "ard":
+                ts = getattr(self._attachment_pane, "target_business_path", None)
+                if callable(ts):
+                    origin_chosen = bool(ts())
+                # 添付件数: _results 属性を参照（無ければ 0）
+                results = getattr(self._attachment_pane, "_results", None)
+                if results is not None:
+                    try:
+                        attached_count = len(results)
+                    except Exception:
+                        attached_count = 0
 
         summary = summarize_requirements(
             workflow_id, step_id,
@@ -2205,20 +2343,32 @@ class OptionsPage(QWidget):
             file_exists=self._banner_file_exists,
             attached_count=attached_count,
             origin_chosen=origin_chosen,
+            autopilot_catalog_path=autopilot_catalog_path,
         )
         if summary is None:
             self._move_banner_to_section(None)
             return
 
         section = summary.section
-        self._move_banner_to_section(section)
+        self._move_banner_to_section(section, workflow_id=workflow_id)
         self._requirements_banner.set_summary(summary)
         self._requirements_banner.setVisible(True)
 
-    def _move_banner_to_section(self, section: Optional[str]) -> None:
+    def _move_banner_to_section(
+        self,
+        section: Optional[str],
+        workflow_id: Optional[str] = None,
+    ) -> None:
         """バナーを指定セクションのレイアウト先頭に移動する。
 
-        section=None または不明セクション → 非表示。
+        - section="OPTIONS_TOP": OptionsPage の最上部（C3 直下相当）に配置。
+        - section が "C10"/"C11"/"C12"/"C13"/"C14" 等のカテゴリ識別子の場合は、
+          対応するワークフロー枠 (`_workflow_group_boxes[workflow_id]`) の先頭へ配置する。
+        - section=None または配置先未解決 → 非表示。
+
+        Note: 旧実装は `_category_groups[section]` 内に配置していたが、Step 1 右ペインの
+              ワークフロー単位グルーピング化に伴いカテゴリ枠は常時非表示となったため、
+              workflow_id 経由でワークフロー枠を引き当てる方式へ変更した。
         """
         banner = self._requirements_banner
         if section is None:
@@ -2245,9 +2395,11 @@ class OptionsPage(QWidget):
                 self._banner_current_section = section
                 return
         else:
-            group = self._category_groups.get(section)
-            if group is not None:
-                inner = group.layout()
+            box = None
+            if workflow_id is not None:
+                box = getattr(self, "_workflow_group_boxes", {}).get(workflow_id)
+            if box is not None:
+                inner = box.layout()
                 if inner is not None:
                     inner.insertWidget(0, banner)
                     self._banner_current_section = section
@@ -2278,13 +2430,7 @@ class OptionsPage(QWidget):
         self._groups_layout = groups_layout
 
         # 見出しスタイル: 太字・少し大きめ。説明文との視覚差を確保。
-        group_style = (
-            "QGroupBox { font-size: 11pt; font-weight: bold; "
-            "border: 1px solid #d0d7de; border-radius: 6px; "
-            "margin-top: 12px; padding: 12px 8px 8px 8px; background: #f6f8fa; }"
-            " QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; "
-            " color: #1f2328; }"
-        )
+        group_style = _WORKFLOW_GROUP_STYLE
 
         def _add(key: str, title: str, widget: QWidget) -> None:
             from .help_popup import HelpPopupButton
@@ -2339,28 +2485,32 @@ class OptionsPage(QWidget):
         layout.addWidget(scroll, stretch=1)
 
     def _refresh_specific_categories(self) -> None:
-        """ワークフロー別の表示制御（フィールド粒度）。
+        """ワークフロー別の表示制御（ワークフロー単位のグループ枠生成）。
 
-        - `_STEP2_HIDDEN_CATEGORIES` のカテゴリは Step 2 では完全非表示（設定画面で編集）。
-        - 残カテゴリ内の `_LabeledField` は全て一旦非表示。
-        - 選択ワークフローの `_STEP2_FIELDS_BY_WORKFLOW` で指定されたフィールドのみ表示。
-        - C15 の `追加プロンプト` は常に表示（共通・最下段）。
-        - 表示フィールドが 1 つも無いカテゴリ枠は非表示。
+        - `_STEP2_HIDDEN_CATEGORIES` のカテゴリ枠は常時非表示。
+        - C4/C10〜C14 のカテゴリ枠は表示せず、内部の `_LabeledField` を
+          ワークフロー単位の `QGroupBox` 枠（タイトル＝ワークフロー名）へ
+          動的に移設して表示する。
+        - 選択 ON のワークフローのみ枠を生成し、OFF のワークフローの枠は
+          破棄する（`_LabeledField` は元カテゴリ widget へ退避してから破棄）。
+        - 「追加プロンプト」(C3) は最上部に常時固定。
         - `aas` のみ選択時は案内ラベルを表示。
         """
         selected_workflows = self._workflow_ids or (
             [self._workflow_id] if self._workflow_id else []
         )
 
-        # 1) Step 2 非表示カテゴリは完全に隠す
-        for cat_key in _STEP2_HIDDEN_CATEGORIES:
+        # 1) Step 2 非表示カテゴリ + C4/C10〜C14 を全て非表示にする。
+        #    （C4/C10〜C14 は `_LabeledField` の退避先として生かしておくが枠は出さない）
+        always_hidden = set(_STEP2_HIDDEN_CATEGORIES) | {
+            "C4", "C10", "C11", "C12", "C13", "C14"
+        }
+        for cat_key in always_hidden:
             g = self._category_groups.get(cat_key)
             if g is not None:
                 g.setVisible(False)
 
         # 1.5) C3 内「追加プロンプト」のみは Step 1 右ペインで常時表示する例外。
-        #     - カテゴリ枠 C3 を可視化し、枠タイトルを「追加プロンプト」に上書き
-        #     - C3 内の他フィールド（QA 自動投入 等）は明示的に hide
         c3_group = self._category_groups.get("C3")
         if c3_group is not None:
             c3_group.setVisible(True)
@@ -2375,78 +2525,184 @@ class OptionsPage(QWidget):
                     head = lbl.text().split("  *")[0].strip()
                 lf.setVisible(head not in _C3_NON_ADDITIONAL_PROMPT_TITLES)
 
-        # 2) ワークフロー固有カテゴリ + C4 の全 _LabeledField を一旦非表示
-        category_attr_map = {
-            "C4": self.c4,
-            "C10": self.c10,
-            "C11": self.c11,
-            "C12": self.c12,
-            "C13": self.c13,
-            "C14": self.c14,
-        }
-        for cw in category_attr_map.values():
-            for lf in cw.findChildren(_LabeledField):
-                lf.setVisible(False)
+        # 2) `_LabeledField` レジストリを遅延構築。
+        self._ensure_lf_registry()
 
-        # 3) 表示すべきフィールドの集合を構築（重複は自動的に統合）
-        attr_to_category = {
-            "c4": "C4",
-            "c10": "C10",
-            "c11": "C11",
-            "c12": "C12",
-            "c13": "C13",
-            "c14": "C14",
-        }
-        wanted: List[tuple] = []
-        seen: set = set()
+        # 3) 既存の全ワークフロー枠を破棄する。
+        #    破棄前に内部の `_LabeledField` を元カテゴリ widget の layout に退避し、
+        #    deleteLater による LF 巻き込み破棄を防ぐ。
+        for box in list(self._workflow_group_boxes.values()):
+            self._evacuate_labeled_fields(box)
+            layout = getattr(self, "_groups_layout", None)
+            if layout is not None:
+                layout.removeWidget(box)
+            box.setParent(None)
+            box.deleteLater()
+        self._workflow_group_boxes = {}
 
-        def _add_field(entry: tuple) -> None:
-            if entry in seen:
-                return
-            seen.add(entry)
-            wanted.append(entry)
-
-        for wf_id in selected_workflows:
-            for entry in _STEP2_FIELDS_BY_WORKFLOW.get(wf_id, []):
-                _add_field(entry)
-        # 共通: 追加プロンプトを最下段で表示
-        for entry in _STEP2_COMMON_FIELDS:
-            _add_field(entry)
-
-        visible_categories: set = set()
-        for cat_attr, title in wanted:
-            cw = getattr(self, cat_attr, None)
-            if cw is None:
+        # 4) 選択ワークフローごとに新規グループ枠を生成（正準順）。
+        selected_set = set(selected_workflows)
+        # 「追加プロンプト」(C3) を index 0 に固定するため、ワークフロー枠は index 1 以降に挿入。
+        insert_idx = 1
+        for wf_id in _WORKFLOW_CANONICAL_ORDER:
+            if wf_id not in selected_set:
                 continue
-            lf = self._find_labeled_field(cw, title)
-            if lf is not None:
-                lf.setVisible(True)
-                cat_key = attr_to_category.get(cat_attr)
-                if cat_key:
-                    visible_categories.add(cat_key)
-
-        # 4) 表示フィールドが 1 つも無いカテゴリ枠を非表示
-        for cat_key, cw in category_attr_map.items():
-            g = self._category_groups.get(cat_key)
-            if g is None:
+            entries = _STEP2_FIELDS_BY_WORKFLOW.get(wf_id, [])
+            if not entries:
+                # 固有設定を持たないワークフロー（aas / aag / aagd 等）は枠を作らない。
                 continue
-            g.setVisible(cat_key in visible_categories)
+            box = self._build_workflow_group_box(wf_id, entries)
+            if box is None:
+                continue
+            self._workflow_group_boxes[wf_id] = box
+            layout = getattr(self, "_groups_layout", None)
+            if layout is not None:
+                layout.insertWidget(insert_idx, box)
+                insert_idx += 1
 
         # 5) APP-ID チェックリスト注入（aad-web のみ）
         self._refresh_app_id_checklist(selected_workflows)
 
-        # 6) `aas` 案内ラベル
-        self._refresh_aas_notice(selected_workflows, visible_categories)
+        # 6) `aas` 案内ラベル（visible_categories は枠 ID セットで代用）
+        self._refresh_aas_notice(
+            selected_workflows, set(self._workflow_group_boxes.keys())
+        )
 
-        # 7) 表示カテゴリを Workflow Step 順 (ARD 先頭) に並べ替え
-        self._reorder_visible_categories(selected_workflows, visible_categories)
-
-        # 8) 「追加プロンプト」(C3) を最上部に固定する。
-        #     - `_reorder_visible_categories` は ordered_keys が空のとき早期 return
-        #       するため、ここで独立に C3 ピン留めを行う。
-        #     - `_aas_notice` は index 0 に挿入されるが、ユーザー要件により
-        #       「追加プロンプトを一番上」とするため C3 をさらに index 0 へ前置する。
+        # 7) 「追加プロンプト」(C3) を最上部に固定する。
         self._pin_additional_prompt_top()
+
+        # 8) 必須要件バナーの再配置（ワークフロー枠が再生成されたため）
+        self._refresh_requirements_banner()
+
+    # ------------------------------------------------------------------
+    # ワークフロー単位グループ枠 — 内部ヘルパ
+    # ------------------------------------------------------------------
+
+    def _ensure_lf_registry(self) -> None:
+        """`(category_attr, normalized_title) -> _LabeledField` のレジストリを
+        遅延構築する。`_LabeledField` の親が動的に変わっても参照を維持するため、
+        ホーム layout（元カテゴリ widget の内部 layout）も同時に記録する。
+
+        レジストリ本体は `__init__` で空 dict として宣言済み。
+        """
+        if self._lf_registry:
+            return
+        for cat_attr in ("c4", "c10", "c11", "c12", "c13", "c14"):
+            cw = getattr(self, cat_attr, None)
+            if cw is None:
+                continue
+            for lf in cw.findChildren(_LabeledField):
+                lbl = lf.findChild(QLabel)
+                if lbl is None:
+                    continue
+                head = lbl.text().split("  *")[0].strip()
+                key = (cat_attr, head)
+                if key in self._lf_registry:
+                    continue
+                self._lf_registry[key] = lf
+                parent_w = lf.parentWidget()
+                home_layout = parent_w.layout() if parent_w is not None else None
+                if home_layout is not None:
+                    self._lf_home_layout[key] = home_layout
+
+    def _build_workflow_group_box(
+        self, wf_id: str, entries: List[Tuple[str, str]]
+    ) -> Optional[QGroupBox]:
+        """指定ワークフローの `QGroupBox`（タイトル＝ワークフロー名）を生成し、
+        `_STEP2_FIELDS_BY_WORKFLOW[wf_id]` のフィールドを内部 layout に移設する。
+
+        wf_id == "ard" の場合は ARD の `AttachmentPane`（添付資料 D&D）も同枠に含める。
+        フィールド / ペインが 1 つも解決できなかった場合は None を返す。
+        """
+        wf_name = self._workflow_name_map.get(wf_id, "")
+        title = format_workflow_label(wf_id, wf_name)
+        box = QGroupBox(title)
+        box.setStyleSheet(_WORKFLOW_GROUP_STYLE)
+        inner = QVBoxLayout(box)
+        inner.setContentsMargins(8, 8, 8, 8)
+
+        seen: set = set()
+        added = 0
+        for cat_attr, fld_title in entries:
+            key = (cat_attr, fld_title.strip())
+            if key in seen:
+                continue
+            seen.add(key)
+            lf = self._lf_registry.get(key)
+            if lf is None:
+                continue
+            inner.addWidget(lf)  # 親が自動的に box に切り替わる
+            lf.setVisible(True)
+            added += 1
+
+        # ARD: AttachmentPane を同じ枠に取り込む（初回は遅延生成）
+        if wf_id == "ard":
+            pane = self._ensure_attachment_pane()
+            if pane is not None:
+                inner.addWidget(pane)
+                pane.setVisible(True)
+                added += 1
+
+        if added == 0:
+            box.deleteLater()
+            return None
+        return box
+
+    def _ensure_attachment_pane(self) -> Optional[QWidget]:
+        """ARD `AttachmentPane` を遅延生成し、キャッシュして返す。
+        ARD ワークフロー枠の生成・破棄をまたぐように、`_evacuate_attachment_pane`
+        とセットで使う。生成済みならそのまま返す。
+        """
+        if self._attachment_pane is not None:
+            return self._attachment_pane
+        try:
+            from .page_options_ard import AttachmentPane
+        except ImportError:
+            return None
+        self._attachment_pane = AttachmentPane()
+        # 要求定義書 生成完了時に target_business フィールドへ自動セット
+        sig = getattr(self._attachment_pane, "business_requirement_generated", None)
+        if sig is not None:
+            sig.connect(self._on_business_requirement_generated)
+        # 添付ファイル件数/起点選択が変わったら要件バナーを再描画
+        files_sig = getattr(self._attachment_pane, "files_changed", None)
+        if files_sig is not None:
+            files_sig.connect(self._on_banner_input_changed)
+        return self._attachment_pane
+
+    def _evacuate_labeled_fields(self, box: QWidget) -> None:
+        """`box` 内の全 `_LabeledField` を元カテゴリの home layout に戻し、非表示化する。
+        併せて必須要件バナーが `box` 内にあれば親解除して救出する。
+
+        `box` を deleteLater する前に呼び出すこと。これにより `_LabeledField`
+        本体および接続されたシグナル/バリデータが破棄されるのを防ぐ。
+        """
+        # 必須要件バナー救出（`box.deleteLater()` による道連れ削除を防ぐ）
+        banner = getattr(self, "_requirements_banner", None)
+        if banner is not None and banner.parentWidget() is box:
+            banner.setParent(None)
+            self._banner_current_section = None
+
+        # AttachmentPane 救出（ARD 枠に付けた場合、`box.deleteLater()` で道連れ削除されるのを防ぐ）
+        attachment = getattr(self, "_attachment_pane", None)
+        if attachment is not None and attachment.parentWidget() is box:
+            attachment.setParent(None)
+
+        if not self._lf_registry:
+            return
+        # `_lf_registry` を逆引きするための一時 dict（同一 LF は 1 つだけ）。
+        lf_to_key: Dict[int, Tuple[str, str]] = {
+            id(lf): key for key, lf in self._lf_registry.items()
+        }
+        for lf in list(box.findChildren(_LabeledField)):
+            key = lf_to_key.get(id(lf))
+            if key is None:
+                continue
+            home = self._lf_home_layout.get(key)
+            if home is None:
+                continue
+            home.addWidget(lf)
+            lf.setVisible(False)
 
     def _pin_additional_prompt_top(self) -> None:
         """C3 カテゴリ枠（追加プロンプト）を `_groups_layout` の index 0 に固定する。"""
@@ -2461,89 +2717,6 @@ class OptionsPage(QWidget):
             return
         layout.removeWidget(c3)
         layout.insertWidget(0, c3)
-
-    def _reorder_visible_categories(
-        self,
-        selected_workflows: List[str],
-        visible_categories: set,
-    ) -> None:
-        """選択 Workflow に基づき表示カテゴリを正準順 (ARD 先頭) で並べ替える。
-
-        - `visible_categories` は `_refresh_specific_categories` で算出済みの
-          「表示意図」セット。`QWidget.isVisible()` は親階層未表示時に
-          False を返すため初回描画で空振りする。ここでは意図集合を使う。
-        - 共有カテゴリ C4 (Work IQ) は `_C4_OWNER_WORKFLOWS` の最初の所有
-          Workflow 直後に 1 回だけ挿入。
-        - 末尾の addStretch アイテム (QSpacerItem) は `removeWidget` の対象外
-          のため末尾に残る。
-        - 同じ並び順を連続で適用しないようキャッシュし (フローカス飛び/
-          フリッカ回避)、同一なら no-op とする。
-        """
-        layout = getattr(self, "_groups_layout", None)
-        if layout is None:
-            return
-
-        selected_set = set(selected_workflows)
-        ordered_keys: List[str] = []
-        c4_inserted = False
-        c4_intended_visible = "C4" in visible_categories
-
-        for wf_id in _WORKFLOW_CANONICAL_ORDER:
-            if wf_id not in selected_set:
-                continue
-            cat_key = _WORKFLOW_TO_PRIMARY_CATEGORY.get(wf_id)
-            if cat_key is None:
-                continue
-            if cat_key not in visible_categories:
-                continue
-            if cat_key not in ordered_keys:
-                ordered_keys.append(cat_key)
-            # C4 を最初の所有 Workflow (`_C4_OWNER_WORKFLOWS`) の直後に 1 回だけ挿入
-            if (
-                not c4_inserted
-                and c4_intended_visible
-                and wf_id in _C4_OWNER_WORKFLOWS
-                and "C4" not in ordered_keys
-            ):
-                ordered_keys.append("C4")
-                c4_inserted = True
-
-        if not ordered_keys:
-            return
-
-        # 連続適用キャッシュ: 同じ並び順なら何もしない (フリッカ/フォーカス飛び回避)
-        if getattr(self, "_last_ordered_keys", None) == ordered_keys:
-            return
-        self._last_ordered_keys = list(ordered_keys)
-
-        # 並べ替え対象を一旦 layout から外し、正準順で再挿入する。
-        # `removeWidget` は QSpacerItem (addStretch) に作用しないため stretch は末尾に残る。
-        for cat_key in ordered_keys:
-            g = self._category_groups.get(cat_key)
-            if g is not None:
-                layout.removeWidget(g)
-        for i, cat_key in enumerate(ordered_keys):
-            g = self._category_groups.get(cat_key)
-            if g is not None:
-                layout.insertWidget(i, g)
-
-    @staticmethod
-    def _find_labeled_field(parent_widget: QWidget, title: str) -> Optional["_LabeledField"]:
-        """parent_widget 配下から指定タイトルの _LabeledField を返す。
-
-        タイトル末尾の "*必須" マーカーは無視して比較する。
-        """
-        normalized = title.strip()
-        for lf in parent_widget.findChildren(_LabeledField):
-            lbl = lf.findChild(QLabel)
-            if lbl is None:
-                continue
-            text = lbl.text()
-            # "  *必須" を除去
-            head = text.split("  *")[0].strip()
-            if head == normalized:
-                return lf
-        return None
 
     def _refresh_app_id_checklist(self, selected_workflows: List[str]) -> None:
         """`aad-web` 選択時に APP-ID チェックリスト Widget を注入する。
@@ -2577,8 +2750,14 @@ class OptionsPage(QWidget):
 
         self._app_id_checklist = AppIdChecklist(self._repo_root, parent=self.c10)
 
-        # `app_ids` の _LabeledField を取得し、その入力ウィジェットの下にチェックリスト追加
-        target_lf = self._find_labeled_field(self.c10, "対象アプリケーション (APP-ID)")
+        # `app_ids` の _LabeledField を取得し、その入力ウィジェットの下にチェックリスト追加。
+        # `_LabeledField` は workflow group box へ reparent 済みの可能性があるため、
+        # `_lf_registry` 経由で検索する（`_find_labeled_field(self.c10, ...)` だと
+        # 既に c10 配下に居ないため None になる）。
+        self._ensure_lf_registry()
+        target_lf = self._lf_registry.get(
+            ("c10", "対象アプリケーション (APP-ID)")
+        )
         if target_lf is None:
             return
         target_lf.layout().addWidget(self._app_id_checklist)
@@ -2653,38 +2832,10 @@ class OptionsPage(QWidget):
         target.setVisible(False)
 
     def _update_attachment_pane_visibility(self) -> None:
-        """ARD 選択時に C14 セクションに添付 D&D ペインを動的追加する。
-
-        実装は `page_options_ard.AttachmentPane` を遅延 import。
+        """[Deprecated] ARD `AttachmentPane` の生成・配置は `_build_workflow_group_box`
+        + `_ensure_attachment_pane` 側に移管。本メソッドは互換のため残置（no-op）。
         """
-        selected_workflows = self._workflow_ids or ([self._workflow_id] if self._workflow_id else [])
-        if "ard" not in selected_workflows:
-            return
-        # 既に追加済みならスキップ
-        if self._attachment_pane is not None:
-            return
-        try:
-            from .page_options_ard import AttachmentPane
-        except ImportError:
-            return
-
-        self._attachment_pane = AttachmentPane()
-        # C14 のレイアウト末尾に追加（QVBoxLayout / QFormLayout 両対応）
-        c14_layout = self.c14.layout()
-        if isinstance(c14_layout, QFormLayout):
-            c14_layout.addRow(self._attachment_pane)
-        elif isinstance(c14_layout, QVBoxLayout):
-            c14_layout.addWidget(self._attachment_pane)
-
-        # 要求定義書 生成完了時に target_business フィールドへ自動セット
-        sig = getattr(self._attachment_pane, "business_requirement_generated", None)
-        if sig is not None:
-            sig.connect(self._on_business_requirement_generated)
-
-        # 添付ファイル件数/起点選択が変わったら要件バナーを再描画（接続漏れ対策）
-        files_sig = getattr(self._attachment_pane, "files_changed", None)
-        if files_sig is not None:
-            files_sig.connect(self._on_banner_input_changed)
+        return
 
     def _on_business_requirement_generated(self, rel_path: str) -> None:
         """AttachmentPane から要求定義書生成完了通知を受けて target_business を自動セット。"""

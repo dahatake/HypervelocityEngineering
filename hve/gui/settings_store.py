@@ -116,12 +116,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # True: ギャップ 0 件でも必ずプランレビュー Dialog を表示する
             # （実行プランの内訳確認を毎回行いたい上級ユーザー向け）。
             "step1_show_plan_review_always": False,
-            # Step 1 [次へ] 統合 precheck で、追加プロンプト本文に対する
-            # LLM (github-copilot-sdk) ベースの自然言語判定を有効化するフラグ。
-            # True（既定）: 部分文字列マッチで漏れた missing 項目を LLM が再判定し、
-            #   自然言語で言及／代替指定があると判断したものを satisfied として除外する。
-            # False: 従来の部分文字列マッチのみで判定（ネットワーク不通環境向け）。
-            "precheck_use_llm_judge": True,
             # ウィンドウ横幅の永続化（ユーザーが手動でリサイズした際のみ保存）。
             # 0 = 未設定（既定の 1100 を使用）。
             "main_window_width": 0,

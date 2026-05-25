@@ -223,7 +223,7 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "analysis_purpose": QT_TRANSLATE_NOOP("help_content", "ARD: 分析目的（省略時は『中長期成長戦略の立案』）。"),
     "target_recommendation_id": QT_TRANSLATE_NOOP("help_content", "ARD: Step 1（企業の事業分析）完了後に採用する Strategic Recommendation の ID（例: SR-1）。"),
     "attached_docs": QT_TRANSLATE_NOOP("help_content", "ARD: 添付資料パス（カンマ区切り・省略可）。"),
-    "additional_prompt": QT_TRANSLATE_NOOP("help_content", "全 Custom Agent の prompt 末尾に追記する文字列 (省略可)。Step 1 [次へ] 押下時の必須ファイル precheck では、設定『LLM 判定 (precheck_use_llm_judge)』が ON のとき、本文中で別ファイル名の指定／参照ファイルの追加指示等を自然言語で記述すると不足扱いが解除される。"),
+    "additional_prompt": QT_TRANSLATE_NOOP("help_content", "全 Custom Agent の prompt 末尾に追記する文字列 (省略可)。"),
     "context_max_chars": QT_TRANSLATE_NOOP("help_content", "各フェーズで注入するコンテキストの最大文字数（既定 20,000）。"),
     "dry_run": QT_TRANSLATE_NOOP("help_content", "ドライラン（実際の SDK 呼び出しをしない）。"),
     "self_improve": QT_TRANSLATE_NOOP("help_content", "自己改善ループ（Phase 4）を有効化する。"),

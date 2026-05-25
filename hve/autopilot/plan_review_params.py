@@ -15,6 +15,8 @@ from .plan_review_model import ParameterCategory, ParameterEntry
 
 # ``wizard_input_inspector._REQUIRED_BY_WORKFLOW`` を読み出してパラメータ表に展開する。
 # 同モジュールは Qt 非依存のため直接 import 可。
+# v2 改訂後: wizard_input_inspector モジュールは撤去済み（precheck の Wizard 検査は
+# workflow_step_requirements に統一）。本 try/except は import 失敗時に空配列を返す。
 def _wizard_required_fields(wf_id: str):
     try:
         from hve.gui.autopilot.wizard_input_inspector import (

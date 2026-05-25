@@ -85,7 +85,14 @@ WORKFLOW_TO_SECTION: Dict[str, str] = {
     "aas": "OPTIONS_TOP",
     "aag": "OPTIONS_TOP",
     "aagd": "OPTIONS_TOP",
+    "autopilot": "OPTIONS_TOP",
 }
+
+
+# 仮想ワークフロー ID。Autopilot ON 時に `pick_target_step` / `summarize_requirements`
+# から参照される。`workflow_registry.py` の WorkflowDef とは独立した GUI 内部 ID。
+AUTOPILOT_PSEUDO_WORKFLOW_ID: str = "autopilot"
+AUTOPILOT_PSEUDO_STEP_ID: str = "0"
 
 
 # --------------------------------------------------------------------------
@@ -317,6 +324,26 @@ _add(StepRequirement(
 ))
 
 
+# ---- Autopilot（仮想ワークフロー） ----
+# Autopilot ON 時はカタログから実行ワークフローが自動判定され、UI 上は個別
+# ワークフロー選択がグレーアウトされる。バナー / Precheck の両方で本エントリ
+# 1 件のみを評価し、カタログファイル本体の存在のみを確認する。
+# 実際のカタログパスは可変（GUI の page_workflow.autopilot_catalog_path()）のため、
+# required_file_kind は使わず summarize_requirements 側で動的にパスを差し込む。
+_add(StepRequirement(
+    workflow_id=AUTOPILOT_PSEUDO_WORKFLOW_ID,
+    step_id=AUTOPILOT_PSEUDO_STEP_ID,
+    required_info_keys=(),
+    required_info_logic="none",
+    required_file_kind=None,
+    guidance_text=(
+        "Autopilot モードでは Application Architecture Catalog "
+        "（既定: docs/catalog/app-arch-catalog.md）から実行ワークフローを自動判定します。"
+        "カタログファイルが存在することが必須です。"
+    ),
+))
+
+
 # --------------------------------------------------------------------------
 # 公開ユーティリティ
 # --------------------------------------------------------------------------
@@ -513,16 +540,21 @@ def summarize_requirements(
     file_exists: Optional[Callable[[str], bool]] = None,
     attached_count: int = 0,
     origin_chosen: bool = False,
+    autopilot_catalog_path: Optional[str] = None,
 ) -> Optional[RequirementsSummary]:
     """指定された (workflow_id, step_id) の要件サマリーを生成する。
 
     Args:
-        workflow_id: ワークフロー ID。
+        workflow_id: ワークフロー ID。``AUTOPILOT_PSEUDO_WORKFLOW_ID`` を指定すると
+            Autopilot モード用のサマリーを生成する。
         step_id: ステップ ID。
         input_values: 必須情報キー → 入力値の辞書（None は空辞書扱い）。
         file_exists: ファイル/ディレクトリ存在判定関数（None なら常に False）。
         attached_count: ARD 添付資料の件数。
         origin_chosen: ARD 添付資料の起点が選択済みかどうか。
+        autopilot_catalog_path: Autopilot モード時のカタログファイルパス（既定:
+            ``docs/catalog/app-arch-catalog.md``）。``workflow_id`` が
+            ``AUTOPILOT_PSEUDO_WORKFLOW_ID`` のときのみ使用される。
 
     Returns:
         RequirementsSummary、または該当要件未定義時は None。
@@ -541,13 +573,31 @@ def summarize_requirements(
         workflow_id, step_id, attached_count, origin_chosen,
     )
 
+    # Autopilot 専用: カタログファイル存在チェックを動的注入。
+    autopilot_overall = "ok"
+    autopilot_items: List[RequirementItem] = []
+    if workflow_id == AUTOPILOT_PSEUDO_WORKFLOW_ID and step_id == AUTOPILOT_PSEUDO_STEP_ID:
+        cat_path = autopilot_catalog_path or "docs/catalog/app-arch-catalog.md"
+        cat_ok = fe(cat_path)
+        autopilot_items.append(RequirementItem(
+            label=cat_path,
+            status="ok" if cat_ok else "warn",
+            detail="存在" if cat_ok else "未配置",
+        ))
+        autopilot_overall = "ok" if cat_ok else "warn"
+
     # overall 集約: いずれかが warn なら warn、すべて ok なら ok。
-    if "warn" in (info_overall, file_overall, origin_overall):
+    if "warn" in (info_overall, file_overall, origin_overall, autopilot_overall):
         overall = "warn"
     else:
         overall = "ok"
 
-    all_items = tuple(info_items) + tuple(file_items) + tuple(origin_items)
+    all_items = (
+        tuple(info_items)
+        + tuple(file_items)
+        + tuple(origin_items)
+        + tuple(autopilot_items)
+    )
     section = WORKFLOW_TO_SECTION.get(workflow_id, "OPTIONS_TOP")
 
     return RequirementsSummary(
@@ -558,4 +608,69 @@ def summarize_requirements(
         guidance_text=req.guidance_text,
         items=all_items,
     )
+
+
+# --------------------------------------------------------------------------
+# Task A-3: バナー / Precheck 共通入口
+# --------------------------------------------------------------------------
+
+
+def summarize_requirements_for_selection(
+    selected: Sequence[Tuple[str, Sequence[str]]],
+    *,
+    input_values: Optional[Dict[str, str]] = None,
+    file_exists: Optional[Callable[[str], bool]] = None,
+    attached_count: int = 0,
+    origin_chosen: bool = False,
+    autopilot_mode: bool = False,
+    autopilot_catalog_path: Optional[str] = None,
+) -> List[RequirementsSummary]:
+    """選択中の (workflow_id, step_ids) 群から、評価対象サマリーを生成する。
+
+    バナー（リアルタイム表示）と Step 1 Precheck（[次へ] 押下時検査）の
+    両方から呼ばれる **唯一の共通入口**。両者で同じ結果を返すために、本関数は
+    **常に 0 件または 1 件のサマリー** を返す（バナー表示と完全一致）。
+
+    決定ロジック:
+      - ``autopilot_mode=True`` のとき: Autopilot 仮想ワークフローの単独サマリー
+        1 件を返す（``selected`` 引数は無視）。
+      - ``autopilot_mode=False`` のとき: ``pick_target_step`` と同じ優先度で
+        最優先ワークフローの最小エントリステップを 1 件選び、そのサマリーのみを
+        返す。下流ワークフロー（例: ARD+AAS 同時選択時の AAS）の入力は、
+        上流ワークフロー（ARD）が同一セッション内で生成すると想定し検査しない。
+
+    Args:
+        selected: [(workflow_id, [step_id, ...]), ...]
+        input_values: 共通の入力値辞書。
+        file_exists: 共通のファイル存在判定関数。
+        attached_count: ARD 添付件数。
+        origin_chosen: ARD 起点選択状態。
+        autopilot_mode: Autopilot ON フラグ。
+        autopilot_catalog_path: Autopilot カタログパス（autopilot_mode のみ有効）。
+
+    Returns:
+        ``RequirementsSummary`` を 0〜1 件含むリスト。
+    """
+    if autopilot_mode:
+        s = summarize_requirements(
+            AUTOPILOT_PSEUDO_WORKFLOW_ID,
+            AUTOPILOT_PSEUDO_STEP_ID,
+            input_values=input_values,
+            file_exists=file_exists,
+            autopilot_catalog_path=autopilot_catalog_path,
+        )
+        return [s] if s is not None else []
+
+    target = pick_target_step(selected)
+    if target is None:
+        return []
+    workflow_id, step_id = target
+    s = summarize_requirements(
+        workflow_id, step_id,
+        input_values=input_values,
+        file_exists=file_exists,
+        attached_count=attached_count,
+        origin_chosen=origin_chosen,
+    )
+    return [s] if s is not None else []
 

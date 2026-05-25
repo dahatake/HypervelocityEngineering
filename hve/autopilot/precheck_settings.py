@@ -67,38 +67,6 @@ def collect_missing_auth(
     return items
 
 
-def collect_missing_workflow_settings(
-    workflow_ids: Iterable[str],
-    settings_by_workflow: Mapping[str, Mapping[str, Any]],
-) -> List[PrecheckItem]:
-    """Workflow-specific 必須設定が空のものを返す（現状は空集合を返す拡張点）。"""
-    items: List[PrecheckItem] = []
-    for wf_id in workflow_ids:
-        keys = _REQUIRED_SETTING_KEYS.get(wf_id, [])
-        if not keys:
-            continue
-        values = settings_by_workflow.get(wf_id, {})
-        for key in keys:
-            value = values.get(key)
-            if value is None or (isinstance(value, str) and not value.strip()):
-                items.append(
-                    PrecheckItem(
-                        category=PrecheckCategory.SETTING,
-                        workflow_id=wf_id,
-                        step_id=None,
-                        field_name=key,
-                        description=(
-                            f"Workflow '{wf_id}' の必須設定 '{key}' が未設定です。"
-                        ),
-                        remediation_hint=(
-                            f"Step 1 の Autopilot 統合入力パネルで '{key}' を設定してください。"
-                        ),
-                    )
-                )
-    return items
-
-
 __all__ = [
     "collect_missing_auth",
-    "collect_missing_workflow_settings",
 ]

@@ -603,6 +603,8 @@ class WorkflowSelectPage(QWidget):
         if hasattr(self, "_autopilot_catalog_edit"):
             self._autopilot_catalog_edit.setEnabled(checked)
         self._emit_autopilot_changed()
+        # バナーも Autopilot 状態に追随させる
+        self._notify_requirements_banner()
 
     def _emit_autopilot_changed(self, *_args) -> None:
         self.autopilot_changed.emit(
@@ -610,6 +612,8 @@ class WorkflowSelectPage(QWidget):
             self._autopilot_catalog_edit.text().strip()
             if hasattr(self, "_autopilot_catalog_edit") else "",
         )
+        # カタログパス変更時もバナー更新
+        self._notify_requirements_banner()
 
     # ----------------------------------------------------------
     # シグナルハンドラ
@@ -683,7 +687,14 @@ class WorkflowSelectPage(QWidget):
         if not callable(updater):
             return
         try:
-            updater(self._collect_all_selected_steps())
+            updater(
+                self._collect_all_selected_steps(),
+                autopilot_mode=self._autopilot_enabled,
+                autopilot_catalog_path=(
+                    self._autopilot_catalog_edit.text().strip()
+                    if hasattr(self, "_autopilot_catalog_edit") else None
+                ) or None,
+            )
         except Exception:
             # 表示更新失敗で本体機能を止めない
             pass

@@ -126,9 +126,6 @@ class _CAutopilotSection(QWidget):
       - ``step1_show_plan_review_always`` (bool, 既定 False, R5-c)
         旧名: ``autopilot_show_plan_review_always``。Step 1 [次へ] 統合 precheck で
         Autopilot ON/OFF いずれでも参照される共通設定として中立化済み。
-      - ``precheck_use_llm_judge`` (bool, 既定 True)
-        Step 1 [次へ] 押下時に追加プロンプト本文を LLM で自然言語解釈し、
-        部分文字列マッチで漏れた不足項目を再判定する。
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -165,21 +162,6 @@ class _CAutopilotSection(QWidget):
             input_widget=self.step1_show_plan_review_always,
         ))
 
-        # 追加プロンプトの LLM 判定（Step 1 precheck 共通設定）
-        self.precheck_use_llm_judge = QCheckBox(
-            self.tr("追加プロンプトを LLM で自然言語解釈する")
-        )
-        layout.addWidget(_LabeledField(
-            title=self.tr("LLM 判定 (precheck_use_llm_judge)"),
-            description=self.tr(
-                "ON（既定）にすると、Step 1 [次へ] 押下時に不足ファイルがあっても、"
-                " 追加プロンプト本文を LLM (github-copilot-sdk) が自然言語解釈して、"
-                " 別ファイル名の指定／参照ファイルの追加指定などで実質的に解消されているか判定します。"
-                " OFF にすると従来の部分文字列マッチのみで判定します"
-                "（ネットワーク不通環境向け）。"
-            ),
-            input_widget=self.precheck_use_llm_judge,
-        ))
         layout.addStretch(1)
 
 
@@ -375,19 +357,10 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("Work IQ", "C4"),
         ],
     ),
-    (
-        "ワークフロー固有設定",
-        [
-            ("アプリケーションID", "C10"),
-            ("Knowledge Management (AKM)", "C11"),
-            ("Original Docs Review (AQOD)", "C12"),
-            ("Source Codeからのドキュメント作成 (ADOC)", "C13"),
-            # C14 (ARD) は実行時パラメータのため Step 1 右ペインのみで編集する。
-            # 設定画面に二重表示すると同期しない独立インスタンスとなり、ユーザーが
-            # 入力先を取り違える原因となるため削除（業務エリア/対象企業名は
-            # Step 1 右ペインの C14 のみで入力する）。
-        ],
-    ),
+    # 「ワークフロー固有設定」(C10/C11/C12/C13) は Step 1 右ペインのワークフロー枠で
+    # 編集する設計に統一したため設定画面からは削除。C14 (ARD) は従来通り Step 1 右ペインのみ。
+    # `_C10AppId` / `_C11AKM` 等のクラスは OptionsPage が直接インスタンス化するため
+    # import は残置する（`_section_factory` 内の C10〜C13 分岐も維持）。
     (
         "skills",
         # スキル名子ノードは hve.gui.skill_sections レジストリから動的に
