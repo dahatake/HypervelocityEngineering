@@ -1,15 +1,21 @@
 """validate-io-contract.py
 
-Validates the `io_contract:` frontmatter block of every `.github/agents/*.agent.md`
-file against the schema defined in `.github/agents/CONTRIBUTING.md`, and checks
-producer/consumer integrity across the agent catalog.
+Validates every `.github/io-contracts/*.yaml` file against the schema defined
+in `.github/io-contracts/SCHEMA.md`, and checks producer/consumer integrity
+across the agent catalog.
+
+Each YAML file is named `<AgentName>.yaml` and contains the io_contract directly
+(i.e. top-level keys are `inputs:` and `outputs:`).
+
+Also cross-checks the io-contracts against `hve/workflow_registry.py` StepDefs
+to detect declaration drift between the two systems (registry_mismatch).
 
 Exit codes:
   0: all valid
-  1: schema or integrity errors detected
+  1: schema, integrity, or registry-mismatch errors detected
 
 Usage:
-  python .github/scripts/validate-io-contract.py [--verbose]
+  python .github/scripts/validate-io-contract.py [--verbose] [--no-registry-check]
 """
 
 from __future__ import annotations
@@ -21,7 +27,7 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTS_DIR = REPO_ROOT / ".github" / "agents"
+IO_CONTRACTS_DIR = REPO_ROOT / ".github" / "io-contracts"
 EXCEPTIONS_FILE = REPO_ROOT / ".github" / "io-contract-exceptions.yaml"
 
 VALID_INPUT_KINDS = {"agent_artifact", "static", "runtime_param", "external"}
@@ -36,29 +42,25 @@ def load_exceptions() -> dict:
         return yaml.safe_load(f) or {}
 
 
-def extract_frontmatter(text: str) -> tuple[dict | None, str]:
-    if not text.startswith("---"):
-        return None, "no frontmatter"
-    end = text.find("\n---\n", 4)
-    if end == -1:
-        end = text.find("\n---", 4)
-        if end == -1:
-            return None, "unterminated frontmatter"
-    fm_text = text[4:end]
+def load_io_contract(path: Path) -> tuple[dict | None, str]:
+    """Load io_contract YAML. Returns (contract_dict, error_message)."""
     try:
-        return yaml.safe_load(fm_text), ""
+        with path.open("r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
     except yaml.YAMLError as e:
         return None, f"YAML parse error: {e}"
+    except OSError as e:
+        return None, f"I/O error: {e}"
+    if data is None:
+        return None, "empty file"
+    if not isinstance(data, dict):
+        return None, "io_contract must be a mapping"
+    return data, ""
 
 
-def validate_io_contract(agent_name: str, fm: dict) -> list[str]:
+def validate_io_contract(agent_name: str, contract: dict) -> list[str]:
     """Validate a single agent's io_contract structure. Returns list of errors."""
     errors: list[str] = []
-    contract = fm.get("io_contract")
-    if contract is None:
-        return [f"{agent_name}: missing io_contract"]
-    if not isinstance(contract, dict):
-        return [f"{agent_name}: io_contract must be a mapping"]
 
     for role_key in ("inputs", "outputs"):
         items = contract.get(role_key)
@@ -83,6 +85,17 @@ def validate_io_contract(agent_name: str, fm: dict) -> list[str]:
                     errors.append(f"{agent_name}: inputs[{i}].kind missing")
                 elif item["kind"] not in VALID_INPUT_KINDS:
                     errors.append(f"{agent_name}: inputs[{i}].kind invalid: {item['kind']}")
+                # producer requirement: required=true && kind=agent_artifact => producer must be non-empty string
+                if (
+                    item.get("required") is True
+                    and item.get("kind") == "agent_artifact"
+                ):
+                    prod = item.get("producer")
+                    if not isinstance(prod, str) or prod.strip() == "":
+                        errors.append(
+                            f"{agent_name}: inputs[{i}].producer must be non-empty "
+                            f"when required=true and kind=agent_artifact (path={item.get('path')!r})"
+                        )
             elif role_key == "outputs":
                 if "mode" not in item:
                     errors.append(f"{agent_name}: outputs[{i}].mode missing")
@@ -95,8 +108,8 @@ def validate_io_contract(agent_name: str, fm: dict) -> list[str]:
 def collect_producers(agents: dict[str, dict]) -> dict[str, list[str]]:
     """Build map: output_path -> [agent names that produce it]."""
     producers: dict[str, list[str]] = defaultdict(list)
-    for name, fm in agents.items():
-        for out in (fm.get("io_contract") or {}).get("outputs") or []:
+    for name, contract in agents.items():
+        for out in contract.get("outputs") or []:
             if isinstance(out, dict) and out.get("path"):
                 producers[out["path"]].append(name)
     return producers
@@ -137,10 +150,12 @@ def check_integrity(agents: dict[str, dict], producers: dict[str, list[str]], ex
                 return sum((producers[p] for p in basename_to_paths[path]), [])
         return []
 
-    for name, fm in agents.items():
-        if name in skip:
+    for name, contract in agents.items():
+        # per-Step filename: <Agent>--<workflow>--<stepId>. Skip-match against either basename or Agent name.
+        agent_short = name.split("--", 1)[0]
+        if name in skip or agent_short in skip:
             continue
-        for inp in (fm.get("io_contract") or {}).get("inputs") or []:
+        for inp in contract.get("inputs") or []:
             if not isinstance(inp, dict):
                 continue
             path = inp.get("path")
@@ -167,32 +182,40 @@ def check_integrity(agents: dict[str, dict], producers: dict[str, list[str]], ex
 
 def main() -> int:
     verbose = "--verbose" in sys.argv
+    skip_registry = "--no-registry-check" in sys.argv
     exceptions = load_exceptions()
 
     agents: dict[str, dict] = {}
     schema_errors: list[str] = []
-    for fp in sorted(AGENTS_DIR.glob("*.agent.md")):
+    if not IO_CONTRACTS_DIR.is_dir():
+        print(f"ERROR: io-contracts directory not found: {IO_CONTRACTS_DIR}", file=sys.stderr)
+        return 1
+    for fp in sorted(IO_CONTRACTS_DIR.glob("*.yaml")):
         if fp.name.startswith("_"):
             continue
-        agent_name = fp.stem.replace(".agent", "")
-        text = fp.read_text(encoding="utf-8")
-        fm, err = extract_frontmatter(text)
+        agent_name = fp.stem
+        contract, err = load_io_contract(fp)
         if err:
             schema_errors.append(f"{agent_name}: {err}")
             continue
-        if not isinstance(fm, dict):
-            schema_errors.append(f"{agent_name}: frontmatter not a mapping")
+        if not isinstance(contract, dict):
+            schema_errors.append(f"{agent_name}: io_contract not a mapping")
             continue
-        agents[agent_name] = fm
-        schema_errors.extend(validate_io_contract(agent_name, fm))
+        agents[agent_name] = contract
+        schema_errors.extend(validate_io_contract(agent_name, contract))
 
     producers = collect_producers(agents)
     integrity_errors = check_integrity(agents, producers, exceptions)
+    registry_mismatch_errors = (
+        [] if skip_registry else check_registry_mismatch(agents)
+    )
 
-    all_errors = schema_errors + integrity_errors
+    all_errors = schema_errors + integrity_errors + registry_mismatch_errors
     print(f"Agents checked: {len(agents)}")
     print(f"Schema errors: {len(schema_errors)}")
     print(f"Integrity errors: {len(integrity_errors)}")
+    if not skip_registry:
+        print(f"Registry mismatch errors: {len(registry_mismatch_errors)}")
 
     if verbose or all_errors:
         for e in all_errors:
@@ -201,5 +224,79 @@ def main() -> int:
     return 0 if not all_errors else 1
 
 
+def check_registry_mismatch(agents: dict[str, dict]) -> list[str]:
+    """Cross-check io-contracts against hve/workflow_registry.py StepDefs.
+
+    For each StepDef with a custom_agent, compares:
+      - StepDef.required_input_paths  vs  io-contract inputs (required=true)
+      - StepDef.output_paths + output_paths_template  vs  io-contract outputs
+
+    Returns a list of mismatch error messages. Pure path-string comparison;
+    placeholder normalization is not performed.
+    """
+    errors: list[str] = []
+    try:
+        sys.path.insert(0, str(REPO_ROOT))
+        from hve.workflow_registry import list_workflows  # type: ignore
+    except Exception as e:  # pragma: no cover
+        errors.append(f"registry import failed: {e}")
+        return errors
+
+    for wf in list_workflows():
+        wf_id = wf.id
+        for step in wf.steps:
+            if getattr(step, "is_container", False):
+                continue
+            agent = getattr(step, "custom_agent", None)
+            if not agent:
+                continue
+            # Per-Step file naming (Q-A2.1=A): <Agent>--<workflow>--<stepId>.yaml
+            basename = f"{agent}--{wf_id}--{step.id}"
+            contract = agents.get(basename)
+            if contract is None:
+                errors.append(
+                    f"{wf_id}/{step.id}: per-Step io-contract '{basename}.yaml' not found"
+                )
+                continue
+
+            ri = [
+                i for i in (contract.get("inputs") or [])
+                if i.get("required") is True and i.get("kind") == "agent_artifact"
+            ]
+            ri_paths = {(i.get("path") or "").strip() for i in ri}
+            ao_paths = {
+                (o.get("path") or "").strip()
+                for o in (contract.get("outputs") or [])
+            }
+            step_in = {p.strip() for p in (step.required_input_paths or [])}
+            step_out = {p.strip() for p in (step.output_paths or [])} | {
+                p.strip() for p in (step.output_paths_template or [])
+            }
+
+            only_step_out = sorted(step_out - ao_paths)
+            only_contract_out = sorted(ao_paths - step_out)
+            only_step_in = sorted(step_in - ri_paths)
+            only_contract_in = sorted(ri_paths - step_in)
+
+            for p in only_step_out:
+                errors.append(
+                    f"{wf_id}/{step.id}({basename}): output '{p}' declared in StepDef but not in io-contract"
+                )
+            for p in only_contract_out:
+                errors.append(
+                    f"{wf_id}/{step.id}({basename}): output '{p}' declared in io-contract but not in StepDef"
+                )
+            for p in only_step_in:
+                errors.append(
+                    f"{wf_id}/{step.id}({basename}): required input '{p}' declared in StepDef but not in io-contract"
+                )
+            for p in only_contract_in:
+                errors.append(
+                    f"{wf_id}/{step.id}({basename}): required input '{p}' declared in io-contract but not in StepDef"
+                )
+    return errors
+
+
 if __name__ == "__main__":
     sys.exit(main())
+

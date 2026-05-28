@@ -1,0 +1,5 @@
+inputs: []
+outputs:
+- path: docs-generated/components/test-spec-summary.md
+  required: true
+  mode: create

@@ -10,7 +10,7 @@
 - `docs/azure/azure-services-compute.md`
 - `docs/azure/azure-services-data.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
-- `src/app/`, `src/api/`, `infra/`, `config/`, `.github/workflows/`
+- `src/app/`, `src/api/`, `src/infra/`, `config/`, `.github/workflows/`
 
 ## 出力
 - `docs/azure/dependency-review-report.md`

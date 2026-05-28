@@ -1,0 +1,28 @@
+inputs:
+- path: docs/catalog/use-case-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog
+- path: docs/usecase/
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog
+outputs:
+- path: docs/dataflow/dataflow-domain-analytics.md
+  required: true
+  mode: create
+- path: knowledge/
+  required: false
+  mode: create
+- path: knowledge/D04-業務プロセス仕様書.md
+  required: true
+  mode: create
+- path: knowledge/D05-ユースケース-シナリオカタログ.md
+  required: true
+  mode: create
+- path: knowledge/D06-業務ルール-判定表仕様書.md
+  required: true
+  mode: create
+- path: knowledge/D07-用語集-ドメインモデル定義書.md
+  required: true
+  mode: create

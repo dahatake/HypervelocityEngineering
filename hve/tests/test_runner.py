@@ -765,77 +765,9 @@ class TestWorkIQToolNamesConsistency(unittest.TestCase):
         self.assertFalse(step_runner._workiq_tool_called)
 
 
-class TestWorkIQCustomAgentToolsWarning(unittest.TestCase):
-    """Work IQ は QA フェーズ専用のため custom agent tools 制限警告を出さない。"""
-
-    def _make_runner(self, **cfg_kwargs) -> StepRunner:
-        cfg = SDKConfig(dry_run=True, model="claude-opus-4.7", **cfg_kwargs)
-        console = Console(verbose=False, quiet=True)
-        return StepRunner(config=cfg, console=console)
-
-    def test_restricted_tools_no_warning_when_workiq_enabled(self) -> None:
-        """Work IQ 有効 + restricted tools でも Phase 1 では警告しない。"""
-        restricted_agent = {
-            "name": "MyAgent",
-            "tools": ["edit_file", "write_file"],
-            "prompt": "agent prompt",
-        }
-        cfg = SDKConfig(
-            dry_run=True, model="claude-opus-4.7",
-            workiq_enabled=True,
-            custom_agents_config=[restricted_agent],
-        )
-        console = Console(verbose=False, quiet=False)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        with _CaptureOutput() as cap:
-            _run(step_runner.run_step("1.1", "test", "prompt", custom_agent="MyAgent"))
-
-        combined = cap.stdout + cap.stderr
-        self.assertNotIn("Work IQ is enabled", combined)
-        self.assertNotIn("restricted tools", combined)
-
-    def test_wildcard_tools_no_warning(self) -> None:
-        """tools=['*'] の場合は警告が出ないこと。"""
-        wildcard_agent = {
-            "name": "MyAgent",
-            "tools": ["*"],
-            "prompt": "agent prompt",
-        }
-        cfg = SDKConfig(
-            dry_run=True, model="claude-opus-4.7",
-            workiq_enabled=True,
-            custom_agents_config=[wildcard_agent],
-        )
-        console = Console(verbose=False, quiet=False)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        with _CaptureOutput() as cap:
-            _run(step_runner.run_step("1.1", "test", "prompt", custom_agent="MyAgent"))
-
-        combined = cap.stdout + cap.stderr
-        self.assertNotIn("restricted tools", combined)
-
-    def test_workiq_tool_in_tools_no_warning(self) -> None:
-        """tools に Work IQ ツールが含まれる場合は警告が出ないこと。"""
-        agent_with_workiq = {
-            "name": "MyAgent",
-            "tools": ["ask_work_iq", "edit_file"],
-            "prompt": "agent prompt",
-        }
-        cfg = SDKConfig(
-            dry_run=True, model="claude-opus-4.7",
-            workiq_enabled=True,
-            custom_agents_config=[agent_with_workiq],
-        )
-        console = Console(verbose=False, quiet=False)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        with _CaptureOutput() as cap:
-            _run(step_runner.run_step("1.1", "test", "prompt", custom_agent="MyAgent"))
-
-        combined = cap.stdout + cap.stderr
-        self.assertNotIn("restricted tools", combined)
+# NOTE: TestWorkIQCustomAgentToolsWarning (Phase 1 以前の Work IQ + Custom Agent
+# tools 警告テストクラス) は Phase 8 S-2 で全テストメソッドとクラス本体を
+# 削除した（custom_agents_config フィールド廃止に伴う dead test）。
 
 
 # ---------------------------------------------------------------------------
@@ -1872,6 +1804,10 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
         self.assertEqual(kw.get("excluded_tools"), ["web_search"])
 
     def test_main_session_omits_keys_when_unset(self) -> None:
+        """Phase 8 S-3 revert: `available_tools` のデフォルトは `None` の据え置き
+        （カテゴリ名と SDK 実ツール名のミスマッチ問題のため）。env 未設定時は
+        SDK へキーを伝搬しないこと。
+        """
         cfg = SDKConfig(
             dry_run=False,
             model="claude-opus-4.7",
@@ -2053,13 +1989,16 @@ class TestSubSessionOptsCustomAgent(unittest.TestCase):
         return StepRunner(config=cfg, console=console)
 
     def test_custom_agent_sets_opts(self) -> None:
+        """Phase 2 (Q1=C / Q3=a) 移行後: SDK へ `custom_agent` キーは渡さない。"""
         runner = self._make_runner()
         with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
             opts = runner._build_sub_session_opts(
                 "claude-opus-4.7",
                 custom_agent="Arch-UI-Detail",
             )
-        self.assertEqual(opts.get("custom_agent"), "Arch-UI-Detail")
+        self.assertNotIn("custom_agent", opts)
+        self.assertNotIn("agent", opts)
+        self.assertNotIn("custom_agents", opts)
 
     def test_custom_agent_omitted_backward_compat(self) -> None:
         """QA/Review 既存呼び出し（custom_agent 省略）では opts に含めない。"""

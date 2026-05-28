@@ -62,7 +62,6 @@ class OrchestrateArgs:
     # C3: 自動プロンプト (L711-L747)
     # ------------------------------------------------------------------
     auto_qa: bool = False
-    force_interactive: bool = False
     auto_contents_review: bool = False
     auto_coding_agent_review: bool = False
     auto_coding_agent_review_auto_approval: bool = False
@@ -135,6 +134,9 @@ class OrchestrateArgs:
     # C9: ブランチ / ステップ選択 (L967-L980)
     # ------------------------------------------------------------------
     branch: str = "main"
+    # `steps` は GUI 設定画面の入力欄からは削除済みだが、Step 1 のワークフロー別
+    # ステップ選択（main_window._resolve_steps_for_workflow → args.steps = ...）の
+    # 受け皿として残置。to_argv() で --steps として subprocess へ伝搬する。
     steps: Optional[str] = None
 
     # ------------------------------------------------------------------
@@ -194,6 +196,9 @@ class OrchestrateArgs:
     dry_run: bool = False
     self_improve: bool = False
     no_self_improve: bool = False
+    self_improve_max_iterations: Optional[int] = None
+    self_improve_target_scope: Optional[str] = None
+    self_improve_goal: Optional[str] = None
     mdq_watch: TriState = None  # BooleanOptionalAction (--mdq-watch / --no-mdq-watch)
     mdq_watch_debounce_ms: Optional[int] = None
 
@@ -244,8 +249,6 @@ class OrchestrateArgs:
         # --- C3 ---
         if self.auto_qa:
             argv.append("--auto-qa")
-        if self.force_interactive:
-            argv.append("--force-interactive")
         if self.auto_contents_review:
             argv.append("--auto-contents-review")
         if self.auto_coding_agent_review:
@@ -406,6 +409,12 @@ class OrchestrateArgs:
             argv.append("--self-improve")
         if self.no_self_improve:
             argv.append("--no-self-improve")
+        if self.self_improve_max_iterations is not None:
+            argv += ["--self-improve-max-iterations", str(self.self_improve_max_iterations)]
+        if self.self_improve_target_scope:
+            argv += ["--self-improve-target-scope", self.self_improve_target_scope]
+        if self.self_improve_goal:
+            argv += ["--self-improve-goal", self.self_improve_goal]
         _append_tristate(argv, "--mdq-watch", "--no-mdq-watch", self.mdq_watch)
         if self.mdq_watch_debounce_ms is not None:
             argv += ["--mdq-watch-debounce-ms", str(self.mdq_watch_debounce_ms)]

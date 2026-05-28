@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-label="AAS インフォグラフィック">
-  <desc>AAS（App Architecture Design）8ステップ: 入力ファイル → Custom Agent → 出力ファイルのデータフロー図</desc>
+  <desc>AAS（App Architecture Design）8ステップ: 入力ファイル → Prompt → 出力ファイルのデータフロー図</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
@@ -88,7 +88,7 @@
   <rect x="20" y="490" width="14" height="14" rx="2" class="in"/>
   <text x="40" y="501" class="lbl">入力</text>
   <rect x="80" y="490" width="14" height="14" rx="2" class="agt"/>
-  <text x="100" y="501" class="lbl">Custom Agent</text>
+  <text x="100" y="501" class="lbl">Prompt</text>
   <rect x="200" y="490" width="14" height="14" rx="2" class="out"/>
   <text x="220" y="501" class="lbl">出力</text>
 </svg>

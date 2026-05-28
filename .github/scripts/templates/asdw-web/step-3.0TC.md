@@ -12,7 +12,7 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
-- `test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）
+- `src/test/ui/` 配下に Jest + jsdom テストファイル（テストコードのみ）
 
 {existing_artifact_policy}
 
@@ -32,6 +32,6 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 - Step.3.0T（UI テスト仕様書）が `asdw-web:done` であること
 
 ## 完了条件
-- `test/ui/` 配下に UI テストコードが生成されている
+- `src/test/ui/` 配下に UI テストコードが生成されている
 - Jest テストで全テストが FAIL（RED 状態）であることが確認されている
 {completion_instruction}{app_id_section}{additional_section}

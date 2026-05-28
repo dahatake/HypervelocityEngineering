@@ -1,0 +1,39 @@
+inputs:
+- path: '{scan_result_json}'
+  required: true
+  kind: runtime_param
+- path: '{WORK}../QA-CodeQualityScan/artifacts/scan-result.json'
+  required: true
+  kind: agent_artifact
+  producer: QA-CodeQualityScan
+- path: '{target_scope}'
+  required: true
+  kind: runtime_param
+- path: '{iteration}'
+  required: true
+  kind: runtime_param
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D15-非機能-運用-監視-DR-仕様書.md
+  required: true
+  kind: static
+- path: knowledge/D17-品質保証-UAT-受入パッケージ.md
+  required: true
+  kind: static
+- path: knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md
+  required: true
+  kind: static
+outputs:
+- path: '{WORK}plan.md'
+  required: true
+  mode: create
+- path: .github/skills/task-dag-planning/references/plan-template.md
+  required: true
+  mode: create
+- path: bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
+  required: true
+  mode: create
+- path: '{WORK}subissues.md'
+  required: true
+  mode: create

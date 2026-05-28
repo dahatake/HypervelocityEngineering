@@ -1,0 +1,12 @@
+inputs:
+- path: users-guide/01-business-requirement.md
+  required: true
+  kind: static
+- path: docs/business/{key}-analysis.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-BusinessAnalysis-Untargeted--ard--1.1
+outputs:
+- path: docs/company-business-requirement.md
+  required: true
+  mode: create

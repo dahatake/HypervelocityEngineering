@@ -60,7 +60,7 @@
   <rect class="box copilot" x="280" y="370" width="540" height="100" rx="6"/>
   <text class="h" x="300" y="394">GitHub Copilot Coding Agent（クラウド側）</text>
   <text x="300" y="414">Sub-Issue body をプロンプトとして実行</text>
-  <text x="300" y="432">.github/agents/*.agent.md（Custom Agent 定義）+ .github/skills/ を参照</text>
+  <text x="300" y="432">.github/prompts/*.prompt.md（Prompt 定義）+ .github/skills/ を参照</text>
   <text x="300" y="450">MCP / Plugin: Copilot CLI 設定を継承</text>
 
   <!-- PR -->

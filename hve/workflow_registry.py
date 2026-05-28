@@ -354,7 +354,6 @@ AAS = WorkflowDef(
                 output_paths=["docs/catalog/service-catalog-matrix.md"],
                 required_input_paths=["docs/catalog/service-catalog.md",
                                       "docs/catalog/data-model.md",
-                                      "docs/catalog/screen-catalog.md",
                                       "docs/catalog/domain-analytics.md",
                                       "docs/catalog/app-catalog.md"]),
         StepDef(id="7", title="テスト戦略書",
@@ -392,7 +391,7 @@ AAD_WEB = WorkflowDef(
                 body_template_path="templates/aad-web/step-2.1.md",
                 fanout_parser="screen_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
-                output_paths_template=["docs/screen/{screenId}-{screenNameSlug}-description.md"]),
+                output_paths_template=["docs/screen/{key}-description.md"]),
         StepDef(id="2.2", title="マイクロサービス定義書",
                 custom_agent="Arch-Microservice-ServiceDetail",
                 depends_on=["1"],
@@ -400,7 +399,7 @@ AAD_WEB = WorkflowDef(
                 body_template_path="templates/aad-web/step-2.2.md",
                 fanout_parser="service_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
-                output_paths_template=["docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
+                output_paths_template=["docs/services/{key}-description.md"]),
         StepDef(id="2.3", title="TDDテスト仕様書",
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["2.1", "2.2"],
@@ -408,10 +407,7 @@ AAD_WEB = WorkflowDef(
                 body_template_path="templates/aad-web/step-2.3.md",
                 fanout_parser="service_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
-                output_paths_template=[
-                    "docs/test-specs/{serviceId}-test-spec.md",
-                    "docs/test-specs/{screenId}-test-spec.md",
-                ]),
+                output_paths_template=["docs/test-specs/{key}-test-spec.md"]),
         # Sub-7 (C-4): 2.1/2.2/2.3 fan-out 完了後の横断整合性レビュー join step
         StepDef(id="3", title="画面 ↔ サービス整合性レビュー",
                 custom_agent="QA-DocConsistency",
@@ -449,7 +445,8 @@ ASDW_WEB = WorkflowDef(
                 # docs/azure/azure-services-data.md は既知 key なし → スキップ
                 # src/data/sample-data.json は src_files でカバー
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-1.2.md"),
+                body_template_path="templates/asdw-web/step-1.2.md",
+                output_paths=["docs/azure/service-catalog.md"]),
         StepDef(id="2.1", title="Azure コンピュート選定",
                 custom_agent="Dev-Microservice-Azure-ComputeDesign",
                 depends_on=["1.2"],
@@ -476,7 +473,7 @@ ASDW_WEB = WorkflowDef(
                 body_template_path="templates/asdw-web/step-2.3T.md",
                 fanout_parser="service_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
-                output_paths_template=["docs/test-specs/{serviceId}-test-spec.md"]),
+                output_paths_template=["docs/test-specs/{key}-test-spec.md"]),
         StepDef(id="2.3TC", title="サービス テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-ServiceTestCoding",
                 depends_on=["2.3T"],
@@ -507,7 +504,7 @@ ASDW_WEB = WorkflowDef(
                 body_template_path="templates/asdw-web/step-3.0T.md",
                 fanout_parser="screen_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
-                output_paths_template=["docs/test-specs/{screenId}-test-spec.md"]),
+                output_paths_template=["docs/test-specs/{key}-test-spec.md"]),
         StepDef(id="3.0TC", title="UI テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-UITestCoding",
                 depends_on=["3.0T"],
@@ -543,7 +540,7 @@ ASDW_WEB = WorkflowDef(
         StepDef(id="4.2", title="整合性チェック",
                 custom_agent="QA-AzureDependencyReview",
                 depends_on=["3.3"],
-                # docs/azure/azure-services-*.md は既知 key なし、src/app/ src/api/ infra/ は src_files でカバー
+                # docs/azure/azure-services-*.md は既知 key なし、src/app/ src/api/ src/infra/ は src_files でカバー
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
                 body_template_path="templates/asdw-web/step-4.2.md"),
     ],
@@ -643,7 +640,7 @@ AAG = WorkflowDef(
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aag/_common.md",
                 output_paths=["docs/ai-agent-catalog.md"],
-                output_paths_template=["docs/agent/agent-detail-{agentId}-{agentName}.md"]),
+                output_paths_template=["docs/agent/agent-detail-{key}.md"]),
     ],
 )
 
@@ -669,7 +666,7 @@ AAGD = WorkflowDef(
                 body_template_path="templates/aagd/step-2.1.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
-                output_paths_template=["docs/test-specs/{agentId}-test-spec.md"]),
+                output_paths_template=["docs/test-specs/{key}-test-spec.md"]),
         StepDef(id="2.2", title="AI Agent テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-AgentTestCoding",
                 depends_on=["2.1"],
@@ -912,11 +909,10 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-skeleton.md"],
-            # docs/company-business-requirement.md は Step 1.2 の任意成果物のため
-            # required_input_paths には含めない（存在すれば参考コンテキストとして利用）。
-            required_input_paths=[
-                "docs/business-requirement.md",
-            ],
+            # docs/business-requirement.md (Step 2) と docs/company-business-requirement.md (Step 1.2) は
+            # いずれも skip_fallback により片方しか生成されない経路があるため、required_input_paths には
+            # 含めない（存在する方を consumed_artifacts 経由で参照する）。
+            required_input_paths=[],
             body_template_path="templates/ard/step-4.1.md",
         ),
         StepDef(
@@ -959,6 +955,7 @@ FULL_PIPELINE = MetaWorkflowDef(
                     "docs/catalog/domain-analytics.md",
                     "docs/catalog/service-catalog.md",
                     "docs/catalog/data-model.md",
+                    "docs/catalog/service-catalog-matrix.md",
                     "docs/catalog/test-strategy.md",
                 ],
             ),
@@ -1093,6 +1090,7 @@ ARTIFACT_DESCRIPTIONS: Dict[str, str] = {
     "docs/catalog/domain-analytics.md": "ドメイン分析",
     "docs/catalog/service-catalog.md": "サービスカタログ",
     "docs/catalog/data-model.md": "データモデル",
+    "docs/catalog/service-catalog-matrix.md": "サービスカタログマトリクス",
     "docs/catalog/test-strategy.md": "TDD テスト戦略",
     "docs/screen/*.md": "画面定義書（一覧）",
     "docs/services/*.md": "サービス定義書（一覧）",

@@ -1,0 +1,17 @@
+inputs:
+- path: docs-generated/component-index.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-ComponentIndex--adoc--4
+- path: docs-generated/components/test-spec-summary.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-TestSpecSummary--adoc--3.4
+- path: docs-generated/components/tech-debt.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-TechDebt--adoc--3.5
+outputs:
+- path: docs-generated/architecture/nfr-analysis.md
+  required: true
+  mode: create

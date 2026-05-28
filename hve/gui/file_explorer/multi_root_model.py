@@ -115,20 +115,23 @@ class MultiRootFileModel(QAbstractItemModel):
     # 子ノード遅延ロード
     # ------------------------------------------------------------------
 
-    def _ensure_loaded(self, node: _Node) -> None:
-        if node._loaded:
-            return
-        node._loaded = True
+    def _scan_children(self, node: _Node) -> List["_Node"]:
+        """``node`` の子ノードリストを scandir で構築して返す（モデルには反映しない）。
+
+        Qt の ``beginInsertRows`` / ``endInsertRows`` 契約を満たすため、
+        子件数が確定した状態で挿入通知を発行できるようにヘルパとして分離。
+        """
         if not node.is_dir:
-            return
+            return []
         try:
             entries = list(os.scandir(node.path))
         except OSError:
-            return
+            return []
 
         # フォルダ優先 + 名前順（敵対的レビュー #29）
         entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
 
+        children: List[_Node] = []
         for e in entries:
             # 隠しファイル既定非表示（敵対的レビュー #30）
             if e.name.startswith("."):
@@ -137,35 +140,70 @@ class MultiRootFileModel(QAbstractItemModel):
                 child_is_dir = e.is_dir()
             except OSError:
                 continue
-            child_node = _Node(
-                Path(e.path),
-                e.name,
-                node,
-                is_dir=child_is_dir,
+            children.append(
+                _Node(
+                    Path(e.path),
+                    e.name,
+                    node,
+                    is_dir=child_is_dir,
+                )
             )
-            node._children.append(child_node)
+        return children
+
+    def _ensure_loaded(self, node: _Node) -> None:
+        if node._loaded:
+            return
+        node._loaded = True
+        node._children = self._scan_children(node)
 
     def refresh_directory(self, dir_path: Path) -> None:
         """指定ディレクトリの子一覧を再走査する（外部変更検知時に呼ぶ）。
 
         該当ディレクトリが本モデル配下にない場合は何もしない。
+
+        注意:
+            ``beginRemoveRows(0, N-1)`` + ``beginInsertRows(0, M-1)`` の full reset
+            方式で通知すると、間に挟まる ``QSortFilterProxyModel``
+            （特に ``recursiveFilteringEnabled=True``）の内部マッピングに
+            幻インデックスが残留し、View 側 ``rowCount`` がソースより
+            多くなる既知問題がある。必ず差分単位（追加分のみ insert / 削除分のみ remove）
+            で通知すること。
         """
         node = self._find_node_for_path(Path(dir_path).resolve())
         if node is None or not node.is_dir:
             return
         idx = self._index_for_node(node)
-        # 既存子を全削除 → 再ロード
-        if node._children:
-            self.beginRemoveRows(idx, 0, len(node._children) - 1)
-            node._children.clear()
+        # 以降の begin/endInsertRows 経由で Qt 側から rowCount() が逆呼び出しされた際に
+        # _ensure_loaded が再走査して _children を上書きしてしまうのを防ぐため、
+        # 先に _loaded を立てる。
+        node._loaded = True
+        new_children = self._scan_children(node)
+        new_names = {c.display_name for c in new_children}
+
+        # 1) 消滅した行を末尾から個別 remove（降順で行番号ズレを防止）
+        for r in sorted(
+            [i for i, c in enumerate(node._children) if c.display_name not in new_names],
+            reverse=True,
+        ):
+            self.beginRemoveRows(idx, r, r)
+            del node._children[r]
             self.endRemoveRows()
-        node._loaded = False
-        # 子件数が判明する前に hasChildren を Qt に再評価させるため、
-        # 既存 _children を再ロードしてから insertRows を発行する。
-        self._ensure_loaded(node)
-        if node._children:
-            self.beginInsertRows(idx, 0, len(node._children) - 1)
+
+        # 2) ソート位置に合わせ、不足行のみ個別 insert（既存 _Node はそのまま保持し、
+        #    展開済みサブツリーの状態を失わないようにする）。
+        #    _scan_children は常にフォルダ優先 + 名前順で返すため、削除後の
+        #    _children と new_children の共通部は順序が一致する前提。
+        for target_row, nc in enumerate(new_children):
+            if (
+                target_row < len(node._children)
+                and node._children[target_row].display_name == nc.display_name
+            ):
+                continue
+            self.beginInsertRows(idx, target_row, target_row)
+            node._children.insert(target_row, nc)
             self.endInsertRows()
+
+        node._loaded = True
 
     def _find_node_for_path(self, target: Path) -> Optional[_Node]:
         """ロード済みノードからパスを検索する。未ロード領域は探索しない。"""

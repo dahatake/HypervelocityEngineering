@@ -147,3 +147,58 @@ def test_for_selection_skips_priority_when_no_table_entry():
     assert len(results) == 1
     assert results[0].workflow_id == "aas"
 
+
+# --------------------------------------------------------------------------
+# Autopilot ON 時に SE 系 WF（aad-web/asdw-web/adfd/adfdv）が未選択なら
+# Autopilot 仮想ではなく通常モード（pick_target_step）と同じ要件を返す。
+# 回帰防止: バナーが ARD/AAS のみ選択時にも app-arch-catalog.md を warn 表示する
+# 不具合を防止する。
+# --------------------------------------------------------------------------
+
+
+def test_for_selection_autopilot_mode_falls_back_when_no_se_workflows():
+    """Autopilot ON + ARD/AAS のみ選択 → Autopilot 仮想ではなく ARD 要件を返す。"""
+    results = summarize_requirements_for_selection(
+        [("ard", ["1"]), ("aas", ["1"])],
+        input_values={"company_name": "Contoso"},
+        file_exists=lambda _p: False,
+        autopilot_mode=True,
+    )
+    assert len(results) == 1
+    # Autopilot 仮想ではなく通常優先順位の ARD が選ばれる
+    assert results[0].workflow_id == "ard"
+    # app-arch-catalog.md 由来の warn 項目は含まれない
+    assert not any(
+        it.label.endswith("app-arch-catalog.md") for it in results[0].items
+    )
+
+
+def test_for_selection_autopilot_mode_uses_pseudo_when_se_workflow_selected():
+    """Autopilot ON + aad-web 選択 → Autopilot 仮想サマリー（catalog チェック実施）。"""
+    results = summarize_requirements_for_selection(
+        [("ard", ["1"]), ("aad-web", ["1"])],
+        input_values={"company_name": "Contoso"},
+        file_exists=lambda _p: False,
+        autopilot_mode=True,
+    )
+    assert len(results) == 1
+    assert results[0].workflow_id == AUTOPILOT_PSEUDO_WORKFLOW_ID
+    assert results[0].overall_status == "warn"
+    assert any(
+        it.label.endswith("app-arch-catalog.md") for it in results[0].items
+    )
+
+
+def test_for_selection_autopilot_mode_ignores_se_workflow_with_empty_steps():
+    """SE 系 WF が登録されてもステップ未選択なら Autopilot 仮想は使わない。"""
+    results = summarize_requirements_for_selection(
+        [("ard", ["1"]), ("aad-web", [])],
+        input_values={"company_name": "Contoso"},
+        file_exists=lambda _p: False,
+        autopilot_mode=True,
+    )
+    assert len(results) == 1
+    # aad-web はステップ未選択なので Autopilot 仮想にならず、ARD が選ばれる
+    assert results[0].workflow_id == "ard"
+
+

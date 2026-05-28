@@ -85,3 +85,49 @@ def test_file_selected_not_emitted_for_directory(qapp, tmp_path: Path) -> None:
     # ルート自身は dir なので emit されない
     panel._on_activated(proxy_root)
     assert received == []
+
+
+def test_panel_no_phantom_rows_on_rapid_creation(qapp, tmp_path: Path) -> None:
+    """Agent によるファイル連続生成シナリオで、プロキシ越しに幻行が残らないこと。
+
+    full reset 方式の refresh_directory + QSortFilterProxyModel +
+    QTreeView.expand の組合せで実在より 1 行多く描画されていた不具合の回帰防止。
+    """
+    docs = tmp_path / "docs"
+    usecase = docs / "usecase"
+    usecase.mkdir(parents=True)
+
+    panel = FileTreePanel([tmp_path])
+    proxy = panel._proxy
+    model = panel._model
+
+    def find_child(parent_proxy_idx, name):
+        for r in range(proxy.rowCount(parent_proxy_idx)):
+            idx = proxy.index(r, 0, parent_proxy_idx)
+            if proxy.data(idx) == name:
+                return idx
+        return None
+
+    # ルート → docs → usecase を View 経由で展開
+    proxy_root = proxy.mapFromSource(model.index(0, 0))
+    panel._view.expand(proxy_root)
+    qapp.processEvents()
+    docs_proxy = find_child(proxy_root, "docs")
+    assert docs_proxy is not None
+    panel._view.expand(docs_proxy)
+    qapp.processEvents()
+    usecase_proxy = find_child(docs_proxy, "usecase")
+    assert usecase_proxy is not None
+    panel._view.expand(usecase_proxy)
+    qapp.processEvents()
+
+    # 30 件を 1 件ずつ作成し、その都度 _on_directory_changed を発火
+    for i in range(1, 31):
+        (usecase / f"UC-{i:02d}-detail.md").write_text(f"# UC-{i}", encoding="utf-8")
+        panel._on_directory_changed(str(usecase))
+        qapp.processEvents()
+
+    rows = proxy.rowCount(usecase_proxy)
+    names = [proxy.data(proxy.index(r, 0, usecase_proxy)) for r in range(rows)]
+    assert rows == 30, f"phantom row(s) detected: rows={rows}, names={names!r}"
+    assert all(n for n in names), f"empty name in proxy view: {names!r}"

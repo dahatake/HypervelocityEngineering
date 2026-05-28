@@ -21,7 +21,7 @@
 - [コマンドリファレンス（CLI モード）](#コマンドリファレンスcli-モード)
 - [ワークフロー一覧](#ワークフロー一覧)
 - [付録A: MCP Server 設定ガイド](#付録a-mcp-server-設定ガイド)
-- [付録B: Custom Agents 設定ガイド](#付録b-custom-agents-設定ガイド)
+- [付録B: Prompt 設定ガイド](#付録b-prompt-設定ガイド)
 - [付録C: DAG 並列実行と Post-step 自動プロンプト](#付録c-dag-並列実行と-post-step-自動プロンプト)
 - [フォーク機能 Fork-on-Retry](#フォーク機能-fork-on-retry)
 - [付録D: トラブルシューティング](#付録d-トラブルシューティング)
@@ -46,7 +46,7 @@
 - **COPILOT_PAT 不要** — ローカルで直接 Agent を実行するため、Copilot アサイン用 PAT は不要
 - **基本実行に GH_TOKEN 不要** — `--create-issues` / `--create-pr` / `--auto-coding-agent-review` を使わなければ環境変数の設定は不要
 - **Copilot ライセンスは必要** — Copilot SDK を利用するため、GitHub Copilot ライセンスが前提
-- MCP Server・Custom Agents・asyncio による並列実行など、高度な機能を利用可能
+- MCP Server・Prompt・asyncio による並列実行など、高度な機能を利用可能
 
 ### 必須 / 任意ツール早見表
 
@@ -68,7 +68,7 @@
 
 - **初めてのユーザー**: まず `python -m hve cli` でインタラクティブモードを試すことを推奨します。オプションの知識がなくても wizard が順番にガイドします
 - **開発者**: ローカル PC 上でワークフローを完結させたい方
-- **アーキテクト**: MCP Server や Custom Agents を活用した高度なオーケストレーションを構築したい方
+- **アーキテクト**: MCP Server や Prompt を活用した高度なオーケストレーションを構築したい方
 - **前提知識**: Python の基本的なスクリプト実行ができる方、`gh auth login` などの GitHub CLI 操作ができる方
 
 ---
@@ -1900,7 +1900,7 @@ python -m hve orchestrate --workflow aad-web --branch main --verbosity <LEVEL>
 [14:30:15]   ┊ ● Environment loaded: 22 custom instructions
 [14:30:15]   ┊ ● Read-only remote session
 [14:30:15]   ┊ ○ List directory docs
-[14:30:15]   ┊   └ ".github/agents/Arch-Microservice*"
+[14:30:15]   ┊   └ ".github/prompts/Arch-Microservice*"
 [14:30:15]   ▶ [Step.1.1] ドメイン分析 (Agent: Arch-Microservice-DomainAnalytics)
 [14:30:15]   ┊ Phase 1/2: メインタスク
 [14:30:15]   🤖 [1.1] Agent 選択: Arch-Microservice-DomainAnalytics
@@ -2025,7 +2025,7 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
 | `--ignore-paths` | `git add` 時に除外するパス（スペース区切りで複数指定可） | `docs images infra qa src test work` |
-| `--additional-prompt` | 全 Custom Agent のプロンプト末尾に追記する文字列 | なし |
+| `--additional-prompt` | 全 Prompt の末尾に追記する文字列 | なし |
 | `--issue-title` | Root Issue 作成時のタイトルを上書き | ワークフロー名から自動生成 |
 
 #### ワークフロー固有オプション
@@ -2219,15 +2219,15 @@ python -m hve orchestrate \
 
 ### Agent 固有の MCP Server
 
-ワークフロー定義（`workflow_registry`）で特定のステップにのみ MCP Server を適用できます。詳細は [付録B](#付録b-custom-agents-設定ガイド) を参照してください。
+ワークフロー定義（`workflow_registry`）で特定のステップにのみ MCP Server を適用できます。詳細は [付録B](#付録b-prompt-設定ガイド) を参照してください。
 
 ---
 
-## 付録B: Custom Agents 設定ガイド
+## 付録B: Prompt 設定ガイド
 
 ### workflow_registry の custom_agent フィールド
 
-ワークフロー定義でステップごとに `custom_agent` を指定します。
+ワークフロー定義でステップごとに `custom_agent` を指定します（フィールド名は歴史的経緯で snake_case のまま残置されており、値としては `.github/prompts/*.prompt.md` の Prompt 名を指します）。
 
 ```python
 WORKFLOW_REGISTRY = {
@@ -2250,12 +2250,12 @@ WORKFLOW_REGISTRY = {
 }
 ```
 
-`custom_agent` に指定した名前が `.github/agents/*.agent.md` の Agent 定義ファイル名に対応します。
+`custom_agent` に指定した名前が `.github/prompts/*.prompt.md` の Prompt ファイル名に対応します。
 
-### Agent の選択優先順位
+### Prompt の選択優先順位
 
 1. ステップ固有の `custom_agent`（workflow_registry で定義）
-2. デフォルト Agent（Copilot SDK のデフォルト）
+2. デフォルト Prompt（Copilot SDK のデフォルト）
 
 ---
 
@@ -2356,7 +2356,7 @@ python -m hve orchestrate --workflow aas
 
 > **本付録は HVE 固有の運用細則を含みます。汎用 Skill 仕様は [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md)、HVE 独自の統合仕様は [.github/skills/markdown-query/references/repo-specific/hve-integration.md](../.github/skills/markdown-query/references/repo-specific/hve-integration.md) を参照してください。**
 
-Copilot / Custom Agent が大量の Markdown を参照する際の **Context Window を最小化** する、ローカル完結（外部 API 不使用）の Skill とその CLI（`mdq`）に関する解説です。
+Copilot / Prompt が大量の Markdown を参照する際の **Context Window を最小化** する、ローカル完結（外部 API 不使用）の Skill とその CLI（`mdq`）に関する解説です。
 
 - Skill: `.github/skills/markdown-query/SKILL.md`
 - 実装: `mdq/`（SQLite + BM25、見出し境界・コードフェンス対応）
@@ -2419,7 +2419,7 @@ pytest 結果: `python -m pytest hve/tests/test_mdq.py -q` → 6 passed in 3.09s
 
 - Cloud runner でも同じ CLI が動作します（Python が利用可能なため）。
 - Cloud runner の作業ツリーは揮発し、索引ファイル `.mdq/index.sqlite` は gitignore 済でセッション間で共有されません。**Cloud Agent セッション側で毎回 `python -m mdq index` を自身で実行**してから `search` / `get` を使う運用です（増分キャッシュは効きません）。
-- 現行の `auto-*-reusable.yml` 群は GitHub Actions runner 上で Issue 作成と Copilot アサインを行うだけで、Custom Agent 本体は Copilot Cloud の独立セッションで動作します。そのため reusable workflow から runner 上で `mdq index` を事前実行しても **Cloud Agent セッションには出現しません**。付属の `.github/workflows/mdq-index-reusable.yml` は主に **CI スモークテスト** と **手動検証ヘルパー** として提供しています（`test-hve-python.yml` の `mdq-smoke` job で使用）。
+- 現行の `auto-*-reusable.yml` 群は GitHub Actions runner 上で Issue 作成と Copilot アサインを行うだけで、Prompt 本体は Copilot Cloud の独立セッションで動作します。そのため reusable workflow から runner 上で `mdq index` を事前実行しても **Cloud Agent セッションには出現しません**。付属の `.github/workflows/mdq-index-reusable.yml` は主に **CI スモークテスト** と **手動検証ヘルパー** として提供しています（`test-hve-python.yml` の `mdq-smoke` job で使用）。
 - Skill 発見は `.github/skills/_routing/SKILL.md` の planning 共通テーブル経由（CLI / Cloud 共通）。Cloud Agent 側への「必ず 1 回 `mdq index` を実行」説明は `markdown-query` Skill 本体に記載済です。
 
 ### F.6 注意点
@@ -2633,7 +2633,7 @@ ANSI エスケープシーケンスに対応していないターミナルでは
 | 利用ガイド（README） | [README.md](../README.md) |
 | GitHub Copilot SDK（リポジトリ） | https://github.com/github/copilot-sdk |
 | SDK Getting Started | https://github.com/github/copilot-sdk/blob/main/docs/getting-started.md |
-| Custom Agents ドキュメント | https://github.com/github/copilot-sdk/blob/main/docs/features/custom-agents.md |
+| Custom Agents ドキュメント（上流 Copilot SDK 機能）<!-- TBD: 上流 SDK の現行名称・リンク妥当性要確認 --> | https://github.com/github/copilot-sdk/blob/main/docs/features/custom-agents.md |
 | MCP Servers ドキュメント | https://github.com/github/copilot-sdk/blob/main/docs/features/mcp.md |
 | Copilot CLI インストールガイド | https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli |
 | Model Context Protocol（MCP）仕様 | https://modelcontextprotocol.io/ |
@@ -2641,7 +2641,7 @@ ANSI エスケープシーケンスに対応していないターミナルでは
 
 ### knowledge/ ディレクトリの参照
 
-HVE CLI Orchestrator でワークフローを実行する際も、`knowledge/` フォルダーの業務要件ドキュメント（D01〜D21）が存在する場合、各 Custom Agent が自動参照します。HVE CLI Orchestrator での `knowledge-management` ワークフロー実行:
+HVE CLI Orchestrator でワークフローを実行する際も、`knowledge/` フォルダーの業務要件ドキュメント（D01〜D21）が存在する場合、各 Prompt が自動参照します。HVE CLI Orchestrator での `knowledge-management` ワークフロー実行:
 
 ```bash
 python -m hve orchestrate --workflow akm

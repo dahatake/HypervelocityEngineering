@@ -81,8 +81,8 @@
 
   <!-- HVE-managed agents/workflows/skills -->
   <rect class="box shared" x="30" y="610" width="1040" height="90" rx="6"/>
-  <text class="h" x="50" y="634">HVE 管理: Custom Agent / Workflow / Skill（リポジトリ内ファイル）</text>
-  <text x="50" y="654">.github/agents/*.agent.md（Arch-*, Dev-*, QA-*, Doc-*, KnowledgeManager 等）</text>
+  <text class="h" x="50" y="634">HVE 管理: Prompt / Workflow / Skill（リポジトリ内ファイル）</text>
+  <text x="50" y="654">.github/prompts/*.prompt.md（Arch-*, Dev-*, QA-*, Doc-*, KnowledgeManager 等）</text>
   <text x="50" y="672">hve/workflow_registry.py（AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC/ARD）</text>
   <text x="50" y="690">.github/skills/*/SKILL.md（task-dag-planning / work-artifacts-layout / markdown-query 等）</text>
 

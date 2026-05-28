@@ -1,0 +1,37 @@
+inputs:
+- path: docs/azure/azure-services-additional.md
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-AddServiceDesign--asdw-web--2.2
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D10-API-Event-File-連携契約パック.md
+  required: true
+  kind: static
+- path: knowledge/D15-非機能-運用-監視-DR-仕様書.md
+  required: true
+  kind: static
+- path: knowledge/D20-セキュア設計-実装ガードレール.md
+  required: true
+  kind: static
+outputs:
+- path: src/infra/azure/create-azure-additional-resources-prep.sh
+  required: true
+  mode: create
+- path: src/infra/azure/create-azure-additional-resources/create.sh
+  required: true
+  mode: create
+- path: src/infra/azure/create-azure-additional-resources/services/<service>.sh
+  required: true
+  mode: create
+- path: src/infra/azure/create-azure-additional-resources/verify-*.sh
+  required: true
+  mode: create
+- path: src/infra/azure/verify-secrets-expiry.sh
+  required: true
+  mode: create

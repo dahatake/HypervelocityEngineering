@@ -84,7 +84,7 @@
   <rect x="575" y="718" width="16" height="14" rx="3" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="598" y="729" font-size="10" fill="#24292e">入力 / ユーザー操作</text>
   <rect x="575" y="742" width="16" height="14" rx="3" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="598" y="753" font-size="10" fill="#24292e">Custom Agent</text>
+  <text x="598" y="753" font-size="10" fill="#24292e">Prompt</text>
   <rect x="575" y="766" width="16" height="14" rx="3" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="598" y="777" font-size="10" fill="#24292e">成果物 / 出力</text>
 </svg>

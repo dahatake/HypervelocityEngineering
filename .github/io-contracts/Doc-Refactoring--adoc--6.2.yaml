@@ -1,0 +1,17 @@
+inputs:
+- path: docs-generated/architecture/dependency-map.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-DependencyMap--adoc--5.2
+- path: docs-generated/architecture/nfr-analysis.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-NFRAnalysis--adoc--5.4
+- path: docs-generated/components/tech-debt.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-TechDebt--adoc--3.5
+outputs:
+- path: docs-generated/guides/refactoring.md
+  required: true
+  mode: create

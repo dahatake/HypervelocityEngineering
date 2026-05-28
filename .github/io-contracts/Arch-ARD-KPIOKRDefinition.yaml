@@ -1,0 +1,21 @@
+inputs:
+- path: docs/business-requirement.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ARD-BusinessAnalysis-Targeted
+- path: docs/company-business-requirement.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ARD-BusinessAnalysis-Untargeted
+- path: original-docs/*
+  required: false
+  kind: static
+- path: docs/business/*-analysis.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ARD-BusinessAnalysis-Untargeted
+outputs:
+- path: docs/recommended-kpi-okr.md
+  required: true
+  mode: create
+

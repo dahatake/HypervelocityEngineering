@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
   <title id="title">ASDW-WEB インフォグラフィック</title>
-  <desc id="desc">入力ファイル、Workflow、Custom Agentタスク、出力ファイルの関係を示す。</desc>
+  <desc id="desc">入力ファイル、Workflow、Promptタスク、出力ファイルの関係を示す。</desc>
   <style>
     text { font-family: "Trebuchet MS", Verdana, Arial, sans-serif; fill: #1f2937; }
     .title { font-size: 28px; font-weight: 700; }
@@ -21,7 +21,7 @@
   </defs>
 
   <text x="40" y="50" class="title">ASDW-WEB Orchestration Overview</text>
-  <text x="40" y="78" class="subtitle">読み順: 左（入力）→ 中央（Workflow / Custom Agent）→ 右（成果物）</text>
+  <text x="40" y="78" class="subtitle">読み順: 左（入力）→ 中央（Workflow / Prompt）→ 右（成果物）</text>
 
   <rect class="panel" x="40" y="120" width="420" height="620"/>
   <text x="70" y="160" class="head">入力（主なファイル）</text>
@@ -39,13 +39,13 @@
   <text x="550" y="300" class="item">Label: auto-app-dev-microservice-web</text>
 
   <rect class="task" x="520" y="360" width="520" height="310"/>
-  <text x="550" y="402" class="head">Custom Agent タスク（抜粋）</text>
+  <text x="550" y="402" class="head">Prompt タスク（抜粋）</text>
   <text x="550" y="438" class="item">1) Dev-Microservice-Azure-DataDesign / DataDeploy</text>
   <text x="550" y="466" class="item">2) ComputeDesign / AddServiceDesign / AddServiceDeploy</text>
   <text x="550" y="494" class="item">3) Arch-TDD-TestSpec → ServiceTestCoding → ServiceCoding</text>
   <text x="550" y="522" class="item">4) UITestCoding → UICoding → UIDeploy → E2ETesting</text>
   <text x="550" y="550" class="item">5) QA-AzureArchitectureReview / QA-AzureDependencyReview</text>
-  <text x="550" y="594" class="small">※ Custom Agent = 各 Step の実行タスク</text>
+  <text x="550" y="594" class="small">※ Prompt = 各 Step の実行タスク</text>
   <text x="550" y="620" class="small">※ Step.4.1 と Step.4.2 は Step.3.3 後に並列</text>
 
   <rect class="panel" x="1100" y="120" width="460" height="620"/>
@@ -64,6 +64,6 @@
   <path class="arrow" d="M1040 520 L1100 520"/>
 
   <rect class="legend" x="40" y="780" width="1520" height="100"/>
-  <text x="70" y="818" class="item">凡例: 青=Workflow、緑=Custom Agent タスク、灰=入出力ファイル</text>
+  <text x="70" y="818" class="item">凡例: 青=Workflow、緑=Prompt タスク、灰=入出力ファイル</text>
   <text x="70" y="848" class="item">色のセマンティクスと読み順を固定し、監査時に実装差分を追跡しやすくしています。</text>
 </svg>

@@ -377,6 +377,51 @@ class TestRunWorkflowDryRun(unittest.TestCase):
         self.assertEqual(result.get("failed", []), [])
 
 
+class TestRunWorkflowFanout(unittest.TestCase):
+    def test_aad_web_fanout_meta_is_forwarded_to_step_runner(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            quiet=True,
+            mdq_watch=False,
+            run_id="fanout-meta-forward-test",
+        )
+        calls: list[dict] = []
+
+        class FakeStepRunner:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def set_fork_index(self, *args, **kwargs):
+                pass
+
+            async def run_step(self, **kwargs):
+                calls.append(kwargs)
+                return True
+
+        with tempfile.TemporaryDirectory() as tmpdir, \
+                patch("run_state.DEFAULT_RUNS_DIR", Path(tmpdir) / "runs"), \
+                patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                patch("orchestrator.StepRunner", FakeStepRunner):
+            result = _run(run_workflow(
+                workflow_id="aad-web",
+                params={"branch": "main", "selected_steps": ["1", "2.2"]},
+                config=cfg,
+            ))
+
+        self.assertEqual(result.get("failed"), [])
+        self.assertTrue(calls)
+        base_calls = [c for c in calls if c["step_id"] == "1"]
+        fanout_calls = [c for c in calls if str(c["step_id"]).startswith("2.2/")]
+        self.assertEqual(len(base_calls), 1)
+        self.assertIsNone(base_calls[0].get("fanout_meta"))
+        self.assertTrue(fanout_calls)
+        for call in fanout_calls:
+            fanout_meta = call.get("fanout_meta")
+            self.assertIsNotNone(fanout_meta)
+            self.assertEqual(fanout_meta["base_step_id"], "2.2")
+            self.assertEqual(fanout_meta["fanout_key"], call["step_id"].split("/", 1)[1])
+
+
 class TestRunWorkflowConfig(unittest.TestCase):
     """config パラメータの伝播テスト。"""
 
@@ -647,91 +692,9 @@ class TestAdditionalPrompt(unittest.TestCase):
         params = _collect_params_non_interactive(wf, cli_args)
         self.assertNotIn("issue_title", params)
 
-    def test_T5_additional_prompt_appended_to_custom_agent(self) -> None:
-        """T5: additional_prompt が Custom Agent の prompt 末尾に追記されることを確認。
-
-        StepRunner が custom_agents リストを組み立てる内部ロジック（deepcopy + append）を
-        CopilotClient をモックして直接検証する。
-        """
-        import copy
-        from runner import StepRunner
-        from console import Console
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            additional_prompt="追加指示テキスト",
-            custom_agents_config=[
-                {
-                    "name": "my-agent",
-                    "display_name": "My Agent",
-                    "description": "Test agent",
-                    "tools": ["*"],
-                    "prompt": "既存のプロンプト",
-                }
-            ],
-        )
-        original_config_snapshot = copy.deepcopy(cfg.custom_agents_config)
-
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-
-        captured_session_opts: dict = {}
-
-        async def fake_send_and_wait(payload):
-            return None
-
-        async def fake_create_session(**opts):
-            captured_session_opts.update(opts)
-            session = MagicMock()
-            session.send_and_wait = fake_send_and_wait
-            session.disconnect = AsyncMock()
-            return session
-
-        mock_client = MagicMock()
-        mock_client.start = AsyncMock()
-        mock_client.stop = AsyncMock()
-        mock_client.create_session = fake_create_session
-
-        mock_permission_handler = MagicMock()
-        mock_permission_handler.approve_all = MagicMock()
-
-        fake_copilot = MagicMock(
-            CopilotClient=MagicMock(return_value=mock_client),
-            PermissionHandler=mock_permission_handler,
-            SubprocessConfig=MagicMock(),
-            ExternalServerConfig=MagicMock(),
-        )
-        fake_copilot_session = types.ModuleType("copilot.session")
-        fake_copilot_session.PermissionHandler = mock_permission_handler
-
-        with patch.dict("sys.modules", {
-            "copilot": fake_copilot,
-            "copilot.session": fake_copilot_session,
-        }):
-            import asyncio
-            asyncio.run(runner.run_step(
-                step_id="test",
-                title="Test Step",
-                prompt="メインプロンプト",
-                custom_agent=None,
-            ))
-
-        # セッションオプションに custom_agents が設定されていること
-        agents = captured_session_opts.get("custom_agents", [])
-        # Phase B (Critical No.1) 以降、`.github/agents/*.agent.md` から
-        # ファイルベースの定義もマージされるため件数は >= 1 となる。
-        # 明示設定された my-agent が含まれていること、かつ additional_prompt が
-        # 追記されていることを検証する。
-        my_agent = next((a for a in agents if a.get("name") == "my-agent"), None)
-        self.assertIsNotNone(my_agent, "explicit my-agent should be present in merged custom_agents")
-        # additional_prompt が追記されていること
-        self.assertEqual(my_agent["prompt"], "既存のプロンプト\n\n追加指示テキスト")
-
-        # 元の custom_agents_config が汚染されていないこと（deepcopy 検証）
-        self.assertEqual(cfg.custom_agents_config, original_config_snapshot)
-        self.assertEqual(cfg.custom_agents_config[0]["prompt"], "既存のプロンプト")
+    # NOTE: test_T5_additional_prompt_appended_to_custom_agent was removed in Phase 8 S-2.
+    # Custom Agent 廃止後、SDK へ `custom_agents` キーを渡す経路が削除されたため、
+    # custom_agents_config フィールドおよび当該テストは廃止された。
 
     def test_T6_additional_prompt_empty_string_no_append(self) -> None:
         """T6: additional_prompt が空文字の場合、追記されないことを確認。"""
@@ -1177,10 +1140,10 @@ class TestRequestCodeReviewSDK(unittest.TestCase):
         self.assertIsNotNone(cfg.ignore_paths)
         self.assertIn("docs", cfg.ignore_paths)
         self.assertIn("images", cfg.ignore_paths)
-        self.assertIn("infra", cfg.ignore_paths)
         self.assertIn("src", cfg.ignore_paths)
-        self.assertIn("test", cfg.ignore_paths)
         self.assertIn("work", cfg.ignore_paths)
+        self.assertNotIn("infra", cfg.ignore_paths)
+        self.assertNotIn("test", cfg.ignore_paths)
 
 
 class TestCreatePrIfNeeded(unittest.TestCase):

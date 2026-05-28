@@ -10,7 +10,7 @@
 static_paths:
   - "users-guide/01-business-requirement.md"
   - "users-guide/08-ai-agent.md"
-  - "docs/templates/atdd-template.md"
+  - "template/atdd-template.md"
   - "docs/templates/testspec-vs-teststrategy.md"
   - "data/sample-data.json"
   - "src/data/sample-data.json"
@@ -19,35 +19,31 @@ static_paths:
   # Directory-only references (treated as static for now; actual file producers
   # are matched via path globs below)
   - "docs/usecase/"
-  - "test/"
-  - "test/api/"
-  - "test/agent/"
-  - "test/ui/"
-  - "test/dataflow/"
+  - "src/test/"
+  - "src/test/api/"
+  - "src/test/agent/"
+  - "src/test/ui/"
+  - "src/test/dataflow/"
   # Cross-WORK references (handled by orchestrator at runtime)
   - "{WORK}../QA-CodeQualityScan/artifacts/scan-result.json"
-  # Path missing in inventory due to extraction quirk; documented in
-  # work/IO-Consistency/T5.1/verification-report.md
-  - "docs/architectural-requirements-app-xx.md"  # template literal, not a real producible file
-  - "docs/architectural-requirements-app-*.md"   # per-APP file, manually authored
-  # Variable-name divergence: legacy aliases retained for backward compat with
-  # older docs/branches. Current canonical paths are produced by current agents.
-  - "docs/screen/{画面ID}-*.md"
-  - "docs/screen/{画面ID}-description.md"
+  # Per-APP architectural requirements (user-authored, kind=external in io-contract)
+  - "docs/architectural-requirements-app-{appId}.md"
+  - "docs/architectural-requirements-app-*.md"
+  # Service / agent wildcard inputs (handled via producer in io-contract;
+  # listed here for legacy paths that may still appear in docs/branches).
   - "docs/services/SVC-*.md"
   - "docs/agent/agent-detail-{agentId}-*.md"
   # Directory-only references (producers output specific files within)
   - "src/agent/"
   - "src/api/"
-  - "infra/"
-  - "infra/azure/"
+  - "src/infra/"
+  - "src/infra/azure/"
   - "config/"
   - ".github/workflows/"
-  - "test/api/<ServiceName>.Tests/"
-  - "test/SVC-*/smoke-test.sh"
+  - "src/test/api/<ServiceName>.Tests/"
+  - "src/test/SVC-*/smoke-test.sh"
   # KnowledgeManager-specific manual/external inputs (handled via kind:static)
   - "work/kpi/fork-kpi-<run_id>.jsonl"
-  - "app_location=src/app/"  # extraction artifact (Bicep param syntax)
 
 # External system paths (out of scope)
 external_paths: []

@@ -1,0 +1,17 @@
+inputs:
+- path: docs-generated/architecture/overview.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-ArchOverview--adoc--5.1
+- path: docs-generated/architecture/infra-deps.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-InfraDeps--adoc--5.3
+- path: docs-generated/architecture/nfr-analysis.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-NFRAnalysis--adoc--5.4
+outputs:
+- path: docs-generated/guides/migration-assessment.md
+  required: true
+  mode: create

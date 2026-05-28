@@ -176,9 +176,15 @@ def build_snapshot(state: WorkbenchState) -> Tuple[List[StatSection], dict]:
     ]
 
     # --- Step Activity（現 Step or 最後に running だった Step） ---
-    sid = state.current_running_step_id or state.last_known_step_id
+    # 並列実行中は単一スカラだと最後の 1 個に偏るため、count 表示に切り替える。
+    running_set = getattr(state, "running_step_ids", None) or set()
+    if len(running_set) >= 2:
+        sid_label = f"並列実行中 ({len(running_set)} steps)"
+    else:
+        sid = state.current_running_step_id or state.last_known_step_id
+        sid_label = sid or _DASH
     step_items = [
-        StatItem("対象 Step", sid or _DASH),
+        StatItem("対象 Step", sid_label),
         StatItem("Tools (Step)", _fmt_counts(state.current_tool_counts())),
         StatItem("Skills (Step)", _fmt_counts(state.current_skill_counts())),
     ]
@@ -229,7 +235,11 @@ def build_snapshot(state: WorkbenchState) -> Tuple[List[StatSection], dict]:
     elapsed_items = [
         StatItem("Workflow 経過", _fmt_elapsed(wf_elapsed)),
     ]
-    sid_for_elapsed = state.current_running_step_id or state.last_known_step_id
+    # 並列実行中は単一 step の経過表示が誤誘導になるため省略する。
+    if len(running_set) >= 2:
+        sid_for_elapsed = None
+    else:
+        sid_for_elapsed = state.current_running_step_id or state.last_known_step_id
     if sid_for_elapsed:
         step_started: Optional[float] = None
         for sv in state.steps:

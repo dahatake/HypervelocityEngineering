@@ -52,7 +52,7 @@
   <text class="h" x="580" y="194">hve/runner.py — StepRunner</text>
   <text x="580" y="216">workflow_registry.StepDef を 1 ステップ実行</text>
   <text x="580" y="234">prompt_templates / template_engine でプロンプト生成</text>
-  <text x="580" y="252">agent_loader: .github/agents/&lt;Agent&gt;.agent.md 読込</text>
+  <text x="580" y="252">agent_loader: .github/prompts/&lt;Agent&gt;.prompt.md 読込</text>
   <text x="580" y="270">skill_resolver: SKILL.md frontmatter から候補抽出</text>
   <text x="580" y="288">artifact_validation: output_paths の存在確認</text>
   <text x="580" y="306">qa_merger / mdq_enforcement / app_arch_filter</text>
@@ -72,7 +72,7 @@
   <rect class="box ext" x="30" y="580" width="500" height="100" rx="6"/>
   <text class="h" x="50" y="604">外部プロセス: `copilot` (GitHub Copilot CLI)</text>
   <text x="50" y="624">モデル選択（hve/models_api.py で `copilot model list --json` 呼出）</text>
-  <text x="50" y="642">Custom Agent 解釈 / MCP 呼出 / Skill 検索</text>
+  <text x="50" y="642">Prompt 解釈 / MCP 呼出 / Skill 検索</text>
   <text x="50" y="662">認証: copilot login（OS 認証ストアに格納、HVE は触らない）</text>
 
   <rect class="box ext" x="560" y="580" width="500" height="100" rx="6"/>

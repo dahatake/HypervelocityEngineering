@@ -310,7 +310,7 @@ mutation(
                 -f "targetRepositoryId=$repoNodeId" `
                 -f "baseRef=$BaseBranch" `
                 -f "customInstructions=$CustomInstructions" `
-                -f "customAgent=$CustomAgent" `
+                -f "customAgent=" `
                 -f "model=$Model" 2>&1
 
             if ($LASTEXITCODE -ne 0) {

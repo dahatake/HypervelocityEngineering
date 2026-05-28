@@ -1,0 +1,25 @@
+inputs:
+- path: docs/catalog/use-case-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog
+- path: docs/catalog/data-model.md
+  required: false
+  kind: agent_artifact
+- path: docs/usecase/
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog
+outputs:
+- path: docs/dataflow/dataflow-data-source-analysis.md
+  required: true
+  mode: create
+- path: knowledge/
+  required: false
+  mode: create
+- path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
+  required: true
+  mode: create
+- path: knowledge/D10-API-Event-File-連携契約パック.md
+  required: true
+  mode: create

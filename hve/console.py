@@ -6,6 +6,7 @@ ANSI カラー・ボックス描画・スピナー・インタラクティブメ
 
 from __future__ import annotations
 
+import contextvars
 import json
 import re
 import os
@@ -16,6 +17,19 @@ import time
 import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+# 並列 fanout child から発行される確定行に発生元 step_id を埋め込むための ContextVar。
+# 値は ``step_start()`` / fanout child エントリ で set() され、`_emit` が行頭に
+# ``[hve:ctx:<step_id>] `` インラインマーカーを付与する。
+# GUI 側 (page_workbench / workbench_state) はこのマーカーを抽出して、
+# その行の正しい step_id を判定する。CLI 単体表示時は `_emit` 内部で strip。
+_CURRENT_EMIT_STEP_ID: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "hve_current_emit_step_id", default=None
+)
+
+# GUI 側でインラインマーカーを抽出するための正規表現（公開 API）。
+# 形式: ``[hve:ctx:<step_id>] `` （半角スペース 1 文字を含む）。
+INLINE_CTX_PATTERN = re.compile(r"^\[hve:ctx:([^\]]+)\] ")
 
 try:
     from .qa_merger import QAQuestion
@@ -365,10 +379,19 @@ class Console:
         並列安全性:
           - _output_lock で排他制御し、並列ステップからの同時呼び出しでも
             出力行が混在しないようにする。
+          - ContextVar `_CURRENT_EMIT_STEP_ID` に値があれば、行頭に
+            ``[hve:ctx:<step_id>] `` インラインマーカーを付与する。
+            これは GUI / Workbench 受信側（append_body 経路）にのみ可視で、
+            CLI 単体実行時 (`self._workbench is None`) の stdout 出力では
+            strip して表示変化を抑える（Q4=x）。
         """
         if not always and self.quiet:
             return
         msg = self._apply_screen_reader_filter(msg)
+        ctx_step_id = _CURRENT_EMIT_STEP_ID.get()
+        # `[hve:stats]` 構造化イベント行 / `[hve:ctx:...]` 既タグ行 にはマーカーを重ねない。
+        # （GUI 側 _STATS_PREFIX_PATTERN との互換性、二重タグ防止）
+        skip_ctx_marker = msg.lstrip().startswith("[hve:stats]") or msg.lstrip().startswith("[hve:ctx:")
         with self._output_lock:
             self._pause_spinner()
             try:
@@ -381,14 +404,21 @@ class Console:
                         formatted = msg
                 else:
                     formatted = msg
+                # インラインマーカーは TS の更に前へ。GUI 受信側で抽出しやすく、
+                # かつ CLI stdout 経路では strip する（後段で分岐）。
+                if ctx_step_id and not skip_ctx_marker:
+                    formatted_with_ctx = f"[hve:ctx:{ctx_step_id}] {formatted}"
+                else:
+                    formatted_with_ctx = formatted
                 # Workbench 有効時は Body へ流し、それ以外は通常 stdout
                 if self._workbench is not None:
                     try:
-                        self._workbench.append_body(formatted)
+                        self._workbench.append_body(formatted_with_ctx)
                     except Exception:
-                        # Workbench 側で例外が出ても本流を止めない
+                        # Workbench 側で例外が出ても本流を止めない（CLI 経路にフォールバック）
                         print(formatted, flush=True)
                 else:
+                    # CLI 単体時はマーカー非表示（Q4=x）
                     print(formatted, flush=True)
             finally:
                 self._resume_spinner()
@@ -830,9 +860,34 @@ class Console:
         self._emit(f"  {msg}")
 
     def step_start(self, step_id: str, title: str, agent: Optional[str] = None) -> None:
-        """ステップ開始。quiet 以外で表示。"""
+        """ステップ開始。quiet 以外で表示。
+
+        出力順序（重要）:
+          1. GUI 向け `[hve:stats] step_status running` を先に発火し、
+             受信側の ``current_running_step_id`` を更新させる。
+          2. ContextVar ``_CURRENT_EMIT_STEP_ID`` を新 step_id にセットし、
+             後続 _emit がインラインマーカーを付与できるようにする。
+          3. その後で可視行 ``▶ [Step.X]`` を出力する。
+        この順序により、可視行のプリフィックスが「1 つ前の Step」を指す
+        off-by-one バグを防ぐ。
+        """
         s = self.s
         agent_str = f" {s.DIM}(Agent: {agent}){s.RESET}" if agent else ""
+        # ① GUI 向け構造化 stats イベント（stdout）を先に発火。
+        # quiet/final_only 時は stdout 抑制要件を守るためスキップ。
+        if not (self.quiet or self.final_only):
+            try:
+                self.stats_event("step_status", step_id=step_id, status="running", title=title)
+            except Exception:
+                pass
+        # ② ContextVar に step_id をセット（後続 _emit のインラインマーカーに使用）。
+        # set() は同一 context スコープ内で上書き。fanout child では各 child の
+        # スコープで独立に set されるため、本書き込みは「直列実行の現ステップ」用。
+        try:
+            _CURRENT_EMIT_STEP_ID.set(step_id)
+        except Exception:
+            pass
+        # ③ 可視行を出力（ここで _emit が新 step_id を行頭マーカーに反映する）。
         self._print(f"  {s.CYAN}▶{s.RESET} {s.BOLD}[Step.{step_id}]{s.RESET} {title}{agent_str}")
         self._step_start_times[step_id] = time.time()
         # Workbench ブリッジ: Header#2 の該当ステップを running にし、
@@ -850,15 +905,6 @@ class Console:
             title=title,
             agent=agent,
         )
-        # GUI 向け構造化 stats イベント（stdout）。
-        # quiet/final_only 時は stdout 抑制要件を守るためスキップ。
-        # workbench_logger._try_consume_stats_event("step_status") が消費し、
-        # current_running_step_id / last_known_step_id を更新する。
-        if not (self.quiet or self.final_only):
-            try:
-                self.stats_event("step_status", step_id=step_id, status="running", title=title)
-            except Exception:
-                pass
 
     def step_end(self, step_id: str, status: str, elapsed: float = 0.0) -> None:
         """ステップ完了。quiet 以外で表示。Usage 累計サマリーを付加。"""

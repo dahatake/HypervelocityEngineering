@@ -1,0 +1,15 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/architectural-requirements-app-{appId}.md
+  required: false
+  kind: external
+- path: knowledge/D01-事業意図-成功条件定義書.md
+  required: false
+  kind: static
+outputs:
+- path: docs/catalog/app-arch-catalog.md
+  required: true
+  mode: create

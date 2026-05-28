@@ -25,7 +25,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: content_contains
-        detail: "infra/ 配下に Bicep ファイルを生成し .azure/plan.md に記録すること"
+        detail: "src/infra/ 配下に Bicep ファイルを生成し .azure/plan.md に記録すること"
     reason: "SKILL.md の description に 'generate Bicep', 'deploy to Azure Container Apps' がトリガーキーワードとして含まれており、IaC ファイル生成は本 Skill が担当する"
 
   - id: add-managed-identity

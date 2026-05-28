@@ -3,8 +3,8 @@
 このサブタスクは ASDW-WEB の fan-out 子であり、要素 `{{key}}` のみ を対象とする。
 
 ## 対象
-- per-service (`SVC-*`): `test/api/{{key}}.Tests/`, `src/api/{{key}}/`
-- per-screen (`SC-*`): `test/ui/{{key}}/`, `src/app/{{key}}/`
+- per-service (`SVC-*`): `src/test/api/{{key}}.Tests/`, `src/api/{{key}}/`
+- per-screen (`SC-*`): `src/test/ui/{{key}}/`, `src/app/{{key}}/`
 
 ## 必須参照
 - `docs/catalog/service-catalog-matrix.md`

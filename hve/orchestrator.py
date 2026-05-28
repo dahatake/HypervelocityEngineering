@@ -859,6 +859,10 @@ def _expand_workflow_for_dag(
         from .workflow_registry import WorkflowDef  # type: ignore[import]
     except ImportError:  # pragma: no cover
         from workflow_registry import WorkflowDef  # type: ignore[no-redef]
+    try:
+        from .catalog_parsers import get_parser_input_path  # type: ignore[import]
+    except ImportError:  # pragma: no cover
+        from catalog_parsers import get_parser_input_path  # type: ignore[no-redef]
 
     info = expand_workflow_fanout(workflow, repo_root)
 
@@ -884,9 +888,77 @@ def _expand_workflow_for_dag(
         if base_id in expanded_active and child_ids:
             expanded_active.update(child_ids)
 
+    # T-C1: deferred fan-out 判定
+    # empty_fanout_ids のうち、同一実行内の upstream step が入力ファイルを生成する
+    # 見込みのものは active から discard せず保持する。DAGExecutor が upstream 完了後に
+    # ランタイム再展開する（T-D2）。
+    #
+    # 判定: base_step.fanout_parser の入力パス（catalog_parsers.get_parser_input_path）が、
+    # base_step の depends_on 推移閉包に含まれるいずれかの step の output_paths
+    # （または output_paths_template の {key} 置換後パターン）と一致するかを fnmatch 照合する。
+    deferred_fanout_ids: List[str] = []
+    if info.empty_fanout_ids:
+        # 元 workflow.steps から ID → step の索引を作る（展開前の状態）
+        _orig_steps_by_id: Dict[str, Any] = {s.id: s for s in workflow.steps}
+
+        def _transitive_deps(start_id: str) -> Set[str]:
+            seen: Set[str] = set()
+            stack: List[str] = [start_id]
+            while stack:
+                cur = stack.pop()
+                step = _orig_steps_by_id.get(cur)
+                if step is None:
+                    continue
+                for dep in getattr(step, "depends_on", []) or []:
+                    if dep in seen:
+                        continue
+                    seen.add(dep)
+                    stack.append(dep)
+            return seen
+
+        def _step_produces_path(step: Any, target_path: str) -> bool:
+            """step が target_path（fnmatch パターン可）を output に持つかを判定。"""
+            import fnmatch as _fnmatch
+            outputs: List[str] = list(getattr(step, "output_paths", []) or [])
+            tmpl: List[str] = list(getattr(step, "output_paths_template", []) or [])
+            for o in outputs:
+                if o == target_path or _fnmatch.fnmatch(o, target_path) or _fnmatch.fnmatch(target_path, o):
+                    return True
+            for t in tmpl:
+                # {key} を * に置換して glob 比較
+                pat = t.replace("{key}", "*")
+                if _fnmatch.fnmatch(target_path, pat) or _fnmatch.fnmatch(pat, target_path):
+                    return True
+            return False
+
+        for empty_id in info.empty_fanout_ids:
+            base = _orig_steps_by_id.get(empty_id)
+            if base is None:
+                continue
+            parser_name = getattr(base, "fanout_parser", None)
+            if not parser_name:
+                continue
+            input_path = get_parser_input_path(parser_name)
+            if not input_path:
+                continue
+            # base の depends_on 推移閉包の中に input_path を output に持つ step があるか
+            upstream_ids = _transitive_deps(empty_id)
+            if any(
+                _step_produces_path(_orig_steps_by_id[uid], input_path)
+                for uid in upstream_ids
+                if uid in _orig_steps_by_id
+            ):
+                deferred_fanout_ids.append(empty_id)
+
+    info.deferred_fanout_ids = deferred_fanout_ids
+
     # K-1: 0 件展開のベース ID は active から除外し auto_skipped 化する
     # （dag_executor.py L274-283 の _fanout_empty_ids skip に相当）
+    # ただし deferred_fanout_ids に該当するものは保持する（T-C1）。
+    _deferred_set = set(deferred_fanout_ids)
     for empty_id in info.empty_fanout_ids:
+        if empty_id in _deferred_set:
+            continue
         expanded_active.discard(empty_id)
 
     return expanded_workflow, expanded_active, info
@@ -1009,14 +1081,17 @@ def _subissues_format_hint_for_step(step) -> str:
 # 既存成果物検出・再利用コンテキスト
 # -----------------------------------------------------------------------
 
-def _collect_file_samples(root: str, limit: int = 10) -> list:
+def _collect_file_samples(root: str, limit: int = 10, exclude_prefixes: tuple = ()) -> list:
     """指定ディレクトリから最大 limit 件のファイルパスを収集して返す。
 
     大規模リポジトリでの全列挙を避けるため、limit 件見つかった時点で走査を打ち切る。
     呼び出し側で artifact 種別に応じた limit を渡すこと（Sub-1 A-3）:
       - "src" → 50（実装ファイルは数が多い）
-      - "test" → 30（テストはやや少ない）
+      - "src/test" → 30（テストはやや少ない）
       - その他 → 10（catalog など）
+
+    exclude_prefixes: 走査結果からこのプレフィックスで始まるパスを除外する
+    （例: src 走査時に src/test/ を除外）。
     """
     from pathlib import Path
     root_path = Path(root)
@@ -1025,6 +1100,9 @@ def _collect_file_samples(root: str, limit: int = 10) -> list:
     files: list = []
     for path in root_path.rglob("*"):
         if path.is_file():
+            p = str(path).replace("\\", "/")
+            if exclude_prefixes and any(p.startswith(pref) for pref in exclude_prefixes):
+                continue
             files.append(str(path))
             if len(files) >= limit:
                 break
@@ -1070,12 +1148,13 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
         existing["test_specs"] = test_specs
 
     # ソースコードの検出（上限付き早期終了。Sub-1 A-3: 種別別動的上限）
-    src_files = _collect_file_samples("src", limit=50)
+    # src/test/ は test_files 側で扱うため除外する。
+    src_files = _collect_file_samples("src", limit=50, exclude_prefixes=("src/test/",))
     if src_files:
         existing["src_files"] = src_files
 
     # テストコードの検出（上限付き早期終了。Sub-1 A-3: 種別別動的上限）
-    test_files = _collect_file_samples("test", limit=30)
+    test_files = _collect_file_samples("src/test", limit=30)
     if test_files:
         existing["test_files"] = test_files
 
@@ -1129,7 +1208,7 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "screen_specs": "docs/screen/*.md",
     "test_specs": "docs/test-specs/*.md",
     "src_files": "src/**/*",
-    "test_files": "test/**/*",
+    "test_files": "src/test/**/*",
     "knowledge": "knowledge/*.md",
     "agent_specs": "docs/agent/*.md",
     "dataflow_specs": "docs/dataflow/apps/*.md",
@@ -1150,7 +1229,7 @@ _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "screen_catalog": "aad-web",
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
-    "use_case_catalog": "user_provided",  # ユーザーが手動で作成するユースケースカタログ
+    "use_case_catalog": "ard",  # ARD Step 4.3 で生成（旧仕様では user_provided）
     "dataflow_catalog": "adfd",
     "batch_service_catalog": "adfd",
     "batch_data_model": "adfd",
@@ -3171,6 +3250,26 @@ async def run_workflow(
             f"fan-out 事前展開に失敗したため非展開 workflow で続行します: {exc}"
         )
 
+    # GUI Workbench 進捗集約用に fan-out 親 → 子 ID マップを 1 回だけ通知する。
+    # GUI 側 (_apply_stats_fanout_init) は受信した child_ids をベース step の
+    # subtask として seed し、以降の child 単位 step_status から base 状態を
+    # 集約する（fan-out 子の進捗が UI に反映されない不具合の対応）。
+    if _expand_info is not None:
+        for _base_id, _child_ids in (getattr(_expand_info, "fanout_map", {}) or {}).items():
+            if not _child_ids:
+                continue
+            try:
+                console.stats_event(
+                    "fanout_init",
+                    step_id=_base_id,
+                    workflow_id=workflow_id,
+                    base_id=_base_id,
+                    child_ids=list(_child_ids),
+                )
+            except Exception:
+                # emit 失敗は実行を止めない（GUI 側は subtask 未seed のままで縮退動作）
+                pass
+
     dry_run_plan = build_dag_plan(
         wf_for_dag,
         active_steps,
@@ -3618,6 +3717,7 @@ async def run_workflow(
         title: str,
         prompt: str,
         custom_agent: Optional[str] = None,
+        fanout_meta: Optional[Dict[str, Any]] = None,
     ) -> bool:
         _prompt = prompt
 
@@ -3648,6 +3748,7 @@ async def run_workflow(
             prompt=_prompt,
             custom_agent=custom_agent,
             workflow_id=workflow_id,
+            fanout_meta=fanout_meta,
         )
         if workflow_id == "ard" and step_id == "1" and success:
             await _on_ard_step1_completed(
@@ -3656,6 +3757,24 @@ async def run_workflow(
                 console=console,
             )
         return success
+
+    # T-D3: deferred fan-out のランタイム展開時に resume_state へ子 step を seed する。
+    # selected_step_ids にも子 ID を追加して resume 時に拾えるようにする。
+    def _on_dynamic_expand(base_id: str, child_ids: List[str]) -> None:
+        try:
+            for cid in child_ids:
+                if cid not in resume_state.step_states:
+                    resume_state.step_states[cid] = StepState(status="pending")
+            existing = set(resume_state.selected_step_ids)
+            for cid in child_ids:
+                if cid not in existing:
+                    resume_state.selected_step_ids.append(cid)
+                    existing.add(cid)
+            resume_state.save()
+        except Exception as exc:  # pragma: no cover
+            console.warning(
+                f"on_dynamic_expand で resume_state 更新失敗 (base={base_id}): {exc}"
+            )
 
     executor = DAGExecutor(
         workflow=wf_for_dag,
@@ -3671,6 +3790,10 @@ async def run_workflow(
         fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
         fork_kpi_logger=_build_fork_kpi_logger(config),
         on_fork_retry=runner.set_fork_index,
+        # T-E1: deferred fan-out ランタイム再展開
+        deferred_fanout_ids=set(getattr(_expand_info, "deferred_fanout_ids", []) or []),
+        on_dynamic_expand=_on_dynamic_expand,
+        workflow_id=workflow_id,
     )
 
     # Phase 3 (Resume): 完了/スキップ済みステップを事前登録し、再実行を回避する。

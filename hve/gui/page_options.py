@@ -48,8 +48,7 @@ from .workflow_display import format_workflow_label
 from .workflow_requirements_banner import WorkflowRequirementsBanner
 from .workflow_step_requirements import (
     WORKFLOW_TO_SECTION,
-    pick_target_step,
-    summarize_requirements,
+    summarize_requirements_for_selection,
 )
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QCheckBox
 
@@ -577,6 +576,23 @@ class _C1Basic(QWidget):
             input_widget=self.verbosity,
         ))
 
+        # --- GUI セッション作業ディレクトリの後処理（旧 GUI_SESSION セクションから移動）---
+        self.gui_session_cleanup_policy = QComboBox()
+        self.gui_session_cleanup_policy.addItem(self.tr("残す (keep, 既定)"), "keep")
+        self.gui_session_cleanup_policy.addItem(self.tr("ZIP 化して退避 (archive)"), "archive")
+        self.gui_session_cleanup_policy.addItem(self.tr("削除 (purge)"), "purge")
+        layout.addWidget(_LabeledField(
+            title=self.tr("GUI セッション作業ディレクトリの後処理"),
+            description=self.tr(
+                "GUI 終了時に work/gui-runs/<session_run_id>/ をどう扱うかを選択します。"
+                " keep: そのまま残す（デバッグ用、既定）。"
+                " archive: work/gui-runs/.archive/<id>.zip に圧縮して元 dir を削除。"
+                " purge: 元 dir を削除。"
+                " 設定変更は次回 GUI 起動時から適用されます。"
+            ),
+            input_widget=self.gui_session_cleanup_policy,
+        ))
+
     def _build_model_effort_row(
         self,
         model_combo: QComboBox,
@@ -857,16 +873,6 @@ class _C3AutoPrompt(QWidget):
         self.auto_qa.toggled.connect(_on_auto_qa_toggled)
         _on_auto_qa_toggled(self.auto_qa.isChecked())
 
-        self.force_interactive = QCheckBox(self.tr("有効化"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("TTY 判定をバイパスして対話モード強制"),
-            description=(
-                self.tr("QA 回答入力の TTY 判定をバイパスしてインタラクティブモードを強制します。"
-                "IDE ターミナル等で stdin が非 TTY 扱いになる場合に使用（既定: 無効）。")
-            ),
-            input_widget=self.force_interactive,
-        ))
-
         self.auto_contents_review = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
             title=self.tr("レビュー自動投入"),
@@ -903,6 +909,41 @@ class _C3AutoPrompt(QWidget):
             input_widget=self.self_improve,
         ))
 
+        # 自己改善ループ 詳細オプション（CLI ウィザードと同等）
+        self.self_improve_max_iterations = QSpinBox()
+        self.self_improve_max_iterations.setRange(1, 10)
+        self.self_improve_max_iterations.setValue(3)
+        layout.addWidget(_LabeledField(
+            title=self.tr("自己改善 最大繰り返し回数"),
+            description=self.tr("スキャン→改善→検証を繰り返す最大回数（既定: 3）。"),
+            input_widget=self.self_improve_max_iterations,
+        ))
+
+        self.self_improve_target_scope = QLineEdit()
+        self.self_improve_target_scope.setPlaceholderText(self.tr("例: src/  hve/  空=リポジトリ全体"))
+        layout.addWidget(_LabeledField(
+            title=self.tr("自己改善 対象パス"),
+            description=self.tr("対象パス（空=リポジトリ全体）。"),
+            input_widget=self.self_improve_target_scope,
+        ))
+
+        self.self_improve_goal = QPlainTextEdit()
+        self.self_improve_goal.setFixedHeight(60)
+        self.self_improve_goal.setPlaceholderText(self.tr("例: テスト失敗を 0 件にし lint エラーを解消する"))
+        layout.addWidget(_LabeledField(
+            title=self.tr("自己改善 ゴール説明"),
+            description=self.tr("ゴール説明（省略可 → ワークフロー種別から自動設定）。"),
+            input_widget=self.self_improve_goal,
+        ))
+
+        # self_improve 連動で 3 オプションをグレーアウト
+        def _on_self_improve_toggled(checked: bool) -> None:
+            self.self_improve_max_iterations.setEnabled(bool(checked))
+            self.self_improve_target_scope.setEnabled(bool(checked))
+            self.self_improve_goal.setEnabled(bool(checked))
+        self.self_improve.toggled.connect(_on_self_improve_toggled)
+        _on_self_improve_toggled(self.self_improve.isChecked())
+
         # --- 旧 _C15AdditionalPrompt から移動: 追加プロンプト / コメント ---
         self.additional_prompt = QPlainTextEdit()
         self.additional_prompt.setFixedHeight(80)
@@ -928,7 +969,6 @@ class _C3AutoPrompt(QWidget):
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.auto_qa = self.auto_qa.isChecked()
-        args.force_interactive = self.force_interactive.isChecked()
         args.auto_contents_review = self.auto_contents_review.isChecked()
         args.auto_coding_agent_review = self.auto_coding_agent_review.isChecked()
         args.auto_coding_agent_review_auto_approval = (
@@ -961,6 +1001,16 @@ class _C3AutoPrompt(QWidget):
 
         # 旧 _C16Misc から移動: self_improve
         args.self_improve = self.self_improve.isChecked()
+        if args.self_improve:
+            args.self_improve_max_iterations = int(self.self_improve_max_iterations.value())
+            _si_scope = self.self_improve_target_scope.text().strip()
+            args.self_improve_target_scope = _si_scope or None
+            _si_goal = self.self_improve_goal.toPlainText().strip()
+            args.self_improve_goal = _si_goal or None
+        else:
+            args.self_improve_max_iterations = None
+            args.self_improve_target_scope = None
+            args.self_improve_goal = None
         # 旧 _C15AdditionalPrompt から移動
         args.additional_prompt = self.additional_prompt.toPlainText().strip() or None
         v = self.context_max_chars.value()
@@ -1198,14 +1248,6 @@ class _C5IssuePR(QWidget):
             input_widget=self.branch,
         ))
 
-        self.steps = QLineEdit()
-        self.steps.setPlaceholderText(self.tr("例: 1,2.1,3"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("実行ステップ"),
-            description=self.tr("カンマ区切りで実行ステップを指定（例: 1,2.1,3）。省略時は全ステップ。"),
-            input_widget=self.steps,
-        ))
-
         # --- 旧 _C11AKM から移動: PR 自動 Approve & Auto-merge ---
         self.enable_auto_merge = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
@@ -1223,7 +1265,6 @@ class _C5IssuePR(QWidget):
         args.issue_title = self.issue_title.text().strip() or None
         # 旧 _C9BranchSteps / _C11AKM から移動
         args.branch = self.branch.text().strip() or "main"
-        args.steps = self.steps.text().strip() or None
         args.enable_auto_merge = self.enable_auto_merge.isChecked()
 
 
@@ -1605,17 +1646,6 @@ class _C10AppId(QWidget):
             input_widget=self.app_ids,
         ))
 
-        self.app_id = QLineEdit()
-        self.app_id.setPlaceholderText(self.tr("ADFDV 等で使用、カンマ区切り可"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("データフローアプリ ID"),
-            description=(
-                self.tr("データフローアプリ ID（ADFDV 等で使用、カンマ区切り可）。"
-                "APP-ID フィルタ後、対象 Batch APP の文脈で実行します。")
-            ),
-            input_widget=self.app_id,
-        ))
-
         self.usecase_id = QLineEdit()
         layout.addWidget(_LabeledField(
             title=self.tr("ユースケース ID"),
@@ -1624,8 +1654,10 @@ class _C10AppId(QWidget):
         ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
+        # `args.app_id`（単一値・後方互換）は `args.app_ids[0]` から
+        # `hve/__main__.py` および `hve/orchestrator.py` 内で自動補完されるため、
+        # GUI からは書き込まない。
         args.app_ids = self.app_ids.text().strip() or None
-        args.app_id = self.app_id.text().strip() or None
         args.usecase_id = self.usecase_id.text().strip() or None
 
 
@@ -1945,12 +1977,14 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c10", "対象アプリケーション (APP-ID)"),
     ],
     "asdw-web": [
+        ("c10", "対象アプリケーション (APP-ID)"),
         ("c10", "Azure リソースグループ名"),
     ],
     "adfd": [
-        ("c10", "データフローアプリ ID"),
+        ("c10", "対象アプリケーション (APP-ID)"),
     ],
     "adfdv": [
+        ("c10", "対象アプリケーション (APP-ID)"),
         ("c10", "Azure リソースグループ名"),
     ],
     "akm": [
@@ -1991,11 +2025,13 @@ _STEP2_HIDDEN_CATEGORIES = {"C1", "C3", "C5", "C6", "C7", "AZURE"}
 _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
     "QA 自動投入",
     "QA 回答モード",
-    "TTY 判定をバイパスして対話モード強制",
     "レビュー自動投入",
     "ローカルでコードレビュー実行",
     "コードレビュー修正プランを自動承認",
     "自己改善ループを有効化",
+    "自己改善 最大繰り返し回数",
+    "自己改善 対象パス",
+    "自己改善 ゴール説明",
     "コンテキスト最大文字数",
 )
 
@@ -2068,7 +2104,9 @@ class OptionsPage(QWidget):
 
         # 必須要件サマリーバナー（Task C 統合）
         # 単一インスタンスを保持し、選択ワークフローに応じて配置先を動的切替する。
-        self._requirements_banner: WorkflowRequirementsBanner = WorkflowRequirementsBanner()
+        # 親を OptionsPage(self) に指定して未配置時の top-level ウィンドウ化を防ぐ。
+        self._requirements_banner: WorkflowRequirementsBanner = WorkflowRequirementsBanner(self)
+        self._requirements_banner.setVisible(False)
         self._banner_current_section: Optional[str] = None
         self._last_banner_selection: List[Tuple[str, List[str]]] = []
 
@@ -2284,65 +2322,57 @@ class OptionsPage(QWidget):
         self._refresh_requirements_banner()
 
     def _refresh_requirements_banner(self) -> None:
-        """内部: バナー内容と配置先を更新する。"""
-        from .workflow_step_requirements import (
-            AUTOPILOT_PSEUDO_STEP_ID,
-            AUTOPILOT_PSEUDO_WORKFLOW_ID,
-        )
+        """内部: バナー内容と配置先を更新する。
 
+        バナーと Step 1 [次へ] 押下時 Precheck の判定ロジックは
+        ``summarize_requirements_for_selection`` を共通入口として統一されている。
+        Autopilot ON 時の SE 系ワークフロー（aad-web/asdw-web/adfd/adfdv）選択有無
+        による分岐も同関数内で完結する。
+        """
         selected = getattr(self, "_last_banner_selection", None)
         autopilot_mode = bool(getattr(self, "_last_banner_autopilot_mode", False))
         autopilot_catalog_path = getattr(
             self, "_last_banner_autopilot_catalog_path", None,
         )
 
-        if autopilot_mode:
-            workflow_id = AUTOPILOT_PSEUDO_WORKFLOW_ID
-            step_id = AUTOPILOT_PSEUDO_STEP_ID
-            attached_count = 0
-            origin_chosen = False
-        else:
-            if not selected:
-                # 選択未確定なら非表示
-                self._move_banner_to_section(None)
-                return
+        if not autopilot_mode and not selected:
+            # 非 Autopilot で選択未確定なら非表示
+            self._move_banner_to_section(None)
+            return
 
-            target = pick_target_step(selected)
-            if target is None:
-                self._move_banner_to_section(None)
-                return
-
-            workflow_id, step_id = target
-
-            # ARD 添付ペインの状態を取得
-            attached_count = 0
-            origin_chosen = False
-            if self._attachment_pane is not None and workflow_id == "ard":
-                ts = getattr(self._attachment_pane, "target_business_path", None)
-                if callable(ts):
+        # ARD 添付ペインの状態を取得（共通入口に渡す。target が ARD でない場合は
+        # 内部で無視されるため常に収集して問題ない）。
+        attached_count = 0
+        origin_chosen = False
+        if self._attachment_pane is not None:
+            ts = getattr(self._attachment_pane, "target_business_path", None)
+            if callable(ts):
+                try:
                     origin_chosen = bool(ts())
-                # 添付件数: _results 属性を参照（無ければ 0）
-                results = getattr(self._attachment_pane, "_results", None)
-                if results is not None:
-                    try:
-                        attached_count = len(results)
-                    except Exception:
-                        attached_count = 0
+                except Exception:
+                    origin_chosen = False
+            results = getattr(self._attachment_pane, "_results", None)
+            if results is not None:
+                try:
+                    attached_count = len(results)
+                except Exception:
+                    attached_count = 0
 
-        summary = summarize_requirements(
-            workflow_id, step_id,
+        summaries = summarize_requirements_for_selection(
+            selected or [],
             input_values=self._collect_banner_input_values(),
             file_exists=self._banner_file_exists,
             attached_count=attached_count,
             origin_chosen=origin_chosen,
+            autopilot_mode=autopilot_mode,
             autopilot_catalog_path=autopilot_catalog_path,
         )
-        if summary is None:
+        if not summaries:
             self._move_banner_to_section(None)
             return
 
-        section = summary.section
-        self._move_banner_to_section(section, workflow_id=workflow_id)
+        summary = summaries[0]
+        self._move_banner_to_section(summary.section, workflow_id=summary.workflow_id)
         self._requirements_banner.set_summary(summary)
         self._requirements_banner.setVisible(True)
 
@@ -2528,6 +2558,9 @@ class OptionsPage(QWidget):
             layout = getattr(self, "_groups_layout", None)
             if layout is not None:
                 layout.removeWidget(box)
+            # setParent(None) のみだと可視状態の widget が一瞬トップレベル
+            # ウィンドウ化してフラッシュ表示されるため、先に非表示化する。
+            box.setVisible(False)
             box.setParent(None)
             box.deleteLater()
         self._workflow_group_boxes = {}
@@ -2536,6 +2569,10 @@ class OptionsPage(QWidget):
         selected_set = set(selected_workflows)
         # 「追加プロンプト」(C3) を index 0 に固定するため、ワークフロー枠は index 1 以降に挿入。
         insert_idx = 1
+        # 共通 LF（同一 (category_attr, title) キーを複数ワークフローで参照）は
+        # 同一 QWidget インスタンスのため、最初に占有した枠のみで表示する。
+        # 例: APP-ID は AAD-WEB/ASDW-WEB/ADFD/ADFDV 共通だが、複数選択時は先頭ワークフロー枠に集約。
+        claimed_lf_keys: set = set()
         for wf_id in _WORKFLOW_CANONICAL_ORDER:
             if wf_id not in selected_set:
                 continue
@@ -2543,9 +2580,17 @@ class OptionsPage(QWidget):
             if not entries:
                 # 固有設定を持たないワークフロー（aas / aag / aagd 等）は枠を作らない。
                 continue
-            box = self._build_workflow_group_box(wf_id, entries)
+            filtered_entries = [
+                (cat, title) for (cat, title) in entries
+                if (cat, title.strip()) not in claimed_lf_keys
+            ]
+            if not filtered_entries:
+                continue
+            box = self._build_workflow_group_box(wf_id, filtered_entries)
             if box is None:
                 continue
+            for cat, title in filtered_entries:
+                claimed_lf_keys.add((cat, title.strip()))
             self._workflow_group_boxes[wf_id] = box
             layout = getattr(self, "_groups_layout", None)
             if layout is not None:
@@ -2607,7 +2652,12 @@ class OptionsPage(QWidget):
         フィールド / ペインが 1 つも解決できなかった場合は None を返す。
         """
         wf_name = self._workflow_name_map.get(wf_id, "")
-        title = format_workflow_label(wf_id, wf_name)
+        # aad-web のカード見出しのみ「Software Engineering」（ID サフィックスなし）に上書き。
+        # 他ワークフローは共通書式 `{name} ({ID})` を維持。
+        if wf_id == "aad-web":
+            title = "Software Engineering"
+        else:
+            title = format_workflow_label(wf_id, wf_name)
         box = QGroupBox(title)
         box.setStyleSheet(_WORKFLOW_GROUP_STYLE)
         inner = QVBoxLayout(box)
@@ -2669,16 +2719,22 @@ class OptionsPage(QWidget):
         `box` を deleteLater する前に呼び出すこと。これにより `_LabeledField`
         本体および接続されたシグナル/バリデータが破棄されるのを防ぐ。
         """
-        # 必須要件バナー救出（`box.deleteLater()` による道連れ削除を防ぐ）
+        # 必須要件バナー救出（`box.deleteLater()` による道連れ削除を防ぐ）。
+        # setParent(None) のみだと orphan の visible widget が top-level ウィンドウ化
+        # する Qt 挙動を踏むため、OptionsPage を親に戻し可視性も落とす。
         banner = getattr(self, "_requirements_banner", None)
         if banner is not None and banner.parentWidget() is box:
-            banner.setParent(None)
+            banner.setParent(self)
+            banner.setVisible(False)
             self._banner_current_section = None
 
         # AttachmentPane 救出（ARD 枠に付けた場合、`box.deleteLater()` で道連れ削除されるのを防ぐ）
+        # setParent(None) のみだと orphan の visible widget が top-level ウィンドウ化
+        # する Qt 挙動を踏むため、バナーと同じく OptionsPage を親に戻し可視性も落とす。
         attachment = getattr(self, "_attachment_pane", None)
         if attachment is not None and attachment.parentWidget() is box:
-            attachment.setParent(None)
+            attachment.setParent(self)
+            attachment.setVisible(False)
 
         if not self._lf_registry:
             return

@@ -10,7 +10,6 @@ from typing import Optional, Tuple
 DEFAULT_VERSION = "1.0.0"
 REPO_ROOT = Path(".")
 TARGET_GLOBS = (
-    ".github/agents/*.agent.md",
     ".github/skills/**/SKILL.md",
 )
 

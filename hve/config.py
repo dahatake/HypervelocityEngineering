@@ -11,6 +11,28 @@ from typing import Any, Dict, List, Optional
 DEFAULT_MODEL: str = "claude-opus-4.7"
 DEFAULT_CONTEXT_INJECTION_MAX_CHARS: int = 20_000
 
+# --- Phase 8 S-3: 旧 Custom Agent の tools frontmatter audit 記録用定数 ---
+# 【重要】本定数は **ドキュメント用**。SDK にそのまま渡してはいけない。
+# 旧 `.github/agents/*.agent.md` の `tools:` frontmatter は「カテゴリ名」
+# (edit / execute / read / search / todo / web) を使っていたが、SDK は
+# `str_replace_editor`, `bash`, `glob`, `web_search` 等の「実ツール名」を
+# `available_tools` / `excluded_tools` に期待するため、カテゴリ名を
+# そのまま SDK に渡すと全ツールがブロックされる。
+# Phase 6 T-6.1c の audit (77 agent) で 75/77 が要求していた union:
+#   edit, execute, read, search, todo, web
+# クラスタリングとしての記録としてり、将来 SDK 側で
+# カテゴリ名 ↔ 実ツール名のマッピング表が提供された際に
+# `available_tools` へポーティングするための参照値として使う。
+# 詳細は work/custom-agent-tasks-phase8/completion-report.md を参照。
+DEFAULT_AVAILABLE_TOOL_CATEGORIES: tuple[str, ...] = (
+    "edit",
+    "execute",
+    "read",
+    "search",
+    "todo",
+    "web",
+)
+
 # --- Self-Improve scope 定数 ---
 # self_improve_scope の許可値。
 # ""         : デフォルト（後方互換）。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される。
@@ -256,7 +278,7 @@ class SDKConfig:
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない
     create_pr: bool = False                 # デフォルト: 作成しない
-    ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "infra", "qa", "src", "test", "work"])
+    ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "qa", "src", "work"])
     # qa/ は PR commit 対象外（ignore_paths に含まれる）。
     # 例外: AQOD ワークフローでは qa/ の成果物が主成果物となる場合がある。
     #   → auto-aqod.yml が qa/ を commit 対象に含めるかどうかはワークフロー設定で制御する。
@@ -300,7 +322,15 @@ class SDKConfig:
     # available_tools: 指定したツール名のみを許可（None = 全許可）
     # excluded_tools:  指定したツール名を除外（available_tools 適用後に評価される想定）
     # サブセッション (Pre-QA / Review) にも同じ値を伝搬する。
-    # Custom Agent 単位の `tools` フィールドは agent_loader.py 側で別途 SDK へ渡される。
+    #
+    # Phase 8 S-3 所見: 旧 `.github/agents/*.agent.md` の `tools:` frontmatter は
+    # 「カテゴリ名」(edit/execute/read/search/todo/web) を採用しており、SDK の
+    # 実ツール名 (str_replace_editor / bash / glob / web_search 等) と一致しない。
+    # そのため「グローバルにデフォルト値を固定」すると SDK ツールを
+    # 完全ブロックしてしまうリスクがあるため、デフォルトは None のまま保持し、
+    # audit 記録は `DEFAULT_AVAILABLE_TOOL_CATEGORIES` 定数にドキュメントとして残す。
+    # SDK 側でカテゴリ名 ↔ 実ツール名のマッピングが今後提供された場合に初めて
+    # ポーティングを検討する。
     available_tools: Optional[List[str]] = None
     excluded_tools: Optional[List[str]] = None
 
@@ -322,21 +352,11 @@ class SDKConfig:
     #     },
     # }
 
-    # --- Custom Agents グローバル定義 ---
-    custom_agents_config: Optional[List[Dict[str, Any]]] = None
-    # セッション横断で全ステップに適用する追加 Agent 定義
-    # Copilot SDK の custom_agents 形式。例:
-    # [
-    #     {
-    #         "name": "researcher",
-    #         "display_name": "Research Agent",
-    #         "description": "Explores codebases...",
-    #         "tools": ["grep", "glob", "view"],
-    #         "prompt": "You are a research assistant...",
-    #     },
-    # ]
-
     # --- 追加プロンプト ---
+    # Phase 2 で SDK へ `custom_agents` キーを渡さなくなったため、本フィールドは
+    # 現状 no-op（caller が設定しても何も作用しない）。Phase 8 S-2 では
+    # `custom_agents_config` 上位フィールドを撤去したが、`additional_prompt` は
+    # 他途用との区別が付けるまでフィールドを残す。次回の清掎候補。
     additional_prompt: Optional[str] = None  # 全 Custom Agent の prompt 末尾に追記する文字列
 
     # --- Work IQ (Microsoft 365 データ参照) ---

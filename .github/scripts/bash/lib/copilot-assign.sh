@@ -162,7 +162,7 @@ query(\$issueNumber: Int!) {
       -f "targetRepositoryId=${repo_node_id}"
       -f "baseRef=${base_branch}"
       -f "customInstructions=${custom_instructions}"
-      -f "customAgent=${custom_agent}"
+      -f "customAgent="
     )
     if [[ "${selected_model}" != "Auto" ]]; then
       query="

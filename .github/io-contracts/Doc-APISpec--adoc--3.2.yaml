@@ -1,0 +1,5 @@
+inputs: []
+outputs:
+- path: docs-generated/components/api-spec.md
+  required: true
+  mode: create

@@ -10,7 +10,7 @@
 
 == 登録パーサ ==
 - "app_catalog"        : docs/catalog/app-catalog.md
-- "screen_catalog"     : docs/catalog/screen-catalog.md
+- "screen_catalog"     : docs/catalog/screen-catalog-APP-*.md（per-APP 直読み、合成キー ``APP-NN-S###`` を返却）
 - "service_catalog"    : docs/catalog/service-catalog.md
 - "dataflow_catalog"  : docs/dataflow/dataflow-app-catalog.md
 - "agent_catalog"      : docs/agent/agent-application-definition.md
@@ -107,7 +107,8 @@ def _extract_ids_from_headings(text: str, *, id_pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 _APP_ID_PATTERN = r"APP-\d{2,3}"
-_SCREEN_ID_PATTERN = r"SC-[A-Za-z0-9_\-]+"
+_SCREEN_LOCAL_ID_PATTERN = r"S\d{3,}"
+_SCREEN_CATALOG_FILE_PATTERN = re.compile(r"^screen-catalog-(APP-\d{2,3})\.md$")
 _SERVICE_ID_PATTERN = r"SVC-[A-Za-z0-9_\-]+"
 _APP_ID_PATTERN_DATAFLOW = r"JOB-[A-Za-z0-9_\-]+"
 _AGENT_ID_PATTERN = r"AG-[A-Za-z0-9_\-]+"
@@ -129,14 +130,53 @@ def parse_app_catalog(repo_root: Path) -> List[str]:
 
 
 def parse_screen_catalog(repo_root: Path) -> List[str]:
-    """docs/catalog/screen-catalog.md から ``SC-*`` 形式の ID を抽出する。"""
-    text = _read_text(repo_root, "docs/catalog/screen-catalog.md")
-    if text is None:
+    """docs/catalog/screen-catalog-APP-*.md 群から ``APP-NN-S###`` 形式の合成キーを抽出する。
+
+    画面 ID は per-APP ファイル内で ``S001`` 形式の安定採番（APP スコープ内で一意）で
+    定義されているため、ファイル名から抽出した APP-ID と組み合わせて全体で一意の
+    fan-out キーを構築する。
+    """
+    catalog_dir = repo_root / "docs" / "catalog"
+    if not catalog_dir.is_dir():
         return []
-    ids = _extract_ids_from_table(text, id_pattern=_SCREEN_ID_PATTERN)
-    if not ids:
-        ids = _extract_ids_from_headings(text, id_pattern=_SCREEN_ID_PATTERN)
-    return ids
+    local_pat = re.compile(_SCREEN_LOCAL_ID_PATTERN)
+    found: List[str] = []
+    seen: set = set()
+    # ファイル名昇順で安定した順序を保証
+    for path in sorted(catalog_dir.glob("screen-catalog-APP-*.md")):
+        m = _SCREEN_CATALOG_FILE_PATTERN.match(path.name)
+        if not m:
+            continue
+        app_id = m.group(1)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        local_ids: List[str] = []
+        local_seen: set = set()
+        for line in text.splitlines():
+            s = line.strip()
+            if not s.startswith("|"):
+                continue
+            if re.match(r"^\|\s*[-:\s|]+\s*\|?$", s):
+                continue
+            cols = [c.strip() for c in s.strip("|").split("|")]
+            if not cols:
+                continue
+            cell = cols[0]
+            for lm in local_pat.finditer(cell):
+                val = lm.group(0)
+                if val in local_seen:
+                    continue
+                local_seen.add(val)
+                local_ids.append(val)
+        for sid in local_ids:
+            key = f"{app_id}-{sid}"
+            if key in seen:
+                continue
+            seen.add(key)
+            found.append(key)
+    return found
 
 
 def parse_service_catalog(repo_root: Path) -> List[str]:
@@ -222,7 +262,36 @@ _PARSERS: Dict[str, Callable[[Path], List[str]]] = {
     "use_case_skeleton": parse_use_case_skeleton,
 }
 
+# Parser 名 → 主入力ファイルパス（リポジトリルートからの相対パス）の SSOT。
+# orchestrator の deferred fan-out 判定（同一実行内の upstream step が入力を
+# 生成するか）で参照する。各 parser の _read_text 呼び出し先と一致させること。
+#
+# - 単一ファイル parser: そのパス
+# - glob 系 parser (screen_catalog): 代表 glob 文字列。判定側で fnmatch 比較する
+# - 複数フォールバック parser (agent_catalog): primary パスのみ列挙
+#   （fallback は registry 上で output_paths として宣言される運用前提）
+_PARSER_INPUT_PATHS: Dict[str, str] = {
+    "app_catalog": "docs/catalog/app-catalog.md",
+    "screen_catalog": "docs/catalog/screen-catalog-APP-*.md",
+    "service_catalog": "docs/catalog/service-catalog.md",
+    "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
+    "agent_catalog": "docs/agent/agent-application-definition.md",
+    "business_candidate": "docs/company-business-recommendation.md",
+    "use_case_skeleton": "docs/catalog/use-case-skeleton.md",
+}
+
 KNOWN_PARSERS: FrozenSet[str] = frozenset(_PARSERS.keys())
+
+
+def get_parser_input_path(parser_name: str) -> Optional[str]:
+    """Parser 名から主入力ファイルパス（リポジトリ相対）を返す。
+
+    未登録 parser には None を返す。
+    deferred fan-out 判定（orchestrator._expand_workflow_for_dag）が、
+    fan-out base の上流 step の output_paths にこの戻り値が含まれるかを
+    照合するために使用する。
+    """
+    return _PARSER_INPUT_PATHS.get(parser_name)
 
 
 def parse_catalog(kind: str, repo_root: Path) -> List[str]:

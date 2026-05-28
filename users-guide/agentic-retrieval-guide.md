@@ -54,6 +54,8 @@
 
 - `enable_agentic_retrieval=no` の場合、関連 Step はスキップされます。
 
+<a id="入力項目q1q6"></a>
+
 ## 入力項目（Q1〜Q6）
 
 以下は `web-app-design.yml` / `web-app-dev.yml` と `hve/template_engine.py` の項目定義に準拠しています。
@@ -98,7 +100,7 @@
 
 - `docs/services/{serviceId}-agentic-retrieval-spec.md`
 - `docs/azure/agentic-retrieval/{serviceId}-design.md`
-- `infra/azure/create-azure-agentic-retrieval/...`
+- `src/infra/azure/create-azure-agentic-retrieval/...`
   （Agent 実行時に生成）
 - `work/.../artifacts/cli-evidence.md`
 - `work/.../artifacts/created-resources.json`

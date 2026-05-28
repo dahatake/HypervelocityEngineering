@@ -14,6 +14,7 @@ import pytest
 from hve import workflow_registry as wr
 from hve.catalog_parsers import KNOWN_PARSERS
 from hve.fanout_expander import expand_workflow_fanout, FanoutChildStep
+from hve.fanout_expander import expand_single_step_fanout
 from hve.dag_executor import DAGExecutor, StepResult
 
 
@@ -159,6 +160,87 @@ def test_output_paths_inherited_when_template_absent(tmp_path):
     expanded = expand_workflow_fanout(fake_wf, tmp_path)
     child = next(s for s in expanded.steps if s.id == "Z/D01")
     assert child.output_paths == ["docs/parent-output.md"]
+
+
+# ---------------------------------------------------------------------------
+# T-B1: expand_single_step_fanout — ランタイム再展開用の単発 API
+# ---------------------------------------------------------------------------
+
+
+def test_expand_single_step_fanout_returns_children_for_static_keys(tmp_path):
+    """fanout_static_keys を持つ base step を渡すと子リストが返る。"""
+    base = wr.StepDef(
+        id="S",
+        title="single",
+        custom_agent=None,
+        consumed_artifacts=[],
+        fanout_static_keys=["K1", "K2", "K3"],
+    )
+    children = expand_single_step_fanout(base, tmp_path)
+    assert children is not None
+    assert [c.id for c in children] == ["S/K1", "S/K2", "S/K3"]
+    assert all(isinstance(c, FanoutChildStep) for c in children)
+    assert children[0].base_step_id == "S"
+    assert children[0].fanout_key == "K1"
+
+
+def test_expand_single_step_fanout_returns_none_for_non_fanout_step(tmp_path):
+    """fan-out 指定なし (static_keys も parser も無い) → None。"""
+    plain = wr.StepDef(
+        id="P",
+        title="plain",
+        custom_agent=None,
+        consumed_artifacts=[],
+    )
+    assert expand_single_step_fanout(plain, tmp_path) is None
+
+
+def test_expand_single_step_fanout_returns_none_for_empty_parser_result(tmp_path):
+    """parser がキー 0 件を返す (カタログ不在) 場合 → None。"""
+    parsed = wr.StepDef(
+        id="Q",
+        title="parsed",
+        custom_agent=None,
+        consumed_artifacts=[],
+        fanout_parser="use_case_skeleton",
+    )
+    # tmp_path に skeleton.md が存在しないので 0 件 → None
+    assert expand_single_step_fanout(parsed, tmp_path) is None
+
+
+def test_expand_single_step_fanout_uses_parser_when_file_exists(tmp_path):
+    """parser の入力ファイルを tmp に作成すると、その内容から子が生成される。"""
+    skeleton = tmp_path / "docs" / "catalog" / "use-case-skeleton.md"
+    skeleton.parent.mkdir(parents=True, exist_ok=True)
+    skeleton.write_text(
+        "# Skeleton\n\n## UC-01\n本文\n## UC-02\n本文\n",
+        encoding="utf-8",
+    )
+    parsed = wr.StepDef(
+        id="R",
+        title="parsed",
+        custom_agent=None,
+        consumed_artifacts=[],
+        fanout_parser="use_case_skeleton",
+    )
+    children = expand_single_step_fanout(parsed, tmp_path)
+    assert children is not None
+    assert [c.id for c in children] == ["R/UC-01", "R/UC-02"]
+
+
+def test_expand_single_step_fanout_does_not_mutate_base(tmp_path):
+    """base_step.depends_on 等が呼び出し後に変更されていない。"""
+    base = wr.StepDef(
+        id="T",
+        title="t",
+        custom_agent=None,
+        consumed_artifacts=[],
+        depends_on=["U", "V"],
+        fanout_static_keys=["A", "B"],
+    )
+    before_deps = list(base.depends_on)
+    expand_single_step_fanout(base, tmp_path)
+    assert base.depends_on == before_deps
 
 
 # ---------------------------------------------------------------------------
@@ -329,6 +411,49 @@ def test_prepare_workflow_for_dag_remaps_downstream_depends_on(tmp_path):
     assert "1" not in step2.depends_on
     assert "1/D01" in step2.depends_on
     assert len(step2.depends_on) == 21
+
+
+def test_fanout_child_depends_on_fanout_parent_is_remapped(tmp_path):
+    """fan-out 親 C が他の fan-out 親 A, B に依存するとき、C の各子の depends_on が
+    A, B の全子 ID へクロス積で展開されること（aad-web Step 2.3 リグレッション）。
+
+    バグ再現条件:
+      - A (fan-out, keys=[a1, a2])
+      - B (fan-out, keys=[b1])
+      - C (fan-out, depends_on=["A", "B"], keys=[c1, c2])
+    期待:
+      - C/c1 と C/c2 の depends_on が {A/a1, A/a2, B/b1} に張り替えられる
+      - 生 ID "A" / "B" は depends_on に残らない（→ existing_ids フォールバックで
+        誤って「解決済み」と扱われる現行バグの再発防止）
+    """
+    a = wr.StepDef(
+        id="A", title="parent-A", custom_agent=None,
+        consumed_artifacts=[], fanout_static_keys=["a1", "a2"],
+    )
+    b = wr.StepDef(
+        id="B", title="parent-B", custom_agent=None,
+        consumed_artifacts=[], fanout_static_keys=["b1"],
+    )
+    c = wr.StepDef(
+        id="C", title="parent-C", custom_agent=None,
+        depends_on=["A", "B"],
+        consumed_artifacts=[], fanout_static_keys=["c1", "c2"],
+    )
+    fake_wf = wr.WorkflowDef(
+        id="test_fanout_chain", name="t", label_prefix="t",
+        state_labels=wr._make_state_labels("t"),
+        params=[], steps=[a, b, c],
+    )
+    expanded = expand_workflow_fanout(fake_wf, tmp_path)
+    c_children = [s for s in expanded.steps if s.id in ("C/c1", "C/c2")]
+    assert len(c_children) == 2
+    expected_deps = {"A/a1", "A/a2", "B/b1"}
+    for child in c_children:
+        deps = set(child.depends_on)
+        assert deps == expected_deps, (
+            f"{child.id} depends_on={deps}, expected={expected_deps}"
+        )
+        assert "A" not in deps and "B" not in deps
 
 
 def test_step_prompts_propagate_to_fanout_children():

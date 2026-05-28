@@ -17,7 +17,7 @@ on:
         description: "Playwright プロジェクトのディレクトリ"
         required: false
         type: string
-        default: "test/e2e/playwright"
+        default: "src/test/e2e/playwright"
 
 permissions:
   contents: read

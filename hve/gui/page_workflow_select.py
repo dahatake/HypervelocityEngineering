@@ -633,6 +633,9 @@ class WorkflowSelectPage(QWidget):
             if wf_id not in self._selected_ids:
                 grp = self._step_groups.pop(wf_id)
                 self._steps_layout.removeWidget(grp)
+                # setParent(None) のみだと可視状態の widget が一瞬トップレベル
+                # ウィンドウ化してフラッシュ表示されるため、先に非表示化する。
+                grp.setVisible(False)
                 grp.setParent(None)
                 grp.deleteLater()
 
@@ -650,6 +653,17 @@ class WorkflowSelectPage(QWidget):
             # placeholder と末尾 stretch の前に挿入
             insert_at = max(0, self._steps_layout.count() - 1)
             self._steps_layout.insertWidget(insert_at, grp)
+
+        # 表示順を `_selected_ids` の順（= ワークフロー定義の正準順）に整列。
+        # 差分更新では新規分が末尾追加されるためクリック順に並ぶ問題を補正する。
+        for idx, wf_id in enumerate(self._selected_ids):
+            grp = self._step_groups.get(wf_id)
+            if grp is None:
+                continue
+            current_idx = self._steps_layout.indexOf(grp)
+            if current_idx != idx:
+                self._steps_layout.removeWidget(grp)
+                self._steps_layout.insertWidget(idx, grp)
 
         self._steps_placeholder.setVisible(not self._selected_ids)
 

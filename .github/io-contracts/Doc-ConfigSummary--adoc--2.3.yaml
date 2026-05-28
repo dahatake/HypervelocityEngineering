@@ -1,0 +1,9 @@
+inputs:
+- path: docs-generated/inventory.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-FileInventory--adoc--1
+outputs:
+- path: docs-generated/files/{relative-path}.md
+  required: true
+  mode: create

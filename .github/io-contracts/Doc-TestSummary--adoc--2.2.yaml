@@ -1,0 +1,12 @@
+inputs:
+- path: docs-generated/inventory.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-FileInventory--adoc--1
+outputs:
+- path: docs-generated/files/{relative-path}.md
+  required: true
+  mode: create
+- path: '| テスト名 | 種別(unit/integration/e2e) | テスト対象 | アサーション概要 |'
+  required: true
+  mode: create

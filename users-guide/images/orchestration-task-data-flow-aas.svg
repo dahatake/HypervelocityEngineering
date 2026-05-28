@@ -12,11 +12,11 @@
 
   <!-- Title -->
   <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAS: アプリケーションアーキテクチャ設計 データフロー</text>
-  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Prompt の入出力ファイル</text>
 
   <!-- Column headers -->
   <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
-  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Prompt</text>
   <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
 
   <!-- ==================== Step 1 ==================== -->
@@ -181,7 +181,7 @@
   <rect x="35" y="865" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="52" y="875" font-size="10" fill="#24292e">入力ファイル</text>
   <rect x="140" y="865" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="157" y="875" font-size="10" fill="#24292e">Custom Agent</text>
+  <text x="157" y="875" font-size="10" fill="#24292e">Prompt</text>
   <rect x="265" y="865" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="282" y="875" font-size="10" fill="#24292e">成果物</text>
   <line x1="360" y1="871" x2="390" y2="871" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>

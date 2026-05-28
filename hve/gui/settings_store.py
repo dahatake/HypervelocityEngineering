@@ -49,7 +49,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # C3 自動プロンプト
             "auto_qa": False,
             "qa_answer_mode": "autopilot",  # "autopilot" | "user"（auto_qa=True 時のみ有効）
-            "force_interactive": False,
             "auto_contents_review": False,
             "auto_coding_agent_review": False,
             "auto_coding_agent_review_auto_approval": False,
@@ -157,6 +156,16 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # True: ギャップ 0 件でも必ずプランレビュー Dialog を表示する
             # （実行プランの内訳確認を毎回行いたい上級ユーザー向け）。
             "step1_show_plan_review_always": False,
+            # AAS 完了後 / downstream 起動前の APP-ID 選択ダイアログ。
+            # True（既定）: AAS が catalog を再生成した直後にダイアログを表示し、
+            #   ユーザーが downstream 対象 APP-ID を絞り込めるようにする。
+            # False: ダイアログを出さず catalog 全件を downstream に流す（旧挙動）。
+            "autopilot_show_app_id_picker": True,
+            # APP-ID 選択ダイアログのタイムアウト秒数。
+            # 既定 300 秒 = 要件 5 分。UI 上は 30〜3600 秒の範囲で変更可能。
+            # （store 側ではバリデーション無し。値域は SpinBox と main_window 側で担保）
+            # タイムアウト経過時はその時点のチェック状態で自動 OK となる。
+            "autopilot_app_id_picker_timeout_sec": 300,
             # ウィンドウ横幅の永続化（ユーザーが手動でリサイズした際のみ保存）。
             # 0 = 未設定（既定の 1100 を使用）。
             "main_window_width": 0,

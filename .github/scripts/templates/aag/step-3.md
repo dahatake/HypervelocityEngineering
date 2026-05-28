@@ -11,7 +11,7 @@ Step.2 の Agent Catalog の各 Agent について詳細設計書を作成し、
 - `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）
 
 ## 出力
-- `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）
+- `docs/agent/agent-detail-{key}.md`（fan-out 子毎、1 ファイル、`{key}` = `AG-*`。Agent 名はファイル名に含めない）
 - `docs/ai-agent-catalog.md`（Agent 一覧）
 
 {existing_artifact_policy}

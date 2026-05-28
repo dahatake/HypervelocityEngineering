@@ -111,9 +111,8 @@ class TestWorkflowGroupBoxes(unittest.TestCase):
         )
         box = self.page._workflow_group_boxes["aad-web"]
         title = box.title()
-        # `format_workflow_label("aad-web", "Web App Design")` -> "Web App Design (AAD-WEB)"
-        self.assertIn("Web App Design", title)
-        self.assertIn("AAD-WEB", title)
+        # aad-web のカード見出しは「Software Engineering」固定（ID サフィックスなし）。
+        self.assertEqual(title, "Software Engineering")
 
     def test_ard_attachment_pane_is_inside_workflow_box(self) -> None:
         """ARD 選択時、`AttachmentPane` は ARD ワークフロー枠の配下に置かれて表示可能であること。

@@ -9,7 +9,7 @@
   グリッド配置される（rank=左→右、order=上→下）。
 - Step ノード単一クリックで ``node_selected(instance_id, step_id)`` を emit
   （Q3=B）。Workflow ヘッダクリック時は ``node_selected(instance_id, "")``。
-- Step ノードのダブルクリックは Fanout 詳細表示の開閉（subtask ドット表示）に
+- Step ノードのダブルクリックは Fanout 詳細表示の開閉（子ノード表示）に
   使用する。Fanout を持たない Step では何も起きない。
 - 1 Hz の ``QTimer`` で経過時間ラベルを再描画する。
 
@@ -63,8 +63,11 @@ LEFT_MARGIN = 12
 RIGHT_MARGIN = 12
 TOP_MARGIN = 8
 BOTTOM_MARGIN = 12
-SUBTASK_DOT_R = 5
-SUBTASK_DOT_GAP = 4
+# Fan-out 子ノード (Q1=A / Q5=A): 親ノードの 1/2 幅・0.7 倍高の小型ノード
+CHILD_NODE_W = NODE_W // 2
+CHILD_NODE_H = int(NODE_H * 0.7)
+CHILD_GAP = 6
+CHILD_ROW_GAP = 6
 
 _STATUS_GLYPH = {
     "pending": "⚪",
@@ -290,6 +293,99 @@ class _StepNodeItem(QGraphicsRectItem):
         super().mouseDoubleClickEvent(event)
 
 
+class _FanoutChildNodeItem(QGraphicsRectItem):
+    """Fan-out 子 1 件を表す小型ノード。
+
+    Q1=A (横並びコンパクト) / Q2=A (短縮ラベル `<key>` 部分のみ) /
+    Q3=A (クリック選択 + ホバー Tooltip) / Q5=A (親の 1/2 サイズ)。
+    """
+
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        instance_id: str,
+        child_id: str,
+        title: str,
+        status: str,
+        widget: "DagStatusWidget",
+        parent: Optional[QGraphicsItem] = None,
+    ) -> None:
+        super().__init__(0, 0, CHILD_NODE_W, CHILD_NODE_H, parent)
+        self.setPos(x, y)
+        self.instance_id = instance_id
+        self.child_id = child_id
+        self.title = title
+        self.status = status
+        self._widget = widget
+        self.started_at: Optional[float] = None
+        self.finished_at: Optional[float] = None
+
+        self.setAcceptHoverEvents(True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+
+        # 1 行のみ: 短縮 ID + 経過時間
+        self._lbl_main = QGraphicsSimpleTextItem("", self)
+        self._lbl_elapsed = QGraphicsSimpleTextItem("", self)
+        self._lbl_main.setPos(4, 3)
+        self._lbl_elapsed.setPos(4, CHILD_NODE_H - 14)
+        self.refresh_theme()
+        self.update_text()
+
+    # ------------------------------ 表示ヘルパ ----------------------------
+
+    def _short_id(self) -> str:
+        """``<base>/<key>`` 形式から ``<key>`` のみを返す。"""
+        if "/" in self.child_id:
+            return self.child_id.split("/", 1)[1]
+        return self.child_id
+
+    def _elapsed_text(self) -> str:
+        if self.started_at is None:
+            return "--:--:--"
+        end = self.finished_at if self.finished_at is not None else time.monotonic()
+        return _fmt_elapsed(max(0.0, end - self.started_at))
+
+    # -------------------------------- 描画 --------------------------------
+
+    def refresh_theme(self) -> None:
+        theme = self._widget._theme_def
+        sc = theme["status_colors"].get(self.status, theme["status_colors"]["pending"])
+        border = theme["node_border_selected"] if self.isSelected() else sc
+        self.setBrush(QBrush(theme["node_bg"]))
+        pen = QPen(border)
+        pen.setWidthF(1.6 if self.isSelected() else 1.0)
+        self.setPen(pen)
+        f_main = QFont()
+        f_main.setBold(True)
+        self._lbl_main.setFont(f_main)
+        self._lbl_main.setBrush(QBrush(theme["node_text"]))
+        self._lbl_elapsed.setBrush(QBrush(theme["node_subtext"]))
+
+    def update_text(self) -> None:
+        glyph = _STATUS_GLYPH.get(self.status, "?")
+        label = f"{glyph} {self._short_id()}"
+        max_chars = 18
+        if len(label) > max_chars:
+            label = label[: max_chars - 1] + "…"
+        self._lbl_main.setText(label)
+        self._lbl_elapsed.setText(f"⏱ {self._elapsed_text()}")
+
+    def refresh_tooltip(self) -> None:
+        self.setToolTip(
+            f"{self.child_id}\n"
+            f"{self.title}\n"
+            f"status: {self.status}\n"
+            f"elapsed: {self._elapsed_text()}"
+        )
+
+    # ------------------------------ イベント ------------------------------
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self._widget._select_node(self.instance_id, self.child_id, self)
+        super().mousePressEvent(event)
+
+
 class _WorkflowHeaderItem(QGraphicsRectItem):
     """Workflow ヘッダ。ダブルクリックで Workflow 配下を展開/折りたたみ。"""
 
@@ -382,6 +478,8 @@ class DagStatusWidget(QWidget):
         self._entries: List[_WorkflowEntry] = []
         # node_key -> _StepNodeItem (Step) / _WorkflowHeaderItem (Workflow)
         self._step_items: Dict[Tuple[str, str], _StepNodeItem] = {}
+        # (instance_id, child_id) -> _FanoutChildNodeItem (Fan-out 展開時のみ存在)
+        self._child_items: Dict[Tuple[str, str], _FanoutChildNodeItem] = {}
         self._wf_items: Dict[str, _WorkflowHeaderItem] = {}
         # Workflow 展開状態（既定: 展開）
         self._wf_expanded: Dict[str, bool] = {}
@@ -447,6 +545,7 @@ class DagStatusWidget(QWidget):
     def reset(self) -> None:
         self._entries = []
         self._step_items.clear()
+        self._child_items.clear()
         self._wf_items.clear()
         self._step_started_at.clear()
         self._step_finished_at.clear()
@@ -552,6 +651,8 @@ class DagStatusWidget(QWidget):
                             str(t[0]) if len(t) > 0 else "",
                             str(t[1]) if len(t) > 1 else "",
                             _normalize_status(str(t[2]) if len(t) > 2 else ""),
+                            t[3] if len(t) > 3 else None,
+                            t[4] if len(t) > 4 else None,
                         )
                         for t in subs
                     ]
@@ -656,6 +757,8 @@ class DagStatusWidget(QWidget):
                             str(getattr(c, "id", "")),
                             str(getattr(c, "title", "")),
                             _normalize_status(getattr(c, "status", "pending")),
+                            getattr(c, "started_at", None),
+                            getattr(c, "finished_at", None),
                         )
                         for c in children
                     ]
@@ -692,6 +795,7 @@ class DagStatusWidget(QWidget):
         """シーンを再構築する。"""
         self._scene.clear()
         self._step_items.clear()
+        self._child_items.clear()
         self._wf_items.clear()
         self._selected_node_item = None  # 再描画で参照無効化
 
@@ -772,7 +876,7 @@ class DagStatusWidget(QWidget):
                     subs = entry.subtasks.get(sid)
                     if subs:
                         sub_done = sum(
-                            1 for _, _, st in subs if st in ("done", "skipped")
+                            1 for t in subs if (t[2] if len(t) > 2 else "") in ("done", "skipped")
                         )
                         node._fanout_total = len(subs)
                         node._fanout_done = sub_done
@@ -786,11 +890,12 @@ class DagStatusWidget(QWidget):
                     self._step_items[(entry.instance_id, sid)] = node
                     step_to_pos[sid] = (x, base_y)
 
-                    # Fanout 展開時はサブタスクドットを下に描画
+                    # Fanout 展開時は小型子ノードを下に描画（Q1=A / Q4=B エッジも描画）
                     if subs and node._fanout_expanded:
-                        self._draw_subtask_dots(
-                            x + 8,
-                            base_y + NODE_H + 4,
+                        self._draw_fanout_children(
+                            x,
+                            base_y,
+                            entry.instance_id,
                             subs,
                         )
 
@@ -812,14 +917,34 @@ class DagStatusWidget(QWidget):
 
                 # ストライプ高加算
                 stripe_h = STRIPE_PADDING_Y + rows * (NODE_H + ROW_GAP) - ROW_GAP
-                # Fanout 展開分の追加（簡略化のため一括 0、subtask 展開時は relayout が再呼び出しされる）
                 y = stripe_top + max(stripe_h, NODE_H)
-                # サブタスクドットの分 (Fanout 展開ノードがある場合) 概算 +16
+                # Fanout 展開中の全親 Step の子描画高を加算する
+                # (複数の同時展開をサポートし、下の stripe と重ならないように)
+                # cols_per_row は _draw_fanout_children と同じ viewport ベースの計算を使う
+                try:
+                    _avail_w = max(
+                        NODE_W,
+                        self._view.viewport().width() - LEFT_MARGIN - RIGHT_MARGIN,
+                    )
+                except (AttributeError, RuntimeError):
+                    _avail_w = NODE_W
+                cols_per_row = max(1, (_avail_w + CHILD_GAP) // (CHILD_NODE_W + CHILD_GAP))
+                child_block_total = 0
                 for s in entry.steps:
                     nd = self._step_items.get((entry.instance_id, s["id"]))
-                    if nd is not None and nd._fanout_expanded:
-                        y += SUBTASK_DOT_R * 2 + 8
-                        break
+                    if nd is None or not nd._fanout_expanded:
+                        continue
+                    subs = entry.subtasks.get(s["id"]) or []
+                    if not subs:
+                        continue
+                    rows_c = (len(subs) + cols_per_row - 1) // cols_per_row
+                    child_block_total += (
+                        4  # 親ノード下のスペース
+                        + rows_c * (CHILD_NODE_H + CHILD_ROW_GAP)
+                        - CHILD_ROW_GAP
+                    )
+                if child_block_total > 0:
+                    y += child_block_total
 
             y += STRIPE_GAP
 
@@ -843,24 +968,76 @@ class DagStatusWidget(QWidget):
             )
         )
 
-    def _draw_subtask_dots(
+    def _draw_fanout_children(
         self,
-        x: float,
-        y: float,
+        parent_x: float,
+        parent_y: float,
+        instance_id: str,
         subs: List[tuple],
     ) -> None:
-        """Fanout 展開時のサブタスク状態ドット列。"""
-        theme = self._theme_def
-        for i, (_sid, _title, st) in enumerate(subs):
-            color = theme["status_colors"].get(st, theme["status_colors"]["pending"])
-            cx = x + i * (SUBTASK_DOT_R * 2 + SUBTASK_DOT_GAP)
-            dot = QGraphicsRectItem(0, 0, SUBTASK_DOT_R * 2, SUBTASK_DOT_R * 2)
-            dot.setPos(cx, y)
-            dot.setBrush(QBrush(color))
-            pen = QPen(color.darker(140))
-            pen.setWidthF(0.8)
-            dot.setPen(pen)
-            self._scene.addItem(dot)
+        """Fanout 展開時の子ノード群を描画する。
+
+        Q1=A / Q5=A: 親ノードの 1/2 幅小型ノード。
+        Q6=A: viewport 幅に合わせて自動折り返しグリッド配置。
+        Q4=B: 親ノード下辺中央 → 各子ノード上辺中央へ縦向路エッジ（矢印なし）。
+        """
+        if not subs:
+            return
+        # 折り返し幅: viewport の可視幅を使う（親 NODE_W に限定すると 1 列になるため）。
+        # Q6=A: ユーザーがウインドウを広げれば列数が増える。
+        try:
+            avail_w = max(
+                NODE_W,
+                self._view.viewport().width() - LEFT_MARGIN - RIGHT_MARGIN - int(parent_x),
+            )
+        except (AttributeError, RuntimeError):
+            avail_w = NODE_W
+        cols_per_row = max(1, (avail_w + CHILD_GAP) // (CHILD_NODE_W + CHILD_GAP))
+        block_top = parent_y + NODE_H + 4
+        edge_pen = QPen(self._theme_def["edge"])
+        edge_pen.setWidthF(0.8)
+        parent_anchor = QPointF(parent_x + NODE_W / 2, parent_y + NODE_H)
+        for i, t in enumerate(subs):
+            sid = str(t[0]) if len(t) > 0 else ""
+            title = str(t[1]) if len(t) > 1 else ""
+            st = str(t[2]) if len(t) > 2 else "pending"
+            started_at = t[3] if len(t) > 3 else None
+            finished_at = t[4] if len(t) > 4 else None
+            col = i % cols_per_row
+            row = i // cols_per_row
+            cx = parent_x + col * (CHILD_NODE_W + CHILD_GAP)
+            cy = block_top + row * (CHILD_NODE_H + CHILD_ROW_GAP)
+            child = _FanoutChildNodeItem(
+                cx, cy, instance_id, sid, title, st, widget=self
+            )
+            child.started_at = started_at
+            child.finished_at = finished_at
+            child.update_text()
+            child.refresh_tooltip()
+            self._scene.addItem(child)
+            self._child_items[(instance_id, sid)] = child
+            # Q4=B: 親下辺中央 → 子上辺中央（縦向路・矢印なし）
+            child_anchor = QPointF(cx + CHILD_NODE_W / 2, cy)
+            self._draw_fanout_edge(parent_anchor, child_anchor, edge_pen)
+
+    def _draw_fanout_edge(
+        self,
+        src: QPointF,
+        dst: QPointF,
+        pen: QPen,
+    ) -> None:
+        """親ノード→子ノードの縦向路エッジ（矢印なし）。
+
+        ``_draw_edge`` は水平路 DAG エッジ用で、矢印が水平向きに固定されているため
+        縦向きの fan-out エッジには不適。ここでは «縦 → 横 → 縦» の 3 セグメントを
+        描画し、矢印は描かない（子ノードの見た目包含で関係は明らか）。
+        """
+        my = (src.y() + dst.y()) / 2
+        seg1 = self._scene.addLine(src.x(), src.y(), src.x(), my, pen)
+        seg2 = self._scene.addLine(src.x(), my, dst.x(), my, pen)
+        seg3 = self._scene.addLine(dst.x(), my, dst.x(), dst.y(), pen)
+        for it in (seg1, seg2, seg3):
+            it.setZValue(-1)
 
     def _draw_edge(self, src: QPointF, dst: QPointF, pen: QPen) -> None:
         """src → dst の直角折れ線エッジと終端矢印を描く。"""
@@ -915,6 +1092,14 @@ class DagStatusWidget(QWidget):
                 node.update_text()
             except RuntimeError:
                 pass
+        # Fan-out 子ノードの経過時間 / Tooltip も更新（running 中の動的反映）
+        for child in self._child_items.values():
+            try:
+                child.update_text()
+                # Tooltip は elapsed も含むため 1 Hz で同期
+                child.refresh_tooltip()
+            except RuntimeError:
+                pass
         # Workflow ヘッダの経過時間も更新
         for entry in self._entries:
             header = self._wf_items.get(entry.instance_id)
@@ -967,7 +1152,10 @@ class DagStatusWidget(QWidget):
                 lines.append(line)
                 subs = entry.subtasks.get(s["id"])
                 if subs:
-                    for sid, title, st in subs:
+                    for t in subs:
+                        sid = t[0] if len(t) > 0 else ""
+                        title = t[1] if len(t) > 1 else ""
+                        st = t[2] if len(t) > 2 else "pending"
                         lines.append(
                             f"    {_STATUS_GLYPH.get(st, '?')} {sid} {title}"
                         )

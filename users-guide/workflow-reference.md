@@ -1,4 +1,4 @@
-# ワークフロー・ラベル・Custom Agent リファレンス
+# ワークフロー・ラベル・Prompt リファレンス
 
 ← [README](../README.md)
 
@@ -17,7 +17,7 @@
 - [ワークフロートリガー系ラベル](#ワークフロートリガー系ラベル)
 - [モデル選択ルール](#モデル選択ルール)
 - [SDK ツール制限（環境変数）](#sdk-ツール制限環境変数)
-- [Custom Agent 一覧](#custom-agent-一覧)
+- [Prompt 一覧](#prompt-一覧)
 - [knowledge/ ディレクトリとの関係](#knowledge-ディレクトリとの関係)
 - [Issue テンプレート一覧](#issue-テンプレート一覧)
 - [Skills 一覧と Agent-Skills 対応](#skills-一覧と-agent-skills-対応)
@@ -108,18 +108,18 @@
 
 #### ARD ステップ一覧
 
-| Step ID | タイトル | Custom Agent | 任意/必須 | 主要出力 |
+| Step ID | タイトル | Prompt | 任意/必須 | 主要出力 |
 |---|---|---|---|---|
 | 1 | 事業分野候補列挙 | `Arch-ARD-BusinessAnalysis-Untargeted` | 必須（グループ 1） | `docs/company-business-recommendation.md` |
 | 1.1 | 事業分野別深掘り分析（fan-out） | 同上 | 必須（グループ 1） | `docs/business/{key}-analysis.md` |
 | 1.2 | 事業分析統合 | 同上 | 必須（グループ 1） | `docs/company-business-requirement.md` |
 | 2 | 対象業務深掘り分析 | `Arch-ARD-BusinessAnalysis-Targeted` | 必須（グループ 2） | `docs/business-requirement.md` |
-| **2.5** | **KPI/OKR 定義（任意）** | **`Arch-ARD-KPIOKRDefinition`** | **任意（オプトイン）** | **`docs/recommended-kpi-okr.md`** |
-| 3.1 | ユースケース骨格抽出 | `Arch-ARD-UseCaseCatalog` | 必須（グループ 3） | `docs/catalog/use-case-skeleton.md` |
-| 3.2 | ユースケース詳細生成（fan-out） | 同上 | 必須（グループ 3） | `docs/usecase/{key}-detail.md` |
-| 3.3 | ユースケースカタログ統合 | 同上 | 必須（グループ 3） | `docs/catalog/use-case-catalog.md` |
+| **3** | **KPI/OKR 定義（任意）** | **`Arch-ARD-KPIOKRDefinition`** | **任意（オプトイン）** | **`docs/recommended-kpi-okr.md`** |
+| 4.1 | ユースケース骨格抽出 | `Arch-ARD-UseCaseCatalog` | 必須（グループ 4） | `docs/catalog/use-case-skeleton.md` |
+| 4.2 | ユースケース詳細生成（fan-out） | 同上 | 必須（グループ 4） | `docs/usecase/{key}-detail.md` |
+| 4.3 | ユースケースカタログ統合 | 同上 | 必須（グループ 4） | `docs/catalog/use-case-catalog.md` |
 
-> Step 2.5 は CLI `--include-kpi-okr` / GUI チェックボックス / 対話ウィザードのいずれかで明示有効化した場合のみ実行されます（既定 OFF）。後続 Step 3.1/3.2 および `aas` の `Arch-ApplicationAnalytics` が任意参照します。
+> Step 3 は CLI `--include-kpi-okr` / GUI チェックボックス / 対話ウィザードのいずれかで明示有効化した場合のみ実行されます（既定 OFF）。後続 Step 4.1/4.2 および `aas` の `Arch-ApplicationAnalytics` が任意参照します。
 
 ### Cloud / Local 対応表（初回ユーザー向け）
 
@@ -215,7 +215,7 @@
 - 画面定義書は docs/screen/ 配下に配置済みです。
 ```
 
-判定ロジック（[`hve/autopilot/precheck_collector.py`](../hve/autopilot/precheck_collector.py)）:
+判定ロジック（`hve/autopilot/` 配下の precheck_* モジュール群 <!-- TBD: 判定ロジックの正確な実装位置要確認（`precheck_runner.py` / `precheck_llm_judge.py` / `precheck_model.py` 等、旧 `precheck_collector.py` は存在せず） -->）:
 
 ある必須入力ファイル `f` は、以下のいずれかを満たせば「不足ではない」と判定されます。
 
@@ -458,13 +458,13 @@ StepDef(
 
 ---
 
-## Custom Agent 一覧
+## Prompt 一覧
 
-`.github/agents/` 配下の **76** Custom Agent を、ファイル名ベースのカテゴリと `hve/workflow_registry.py` の実際の割当で整理します。
+`.github/prompts/` 配下の **77** Prompt を、ファイル名ベースのカテゴリと `hve/workflow_registry.py` の実際の割当で整理します。
 
 ### 全体俯瞰図
 
-![全Custom Agentと10ワークフローおよびSelf-Improveループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
+![全 Prompt と 10 ワークフローおよび Self-Improve ループの関係俯瞰図](./images/agent-ecosystem-overview.svg)
 
 ### ワークフロー別チェーン図
 
@@ -481,7 +481,7 @@ StepDef(
 - Self-Improve: [chain-self-improve.svg](./images/chain-self-improve.svg)
 - Workflow interconnection: [workflow-interconnection.svg](./images/workflow-interconnection.svg)
 
-### カテゴリ別件数（`.github/agents/*.agent.md` 実体ベース）
+### カテゴリ別件数（`.github/prompts/*.prompt.md` 実体ベース）
 
 | カテゴリ | 件数 |
 |---------|-----:|
@@ -517,7 +517,7 @@ StepDef(
 | Phase 4b: 改善計画 | `Arch-ImprovementPlanner` |
 | Phase 4d: 改善後検証 | `QA-PostImproveVerify` |
 
-> **補足**: 各 Agent の詳細な入出力や `knowledge/` 参照は、対応する `.github/agents/*.agent.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
+> **補足**: 各 Prompt の詳細な入出力や `knowledge/` 参照は、対応する `.github/prompts/*.prompt.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
 
 ## knowledge/ ディレクトリとの関係
 
@@ -532,9 +532,9 @@ StepDef(
 | `original-docs/` | `aqod` | `qa/`（質問票） |
 | `src/` | `adoc` | `docs-generated/` |
 
-設計・開発の全 Custom Agent（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。
+設計・開発の全 Prompt（`Arch-*`, `Dev-*`, `QA-*`）は、`knowledge/` ファイルが存在する場合に業務コンテキストとして自動参照します。
 
-| knowledge ファイル | 主な参照 Custom Agent |
+| knowledge ファイル | 主な参照 Prompt |
 |------------------|---------------------|
 | `knowledge/D01-事業意図-成功条件定義書.md` | `Arch-ApplicationAnalytics`, `Arch-ArchitectureCandidateAnalyzer` |
 | `knowledge/D05-ユースケース-シナリオカタログ.md` | `Arch-*` 全般, `Dev-*-ServiceCoding`, `Dev-*-TestCoding` |
@@ -545,7 +545,7 @@ StepDef(
 | `knowledge/D19-ソフトウェアアーキテクチャ-ADR-パック.md` | `Arch-ArchitectureCandidateAnalyzer`, `Dev-*-ComputeDesign`, `QA-AzureArchitectureReview` |
 | `knowledge/D20-セキュア設計-実装ガードレール.md` | `Dev-*-ServiceCoding`, `Dev-*-DataDeploy`, `Dev-*-Deploy`, `QA-*` |
 
-詳細な参照マッピングは各 Custom Agent ファイル（`.github/agents/*.agent.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションを参照してください。
+詳細な参照マッピングは各 Prompt ファイル（`.github/prompts/*.prompt.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションを参照してください。
 
 ## Issue テンプレート一覧
 

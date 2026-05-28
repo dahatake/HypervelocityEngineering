@@ -82,6 +82,13 @@ class ExpandedWorkflow:
     empty_fanout_ids: List[str] = field(default_factory=list)
     """0 件展開でスキップすべきベース step_id 一覧（K-1）。"""
 
+    deferred_fanout_ids: List[str] = field(default_factory=list)
+    """0 件展開のうち、同一実行内の upstream step が入力を生成する見込みの
+    ベース step_id 一覧（T-C2）。orchestrator が empty_fanout_ids と差分集合を
+    取って active から discard せず保持する判定に使う。
+    本フィールド自体は ``expand_workflow_fanout`` では設定されず、
+    orchestrator._expand_workflow_for_dag が後付けで設定する（呼び出し側責務）。"""
+
     max_parallel: Optional[int] = None
     """WorkflowDef.max_parallel をそのまま伝搬。"""
 
@@ -167,15 +174,12 @@ def expand_workflow_fanout(
         fanout_map[step.id] = [c.id for c in children]
 
     # 下流ステップの depends_on を子 ID リストへ置換（non-mutating: 必要時のみコピーを差し替え）
-    expanded_steps: List[Any] = []
-    for step in pass_through:
+    def _remap_deps(step: Any) -> Any:
         deps = list(getattr(step, "depends_on", []) or [])
         if not deps:
-            expanded_steps.append(step)
-            continue
+            return step
         if not any(d in children_by_base for d in deps):
-            expanded_steps.append(step)
-            continue
+            return step
         new_deps: List[str] = []
         for d in deps:
             if d in children_by_base:
@@ -192,11 +196,18 @@ def expand_workflow_fanout(
                 new_step.depends_on = new_deps  # type: ignore[attr-defined]
             except Exception:
                 pass
-        expanded_steps.append(new_step)
+        return new_step
 
-    # 子ステップを末尾に追加（並列展開）
+    expanded_steps: List[Any] = [_remap_deps(s) for s in pass_through]
+
+    # 子ステップを末尾に追加（並列展開）。fan-out 子自身の depends_on も
+    # 親ベース ID（例: "A"）が children_by_base に含まれる場合は全子 ID リストへ
+    # 張り替える（クロス積）。これを行わないと、`get_next_steps` のフォールバック
+    # 「dep がレジストリに存在しない → 解決済み」が誤発火し、上流 fan-out 親の
+    # 子が未完了でも下流 fan-out 親の子が起動してしまう（aad-web Step 2.3 等）。
     for base_id, children in children_by_base.items():
-        expanded_steps.extend(children)
+        for child in children:
+            expanded_steps.append(_remap_deps(child))
 
     return ExpandedWorkflow(
         workflow_id=getattr(workflow, "id", "unknown"),
@@ -205,3 +216,28 @@ def expand_workflow_fanout(
         empty_fanout_ids=empty_fanout_ids,
         max_parallel=getattr(workflow, "max_parallel", None),
     )
+
+
+def expand_single_step_fanout(
+    base_step: Any,
+    repo_root: Path,
+) -> Optional[List[FanoutChildStep]]:
+    """単一の fan-out base step を展開し、子 step リストを返す。
+
+    DAGExecutor のランタイム再展開（deferred fan-out 経路）から呼び出される。
+    `expand_workflow_fanout` 全体展開と異なり、下流 step の depends_on remap は
+    行わない（呼び出し側が DAG mutate 時に自前で実施する）。
+
+    Args:
+        base_step: fan-out 対象のベース StepDef。
+        repo_root: catalog parser がカタログファイルを探すルート。
+
+    Returns:
+        子 step (FanoutChildStep) のリスト。base_step が fan-out 非対象
+        （``fanout_static_keys`` も ``fanout_parser`` も無い）の場合や、
+        展開キーが 0 件だった場合は None。
+    """
+    keys = _resolve_keys(base_step, repo_root)
+    if not keys:
+        return None
+    return [_make_child(base_step, k) for k in keys]

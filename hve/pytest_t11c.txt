@@ -1,0 +1,14 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\dahatake\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: C:\GitHub\RoyalytyService2ndGen\hve
+configfile: pytest.ini
+plugins: timeout-2.4.0
+timeout: 10.0s
+timeout method: thread
+timeout func_only: False
+collecting ... collected 131 items / 130 deselected / 1 selected
+
+hve\tests\test_orchestrator.py::TestRequestCodeReviewSDK::test_ignore_paths_default_in_config PASSED [100%]
+
+====================== 1 passed, 130 deselected in 0.29s ======================

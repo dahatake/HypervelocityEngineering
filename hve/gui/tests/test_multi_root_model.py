@@ -108,6 +108,44 @@ def test_refresh_directory_outside_model_is_noop(model: MultiRootFileModel, tmp_
     model.refresh_directory(tmp_path / "elsewhere")  # 例外を出さない
 
 
+def test_refresh_directory_incremental_no_phantom_rows(
+    model: MultiRootFileModel, tmp_path: Path
+) -> None:
+    """ファイル追加 1 件ごとに refresh_directory を呼んでも幻行が生じないこと。
+
+    full reset 方式（beginRemoveRows(0,N-1) + beginInsertRows(0,M-1)）に戻ると
+    QSortFilterProxyModel 越しに行ズレが発生する既知問題の回帰防止。
+    ここではソースモデル単独で rowCount と display_name の整合のみ検証する。
+    """
+    model.add_root(tmp_path)
+    root_idx = model.index(0, 0)
+    # 30 件を 1 件ずつ追加し、その都度 refresh
+    for i in range(1, 31):
+        (tmp_path / f"UC-{i:02d}-detail.md").write_text(f"# UC-{i}", encoding="utf-8")
+        model.refresh_directory(tmp_path)
+    assert model.rowCount(root_idx) == 30
+    names = [model.data(model.index(r, 0, root_idx)) for r in range(30)]
+    assert all(n for n in names), f"empty name detected: {names!r}"
+    # 想定どおりソート順（名前順）で並んでいること
+    assert names == sorted(names)
+
+
+def test_refresh_directory_removes_missing_entries(
+    model: MultiRootFileModel, tmp_path: Path
+) -> None:
+    """refresh_directory が削除されたファイルを行から除去すること（削除分岐の回帰防止）。"""
+    (tmp_path / "a.md").write_text("a", encoding="utf-8")
+    (tmp_path / "b.md").write_text("b", encoding="utf-8")
+    model.add_root(tmp_path)
+    root_idx = model.index(0, 0)
+    assert model.rowCount(root_idx) == 2
+
+    (tmp_path / "a.md").unlink()
+    model.refresh_directory(tmp_path)
+    assert model.rowCount(root_idx) == 1
+    assert model.data(model.index(0, 0, root_idx)) == "b.md"
+
+
 def test_multiple_roots(qapp, tmp_path: Path) -> None:
     m = MultiRootFileModel()
     r1 = tmp_path / "r1"

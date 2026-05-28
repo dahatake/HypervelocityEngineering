@@ -1,0 +1,8 @@
+inputs:
+- path: .github/workflows/*.yml
+  required: true
+  kind: external
+outputs:
+- path: docs-generated/files/{relative-path}.md
+  required: true
+  mode: create

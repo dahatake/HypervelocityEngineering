@@ -66,7 +66,7 @@ az acr delete / az aks delete
 
 | ケース | 例 | 理由 |
 |---|---|---|
-| テストコード内の DROP TABLE | `test/`, `tests/`, `*.test.*` 配下の `DROP TABLE` | テストデータ初期化用途 |
+| テストコード内の DROP TABLE | `src/test/`, `tests/`, `*.test.*` 配下の `DROP TABLE` | テストデータ初期化用途 |
 | プレースホルダー | `password=your-password-here`, `password=<YOUR_PASSWORD>` | ドキュメント・テンプレートの例示 |
 | コメント行 | `# password=example` | 説明のためのコメント |
 | 環境変数参照 | `password=$DB_PASSWORD`, `connectionstring=${CONNECTION_STRING}` | 実値でなく環境変数参照 |

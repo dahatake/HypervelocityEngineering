@@ -12,11 +12,11 @@
 
   <!-- Title -->
   <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ARD: 要求定義の自動化 データフロー</text>
-  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル（7 ステップ構成 / ADR-0003）</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Prompt の入出力ファイル（7 ステップ構成 / ADR-0003）</text>
 
   <!-- Column headers -->
   <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
-  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent（タスク）</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Prompt（タスク）</text>
   <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
 
   <!-- ==================== Step 1 ==================== -->
@@ -129,7 +129,7 @@
   <rect x="40" y="736" width="22" height="14" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="72" y="748" font-size="11" fill="#24292e">入力ファイル / パラメータ</text>
   <rect x="240" y="736" width="22" height="14" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="272" y="748" font-size="11" fill="#24292e">Custom Agent（.github/agents/*.agent.md）</text>
+  <text x="272" y="748" font-size="11" fill="#24292e">Prompt（.github/prompts/*.prompt.md）</text>
   <rect x="560" y="736" width="22" height="14" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="592" y="748" font-size="11" fill="#24292e">成果物ファイル</text>
   <line x1="760" y1="743" x2="800" y2="743" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -140,6 +140,6 @@
   <text x="40" y="790" font-size="11" fill="#24292e">• Step 2 は target_business パラメータ指定時のみ実行。未指定時は Step 1.2 完了後、Step 3.1 の skip_fallback_deps=["1.2"] により Step 2 をスキップして Step 3.1 へ進みます。</text>
   <text x="40" y="808" font-size="11" fill="#24292e">• 最大並列数: 15（hve/workflow_registry.py ARD.max_parallel）。</text>
   <text x="40" y="826" font-size="11" fill="#24292e">• 出典: hve/workflow_registry.py ARD WorkflowDef（ADR-0003 / Sub-10）。</text>
-  <text x="40" y="858" font-size="11" font-weight="bold" fill="#9a3412">関連 Custom Agent ファイル:</text>
-  <text x="40" y="876" font-size="10" fill="#24292e">.github/agents/Arch-ARD-BusinessAnalysis-Untargeted.agent.md / Arch-ARD-BusinessAnalysis-Targeted.agent.md / Arch-ARD-UseCaseCatalog.agent.md</text>
+  <text x="40" y="858" font-size="11" font-weight="bold" fill="#9a3412">関連 Prompt ファイル:</text>
+  <text x="40" y="876" font-size="10" fill="#24292e">.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md / Arch-ARD-BusinessAnalysis-Targeted.prompt.md / Arch-ARD-UseCaseCatalog.prompt.md</text>
 </svg>

@@ -1,0 +1,21 @@
+inputs:
+- path: docs/dataflow/dataflow-domain-analytics.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-DomainAnalytics--adfd--1.1
+- path: docs/dataflow/dataflow-data-source-analysis.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-DataSourceAnalysis--adfd--1.2
+- path: docs/dataflow/dataflow-data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-DataModel--adfd--2
+- path: docs/catalog/use-case-catalog.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog--ard--4.3
+outputs:
+- path: docs/dataflow/dataflow-app-catalog.md
+  required: true
+  mode: create

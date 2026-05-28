@@ -29,8 +29,8 @@
 | `.github/agents/` | Custom Agent 定義（30+個） |
 | `.github/skills/` | Skill 定義（36+個） |
 | `src/api/` | Azure Functions 実装（SVC 単位のサブディレクトリ） |
-| `infra/azure/` | Azure リソース作成スクリプト（bash） |
-| `test/api/` | API テストコード（pytest / .NET） |
+| `src/infra/azure/` | Azure リソース作成スクリプト（bash） |
+| `src/test/api/` | API テストコード（pytest / .NET） |
 
 ## 境界（API/データ/責務）
 
@@ -43,17 +43,17 @@
 ## 踏襲元（類似実装パス）
 
 src/api/SVC-10-ai-cs-support-service/ ← エンドポイント定義の参考
-infra/azure/create-azure-api-resources.sh ← リソース作成スクリプトの参考
+src/infra/azure/create-azure-api-resources.sh ← リソース作成スクリプトの参考
 .github/workflows/deploy-api-svc10.yml ← CI/CD workflow の参考
 
 ## 標準コマンド
 
 ```bash
 # Python テスト実行
-pytest test/api/ -x --tb=short
+pytest src/test/api/ -x --tb=short
 
 # .NET テスト実行（SVC 例）
-dotnet test test/api/AICSSupportService.Tests/
+dotnet test src/test/api/AICSSupportService.Tests/
 
 # デプロイ → .github/workflows/deploy-api-svc{NN}.yml を参照
 ```

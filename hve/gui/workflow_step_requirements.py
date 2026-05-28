@@ -94,6 +94,14 @@ WORKFLOW_TO_SECTION: Dict[str, str] = {
 AUTOPILOT_PSEUDO_WORKFLOW_ID: str = "autopilot"
 AUTOPILOT_PSEUDO_STEP_ID: str = "0"
 
+# Autopilot ON 時に `docs/catalog/app-arch-catalog.md` を必須とするワークフロー集合。
+# 根拠: ``hve/autopilot/plan_review_gap.py`` の ``_AUTOPILOT_IMPLICIT_REQUIRED_PATHS``
+# と同じ集合。ARD/AAS のみ選択時は catalog が pre_phase 出力として生成される側
+# （``hve/autopilot/planner.py`` の pre_phase_only モード）であり必須ではない。
+_AUTOPILOT_CATALOG_REQUIRING_WORKFLOWS: Tuple[str, ...] = (
+    "aad-web", "asdw-web", "adfd", "adfdv",
+)
+
 
 # --------------------------------------------------------------------------
 # 入力フィールドキー（正準名）。
@@ -632,8 +640,15 @@ def summarize_requirements_for_selection(
     **常に 0 件または 1 件のサマリー** を返す（バナー表示と完全一致）。
 
     決定ロジック:
-      - ``autopilot_mode=True`` のとき: Autopilot 仮想ワークフローの単独サマリー
-        1 件を返す（``selected`` 引数は無視）。
+      - ``autopilot_mode=True`` のとき:
+        - ``selected`` 内に ``_AUTOPILOT_CATALOG_REQUIRING_WORKFLOWS``
+          （aad-web / asdw-web / adfd / adfdv）のいずれかが **ステップ 1 件以上
+          選択された状態で** 含まれる場合のみ、Autopilot 仮想ワークフローの
+          単独サマリー 1 件を返す（``app-arch-catalog.md`` 存在チェックを実施）。
+        - 上記に該当しない場合（例: ARD/AAS のみ選択）は、Autopilot OFF と
+          同じく ``pick_target_step`` で最優先個別ワークフローの要件を返す。
+          これにより Autopilot ON/OFF で同じ選択 → 同じ入力チェック結果に
+          なる（``hve/autopilot/planner.py`` の pre_phase_only モードと整合）。
       - ``autopilot_mode=False`` のとき: ``pick_target_step`` と同じ優先度で
         最優先ワークフローの最小エントリステップを 1 件選び、そのサマリーのみを
         返す。下流ワークフロー（例: ARD+AAS 同時選択時の AAS）の入力は、
@@ -652,14 +667,22 @@ def summarize_requirements_for_selection(
         ``RequirementsSummary`` を 0〜1 件含むリスト。
     """
     if autopilot_mode:
-        s = summarize_requirements(
-            AUTOPILOT_PSEUDO_WORKFLOW_ID,
-            AUTOPILOT_PSEUDO_STEP_ID,
-            input_values=input_values,
-            file_exists=file_exists,
-            autopilot_catalog_path=autopilot_catalog_path,
+        # Autopilot ON でも catalog を必要とする SE 系 WF が
+        # 「ステップ 1 件以上選択」で含まれる場合のみ Autopilot 仮想サマリーを返す。
+        se_requires_catalog = any(
+            wf in _AUTOPILOT_CATALOG_REQUIRING_WORKFLOWS and len(list(steps)) > 0
+            for wf, steps in selected
         )
-        return [s] if s is not None else []
+        if se_requires_catalog:
+            s = summarize_requirements(
+                AUTOPILOT_PSEUDO_WORKFLOW_ID,
+                AUTOPILOT_PSEUDO_STEP_ID,
+                input_values=input_values,
+                file_exists=file_exists,
+                autopilot_catalog_path=autopilot_catalog_path,
+            )
+            return [s] if s is not None else []
+        # SE 系未選択 → 通常モードと同じフォールバック（catalog 要件を出さない）
 
     target = pick_target_step(selected)
     if target is None:

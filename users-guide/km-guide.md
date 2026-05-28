@@ -31,7 +31,7 @@
 
 - Issue Template: `.github/ISSUE_TEMPLATE/knowledge-management.yml`
 - Workflow: `.github/workflows/auto-orchestrator-dispatcher.yml` → `.github/workflows/auto-knowledge-management-reusable.yml`
-- Workflow ID / Custom Agent: `akm` / `KnowledgeManager`（`hve/workflow_registry.py`）
+- Workflow ID / Prompt: `akm` / `KnowledgeManager`（`hve/workflow_registry.py`）
 
 ## 次のステップ
 
@@ -57,13 +57,13 @@ AKM は 1 回実行して終わりではなく、`aqod` で生成した質問票
 
 ## Agent チェーン図（AKM）
 
-以下の図は、このワークフローで使用される Custom Agent がファイルの入出力を介してどのように連鎖するかを示します。
+以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
 
 ![AKM: KnowledgeManager の1ステップチェーン（並列0箇所含む）](./images/chain-akm.svg)
 
 ### タスク／データフロー
 
-Custom Agent の入出力ファイルを示します（`hve/workflow_registry.py` の AKM 定義に準拠）。
+Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の AKM 定義に準拠）。
 
 ![AKM: Knowledge Management データフロー](./images/orchestration-task-data-flow-akm.svg)
 

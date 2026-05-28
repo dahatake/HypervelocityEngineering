@@ -238,8 +238,24 @@ if ($Minimal) {
 }
 
 # ---------- github-copilot-sdk: 最新へ ----------
-Write-Step 'Upgrading github-copilot-sdk to latest'
-Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','github-copilot-sdk')
+# NOTE: --no-deps を付与し SDK 本体のみ更新する。これを付けないと pip resolver が
+#   pydantic-core を最新版 (例: 2.47.0) へ引き上げ、pydantic 2.13.4 が要求する
+#   pin (pydantic-core==2.46.4) と不整合になり GUI 起動時に例外となる。
+#   SDK の依存 (pydantic>=2.0 等) は editable install 時点で既に充足済み。
+Write-Step 'Upgrading github-copilot-sdk to latest (no-deps)'
+Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+
+# ---------- 依存整合性チェック（pydantic / pydantic-core 等） ----------
+# github-copilot-sdk の --upgrade 時に pip resolver が pydantic-core を
+# 最新版 (例: 2.47.0) へ引き上げ、pydantic 本体が要求する pin
+# (例: pydantic 2.13.4 → pydantic-core==2.46.4) と不整合になるケースを
+# 自動修復する。`pip check` が NG なら pydantic を force-reinstall。
+Write-Step 'Verifying dependency consistency (pip check)'
+& $venvPy -m pip check *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warn2 'pip check detected inconsistencies. Reinstalling pydantic to re-pin pydantic-core.'
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--force-reinstall','pydantic')
+}
 
 # ---------- NLTK punkt_tab 事前 DL ----------
 if (-not $Minimal -and -not $SkipNltkDownload) {

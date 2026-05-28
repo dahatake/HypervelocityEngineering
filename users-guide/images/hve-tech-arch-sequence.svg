@@ -66,7 +66,7 @@
     <text x="620" y="194">4. StepRunner.run(step)（asyncio.Semaphore で並列度制御）</text>
 
     <path class="arr" d="M790,230 L790,230"/>
-    <text x="620" y="224">5. agent_loader.load(.github/agents/&lt;Agent&gt;.agent.md)</text>
+    <text x="620" y="224">5. agent_loader.load(.github/prompts/&lt;Agent&gt;.prompt.md)</text>
 
     <path class="arr" d="M790,260 L790,260"/>
     <text x="620" y="254">6. skill_resolver / template_engine でプロンプト生成</text>

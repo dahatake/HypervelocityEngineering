@@ -124,17 +124,21 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "review_timeout": "review_timeout",
         "theme": "theme",
         "verbosity": "verbosity",
+        # 旧 GUI_SESSION セクションから移動
+        "gui_session_cleanup_policy": "gui_session_cleanup_policy",
     },
     "C3": {
         "auto_qa": "auto_qa",
         "qa_answer_mode": "qa_answer_mode",
-        "force_interactive": "force_interactive",
         "auto_contents_review": "auto_contents_review",
         "auto_coding_agent_review": "auto_coding_agent_review",
         "auto_coding_agent_review_auto_approval": "auto_coding_agent_review_auto_approval",
         # 旧 C16 / C15 から移動
         "self_improve": "self_improve",
         "no_self_improve": "no_self_improve",
+        "self_improve_max_iterations": "self_improve_max_iterations",
+        "self_improve_target_scope": "self_improve_target_scope",
+        "self_improve_goal": "self_improve_goal",
         "additional_prompt": "additional_prompt",
         "context_max_chars": "context_max_chars",
     },
@@ -212,9 +216,8 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "AUTOPILOT": {
         "autopilot_max_parallel": "autopilot_max_parallel",
         "step1_show_plan_review_always": "step1_show_plan_review_always",
-    },
-    "GUI_SESSION": {
-        "gui_session_cleanup_policy": "gui_session_cleanup_policy",
+        "autopilot_show_app_id_picker": "autopilot_show_app_id_picker",
+        "autopilot_app_id_picker_timeout_sec": "autopilot_app_id_picker_timeout_sec",
     },
     # EXPLORER: 値は ";" 区切り文字列。QListWidget との同期は
     # ``_CExplorerSection`` 内部で完結し、settings_apply 経由では QLineEdit

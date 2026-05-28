@@ -12,7 +12,7 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
-- `test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）
+- `src/test/api/{サービス名}.Tests/` 配下に xUnit テストプロジェクト（テストコードのみ）
 
 {existing_artifact_policy}
 
@@ -20,7 +20,7 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 `Dev-Microservice-Azure-ServiceTestCoding` を使用
 
 ## TDD RED 確認手順（必須）
-1. `cd test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する
+1. `cd src/test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する
 2. 移動先ディレクトリで `dotnet build` を実行し、コンパイル成功を確認する
 3. 同じディレクトリで `dotnet test` を実行し、そのテストプロジェクト内の全テストが FAIL であることを確認する（RED 状態）
 4. RED 確認結果（テスト実行ログ）を Issue コメントに記録する
@@ -29,6 +29,6 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 - Step.2.3T（サービス テスト仕様書）が `asdw-web:done` であること
 
 ## 完了条件
-- `test/api/{サービス名}.Tests/` 配下にテストコードが生成されている
+- `src/test/api/{サービス名}.Tests/` 配下にテストコードが生成されている
 - `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている
 {completion_instruction}{app_id_section}{additional_section}

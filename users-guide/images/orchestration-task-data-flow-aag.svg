@@ -10,10 +10,10 @@
   <rect width="1200" height="400" fill="#f6f8fa" rx="12"/>
 
   <text x="600" y="36" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAG: AI Agent 設計 データフロー</text>
-  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+  <text x="600" y="56" text-anchor="middle" font-size="11" fill="#586069">各 Prompt の入出力ファイル</text>
 
   <text x="175" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#0366d6">入力ファイル</text>
-  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Custom Agent</text>
+  <text x="565" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Prompt</text>
   <text x="980" y="76" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
 
   <!-- Step 1 -->

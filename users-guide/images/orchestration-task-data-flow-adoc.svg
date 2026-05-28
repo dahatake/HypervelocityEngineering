@@ -12,7 +12,7 @@
 
   <!-- Title -->
   <text x="600" y="32" text-anchor="middle" font-size="16" font-weight="bold" fill="#24292e">ADOC: ソースコードからの段階的ドキュメント生成 データフロー</text>
-  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">Wave 1〜6 の Doc-* Custom Agent とファイル入出力</text>
+  <text x="600" y="52" text-anchor="middle" font-size="11" fill="#586069">Wave 1〜6 の Doc-* Prompt とファイル入出力</text>
 
   <!-- Wave label column (x=5, width=80) -->
   <!-- Main content starts at x=90 -->
@@ -219,7 +219,7 @@
   <rect x="110" y="925" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="127" y="935" font-size="10" fill="#24292e">入力ファイル</text>
   <rect x="240" y="925" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="257" y="935" font-size="10" fill="#24292e">Custom Agent</text>
+  <text x="257" y="935" font-size="10" fill="#24292e">Prompt</text>
   <rect x="380" y="925" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="397" y="935" font-size="10" fill="#24292e">成果物</text>
   <line x1="490" y1="931" x2="520" y2="931" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>

@@ -72,7 +72,7 @@ grep -rnE \
 
 **判定基準**: 検出 0 件 → PASS。検出あり → テストデータ/モックのみなら `PASS(テストデータのみ - ホワイトリスト確認済み)`。実際の秘密情報 → **即時停止**（harness-safety-guard の HIGH レベル処理を適用）。
 
-**ホワイトリスト**: `*.test.*`, `*.spec.*`, `test/` 配下のモック値 / `password=your-password-here` 等のプレースホルダー / コメント行内の説明テキスト
+**ホワイトリスト**: `*.test.*`, `*.spec.*`, `src/test/` 配下のモック値 / `password=your-password-here` 等のプレースホルダー / コメント行内の説明テキスト
 
 ---
 

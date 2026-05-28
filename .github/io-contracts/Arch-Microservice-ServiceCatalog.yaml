@@ -1,0 +1,31 @@
+inputs:
+- path: docs/catalog/service-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceIdentify
+- path: docs/catalog/domain-analytics.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-DomainAnalytics
+- path: docs/catalog/data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-DataModeling
+- path: docs/catalog/screen-catalog.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-UI-List
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics
+outputs:
+- path: docs/catalog/service-catalog-matrix.md
+  required: true
+  mode: upsert
+- path: '{WORK}plan.md'
+  required: true
+  mode: create
+- path: '{WORK}subissues.md'
+  required: true
+  mode: create

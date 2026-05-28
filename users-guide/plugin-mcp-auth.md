@@ -1,227 +1,190 @@
-# Plugin / MCP Server インタラクティブ認証ガイド
+# Plugin / MCP Server 認証ガイド
 
-HVE GUI Orchestrator は **GitHub Copilot CLI を唯一の信頼ソース** として扱い、
-CLI が認識している MCP サーバとプラグインの認証状態を一覧表示します。
-CLI 側で認証が完了しているサーバはそのまま引き継ぎ、未完了のもののみ、
-GUI 内のターミナルで対話的な認証フロー（`az login` / `gh auth login` / Device Flow 等）
-を実行します。
-
-本ガイドは以下を対象読者とします:
-
-- `copilot mcp add` で MCP サーバを追加した上で GUI から認証したい開発者
-- Azure / GitHub MCP に接続する際の手順を知りたいユーザー
-- 自前の MCP サーバ向けに認証 manifest を追加したい上級ユーザー
-
-> **Breaking Change (Wave 3 以降)**: GUI 設定の ``mcp_config`` (MCP Server 設定 JSON
-> ファイルパス) と ``workiq_tenant_id`` は **廃止** されました。代わりに
-> `copilot mcp add` / `copilot plugin install` で登録してください。既存設定
-> ファイルにこれらのキーが残っている場合は、初回起動時に自動削除されます。
+> ⚠️ **本ドキュメントの位置付け（2026-05-27 現在）**
+>
+> - **ユーザー影響**: HVE GUI から MCP / Plugin の認証を起動する専用 UI（旧 🔐 ボタン）は廃止されています（[hve/gui/main_window.py](../hve/gui/main_window.py) の該当箇所に「Plugin / MCP Server 認証ボタンは廃止」とコメントあり）。認証は **GitHub Copilot CLI 側で完結** させる運用に移行しました。
+> - **実装状況（参考）**: 旧ガイドが参照していた `hve/gui/auth_providers/`（manifest システム）は 2026-02 のコミットで他作業と併せ削除済みです。同じく旧記述の `hve/gui/pty_auth_controller.py` / `hve/gui/pty_auth_session_widget.py` は **過去・現在いずれも本リポジトリに存在しません**。PTY 関連コード（[hve/gui/pty_backend.py](../hve/gui/pty_backend.py) / [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py)）は残存していますが、本番 GUI コードからは現在呼び出されておらず、テスト経由でのみ実行されます。
+> - **公式ルート**: 本ドキュメントは現状を整理し、公式 GitHub Copilot CLI の `/mcp add` / `/login` フローに読者を誘導します（公式: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）。
 
 ---
 
-## 仕組み
+## 1. 概要
 
-> **アーキテクチャ詳細**（OS 認証ストア委譲モデル・PTY 統合・マニフェストスキーマの設計思想・4 ゾーン疎結合境界における位置付け）は [hve-technical-architecture.md §8](./hve-technical-architecture.md#8-認証と資格情報の取扱い) を参照してください。本書は **利用者向けの操作手順** にフォーカスします。
+### 1.1 ユーザー影響サマリ
 
-### 概要（要点のみ）
+- GUI から「Plugin / MCP Server 認証ダイアログ」を起動する手段は **現状ありません**。
+- MCP サーバの登録・認証は GitHub Copilot CLI 標準の対話 UI（`/mcp add` / `/login` slash command）で行います。
+- HVE GUI の設定パネルには、現在登録済みの MCP サーバと Plugin の **一覧表示** 機能のみ残っています（実装: [hve/gui/page_options.py](../hve/gui/page_options.py)、薄いラッパ: [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py)）。
 
-- GUI 認証パネルは **`copilot mcp list --json` / `copilot plugin list` / `copilot login`** を Copilot CLI に問い合わせるだけ。独自のレジストリは持たない。実装は薄いラッパ [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py)。
-- HVE 自身は **トークンや資格情報を一切保存しない**。`copilot` / `az` / `gh` 等が OS の資格情報ストア（Windows Credential Manager / macOS Keychain / Linux Secret Service / `~/.azure/`）に保存する。
-- 認証ダイアログは PTY（`pywinpty` / `ptyprocess`）+ xterm.js で `az login` / `gh auth login` / `copilot login` 等の対話を埋め込み実行する。
+### 1.2 実装状況（参考）
 
----
-
-## 同梱されている認証 manifest
-
-[hve/gui/auth_providers/manifests/](../hve/gui/auth_providers/manifests/) 配下に YAML として配置されています。
-
-| ID | 対象 MCP サーバ名 | 前提コマンド |
+| カテゴリ | パス | 状態 |
 |---|---|---|
-| `azure_mcp` | `azure` / `az` / `azure-mcp` | `az login` |
-| `github_mcp` | `github` / `github-mcp` | `gh auth login` |
-| `_default` | (個別 manifest が無い任意のサーバ) | なし (疎通確認のみ) |
+| 設定パネルから利用中 | [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) | GitHub Copilot CLI の薄いラッパ。MCP / Plugin 一覧の取得に使用。 |
+| 設定パネルから利用中 | [hve/gui/page_options.py](../hve/gui/page_options.py) | 上記ブリッジを呼び出す画面実装。 |
+| CLI バイナリ解決 / login | [hve/auth.py](../hve/auth.py) | `find_copilot_binary` / `is_authenticated` / `run_login` を提供。`copilot_cli_bridge.py` が委譲。 |
+| 実装は残存・本番未使用 | [hve/gui/pty_backend.py](../hve/gui/pty_backend.py) | PTY 抽象レイヤ。現在は単体テストからのみ参照。 |
+| 実装は残存・本番未使用 | [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py) | xterm.js を埋め込んだターミナルウィジェット。同上。 |
+| 削除済み（過去存在） | `hve/gui/auth_providers/` 配下 | 2026-02 のコミットで他作業と併せ削除済み（manifest システム）。 |
+| 過去・現在いずれも未実装 | `hve/gui/pty_auth_controller.py` / `hve/gui/pty_auth_session_widget.py` | 旧ガイドに記載があったが、git 履歴を含め本リポジトリには存在しません。 |
+
+### 1.3 廃止済み GUI 設定キー
+
+GUI 設定 (`settings.ini`) の `[options]` セクションにあった `mcp_config` / `workiq_tenant_id` は廃止済みです。
+
+- 起動時に `[options]` セクション内の上記キーを検出すると、自動で削除しファイルへ再保存します（実装: [hve/gui/settings_store.py](../hve/gui/settings_store.py) `_OBSOLETE_KEYS` / `_migrate_obsolete_keys`）。マイグレーション対象は `[options]` セクション限定です。
+- **GUI フォーム経路は廃止** ([hve/gui/page_options.py](../hve/gui/page_options.py) のコメント「workiq_tenant_id の GUI 入力経路は廃止」参照) ですが、**CLI 引数 `--mcp-config` / `--workiq-tenant-id` および環境変数 `WORKIQ_TENANT_ID` の経路は引き続き有効** です（CLI: [hve/__main__.py](../hve/__main__.py) で argparse 受理 → `_load_mcp_config()` / `cfg.workiq_tenant_id` で消費、環境変数: [hve/config.py](../hve/config.py) `os.environ.get("WORKIQ_TENANT_ID")` で取得）。
+- なお i18n ファイル ([hve/gui/i18n/hve_gui_en_US.ts](../hve/gui/i18n/hve_gui_en_US.ts)) には旧ボタン文字列「🔐 PluginやMCP Serverへの認証」が残置されていますが、UI ボタン自体は [hve/gui/main_window.py](../hve/gui/main_window.py) で生成されていません。
 
 ---
 
-## 操作手順
+## 2. 公式ルート: GitHub Copilot CLI での MCP サーバ登録と認証
 
-### Azure MCP の認証
+本章は GitHub Copilot CLI 公式ドキュメントに基づきます（一次情報源: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）。
 
-1. コマンドラインで Copilot CLI に Azure MCP を登録:
+### 2.1 対話 UI 経由での登録（推奨）
 
-   ```powershell
-   copilot mcp add azure-mcp -- npx -y @azure/mcp@latest server start
+1. ターミナルで `copilot` を起動し、対話セッションに入る。
+2. プロンプトで以下の slash command を実行する:
+
+   ```text
+   /mcp add
    ```
 
-2. HVE GUI を起動し、ヘッダの 🔐 「PluginやMCP Serverへの認証」を押す。
-3. テーブルに `MCP: azure-mcp` 行が自動掲載されるので、**[認証]** を押す。
-4. 新しいダイアログが開き、左にステップ（`az login` など）、右に
-   ターミナルが表示される。
-5. ターミナル内で規定ブラウザが自動起動するので、Microsoft アカウントで
-   サインインする。
-6. **サブスクリプション選択画面が出たら**、ターミナルにフォーカスを置いて
-   矢印キー（↑ ↓）で対象を選び **Enter**。番号入力でも可。
-7. `Subscription is set to ...` が出ると緑色のステップ完了マーカーが付き、
-   次のステップへ進む。
-8. すべて成功するとダイアログが自動で閉じ、一覧テーブルが ✅ 認証済み に
-   更新される。
+3. 表示されるフォームに、MCP サーバの起動コマンド・引数・環境変数等を入力し、`Ctrl+S` で保存する。
 
-### GitHub MCP の認証
+詳細手順は GitHub Copilot CLI 公式ドキュメント [Using GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview) の「Add an MCP server」節を参照してください。
 
-1. コマンドラインで GitHub MCP を登録 (すでに built-in として含まれている場合もあります):
+### 2.2 設定保存先
 
-   ```powershell
-   copilot mcp add github --env GITHUB_PERSONAL_ACCESS_TOKEN=ghp_xxx -- npx -y @modelcontextprotocol/server-github
-   ```
+`/mcp add` で登録した内容は以下の場所に JSON として保存されます。
 
-2. 🔐 ボタン → `MCP: github` 行の **[認証]**。
-3. ターミナルで `gh auth login` の対話メニュー（GitHub.com か GHES か、
-   ブラウザ認証 or トークン認証）が表示される。**矢印 + Enter** で選択。
-4. ブラウザに 8 桁の確認コードを貼り付けて承認すれば完了。
+| OS | パス |
+|---|---|
+| Linux / macOS | `~/.copilot/mcp-config.json` |
+| Windows | `%USERPROFILE%\.copilot\mcp-config.json` |
 
-### Microsoft Work IQ の認証
+- 環境変数 `COPILOT_HOME` を設定すると保存ディレクトリを変更できます（公式記載）。
+- JSON 構造の仕様は GitHub Copilot 公式ドキュメント（<https://docs.github.com/en/copilot>）の MCP 関連ページを参照してください。
 
-`copilot plugin list` に `workiq@work-iq` が表示されている場合、GUI に
-`Microsoft Work IQ` 行が自動掲載されます。
+### 2.3 認証（`/login`）
 
-```powershell
-# 未インストールであれば事前に:
-copilot plugin install work-iq/workiq
-```
+GitHub への認証は対話セッション内の `/login` slash command で実施します。詳細は [About GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli) を参照してください。サービス固有の認証（Azure / GitHub 等）は **各 MCP サーバの実装仕様に依存** します（例: `az login` で取得した資格情報を Azure SDK 経由で利用する等）。具体手順は §2.4 の各サーバ公式情報源を参照してください。
 
-GUI 上で **[認証]** を押すと `@microsoft/workiq accept-eula` + `ask -q ping` の
-シーケンスで状態を確定します。
+### 2.4 サービス別の参照先
 
-### 任意の MCP サーバ（manifest 不在の場合）
+各 MCP サーバの起動コマンド・必要な環境変数・推奨設定は、それぞれの公式リポジトリ／ドキュメントを参照してください。本ドキュメントでは個別の起動コマンド例は記載しません（バージョンや配布形態の変更が頻繁なため）。
 
-`_default` manifest がフォールバックとして発動します:
+| サーバ | 公式情報源 |
+|---|---|
+| Azure MCP Server | <https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md>（旧 `Azure/azure-mcp` リポジトリは 2026-02-06 にアーカイブされ、現在は `microsoft/mcp` モノレポ配下で開発継続中） |
+| GitHub MCP Server | <https://github.com/github/github-mcp-server>（Copilot CLI 用インストールガイドは [`docs/installation-guides/install-copilot-cli.md`](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-copilot-cli.md) を参照） |
+| Microsoft Work IQ | Microsoft 365 / Microsoft 公式案内に従う（本ドキュメント更新時点で公式 URL の確認手順を本リポジトリに整備していないため、URL の明示を控えます） |
+| その他 MCP サーバ | 各サーバの配布元（npm パッケージ・GitHub リポジトリ・コンテナイメージ等） |
 
-- 前提コマンドは実行されません。
-- サーバ固有の認証（API キー / 環境変数 / 個別ログイン）は**事前に**完了させてください。
-- ダイアログは **疎通確認のみ** を実施します。
+### 2.5 非対話セットアップ
+
+CI 等の非対話環境で MCP 設定を投入する場合は、`/mcp add` の対話 UI を経由せず、`mcp-config.json` を直接生成・配置する方法があります（公式 JSON 構造は §2.2 のリンクを参照）。本リポジトリ内に該当用途の自動化スクリプトは確認できませんでした（本ドキュメント更新時点）。
 
 ---
 
-## カスタム manifest の追加
+## 3. HVE GUI / CLI からの利用
 
-自前の MCP サーバ向けに新規 manifest を作成する場合の手順です。
+### 3.1 `copilot_cli_bridge.py` の現状
 
-### 配置場所
+HVE GUI の設定パネル ([hve/gui/page_options.py](../hve/gui/page_options.py)) は、登録済みの MCP サーバと Plugin を一覧表示するために [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) を呼び出します。ブリッジは内部で以下の Copilot CLI コマンドを実行します（実装ソース参照）。
 
-2 通り対応:
+| 呼び出すコマンド | 用途 |
+|---|---|
+| `copilot mcp list --json` | 登録済み MCP サーバの一覧取得（`{ "mcpServers": { name: {...} } }` 形式を期待） |
+| `copilot mcp get <name> --json` | 個別 MCP サーバの定義取得 |
+| `copilot plugin list` | Plugin 一覧取得（`--json` 未対応のため行ベース正規表現で解析） |
+| `copilot login` | GitHub Copilot へのログイン（`hve.auth.run_login` 経由） |
 
-1. **同梱**: [hve/gui/auth_providers/manifests/](../hve/gui/auth_providers/manifests/)
-   に `<name>.yml` を直接追加（リポジトリにコミット）。
-2. **ユーザー固有**: 環境変数 `HVE_AUTH_MANIFESTS_DIR` を任意ディレクトリに
-   設定し、その中に YAML を配置（同名 `id` があれば**ユーザー側が優先**）。
+> ⚠️ **公式ドキュメントとの差異**: 公式は対話 UI の `/mcp add` slash command と `~/.copilot/mcp-config.json` を一次情報源として推奨しており、本ブリッジが利用する **サブコマンド形式** (`copilot mcp list` / `copilot mcp get` / `copilot plugin list` / `copilot login`) については、本ドキュメント作成時点の公式ドキュメント（<https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli> 、<https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）に明記を確認できませんでした。本ブリッジは [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) のソースコメント記載のターゲットバージョン **Copilot CLI v1.0.48 時点の振る舞い** に基づきます（本リポジトリ内に実機検証エビデンスは保有していません）。Copilot CLI 内部仕様の変更により、出力スキーマやサブコマンドが変更される可能性があります。
 
-### スキーマ
+### 3.2 廃止済み GUI 設定キーのマイグレーション
 
-```yaml
-id: my_mcp                              # 一意 ID (必須)
-display_name: "My MCP"
+[hve/gui/settings_store.py](../hve/gui/settings_store.py) は読み込み時に `[options]` セクションの廃止キーを自動削除します（実装: `_OBSOLETE_KEYS` / `_migrate_obsolete_keys`）。
 
-match:                                  # 最低 1 つ必須
-  mcp_server_name_regex: "^my(_|-)?mcp$"
+- 対象セクション: `[options]` のみ。他セクションの同名キーは削除されません。
+- 対象キー: `mcp_config` / `workiq_tenant_id`。
+- 削除後、`settings.ini` はその場で **再保存** されます。
 
-pre_auth_commands:                      # 順次 PTY 実行
-  - argv: ["my-cli", "login"]
-    success_regex: "Logged in"
-    failure_regex: "(?i)(error|denied)"
-    timeout: 600
+### 3.3 CLI 引数 / 環境変数経路
 
-main_command:                           # 任意
-  argv: ["copilot", "-p", "list my_mcp tools", "--allow-all-tools", "--no-ask-user"]
-  success_regex: "(?i)available"
-  timeout: 300
+GUI フォームから `mcp_config` / `workiq_tenant_id` を入力する経路は廃止されています（[hve/gui/page_options.py](../hve/gui/page_options.py) の「workiq_tenant_id の GUI 入力経路は廃止 (Wave 3 / Q9=b)」コメント参照）。一方、以下の経路は引き続き有効です。
 
-success_regex: "(?i)tools? (available|registered)"
-failure_regex: "(?i)(unauthorized|forbidden)"
-timeout_total: 900
+| 経路 | キー / 引数 | 実装位置 |
+|---|---|---|
+| CLI 引数 | `--mcp-config <path>` | [hve/__main__.py](../hve/__main__.py)（argparse で受理、`_load_mcp_config()` で消費） |
+| CLI 引数 | `--workiq-tenant-id <id>` | [hve/__main__.py](../hve/__main__.py)（argparse で受理、`cfg.workiq_tenant_id` に代入） |
+| 環境変数 | `WORKIQ_TENANT_ID` | [hve/config.py](../hve/config.py)（`os.environ.get("WORKIQ_TENANT_ID")` で取得） |
 
-notes_md: |
-  ## My MCP 認証手順
-
-  1. ...
-```
-
-全フィールドの詳細は [hve/gui/auth_providers/manifests/__init__.py](../hve/gui/auth_providers/manifests/__init__.py)
-の docstring を参照してください。
-
-### バリデーション
-
-manifest の YAML を保存後、以下のコマンドで構文検証ができます:
-
-```powershell
-python -c "from hve.gui.auth_providers.manifests import load_all_manifests; [print(m.id) for m in load_all_manifests()]"
-```
-
-構文エラーがある manifest は **個別に skip** され、他の manifest には影響しません。
+各経路の詳細は §1.3 も併せて参照してください。
 
 ---
 
-## トラブルシューティング
+## 4. トラブルシューティング
 
-### Q. ダイアログが「PTY backend not available」と出る
+> 本章は **過去存在した GUI 認証ダイアログ / 将来 PTY 利用 UI が再導入された場合の参考情報** として残しています。現状では GUI からこれらのフローを起動する手段はありません（§1.1 参照）。手元の Copilot CLI / Azure CLI / GitHub CLI を直接利用する場合のヒントとしてもご活用ください。
 
-依存パッケージが未インストールです:
+### 4.1 PTY バックエンドが見つからない
+
+PTY 抽象レイヤ ([hve/gui/pty_backend.py](../hve/gui/pty_backend.py)) が依存する OS ごとのパッケージが未インストールの場合、`PtyBackendError` が発生します。
+
+- **Windows**: `pywinpty>=2.0`（pyproject.toml で宣言。ConPTY 利用）。Windows 10 1809 未満は ConPTY 非対応のため利用できません。
+- **Linux / macOS**: `ptyprocess>=0.7`（pyproject.toml で宣言）。
+
+依存をインストールするには、リポジトリで以下を実行してください（`gui-pty` extras は `pyproject.toml` で定義されています）。
 
 ```powershell
 pip install -e .[gui,gui-pty]
 ```
 
-Windows なら `pywinpty>=2.0` (ConPTY)、POSIX なら `ptyprocess>=0.7` が必要です。
-Windows 10 1809 未満は ConPTY 非対応のため利用できません。
+### 4.2 xterm.js のアセットが無い
 
-### Q. xterm.js のアセットが無いというエラー
-
-リポジトリのチェックアウト時に vendor 配下が空のままだと発生します。
-以下で再取得してください:
+[hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py) は xterm.js を埋め込んだ Qt ウィジェットですが、リポジトリのチェックアウト時に vendor 配下が空のままだとロードに失敗します。以下のスクリプトで再取得できます。
 
 ```powershell
 python tools/fetch_xterm_assets.py
 ```
 
-### Q. `az login` のサブスクリプション選択画面でキー入力が反映されない
+### 4.3 Windows で `az` が見つからない
 
-- ターミナルウィジェットにマウスでフォーカスを置いてください。
-- それでも反応しない場合、`az` のバージョンが古い可能性があります。
-  `az upgrade` を実行してください。
+Azure CLI が PATH に追加されている必要があります。インストール後、新しい PowerShell / cmd セッションを開き直してください。Azure CLI の出力フォーマットは時期によって変更されることがあるため、最新版の利用を推奨します（更新手順は Azure CLI 公式ドキュメントに従ってください。検証時点: 2026-05、要再検証）。
 
-### Q. Windows で `az` が見つからないと言われる
+### 4.4 検証済みバージョン（参考）
 
-- Azure CLI が PATH に追加されている必要があります。インストール後、新しい
-  PowerShell / cmd セッションを開き直してから HVE GUI を再起動してください。
-- 検証済みバージョン: Azure CLI v2.50 系（`success_regex` パターンも本バージョン
-  の出力に基づきます）。古いバージョンや将来バージョンでは出力文言が変わる場合が
-  あるため、ヒットしないときはご自身の manifest を `HVE_AUTH_MANIFESTS_DIR` 経由で
-  追加して上書きしてください。
+本ドキュメント更新時点 (2026-05、要再検証) の pyproject.toml 宣言と、それに合致する範囲のバージョンを記載します。
 
-### Q. PTY バックエンドの検証済みバージョン
-
-| OS | パッケージ | 検証済みバージョン |
+| OS | パッケージ | pyproject.toml 宣言 |
 |---|---|---|
-| Windows | pywinpty | 3.0.3 (3.x 系) |
-| Linux / macOS | ptyprocess | 0.7+ (未実機検証、API 互換) |
+| Windows | pywinpty | `pywinpty>=2.0; sys_platform == 'win32'` |
+| Linux / macOS | ptyprocess | `ptyprocess>=0.7; sys_platform != 'win32'` |
 
-### Q. すでに別端末で `az login` 済みで再認証したくない
+実機での動作確認エビデンスは本リポジトリには保有していません。
 
-該当ステップ実行中に「**次へスキップ**」を押すと、当該ステップを成功扱いで
-次のステップへ進められます。
+### 4.5 機密情報の取り扱い
 
-### Q. 機密情報がログに残らないか心配
-
-`PtyAuthSessionWidget` はダイアログを閉じるとターミナル表示を**破棄**します。
-出力は `workbench_logger` 等への自動転送もしていません（明示的なユーザー操作
-のみ）。トークン / Device Flow コード等を保存する仕組みは無いため、
-スクリーンショットや手動コピーをしない限り永続化されません。
+HVE 自身は **トークンや資格情報を一切保存しません**。Copilot CLI / Azure CLI / GitHub CLI 等のツールが OS の資格情報ストアに保存します（保存先は各 CLI の公式ドキュメント参照）。本リポジトリのログ出力（`hve/gui/workbench_logger.py` 等）に資格情報を自動転送する仕組みはありません。
 
 ---
 
-## 関連
+## 5. 関連ドキュメント
 
-- [HVE GUI Orchestrator ガイド](./hve-gui-orchestrator-guide.md#plugin--mcp-server-認証)
-- [hve/gui/pty_backend.py](../hve/gui/pty_backend.py) — PTY 抽象レイヤ
-- [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py) — ターミナルウィジェット
-- [hve/gui/pty_auth_controller.py](../hve/gui/pty_auth_controller.py) — 認証フロー制御
-- [hve/gui/pty_auth_session_widget.py](../hve/gui/pty_auth_session_widget.py) — UI ダイアログ
+### 5.1 外部公式ドキュメント
+
+英語版を一次情報源として採用しています（日本語版は翻訳遅延が発生する場合があります）。
+
+- GitHub Copilot CLI 概要: <https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli>
+- GitHub Copilot CLI 利用ガイド: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>
+- GitHub MCP Server リポジトリ: <https://github.com/github/github-mcp-server>
+- Azure MCP Server（現行）: <https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md>
+
+### 5.2 本リポジトリ内ドキュメント
+
+- [HVE GUI Orchestrator ガイド — Plugin / MCP Server 認証](./hve-gui-orchestrator-guide.md#plugin-mcp-server-認証)
+- [HVE 技術アーキテクチャ §8 認証と資格情報の取扱い](./hve-technical-architecture.md#8-認証と資格情報の取扱い)
+
+内部コード参照は §1.2 / §3 にまとめています。

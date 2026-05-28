@@ -1,0 +1,5 @@
+inputs: []
+outputs:
+- path: docs-generated/inventory.md
+  required: true
+  mode: create

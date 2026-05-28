@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1700" height="980" viewBox="0 0 1700 980" role="img" aria-labelledby="title desc">
   <title id="title">ASDW-WEB データフロー図</title>
-  <desc id="desc">入力ファイルからCustom Agentタスクを経由して出力ファイルへ到達する関係を示す。</desc>
+  <desc id="desc">入力ファイルからPromptタスクを経由して出力ファイルへ到達する関係を示す。</desc>
   <style>
     text { font-family: "Trebuchet MS", Verdana, Arial, sans-serif; fill: #1f2937; }
     .title { font-size: 28px; font-weight: 700; }
@@ -25,7 +25,7 @@
   <text x="40" y="78" class="subtitle">読み順: 上から下。各行は「1 Step の代表的なファイルフロー」を示す。</text>
 
   <text x="120" y="130" class="col-title">入力ファイル</text>
-  <text x="740" y="130" class="col-title">Custom Agent（タスク）</text>
+  <text x="740" y="130" class="col-title">Prompt（タスク）</text>
   <text x="1260" y="130" class="col-title">出力ファイル</text>
 
   <!-- Row 1 -->
@@ -104,7 +104,7 @@
   <path class="arrow" d="M1070 706 L1160 706"/>
 
   <rect class="legend" x="60" y="790" width="1600" height="150"/>
-  <text class="label" x="90" y="828">凡例: 灰=入力ファイル、緑=Custom Agent タスク、紫=出力ファイル</text>
+  <text class="label" x="90" y="828">凡例: 灰=入力ファイル、緑=Prompt タスク、紫=出力ファイル</text>
   <text class="label" x="90" y="858">色のセマンティクス: ファイルと実行主体を視覚的に分離し、監査時の差分確認を容易化</text>
   <text class="label" x="90" y="888">読み順: 上から下へ。各行で「入力 → Agent → 出力」の関係を追跡する</text>
 </svg>

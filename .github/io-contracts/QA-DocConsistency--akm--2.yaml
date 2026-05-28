@@ -1,0 +1,14 @@
+inputs:
+- path: '{target_scope}'
+  required: true
+  kind: runtime_param
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D07-用語集-ドメインモデル定義書.md
+  required: true
+  kind: static
+- path: work/kpi/fork-kpi-<run_id>.jsonl
+  required: true
+  kind: external
+outputs: []

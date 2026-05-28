@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from hve.console import Console
+import pytest
+
+from hve.console import Console, _CURRENT_EMIT_STEP_ID
+
+
+@pytest.fixture(autouse=True)
+def _reset_ctx_step_id():
+    """各テスト前後で ContextVar をリセットし、ステップ ID の漏れを防ぐ。"""
+    token = _CURRENT_EMIT_STEP_ID.set(None)
+    yield
+    _CURRENT_EMIT_STEP_ID.reset(token)
 
 
 class _MockWB:

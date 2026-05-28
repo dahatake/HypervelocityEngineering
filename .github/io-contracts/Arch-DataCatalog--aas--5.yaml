@@ -1,0 +1,34 @@
+inputs:
+- path: docs/catalog/data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-DataModeling--aas--4.1
+- path: docs/catalog/domain-analytics.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-DomainAnalytics--aas--3.1
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/catalog/service-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+- path: docs/catalog/service-catalog-matrix.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--6
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D07-用語集-ドメインモデル定義書.md
+  required: true
+  kind: static
+- path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
+  required: true
+  kind: static
+outputs:
+- path: docs/catalog/data-catalog.md
+  required: true
+  mode: create

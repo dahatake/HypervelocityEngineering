@@ -250,6 +250,10 @@ class WorkbenchPage(QWidget):
         self._workflow_step_status: Dict[str, Dict[str, str]] = {}
         self._workflow_subtask_status: Dict[str, Dict[str, List[tuple]]] = {}
         self._subtask_seq: Dict[tuple, int] = {}
+        # fan-out 初期化済み base step（wf_id -> base_id 集合）。
+        # fanout_init で seed された base のみ集約完了判定を許可することで、
+        # 子イベントが部分到着した状態での早期 "完了" 遷移を防ぐ。
+        self._fanout_initialized: Dict[str, set] = {}
         self._current_workflow_id: Optional[str] = None
         # QA IPC (qa_answer_mode="gui-file" 時のみ生成)
         self._qa_ipc_manager: Optional[QAIpcManager] = None
@@ -739,25 +743,41 @@ class WorkbenchPage(QWidget):
     def _apply_plan_mode_prefix(self, line: str) -> str:
         """Plan モードのログ 1 行に表示用プリフィックスを付与する。
 
-        ``_current_workflow_id`` および ``state.current_running_step_id`` /
-        ``last_known_step_id`` から ``[wf_id]-[step_id.title]`` 形式を組み立てる。
-        Step が不明な場合は ``[wf_id]-[main]`` を付与する。
+        Step ID の決定優先順位 (Q3=i / Q2=a):
+          1. ``line`` 行頭の ``[hve:ctx:<step_id>] `` インラインマーカー（最優先）
+          2. ``state.current_running_step_id`` / ``last_known_step_id`` フォールバック
+
+        フォーマット: ``[時間] [WF大文字] [step_id] [title] 本文``
+        （元行の ``[HH:MM:SS]`` は抽出して再配置）
 
         Note: 呼び出し元は ``is_stats_line(line)`` で stats 行を既に除外している
         ため、本関数では stats チェックを行わない（二重防衛は不要）。
         """
+        from .workbench_state import _extract_inline_ctx, _extract_timestamp  # local import
+
         wf_id = self._current_workflow_id or "?"
-        sid = (
-            getattr(self._state, "current_running_step_id", None)
-            or getattr(self._state, "last_known_step_id", None)
-        )
+        inline_step_id, body_after_ctx = _extract_inline_ctx(line)
+        # マーカー欠落かつ並列実行中（running_step_ids が複数）の場合、
+        # 単一スカラ fallback は最後に running 化した step に誤帰属するため
+        # 抑止する（捏造防止）。当該行は wf レベル ([main]) として表示する。
+        running_set = getattr(self._state, "running_step_ids", None) or set()
+        if inline_step_id is not None:
+            sid = inline_step_id
+        elif len(running_set) >= 2:
+            sid = None
+        else:
+            sid = (
+                getattr(self._state, "current_running_step_id", None)
+                or getattr(self._state, "last_known_step_id", None)
+            )
         step_title: Optional[str] = None
         if sid:
             for sv in getattr(self._state, "steps", []) or []:
                 if getattr(sv, "id", None) == sid:
                     step_title = getattr(sv, "title", None)
                     break
-        return format_log_prefix(wf_id, sid, step_title) + line
+        ts, body = _extract_timestamp(body_after_ctx)
+        return format_log_prefix(wf_id, sid, step_title, timestamp=ts) + body
 
     @Slot(str, str)
     def _on_node_selected(self, instance_id: str, step_id: str) -> None:
@@ -880,8 +900,22 @@ class WorkbenchPage(QWidget):
         Q12=b: parse は本クラスに残し、State 側の API (``update_step_status_in_instance``
         / ``add_step_subtask`` / ``update_step_in_instance``) を呼び出す。
         """
-        # 1) step_status イベント
+        # 1) step_status / fanout_init イベント
         payload = parse_stats_event(line)
+        # 1a) fanout_init: base step 配下の fanout 子を seed
+        if payload is not None and payload.get("kind") == "fanout_init":
+            base_id = payload.get("base_id") or payload.get("step") or ""
+            if isinstance(base_id, str):
+                base_id = base_id.strip()
+            else:
+                base_id = ""
+            child_ids_raw = payload.get("child_ids") or []
+            if base_id and isinstance(child_ids_raw, list):
+                # instance_id == "_global" のときは内部で no-op
+                self._apply_fanout_init_in_instance(
+                    instance_id, base_id, child_ids_raw
+                )
+            return
         if payload is not None and payload.get("kind") == "step_status":
             sid = (payload.get("step") or payload.get("step_id") or "")
             sid = sid.strip() if isinstance(sid, str) else ""
@@ -893,6 +927,15 @@ class WorkbenchPage(QWidget):
             status = (payload.get("status") or "")
             status = status.strip() if isinstance(status, str) else ""
             if sid and status in ("running", "done", "failed", "skipped"):
+                # fan-out 子 step_id (`<base>/<key>` 形式) は base に集約する。
+                # 注: prefix strip 後に `/` 判定を行う（順序固定）。
+                if "/" in sid and instance_id and instance_id != "_global":
+                    base_id, _, _ = sid.partition("/")
+                    if base_id:
+                        self._apply_fanout_child_status_in_instance(
+                            instance_id, base_id, sid, status
+                        )
+                    return
                 # T4: step_id 直接ヒット → 親 step 1 段 bubble-up の順で反映
                 resolved_sid = self._resolve_step_id_for_instance(instance_id, sid)
                 if resolved_sid is not None:
@@ -987,6 +1030,129 @@ class WorkbenchPage(QWidget):
         if not wf_id or wf_id == self._current_workflow_id:
             return
         self._current_workflow_id = wf_id
+
+    def _apply_fanout_init_in_instance(
+        self,
+        instance_id: str,
+        base_id: str,
+        child_ids: List[str],
+    ) -> None:
+        """Autopilot 経路用の fanout_init ハンドラ（Instances モード版）。
+
+        ``_apply_stats_fanout_init`` の state ミラー部分のみを Instances 木上で
+        実行する。``_workflow_subtask_status`` 辞書は触らず、
+        ``_current_workflow_id`` も読まない。
+
+        - base_id が instance に存在しない場合は何もしない（捏造防止）。
+        - ``_fanout_initialized[instance_id]`` に base_id を登録（集約完了判定の前提）。
+        - 各 child_id について ``find_step_in_instance is None`` のときのみ
+          ``add_step_subtask(kind="fanout_child", status="pending")`` で seed。
+        """
+        if not instance_id or instance_id == "_global" or not base_id or not child_ids:
+            return
+        if self._state.find_step_in_instance(instance_id, base_id) is None:
+            return
+        self._fanout_initialized.setdefault(instance_id, set()).add(base_id)
+        for cid in child_ids:
+            if not isinstance(cid, str) or not cid:
+                continue
+            if self._state.find_step_in_instance(instance_id, cid) is not None:
+                continue
+            try:
+                self._state.add_step_subtask(
+                    instance_id=instance_id,
+                    parent_step_id=base_id,
+                    subtask_id=cid,
+                    title=cid,
+                    kind="fanout_child",
+                    status="pending",
+                )
+            except (AttributeError, ValueError):
+                pass
+
+    def _apply_fanout_child_status_in_instance(
+        self,
+        instance_id: str,
+        base_id: str,
+        child_id: str,
+        child_status: str,
+    ) -> None:
+        """Autopilot 経路用の fan-out 子 step_status ハンドラ。
+
+        ``_apply_fanout_child_status`` の集約ロジックを Instances 木上で実行する。
+        ``_workflow_subtask_status`` 辞書は触らず、``_current_workflow_id`` も読まない。
+
+        集約規則 (Plan 版と同一):
+          - 子に running が 1 件以上 → base = "running"
+          - ``_fanout_initialized[instance_id]`` に base_id 含み かつ 全子が
+            終了状態 (done/failed/skipped) → base = "failed" if any failed else "done"
+          - それ以外 → base 未変更（早期完了防止）
+
+        child_status が "running" のとき、base 更新後に
+        ``_highlight_running_workflow(instance_id)`` を呼ぶ。
+        """
+        if not instance_id or instance_id == "_global" or not base_id:
+            return
+        if child_status not in ("running", "done", "failed", "skipped"):
+            return
+        # plan 外の base は対象外（捏造防止）
+        base_node = self._state.find_step_in_instance(instance_id, base_id)
+        if base_node is None:
+            return
+        # 子 step の lazy seed と status 更新
+        existing_child = self._state.find_step_in_instance(instance_id, child_id)
+        if existing_child is None:
+            try:
+                self._state.add_step_subtask(
+                    instance_id=instance_id,
+                    parent_step_id=base_id,
+                    subtask_id=child_id,
+                    title=child_id,
+                    kind="fanout_child",
+                    status=child_status,  # type: ignore[arg-type]
+                )
+            except (AttributeError, ValueError):
+                pass
+        else:
+            try:
+                self._state.update_step_status_in_instance(
+                    instance_id, child_id, child_status  # type: ignore[arg-type]
+                )
+            except (AttributeError, ValueError):
+                pass
+        # base 配下の fanout_child 集合で集約
+        fanout_children = [
+            c for c in base_node.children
+            if getattr(c, "kind", "step") == "fanout_child"
+        ]
+        if not fanout_children:
+            return
+        statuses = [getattr(c, "status", "pending") for c in fanout_children]
+        terminal = {"done", "failed", "skipped"}
+        any_running = any(s == "running" for s in statuses)
+        is_initialized = base_id in self._fanout_initialized.get(instance_id, set())
+        all_terminal = (
+            is_initialized
+            and all(s in terminal for s in statuses)
+        )
+        any_failed = any(s == "failed" for s in statuses)
+        if any_running:
+            base_state_key = "running"
+        elif all_terminal:
+            base_state_key = "failed" if any_failed else "done"
+        else:
+            # 全 pending、または fanout_init 未受信で完了判定不可 — base 未変更
+            return
+        # base 状態が現状と異なる場合のみ更新
+        if getattr(base_node, "status", "pending") != base_state_key:
+            try:
+                self._state.update_step_status_in_instance(
+                    instance_id, base_id, base_state_key  # type: ignore[arg-type]
+                )
+            except (AttributeError, ValueError):
+                pass
+        if child_status == "running":
+            self._highlight_running_workflow(instance_id)
 
     def _connect_state_signals(self) -> None:
         signals = self._state.signals()
@@ -1132,10 +1298,18 @@ class WorkbenchPage(QWidget):
                         workflow_id=wf_id,
                         label=wf_id,
                     )
-                sid = (
-                    getattr(self._state, "current_running_step_id", None)
-                    or getattr(self._state, "last_known_step_id", None)
-                )
+                # 並列実行中（running_step_ids が複数）はスカラ fallback による
+                # 単一 step への誤帰属を避けるため None を渡し、wf レベルバッファに
+                # 集約する。append_workflow_log は行頭の [hve:ctx:<step_id>] マーカーを
+                # 最優先で抽出するため、マーカー付き行は正しい子バッファに振り分けられる。
+                running_set = getattr(self._state, "running_step_ids", None) or set()
+                if len(running_set) >= 2:
+                    sid = None
+                else:
+                    sid = (
+                        getattr(self._state, "current_running_step_id", None)
+                        or getattr(self._state, "last_known_step_id", None)
+                    )
                 # append_workflow_log 側でも自前のプリフィックスを付与するため、
                 # 二重プリフィックスを避けるため raw line を渡す。
                 # （戻り値の formatted を _log_pane にも渡したいところだが、
@@ -1149,6 +1323,8 @@ class WorkbenchPage(QWidget):
         payload = parse_stats_event(line)
         if payload is not None and payload.get("kind") == "step_status":
             self._apply_stats_step_status(payload)
+        if payload is not None and payload.get("kind") == "fanout_init":
+            self._apply_stats_fanout_init(payload)
         if payload is not None and payload.get("kind") == "file_io":
             self._record_file_io_artifact(payload)
         self._update_workflow_progress_from_line(line)
@@ -1403,6 +1579,60 @@ class WorkbenchPage(QWidget):
             )
         return plan
 
+    def _apply_stats_fanout_init(self, payload: dict) -> None:
+        """``[hve:stats] {"kind":"fanout_init",...}`` を受信して base step の
+        fan-out 子情報を seed する。
+
+        orchestrator が fan-out 展開後に 1 回だけ emit する。受信した child_ids
+        を base step 配下に subtask（kind="fanout_child"）として登録し、以降の
+        per-child ``step_status`` イベントから base step の状態を集約できる
+        ようにする（同 (wf, base) で繰り返し受信されても冪等）。
+        """
+        wf_id = payload.get("workflow_id") or self._current_workflow_id
+        if not wf_id:
+            return
+        base_id = payload.get("base_id") or payload.get("step") or ""
+        if isinstance(base_id, str):
+            base_id = base_id.strip()
+        else:
+            base_id = ""
+        child_ids = payload.get("child_ids") or []
+        if not (base_id and isinstance(child_ids, list) and child_ids):
+            return
+        wf_sub_map = self._workflow_subtask_status.setdefault(wf_id, {})
+        existing = {sid for sid, _t, _s in wf_sub_map.get(base_id, [])}
+        sub_list = wf_sub_map.setdefault(base_id, [])
+        # base_id を「初期化済み」として記録（集約完了判定の前提）
+        self._fanout_initialized.setdefault(wf_id, set()).add(base_id)
+        added_any = False
+        for cid in child_ids:
+            if not isinstance(cid, str):
+                continue
+            if cid in existing:
+                continue
+            sub_list.append((cid, cid, "pending"))
+            existing.add(cid)
+            added_any = True
+            # State (WorkflowInstance.steps 配下) にもミラー
+            try:
+                self._state.add_step_subtask(
+                    instance_id=wf_id,
+                    parent_step_id=base_id,
+                    subtask_id=cid,
+                    title=cid,
+                    kind="fanout_child",
+                    status="pending",
+                )
+            except (AttributeError, ValueError):
+                pass
+        if added_any:
+            self._progress_widget.set_plan(
+                self._workflow_plan,
+                self._workflow_status,
+                self._workflow_step_status,
+                self._workflow_subtask_status,
+            )
+
     def _apply_stats_step_status(self, payload: dict) -> None:
         """``[hve:stats] {"kind":"step_status",...}`` を ``_workflow_step_status``
         へ反映する。
@@ -1428,6 +1658,15 @@ class WorkbenchPage(QWidget):
             status = ""
         if not step_id or status not in ("running", "done", "failed", "skipped"):
             return
+
+        # fan-out 子 step_id（"<base>/<key>" 形式）の場合、base step の subtask
+        # として状態更新し、その集約結果を base step の status に反映する。
+        # 非 fan-out（"/" を含まない）はそのまま既存ロジックへ。
+        if "/" in step_id:
+            base_id, _, _ = step_id.partition("/")
+            self._apply_fanout_child_status(base_id, step_id, status)
+            return
+
         if status == "running":
             state_text = "実行中"
         else:  # done / failed / skipped
@@ -1458,6 +1697,107 @@ class WorkbenchPage(QWidget):
             self._workflow_subtask_status,
         )
 
+    def _apply_fanout_child_status(
+        self, base_id: str, child_id: str, child_status: str
+    ) -> None:
+        """fan-out 子 step の status を反映し、base step の集約状態を更新する。
+
+        集約ルール:
+          - 子に running が 1 件以上 → base = "実行中"
+          - 全子が終了状態（done / failed / skipped）かつ failed が 1 件以上 → base = "完了"（failed sticky は未配備の base に対しては適用しない。集約結果は内部 "failed" にし、表示は既存マッピングと整合のため "完了" に丸める）
+          - 全子が done / skipped のみ → base = "完了"
+
+        fanout_init を受信していない場合、subtask seed が無い状態でも child を
+        遅延 seed して集約に組み込む（emit 順序によらず動作する）。
+        """
+        wf_id = self._current_workflow_id
+        if not wf_id or not base_id:
+            return
+        wf_step_map = self._workflow_step_status.setdefault(wf_id, {})
+        if base_id not in wf_step_map:
+            # plan 外の base は対象外（捏造防止）
+            return
+
+        # subtask リストを更新（遅延 seed 含む冪等処理）
+        wf_sub_map = self._workflow_subtask_status.setdefault(wf_id, {})
+        sub_list = wf_sub_map.setdefault(base_id, [])
+        found = False
+        for i, (sid, title, _st) in enumerate(sub_list):
+            if sid == child_id:
+                sub_list[i] = (sid, title, child_status)
+                found = True
+                break
+        if not found:
+            sub_list.append((child_id, child_id, child_status))
+            # State 側も seed
+            try:
+                self._state.add_step_subtask(
+                    instance_id=wf_id,
+                    parent_step_id=base_id,
+                    subtask_id=child_id,
+                    title=child_id,
+                    kind="fanout_child",
+                    status=child_status if child_status in ("running", "done", "failed", "skipped") else "pending",  # type: ignore[arg-type]
+                )
+            except (AttributeError, ValueError):
+                pass
+        else:
+            # 既存 subtask の状態を State 側にもミラー
+            try:
+                self._state.update_step_status_in_instance(
+                    wf_id, child_id, child_status  # type: ignore[arg-type]
+                )
+            except (AttributeError, ValueError):
+                pass
+
+        # base 状態を集約
+        terminal = {"done", "failed", "skipped"}
+        any_running = any(s == "running" for _id, _t, s in sub_list)
+        # fanout_init で base_id が seed 済みの場合のみ完了判定を許可。
+        # 未 seed (fanout_init 不在 or 順序逆転) では running 判定のみ許可し、
+        # 部分到着した子イベントで base を早期完了させない。
+        is_initialized = base_id in self._fanout_initialized.get(wf_id, set())
+        all_terminal = (
+            is_initialized
+            and bool(sub_list)
+            and all(s in terminal for _id, _t, s in sub_list)
+        )
+        any_failed = any(s == "failed" for _id, _t, s in sub_list)
+
+        if any_running:
+            base_state_text = "実行中"
+            base_state_key = "running"
+        elif all_terminal:
+            base_state_text = "完了"
+            base_state_key = "failed" if any_failed else "done"
+        else:
+            # 全 pending、または fanout_init 未受信で完了判定不可 — 触らない
+            return
+
+        if wf_step_map.get(base_id) == base_state_text:
+            # subtask 内訳のみ更新したケース。redraw で N/M バッジを反映するため
+            # set_plan は呼ぶが、status 変更通知は飛ばさない。
+            self._progress_widget.set_plan(
+                self._workflow_plan,
+                self._workflow_status,
+                self._workflow_step_status,
+                self._workflow_subtask_status,
+            )
+            return
+        wf_step_map[base_id] = base_state_text
+        try:
+            self._state.update_step_status_in_instance(
+                wf_id, base_id, base_state_key  # type: ignore[arg-type]
+            )
+        except (AttributeError, ValueError):
+            pass
+        self._progress_widget.set_plan(
+            self._workflow_plan,
+            self._workflow_status,
+            self._workflow_step_status,
+            self._workflow_subtask_status,
+        )
+
     def _update_workflow_progress_from_line(self, line: str) -> None:
         if not self._current_workflow_id:
             return
@@ -1466,6 +1806,15 @@ class WorkbenchPage(QWidget):
         if not (timestamp and step_id and message):
             return
         if step_id in ("[main]", "main"):
+            return
+
+        # fan-out 子 ID（"<base>/<key>"）はテキストパース経路でも _apply_stats_*
+        # と同じ集約に委譲する（lookup は base ID で行う）。
+        if "/" in step_id:
+            base_id = step_id.split("/", 1)[0]
+            hint = extract_step_status_hint(message)
+            if hint in ("running", "done", "failed", "skipped"):
+                self._apply_fanout_child_status(base_id, step_id, hint)
             return
 
         hint = extract_step_status_hint(message)
@@ -1688,6 +2037,7 @@ class WorkbenchPage(QWidget):
         self._workflow_subtask_status = {}
         self._current_workflow_id = None
         self._subtask_seq = {}
+        self._fanout_initialized = {}
         # 前回 Autopilot 実行の WorkflowInstance 残骸（state.workflows）も
         # クリアする。クリアしないと別 APP セットでの再 Autopilot 時に
         # 旧 instance がツリーに累積表示される。

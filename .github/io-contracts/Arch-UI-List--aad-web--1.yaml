@@ -1,0 +1,30 @@
+inputs:
+- path: docs/catalog/domain-analytics.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-DomainAnalytics--aas--3.1
+- path: docs/catalog/service-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+- path: docs/catalog/data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-DataModeling--aas--4.1
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D05-ユースケース-シナリオカタログ.md
+  required: true
+  kind: static
+- path: knowledge/D11-画面-UX-操作意味仕様書.md
+  required: true
+  kind: static
+outputs:
+- path: docs/catalog/screen-catalog.md
+  required: true
+  mode: create

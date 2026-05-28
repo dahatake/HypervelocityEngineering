@@ -120,12 +120,9 @@ class TestARDWorkflowRegistration(unittest.TestCase):
         self.assertEqual(s.depends_on, ["2"])
         self.assertEqual(s.skip_fallback_deps, ["1.2"])
         self.assertEqual(s.output_paths, ["docs/catalog/use-case-skeleton.md"])
-        self.assertEqual(
-            s.required_input_paths,
-            [
-                "docs/business-requirement.md",
-            ],
-        )
+        # required_input_paths は空（business-requirement.md / company-business-requirement.md は
+        # いずれも skip_fallback により片方しか生成されない経路があるため、consumed_artifacts 経由）。
+        self.assertEqual(s.required_input_paths, [])
 
     def test_step_4_2_is_fanout(self):
         # Sub-10: Step 4.2 はユースケース詳細生成の fan-out

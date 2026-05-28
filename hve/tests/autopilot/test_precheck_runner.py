@@ -102,29 +102,47 @@ def test_runner_autopilot_mode_requires_catalog(tmp_path: Path) -> None:
 
 
 def test_runner_autopilot_mode_satisfied_when_catalog_exists(tmp_path: Path) -> None:
+    """Autopilot ON + SE 系 WF（aad-web）選択 + app-arch-catalog.md 配置 → OK。"""
     catalog = tmp_path / "docs" / "catalog" / "app-arch-catalog.md"
     catalog.parent.mkdir(parents=True, exist_ok=True)
     catalog.write_text("# catalog", encoding="utf-8")
 
     r = run_step1_precheck(
-        ["aas"], tmp_path,
-        steps_by_workflow={"aas": ["1"]},
+        ["aas", "aad-web"], tmp_path,
+        steps_by_workflow={"aas": ["1"], "aad-web": ["1"]},
         autopilot_mode=True,
     )
     assert r.is_ok() is True
 
 
 def test_runner_autopilot_custom_catalog_path(tmp_path: Path) -> None:
+    """Autopilot ON + SE 系 WF 選択 + カスタムカタログパス配置 → OK。"""
     custom = tmp_path / "custom" / "my-catalog.md"
     custom.parent.mkdir(parents=True, exist_ok=True)
     custom.write_text("# custom", encoding="utf-8")
 
     r = run_step1_precheck(
-        ["aas"], tmp_path,
+        ["aas", "aad-web"], tmp_path,
+        steps_by_workflow={"aas": ["1"], "aad-web": ["1"]},
         autopilot_mode=True,
         autopilot_catalog_path="custom/my-catalog.md",
     )
     assert r.is_ok() is True
+
+
+def test_runner_autopilot_mode_no_se_workflow_skips_catalog_check(tmp_path: Path) -> None:
+    """Autopilot ON + ARD/AAS のみ選択（SE 系未選択） → app-arch-catalog.md は要求されない。
+
+    バナーと Precheck の挙動を Autopilot ON/OFF で揃えるための回帰テスト。
+    """
+    r = run_step1_precheck(
+        ["ard"], tmp_path,
+        steps_by_workflow={"ard": ["1"]},
+        input_values={"company_name": "Contoso"},
+        autopilot_mode=True,
+    )
+    file_names = {it.field_name for it in r.by_category(PrecheckCategory.FILE)}
+    assert "docs/catalog/app-arch-catalog.md" not in file_names
 
 
 def test_runner_no_legacy_setting_category(tmp_path: Path) -> None:

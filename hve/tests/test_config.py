@@ -101,9 +101,6 @@ class TestSDKConfigDefaults(unittest.TestCase):
     def test_mcp_servers_default(self) -> None:
         self.assertIsNone(self.cfg.mcp_servers)
 
-    def test_custom_agents_config_default(self) -> None:
-        self.assertIsNone(self.cfg.custom_agents_config)
-
     def test_dry_run_default(self) -> None:
         self.assertFalse(self.cfg.dry_run)
 

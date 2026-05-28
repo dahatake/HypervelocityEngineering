@@ -3,7 +3,7 @@
 このサブタスクは AAD-WEB の fan-out 子であり、要素 `{{key}}` のみ を対象とする。
 
 ## 対象
-- 画面の場合 (`SC-*`): `docs/screen/{{key}}.md`
+- 画面の場合 (`APP-NN-S###`): `docs/screen/{{key}}.md`
 - サービスの場合 (`SVC-*`): `docs/services/{{key}}.md`
 - テスト仕様の場合: `docs/test-specs/{{key}}-test-spec.md`
 

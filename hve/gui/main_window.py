@@ -855,12 +855,44 @@ class MainWindow(QMainWindow):
     def _current_step(self) -> int:
         return self._stack.currentIndex()
 
+    def _is_any_execution_running(self) -> bool:
+        """Plan モード / Autopilot 両経路の「実行中」を統合判定する。
+
+        gui-autopilot-stop-button 修正: 従来 ``_refresh_navigation`` は
+        ``_page_workbench.is_running()`` のみで停止ボタンを enable/disable していた
+        が、Autopilot 経路では ``_page_workbench._is_running`` が True にセット
+        されないため、Autopilot 実行中に [停止] ボタンが常時無効化されていた。
+        本ヘルパで以下のいずれかを「実行中」として扱う:
+
+        1. Plan モード: ``_page_workbench.is_running()``（``_start_next_in_queue``）
+        2. Autopilot Controller（app_chains 経路）: ``_autopilot_controller`` 生存かつ
+           内部 ``_timer.isActive()``（cancel_all / 完了で停止する）。
+           注: ``_timer`` は ``AutopilotController`` の実装詳細だが、現状公開 API が
+           無いため直接参照する。将来公開 API（例: ``is_active()``）が追加された
+           場合はそちらへ切り替える。
+        3. Autopilot pre_phase / main_workflow キュー経路: 別 namespace
+           ``_autopilot_main_workflow_window`` (``types.SimpleNamespace``) に保持
+           される ``_reader``（``SubprocessReader``: ``QThread``）の ``isRunning()``。
+        """
+        if self._page_workbench.is_running():
+            return True
+        ctrl = getattr(self, "_autopilot_controller", None)
+        if ctrl is not None:
+            timer = getattr(ctrl, "_timer", None)
+            if timer is not None and timer.isActive():
+                return True
+        win = getattr(self, "_autopilot_main_workflow_window", None)
+        if win is not None:
+            reader = getattr(win, "_reader", None)
+            if reader is not None and hasattr(reader, "isRunning") and reader.isRunning():
+                return True
+        return False
+
     def _refresh_navigation(self) -> None:
         step = self._current_step()
+        running = self._is_any_execution_running()
         # 戻るボタン (Step 2 「実行」のみ有効、ただし実行中は不可)
-        self._btn_back.setEnabled(
-            step == _STEP_WORKBENCH and not self._page_workbench.is_running()
-        )
+        self._btn_back.setEnabled(step == _STEP_WORKBENCH and not running)
         # 次へボタン (Step 1 のみ)
         self._btn_next.setVisible(step == _STEP_WORKFLOW)
         if step == _STEP_WORKFLOW:
@@ -869,7 +901,7 @@ class MainWindow(QMainWindow):
             )
         # 停止ボタン (Step 2 「実行」のみ)
         self._btn_stop.setVisible(step == _STEP_WORKBENCH)
-        self._btn_stop.setEnabled(self._page_workbench.is_running())
+        self._btn_stop.setEnabled(running)
 
         # ヘッダー進捗
         self._header.set_current_step(step)
@@ -893,11 +925,15 @@ class MainWindow(QMainWindow):
             # _refresh_navigation が無条件 RUNNING で上書きすると色フリッカーや
             # 完了状態の取りこぼしが起きるため、「サブプロセスが実際に
             # 走行中」のときのみ RUNNING を設定し、それ以外はバナーを触らない。
+            # 注（gui-autopilot-stop-button）: Autopilot 経路のバナー文字列は
+            # ``_on_autopilot_progress`` が「Autopilot 実行中: x/y」を直接設定する
+            # ため、ここでは Plan モード判定（``_page_workbench.is_running()``）
+            # のみとし、ボタン判定（``running``）と意図的に分けている。
             if self._page_workbench.is_running():
                 self._set_status(StatusKind.RUNNING, self.tr("実行中"))
 
     def _on_back_clicked(self) -> None:
-        if self._current_step() == _STEP_WORKBENCH and not self._page_workbench.is_running():
+        if self._current_step() == _STEP_WORKBENCH and not self._is_any_execution_running():
             self._stack.setCurrentIndex(_STEP_WORKFLOW)
             self._refresh_navigation()
             # Step 1 戻り時、前回セッションで生成・更新されたファイルを
@@ -1596,6 +1632,77 @@ class MainWindow(QMainWindow):
         ids = [s.strip() for s in (raw or "").split(",") if s.strip()]
         return ids or None
 
+    def _should_show_app_id_picker(
+        self,
+        selection: "AutopilotSelection",
+        catalog_path: Path,
+    ) -> "Optional[List[Tuple[str, str]]]":
+        """APP-ID 選択ダイアログ表示判定 + entries 取得を一体化する。
+
+        以下のいずれかに該当する場合は ``None`` を返してダイアログを抑止する:
+          - 設定 ``autopilot_show_app_id_picker`` が False
+          - ``selection.pre_phases()`` に "aas" が含まれない
+            （AAS が catalog を更新しない経路では絞り込み再確認は不要）
+          - catalog ファイル不在 / パース失敗 / 0 件
+            （build_plan の既存 0 件警告に委ねる）
+
+        Returns:
+            None: ダイアログを表示しない
+            list[tuple[str, str]]: ``(app_id, architecture)`` 列（非空保証）
+        """
+        from .settings_store import get_option
+        from hve.app_arch_filter import parse_catalog
+
+        try:
+            if not bool(get_option("autopilot_show_app_id_picker")):
+                return None
+        except (KeyError, TypeError, ValueError):
+            # 設定読み込み失敗時は既定 ON 扱いで継続
+            pass
+
+        if "aas" not in selection.pre_phases():
+            return None
+
+        try:
+            catalog = parse_catalog(str(catalog_path))
+        except (FileNotFoundError, ValueError, OSError):
+            return None
+        if not catalog:
+            return None
+        return list(catalog.items())
+
+    def _show_app_id_picker_for_catalog(
+        self,
+        entries: "List[Tuple[str, str]]",
+    ) -> "Optional[List[str]]":
+        """APP-ID 選択ダイアログを表示し、選択結果を返す。
+
+        Args:
+            entries: 非空の ``(app_id, architecture)`` 列。
+
+        Returns:
+            None      : ユーザーがキャンセル押下
+            ``[]``    : OK 押下時のチェック数が 0（呼び元で skip 扱い）
+            非空 list : OK 押下時のチェック中 APP-ID 群
+        """
+        from .autopilot.app_id_picker_dialog import AppIdPickerDialog
+        from .settings_store import get_option
+
+        # タイムアウト秒数を設定から読み込み、異常値は 300 にフォールバック。
+        try:
+            raw = get_option("autopilot_app_id_picker_timeout_sec")
+            timeout_sec = int(raw) if raw is not None else 300
+            if timeout_sec <= 0:
+                timeout_sec = 300
+        except (TypeError, ValueError):
+            timeout_sec = 300
+
+        dlg = AppIdPickerDialog(self, entries, timeout_sec=timeout_sec)
+        result = dlg.exec()
+        if result != QDialog.DialogCode.Accepted:
+            return None
+        return dlg.selected_app_ids()
+
     def _start_autopilot(self) -> None:
         """Autopilot 計画 → Preview → 子プロセス並列起動。
 
@@ -2230,11 +2337,44 @@ class MainWindow(QMainWindow):
 
         ``_prompt_autopilot_downstream_continuation`` と
         ``_continue_autopilot_with_app_chains`` から共用される。
+
+        AAS が ``docs/catalog/app-arch-catalog.md`` を生成・更新した直後の
+        合流点でもあるため、ここで APP-ID 選択ダイアログを差し込み、
+        ``requested_app_ids`` をユーザー選択で絞り込めるようにする。
         """
         from .autopilot.planner import build_plan
         from .autopilot.child_launcher import AutopilotController
 
         requested_app_ids = self._collect_requested_app_ids()
+
+        # AAS 完了後の APP-ID 選択ダイアログ。
+        # 設定 ``autopilot_show_app_id_picker`` が True かつ ``selection.pre_phases()``
+        # に "aas" が含まれ、かつユーザーが Step 1 の app_ids 欄を未入力のときのみ
+        # 表示する。catalog 解析失敗・0 件は ``_should_show_app_id_picker`` 内で
+        # None 返却となり、ダイアログを出さず従来挙動（build_plan の 0 件警告）に
+        # 委ねる。
+        if requested_app_ids is None:
+            entries = self._should_show_app_id_picker(selection, catalog_path)
+            if entries is not None:
+                picked = self._show_app_id_picker_for_catalog(entries)
+                if picked is None:
+                    # キャンセル → downstream スキップ
+                    self._set_status(
+                        StatusKind.SUCCESS,
+                        self.tr("Autopilot: downstream スキップ"),
+                    )
+                    return
+                if not picked:
+                    # 全 OFF で OK → 実行対象なしとして skip
+                    self._set_status(
+                        StatusKind.SUCCESS,
+                        self.tr(
+                            "Autopilot: APP-ID 未選択のため downstream スキップ"
+                        ),
+                    )
+                    return
+                requested_app_ids = picked
+
         plan = build_plan(
             catalog_path,
             max_parallel=max_parallel,
@@ -2431,6 +2571,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_autopilot_finished(self) -> None:
         self._set_status(StatusKind.SUCCESS, self.tr("Autopilot: 全 APP 完了"))
+        # gui-autopilot-stop-button: 完了で controller の _timer が停止するため、
+        # _is_any_execution_running() が False に転じる。ナビゲーション
+        # （[戻る] 有効化 / [停止] 無効化）を即時反映する。
+        self._refresh_navigation()
 
     def _on_stop_all_clicked(self) -> None:
         """[停止] ボタン: Autopilot Controller と Workbench の両方を停止する。
@@ -2641,7 +2785,9 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
-        if self._page_workbench.is_running():
+        # gui-autopilot-stop-button: Autopilot 経路でも未確認終了を防ぐため
+        # ``_is_any_execution_running`` で統合判定する（Plan モードと同じ確認 Dialog）。
+        if self._is_any_execution_running():
             ret = QMessageBox.question(
                 self,
                 self.tr("確認"),

@@ -65,7 +65,7 @@
   <text x="632" y="225" text-anchor="middle" class="bs" style="fill:white;">test-strategy.md</text>
   <!-- Legend -->
   <rect x="20" y="280" width="16" height="16" rx="3" class="box"/>
-  <text x="42" y="293" style="font-size:11px;fill:#333;">Custom Agent</text>
+  <text x="42" y="293" style="font-size:11px;fill:#333;">Prompt</text>
   <rect x="160" y="280" width="16" height="16" rx="3" class="out"/>
   <text x="182" y="293" style="font-size:11px;fill:#333;">成果物（出力）</text>
   <!-- Step labels -->

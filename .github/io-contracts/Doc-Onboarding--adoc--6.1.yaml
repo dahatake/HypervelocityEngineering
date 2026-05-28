@@ -1,0 +1,13 @@
+inputs:
+- path: docs-generated/architecture/overview.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-ArchOverview--adoc--5.1
+- path: docs-generated/architecture/dependency-map.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-DependencyMap--adoc--5.2
+outputs:
+- path: docs-generated/guides/onboarding.md
+  required: true
+  mode: create

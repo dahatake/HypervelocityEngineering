@@ -1045,9 +1045,8 @@ class StepRunner:
             "on_permission_request": PermissionHandler.approve_all,
             "streaming": True,
         }
-        # SPLIT-fork 用: 親 Step の Custom Agent を継承（QA/Review では None のため未設定）
-        if custom_agent:
-            opts["custom_agent"] = custom_agent
+        # Q1=C / Q3=a: SDK へ `custom_agent` / `custom_agents` キーは渡さない。
+        # SPLIT-fork 用の Agent 識別子継承は呼び出し側で Prompt 前置として実現する。
         # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
         if model and model != MODEL_AUTO_VALUE:
             opts["model"] = model
@@ -2434,39 +2433,20 @@ class StepRunner:
             if self.config.excluded_tools:
                 session_opts["excluded_tools"] = list(self.config.excluded_tools)
 
-            # Custom Agents (グローバル定義)
-            # 明示設定 (config.custom_agents_config) を最優先し、
-            # `.github/agents/*.agent.md` から読み込んだファイルベース定義をマージする。
-            # 同名 (name) がある場合は明示設定を優先し、ファイル側を破棄する。
+            # Custom Agent 廃止後 (Q1=C / Q3=a):
+            # `custom_agents` / `agent` キーは SDK に渡さない。
+            # 代わりに `.github/prompts/<custom_agent>.prompt.md` を読み込み、
+            # メインタスク Prompt の先頭に前置する。
             try:
-                from .agent_loader import (
-                    load_agent_definitions,
-                    merge_with_explicit,
-                )
+                from .prompt_loader import load_prompt
             except ImportError:  # pragma: no cover
-                from agent_loader import (  # type: ignore[no-redef]
-                    load_agent_definitions,
-                    merge_with_explicit,
-                )
-            _explicit = copy.deepcopy(self.config.custom_agents_config or [])
-            _agents_dir = Path(__file__).resolve().parent.parent / ".github" / "agents"
-            _file_based = load_agent_definitions(_agents_dir)
-            custom_agents: List[Dict[str, Any]] = merge_with_explicit(
-                _explicit, _file_based
-            )
+                from prompt_loader import load_prompt  # type: ignore[no-redef]
 
-            # additional_prompt をグローバル定義の各 agent の prompt に追記
-            # GUI 設定 [mdq] target_folders が非空のとき、Markdown-Query 強制ブロックを前置する。
-            suffix = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
-            if suffix:
-                for agent_def in custom_agents:
-                    existing = agent_def.get("prompt", "")
-                    if existing:
-                        agent_def["prompt"] = existing + "\n\n" + suffix
-                    else:
-                        agent_def["prompt"] = suffix
+            _agent_prompt_body = load_prompt(custom_agent) if custom_agent else ""
+            _additional_suffix = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
 
-            # ステップ固有 Custom Agent を先頭に追加し、agent で pre-select
+            # Skill 利用ガード（Prompt 末尾に付加）
+            _skill_guard_text = ""
             if custom_agent:
                 _required_skills_for_step: List[str] = []
                 _base_step_id = str(step_id).split("/", 1)[0]
@@ -2488,40 +2468,6 @@ class StepRunner:
                         )
                     except Exception:
                         _required_skills_for_step = []
-
-                # グローバル定義に同名がなければ最小定義を追加（fallback）
-                existing_names = {a.get("name") for a in custom_agents}
-                if custom_agent not in existing_names:
-                    # Wave 4: fallback 発生時に警告を出力し、未定義 Agent を可観測にする。
-                    # Custom Agent 定義が .github/agents/{custom_agent}.agent.md に存在するか確認し、
-                    # 不足している場合は agent-common-preamble Skill の参照を促すこと。
-                    self.console.warning(
-                        f"Custom Agent '{custom_agent}' の定義が見つかりませんでした。"
-                        f" 最小定義 (fallback) で実行します。\n"
-                        f"  → .github/agents/{custom_agent}.agent.md を作成し、"
-                        f"agent-common-preamble Skill を参照することを推奨します。"
-                    )
-                    base_prompt = (
-                        f"You are {custom_agent}.\n\n"
-                        f"# 参照: agent-common-preamble\n"
-                        f"作業開始時は .github/skills/agent-common-preamble/SKILL.md を参照し、"
-                        f"共通ルールを確認してください。"
-                    )
-                    _eff = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
-                    if _eff:
-                        base_prompt = base_prompt + "\n\n" + _eff
-                    custom_agents.insert(
-                        0,
-                        {
-                            "name": custom_agent,
-                            "display_name": custom_agent,
-                            "description": f"Custom agent: {custom_agent}",
-                            "tools": ["*"],
-                            "prompt": base_prompt,
-                        },
-                    )
-
-                # Prompt Guard: Agent 名を skill 名として使わないことを明示し、必要 skill を固定する。
                 _guard = [
                     "## Skill 利用ガード",
                     "- `skill(...)` ツールには Custom Agent 名ではなく、skill 名のみを指定すること。",
@@ -2531,22 +2477,7 @@ class StepRunner:
                         "- このステップで使用可能な skill 名: "
                         + ", ".join(f"`{s}`" for s in _required_skills_for_step)
                     )
-                _guard_text = "\n".join(_guard)
-
-                for agent_def in custom_agents:
-                    if agent_def.get("name") != custom_agent:
-                        continue
-                    _existing_prompt = str(agent_def.get("prompt") or "")
-                    if _guard_text not in _existing_prompt:
-                        agent_def["prompt"] = (
-                            (_existing_prompt + "\n\n" + _guard_text).strip()
-                        )
-                    break
-
-                session_opts["agent"] = custom_agent
-
-            if custom_agents:
-                session_opts["custom_agents"] = custom_agents
+                _skill_guard_text = "\n".join(_guard)
 
             # Phase 2 (Resume): メインセッションに決定論的 session_id を付与する。
             # 既存値（呼び出し元が明示指定したケース）は尊重する。
@@ -2627,16 +2558,31 @@ class StepRunner:
             current_phase += 1
             phase1_start = time.time()
             self.console.step_phase_start(step_id, current_phase, total_phases, "メインタスク")
-            # 事前 QA の結果をプロンプト先頭に注入
+
+            # Agent Prompt 本文・Skill Guard・additional_prompt をプロンプト先頭に注入
+            _prompt_prefix_parts: List[str] = []
+            if _agent_prompt_body:
+                _prompt_prefix_parts.append(_agent_prompt_body.strip())
+            if _skill_guard_text:
+                _prompt_prefix_parts.append(_skill_guard_text)
+            if _additional_suffix:
+                _prompt_prefix_parts.append(_additional_suffix)
+            _agent_prefix = "\n\n".join(_prompt_prefix_parts).strip()
+
             if pre_qa_context:
-                _injected_prompt = (
+                _body = (
                     "## 事前確認済みの前提条件・補足情報\n\n"
                     f"{pre_qa_context}\n\n"
                     "## メインタスク\n\n"
                     f"{prompt}"
                 )
             else:
-                _injected_prompt = prompt
+                _body = prompt
+
+            if _agent_prefix:
+                _injected_prompt = f"{_agent_prefix}\n\n{_body}"
+            else:
+                _injected_prompt = _body
             main_response = await session.send_and_wait(_injected_prompt, timeout=self.config.timeout_seconds)
             main_output = _extract_text(main_response)
             if main_output and main_output.strip():

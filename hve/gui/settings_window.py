@@ -126,6 +126,10 @@ class _CAutopilotSection(QWidget):
       - ``step1_show_plan_review_always`` (bool, 既定 False, R5-c)
         旧名: ``autopilot_show_plan_review_always``。Step 1 [次へ] 統合 precheck で
         Autopilot ON/OFF いずれでも参照される共通設定として中立化済み。
+      - ``autopilot_show_app_id_picker`` (bool, 既定 True)
+        AAS 完了後 / downstream 起動前に APP-ID 選択ダイアログを表示するか。
+      - ``autopilot_app_id_picker_timeout_sec`` (int, 30〜3600, 既定 300)
+        上記ダイアログのタイムアウト秒数。
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -162,47 +166,41 @@ class _CAutopilotSection(QWidget):
             input_widget=self.step1_show_plan_review_always,
         ))
 
-        layout.addStretch(1)
-
-
-# ---------------------------------------------------------------------------
-# GUI セッション作業ディレクトリ後処理セクション
-# ---------------------------------------------------------------------------
-class _CGuiSessionSection(QWidget):
-    """GUI セッション作業ディレクトリ (work/gui-runs/<id>/) の後処理設定。
-
-    Issue-gui-session-workdir-isolation T7 で導入。
-    保存キー: ``gui_session_cleanup_policy`` ("keep" / "archive" / "purge")
-    """
-
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        self.gui_session_cleanup_policy = QComboBox()
-        self.gui_session_cleanup_policy.addItem(
-            self.tr("残す (keep, 既定)"), "keep"
+        # APP-ID 選択ダイアログ ON/OFF（AAS 完了後・downstream 起動前）
+        self.autopilot_show_app_id_picker = QCheckBox(
+            self.tr("APP-ID 選択画面の表示")
         )
-        self.gui_session_cleanup_policy.addItem(
-            self.tr("ZIP 化して退避 (archive)"), "archive"
-        )
-        self.gui_session_cleanup_policy.addItem(
-            self.tr("削除 (purge)"), "purge"
-        )
-
         layout.addWidget(_LabeledField(
-            title=self.tr("GUI セッション作業ディレクトリの後処理"),
+            title=self.tr("APP-ID 選択画面 (autopilot_show_app_id_picker)"),
             description=self.tr(
-                "GUI 終了時に work/gui-runs/<session_run_id>/ をどう扱うかを選択します。"
-                " keep: そのまま残す（デバッグ用、既定）。"
-                " archive: work/gui-runs/.archive/<id>.zip に圧縮して元 dir を削除。"
-                " purge: 元 dir を削除。"
-                " 設定変更は次回 GUI 起動時から適用されます。"
+                "ON（既定）にすると、AAS 完了後 / downstream 起動前に APP-ID 選択"
+                " ダイアログを表示します。ユーザーは downstream（Web/Dataflow 等）"
+                " の実行対象 APP-ID を絞り込めます。"
+                " OFF の場合は Application Architecture Catalog 全件を downstream に"
+                " 流します（旧挙動）。"
             ),
-            input_widget=self.gui_session_cleanup_policy,
+            input_widget=self.autopilot_show_app_id_picker,
         ))
+
+        # APP-ID 選択ダイアログのタイムアウト秒数
+        self.autopilot_app_id_picker_timeout_sec = QSpinBox()
+        self.autopilot_app_id_picker_timeout_sec.setRange(30, 3600)
+        self.autopilot_app_id_picker_timeout_sec.setValue(300)
+        self.autopilot_app_id_picker_timeout_sec.setSuffix(self.tr(" 秒"))
+        layout.addWidget(_LabeledField(
+            title=self.tr(
+                "APP-ID 選択タイムアウト (autopilot_app_id_picker_timeout_sec)"
+            ),
+            description=self.tr(
+                "APP-ID 選択ダイアログのタイムアウト秒数（既定 300 秒 = 5 分）。"
+                " タイムアウト経過時はその時点のチェック状態で自動 OK となり、"
+                " 選択中の APP-ID で downstream が実行されます。"
+                " 範囲 30〜3600 秒。"
+                " 上記「APP-ID 選択画面の表示」が OFF のときは無効。"
+            ),
+            input_widget=self.autopilot_app_id_picker_timeout_sec,
+        ))
+
         layout.addStretch(1)
 
 
@@ -344,7 +342,6 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("自動プロンプト", "C3"),
             ("Autopilot", "AUTOPILOT"),
             ("言語 / Language", "LANG"),
-            ("GUI セッション作業ディレクトリ", "GUI_SESSION"),
             ("エクスプローラー", "EXPLORER"),
         ],
     ),
@@ -519,8 +516,6 @@ class SettingsWindow(QMainWindow):
             return _LanguageSection()
         if key == "AUTOPILOT":
             return _CAutopilotSection()
-        if key == "GUI_SESSION":
-            return _CGuiSessionSection()
         if key == "EXPLORER":
             return _CExplorerSection(self._repo_root)
         # skills レジストリ経由で登録されたセクション

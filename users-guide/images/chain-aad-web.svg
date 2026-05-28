@@ -54,9 +54,9 @@
   <text x="265" y="220" text-anchor="middle" class="note">両方完了後に Step.2.3 が起動</text>
   <!-- Legend -->
   <rect x="40" y="255" width="14" height="14" rx="3" class="box"/>
-  <text x="60" y="266" style="font-size:11px;fill:#333;">直列 Custom Agent</text>
+  <text x="60" y="266" style="font-size:11px;fill:#333;">直列 Prompt</text>
   <rect x="200" y="255" width="14" height="14" rx="3" class="par"/>
-  <text x="220" y="266" style="font-size:11px;fill:#333;">並列 Custom Agent</text>
+  <text x="220" y="266" style="font-size:11px;fill:#333;">並列 Prompt</text>
   <rect x="360" y="255" width="14" height="14" rx="3" class="out"/>
   <text x="380" y="266" style="font-size:11px;fill:#333;">成果物（出力）</text>
 </svg>

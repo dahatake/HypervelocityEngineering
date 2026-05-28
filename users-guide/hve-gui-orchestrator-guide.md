@@ -96,7 +96,7 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 | Python 3.11+ | **必須** | HVE 基本要件 |
 | `pip install -e ".[gui]"` | **必須** | PySide6 を含む GUI 依存 |
 | `pip install -e ".[gui,gui-docconvert]"`（`hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで実行すれば既定で導入） | オプション | ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` / `.html` をドラッグ&ドロップする場合（変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
-| GitHub Copilot CLI（外部 `copilot` コマンド） | HVE CLI 共通 | Custom Agent 実行に必要 |
+| GitHub Copilot CLI（外部 `copilot` コマンド） | HVE CLI 共通 | Prompt 実行に必要 |
 
 > その他の前提条件（Git / GitHub アカウント / Copilot ライセンス等）は [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。
 
@@ -216,6 +216,14 @@ chmod +x hve-gui.command
 
 `workflow_registry.list_workflows()` から取得した全ワークフローをラジオボタンで提示します。
 
+起動直後のメインウィンドウは以下のとおりで、左に エクスプローラー、中央にウィザード本体、右に Copilot Chat / 追加プロンプト等の補助パネルが並びます。
+
+![GUI Step 1: ワークフロー選択画面（起動直後）](./images/screenshots/gui-01-main-window.png)
+
+複数のワークフローを同時選択することも可能です。下記は `Architecture Design (AAS)` を選択した状態の例です。
+
+![GUI Step 1: AAS を選択した状態](./images/screenshots/gui-03-workflow-selected-aas.png)
+
 | ワークフロー ID | 正式名称 |
 |---|---|
 | `aas` | Application Architecture Selection |
@@ -315,6 +323,10 @@ chmod +x hve-gui.command
 
 ### Step 3: Workbench（実行）
 
+実行画面は左に「作業状況」ツリー（各 Step がノードとして表示）、右に「ログ」ペインを並べた構成です。下部には実行モデル・経過時間・コスト・Reqs・Tools・Skills の集計が表示されます。
+
+![GUI Step 2 (実行): 作業状況ツリー + ログ + 実行統計](./images/screenshots/gui-04-step2-execution.png)
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Step 3: 実行 (ard — Auto Requirement Definition)    │
@@ -335,6 +347,8 @@ chmod +x hve-gui.command
 - **停止**: 「■ 停止」ボタンで `subprocess.Popen.terminate()` を送信（Windows ではハードキル相当）。
 
 ---
+
+<a id="plugin-mcp-server-認証"></a>
 
 ## Plugin / MCP Server 認証
 
@@ -401,7 +415,7 @@ Enter で通常の CLI と同じ手順で認証を完走できます。
 
 > **GUI → サブプロセス → DAG → 成果物** のアーキテクチャ詳細は [hve-technical-architecture.md §5 / §6](./hve-technical-architecture.md#5-hve-gui-orchestrator) を参照してください。
 
-GUI の操作（ワークフロー選択・オプション設定）は `python -m hve orchestrate ...` コマンドに変換され、`hve orchestrate` エンジンを経て Custom Agent DAG が実行されます。Custom Agent は `work/` / `docs/` / `knowledge/` / `docs-generated/` といった成果物ファイルを生成・更新します。
+GUI の操作（ワークフロー選択・オプション設定）は `python -m hve orchestrate ...` コマンドに変換され、`hve orchestrate` エンジンを経て Prompt DAG が実行されます。Prompt は `work/` / `docs/` / `knowledge/` / `docs-generated/` といった成果物ファイルを生成・更新します。
 
 ---
 
@@ -460,6 +474,8 @@ GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを
 
 ---
 
+<a id="fork-on-retry-dag-並列実行post-step-自動プロンプト"></a>
+
 ## Fork-on-Retry / DAG 並列実行・Post-step 自動プロンプト
 
 DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--auto-qa` / `--auto-contents-review` / `--auto-coding-agent-review`）は GUI の Step 2 C2・C3 から設定可能で、Fork-on-Retry も CLI と共通の挙動です。詳細は次を参照してください。
@@ -495,6 +511,8 @@ DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--a
 その他のトラブルは [troubleshooting.md](./troubleshooting.md) を参照してください。
 
 ---
+
+<a id="多言語表示日本語-english"></a>
 
 ## 多言語表示（日本語 / English）
 
@@ -543,7 +561,7 @@ HVE_GUI_LANG=en_US python -m hve gui
 | [hve-gui-getting-started.md](./hve-gui-getting-started.md) | 初期セットアップ全体（GUI） |
 | [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) | CLI Orchestrator ガイド・詳細オプション |
 | [web-ui-guide.md](./web-ui-guide.md) | Cloud Agent Orchestrator（GitHub Issue/PR） |
-| [workflow-reference.md](./workflow-reference.md) | ワークフロー一覧・Custom Agent 一覧 |
+| [workflow-reference.md](./workflow-reference.md) | ワークフロー一覧・Prompt 一覧 |
 | [hve-technical-architecture.md](./hve-technical-architecture.md) | GUI / CLI / Cloud の技術アーキテクチャ詳細（開発者向け） |
 | [hve/gui/i18n/README.md](../hve/gui/i18n/README.md) | GUI 翻訳ファイル管理（開発者向け） |
 

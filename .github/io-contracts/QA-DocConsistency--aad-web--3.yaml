@@ -1,0 +1,33 @@
+inputs:
+- path: '{target_scope}'
+  required: true
+  kind: runtime_param
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D07-用語集-ドメインモデル定義書.md
+  required: true
+  kind: static
+- path: work/kpi/fork-kpi-<run_id>.jsonl
+  required: true
+  kind: external
+- path: docs/screen/{screenId}-{screenNameSlug}-description.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-UI-Detail--aad-web--2.1
+- path: docs/services/{serviceId}-{serviceNameSlug}-description.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceDetail--aad-web--2.2
+- path: docs/test-specs/{serviceId}-test-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-TDD-TestSpec--aad-web--2.3
+- path: docs/test-specs/{screenId}-test-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-TDD-TestSpec--aad-web--2.3
+outputs:
+- path: docs/catalog/screen-service-consistency-report.md
+  required: true
+  mode: create

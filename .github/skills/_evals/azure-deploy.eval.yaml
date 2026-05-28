@@ -29,7 +29,7 @@ test_cases:
     reason: "SKILL.md の description に 'push to production' / 'execute deployment' がトリガーキーワードとして含まれており、Validated 状態のプランを前提とした本番デプロイ依頼は本 Skill の対象"
 
   - id: terraform-apply-prepared
-    input: "terraform apply を実行してください。infra/ の Terraform ファイルは azure-prepare で生成済みで、azure-validate も通過しています。"
+    input: "terraform apply を実行してください。src/infra/ の Terraform ファイルは azure-prepare で生成済みで、azure-validate も通過しています。"
     expected_trigger: true
     verify:
       - type: content_contains

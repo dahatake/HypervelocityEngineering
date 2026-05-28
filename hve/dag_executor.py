@@ -106,6 +106,9 @@ class DAGExecutor:
         fork_kpi_logger: Any = None,
         on_fork_retry: Optional[Callable[[str, int], None]] = None,
         on_fork_retry_ui: Optional[Callable[[str, int], None]] = None,
+        deferred_fanout_ids: Optional[Set[str]] = None,
+        on_dynamic_expand: Optional[Callable[[str, List[str]], None]] = None,
+        workflow_id: Optional[str] = None,
     ) -> None:
         self.workflow = workflow
         self.dag_plan = dag_plan
@@ -177,6 +180,21 @@ class DAGExecutor:
         # (step_id, retry_count) 。retry_count=0 でクリア。例外は握り潰す。
         self._on_fork_retry_ui = on_fork_retry_ui
 
+        # T-D1: deferred fan-out のランタイム再展開
+        # orchestrator._expand_workflow_for_dag が判定した deferred 集合を受け取り、
+        # execute() メインループで「直近完了 step の output_paths が deferred base の
+        # parser 入力パスを満たした」契機に expand_single_step_fanout で再展開する。
+        self._deferred_fanout_ids: Set[str] = set(deferred_fanout_ids or set())
+        self._on_dynamic_expand = on_dynamic_expand
+        self._repo_root = repo_root
+        self._workflow_id = workflow_id or getattr(workflow, "id", "unknown")
+        # T-D2: ランタイム展開された fan-out の進捗管理
+        # base_id → 未完了の子 step_id 集合。全子完了で base を completed に昇格させる。
+        self._dynamic_fanout_remaining: Dict[str, Set[str]] = {}
+        # ランタイム展開で追加された子 step_id（dag_plan.nodes に存在しないため
+        # _get_next_steps の overlay で別途解決する必要がある）
+        self._dynamic_child_ids: Set[str] = set()
+
         # 実行状態
         self.completed: Set[str] = set()
         self.skipped: Set[str] = set()
@@ -197,8 +215,7 @@ class DAGExecutor:
         Phase 3 (Resume): state.json 更新などの副作用を発火するための同期フック。
         コールバック内の例外で DAG 実行が止まらないよう、warn を出して握り潰す。
         """
-        if self._on_step_complete is None:
-            return
+        if self._on_step_complete is None:            return
         try:
             self._on_step_complete(result)
         except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
@@ -265,15 +282,183 @@ class DAGExecutor:
 
         return waves
 
+    # ------------------------------------------------------------------
+    # T-D2 / T-D3: deferred fan-out のランタイム再展開
+    # ------------------------------------------------------------------
+
+    def _try_dynamic_expand(self, completed_step_id: str) -> None:
+        """直近完了 step を契機に、deferred fan-out base の再展開を試みる。
+
+        ``self._deferred_fanout_ids`` の各 base について、その base の depends_on が
+        全て解決済みのものを対象に ``expand_single_step_fanout`` を呼ぶ。
+        ファイルが実在しない・空の場合は ``expand_single_step_fanout`` が None を返し、
+        本メソッドは ``continue`` で次回完了時に再試行する。
+        ただし base の依存が全完了し、かつ展開キーが 0 件確定 (= 永続的に空) の場合は
+        skip 化して deferred から外し、無限リトライを避ける。
+
+        成功時の副作用:
+          - ``self._expanded_steps`` に子 step を追加
+          - ``self._workflow_step_index`` に子を追加
+          - ``self.active_step_ids`` に子 ID を追加
+          - ``self._fanout_child_to_parent`` / ``self._dynamic_fanout_remaining`` を更新
+          - ``self._dynamic_child_ids`` に子 ID を追加
+          - ``self._fanout_map`` に base→children を追加
+          - ``self._deferred_fanout_ids`` から base を削除
+          - GUI 用 ``fanout_init`` stats_event を emit
+          - ``self._on_dynamic_expand(base_id, child_ids)`` を呼び出し
+        """
+        if not self._deferred_fanout_ids:
+            return
+        if self._repo_root is None:
+            return
+        try:
+            from .fanout_expander import expand_single_step_fanout  # type: ignore[import]
+        except ImportError:  # pragma: no cover
+            try:
+                from fanout_expander import expand_single_step_fanout  # type: ignore[no-redef]
+            except ImportError:
+                return
+
+        effective_done = self.completed | self.skipped
+        existing_ids = set(self._workflow_step_index.keys())
+
+        # snapshot to avoid mutating during iteration
+        for base_id in list(self._deferred_fanout_ids):
+            base_step = self._workflow_step_index.get(base_id)
+            if base_step is None:
+                continue
+            # 依存が全解決した base のみ対象（未解決ならまだ入力ファイルが揃わない可能性）
+            deps = list(getattr(base_step, "depends_on", []) or [])
+            deps_resolved = all(
+                d in effective_done or d not in existing_ids for d in deps
+            )
+            if not deps_resolved:
+                continue
+            try:
+                children = expand_single_step_fanout(base_step, self._repo_root)
+            except Exception as exc:  # pragma: no cover - parser 例外は実行を止めない
+                if self.console is not None:
+                    self.console.warning(
+                        f"deferred fan-out 再展開で例外 (base={base_id}): {exc}"
+                    )
+                continue
+            if not children:
+                # 依存解決後も 0 件 → 永続的に空。skip 化して deferred から外す。
+                self._deferred_fanout_ids.discard(base_id)
+                if base_id in self.completed or base_id in self.skipped:
+                    continue
+                self.skipped.add(base_id)
+                _empty_result = StepResult(
+                    base_id, success=True, elapsed=0.0,
+                    skipped=True, state="skipped", reason="fanout-empty",
+                )
+                self._results[base_id] = _empty_result
+                self._emit_step_complete(_empty_result)
+                if self.console is not None:
+                    try:
+                        self.console.warning(
+                            f"  ⏭️  [Step.{base_id}] deferred fan-out が依存解決後も 0 件のため skip"
+                        )
+                    except Exception:
+                        pass
+                continue
+
+            child_ids: List[str] = [c.id for c in children]
+            # _expanded_steps / index 更新
+            self._expanded_steps.extend(children)
+            for c in children:
+                self._workflow_step_index[c.id] = c
+            # active_step_ids 拡張
+            self.active_step_ids.update(child_ids)
+            # 進捗管理
+            self._fanout_map[base_id] = list(child_ids)
+            for cid in child_ids:
+                self._fanout_child_to_parent[cid] = base_id
+            self._dynamic_fanout_remaining[base_id] = set(child_ids)
+            self._dynamic_child_ids.update(child_ids)
+            # deferred から外す
+            self._deferred_fanout_ids.discard(base_id)
+
+            # GUI fanout_init を再 emit（orchestrator が初回 emit 時には子 ID が
+            # 確定していなかったため、ここでの emit が GUI 木の seed となる）
+            if self.console is not None:
+                try:
+                    self.console.stats_event(
+                        "fanout_init",
+                        step_id=base_id,
+                        workflow_id=self._workflow_id,
+                        base_id=base_id,
+                        child_ids=list(child_ids),
+                    )
+                except Exception:
+                    pass
+                try:
+                    self.console.event(
+                        f"  🌱 [Step.{base_id}] deferred fan-out を動的展開 ({len(child_ids)} 件)"
+                    )
+                except Exception:
+                    pass
+
+            # on_dynamic_expand フック呼び出し（resume_state 更新等の副作用）
+            if self._on_dynamic_expand is not None:
+                try:
+                    self._on_dynamic_expand(base_id, list(child_ids))
+                except Exception as hook_exc:  # pragma: no cover
+                    if self.console is not None:
+                        self.console.warning(
+                            f"on_dynamic_expand フック失敗 (base={base_id}): {hook_exc}"
+                        )
+
+    def _maybe_mark_dynamic_fanout_parent_complete(self, completed_child_id: str) -> None:
+        """ランタイム展開された fan-out の子完了時に、残り 0 件なら親を completed 化する。
+
+        親 base の depends_on は元の workflow の物のまま (例: 4.3.depends_on=["4.2"])
+        なので、子全完了で base を ``self.completed`` に入れることで下流 step の
+        deps_satisfied 判定が通る。
+        """
+        base_id = self._fanout_child_to_parent.get(completed_child_id)
+        if base_id is None:
+            return
+        remaining = self._dynamic_fanout_remaining.get(base_id)
+        if remaining is None:
+            return
+        remaining.discard(completed_child_id)
+        if remaining:
+            return
+        # 全子完了 → base を completed として記録
+        if base_id in self.completed or base_id in self.skipped:
+            return
+        self.completed.add(base_id)
+        parent_result = StepResult(
+            base_id,
+            success=True,
+            elapsed=0.0,
+            skipped=False,
+            state="success",
+            reason="fanout-aggregated",
+        )
+        self._results[base_id] = parent_result
+        self._emit_step_complete(parent_result)
+        if self.console is not None:
+            try:
+                self.console.event(
+                    f"  ✅ [Step.{base_id}] fan-out 子 {len(self._fanout_map.get(base_id, []))} 件全完了"
+                )
+            except Exception:
+                pass
+
     async def execute(self) -> Dict[str, StepResult]:
         """DAG を走査し、全ステップを実行する。
 
         Returns:
             step_id → StepResult のマップ。
-        """
-        # ADR-0002 K-1: fan-out が 0 件で展開されたベース ID を自動 skip
+        """        # ADR-0002 K-1: fan-out が 0 件で展開されたベース ID を自動 skip
+        # T-D2: ただし deferred_fanout_ids に該当するものは、上流 step が
+        # 入力ファイルを生成する見込みなので skip せず保留する。
         for empty_id in self._fanout_empty_ids:
             if empty_id in self.skipped or empty_id in self.completed:
+                continue
+            if empty_id in self._deferred_fanout_ids:
                 continue
             self.skipped.add(empty_id)
             _result = StepResult(
@@ -299,6 +484,14 @@ class DAGExecutor:
         HEARTBEAT_INTERVAL = 15  # 秒 — ローカル実行ではより頻繁なチェックで応答性を向上
 
         while True:
+            # T-D2: deferred fan-out のうち依存解決済みのものを再展開試行する。
+            # 上流 step が完了して入力ファイルが揃っているケースをここで検出する
+            # （resume mode で再起動直後の deferred も拾える）。
+            _expanded_count_before = len(self._dynamic_child_ids)
+            if self._deferred_fanout_ids:
+                self._try_dynamic_expand("__loop_top__")
+            _newly_expanded = len(self._dynamic_child_ids) > _expanded_count_before
+
             next_steps = self._get_next_steps(
                 completed_step_ids=list(self.completed),
                 skipped_step_ids=list(self.skipped),
@@ -339,6 +532,13 @@ class DAGExecutor:
                 and s.id not in self.failed
                 and s.id not in self.blocked
                 and s.id not in self.skipped
+                # T-D2: deferred fan-out base は通常 step として実行しない。
+                # _try_dynamic_expand で子展開を待つ。
+                and s.id not in self._deferred_fanout_ids
+                # T-D2: 動的展開済みで子集約待ちの base も実行対象外
+                # （子全完了時に _maybe_mark_dynamic_fanout_parent_complete が
+                # base を completed に昇格させる）。
+                and s.id not in self._dynamic_fanout_remaining
             ]
 
             if executable:
@@ -361,6 +561,10 @@ class DAGExecutor:
                 if newly_skipped:
                     # 今回のイテレーションで新たにスキップが発生した場合は
                     # 後続ステップが解放される可能性があるため再ループする
+                    continue
+                if _newly_expanded:
+                    # T-D2: 直前に deferred fan-out が動的展開された場合、
+                    # 次イテレーションで子 step を get_next_steps が返すので継続する。
                     continue
                 # 本当に完了（or デッドロック）
                 self._mark_unresolved_active_steps()
@@ -386,6 +590,10 @@ class DAGExecutor:
             for task in done:
                 result: StepResult = task.result()
                 self._results[result.step_id] = result
+                # T-D2: fan-out 子完了で base 集約 / 親 step 完了で deferred 展開を試行
+                if result.success and not result.skipped:
+                    self._maybe_mark_dynamic_fanout_parent_complete(result.step_id)
+                    self._try_dynamic_expand(result.step_id)
 
             # 進捗更新
             if self.console is not None:
@@ -403,6 +611,19 @@ class DAGExecutor:
         フックで runner にフォーク回数を通知してから `run_step_fn` を 1 回だけ再実行する。
         """
         async with self._semaphore:
+            # ログプリフィックスのインラインマーカー用に、本タスク (= 1 child step)
+            # の ContextVar を確定させる。asyncio.create_task は親 context を
+            # コピーするため、ここでの set は本タスクスコープに閉じる。
+            # 参考: hve/console.py `_CURRENT_EMIT_STEP_ID`
+            try:
+                from .console import _CURRENT_EMIT_STEP_ID as _ctx_var  # type: ignore
+            except ImportError:
+                _ctx_var = None  # type: ignore
+            if _ctx_var is not None:
+                try:
+                    _ctx_var.set(step.id)
+                except Exception:
+                    pass
             start = time.time()
             error_msg: Optional[str] = None
             # ADR-0002: fan-out 子ステップは追加メタ (fanout_key / base_step_id /
@@ -605,6 +826,23 @@ class DAGExecutor:
             )
             if deps_satisfied:
                 result.append(self._step_for_id(node.id))
+
+        # T-D2: ランタイム動的展開された fan-out 子の overlay
+        # dag_plan.nodes には含まれないため、本ループで明示的に解決する。
+        if self._dynamic_child_ids:
+            for cid in self._dynamic_child_ids:
+                if cid in completed or cid in skipped or cid in self.failed or cid in self.blocked or cid in self.running:
+                    continue
+                step = self._workflow_step_index.get(cid)
+                if step is None:
+                    continue
+                deps = list(getattr(step, "depends_on", []) or [])
+                deps_satisfied = all(
+                    dep in effective_done or dep not in existing_ids
+                    for dep in deps
+                )
+                if deps_satisfied:
+                    result.append(step)
         return result
 
     def _mark_unresolved_active_steps(self) -> None:

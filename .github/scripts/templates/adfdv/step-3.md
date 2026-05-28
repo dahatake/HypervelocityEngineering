@@ -14,7 +14,7 @@
 ## 出力
 - Azure Functions / コンテナのデプロイ完了
 - CI/CD パイプライン設定（`.github/workflows/deploy-batch-functions.yml` 等）
-- `infra/azure/dataflow/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
+- `src/infra/azure/dataflow/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
 
 {existing_artifact_policy}
 

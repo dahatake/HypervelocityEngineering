@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'infra/azure/**'
+      - 'src/infra/azure/**'
       - 'tests/bats/**'
       - '.github/workflows/bats-tests.yml'
 

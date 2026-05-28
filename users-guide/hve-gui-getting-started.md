@@ -128,11 +128,26 @@ python -m hve gui
 
 GUI は 3 ステップ構成です（詳細は [hve-gui-orchestrator-guide.md の「3 ステップ操作ガイド」](./hve-gui-orchestrator-guide.md#3-ステップ操作ガイド)）。
 
-1. **ステップ 1: ワークフロー選択** — 一覧から **ARD（Auto Requirement Definition）** を選択
-2. **ステップ 2: パラメータ入力**
+#### ステップ 1: ワークフロー選択
+
+起動直後の画面で、一覧から **ARD（Auto Requirement Definition）** を選択します。
+
+![GUI Step 1: ワークフロー選択画面（起動直後）](./images/screenshots/gui-01-main-window.png)
+
+ARD のチェックボックスを ON にすると、選択状態が反映されます。
+
+![GUI Step 1: ARD 選択時](./images/screenshots/gui-02-workflow-selected-ard.png)
+
+#### ステップ 2: パラメータ入力
+
    - `company-name`: `ロイヤルティサンプル` を入力
    - その他のオプションは既定値のままで OK
-3. **ステップ 3: 実行確認** — 内容を確認して「実行」をクリック
+
+#### ステップ 3: 実行確認と実行
+
+「次へ」を押すと実行画面に遷移し、`Step 0/9` から進行が始まります。ログ・作業状況ツリー・実行中の課題などがリアルタイムで表示されます。
+
+![GUI Step 2 (実行): 進行状況・ログ・作業状況ツリー](./images/screenshots/gui-04-step2-execution.png)
 
 実行が完了すると、以下のような成果物が生成・更新されます（詳細は [01-business-requirement.md](./01-business-requirement.md) 参照）。
 

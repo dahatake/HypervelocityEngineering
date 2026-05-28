@@ -4,7 +4,7 @@
 
 ## 対象
 - Step 2.1: `docs/test-specs/{{key}}-test-spec.md`
-- Step 2.2: `test/agent/{{key}}.Tests/`
+- Step 2.2: `src/test/agent/{{key}}.Tests/`
 - Step 2.3: `src/agent/{{key}}/`
 - Step 3: 当該 Agent の Deploy（Azure AI Foundry）
 

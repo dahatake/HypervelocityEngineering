@@ -338,7 +338,7 @@ metadata:
 ```
 .github/copilot-instructions.md  ← 最優先（常に適用）
         ↓
-Custom Agent（.github/agents/*.agent.md）
+Custom Agent（.github/prompts/*.prompt.md）
         ↓
 Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 ```

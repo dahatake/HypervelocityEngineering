@@ -310,7 +310,7 @@ mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef
       -f targetRepositoryId="${repo_node_id}" \
       -f baseRef="${base_branch}" \
       -f customInstructions="${custom_instructions}" \
-      -f customAgent="${custom_agent}" \
+      -f customAgent="" \
       2>&1) || true
 
     echo "  GraphQL mutation レスポンス: ${result}"

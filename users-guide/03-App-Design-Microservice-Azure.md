@@ -53,11 +53,11 @@ Step.1〜Step.2.3 の設計タスクを Sub-issue として生成し、依存関
 
 ### アーキテクチャ図
 
-![AAD-WEB アーキテクチャ: 入力ファイル → auto-app-detail-design-web Workflow → Custom Agent チェーン → 成果物](./images/infographic-aad-web.svg)
+![AAD-WEB アーキテクチャ: 入力ファイル → auto-app-detail-design-web Workflow → Prompt チェーン → 成果物](./images/infographic-aad-web.svg)
 
 ### データフロー図（AAD-WEB）
 
-![AAD-WEB データフロー: 各 Custom Agent の入出力ファイル](./images/orchestration-task-data-flow-aad-web.svg)
+![AAD-WEB データフロー: 各 Prompt の入出力ファイル](./images/orchestration-task-data-flow-aad-web.svg)
 
 ---
 
@@ -79,7 +79,7 @@ step-1 ──┬──► step-2.1 ──┐
 
 ### 各ステップの入出力
 
-| Step ID | タイトル | Custom Agent | 入力 | 出力 | 依存 |
+| Step ID | タイトル | Prompt | 入力 | 出力 | 依存 |
 |---------|---------|-------------|------|------|------|
 | step-1 | 画面一覧と遷移図 | `Arch-UI-List` | `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/app-catalog.md` | `docs/catalog/screen-catalog.md` | AAS 完了 |
 | step-2.1 | 画面定義書 | `Arch-UI-Detail` | `docs/catalog/screen-catalog.md`, `docs/catalog/app-catalog.md`, `docs/catalog/test-strategy.md`（存在する場合） | `docs/screen/{screenId}-{screenNameSlug}-description.md` | step-1 |
@@ -92,25 +92,25 @@ step-1 ──┬──► step-2.1 ──┐
 
 ### Step 1. 画面一覧と遷移図
 
-- Custom Agent: `Arch-UI-List`
+- Prompt: `Arch-UI-List`
 - 入力: `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/app-catalog.md`
 - 出力: `docs/catalog/screen-catalog.md`
 
 ### Step 2.1. 画面定義書
 
-- Custom Agent: `Arch-UI-Detail`
+- Prompt: `Arch-UI-Detail`
 - 入力: `docs/catalog/screen-catalog.md`, `docs/catalog/app-catalog.md`
 - 出力: `docs/screen/{screenId}-{screenNameSlug}-description.md`
 
 ### Step 2.2. マイクロサービス定義書
 
-- Custom Agent: `Arch-Microservice-ServiceDetail`
+- Prompt: `Arch-Microservice-ServiceDetail`
 - 入力: `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md`
 - 出力: `docs/services/{serviceId}-{serviceNameSlug}-description.md`
 
 ### Step 2.3. TDD テスト仕様書
 
-- Custom Agent: `Arch-TDD-TestSpec`
+- Prompt: `Arch-TDD-TestSpec`
 - 入力: `docs/catalog/test-strategy.md`（存在する場合）, 画面定義書, サービス定義書
 - 出力: `docs/test-specs/{serviceId}-test-spec.md`, `docs/test-specs/{screenId}-test-spec.md`
 

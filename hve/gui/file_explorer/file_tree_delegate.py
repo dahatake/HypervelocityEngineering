@@ -62,4 +62,8 @@ class FileTreeDelegate(QStyledItemDelegate):
         size = super().sizeHint(option, index)
         # バッジ表示分の幅を確保
         size.setWidth(size.width() + _BADGE_DIAMETER + _BADGE_MARGIN * 2)
+        # 行高さを font metrics ベースで圧縮し、無駄な余白を排除
+        # ただしアイコンサイズ (16px) を下回らないようにする
+        fm_height = option.fontMetrics.height()
+        size.setHeight(max(fm_height + 2, 16))
         return size

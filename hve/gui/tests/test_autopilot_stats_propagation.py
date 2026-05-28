@@ -42,6 +42,11 @@ def _stats_tool_invoked_line(step_id: str, tool_name: str) -> str:
     return f"[hve:stats] {json.dumps(payload)}"
 
 
+def _stats_fanout_init_line(base_id: str, child_ids: list) -> str:
+    payload = {"kind": "fanout_init", "base_id": base_id, "child_ids": child_ids}
+    return f"[hve:stats] {json.dumps(payload)}"
+
+
 def _seed_instance(page, instance_id: str, step_id: str = "1") -> None:
     """テスト対象インスタンスを workflow_id 配下の Step 付きで pending 事前登録する。"""
     from hve.gui.workbench_state import WorkflowInstanceSeed
@@ -208,3 +213,131 @@ def test_t8_main_window_on_line_closure_no_filter(qapp):
     assert "if is_stats_line(line):\n            return" not in src
     # is_stats_line import が不要になっていること
     assert "from .workbench_logger import is_stats_line" not in src
+
+
+# ---------------------------------------------------------------------------
+# Fanout child step_status / fanout_init propagation
+# (Issue: GUI Workbench Autopilot 経路で fan-out 子イベントが base step へ反映されない)
+# ---------------------------------------------------------------------------
+
+
+def _seed_instance_with_step(page, instance_id: str, step_id: str) -> None:
+    """fanout テスト用に instance と base step を Instances 木へ事前登録する。"""
+    from hve.gui.workbench_state import WorkflowInstanceSeed
+
+    page.prepopulate_workflow_instances(
+        [
+            WorkflowInstanceSeed(
+                instance_id=instance_id,
+                workflow_id=instance_id.split("#", 1)[0],
+                label=instance_id,
+                app_id=None,
+                steps=[(step_id, f"Step {step_id}")],
+            )
+        ]
+    )
+
+
+def test_fanout_init_seeds_child_subtasks_under_base(qapp):
+    """(a) fanout_init で base step 配下に kind=fanout_child の子が seed される。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/SVC-14", "2.3/SVC-15"])
+    )
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    fanout_kids = [c for c in base.children if getattr(c, "kind", "") == "fanout_child"]
+    assert {c.id for c in fanout_kids} == {"2.3/SVC-14", "2.3/SVC-15"}
+    assert all(c.status == "pending" for c in fanout_kids)
+    # _fanout_initialized に base が登録される
+    assert "2.3" in page._fanout_initialized.get(inst_id, set())
+
+
+def test_fanout_child_running_marks_base_running(qapp):
+    """(b) fanout_init 後に子 running を投入すると base step が running になる。
+
+    スクリーンショットの「ログは 2.3/SVC-14 を実行中だが作業状況は step 1 のみ
+    タイマー進行」現象の回帰防止。
+    """
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/SVC-14", "2.3/SVC-15"])
+    )
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/SVC-14", "running"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    assert base.status == "running"
+    assert base.started_at is not None
+    child = page._state.find_step_in_instance(inst_id, "2.3/SVC-14")
+    assert child is not None and child.status == "running"
+
+
+def test_fanout_all_children_done_aggregates_base_done(qapp):
+    """(c) fanout_init 後、全 child が done になると base step も done に集約される。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/A", "2.3/B"])
+    )
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/A", "done"))
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/B", "done"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    assert base.status == "done"
+    assert base.finished_at is not None
+
+
+def test_fanout_child_status_for_unknown_base_is_ignored(qapp):
+    """(d) plan 外 base_id（state 未登録）への step_status は state を変更しない（捏造防止）。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")  # base="99" は未登録
+
+    page.append_log(inst_id, "", _stats_step_status_line("99/X", "running"))
+
+    # 既存 base "2.3" には影響なし
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None and base.status == "pending"
+    # 未登録 base "99" は引き続き未登録
+    assert page._state.find_step_in_instance(inst_id, "99") is None
+    # 子も登録されない
+    assert page._state.find_step_in_instance(inst_id, "99/X") is None
+
+
+def test_fanout_child_done_without_init_does_not_complete_base(qapp):
+    """(e) fanout_init 未受信時、child done だけでは base を done にしない（早期完了防止）。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    # fanout_init を送らず、いきなり child done
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/A", "done"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    # base は pending のまま（fanout_init 不在のため早期完了させない）
+    assert base.status == "pending"
+    # 子は seed されている
+    child = page._state.find_step_in_instance(inst_id, "2.3/A")
+    assert child is not None and child.status == "done"

@@ -1,0 +1,48 @@
+name: Validate io-contracts
+
+on:
+  pull_request:
+    paths:
+      - '.github/io-contracts/**'
+      - '.github/scripts/validate-io-contract.py'
+      - '.github/io-contract-exceptions.yaml'
+      - '.github/workflows/validate-io-contract.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/io-contracts/**'
+      - '.github/scripts/validate-io-contract.py'
+      - '.github/io-contract-exceptions.yaml'
+      - '.github/workflows/validate-io-contract.yml'
+
+jobs:
+  validate-io-contract:
+    name: Validate .github/io-contracts/*.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install PyYAML
+
+      - name: Validate io-contracts (schema + integrity)
+        # Schema と Integrity は厳格チェック（fail）。Registry mismatch は
+        # 別ステップで warning 出力のみ（段階的厳格化のための過渡的措置）。
+        run: |
+          python .github/scripts/validate-io-contract.py --no-registry-check
+
+      - name: Registry mismatch report (warning-only)
+        # StepDef × io-contract 突き合わせ。fail させず件数推移を可視化する。
+        # 件数が継続的に減ることを GitHub Actions ログで確認。閾値ベースの
+        # 厳格化（例: 件数しきい値設定）は将来検討。
+        if: always()
+        run: |
+          set +e
+          python .github/scripts/validate-io-contract.py 2>&1 | tee /tmp/io-contract-report.txt
+          echo "::notice::Registry mismatch errors are reported above. CI does not fail on these (warning-only mode)."
+          exit 0

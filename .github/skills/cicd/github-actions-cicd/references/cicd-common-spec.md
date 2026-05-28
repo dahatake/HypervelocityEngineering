@@ -32,7 +32,7 @@ jobs:
 
 ### 1.2 例外: OIDC 不可の場合
 
-OIDC が使用できない場合（例: SWA の API トークン方式、publish profile 方式）に限り、代替認証を採用する。代替方式を使用する場合は、**採用理由と設定手順** を `infra/README.md` に記載する。
+OIDC が使用できない場合（例: SWA の API トークン方式、publish profile 方式）に限り、代替認証を採用する。代替方式を使用する場合は、**採用理由と設定手順** を `src/infra/README.md` に記載する。
 
 ---
 

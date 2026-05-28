@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 240" role="img" aria-label="AAGD 5ステップチェーン図">
-  <desc>AAGD（AI Agent Dev and Deploy）: 5ステップ直列チェーン。Step.1 Arch-AIAgentDesign → Step.2.1 Arch-TDD-TestSpec → Step.2.2 Dev-Microservice-Azure-AgentTestCoding → Step.2.3 Dev-Microservice-Azure-AgentCoding → Step.3 Dev-Microservice-Azure-AgentDeploy</desc>
+  <desc>AAGD（AI Agent Dev and Deploy）: 5ステップ直列チェーン。Step.1 Arch-AIAgentDesign-Step1 → Step.2.1 Arch-TDD-TestSpec → Step.2.2 Dev-Microservice-Azure-AgentTestCoding → Step.2.3 Dev-Microservice-Azure-AgentCoding → Step.3 Dev-Microservice-Azure-AgentDeploy</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
@@ -21,7 +21,7 @@
   <text x="75" y="73" text-anchor="middle" class="bt">Step.1</text>
   <text x="75" y="86" text-anchor="middle" class="bs">AI Agent</text>
   <text x="75" y="99" text-anchor="middle" class="bs">構成設計</text>
-  <text x="75" y="112" text-anchor="middle" class="bs">Arch-AIAgentDesign</text>
+  <text x="75" y="112" text-anchor="middle" class="bs">Arch-AIAgentDesign-Step1</text>
   <line x1="140" y1="90" x2="163" y2="90" class="ln"/>
   <!-- Step 2.1 -->
   <rect x="163" y="55" width="130" height="70" rx="5" class="arch"/>

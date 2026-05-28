@@ -428,7 +428,7 @@ HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティ
 
 ### knowledge/ フォルダーが空の場合
 
-**症状**: Custom Agent の設計精度が低い、業務要件が反映されていない。
+**症状**: Prompt の設計精度が低い、業務要件が反映されていない。
 
 **対処法**:
 1. `qa/` フォルダーに質問票ファイルが存在するか確認する
@@ -437,9 +437,9 @@ HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティ
 
 ### knowledge/ ファイルが期待通り参照されない
 
-**症状**: Custom Agent が `knowledge/` の内容を無視して設計している。
+**症状**: Prompt が `knowledge/` の内容を無視して設計している。
 
 **確認事項**:
-1. 各 Custom Agent ファイル（`.github/agents/*.agent.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションに対象ファイルが記載されているか確認する
+1. 各 Prompt ファイル（`.github/prompts/*.prompt.md`）の `knowledge/ 参照（任意・存在する場合のみ）` セクションに対象ファイルが記載されているか確認する
 2. `knowledge/` のファイル名が正しい形式（`D{NN}-<文書名>.md`）になっているか確認する
 3. `knowledge/` ファイルの `**Prompt投入可否**:` フィールドが `Yes（Confirmed のみ）` になっているか確認する（`No（Draft）` の場合は未確定事項があります）

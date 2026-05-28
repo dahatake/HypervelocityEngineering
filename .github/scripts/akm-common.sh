@@ -57,10 +57,17 @@ create_issue() {
   local labels_json="$3"
   local data
   data=$(python3 - "${title}" "${body}" "${labels_json}" <<'PY'
-import json, sys
+import json, re, sys
+from pathlib import Path
 title = sys.argv[1]
 body  = sys.argv[2]
 labels = json.loads(sys.argv[3])
+_m = re.search(r'## Custom Agent\s*\n\s*`([^`]+)`', body)
+if _m:
+    _agent = _m.group(1).strip()
+    _path = Path('.github/prompts') / f'{_agent}.prompt.md'
+    if _path.is_file():
+        body = body + '\n\n## エージェント指示（Prompt）\n\n' + _path.read_text(encoding='utf-8')
 print(json.dumps({'title': title, 'body': body, 'labels': labels}))
 PY
   )
@@ -338,7 +345,7 @@ mutation(\$assignableId: ID!, \$botId: ID!, \$targetRepositoryId: ID!, \$baseRef
       -f targetRepositoryId="${repo_node_id}" \
       -f baseRef="${base_branch}" \
       -f customInstructions="${custom_instructions}" \
-      -f customAgent="${custom_agent}" \
+      -f customAgent="" \
       2>&1) || true
 
     echo "  GraphQL mutation レスポンス: ${result}"

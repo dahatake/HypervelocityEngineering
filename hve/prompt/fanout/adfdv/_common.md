@@ -3,7 +3,7 @@
 このサブタスクは ADFDV Step 2.1 / 2.2 の fan-out 子であり、データフローアプリ `{{key}}` のみ を対象とする。
 
 ## 対象
-- `test/dataflow/{{key}}.Tests/`（Step 2.1）
+- `src/test/dataflow/{{key}}.Tests/`（Step 2.1）
 - `src/dataflow/{{key}}/`（Step 2.2）
 
 ## 必須参照

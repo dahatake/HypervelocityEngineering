@@ -1,0 +1,29 @@
+inputs:
+- path: qa/*.md
+  required: true
+  kind: static
+- path: original-docs/*
+  required: true
+  kind: static
+- path: knowledge/Dxx-*.md
+  required: true
+  kind: static
+- path: qa/*-workiq-*.md
+  required: true
+  kind: static
+- path: template/business-requirement-document-master-list.md
+  required: true
+  kind: static
+outputs:
+- path: knowledge/business-requirement-document-status.md
+  required: true
+  mode: upsert
+- path: knowledge/D{NN}-*.md
+  required: true
+  mode: create
+- path: knowledge/D{NN}-*-ChangeLog.md
+  required: true
+  mode: create
+- path: work/KnowledgeManager/Issue-<識別子>/artifacts/*
+  required: true
+  mode: create

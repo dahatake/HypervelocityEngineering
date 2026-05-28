@@ -9,7 +9,7 @@ applyTo: "knowledge/business-requirement-document-status.md, knowledge/D??-*.md,
 
 ## §1 適用条件
 
-- **参照元 Agent**: `KnowledgeManager`（`.github/agents/KnowledgeManager.agent.md`）
+- **参照元 Agent**: `KnowledgeManager`（`.github/prompts/KnowledgeManager.prompt.md`）
 - **入力**: `qa/*.md`（全ファイル）、`original-docs/*`、`template/business-requirement-document-master-list.md`
 - **主タスク**: qa/ および original-docs/ の入力を読み込み、各 D クラスの要求定義書ドラフトとして本文（散文）を執筆・合成すること。マッピング表は合成プロセスの中間成果物として位置づけられる。
 - **出力**:

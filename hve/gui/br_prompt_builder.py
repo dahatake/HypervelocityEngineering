@@ -1,6 +1,6 @@
 """hve.gui.br_prompt_builder — 章単位マージプロンプトの組み立て。
 
-`Arch-ARD-BusinessAnalysis-Targeted.agent.md` の Prompt をベースに、
+`.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md` の Prompt をベースに、
 1 章分のマージ指示を組み立てる純関数を提供する。
 
 設計判断:

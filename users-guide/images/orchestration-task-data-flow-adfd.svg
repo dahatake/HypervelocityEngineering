@@ -12,7 +12,7 @@
 
   <!-- Title -->
   <text x="650" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ABD: バッチ設計 データフロー</text>
-  <text x="650" y="54" text-anchor="middle" font-size="11" fill="#586069">各 Custom Agent の入出力ファイル</text>
+  <text x="650" y="54" text-anchor="middle" font-size="11" fill="#586069">各 Prompt の入出力ファイル</text>
 
   <!-- ========== Steps 1.1 and 1.2 (parallel) ========== -->
   <text x="650" y="75" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行</text>
@@ -218,7 +218,7 @@
   <rect x="35" y="965" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="52" y="975" font-size="10" fill="#24292e">入力ファイル</text>
   <rect x="145" y="965" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="162" y="975" font-size="10" fill="#24292e">Custom Agent</text>
+  <text x="162" y="975" font-size="10" fill="#24292e">Prompt</text>
   <rect x="270" y="965" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="287" y="975" font-size="10" fill="#24292e">成果物</text>
   <rect x="380" y="965" width="12" height="12" rx="2" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>

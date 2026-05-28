@@ -1,0 +1,8 @@
+inputs:
+- path: docs-generated/components/*.md
+  required: true
+  kind: external
+outputs:
+- path: docs-generated/component-index.md
+  required: true
+  mode: create

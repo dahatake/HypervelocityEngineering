@@ -1375,6 +1375,25 @@ def _build_parser() -> argparse.ArgumentParser:
             "自己改善ループ（Phase 4）を無効化する（--self-improve および HVE_AUTO_SELF_IMPROVE=true より優先）。"
         ),
     )
+    orch.add_argument(
+        "--self-improve-max-iterations",
+        type=int,
+        default=None,
+        metavar="N",
+        help="自己改善ループの最大繰り返し回数（既定: 3）。--self-improve 有効時のみ有効。",
+    )
+    orch.add_argument(
+        "--self-improve-target-scope",
+        default=None,
+        metavar="SCOPE",
+        help="自己改善ループの対象パス（例: 'src/' / 'hve/' / 空=リポジトリ全体）。--self-improve 有効時のみ有効。",
+    )
+    orch.add_argument(
+        "--self-improve-goal",
+        default=None,
+        metavar="TEXT",
+        help="自己改善ループのゴール説明（省略時はワークフロー種別から自動設定）。--self-improve 有効時のみ有効。",
+    )
 
     # mdq リアルタイム索引更新（HVE CLI Orchestrator 限定機能）
     orch.add_argument(
@@ -1835,6 +1854,18 @@ def _build_config(args: argparse.Namespace):
     elif getattr(args, "self_improve", False):
         cfg.auto_self_improve = True
         cfg.self_improve_skip = False
+
+    # Self-Improve 詳細オプション（auto_self_improve 有効時のみ反映）
+    if cfg.auto_self_improve and not cfg.self_improve_skip:
+        _si_iter = getattr(args, "self_improve_max_iterations", None)
+        if _si_iter is not None:
+            cfg.self_improve_max_iterations = int(_si_iter)
+        _si_scope = getattr(args, "self_improve_target_scope", None)
+        if _si_scope is not None:
+            cfg.self_improve_target_scope = _si_scope
+        _si_goal = getattr(args, "self_improve_goal", None)
+        if _si_goal is not None:
+            cfg.self_improve_goal = _si_goal
 
     # mdq リアルタイム索引更新: 優先順位 --no-mdq-watch > --mdq-watch > HVE_MDQ_WATCH > デフォルト True
     if getattr(args, "no_mdq_watch", False):

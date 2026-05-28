@@ -1,0 +1,33 @@
+inputs:
+- path: docs/dataflow/dataflow-test-strategy.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-TestStrategy--adfd--5
+- path: docs/dataflow/dataflow-service-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-ServiceCatalog--adfd--4
+- path: docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-AppSpec--adfd--6.1
+- path: docs/dataflow/dataflow-monitoring-design.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-MonitoringDesign--adfd--6.2
+- path: docs/dataflow/dataflow-data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-DataModel--adfd--2
+- path: docs/dataflow/dataflow-app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-AppCatalog--adfd--3
+- path: docs/dataflow/dataflow-domain-analytics.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-DomainAnalytics--adfd--1.1
+outputs:
+- path: docs/test-specs/{jobId}-test-spec.md
+  required: true
+  mode: create

@@ -52,15 +52,15 @@
 
 ## Agent チェーン図（ADOC）
 
-以下の図は、このワークフローで使用される Custom Agent がファイルの入出力を介してどのように連鎖するかを示します。
+以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
 
 ![ADOC: Doc-FileInventory → Doc-Migration の19ステップチェーン（並列4箇所含む）](./images/chain-adoc.svg)
 
 ### データフロー図（ADOC）
 
-以下の図は、Wave 1〜6 の各 Doc-* Custom Agent が読み書きするファイルのデータフローを示します。
+以下の図は、Wave 1〜6 の各 Doc-* Prompt が読み書きするファイルのデータフローを示します。
 
-![ADOC データフロー: Wave 1〜6 の Doc-* Custom Agent とファイル入出力](./images/orchestration-task-data-flow-adoc.svg)
+![ADOC データフロー: Wave 1〜6 の Doc-* Prompt とファイル入出力](./images/orchestration-task-data-flow-adoc.svg)
 
 
 ## 前提条件
@@ -76,7 +76,7 @@
 ## 方式1: Copilot cloud agent 手動実行
 
 1. Issue/Sub-issue を作成する
-2. Step ごとに対応する `Doc-*` Custom Agent を選択して実行する
+2. Step ごとに対応する `Doc-*` Prompt を選択して実行する
 3. 各 Step 完了後に `adoc:done` ラベルが付与されることを確認する
 
 ---

@@ -62,7 +62,7 @@ jobs:
           LOG_FILE="/tmp/rollback-drill/rollback-${DEPLOY}.log"
 
           set +e
-          cmd=(bash infra/azure/rollback/run-rollback.sh --deploy "${DEPLOY}" --rg "${RESOURCE_GROUP}")
+          cmd=(bash src/infra/azure/rollback/run-rollback.sh --deploy "${DEPLOY}" --rg "${RESOURCE_GROUP}")
           if [[ -n "${CONFIRM}" ]]; then
             cmd+=(--confirm "${CONFIRM}")
           fi
@@ -79,7 +79,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/rollback-drill
           LOG_FILE="/tmp/rollback-drill/verify-${DEPLOY}.log"
-          verify_script="infra/azure/verify-webui-resources.sh"
+          verify_script="src/infra/azure/verify-webui-resources.sh"
 
           set +e
           SWA_NAME="${SWA_NAME}" RESOURCE_GROUP="${RESOURCE_GROUP}" bash "${verify_script}" >"${LOG_FILE}" 2>&1
@@ -136,7 +136,7 @@ jobs:
             echo
             echo "## Known limitations"
             echo
-            echo "- \`infra/azure/rollback/run-rollback.sh\` は PR-4 README に基づく最小ラッパーです。"
+            echo "- \`src/infra/azure/rollback/run-rollback.sh\` は PR-4 README に基づく最小ラッパーです。"
             echo "- rollback-drill workflow の対象 deploy は現状 ui のみです。"
           } > "${REPORT_FILE}"
 

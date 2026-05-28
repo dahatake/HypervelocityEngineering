@@ -1,0 +1,163 @@
+> Polyglot Persistence に基づき、指定ユースケースの全エンティティに対する最適 Azure データストア選定と根拠、整合性/運用方針を docs/azure/azure-services-data.md に文書化する。
+
+> **WORK**: `/work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
+
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
+
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `microservice-design-guide` — Polyglot Persistence のサービス境界・データ整合性参照
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
+
+## 1) 目的と非目的
+- 対象：ユースケースの **全エンティティ**について、Azure のデータストア（および必要なら補助コンポーネント）を選定し、根拠と整合性/運用方針を文書化する。
+- 目的：後続の実装・運用・レビューができる **決定と根拠の記録**を作る（「なぜそれが最適か」「代替は何で、なぜ採用しないか」まで）。
+- 非対象：実装（コード追加）、インフラ構築、コスト試算の詳細、未提示要件の推測による断定。
+
+## 2) 入力（必ず参照）
+- 必読ファイル
+  - `docs/catalog/data-model.md`
+  - `docs/catalog/service-catalog.md`
+  - `docs/catalog/domain-analytics.md`
+  - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+- 任意（存在すれば参照）
+  - `.github/skills/agent-common-preamble/references/agent-playbook.md`（社内テンプレ/語彙/表現ルールがある場合のみ）
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+- `knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md` — セキュリティ・プライバシー・監査
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
+
+## APP-ID スコープ → Skill `app-scope-resolution` を参照
+## 3) 出力フォーマット（Markdown固定スキーマ）
+1) 設計ドキュメント（作成/更新）
+- `docs/azure/azure-services-data.md`
+
+2) 進捗ログ（追記専用）
+- `{WORK}data-azure-design-work-status.md`
+
+※`{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
+
+## 5) 品質原則（必ず守る）
+- 公式根拠を優先（Microsoft Learn / 公式ドキュメントが取得できる場合はリンクを残す）。取得できない場合は「確認できていない」旨を明記してTBDにする。
+- ツールは **必要なときだけ**使う（無目的な全探索は禁止）。
+
+## 4) 実行手順（順序固定）
+### 5.1 まずスコープ固定（AC/非対象）
+- `azure-services-data.md` の「0. 概要」に入れる粒度で、ユースケース要約と評価軸を確定する。
+- 受け入れ条件（AC）を最低3つ定義（例：全エンティティ行が埋まっている／各行に根拠リンクがある／整合性方針が記述されている）。
+
+### 5.2 入力から抽出（棚卸し）
+- 3つの入力ファイルから以下を抽出し、エンティティ表に反映する。
+  - Entity一覧
+  - Data characteristics（構造/更新頻度/サイズ感/保持期間のヒント）
+  - Access patterns（主要クエリ、ホットパス、参照方向）
+  - Consistency要件（強整合が必要か／最終で良いか、根拠）
+
+### 5.3 選定（Polyglot Persistence）
+各エンティティについて、次を順に決める（決められない場合はTBD＋理由＋質問候補へ）：
+- Chosen Azure service（正式名称）
+- Partition/Key/Index（要点のみ）
+- Consistency（強/最終/セッション等。要求根拠を明記）
+- Rationale（3〜6行：なぜ最適か）
+- Alternatives（最大2つ：短く）
+- Evidence（根拠リンク：取れない場合は `TBD (need official link)`）
+
+### 5.4 ストア間の整合性/同期戦略
+- “単一ストアで完結しない” 前提の整合性方針を決める。
+  - イベント駆動 / CDC / 二重書き / バッチ同期 などの採否
+  - 失敗時のリカバリ（再実行/べき等/重複排除）の方針
+- ここは「採否と理由」「運用上の注意」を中心に書き、詳細実装は非対象。
+
+### 5.5 セキュリティ/コンプラ（必要な場合のみ）
+- 個人情報/機微/ログなど、断定せず「前提」「確認事項」を書く（TBD可）。
+
+### 5.6 進捗ログ追記（必須）
+- `{WORK}data-azure-design-work-status.md` に追記のみで記録する：
+  - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
+
+## 6) 出力フォーマット（azure-services-data.md は固定）
+既存ファイルがある場合は **同一見出しを維持し、差分最小で更新**する（章や表を増殖させない）。
+
+### 0. 概要
+- ユースケース要約（2〜5行）
+- 選定の評価軸（例：整合性/レイテンシ/スケール/コスト/運用）
+
+### 1. エンティティ別ストア選定（必須：表）
+列（欠損は "TBD"。推測で埋めない）：
+- Entity
+- Data characteristics（構造/更新頻度/サイズ）
+- Access patterns（主要クエリ/ホットパス）
+- Consistency（強/最終/要件根拠）
+- Chosen Azure service（正式名称）
+- Partition/Key/Index（要点）
+- Rationale（3〜6行）
+- Alternatives（最大2つ）
+- Evidence（根拠リンク）
+
+### 2. ストア間の整合性/同期戦略
+- イベント駆動/CDC/二重書き等の採否と理由
+- 失敗時のリカバリ/再実行（べき等・重複排除の観点）
+
+### 3. セキュリティ/コンプラ（必要な場合のみ）
+- 前提と確認事項（断定しない）
+
+### 4. 未決事項（最大3つ）
+- Questions（最大3点）
+- Assumptions（必要なら併記）
+
+## 7) 書き込み失敗/巨大出力への対策
+- まず `large-output-chunking` スキルのルールに従う。
+- それでも書き込みが失敗する場合のみ、見出し境界で **小さめのチャンク（例：1〜2千文字）**にして追記で復旧する（全置換を避ける）。
+
+## 6) セルフチェック（出力前に必ず確認）
+
+### 8.1 事前チェック（実装後の簡潔検証）
+成果物をレビューに入れる前に、以下が満たされているか確認する：
+- 表が「全エンティティ」をカバーしている
+- 各行に根拠（Evidence）がある、無いなら TBD 理由が書かれている
+- 整合性/同期戦略がユースケースの要件に矛盾していない
+- 質問が3つ以内、かつ本当にブロッカーのみ
+
+### 8.2 品質レビュー（異なる観点で3度のレビュー）
+- Skill adversarial-review に従う。
+
+#### 3つの異なる観点（Azure データストア選定設計の場合）
+- **1回目：技術妥当性・要件達成度**
+  - Polyglot Persistence の選定根拠が正しいか
+  - 各エンティティの特性と Access patterns から最適なストアが選ばれているか
+  - AC がすべて満たされているか
+  - 根拠リンクは十分か
+
+- **2回目：ユーザー/運用視点**
+  - ドキュメントがわかりやすいか
+  - 開発チーム/運用チームが実装・運用できるレベルの詳細度か
+  - ストア間整合性戦略は明確か
+  - 障害時の回復方法まで記述されているか
+
+- **3回目：保守性・拡張性・スケーラビリティ**
+  - エンティティ追加時の変更容易性
+  - ストア間同期の堅牢性とリカバリ戦略
+  - 新たな Azure データサービス（オプション）への対応余地
+  - ドキュメント保守性と見直し周期の妥当性
+
+### 8.3 出力方法
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

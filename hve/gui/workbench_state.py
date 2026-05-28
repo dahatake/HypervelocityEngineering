@@ -6,10 +6,11 @@ PySide6 Signal/Slot 対応のため、状態変更時に信号を emit する。
 
 from __future__ import annotations
 
+import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional, Tuple
 
 from PySide6.QtCore import QObject, Signal
 
@@ -18,28 +19,65 @@ ActionLevel = Literal["INFO", "WARN", "ERROR"]
 StepKind = Literal["step", "container", "fanout_child", "subagent"]
 
 
+# CLI 側 (`hve/console.py::_emit`) が確定行に付与するインラインマーカー。
+# 形式: ``[hve:ctx:<step_id>] `` （末尾スペース 1 文字を含む）。
+# このマーカーは GUI 受信側でのみ参照する内部メタで、UI 表示文字列には残さない。
+_INLINE_CTX_PATTERN = re.compile(r"^\[hve:ctx:([^\]]+)\] ")
+
+# CLI 出力の `[HH:MM:SS]` タイムスタンプを抽出するための正規表現。
+# `_emit` で `timestamp_style="prefix"` 時に行頭付近へ付与される。
+_TIMESTAMP_PATTERN = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\]\s*")
+
+
+def _extract_inline_ctx(line: str) -> Tuple[Optional[str], str]:
+    """行頭の `[hve:ctx:<step_id>] ` を抽出し、(step_id, 残り行) を返す。
+
+    マーカーが無ければ (None, line)。
+    """
+    m = _INLINE_CTX_PATTERN.match(line)
+    if not m:
+        return None, line
+    return m.group(1), line[m.end():]
+
+
+def _extract_timestamp(line: str) -> Tuple[Optional[str], str]:
+    """行頭の `[HH:MM:SS]` を抽出し、(timestamp, 残り行) を返す。
+
+    マッチしなければ (None, line)。
+    """
+    m = _TIMESTAMP_PATTERN.match(line)
+    if not m:
+        return None, line
+    return m.group(1), line[m.end():]
+
+
 def format_log_prefix(
     workflow_id: str,
     step_id: Optional[str],
     step_title: Optional[str] = None,
+    timestamp: Optional[str] = None,
 ) -> str:
-    """ログ行に付与する ``[wf_id]-[step].`` 形式のプリフィックスを返す。
+    """ログ行に付与する ``[時間] [WF大文字] [step_id] [title] `` 形式のプリフィックスを返す。
 
-    - ``workflow_id`` 空文字時は ``[?]`` を出力
-    - ``step_id`` 空・None 時は ``[main]``
-    - ``step_title`` が与えられれば ``[step_id.step_title]``、無ければ ``[step_id]``
+    フォーマット要素（Q3=i）:
+      - ``[時間]``: ``timestamp`` が与えられれば ``[HH:MM:SS]``、無ければ省略
+      - ``[Workflow ID 大文字]``: ``workflow_id`` を upper() 化。空時は ``[?]``
+      - ``[Step ID]``: ``step_id``。空・None 時は ``[main]``
+      - ``[Sub Task 名]``: ``step_title`` があれば ``[title]``、無ければ省略
 
     末尾はスペース 1 文字を含むため、戻り値をそのまま ``prefix + line`` 連結できる。
     捏造防止のため、引数で受け取った値以外は構築しない。
     """
-    wf = workflow_id or "?"
-    if not step_id:
-        step_part = "main"
-    elif step_title:
-        step_part = f"{step_id}.{step_title}"
-    else:
-        step_part = step_id
-    return f"[{wf}]-[{step_part}] "
+    parts: List[str] = []
+    if timestamp:
+        parts.append(f"[{timestamp}]")
+    wf = (workflow_id or "?").upper()
+    parts.append(f"[{wf}]")
+    sid = step_id if step_id else "main"
+    parts.append(f"[{sid}]")
+    if step_title:
+        parts.append(f"[{step_title}]")
+    return " ".join(parts) + " "
 
 _VALID_STATUS: frozenset = frozenset(
     {"pending", "running", "done", "failed", "skipped"}
@@ -344,6 +382,11 @@ class WorkbenchState:
     current_running_step_id: Optional[str] = None
     # Step 完了後も最後に running だった step の集計を表示し続けるための保持
     last_known_step_id: Optional[str] = None
+    # 並列 fanout / parallel step 実行中に running 状態の step_id を全て保持する集合。
+    # ``current_running_step_id`` は単一スカラのため並列実行で「最後に running 化した
+    # 1 個」に上書きされる。マーカー (`[hve:ctx:<step_id>]`) 欠落行の step_id を
+    # 推測（捏造）しないよう、|set|>1 のときはスカラ fallback を抑止する判定に用いる。
+    running_step_ids: set = field(default_factory=set)
     # step_id -> tool_name -> count
     tool_counts_by_step: Dict[str, Dict[str, int]] = field(default_factory=dict)
     # step_id -> skill_name -> count
@@ -487,8 +530,11 @@ class WorkbenchState:
         if status == "running":
             self.current_running_step_id = step_id
             self.last_known_step_id = step_id
+            self.running_step_ids.add(step_id)
         elif self.current_running_step_id == step_id:
             self.current_running_step_id = None
+        if status in ("done", "failed", "skipped"):
+            self.running_step_ids.discard(step_id)
 
         # TaskTree 更新
         node = self.task_tree.get(step_id)
@@ -565,14 +611,34 @@ class WorkbenchState:
         self._signals.skill_counts_updated.emit(sid, skill_name)
 
     def current_tool_counts(self) -> Dict[str, int]:
-        """表示対象 Step （running または最後に running だった Step）のツール集計を返す。"""
+        """表示対象 Step （running または最後に running だった Step）のツール集計を返す。
+
+        並列実行中（``running_step_ids`` が複数）は、単一スカラ
+        ``current_running_step_id`` への上書きで最後の 1 個に偏るため、
+        running 全 step の集計を合算して返す（捏造防止のため推測しない）。
+        """
+        if len(self.running_step_ids) >= 2:
+            agg: Dict[str, int] = {}
+            for sid in self.running_step_ids:
+                for k, v in self.tool_counts_by_step.get(sid, {}).items():
+                    agg[k] = agg.get(k, 0) + int(v)
+            return agg
         sid = self.current_running_step_id or self.last_known_step_id
         if not sid:
             return {}
         return dict(self.tool_counts_by_step.get(sid, {}))
 
     def current_skill_counts(self) -> Dict[str, int]:
-        """表示対象 Step の Skill 集計を返す。"""
+        """表示対象 Step の Skill 集計を返す。
+
+        並列実行中は ``current_tool_counts`` と同様に running 全 step の合算を返す。
+        """
+        if len(self.running_step_ids) >= 2:
+            agg: Dict[str, int] = {}
+            for sid in self.running_step_ids:
+                for k, v in self.skill_counts_by_step.get(sid, {}).items():
+                    agg[k] = agg.get(k, 0) + int(v)
+            return agg
         sid = self.current_running_step_id or self.last_known_step_id
         if not sid:
             return {}
@@ -951,9 +1017,14 @@ class WorkbenchState:
     ) -> "Optional[str]":
         """ワークフローインスタンスへログ1行を追記する。
 
-        UI 表示・コピー用に ``[workflow_id]-[step_id.title]`` のプリフィックスを付与する
-        （Step 不明時は ``[wf]-[main]``）。``[hve:stats] {...}`` 行はプリフィックス対象外
-        （UI 非表示行のため）。
+        UI 表示・コピー用に ``[時間] [WF大文字] [step_id] [title] `` 形式
+        （Q3=i）のプリフィックスを付与する。``[hve:stats] {...}`` 行はプリフィックス
+        対象外（UI 非表示行のため）。
+
+        Step ID の決定優先順位:
+          1. ``line`` 行頭の ``[hve:ctx:<step_id>] `` インラインマーカー（最優先）
+          2. 引数 ``step_id``
+          3. ``[main]`` フォールバック
 
         Returns:
             内部バッファへ格納したフォーマット済み行。``instance_id`` が未登録なら
@@ -967,12 +1038,22 @@ class WorkbenchState:
         if line.startswith("[hve:stats]"):
             formatted = line
         else:
+            # ① インラインマーカーを最優先で抽出
+            inline_step_id, body_after_ctx = _extract_inline_ctx(line)
+            effective_step_id = inline_step_id or step_id
+            # ② タイムスタンプを抽出（CLI の `[HH:MM:SS] ` を残り行から取り除く）
+            ts, body = _extract_timestamp(body_after_ctx)
+            # ③ Step タイトル解決
             step_title: Optional[str] = None
-            if step_id:
-                sv = inst.steps.get(step_id)
+            if effective_step_id:
+                sv = inst.steps.get(effective_step_id)
                 if sv is not None:
                     step_title = getattr(sv, "title", None)
-            formatted = format_log_prefix(inst.workflow_id, step_id, step_title) + line
+            formatted = format_log_prefix(
+                inst.workflow_id, effective_step_id, step_title, timestamp=ts
+            ) + body
+            # 内部バッファ用 step_id もインラインマーカーを優先する
+            step_id = effective_step_id
         inst.log_buffer.append(formatted)
         if step_id:
             inst.step_log_buffers.setdefault(step_id, []).append(formatted)

@@ -103,7 +103,7 @@ body:
         ⚠️ **TDD 警告**: Step.2 をスキップすると、TDD RED フェーズ（テスト仕様書・テストコード生成）が未実施のままサービス実装（Step.2.4）が開始されます。
         テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（Web App Design Step.2.3）で生成済みであることを前提とします。Step.2 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
         Step.3 をスキップすると、UI テスト仕様書・テストコード生成（Step.3.0T / Step.3.0TC）が未実施のまま UI 実装をスキップすることになります。
-        Step.3 をスキップする場合は、`docs/test-specs/` と `test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
+        Step.3 をスキップする場合は、`docs/test-specs/` と `src/test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
       options:
         - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
         - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.5 + Step.2.3T, Step.2.3TC)"

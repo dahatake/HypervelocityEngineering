@@ -29,7 +29,6 @@ sdkconfig_internal_fields:
   - context_injection_max_chars     # 各フェーズの注入文字数上限（チューニング、HVE_CONTEXT_INJECTION_MAX_CHARS）
   - create_issues                   # GitHub Issue 作成（hve 固有インフラ）
   - create_pr                       # GitHub PR 作成（hve 固有インフラ）
-  - custom_agents_config            # SDK Custom Agent 設定（内部）
   - dry_run                         # ドライランモード（テスト用）
   - final_only                      # 最終出力のみ表示（出力制御）
   - force_interactive               # TTY 判定バイパス（QA 内部）

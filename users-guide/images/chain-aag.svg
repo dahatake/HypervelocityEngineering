@@ -43,7 +43,7 @@
   <text x="610" y="110" text-anchor="middle" class="bs" style="fill:white;">ai-agent-catalog.md</text>
   <!-- Legend -->
   <rect x="30" y="160" width="14" height="14" rx="3" class="box"/>
-  <text x="50" y="171" style="font-size:11px;fill:#333;">Custom Agent（Arch-AIAgentDesign）</text>
+  <text x="50" y="171" style="font-size:11px;fill:#333;">Prompt（Arch-AIAgentDesign）</text>
   <rect x="310" y="160" width="14" height="14" rx="3" class="out"/>
   <text x="330" y="171" style="font-size:11px;fill:#333;">成果物（出力）</text>
 </svg>

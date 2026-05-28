@@ -13,16 +13,16 @@
 - リージョン: `Japan East`（優先。利用不可なら `Japan West`、それも不可なら `Southeast Asia`）
 
 ## 出力
-- `infra/azure/create-azure-api-resources-prep.sh`
+- `src/infra/azure/create-azure-api-resources-prep.sh`
 - `.github/workflows/` にCI/CD（OIDC + azure/login 優先）
 - `docs/catalog/service-catalog-matrix.md` 更新
-- `test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI
+- `src/test/{サービスID}-{サービス名}/` にスモークテスト + 手動UI
 
 {existing_artifact_policy}
 
 ## デプロイ TDD フロー（必須）
 1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-compute-test-spec.md`
-2. 検証スクリプトの生成: `infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）
+2. 検証スクリプトの生成: `src/infra/azure/verify-api-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）
 3. 検証スクリプト実行 → 全 FAIL 確認（RED 状態）
 4. デプロイスクリプトの作成・実行
 5. 検証スクリプト実行 → 全 PASS まで修正（最大 3 回反復。超過時は `asdw-web:blocked` + FAIL 項目一覧を報告）

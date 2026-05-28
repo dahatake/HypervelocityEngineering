@@ -13,8 +13,8 @@
 - `docs/dataflow/dataflow-test-strategy.md`（テスト戦略書: データストア選定の参考）
 
 ## 出力
-- `infra/azure/dataflow/create-batch-resources.sh`（Azure CLI リソース作成スクリプト）
-- `infra/azure/dataflow/verify-batch-resources.sh`（Azure CLI リソース検証スクリプト）
+- `src/infra/azure/dataflow/create-batch-resources.sh`（Azure CLI リソース作成スクリプト）
+- `src/infra/azure/dataflow/verify-batch-resources.sh`（Azure CLI リソース検証スクリプト）
 
 {existing_artifact_policy}
 
@@ -25,6 +25,6 @@
 - 依存なし（最初の Step）
 
 ## 完了条件
-- `infra/azure/dataflow/create-batch-resources.sh` が作成されている
-- `infra/azure/dataflow/verify-batch-resources.sh` が作成されている
+- `src/infra/azure/dataflow/create-batch-resources.sh` が作成されている
+- `src/infra/azure/dataflow/verify-batch-resources.sh` が作成されている
 {completion_instruction}{rg_section}{job_section}{additional_section}

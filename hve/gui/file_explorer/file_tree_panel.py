@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 import time
 
-from PySide6.QtCore import QFileSystemWatcher, QModelIndex, QSortFilterProxyModel, QTimer, Qt, Signal
+from PySide6.QtCore import QFileSystemWatcher, QModelIndex, QSize, QSortFilterProxyModel, QTimer, Qt, Signal
 from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtWidgets import (
     QDockWidget,
@@ -152,6 +152,7 @@ class FileTreePanel(QDockWidget):
         self._view.setModel(self._proxy)
         self._view.setHeaderHidden(True)
         self._view.setUniformRowHeights(True)
+        self._view.setIconSize(QSize(16, 16))
         self._view.setItemDelegate(FileTreeDelegate(self._tracker, self._view))
         self._view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._view.customContextMenuRequested.connect(self._on_context_menu)

@@ -49,7 +49,7 @@ body:
     attributes:
       label: "対象ディレクトリ（任意）"
       description: "ドキュメント生成対象ディレクトリ（カンマ区切り）。未指定時はリポジトリ全体が対象です"
-      placeholder: "例: src/,hve/,infra/"
+      placeholder: "例: src/,hve/"
     validations:
       required: false
 

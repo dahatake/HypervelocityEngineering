@@ -1,0 +1,166 @@
+﻿> バッチ4層データモデル・冪等性キー・パーティション・ER図を設計し docs/dataflow/dataflow-data-model.md 作成
+
+> **WORK**: `/work/Arch-Dataflow-DataModel/Issue-<識別子>/`
+
+## 共通ルール
+> 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
+
+## 禁止事項
+
+> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+
+- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
+- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
+- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
+- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
+- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+
+## Agent 固有の Skills 依存
+
+- `dataflow-design-guide` — バッチ4層データモデル・冪等性キー・パーティション設計の手順
+- `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
+- `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
+- `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
+- `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
+
+## 1) 目的と非目的
+
+データフロー処理用データモデル設計書作成専用Agent。
+データフロー処理ドメイン分析とデータソース分析の結果を根拠に、4層データモデル・冪等性キー設計・パーティション戦略・ER 図を **1ファイル** にまとめる。
+コード実装は範囲外（`{WORK}` 配下の計画メモのみ可）。
+
+## 2) 入力・出力
+
+### 2.1 入力（必須）
+
+- `docs/dataflow/dataflow-domain-analytics.md`（Arch-Dataflow-DomainAnalytics の出力）
+- `docs/dataflow/dataflow-data-source-analysis.md`（Arch-Dataflow-DataSourceAnalysis の出力）
+
+### 2.2 参照（任意・必要最小限）
+
+- `docs/catalog/data-model.md`（存在する場合）
+
+### 2.3 出力（必須）
+
+- `docs/dataflow/dataflow-data-model.md`
+
+### knowledge/ 参照（任意・存在する場合のみ）
+以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
+- `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
+- `knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md` — データモデル・SoR/SoT
+
+## 4) 実行手順（順序固定）
+
+### 3.0 依存確認（必須・最初に実行）
+
+- `docs/dataflow/dataflow-domain-analytics.md` と `docs/dataflow/dataflow-data-source-analysis.md` の両方を `read` で確認する。
+- いずれかが存在しない、空、または見出し構造が不完全な場合：
+  - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と出力して **即座に停止** する。
+  - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）。
+- 「見出し構造が不完全」とは、以下の見出しがすべて揃っていない状態を指す：
+  - `batch-domain-analytics.md`：`## 1.` 系（概要）、`## 10.` 系（Bounded Context）、`## 11.` 系（データフロー処理 BC）、`## 14.` 系（バッチ固有ドメインイベント）、`## 15.` 系（トランザクション境界判定表）
+  - `batch-data-source-analysis.md`：章 1〜5（データソース一覧・データ量見積・デスティネーション定義・変換ルール・SLA/SLO）
+
+### 3.1 Discovery（根拠の回収）
+
+- 入力2ファイルから以下を抽出し、根拠（ファイルパス + 見出し/節）を控える：
+  - エンティティ候補（名詞句）とサービス境界
+  - データソース/デスティネーション一覧と型情報
+  - 冪等性方式と一貫性要件
+  - SLA/SLO（処理時間上限・データ鮮度）
+
+### 3.2 計画・分割
+
+- Skill task-dag-planning に従う。
+- **plan.md 作成時の必須手順（省略禁止）**:
+  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
+  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
+     ```
+     <!-- task_scope: single|multi -->
+     <!-- context_size: small|medium|large -->
+     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
+     <!-- subissues_count: N -->
+     <!-- implementation_files: true or false -->
+     ```
+  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
+  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
+- `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
+
+### 3.3 Execution（Split Mode でない場合のみ）
+
+1. 入力2ファイルを `read` する。`docs/catalog/data-model.md` が存在する場合も `read` して参照する。
+2. 出力ディレクトリ `docs/dataflow/` が存在しない場合は作成する。
+3. `docs/dataflow/dataflow-data-model.md` を全章含めて **1回のファイル作成**（`create`）で完結させる。
+   ファイルが大きすぎて1回で書けない場合は、以下のチャンク方式を使用する（`docs/dataflow/` への書き込みは Skill work-artifacts-layout §4.1 の対象外だが、書き込み失敗対策として分割する）：
+   - **チャンク1**：ヘッダ＋「1. 概要」＋「2. 4層データモデル」を新規作成 → `read` で空でないことを確認
+   - **チャンク2**：「3. エンティティ定義」「4. ER 図（Mermaid）」を `edit` で追記 → `read` 確認
+   - **チャンク3**：「5. 冪等性キー設計」「6. パーティション戦略」を `edit` で追記 → `read` 確認
+   - **チャンク4**：「7. データ型マッピング表」「8. サンプルデータ（JSON）」「9. 参照」を `edit` で追記 → `read` 確認
+   - 失敗/空になった場合：さらに小さく分割して再試行
+
+## 4) データフロー処理データモデル設計の作り方（簡潔ルール）
+
+### 4.1 4層データモデル
+
+- **入力層（Input Layer）**：外部ソースから受け取る生データのエンティティ定義。変換前のスキーマをそのまま表現する。
+- **ステージング層（Staging Layer）**：入力データを一時保管し、検証・クレンジングを行う中間ステージ。冪等性の確保（重複排除）を担う。
+- **中間層（Intermediate Layer）**：変換・集計・結合など複数ステップにわたる処理の中間結果を保持するエンティティ。チェックポイントの単位となる。
+- **出力層（Output Layer）**：最終的にデスティネーションに書き込まれるエンティティ定義。
+
+### 4.2 冪等性キー設計
+
+- **自然キー**：業務上の一意識別子（例：注文番号 + 処理日）
+- **代理キー + 処理日時**：サロゲートキー（UUID/連番）に処理実行日時を組み合わせる方式
+- **Upsert 方式**：INSERT OR UPDATE で重複を吸収する方式
+- 各エンティティの冪等性キー設計を明示し、「重複実行時の挙動」を記述する。
+
+### 4.3 パーティション戦略
+
+- 日付パーティション（日次/月次）、リージョンパーティション、テナントパーティション等を検討する。
+- 各パーティション候補について「選定理由」と「スキャン範囲削減効果」を記述する。
+
+### 4.4 ER 図（Mermaid）のバッチ固有追加
+
+- 処理ログエンティティ（DataflowAppLog）：Job-ID / 開始日時 / 終了日時 / ステータス / 処理件数 / エラー詳細
+- 監査テーブル（BatchAuditLog）：変更日時 / 変更種別 / 変更前値 / 変更後値 / 実行ジョブID
+- チェックポイントテーブル（BatchCheckpoint）：ジョブID / チェックポイント名 / 記録日時 / 再開可能か
+- これらを通常エンティティの ER 図に含める（別セクションに分けてもよい）。
+
+## 5) batch-data-model.md の出力契約（章立て固定・順序固定）
+
+以下の見出しをこの順序で含める（`docs-output-format` Skill §1 参照）。
+
+### 出力見出し
+
+1. 概要（Summary）
+   - モデリング方針（根拠/所有権/整合性の前提）
+   - 非対象（分かっている範囲）
+2. 4層データモデル（入力層/ステージング層/中間層/出力層）
+   - 各層の目的・主要エンティティ一覧・境界理由
+3. エンティティ定義
+   - 表：エンティティ名 / 層 / 主キー / 冪等性キー / パーティションキー / 主要属性 / 根拠
+4. ER 図（Mermaid）— 処理ログ・監査テーブル・チェックポイントテーブルを含む
+   - Mermaid `erDiagram` で全エンティティの関連を表現する（`docs-output-format` Skill §2 参照）
+5. 冪等性キー設計
+   - 表：エンティティ名 / 冪等性キー種別 / キー構成フィールド / 重複実行時の挙動
+6. パーティション戦略
+   - 表：エンティティ名 / パーティションキー / パーティション種別（日付/リージョン/テナント等） / 選定理由 / スキャン範囲削減効果
+7. データ型マッピング表（ソース型→ターゲット型）
+   - 表：フィールド名 / ソース型 / ターゲット型 / 変換ロジック概要 / NULL 扱い / デフォルト値
+8. サンプルデータ（JSON）— 各エンティティ最低1件
+   - 架空データ（実在の個人情報を使わない）。参照関係（外部キー相当）は整合させる。
+9. 参照（必須）
+   - 読んだファイルのパス一覧（例：`docs/dataflow/dataflow-domain-analytics.md`、`docs/dataflow/dataflow-data-source-analysis.md`）
+
+## 6) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+
+### 6.2 3つの異なる観点（データフロー処理データモデル固有）
+
+- **1回目：網羅性・要件達成度**：4層データモデルがすべて定義され、冪等性キー/パーティション戦略/処理ログ/監査テーブル/チェックポイントテーブルが漏れなく設計され、入力2ファイルの内容と整合しているか
+- **2回目：整合性・妥当性**：ER 図が正しく描画され、エンティティ間の主キー/外部キー参照が一貫し、データ型マッピング表がデータソース分析の変換ルールと整合しているか
+- **3回目：実用性・保守性**：JSON サンプルが各エンティティについて最低1件存在し、冪等性保証の「重複実行時の挙動」が実装担当者に伝わる粒度で記述されているか
+
+### 6.3 出力方法
+レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。

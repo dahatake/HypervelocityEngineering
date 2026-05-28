@@ -1,0 +1,9 @@
+inputs:
+- path: docs-generated/component-index.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-ComponentIndex--adoc--4
+outputs:
+- path: docs-generated/architecture/overview.md
+  required: true
+  mode: create

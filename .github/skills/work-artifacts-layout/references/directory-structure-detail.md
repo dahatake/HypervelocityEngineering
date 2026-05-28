@@ -141,9 +141,9 @@ def generate_run_id() -> str:
 |------|---------|------|
 | UI 実装 | `src/app/` | Web フロントエンド |
 | API 実装 | `src/api/{サービスID}-{サービス名}/` | バックエンド（Azure Functions 等） |
-| IaC | `infra/azure/` | Azure リソース作成スクリプト |
-| テスト(API) | `test/api/` | バックエンド テストコード |
-| テスト(UI) | `test/ui/` | フロントエンド テストコード |
+| IaC | `src/infra/azure/` | Azure リソース作成スクリプト |
+| テスト(API) | `src/test/api/` | バックエンド テストコード |
+| テスト(UI) | `src/test/ui/` | フロントエンド テストコード |
 | データ | `src/data/` | データ登録スクリプト等 |
 
 ※ Custom Agent が `app/` や `api/` と記載している場合でも、本標準に従い `src/app/`、`src/api/` と解釈すること。
