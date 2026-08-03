@@ -1,0 +1,35 @@
+# mdq configuration for this repository.
+#
+# Without this file, `python -m mdq index` would scan only the generic
+# defaults (`docs/`, `users-guide/`). This repository has additional
+# documentation roots produced by the HVE orchestrator and design phases
+# (knowledge/, qa/, original-docs/, etc.), so they are enumerated here.
+#
+# `work/` is deliberately absent: it holds per-run working artifacts that
+# restate design documents, so indexing it lets superseded copies outrank the
+# authoritative source. Cross-run references to it are prohibited anyway
+# (copilot-instructions.md "work/run 横断参照の禁止").
+#
+# Schema reference: mdq/config.py
+
+[index]
+roots = [
+    "docs",
+    "docs-generated",
+    "users-guide",
+    "template",
+    "knowledge",
+    "qa",
+    "original-docs",
+    "sample",
+    "hve-dev",
+]
+
+# Tabular inventories indexed row-by-row (FR-MDQ-02). Without this, the
+# 4.6 MB of hve-dev/*.csv would stay entirely outside the index because the
+# Markdown walker only picks up `*.md`.
+tabular = [
+    "hve-dev/hve-feature-inventory.csv",
+    "hve-dev/hve-surface-inventory.csv",
+    "hve-dev/hve-test-inventory.csv",
+]

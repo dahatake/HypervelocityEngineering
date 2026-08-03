@@ -1,0 +1,25 @@
+# cq configuration for this repository.
+#
+# `cq` indexes source code only. Markdown and tabular inventories stay with
+# `mdq` (see mdq.toml) so that neither corpus pollutes the other's IDF.
+#
+# Schema reference: cq/config.py
+
+[index]
+# 2 MiB。これを超えるファイルは生成物・バンドルとみなして索引しない。
+max_file_bytes = 2097152
+
+# HVE アプリケーション自体。§3.7 対象境界（.github/scripts/hve_scope.py）のソースコード部分に対応する。
+[profiles.hve]
+roots = ["hve", "mdq", "cq", "hve-dev", "tools", ".github/scripts"]
+exclude = [
+    # Qt Linguist の翻訳ソース。拡張子は .ts だが TypeScript ではない。
+    "hve/gui/i18n/**",
+    # 各 Skill 配布キットへベンダリングしたエンジンの複製。原本は mdq/ と cq/ にある。
+    "tools/skills/markdown_query/vendor/**",
+    "tools/skills/code_query/vendor/**",
+]
+
+# HVE が生成するアプリケーション。
+[profiles.app]
+roots = ["src"]

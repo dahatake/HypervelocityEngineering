@@ -1,0 +1,217 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hve"
+version = "0.2.0"
+description = "HVE CLI Orchestrator package"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+  "github-copilot-sdk>=1.0.0",
+  # pydantic / pydantic-core はペアで固定する。github-copilot-sdk は pydantic を
+  # 非固定 (`pydantic`) で要求するため、`pip install -U github-copilot-sdk` 等で
+  # pip resolver が pydantic-core を最新 (例: 2.47.0) へ引き上げると、pydantic
+  # 2.13.4 が要求する pin (pydantic-core==2.46.4) と不整合になる。この不整合は
+  # ステップ実行時の `from copilot import CopilotClient` (pydantic 遅延 import) で
+  # 例外となり、各ステップが即死して「作業状況のステップ内に何も出力されない」
+  # 根本原因となる。setup-hve.* の --no-deps + pip check 緩和を宣言的に裏付ける。
+  "pydantic==2.13.4",
+  "pydantic-core==2.46.4",
+  "platformdirs>=4.10",
+  "PyYAML>=6.0.3",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+mdq = [
+  "rank_bm25>=0.2.2",
+  "tiktoken>=0.13",
+]
+# mdq-watch: HVE CLI Orchestrator 実行中に *.md の追加/更新/削除を OS イベントで検知し
+# `.mdq/index.sqlite` を逐次更新するためのオプション依存。Cloud Agent では使用しない。
+mdq-watch = [
+  "rank_bm25>=0.2.2",
+  "tiktoken>=0.13",
+  "watchdog>=6.0",
+]
+# mdq-ja: 日本語 Markdown 索引用のオプション依存。Q5=A 採用のため、
+# 現状は SQLite 3.34+ 標準搭載の `trigram` FTS5 tokenizer のみで成立し、
+# 追加 wheel は不要（プレースホルダー extras）。将来 fugashi/sudachipy 等の
+# 形態素解析器に切り替える際に依存をここへ追加する。
+mdq-ja = []
+# code: cq の高フィデリティ言語対応（FR-CQ-11）。tree-sitter の公式文法を個別に
+# 導入する。`tree-sitter-language-pack` は文法を初回利用時にネットワーク取得する
+# ため採用しない。ここに挙げた個別パッケージは wheel に文法を同梱しており、
+# ネットワーク遮断下での import と parse を実測済み
+# （work/run/20260730-cq-lang-expansion/.../artifacts/spike-report.md §1）。
+# 未導入の環境では regex ベースの低フィデリティへ自動降格する。
+# 手動インストール: pip install -e .[code]
+code = [
+  "tree-sitter>=0.23",
+  "tree-sitter-java>=0.23",
+  "tree-sitter-go>=0.25",
+  "tree-sitter-rust>=0.24",
+  "tree-sitter-c>=0.24",
+  "tree-sitter-cpp>=0.23",
+  "tree-sitter-bash>=0.25",
+  "tree-sitter-powershell>=0.26",
+  "tree-sitter-batch>=0.11",
+  "tree-sitter-scala>=0.26",
+  # SQL は tree-sitter ではなく方言対応のパーサを使う（pure Python、追加の実行時依存なし）。
+  "sqlglot>=30",
+  # PostgreSQL の `$tag$ ... $tag$` ルーチン本体だけは sqlglot / sqlfluff とも 1 トークン
+  # 扱いになるため、本体の再パースにだけ使う。
+  "tree-sitter-sql>=0.3",
+]
+# code-sql: sqlglot が解析できないストアド本体（Oracle PL/SQL・BigQuery スクリプト）を
+# 構造化するための追加パーサ。`code` から分離するのは、sqlfluff 4.2.2 が `click<8.4.0` を
+# pin しており、既定 extras の `semantic`（fastembed → huggingface-hub >= 1.18 は
+# `click>=8.4.0` を要求）と同時導入すると `pip check` が失敗するため。
+# 未導入時は当該ファイルだけが lite へ降格する（FR-CQ-11）。
+# 手動インストール: pip install -e .[code,code-sql]
+code-sql = [
+  "sqlfluff>=4.2",
+]
+# semantic: `--strategy semantic_paragraph` 用の任意依存（work/semantic-paragraph/plan.md 参照）。
+# - fastembed: ONNX ベースのローカル埋め込み（既定 model = intfloat/multilingual-e5-large、MIT、Q2=C）。
+#   初回 DL ~2GB。MDQ_EMBED_MODEL 環境変数で軽量モデル（例: BAAI/bge-small-en-v1.5）に切替可。
+# - nltk: 文分割（Q3=C）。初回呼び出し時に `punkt_tab` を自動 DL（失敗時は regex フォールバック）。
+# - numpy: コサイン距離計算とパーセンタイル算出。
+# 手動インストール: pip install -e .[semantic]
+# NOTE: numpy 2.x 系に揃える（fastembed 0.8 / nltk 3.9 は numpy 2.x 対応済み）。
+semantic = [
+  "fastembed>=0.8",
+  "nltk>=3.9",
+  "numpy>=2.0",
+]
+# graphrag: `--strategy graphrag` 用の任意依存（work/graphrag/plan.md 参照）。
+# - lightrag-hku: GraphRAG エンジン（MIT、HKUDS 製、Python 3.14 対応）。
+#   グラフ storage は NetworkX (ファイル)、LLM/embedding は外部 callable 注入。
+#   mdq は LightRAG コア (`from lightrag import LightRAG, QueryParam`) のみ使用し、
+#   `lightrag.llm.*` は import しない（pipmaster の自動 pip install 副作用回避）。
+# 注意 1: lightrag-hku は `pandas<2.4.0` を要求するため、本 extras を有効化すると
+#   ユーザー環境の pandas が 2.x にダウングレードされる。mdq/hve/tools は pandas を
+#   使用しないため mdq 機能には影響なし。
+# 注意 2: transitive 依存に google-genai 等の cloud SDK が含まれるが mdq は呼び出さない。
+# 注意 3: GraphRAG は LLM 必須。Ollama (loopback のみ) を mdq 内 adapter で呼び出す。
+#   Cloud Agent 環境では Ollama 不在のため `heading_recursive` へ自動 fallback。
+# 手動インストール: pip install -e .[graphrag]
+# 別途、Ollama のインストールと起動が必要: https://ollama.com/download
+# 注意 4: 1.5.0 は mdq/strategies_graphrag.py が使う API
+#   (LightRAG / EmbeddingFunc / QueryParam, ainsert(file_paths=...) /
+#    aquery(param=...), initialize_storages / finalize_storages) と互換性
+#   検証済み (2026-06)。次の major bump (2.x) では再検証が必要なため <2 で
+#   ブロックする。
+graphrag = [
+  "lightrag-hku>=1.5,<2",
+]
+# gui: HVE GUI Orchestrator（PySide6/Qt6 ベース GUI フロントエンド）。
+# `python -m hve gui` または `--ui gui` フラグでの GUI モード起動に必要。
+# ターミナル/CLI モード（既定）では本依存は不要。
+#
+# Markdown プレビュー機能で以下を使用:
+#   - QtWebEngine (PySide6 6.11.1 に同梱を実測確認。
+#     より古い 6.x では PySide6-Addons が必要な可能性あり)
+#   - markdown-it-py: Markdown → HTML 変換
+#   - mdit-py-plugins: KaTeX 数式等の plugin
+#   - Pygments: 非 Markdown ファイルのシンタックスハイライト
+gui = [
+  "PySide6>=6.11",
+  "markdown-it-py>=4.0",
+  "mdit-py-plugins>=0.6",
+  "Pygments>=2.20",
+]
+# gui-pty: HVE GUI Orchestrator で Plugin / MCP Server 認証時にインタラクティブ
+# 端末（PTY）を起動するためのオプション依存。`copilot` / `az` / `gh` 等の対話 CLI を
+# GUI 内ターミナルで実行し、Device Flow / サブスクリプション選択等の対話を完走させる
+# 用途に使用する（hve/gui/pty_backend.py）。本 extras 未インストール時は
+# GUI 側で `is_pty_available()` が False を返し、既存の疎通確認のみへフォールバックする。
+# 手動インストール: pip install -e .[gui,gui-pty]
+# NOTE: pywinpty 3.x は Windows 上での PTY 動作改善を含む。2.x からは ABI 互換。
+gui-pty = [
+  "pywinpty>=3.0; sys_platform == 'win32'",
+  "ptyprocess>=0.7; sys_platform != 'win32'",
+]
+# gui-docconvert: HVE GUI Orchestrator で添付ファイル D&D 時の Markdown 変換に必要な任意依存。
+# .md / .markdown / .txt / .csv は標準ライブラリで対応するため不要だが、
+# PDF / DOCX / HTML / XLSX / PPTX / XLS を変換する場合は本 extras を追加インストールする。
+# 変換エンジンは microsoft/markitdown 単一に統合済み（旧 pypdf/mammoth/markdownify/openpyxl は廃止）。
+# 通常は hve/setup-hve.ps1 --WithGui または hve/setup-hve.sh --with-gui で自動インストールされる。
+# 手動インストール: pip install -e .[gui,gui-docconvert]
+#
+# NOTE: `markitdown[all]` は YouTube/音声書き起こし等まで含み、
+#   `youtube-transcript-api~=1.0.0` を要求するため Python 3.14 では解決不能（該当 wheel 不在）。
+#   GUI D&D 用途で必要な PDF/DOCX/PPTX/XLSX/XLS/Outlook のみを明示指定する。
+gui-docconvert = [
+  "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1.6",
+]
+
+[project.scripts]
+hve = "hve.__main__:main"
+hve-mdq = "mdq.cli:main"
+mdq = "mdq.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hve*", "mdq*", "cq*", "tools*"]
+exclude = ["hve.tests*"]
+
+# 非 Python 同梱データ (wheel 配布時に必須):
+#   - xterm.js アセット (T02): HTML / JS / CSS / vendor 配下
+#   - 認証 manifest (T04): YAML
+# これらを宣言しないと `pip install hve` で配布された wheel に含まれず、
+# インタラクティブ認証機能 (T06 PluginAuthDialog の PTY 経路) が壊れる。
+[tool.setuptools.package-data]
+"hve.gui.widgets.xterm_assets" = [
+  "*.html",
+  "*.js",
+  "vendor/**/*",
+  "VERSIONS.txt",
+]
+"hve.gui.auth_providers.manifests" = [
+  "*.yml",
+  "*.yaml",
+]
+# Markdown プレビュー用同梱アセット (Mermaid / KaTeX JS/CSS + preview.html テンプレ + 第三者ライセンス)
+"hve.gui.markdown_preview" = [
+  "assets/*.html",
+  "assets/*.js",
+  "assets/*.css",
+  "assets/LICENSE-third-party.md",
+]
+# ActivityBar / FileTreePanel 用 SVG アイコン
+"hve.gui.icons" = [
+  "*.svg",
+]
+
+# ---------------------------------------------------------------------------
+# bump-my-version 設定（バージョンアップ自動化）
+# 使い方は hve-dev/hve-app-tools.md を参照。
+# 対象: pyproject.toml (本ファイル) / hve/__init__.py / CHANGELOG.md
+# 連動対象外: mdq/__init__.py（独立ライフサイクル）
+# ---------------------------------------------------------------------------
+[tool.bumpversion]
+current_version = "0.2.0"
+commit = true
+tag = true
+tag_name = "v{new_version}"
+message = "chore(release): bump version to {new_version}"
+tag_message = "chore(release): v{new_version}"
+allow_dirty = false
+
+# 注: pyproject.toml 自身は bump-my-version 1.x が設定ファイルとして暗黙で対象に
+# 含めるため、[[tool.bumpversion.files]] への明示登録は不要（重複登録になる）。
+
+[[tool.bumpversion.files]]
+filename = "hve/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "CHANGELOG.md"
+search = "## [Unreleased]"
+replace = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
