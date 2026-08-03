@@ -1,0 +1,19 @@
+inputs:
+- path: docs/azure/azure-services-data.md
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: src/data/sample-data.json
+  required: false
+  kind: static
+outputs:
+- path: src/infra/azure/verify-data-resources.sh
+  required: true
+  mode: create
+- path: tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md
+  required: true
+  mode: create

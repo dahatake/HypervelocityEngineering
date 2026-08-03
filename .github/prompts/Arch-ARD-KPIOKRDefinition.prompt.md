@@ -30,7 +30,7 @@
 ## 2) 入力（必ず参照）
 - 一次情報（いずれか優先順）:
   - `docs/business-requirement.md`（Step 2 出力。存在時優先）
-  - `docs/company-business-requirement.md`（Step 1.2 出力。フォールバック）
+  - `docs/company-business-requirement.md`（Step 1.2 出力。フォールバック。**任意ファイル**。Step 1.2 が skip された経路では存在しないため、参照前に必ず存在確認（`Test-Path` / `[ -f ... ]`）を行い、存在しない場合は `rg` / `read_file` を実行しないこと）
 - 参考（任意）: `original-docs/*`, `docs/business/*-analysis.md`
 - 一次情報に **戦略的記述が存在しない場合** は捏造せず「資料上確認できない」と注記し、後続工程に **要追加確認** として引き継ぐ。
 

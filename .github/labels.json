@@ -52,7 +52,12 @@
   {
     "name": "auto-context-review",
     "color": "1D76DB",
-    "description": "auto context review trigger for copilot-auto-review workflow"
+    "description": "force context questionnaire and design clarification"
+  },
+  {
+    "name": "adversarial-review",
+    "color": "B60205",
+    "description": "explicit adversarial review trigger for Copilot review workflow"
   },
   {
     "name": "auto-qa",

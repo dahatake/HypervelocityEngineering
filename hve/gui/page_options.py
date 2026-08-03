@@ -14,14 +14,19 @@ ARD 添付ファイル D&D 拡張（§7）は `page_options_ard.py` に分離。
 
 from __future__ import annotations
 
+import json
+import os
+import re
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QStringListModel, Signal
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -51,6 +56,86 @@ from .workflow_step_requirements import (
     summarize_requirements_for_selection,
 )
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QCheckBox
+
+
+_GITHUB_REMOTE_PATTERNS = (
+    re.compile(r"^https://github\.com/([^/\s]+)/([^/\s]+)/?$"),
+    re.compile(r"^git@github\.com:([^/\s]+)/([^/\s]+)$"),
+    re.compile(r"^ssh://git@github\.com/([^/\s]+)/([^/\s]+)/?$"),
+)
+
+
+def _parse_github_remote_url(url: str) -> Optional[str]:
+    """GitHub remote URL から ``owner/repo`` を抽出する。"""
+    value = (url or "").strip()
+    if not value:
+        return None
+    for pattern in _GITHUB_REMOTE_PATTERNS:
+        match = pattern.match(value)
+        if not match:
+            continue
+        owner, repo = match.group(1), match.group(2)
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        if owner and repo and "/" not in owner and "/" not in repo:
+            return f"{owner}/{repo}"
+    return None
+
+
+def _guess_repo_from_git_remote(cwd: Optional[str] = None) -> Optional[str]:
+    """ローカル git remote origin から GitHub ``owner/repo`` を推定する。"""
+    try:
+        proc = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return _parse_github_remote_url(proc.stdout.strip())
+
+
+def _derive_cloud_repository_from_repo(repo: str) -> Tuple[Optional[str], Optional[str]]:
+    """``owner/repo`` 形式の repo から Cloud repository owner/name を派生する。"""
+    parts = [part.strip() for part in (repo or "").split("/")]
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None, None
+    return parts[0], parts[1]
+
+
+def _repo_permission_label(metadata: dict) -> str:
+    """GitHub repository metadata から表示用の権限ラベルを返す。"""
+    permissions = metadata.get("permissions") if isinstance(metadata, dict) else None
+    if isinstance(permissions, dict):
+        for key, label in (
+            ("admin", "ADMIN"),
+            ("maintain", "MAINTAIN"),
+            ("push", "WRITE"),
+            ("triage", "TRIAGE"),
+            ("pull", "READ"),
+        ):
+            if permissions.get(key):
+                return label
+    viewer_permission = metadata.get("viewerPermission") if isinstance(metadata, dict) else None
+    return str(viewer_permission or "不明")
+
+
+def _repo_has_write_permission(metadata: dict) -> bool:
+    """Issue/PR 作成に使える可能性が高い repository 権限かを簡易判定する。"""
+    permissions = metadata.get("permissions") if isinstance(metadata, dict) else None
+    if isinstance(permissions, dict):
+        return bool(
+            permissions.get("admin")
+            or permissions.get("maintain")
+            or permissions.get("push")
+        )
+    return str(metadata.get("viewerPermission") or "").upper() in {"ADMIN", "MAINTAIN", "WRITE"}
 
 
 # --------------------------------------------------------------------------
@@ -426,11 +511,26 @@ class _C1Basic(QWidget):
     # --- secondary コンボの「継承」項目に使用するセンチネル値 ---
     _INHERIT_SENTINEL = "__INHERIT__"
 
+    # メイン画面ステータスバーの「利用できるモデルの取得」と同じ操作をこのセクション
+    # からも起動できるようにするための通知シグナル。実際のフェッチ処理（QThread 起動 /
+    # models_cache 更新 / 両インスタンスの reload_models() 呼び出し）は MainWindow 側の
+    # 既存 `_on_login_clicked()` に一本化し、本クラスはボタン押下の通知のみを担う。
+    fetch_models_requested = Signal()
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+
+        # 「利用できるモデルの取得」ボタン（本セクションの最上部に配置）。
+        # メイン画面ステータスバーの同名ボタンと機能・文言・ツールチップを揃える。
+        self.fetch_models_button = QPushButton(self.tr("利用できるモデルの取得"))
+        self.fetch_models_button.setToolTip(
+            self.tr("利用できるモデル一覧を取得しキャッシュへ保存します。")
+        )
+        self.fetch_models_button.clicked.connect(self.fetch_models_requested.emit)
+        layout.addWidget(self.fetch_models_button)
 
         choices = _load_model_choices()
         self._entries_map: Dict[str, object] = _load_model_entries_map()
@@ -454,6 +554,24 @@ class _C1Basic(QWidget):
                 self.model, self.effort, self.context_size_label, self.cost_label
             ),
             required=True,
+        ))
+
+        # --context-tier: コンテキスト階層（SDK create_session(context_tier=...) へ伝播）。
+        # 既定 long_context（設定画面の既定要件）。値はそのまま CLI --context-tier に渡る。
+        self.context_tier = QComboBox()
+        self.context_tier.setEditable(False)
+        self.context_tier.addItem("default", userData="default")
+        self.context_tier.addItem("long_context", userData="long_context")
+        _ct_idx = self.context_tier.findData("long_context")
+        if _ct_idx >= 0:
+            self.context_tier.setCurrentIndex(_ct_idx)
+        layout.addWidget(_LabeledField(
+            title=self.tr("コンテキスト階層 (context_tier)"),
+            description=(
+                self.tr("モデルのコンテキスト階層を選択します。long_context は対応モデルで"
+                "ロングコンテキストを有効化します（既定: long_context）。")
+            ),
+            input_widget=self.context_tier,
         ))
 
         # --review-model: 先頭に「継承」項目を追加
@@ -512,6 +630,24 @@ class _C1Basic(QWidget):
         self._refresh_effort_row(self.model, self.effort, self.context_size_label, self.cost_label, is_secondary=False)
         self._refresh_effort_row(self.review_model, self.review_effort, self.review_context_size_label, self.review_cost_label, is_secondary=True)
         self._refresh_effort_row(self.qa_model, self.qa_effort, self.qa_context_size_label, self.qa_cost_label, is_secondary=True)
+
+        # --- run-id 生成タイムゾーン ---
+        from .timezones import TIMEZONE_CHOICES, DEFAULT_TIMEZONE
+        self.run_id_timezone = QComboBox()
+        self.run_id_timezone.setEditable(False)
+        for iana, label in TIMEZONE_CHOICES:
+            self.run_id_timezone.addItem(label, iana)
+        default_idx = self.run_id_timezone.findData(DEFAULT_TIMEZONE)
+        if default_idx >= 0:
+            self.run_id_timezone.setCurrentIndex(default_idx)
+        layout.addWidget(_LabeledField(
+            title=self.tr("run-id タイムゾーン"),
+            description=self.tr(
+                "`work/run/<run-id>/` の <run-id> 内タイムスタンプに使うタイムゾーン（既定: Asia/Tokyo / JST）。"
+                " 環境変数 HVE_RUN_ID_TZ が設定されていればそちらが優先されます。"
+            ),
+            input_widget=self.run_id_timezone,
+        ))
 
         # --- 旧 _C2Parallel から移動: 並列実行上限 ---
         self.max_parallel = QSpinBox()
@@ -584,9 +720,9 @@ class _C1Basic(QWidget):
         layout.addWidget(_LabeledField(
             title=self.tr("GUI セッション作業ディレクトリの後処理"),
             description=self.tr(
-                "GUI 終了時に work/gui-runs/<session_run_id>/ をどう扱うかを選択します。"
+                "GUI 終了時に work/run/<session_run_id>/ をどう扱うかを選択します。"
                 " keep: そのまま残す（デバッグ用、既定）。"
-                " archive: work/gui-runs/.archive/<id>.zip に圧縮して元 dir を削除。"
+                " archive: work/archive/<id>.zip に圧縮して元 dir を削除。"
                 " purge: 元 dir を削除。"
                 " 設定変更は次回 GUI 起動時から適用されます。"
             ),
@@ -824,6 +960,8 @@ class _C1Basic(QWidget):
         args.reasoning_effort = _effort_value(self.effort)
         args.review_reasoning_effort = _effort_value(self.review_effort)
         args.qa_reasoning_effort = _effort_value(self.qa_effort)
+        # context_tier: 選択中の userData（"default" | "long_context"）をそのまま渡す
+        args.context_tier = self.context_tier.currentData()
 
         # 旧 _C2Parallel / _C8Timeout から移動した項目
         args.max_parallel = self.max_parallel.value()
@@ -899,12 +1037,12 @@ class _C3AutoPrompt(QWidget):
         ))
 
         # --- 旧 _C16Misc から移動: 自己改善ループ ---
-        self.self_improve = QCheckBox(self.tr("有効化"))
+        self.self_improve = TriStateCombo()
         layout.addWidget(_LabeledField(
-            title=self.tr("自己改善ループを有効化"),
+            title=self.tr("自己改善ループ"),
             description=(
-                self.tr("自己改善ループ（Phase 4）を有効化します。"
-                "HVE_AUTO_SELF_IMPROVE=true 環境変数でも有効化できます。")
+                self.tr("継承時はAAG/AAGDで既定ON、その他は既定設定を使用します。"
+                "明示OFFは --no-self-improve として既定ONや環境変数より優先します。")
             ),
             input_widget=self.self_improve,
         ))
@@ -937,12 +1075,13 @@ class _C3AutoPrompt(QWidget):
         ))
 
         # self_improve 連動で 3 オプションをグレーアウト
-        def _on_self_improve_toggled(checked: bool) -> None:
-            self.self_improve_max_iterations.setEnabled(bool(checked))
-            self.self_improve_target_scope.setEnabled(bool(checked))
-            self.self_improve_goal.setEnabled(bool(checked))
-        self.self_improve.toggled.connect(_on_self_improve_toggled)
-        _on_self_improve_toggled(self.self_improve.isChecked())
+        def _on_self_improve_changed(_index: int) -> None:
+            explicitly_enabled = self.self_improve.get_tristate() is True
+            self.self_improve_max_iterations.setEnabled(explicitly_enabled)
+            self.self_improve_target_scope.setEnabled(explicitly_enabled)
+            self.self_improve_goal.setEnabled(explicitly_enabled)
+        self.self_improve.currentIndexChanged.connect(_on_self_improve_changed)
+        _on_self_improve_changed(self.self_improve.currentIndex())
 
         # --- 旧 _C15AdditionalPrompt から移動: 追加プロンプト / コメント ---
         self.additional_prompt = QPlainTextEdit()
@@ -1000,7 +1139,9 @@ class _C3AutoPrompt(QWidget):
             args.qa_ipc_dir = None
 
         # 旧 _C16Misc から移動: self_improve
-        args.self_improve = self.self_improve.isChecked()
+        self_improve_state = self.self_improve.get_tristate()
+        args.self_improve = self_improve_state is True
+        args.no_self_improve = self_improve_state is False
         if args.self_improve:
             args.self_improve_max_iterations = int(self.self_improve_max_iterations.value())
             _si_scope = self.self_improve_target_scope.text().strip()
@@ -1032,6 +1173,19 @@ class _C4WorkIQ(QWidget):
         notice.setStyleSheet("color: #6a737d; padding: 4px;")
         notice.setWordWrap(True)
         layout.addWidget(notice)
+
+        auth_row = QHBoxLayout()
+        auth_row.setContentsMargins(0, 0, 0, 0)
+        self.workiq_auth_button = QPushButton(self.tr("Work IQ 認証確認"))
+        self.workiq_auth_button.setToolTip(
+            self.tr("EULA 承認と Microsoft 365 認証を確認します。")
+        )
+        self.workiq_auth_button.clicked.connect(self._on_workiq_auth_clicked)
+        self.workiq_auth_status = QLabel(self.tr("未確認"))
+        self.workiq_auth_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        auth_row.addWidget(self.workiq_auth_button, 0)
+        auth_row.addWidget(self.workiq_auth_status, 1)
+        layout.addLayout(auth_row)
 
         self.workiq = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
@@ -1182,16 +1336,197 @@ class _C4WorkIQ(QWidget):
             req_timeout = 0.0
         args.workiq_request_timeout = req_timeout if req_timeout > 0 else None
 
+    def _on_workiq_auth_clicked(self) -> None:
+        """Work IQ の EULA / M365 認証を確認する。"""
+        self.workiq_auth_button.setEnabled(False)
+        self.workiq_auth_status.setText(self.tr("確認中..."))
+        from PySide6.QtCore import QThread, Signal
+
+        class _WorkIQAuthThread(QThread):
+            done = Signal(object)  # dict | Exception
+
+            def run(self) -> None:  # type: ignore[override]
+                warnings: List[str] = []
+
+                class _Console:
+                    @staticmethod
+                    def warning(message: str) -> None:
+                        warnings.append(message)
+
+                try:
+                    from hve.workiq import workiq_login
+                    ok = workiq_login(_Console())  # type: ignore[arg-type]
+                    self.done.emit({"ok": ok, "detail": "\n".join(warnings)})
+                except Exception as exc:
+                    self.done.emit(exc)
+
+        thread = _WorkIQAuthThread(self)
+        thread.done.connect(self._on_workiq_auth_finished)
+        self._workiq_auth_thread = thread  # GC 防止
+        thread.start()
+
+    def _on_workiq_auth_finished(self, result: object) -> None:
+        self.workiq_auth_button.setEnabled(True)
+        if isinstance(result, Exception):
+            self.workiq_auth_status.setText(self.tr("失敗"))
+            QMessageBox.warning(
+                self,
+                self.tr("Work IQ 認証確認失敗"),
+                self.tr("Work IQ 認証確認に失敗しました: {err}").format(err=str(result)),
+            )
+            return
+        ok = bool(result.get("ok")) if isinstance(result, dict) else False
+        detail = str(result.get("detail") or "") if isinstance(result, dict) else ""
+        if ok:
+            self.workiq_auth_status.setText(self.tr("確認済み"))
+        else:
+            self.workiq_auth_status.setText(self.tr("失敗"))
+            QMessageBox.warning(
+                self,
+                self.tr("Work IQ 認証確認失敗"),
+                detail or self.tr("Work IQ 認証確認に失敗しました。`python -m hve workiq-doctor` で診断してください。"),
+            )
+
+
+# FR-CLI-34: マージ後ローカル作業ブランチ削除トグルの共通定義（C5 設定画面 / C10 主画面で共有）。
+_DELETE_BRANCH_FIELD_TITLE = "マージ後にローカル作業ブランチを削除"
+
+
+def _make_delete_branch_field(widget: QWidget) -> Tuple[QCheckBox, _LabeledField]:
+    """FR-CLI-34: 削除トグルの QCheckBox + _LabeledField を生成する共通ファクトリ。
+
+    C5（設定画面 GitHub セクション）と C10（主画面 ASDW-WEB）が同一定義から各 1 インスタンス
+    を生成する（Qt は 1 widget = 1 親のため表示実体は各画面に必要）。既定はチェック ON。
+    """
+    cb = QCheckBox(widget.tr("有効化"))
+    cb.setChecked(True)
+    field = _LabeledField(
+        title=widget.tr(_DELETE_BRANCH_FIELD_TITLE),
+        description=widget.tr(
+            "github.com 側のマージ（auto-approve-and-merge）完了を検知後、今回作成した"
+            "ローカル作業ブランチを削除します（既定: 有効）。"
+            "「PR 自動 Approve & Auto-merge」が有効な場合のみ動作します。"
+        ),
+        input_widget=cb,
+    )
+    return cb, field
+
+
+class _GitHubCliLoginGroup(QGroupBox):
+    """GitHub CLI ログイン UI と ``GH_TOKEN`` 注入処理をまとめた認証グループ。"""
+
+    login_succeeded = Signal()
+
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        dialog_parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(self.tr("認証"), parent)
+        self._dialog_parent = dialog_parent
+
+        inner = QVBoxLayout(self)
+        inner.setContentsMargins(8, 4, 8, 4)
+        inner.setSpacing(4)
+
+        # --- GitHub CLI ログイン（埋め込み端末で gh auth login → GH_TOKEN 注入）---
+        # 取得トークンは GitHub REST 経路（ブランチ取得 / Issue・PR 作成）を有効化する。
+        self.gh_login_button = QPushButton(self.tr("GitHub CLI でログイン"))
+        self.gh_login_button.setToolTip(
+            self.tr(
+                "埋め込み端末で `gh auth login` を実行し、取得したトークンを GH_TOKEN へ"
+                "設定します（このセッション限り）。ブランチ取得・Issue/PR 作成が有効化されます。"
+            )
+        )
+        self.gh_login_button.clicked.connect(self._on_gh_login_clicked)
+        self.gh_login_status = QLabel(self._gh_login_initial_status())
+        self.gh_login_status.setWordWrap(True)
+        self.gh_login_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self.gh_login_button, 0)
+        row.addWidget(self.gh_login_status, 1)
+        inner.addLayout(row)
+
+    def refresh_status(self) -> None:
+        """環境変数トークンの有無から状態ラベルを再評価する。"""
+        self.gh_login_status.setText(self._gh_login_initial_status())
+
+    def _gh_login_initial_status(self) -> str:
+        """起動時・再表示時の認証状態ラベル文言を返す。"""
+        if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
+            return self.tr("✓ 認証済み（環境変数トークンあり）")
+        return self.tr("未ログイン")
+
+    def _dialog_parent_widget(self) -> QWidget:
+        """ログインダイアログの親 Widget を返す。"""
+        window = self.window()
+        if window is not None and window is not self and window.isVisible():
+            return window
+        return self._dialog_parent or self
+
+    def _on_gh_login_clicked(self) -> None:
+        """埋め込み端末で `gh auth login` を実行し、トークンを GH_TOKEN へ注入する。
+
+        成否は exit code ではなく ``gh auth token`` の取得可否で独立に確認する
+        （端末ダイアログの exit code は補助情報）。トークンはセッション限り。
+
+        ダイアログは modal ``exec()`` で実行し、トークン取得は高速なローカル
+        サブプロセスのため worker thread は用いない。
+        """
+        from . import gh_cli
+        from .gh_login_dialog import GhLoginDialog
+
+        dlg = GhLoginDialog(self._dialog_parent_widget())
+        dlg.exec()
+
+        token = gh_cli.capture_gh_token()
+        if token:
+            gh_cli.inject_token_into_env(token)
+            self.gh_login_status.setText(
+                self.tr("✓ ログイン済み（GH_TOKEN を設定しました）")
+            )
+            self.login_succeeded.emit()
+        else:
+            self.gh_login_status.setText(
+                self.tr("⚠ トークンを取得できませんでした（gh 未ログインの可能性）")
+            )
+
 
 class _C5IssuePR(QWidget):
+    """C5「GitHub」セクション — Issue/PR 作成・リポジトリ・ベースブランチ・PR 自動
+    Approve & Auto-merge に加え、Fleet mode / Cloud Session（GitHub Copilot SDK）を扱う。
+    """
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
+        def _group(title: str) -> QVBoxLayout:
+            """グループ枠（QGroupBox）を本セクションへ追加し、内部 layout を返す。"""
+            box = QGroupBox(title)
+            inner = QVBoxLayout(box)
+            inner.setContentsMargins(8, 4, 8, 4)
+            inner.setSpacing(4)
+            layout.addWidget(box)
+            return inner
+
+        # === グループ: 認証 ===
+        self.gh_auth_group = _GitHubCliLoginGroup(self, dialog_parent=self)
+        self.gh_auth_group.login_succeeded.connect(
+            lambda: self._start_repo_metadata_fetch(auto=True)
+        )
+        layout.addWidget(self.gh_auth_group)
+        self.gh_login_button = self.gh_auth_group.gh_login_button
+        self.gh_login_status = self.gh_auth_group.gh_login_status
+
+        # === グループ: ソースコード管理 ===
+        _scm_group = _group(self.tr("ソースコード管理"))
         self.create_issues = QCheckBox(self.tr("有効化"))
-        layout.addWidget(_LabeledField(
+        _scm_group.addWidget(_LabeledField(
             title=self.tr("GitHub Issue を作成"),
             description=(
                 self.tr("GitHub Issue を作成します。新規ブランチと PR が自動的に作成されます"
@@ -1201,7 +1536,7 @@ class _C5IssuePR(QWidget):
         ))
 
         self.create_pr = QCheckBox(self.tr("有効化"))
-        layout.addWidget(_LabeledField(
+        _scm_group.addWidget(_LabeledField(
             title=self.tr("GitHub Pull Request を作成"),
             description=(
                 self.tr("ローカル実行後に GitHub PR を作成します。"
@@ -1213,7 +1548,7 @@ class _C5IssuePR(QWidget):
 
         self.ignore_paths = QLineEdit()
         self.ignore_paths.setPlaceholderText(self.tr("例: docs/ legacy/"))
-        layout.addWidget(_LabeledField(
+        _scm_group.addWidget(_LabeledField(
             title=self.tr("git add 除外パス"),
             description=(
                 self.tr("git add 時に除外するパス（スペース区切りで複数指定可）。"
@@ -1222,16 +1557,32 @@ class _C5IssuePR(QWidget):
             input_widget=self.ignore_paths,
         ))
 
+        # === グループ: リポジトリ / Issue 設定 ===
+        _repo_group = _group(self.tr("リポジトリ / Issue 設定"))
         self.repo = QLineEdit()
         self.repo.setPlaceholderText("owner/repo")
-        layout.addWidget(_LabeledField(
+        _repo_group.addWidget(_LabeledField(
             title=self.tr("リポジトリ (owner/repo)"),
             description=self.tr("リポジトリ（owner/repo 形式）。REPO 環境変数からも取得可能。"),
             input_widget=self.repo,
         ))
 
+        self.fetch_repo_button = QPushButton(self.tr("リポジトリ取得"))
+        self.fetch_repo_button.setToolTip(
+            self.tr("ログイン済み GitHub アカウントと現在の git remote から owner/repo を取得・検証します。")
+        )
+        self.fetch_repo_button.clicked.connect(self._on_fetch_repo_clicked)
+        self.repo_fetch_status = QLabel("")
+        self.repo_fetch_status.setWordWrap(True)
+        self.repo_fetch_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        _repo_fetch_row = QHBoxLayout()
+        _repo_fetch_row.setContentsMargins(0, 0, 0, 0)
+        _repo_fetch_row.addWidget(self.fetch_repo_button, 0)
+        _repo_fetch_row.addWidget(self.repo_fetch_status, 1)
+        _repo_group.addLayout(_repo_fetch_row)
+
         self.issue_title = QLineEdit()
-        layout.addWidget(_LabeledField(
+        _repo_group.addWidget(_LabeledField(
             title=self.tr("Issue タイトル（上書き）"),
             description=(
                 self.tr("Issue 作成時の Root Issue タイトルを上書きします（省略可）。"
@@ -1240,21 +1591,326 @@ class _C5IssuePR(QWidget):
             input_widget=self.issue_title,
         ))
 
+        self._cloud_session_repository_owner: Optional[str] = None
+        self._cloud_session_repository_name: Optional[str] = None
+
+        # === グループ: ベースブランチ ===
         # --- 旧 _C9BranchSteps から移動 ---
+        _branch_group = _group(self.tr("ベースブランチ"))
         self.branch = QLineEdit("main")
-        layout.addWidget(_LabeledField(
+        self._branch_completer = QCompleter([], self)
+        self.branch.setCompleter(self._branch_completer)
+        _branch_group.addWidget(_LabeledField(
             title=self.tr("ベースブランチ"),
-            description=self.tr("ベースブランチ（既定: main）。"),
+            description=self.tr(
+                "ベースブランチ（既定: main）。"
+                "「ブランチ取得」でリポジトリのブランチを取得して候補表示します（GH_TOKEN が必要）。"
+            ),
             input_widget=self.branch,
         ))
 
+        # ブランチ取得ボタン + 状態表示（GitHub API でブランチ一覧を取得し branch を候補補完）
+        self.fetch_branches_button = QPushButton(self.tr("ブランチ取得"))
+        self.fetch_branches_button.clicked.connect(self._on_fetch_branches_clicked)
+        self.branch_fetch_status = QLabel("")
+        self.branch_fetch_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        _branch_fetch_row = QHBoxLayout()
+        _branch_fetch_row.setContentsMargins(0, 0, 0, 0)
+        _branch_fetch_row.addWidget(self.fetch_branches_button, 0)
+        _branch_fetch_row.addWidget(self.branch_fetch_status, 1)
+        _branch_group.addLayout(_branch_fetch_row)
+
+        # === グループ: PR 自動 Approve & Auto-merge ===
         # --- 旧 _C11AKM から移動: PR 自動 Approve & Auto-merge ---
+        _akm_group = _group(self.tr("PR 自動 Approve & Auto-merge"))
         self.enable_auto_merge = QCheckBox(self.tr("有効化"))
-        layout.addWidget(_LabeledField(
+        _akm_group.addWidget(_LabeledField(
             title=self.tr("PR 自動 Approve & Auto-merge"),
-            description=self.tr("AKM: PR の自動 Approve & Auto-merge を有効化します（既定: 無効）。"),
+            description=self.tr("GitHub / Cloud 実行時に PR の自動 Approve & Auto-merge を有効化します（既定: 無効）。"),
             input_widget=self.enable_auto_merge,
         ))
+        # FR-CLI-34: マージ後ローカルブランチ削除トグル（共通ファクトリ生成、C10 と双方向同期）。
+        self.delete_local_merged_branch, _delete_branch_field = _make_delete_branch_field(self)
+        _akm_group.addWidget(_delete_branch_field)
+
+        # === グループ: GitHub Copilot SDK 連携 ===
+        _sdk_group = _group(self.tr("GitHub Copilot SDK 連携"))
+        # --- 旧 _C1Basic から移動: Fleet mode (GitHub Copilot SDK 1.0.0+) ---
+        self.fleet_mode_enabled = TriStateCombo()
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Fleet mode"),
+            description=self.tr(
+                "ON にすると複数 Step の DAG wave を Copilot SDK Fleet mode に委譲します（既定: OFF）。"
+                " SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out が対象です。"
+                " 未指定の場合は環境変数/CLI 設定を継承します。"
+            ),
+            input_widget=self.fleet_mode_enabled,
+        ))
+
+        # --- 旧 _C1Basic から移動: Cloud Sessions (GitHub Copilot SDK 1.0.0+) ---
+        self.cloud_session_enabled = QCheckBox(self.tr("Cloud Session を使用する"))
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud Session"),
+            description=self.tr(
+                "ON にすると Copilot SDK Cloud Sessions を使用します（既定: OFF）。"
+                " repository owner/name はリポジトリ (owner/repo) から補完します。"
+                " 優先順位は サブタスク上書き > Step 上書き > この全体設定 です。"
+            ),
+            input_widget=self.cloud_session_enabled,
+        ))
+
+        self.cloud_session_repository_branch = QLineEdit()
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud repository branch"),
+            description=self.tr("Cloud Session の repository.branch。空欄時はベースブランチを使用します。"),
+            input_widget=self.cloud_session_repository_branch,
+        ))
+
+        self.cloud_session_max_concurrency = QSpinBox()
+        self.cloud_session_max_concurrency.setRange(1, 200)
+        self.cloud_session_max_concurrency.setValue(5)
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud Session 同時実行上限"),
+            description=self.tr(
+                "1 プロセス内で同時に実行する Cloud Session の上限（既定: 5）。"
+                " ローカル orchestration の並列実行上限とは別に適用されます。"
+            ),
+            input_widget=self.cloud_session_max_concurrency,
+        ))
+
+        self.cloud_session_integration_id = QLineEdit()
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud integration ID"),
+            description=self.tr("GITHUB_COPILOT_INTEGRATION_ID に渡す識別子。トークンや秘密情報は入力しないでください。"),
+            input_widget=self.cloud_session_integration_id,
+        ))
+
+        self.cloud_session_mc_base_url = QLineEdit()
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Mission Control base URL"),
+            description=self.tr(
+                "COPILOT_MC_BASE_URL に渡す URL（GHES 用）。通常は空欄のままにします。"
+                " token、Basic 認証情報、署名付き query、API key は含めないでください。"
+            ),
+            input_widget=self.cloud_session_mc_base_url,
+        ))
+
+        self.cloud_session_step_overrides = QLineEdit()
+        self.cloud_session_step_overrides.setPlaceholderText('{"1": true, "2": false}')
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud Step 上書き JSON"),
+            description=self.tr(
+                "Step ID を key、true/false を値にした JSON object。"
+                " true は Cloud Session 使用、false は使用しない、空欄は全体設定を継承します。"
+                " 秘密情報は入力しないでください。通常は Step 選択画面から設定します。"
+            ),
+            input_widget=self.cloud_session_step_overrides,
+        ))
+
+        self.cloud_session_subtask_overrides = QLineEdit()
+        self.cloud_session_subtask_overrides.setPlaceholderText('{"pre_qa": true, "review": false}')
+        _sdk_group.addWidget(_LabeledField(
+            title=self.tr("Cloud サブタスク上書き JSON"),
+            description=self.tr(
+                "pre_qa / review / sub_session などを key、true/false を値にした JSON object。"
+                " サブタスク上書きは Step 上書きより優先されます。秘密情報は入力しないでください。"
+            ),
+            input_widget=self.cloud_session_subtask_overrides,
+        ))
+
+    def _on_fetch_repo_clicked(self) -> None:
+        """「リポジトリ取得」押下時: repo metadata を非同期取得する。"""
+        self._start_repo_metadata_fetch(auto=False)
+
+    def _start_repo_metadata_fetch(self, *, auto: bool) -> None:
+        repo_text = self.repo.text().strip()
+        self.fetch_repo_button.setEnabled(False)
+        if auto:
+            self.repo_fetch_status.setText(self.tr("ログイン済みアカウントからリポジトリ情報を取得中..."))
+        else:
+            self.repo_fetch_status.setText(self.tr("リポジトリ情報を取得中..."))
+
+        from PySide6.QtCore import QThread, Signal
+
+        class _FetchRepoMetadataThread(QThread):
+            done = Signal(object)
+
+            def __init__(self, repo_text: str, parent: Optional[QWidget] = None) -> None:
+                super().__init__(parent)
+                self._repo_text = repo_text
+
+            def run(self) -> None:  # type: ignore[override]
+                try:
+                    from hve import github_api
+
+                    repo = self._repo_text.strip()
+                    update_repo = False
+                    if not repo:
+                        repo = os.environ.get("REPO", "").strip()
+                        update_repo = bool(repo)
+                    if not repo:
+                        guessed_repo = _guess_repo_from_git_remote()
+                        if guessed_repo:
+                            repo = guessed_repo
+                            update_repo = True
+                    if repo:
+                        metadata = github_api.get_repository_metadata(repo)
+                        self.done.emit({"metadata": metadata, "update_repo": update_repo})
+                        return
+
+                    candidates = github_api.list_viewer_repositories()
+                    eligible = [
+                        item
+                        for item in candidates
+                        if isinstance(item, dict)
+                        and not item.get("archived", False)
+                        and item.get("has_issues", True)
+                        and _repo_has_write_permission(item)
+                    ]
+                    if len(eligible) == 1:
+                        self.done.emit({"metadata": eligible[0], "update_repo": True})
+                    else:
+                        self.done.emit({"candidates": eligible, "update_repo": False})
+                except Exception as exc:  # noqa: BLE001
+                    self.done.emit(exc)
+
+        thread = _FetchRepoMetadataThread(repo_text, self)
+        thread.done.connect(self._on_repo_metadata_fetched)
+        self._fetch_repo_thread = thread  # GC 防止
+        thread.start()
+
+    def _on_repo_metadata_fetched(self, result: object) -> None:
+        """repo metadata 取得完了時: repo/branch/status へ反映する。"""
+        self.fetch_repo_button.setEnabled(True)
+        if isinstance(result, Exception):
+            self.repo_fetch_status.setText(
+                self.tr("⚠ 取得失敗: {err}").format(err=str(result))
+            )
+            return
+        if not isinstance(result, dict):
+            self.repo_fetch_status.setText(self.tr("⚠ リポジトリ情報を取得できませんでした"))
+            return
+        if "candidates" in result:
+            candidates = result.get("candidates") or []
+            count = len(candidates) if hasattr(candidates, "__len__") else 0
+            if count > 1:
+                self.repo_fetch_status.setText(
+                    self.tr("⚠ 候補が複数あります。owner/repo を入力してください（候補: {n} 件）").format(n=count)
+                )
+            elif count == 1:
+                self.repo_fetch_status.setText(self.tr("⚠ リポジトリ候補を自動選択できませんでした"))
+            else:
+                self.repo_fetch_status.setText(self.tr("⚠ 利用可能なリポジトリ候補が見つかりませんでした"))
+            return
+
+        metadata = result.get("metadata")
+        if not isinstance(metadata, dict):
+            self.repo_fetch_status.setText(self.tr("⚠ リポジトリ情報を取得できませんでした"))
+            return
+        full_name = str(metadata.get("full_name") or metadata.get("nameWithOwner") or "").strip()
+        if result.get("update_repo") and full_name:
+            self.repo.setText(full_name)
+        default_branch = str(metadata.get("default_branch") or "").strip()
+        default_branch_ref = metadata.get("defaultBranchRef")
+        if not default_branch and isinstance(default_branch_ref, dict):
+            default_branch = str(default_branch_ref.get("name") or "").strip()
+        if default_branch and (not self.branch.text().strip() or self.branch.text().strip() == "main"):
+            self.branch.setText(default_branch)
+        self._sync_cloud_repository_from_repo()
+
+        permission = _repo_permission_label(metadata)
+        repo_label = full_name or self.repo.text().strip() or self.tr("リポジトリ")
+        if metadata.get("archived", False):
+            self.repo_fetch_status.setText(
+                self.tr("⚠ {repo} はアーカイブされています（権限: {perm}）").format(repo=repo_label, perm=permission)
+            )
+            return
+        if metadata.get("has_issues") is False:
+            self.repo_fetch_status.setText(
+                self.tr("⚠ {repo}: Issues が無効です（権限: {perm}）").format(repo=repo_label, perm=permission)
+            )
+            return
+        self.repo_fetch_status.setText(
+            self.tr("✓ {repo} を取得しました（Issues: 有効 / 権限: {perm}）").format(repo=repo_label, perm=permission)
+        )
+
+    def _sync_cloud_repository_from_repo(self) -> None:
+        """repo 欄から Cloud Session 用 owner/name 内部値を同期する。"""
+        owner, name = _derive_cloud_repository_from_repo(self.repo.text().strip())
+        self._cloud_session_repository_owner = owner
+        self._cloud_session_repository_name = name
+
+    def _on_fetch_branches_clicked(self) -> None:
+        """「ブランチ取得」押下時: repo を解決し、ブランチ一覧を非同期取得する。"""
+        repo = self.repo.text().strip() or os.environ.get("REPO", "").strip()
+        if not repo:
+            self.branch_fetch_status.setText(
+                self.tr("⚠ リポジトリ (owner/repo) を入力してください")
+            )
+            return
+        self.fetch_branches_button.setEnabled(False)
+        self.branch_fetch_status.setText(self.tr("ブランチを取得中..."))
+
+        from PySide6.QtCore import QThread, Signal
+
+        class _FetchBranchesThread(QThread):
+            done = Signal(object)  # list[str] | Exception
+
+            def __init__(self, repo: str, parent: Optional[QWidget] = None) -> None:
+                super().__init__(parent)
+                self._repo = repo
+
+            def run(self) -> None:  # type: ignore[override]
+                try:
+                    from hve import github_api
+
+                    self.done.emit(github_api.list_branches(self._repo))
+                except Exception as exc:  # noqa: BLE001
+                    self.done.emit(exc)
+
+        thread = _FetchBranchesThread(repo, self)
+        thread.done.connect(self._on_branches_fetched)
+        self._fetch_branches_thread = thread  # GC 防止
+        thread.start()
+
+    def _on_branches_fetched(self, result: object) -> None:
+        """ブランチ取得スレッド完了時: completer 反映 / エラー表示。"""
+        self.fetch_branches_button.setEnabled(True)
+        if isinstance(result, Exception):
+            self.branch_fetch_status.setText(
+                self.tr("⚠ 取得失敗: {err}").format(err=str(result))
+            )
+            return
+        names = list(result) if result and hasattr(result, "__iter__") else []
+        if not names:
+            self.branch_fetch_status.setText(self.tr("ブランチが見つかりませんでした"))
+            return
+        self._branch_completer.setModel(QStringListModel(names, self._branch_completer))
+        self.branch_fetch_status.setText(
+            self.tr("✓ {n} 件のブランチを取得").format(n=len(names))
+        )
+
+    # ----------------------------------------------------------
+    # GitHub CLI ログイン
+    # ----------------------------------------------------------
+    def _gh_login_initial_status(self) -> str:
+        """起動時の認証状態ラベル文言を返す。"""
+        return self.gh_auth_group._gh_login_initial_status()
+
+    def refresh_gh_login_status(self) -> None:
+        """GitHub CLI ログイン状態ラベルを再評価する。"""
+        self.gh_auth_group.refresh_status()
+
+    def _on_gh_login_clicked(self) -> None:
+        """埋め込み端末で `gh auth login` を実行し、トークンを GH_TOKEN へ注入する。
+
+        成否は exit code ではなく ``gh auth token`` の取得可否で独立に確認する
+        （端末ダイアログの exit code は補助情報）。トークンはセッション限り。
+
+        ダイアログは modal ``exec()`` で実行し、トークン取得は高速なローカル
+        サブプロセスのため worker thread は用いない。
+        """
+        self.gh_auth_group._on_gh_login_clicked()
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.create_issues = self.create_issues.isChecked()
@@ -1266,6 +1922,48 @@ class _C5IssuePR(QWidget):
         # 旧 _C9BranchSteps / _C11AKM から移動
         args.branch = self.branch.text().strip() or "main"
         args.enable_auto_merge = self.enable_auto_merge.isChecked()
+        args.delete_local_merged_branch = self.delete_local_merged_branch.isChecked()
+        # 旧 _C1Basic から移動: Fleet mode / Cloud Sessions
+        args.fleet_mode_enabled = self.fleet_mode_enabled.get_tristate()
+        args.cloud_session_enabled = self.cloud_session_enabled.isChecked()
+        self._sync_cloud_repository_from_repo()
+        args.cloud_session_owner = self._cloud_session_repository_owner
+        args.cloud_session_repository_name = self._cloud_session_repository_name
+        args.cloud_session_branch = self.cloud_session_repository_branch.text().strip() or None
+        args.cloud_session_max_concurrency = self.cloud_session_max_concurrency.value()
+        args.cloud_session_integration_id = self.cloud_session_integration_id.text().strip() or None
+        args.cloud_session_mc_base_url = self.cloud_session_mc_base_url.text().strip() or None
+        args.cloud_session_step_overrides = self._normalized_override_json(
+            self.cloud_session_step_overrides,
+            self.tr("Cloud Step 上書き JSON"),
+        )
+        args.cloud_session_subtask_overrides = self._normalized_override_json(
+            self.cloud_session_subtask_overrides,
+            self.tr("Cloud サブタスク上書き JSON"),
+        )
+
+    def _normalized_override_json(self, edit: QLineEdit, label: str) -> Optional[str]:
+        raw = edit.text().strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{label} は JSON object 形式で入力してください: {exc}") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError(f"{label} は JSON object 形式で入力してください。")
+        normalized: Dict[str, bool] = {}
+        for key, value in parsed.items():
+            key_text = str(key).strip()
+            if not key_text:
+                raise ValueError(f"{label} に空の key は指定できません。")
+            if not isinstance(value, bool):
+                raise ValueError(f"{label} の値は true / false のみ指定できます。")
+            normalized[key_text] = value
+        canonical = json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+        if canonical != raw:
+            edit.setText(canonical)
+        return canonical
 
 
 class _C6Output(QWidget):
@@ -1408,10 +2106,10 @@ class _C7Connection(QWidget):
         layout.addLayout(refresh_row)
 
         # ----------------------------------------------------------
-        # T5 (Wave 1 / C2): MCP Server 利用 ON/OFF 設定
+        # T5 (Wave 1 / C2): MCP Server 一覧表示
         # ----------------------------------------------------------
         self._mcp_section_label = QLabel(
-            self.tr("MCP Server 利用設定（ON のサーバは Step 2 実行前に認証必須）")
+            self.tr("登録済み MCP Server 一覧（実行で使用する場合は --mcp-config を指定）")
         )
         self._mcp_section_label.setStyleSheet("color: #6a737d; padding: 6px 0 2px 0;")
         layout.addWidget(self._mcp_section_label)
@@ -1422,7 +2120,7 @@ class _C7Connection(QWidget):
         self._mcp_container_layout.setSpacing(2)
         layout.addWidget(self._mcp_container)
 
-        # サーバ名 -> QCheckBox
+        # 互換属性。現行 UI は一覧表示のみで、実行時 ON/OFF には使わない。
         self._mcp_checkboxes: Dict[str, QCheckBox] = {}
         self._mcp_empty_label: Optional[QLabel] = None
         self._populate_mcp_servers()
@@ -1447,23 +2145,13 @@ class _C7Connection(QWidget):
 
     # ----------------------------------------------------------
     def _populate_mcp_servers(self) -> None:
-        """`copilot mcp list` から MCP サーバ名を取得し、トグル UI を構築する。
-
-        既存設定 (settings_store の ``mcp_enabled`` セクション) を初期チェック状態として反映。
-        """
+        """`copilot mcp list` から MCP サーバ名を取得し、一覧 UI を構築する。"""
         try:
             from .copilot_cli_bridge import CopilotCliBridge
             servers = CopilotCliBridge.list_mcp_servers()
             server_names = sorted(servers.keys()) if isinstance(servers, dict) else []
         except Exception:
             server_names = []
-
-        # 既存設定読込
-        try:
-            from . import settings_store
-            mcp_enabled = settings_store.load_mcp_enabled()
-        except Exception:
-            mcp_enabled = {}
 
         # 既存ウィジェットをクリア
         while self._mcp_container_layout.count():
@@ -1488,10 +2176,9 @@ class _C7Connection(QWidget):
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 0, 0, 0)
             row_layout.setSpacing(6)
-            cb = QCheckBox(name)
-            cb.setChecked(bool(mcp_enabled.get(name, False)))
-            cb.toggled.connect(self._on_mcp_toggle)
-            row_layout.addWidget(cb)
+            lbl = QLabel(f"• {name}")
+            lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            row_layout.addWidget(lbl)
             row_layout.addStretch(1)
             auth_btn = QPushButton(self.tr("認証手順..."))
             auth_btn.setToolTip(
@@ -1500,7 +2187,6 @@ class _C7Connection(QWidget):
             auth_btn.clicked.connect(lambda _checked=False, n=name: self._show_auth_guidance(n))
             row_layout.addWidget(auth_btn)
             self._mcp_container_layout.addWidget(row_widget)
-            self._mcp_checkboxes[name] = cb
 
     # ----------------------------------------------------------
     def _populate_plugins(self) -> None:
@@ -1582,13 +2268,8 @@ class _C7Connection(QWidget):
 
     # ----------------------------------------------------------
     def _on_mcp_toggle(self, _checked: bool) -> None:
-        """各 MCP トグルの状態変化を即座に settings_store に永続化する。"""
-        try:
-            from . import settings_store
-            current = {name: cb.isChecked() for name, cb in self._mcp_checkboxes.items()}
-            settings_store.save_mcp_enabled(current)
-        except Exception:
-            pass
+        """後方互換用 no-op。現行 UI は MCP Server 一覧表示のみ。"""
+        return None
 
     # ----------------------------------------------------------
     def refresh_mcp_servers(self) -> None:
@@ -1597,13 +2278,138 @@ class _C7Connection(QWidget):
         self._populate_plugins()
 
     def mcp_enabled_dict(self) -> Dict[str, bool]:
-        """現在のチェック状態を ``{server_name: bool}`` で返す。"""
-        return {name: cb.isChecked() for name, cb in self._mcp_checkboxes.items()}
+        """後方互換用。現行 UI は MCP Server の実行時 ON/OFF を扱わない。"""
+        return {}
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.cli_path = self.cli_path.text().strip() or None
         args.cli_url = self.cli_url.text().strip() or None
 
+
+# ----------------------------------------------------------------------
+# ASDW-WEB Step 1.3（Dev-Microservice-Azure-DataDeploy）bootstrap 入力の説明文。
+#
+# 根拠（捏造防止）:
+#   - 検証仕様: hve/asdw_data_runtime_context.py
+#     (build_asdw_data_deploy_bootstrap_context / _RESOURCE_SUFFIX_PATTERN /
+#      _DIGEST_REFERENCE_PATTERN / CIDR 包含・非重複チェック)
+#   - リソース生成手順: hve/asdw_data_script_generator.py (_render_prep_script)
+#   - network 契約: .github/skills/azure-skills/azure-cli-deploy-scripts/
+#     references/asdw-data-verifier-contract.md
+#
+# 説明文はヘルプポップアップ（QLabel）と入力欄のツールチップに同じ文字列が
+# 使われる。QLabel のリッチテキスト自動判定を避けるため `<` `>` `&` は使わない。
+# ----------------------------------------------------------------------
+
+_DATA_DEPLOY_HELP_PREFIX = (
+    "【ASDW-WEB Step 1.3「Azure データ基盤デプロイ」専用の設定です】\n"
+)
+
+_DATA_DEPLOY_HELP_LOCATION = _DATA_DEPLOY_HELP_PREFIX + (
+    "\n"
+    "■ 何を入れる項目か\n"
+    "Step 1.3 が Azure 上にデータ基盤を作成するリージョン（場所）です。\n"
+    "\n"
+    "■ 何に使われるか\n"
+    "・リソースグループ作成コマンド `az group create --location` にそのまま渡されます。\n"
+    "・VNet / NAT Gateway / マネージド ID など、リージョン指定を省略して作成される\n"
+    "  配下リソースは、このリソースグループのリージョンに作成されます。\n"
+    "\n"
+    "■ なぜ入力が必要か\n"
+    "HVE は値を推測・捏造しない fail-closed 方式です。未入力のまま Step 1.3 を実行すると、\n"
+    "Azure へ 1 件も書き込まないまま「bootstrap input is missing: LOCATION」で停止します。\n"
+    "\n"
+    "■ 入力形式\n"
+    "Azure のリージョン名（前後に空白を含まない 1 行の文字列）。\n"
+    "例: japaneast / japanwest / eastus"
+)
+
+_DATA_DEPLOY_HELP_RESOURCE_SUFFIX = _DATA_DEPLOY_HELP_PREFIX + (
+    "\n"
+    "■ 何を入れる項目か\n"
+    "Step 1.3 が作成する Azure リソースの名前に共通で付ける識別子（デプロイ用スラッグ）です。\n"
+    "\n"
+    "■ 何に使われるか\n"
+    "・SQL Server / Cosmos DB アカウント / VNet / Private Endpoint などのリソース名を\n"
+    "  組み立てる際の共通サフィックスとして、実行環境に固定値で引き渡されます。\n"
+    "・アプリや環境（dev / stg など）ごとに値を変えることで、同じサブスクリプション内での\n"
+    "  名前衝突と、既存リソースの上書きを防ぎます。\n"
+    "\n"
+    "■ なぜ入力が必要か\n"
+    "SQL Server 名や Cosmos DB アカウント名はグローバルに一意である必要があり、\n"
+    "HVE は名前を自動生成しません。誰が実行しても同じ名前が再現できるよう明示指定が必須です。\n"
+    "\n"
+    "■ 入力形式\n"
+    "小文字の英数字とハイフンのみ。先頭と末尾は英数字。1〜24 文字。\n"
+    "例: app009 / royalty-dev\n"
+    "（大文字・アンダースコア・空白・日本語を含むとエラーになります）"
+)
+
+_DATA_DEPLOY_HELP_VNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
+    "\n"
+    "■ 何を入れる項目か\n"
+    "Step 1.3 が作成する仮想ネットワーク（VNet）全体のアドレス空間です。\n"
+    "\n"
+    "■ 何に使われるか\n"
+    "・`az network vnet create` で作成する VNet のアドレス範囲になります。\n"
+    "・この範囲の内側に、下 2 つのサブネット（Private Endpoint 用・ACI 用）を切り出します。\n"
+    "\n"
+    "■ なぜ入力が必要か\n"
+    "Step 1.3 のデータ基盤は public アクセスを使わない private 構成\n"
+    "（DATA_NETWORK_MODE=private）で構築され、SQL Database / Cosmos DB へは\n"
+    "Private Endpoint 経由でしか接続しません。その土台となる閉じたネットワークが必要です。\n"
+    "既存のオンプレ網やハブ VNet とアドレスが重複すると経路障害になるため、\n"
+    "HVE は値を推測せず、利用者が承認したレンジの明示を求めます。\n"
+    "\n"
+    "■ 入力形式\n"
+    "IPv4 の CIDR 表記。例: 10.40.0.0/16\n"
+    "ホスト部が 0 のネットワークアドレスであること（10.40.0.1/16 はエラー）。"
+)
+
+_DATA_DEPLOY_HELP_PRIVATE_ENDPOINT_SUBNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
+    "\n"
+    "■ 何を入れる項目か\n"
+    "SQL Database と Cosmos DB の Private Endpoint を配置するサブネットのアドレス範囲です。\n"
+    "\n"
+    "■ 何に使われるか\n"
+    "・VNet 内にこのサブネットを作成し、SQL / Cosmos DB の Private Endpoint（プライベート IP）を\n"
+    "  ここに割り当てます。\n"
+    "・Step 1.2 の検証スクリプトが、各 Private Endpoint がこのサブネットに属し、接続状態が\n"
+    "  Approved であることを読み取り専用でチェックします。\n"
+    "\n"
+    "■ なぜ入力が必要か\n"
+    "private 構成ではデータストアへの到達経路が Private Endpoint だけになるため、\n"
+    "その配置先サブネットを決めないとデプロイも検証も開始できません。\n"
+    "\n"
+    "■ 入力形式\n"
+    "IPv4 の CIDR 表記。例: 10.40.1.0/24\n"
+    "・「DataDeploy VNet CIDR」の内側に完全に収まること。\n"
+    "・「DataDeploy ACI subnet CIDR」と 1 アドレスも重ならないこと。"
+)
+
+_DATA_DEPLOY_HELP_ACI_SUBNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
+    "\n"
+    "■ 何を入れる項目か\n"
+    "検証・データ登録に使う一時 Azure Container Instances (ACI) を起動するサブネットの\n"
+    "アドレス範囲です。\n"
+    "\n"
+    "■ 何に使われるか\n"
+    "・Microsoft.ContainerInstance/containerGroups へ委任（delegation）済みのサブネットとして\n"
+    "  作成され、送信通信用に NAT Gateway が関連付けられます。\n"
+    "・Step 1.3 のデータ登録 ACI と Step 1.2 の件数検証 ACI が、`az container create --subnet`\n"
+    "  でこのサブネットに接続されます。\n"
+    "\n"
+    "■ なぜ入力が必要か\n"
+    "Private Endpoint 経由でしか到達できない SQL / Cosmos DB へサンプルデータを登録し、\n"
+    "件数を検証するには、同じ VNet の内側で動くコンテナーが必要です。\n"
+    "ACI の VNet 統合には専用の委任済みサブネットが必須で、Private Endpoint 用サブネットとは\n"
+    "共有できないため、別レンジを指定します。\n"
+    "\n"
+    "■ 入力形式\n"
+    "IPv4 の CIDR 表記。例: 10.40.2.0/24\n"
+    "・「DataDeploy VNet CIDR」の内側に完全に収まること。\n"
+    "・「DataDeploy private endpoint subnet CIDR」と 1 アドレスも重ならないこと。"
+)
 
 class _CAzure(QWidget):
     """連携 / Azure：Azure 連携設定。"""
@@ -1620,12 +2426,60 @@ class _CAzure(QWidget):
             description=self.tr("Azure リソースグループ名。"),
             input_widget=self.resource_group,
         ))
+        self.data_location = QLineEdit()
+        self.data_resource_suffix = QLineEdit()
+        self.data_vnet_cidr = QLineEdit()
+        self.data_private_endpoint_subnet_cidr = QLineEdit()
+        self.data_aci_subnet_cidr = QLineEdit()
+        for title, input_widget, description in (
+            (
+                "DataDeploy location",
+                self.data_location,
+                _DATA_DEPLOY_HELP_LOCATION,
+            ),
+            (
+                "DataDeploy resource suffix",
+                self.data_resource_suffix,
+                _DATA_DEPLOY_HELP_RESOURCE_SUFFIX,
+            ),
+            (
+                "DataDeploy VNet CIDR",
+                self.data_vnet_cidr,
+                _DATA_DEPLOY_HELP_VNET_CIDR,
+            ),
+            (
+                "DataDeploy private endpoint subnet CIDR",
+                self.data_private_endpoint_subnet_cidr,
+                _DATA_DEPLOY_HELP_PRIVATE_ENDPOINT_SUBNET_CIDR,
+            ),
+            (
+                "DataDeploy ACI subnet CIDR",
+                self.data_aci_subnet_cidr,
+                _DATA_DEPLOY_HELP_ACI_SUBNET_CIDR,
+            ),
+        ):
+            layout.addWidget(_LabeledField(
+                title=self.tr(title),
+                description=self.tr(description),
+                input_widget=input_widget,
+            ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.resource_group = self.resource_group.text().strip() or None
+        args.data_location = self.data_location.text().strip() or None
+        args.data_resource_suffix = self.data_resource_suffix.text().strip() or None
+        args.data_vnet_cidr = self.data_vnet_cidr.text().strip() or None
+        args.data_private_endpoint_subnet_cidr = (
+            self.data_private_endpoint_subnet_cidr.text().strip() or None
+        )
+        args.data_aci_subnet_cidr = self.data_aci_subnet_cidr.text().strip() or None
 
 
 class _C10AppId(QWidget):
+    # github.com CI/CD（A2）トグルの _LabeledField タイトル。
+    # _STEP2_FIELDS_BY_WORKFLOW の登録キーと完全一致させること。
+    GITHUB_CICD_FIELD_TITLE = "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -1652,6 +2506,30 @@ class _C10AppId(QWidget):
             description=self.tr("ユースケース ID（ASDW 等で使用）。"),
             input_widget=self.usecase_id,
         ))
+
+        # github.com CI/CD（案 P）: ASDW-WEB / ADFDV 選択時に右パネルの
+        # ワークフロー枠内へ _refresh_specific_categories が本 LF を移設して表示する。
+        self.github_cicd_enabled = QCheckBox(self.tr("有効化"))
+        layout.addWidget(_LabeledField(
+            title=self.tr(self.GITHUB_CICD_FIELD_TITLE),
+            description=(
+                self.tr("ON にすると、ワークフローをローカルで実行し、Deploy（Azure "
+                "デプロイ）Step のうち remote CI/CD が必要な Step だけ、Step 専用の一時ブランチを作成して github.com の "
+                "GitHub Actions (OIDC) に委譲します。Issue Template は使いません。"
+                "成果物の commit / push / PR 作成 / 自動 Approve & merge / base branch 復帰まで Step 単位で実行します"
+                "（失敗 Step がある場合は PR を作成せず、一時ブランチはデバッグ用に残します）。"
+                "OFF の場合はローカルで成果物を生成するのみで、リポジトリ操作は手動です。"
+                "事前に github.com 側で次の設定が必要です: "
+                "Azure OIDC Secrets（AZURE_CLIENT_ID・AZURE_TENANT_ID・"
+                "AZURE_SUBSCRIPTION_ID）/ Workflow permissions = Read and write / "
+                "GH_TOKEN（PR 作成・ラベル付与用）。")
+            ),
+            input_widget=self.github_cicd_enabled,
+        ))
+        # FR-CLI-34: 「github.com で CI/CD を実行」の直下にマージ後ローカルブランチ削除トグルを
+        # 同一の共通ファクトリで生成して配置する（C5 と双方向同期、内部設定は 1 変数）。
+        self.delete_local_merged_branch, _delete_branch_field_c10 = _make_delete_branch_field(self)
+        layout.addWidget(_delete_branch_field_c10)
 
     def to_args(self, args: OrchestrateArgs) -> None:
         # `args.app_id`（単一値・後方互換）は `args.app_ids[0]` から
@@ -1978,7 +2856,15 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     ],
     "asdw-web": [
         ("c10", "対象アプリケーション (APP-ID)"),
-        ("c10", "Azure リソースグループ名"),
+        ("c_azure", "Azure リソースグループ名"),
+        ("c_azure", "DataDeploy location"),
+        ("c_azure", "DataDeploy resource suffix"),
+        ("c_azure", "DataDeploy VNet CIDR"),
+        ("c_azure", "DataDeploy private endpoint subnet CIDR"),
+        ("c_azure", "DataDeploy ACI subnet CIDR"),
+        ("c_azure", "DataDeploy verify ACI image"),
+        ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
+        ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
     "adfd": [
         ("c10", "対象アプリケーション (APP-ID)"),
@@ -1986,6 +2872,8 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "adfdv": [
         ("c10", "対象アプリケーション (APP-ID)"),
         ("c10", "Azure リソースグループ名"),
+        ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
+        ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
     "akm": [
         ("c4", "Work IQ 回答ドラフト作成"),
@@ -2008,6 +2896,23 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     ],
 }
 
+# CI/CD 系トグル（github.com で CI/CD を実行 / マージ後にローカル作業ブランチを
+# 削除）の表示トリガーとなる Deploy ステップ ID。当該ワークフローでこれらの Step が
+# 1つでも選択された時のみ 2トグルを表示する（OptionsPage.set_selected_steps が選択状態を
+# 供給し、_refresh_specific_categories が評価する）。ASDW-WEB は Step 3.4(Compute Deploy)/
+# 4.3(UI Deploy)、ADFDV は Step 1.2(データリソース Deploy)/3(Functions Deploy)。
+_CICD_TOGGLE_TRIGGER_STEPS: Dict[str, frozenset] = {
+    "asdw-web": frozenset({"3.4", "4.3"}),
+    "adfdv": frozenset({"1.2", "3"}),
+}
+
+# CI/CD 系トグルの _LabeledField タイトル（_STEP2_FIELDS_BY_WORKFLOW のキーと一致）。
+# トリガー Step 未選択時に entries から除外する対象。
+_CICD_TOGGLE_FIELD_TITLES: Tuple[str, ...] = (
+    _C10AppId.GITHUB_CICD_FIELD_TITLE,
+    _DELETE_BRANCH_FIELD_TITLE,
+)
+
 # 全ワークフロー共通で常に表示するフィールド（最下段）。
 # 追加プロンプトは Step 1 右ペイン（OptionsPage）の最上部に常時表示するため、
 # `_refresh_specific_categories` / `_pin_additional_prompt_top` で個別制御する。
@@ -2028,7 +2933,7 @@ _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
     "レビュー自動投入",
     "ローカルでコードレビュー実行",
     "コードレビュー修正プランを自動承認",
-    "自己改善ループを有効化",
+    "自己改善ループ",
     "自己改善 最大繰り返し回数",
     "自己改善 対象パス",
     "自己改善 ゴール説明",
@@ -2039,7 +2944,7 @@ _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
 # `_refresh_specific_categories` が選択 Workflow 群を本リスト順で並べてグループ枠を生成する。
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "akm", "aqod", "adoc",
+    "aag", "aagd", "akm", "aqod", "adoc",
 ]
 
 # Step 1 右ペインのワークフロー単位グループ枠（QGroupBox）共通スタイル。
@@ -2074,6 +2979,10 @@ class OptionsPage(QWidget):
         self._workflow_name: Optional[str] = None
         self._workflow_ids: List[str] = []
         self._workflow_name_map: Dict[str, str] = {}
+        # ステップ選択（``{workflow_id: [step_id, ...]}``）。WorkflowSelectPage の
+        # steps_selection_changed 経由で set_selected_steps が更新する。
+        # ASDW-WEB / ADFDV の CI/CD 系トグルの表示条件評価に用いる。
+        self._selected_steps: Dict[str, List[str]] = {}
 
         # 各カテゴリのインスタンス（参照保持）
         self.c1 = _C1Basic()
@@ -2117,6 +3026,23 @@ class OptionsPage(QWidget):
             lambda _s: self._refresh_specific_categories()
         )
 
+        # メイン画面（C10: github.com で CI/CD を実行）と設定画面（C5: PR 自動
+        # Approve & Auto-merge）のトグルは同一の内部設定（enable_auto_merge）を表すため
+        # 双方向同期する。一方を操作するともう一方へ反映する（無限ループは
+        # blockSignals で防止）。
+        def _mirror_auto_merge(src: QCheckBox, dst: QCheckBox) -> None:
+            def _on_toggled(checked: bool) -> None:
+                if dst.isChecked() != checked:
+                    dst.blockSignals(True)
+                    dst.setChecked(checked)
+                    dst.blockSignals(False)
+            src.toggled.connect(_on_toggled)
+        _mirror_auto_merge(self.c10.github_cicd_enabled, self.c5.enable_auto_merge)
+        _mirror_auto_merge(self.c5.enable_auto_merge, self.c10.github_cicd_enabled)
+        # FR-CLI-34: 削除トグルも C5/C10 で双方向同期（同一の内部設定 delete_local_merged_branch）。
+        _mirror_auto_merge(self.c10.delete_local_merged_branch, self.c5.delete_local_merged_branch)
+        _mirror_auto_merge(self.c5.delete_local_merged_branch, self.c10.delete_local_merged_branch)
+
         # 監視対象フィールドの textChanged をバナー更新にフック（接続漏れ防止のため
         # 一覧をテーブル化してまとめて接続する）
         self._wire_requirements_banner_listeners()
@@ -2144,6 +3070,21 @@ class OptionsPage(QWidget):
 
         self._refresh_specific_categories()
         self._update_attachment_pane_visibility()
+
+    def set_selected_steps(
+        self, steps_by_workflow: Optional[Dict[str, List[str]]] = None
+    ) -> None:
+        """選択中ステップ（``{workflow_id: [step_id, ...]}``）を設定し、
+        ワークフロー固有フィールドの表示条件を再評価する。
+
+        ASDW-WEB / ADFDV の CI/CD 系トグル（github.com で CI/CD を実行 /
+        マージ後にローカル作業ブランチを削除）は Deploy ステップが選択された
+        時のみ表示する（条件評価は ``_refresh_specific_categories``）。
+        """
+        self._selected_steps = {
+            wf: list(steps) for wf, steps in (steps_by_workflow or {}).items()
+        }
+        self._refresh_specific_categories()
 
     def build_args(self, repo_root: Optional["Path"] = None) -> OrchestrateArgs:  # type: ignore[name-defined] # noqa: F821
         """全カテゴリの入力値を `OrchestrateArgs` にまとめて返す。"""
@@ -2178,16 +3119,15 @@ class OptionsPage(QWidget):
         ):
             cat.to_args(args)
 
-        # SSOT ブリッジ: mdq_watch / mdq_watch_debounce_ms は MDQ セクション
-        # (skills/Markdown-Query) で編集されるため、settings_store から直接拾う。
+        # SSOT ブリッジ: mdq / cq の watch 設定は skills セクションで編集されるため、
+        # settings_store から直接拾って OrchestrateArgs へ反映する。
         try:
             from . import settings_store
+            from .orchestrate_args import apply_watch_settings
             _opts = settings_store.load().get("options", {})
-            if "mdq_watch" in _opts:
-                args.mdq_watch = _opts["mdq_watch"]
-            if "mdq_watch_debounce_ms" in _opts:
-                _v = _opts["mdq_watch_debounce_ms"]
-                args.mdq_watch_debounce_ms = _v if isinstance(_v, int) and _v > 0 else None
+            apply_watch_settings(args, _opts)
+            if "auto_compaction" in _opts:
+                args.auto_compaction = bool(_opts["auto_compaction"])
         except Exception:
             pass
 
@@ -2224,6 +3164,20 @@ class OptionsPage(QWidget):
         """入力検証。OK なら (True, "")、NG なら (False, エラー文)。"""
         if not self._workflow_ids and not self._workflow_id:
             return False, "ワークフローが選択されていません。"
+        if self.c10.github_cicd_enabled.isChecked():
+            selected_set = set(self._workflow_ids or ([self._workflow_id] if self._workflow_id else []))
+            cicd_auth_required = any(
+                wf in selected_set
+                and bool(_CICD_TOGGLE_TRIGGER_STEPS[wf] & set(self._selected_steps.get(wf, [])))
+                for wf in _CICD_TOGGLE_TRIGGER_STEPS
+            )
+            if cicd_auth_required and not (
+                os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+            ):
+                return False, self.tr(
+                    "github.com で CI/CD を実行するには GitHub CLI 認証が必要です。"
+                    "表示された「GitHub CLI でログイン」を実行してから再度開始してください。"
+                )
         # ARD: company-name または target-business のいずれかは推奨だが、強制はしない
         # （CLI 仕様上は未指定でも動作可能なため）
         # 実行は許可するが警告ステータスを表示できる構造を維持
@@ -2239,12 +3193,20 @@ class OptionsPage(QWidget):
 
     # 監視対象フィールド対応表（プラン Task C のキー → ウィジェット属性）
     # キーは workflow_step_requirements.INPUT_FIELD_KEYS と一致させる。
+    # FR-GUI-02: レジストリ宣言（StepDef.required_params）由来のキーも網羅する。
     def _banner_input_widgets(self) -> Dict[str, QWidget]:
         return {
             "company_name": self.c14.company_name,
             "target_business": self.c14.target_business,
             "resource_group": self.c_azure.resource_group,
             "target_dirs": self.c13.target_dirs,
+            "data_location": self.c_azure.data_location,
+            "data_resource_suffix": self.c_azure.data_resource_suffix,
+            "data_vnet_cidr": self.c_azure.data_vnet_cidr,
+            "data_private_endpoint_subnet_cidr": (
+                self.c_azure.data_private_endpoint_subnet_cidr
+            ),
+            "data_aci_subnet_cidr": self.c_azure.data_aci_subnet_cidr,
         }
 
     def _wire_requirements_banner_listeners(self) -> None:
@@ -2482,7 +3444,7 @@ class OptionsPage(QWidget):
         _add("C1", "基本設定  *必須", self.c1)
         _add("C3", "自動プロンプト", self.c3)
         _add("C4", "Work IQ", self.c4)
-        _add("C5", "Git", self.c5)
+        _add("C5", "GitHub", self.c5)
         _add("C6", "出力制御", self.c6)
         _add("C7", "MCP / CLI 接続", self.c7)
         _add("AZURE", "Azure", self.c_azure)
@@ -2572,6 +3534,24 @@ class OptionsPage(QWidget):
         # 共通 LF（同一 (category_attr, title) キーを複数ワークフローで参照）は
         # 同一 QWidget インスタンスのため、最初に占有した枠のみで表示する。
         # 例: APP-ID は AAD-WEB/ASDW-WEB/ADFD/ADFDV 共通だが、複数選択時は先頭ワークフロー枠に集約。
+        # CI/CD 系トグル（github.com で CI/CD を実行 / マージ後にローカル作業ブランチを削除）は、
+        # CI/CD 対応ワークフロー（asdw-web/adfdv）の「いずれか」で Deploy ステップ
+        # （_CICD_TOGGLE_TRIGGER_STEPS）が選択された時のみ表示する。CI/CD トグルは
+        # 共通 LF（1 個）を asdw-web/adfdv で共有するため、ワークフロー個別ではなく集約で判定する。
+        # 複数ワークフロー同時選択時に片方が Deploy 不要でも、他方が Deploy 必要なら表示を維持する。
+        cicd_workflows_selected = [
+            wf for wf in _CICD_TOGGLE_TRIGGER_STEPS if wf in selected_set
+        ]
+        cicd_toggles_visible = any(
+            bool(_CICD_TOGGLE_TRIGGER_STEPS[wf] & set(self._selected_steps.get(wf, [])))
+            for wf in cicd_workflows_selected
+        )
+        # CI/CD 対応ワークフローが選択されている場合のみ、Deploy ステップ未選択時に 2 トグルを
+        # 除外し内部状態も OFF にする（非表示なのに enable_auto_merge=True で自動マージが
+        # 走るのを防ぐ。C5 とのミラーで設定画面側も OFF）。CI/CD 非対応のみ選択 / 初期状態（__init__
+        # 時の呼び出し含む）はトグルのデフォルト状態（delete=True 等）を保持するため touch しない。
+        if cicd_workflows_selected and not cicd_toggles_visible:
+            self._set_cicd_toggles_off()
         claimed_lf_keys: set = set()
         for wf_id in _WORKFLOW_CANONICAL_ORDER:
             if wf_id not in selected_set:
@@ -2580,6 +3560,13 @@ class OptionsPage(QWidget):
             if not entries:
                 # 固有設定を持たないワークフロー（aas / aag / aagd 等）は枠を作らない。
                 continue
+            # CI/CD 対応ワークフローで Deploy ステップ未選択時は 2 entry を除外する
+            # （除外比較は後続の filtered_entries の title.strip() 比較と統一）。
+            if not cicd_toggles_visible and wf_id in _CICD_TOGGLE_TRIGGER_STEPS:
+                entries = [
+                    (cat, title) for (cat, title) in entries
+                    if title.strip() not in _CICD_TOGGLE_FIELD_TITLES
+                ]
             filtered_entries = [
                 (cat, title) for (cat, title) in entries
                 if (cat, title.strip()) not in claimed_lf_keys
@@ -2611,6 +3598,20 @@ class OptionsPage(QWidget):
         # 8) 必須要件バナーの再配置（ワークフロー枠が再生成されたため）
         self._refresh_requirements_banner()
 
+    def _set_cicd_toggles_off(self) -> None:
+        """CI/CD 系トグルを非表示化する際、内部状態を OFF にする。
+
+        非表示なのに enable_auto_merge=True のまま実行されると、Deploy 対象外でも
+        自動 PR 作成・マージが走ってしまう。C10 トグルを OFF にすると _mirror_auto_merge
+        により C5（設定画面）の enable_auto_merge / delete_local_merged_branch も OFF になる。
+        """
+        for cb in (
+            self.c10.github_cicd_enabled,
+            self.c10.delete_local_merged_branch,
+        ):
+            if cb.isChecked():
+                cb.setChecked(False)
+
     # ------------------------------------------------------------------
     # ワークフロー単位グループ枠 — 内部ヘルパ
     # ------------------------------------------------------------------
@@ -2624,7 +3625,16 @@ class OptionsPage(QWidget):
         """
         if self._lf_registry:
             return
-        for cat_attr in ("c4", "c10", "c11", "c12", "c13", "c14"):
+        for cat_attr in (
+            "c4",
+            "c5",
+            "c10",
+            "c11",
+            "c12",
+            "c13",
+            "c14",
+            "c_azure",
+        ):
             cw = getattr(self, cat_attr, None)
             if cw is None:
                 continue
@@ -2665,6 +3675,7 @@ class OptionsPage(QWidget):
 
         seen: set = set()
         added = 0
+        auth_added = False
         for cat_attr, fld_title in entries:
             key = (cat_attr, fld_title.strip())
             if key in seen:
@@ -2673,6 +3684,18 @@ class OptionsPage(QWidget):
             lf = self._lf_registry.get(key)
             if lf is None:
                 continue
+            if (
+                not auth_added
+                and cat_attr == "c10"
+                and fld_title.strip() == _C10AppId.GITHUB_CICD_FIELD_TITLE
+            ):
+                auth_group = getattr(self.c5, "gh_auth_group", None)
+                if auth_group is not None:
+                    self.c5.refresh_gh_login_status()
+                    inner.addWidget(auth_group)
+                    auth_group.setVisible(True)
+                    auth_added = True
+                    added += 1
             inner.addWidget(lf)  # 親が自動的に box に切り替わる
             lf.setVisible(True)
             added += 1
@@ -2735,6 +3758,16 @@ class OptionsPage(QWidget):
         if attachment is not None and attachment.parentWidget() is box:
             attachment.setParent(self)
             attachment.setVisible(False)
+
+        # GitHub CLI 認証グループ救出（CI/CD トグル直上へ移設した場合）。
+        auth_group = getattr(self.c5, "gh_auth_group", None)
+        if auth_group is not None and auth_group.parentWidget() is box:
+            c5_layout = self.c5.layout()
+            if isinstance(c5_layout, QVBoxLayout):
+                c5_layout.insertWidget(0, auth_group)  # type: ignore[attr-defined]
+            elif c5_layout is not None:
+                c5_layout.addWidget(auth_group)
+            auth_group.setVisible(False)
 
         if not self._lf_registry:
             return

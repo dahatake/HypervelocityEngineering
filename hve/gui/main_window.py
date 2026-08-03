@@ -1,4 +1,4 @@
-"""hve.gui.main_window — 3 ステップ単一ウィンドウ (MainWindow)。
+"""hve.gui.main_window — 2 ステップ単一ウィンドウ (MainWindow)。
 
 設計書 §3 / §11.2 U1 対応。
 
@@ -6,7 +6,6 @@
   QMainWindow
   └── QWidget (central)
       └── QVBoxLayout
-          ├── HeaderBar              (§4)
           ├── QStackedWidget          (2 ステップの切替)
           │   ├── WorkflowSelectPage (Step 1: ワークフローの選択 — 右ペインに OptionsPage を埋め込み)
           │   └── WorkbenchPage       (Step 2: 実行)
@@ -23,10 +22,12 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
 
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QResizeEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -49,7 +50,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .header_bar import HeaderBar
 from .copilot_chat_panel import CopilotChatPanel
 from .top_file_toggles_bar import TopFileTogglesBar
 from .file_explorer.file_tree_panel import FileTreePanel
@@ -75,10 +75,61 @@ from .workflow_display import format_workflow_label
 _TITLE_MAX_WORKFLOWS = 3  # 旧: タイトル番号表示用定数。現在 _update_title から参照なし。下位互換のため一時残置。
 # TODO: 次回クリーンアップで削除する。
 
-
 # ステップインデックス (2 ステップ構成: ワークフローの選択 / 実行)
 _STEP_WORKFLOW = 0
 _STEP_WORKBENCH = 1
+_GIT_STATUS_REFRESH_INTERVAL_MS = 5000
+_GIT_STATUS_COMMAND_TIMEOUT_SECONDS = 1
+
+
+def _resolve_local_git_branch(repo_root: Path) -> Optional[str]:
+    """Return the current local Git branch for ``repo_root``.
+
+    Remote branch information is intentionally not queried: this label is only
+    meant to show what the local worktree is currently checked out to.
+    """
+    if not (repo_root / ".git").exists():
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=_GIT_STATUS_COMMAND_TIMEOUT_SECONDS,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode == 0:
+        branch = proc.stdout.strip()
+        if branch:
+            return branch
+
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=_GIT_STATUS_COMMAND_TIMEOUT_SECONDS,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    short_sha = proc.stdout.strip()
+    if not short_sha:
+        return None
+    return f"detached:{short_sha}"
+
+
+def _format_git_status_text(repo_root: Path, branch: Optional[str]) -> str:
+    repo_name = repo_root.name or str(repo_root)
+    return f"Git: {repo_name} @ {branch or '不明'}"
 
 
 class _SessionArtifactPickerDialog(QDialog):
@@ -160,7 +211,7 @@ def _build_step_seeds_for_workflow(
 
     親子判定ルール:
       - 各 Step ID の dotted prefix を逆順に試し、登録済みステップ ID と一致したものを親とする
-        （例: "2.3T" → 親候補 "2.3"（存在しなければ）→ "2"）。
+        （例: "2.3.1" → 親候補 "2.3"（存在しなければ）→ "2"）。
       - 親が見つからない場合は workflow 直下のトップレベル Step として返す。
       - 子を持たない container は表示価値が無いため除去する。
 
@@ -293,12 +344,16 @@ class MainWindow(QMainWindow):
 
         # Issue-gui-session-workdir-isolation T5a/T9:
         # MainWindow 1 インスタンス = 1 GUI セッションとして、独立した
-        # work/gui-runs/<session_run_id>/ を生成し、HVE_WORK_ROOT を子プロセス
+        # work/run/<session_run_id>/ を生成し、HVE_WORK_ROOT を子プロセス
         # に伝播する。設定値が読み取れない初期化タイミングでは "keep" 既定。
         try:
             from . import settings_store as _ss
+            import os as _os
 
             _policy = (_ss.get_option("gui_session_cleanup_policy") or "keep")
+            _tz = (_ss.get_option("run_id_timezone") or "").strip()
+            if _tz:
+                _os.environ["HVE_RUN_ID_TZ"] = _tz
         except Exception:
             _policy = "keep"
         from .session_workdir import GuiSessionWorkdir
@@ -438,9 +493,6 @@ class MainWindow(QMainWindow):
         top_row.addWidget(self._btn_settings)
         top_row.addWidget(self._btn_copilot)
 
-        # ヘッダー
-        self._header = HeaderBar()
-
         # Copilot チャットドック（初期状態は非表示）
         self._copilot_dock = CopilotChatPanel(self, repo_root=self._repo_root)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._copilot_dock)
@@ -454,15 +506,34 @@ class MainWindow(QMainWindow):
         # WorkflowSelectPage に OptionsPage を右ペインとして埋め込む。2ペイン構成。
         self._page_workflow = WorkflowSelectPage(options_page=self._page_options)
         self._page_workflow.selection_changed.connect(self._on_workflow_selection_changed)
+        self._page_workflow.steps_selection_changed.connect(self._on_steps_selection_changed)
         self._page_workflow.autopilot_changed.connect(self._on_autopilot_toggled)
 
         self._page_workbench = WorkbenchPage()
         self._page_workbench.process_finished.connect(self._on_process_finished)
+        self._page_workbench.cloud_session_url_changed.connect(self._on_cloud_session_url_changed)
+        # Steering（実行中ワークフローへの割り込み送信）機能のため、CopilotChatPanel に
+        # WorkbenchPage への参照を渡す（resolve_active_main_step_id / active_steering_ipc_dir
+        # の呼び出し元として使用する）。CopilotChatPanel 側に set_workbench_page が
+        # 未実装のバージョンでも安全にスキップできるよう存在チェックする。
+        _set_workbench_page = getattr(self._copilot_dock, "set_workbench_page", None)
+        if callable(_set_workbench_page):
+            _set_workbench_page(self._page_workbench)
         # Issue-gui-session-workdir-isolation T5b:
         # GUI セッション分離のため HVE_WORK_ROOT 等を子プロセスに伝播させる。
         try:
             self._page_workbench.set_env_overrides(
                 self._session_workdir.env_overrides()
+            )
+        except Exception:
+            pass
+        # console-log ダンプ機能:
+        # GUI セッション終了時に画面ログ全文を
+        # ``work/run/<session_run_id>/console-log.txt`` へ書き出すための
+        # 出力先ディレクトリを WorkbenchPage に注入する。
+        try:
+            self._page_workbench.set_session_work_root(
+                self._session_workdir.work_root
             )
         except Exception:
             pass
@@ -532,7 +603,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.addLayout(top_row)
-        layout.addWidget(self._header)
         layout.addLayout(body_row, stretch=1)
         layout.addWidget(self._status_banner)
         layout.addLayout(nav)
@@ -641,7 +711,7 @@ class MainWindow(QMainWindow):
     def _explorer_root_display_names(self) -> dict:
         """ルート表示名のマッピングを返す。
 
-        現状は GUI セッション作業フォルダー（``work/gui-runs/<session_run_id>/``）
+        現状は GUI セッション作業フォルダー（``work/run/<session_run_id>/``）
         のみを ``作業フォルダー (<session_run_id>)`` の形式で表示する。
         それ以外のルートは ``FileTreePanel`` 側のフォールバック（``path.name``）に委ねる。
         """
@@ -672,6 +742,13 @@ class MainWindow(QMainWindow):
             self._settings_window.settings_changed.connect(
                 self._on_settings_changed
             )
+            # 「HVE 設定」>「基本設定」の「利用できるモデルの取得」ボタン押下は、
+            # ステータスバーの同名ボタンと全く同じ処理（_on_login_clicked）へ委譲する。
+            # これにより取得スレッド／キャッシュ更新／両 C1 インスタンスの
+            # reload_models() 呼び出しが重複コードなしで共有される。
+            self._settings_window.fetch_models_requested.connect(
+                self._on_login_clicked
+            )
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
@@ -701,6 +778,14 @@ class MainWindow(QMainWindow):
                     # 入力（company_name 等）が上書きされてしまう。
                 },
                 _settings or settings_store.load(),
+                # C10.app_ids は Step 1 右ペインの AppIdChecklist を SSOT として
+                # 保護する。Settings dialog の C10 セクションは独立
+                # ``_C10AppId()`` インスタンスかつ起動時は空文字のため、
+                # 他フィールド (usecase_id 等) の autosave 発火時に
+                # ここで OptionsPage の APP-ID 欄が空文字で上書きされ、
+                # downstream workflow で全 APP-ID 並列実行されるバグの
+                # 引き金となっていた。
+                skip_keys={("C10", "app_ids")},
             )
         except Exception:
             pass
@@ -760,8 +845,24 @@ class MainWindow(QMainWindow):
         # T3 (gui-status-banner / Q1=B): 左側の _status_label は撤去。
         # 状況メッセージは central の _status_banner へ一本化する。
         # 認証ステータス表示は廃止（認証は GitHub Copilot CLI 側で完結）。
+        # 「Copilot にログイン」ボタンは廃止（認証は GitHub Copilot CLI 側で完結するため）。
         # 「利用できるモデルの取得」ボタンは常時有効。押下で
         # models_api.fetch_model_entries() を実行しキャッシュへ保存する。
+        self._git_status_label = QLabel()
+        self._git_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._git_status_label.setMinimumWidth(0)
+        self._git_status_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        sb.addWidget(self._git_status_label, 1)
+        self._refresh_git_status_label()
+
+        self._git_status_timer = QTimer(self)
+        self._git_status_timer.setInterval(_GIT_STATUS_REFRESH_INTERVAL_MS)
+        self._git_status_timer.timeout.connect(self._refresh_git_status_label)
+        self._git_status_timer.start()
+
         self._btn_login = QPushButton(self.tr("利用できるモデルの取得"))
         self._btn_login.setVisible(True)
         self._btn_login.setEnabled(True)
@@ -776,6 +877,90 @@ class MainWindow(QMainWindow):
         )
         self._btn_login.setMinimumWidth(0)
         sb.addPermanentWidget(self._btn_login)
+
+        # 「使用するモデル」/「Effort」選択（「利用できるモデルの取得」の右側）。
+        # 「HVE 設定」>「基本設定」の「使用するモデル *必須」/「Effort」と同一の
+        # ウィジェット（self._page_options.c1.model / .effort）をそのまま
+        # re-parent して配置する。同一オブジェクトのため独自の値は一切保持しない
+        # （SSOT は _page_options.c1）。選択肢投入・Effort 動的切替・
+        # reload_models() 対応ロジックは _C1Basic 側の既存実装をそのまま再利用する。
+        model_status_container = QWidget()
+        model_status_layout = QHBoxLayout(model_status_container)
+        model_status_layout.setContentsMargins(0, 0, 0, 0)
+        model_status_layout.setSpacing(4)
+
+        model_caption = QLabel(self.tr("使用するモデル"))
+        effort_caption = QLabel(self.tr("Effort"))
+        for caption in (model_caption, effort_caption):
+            caption.setStyleSheet("padding: 0 2px;")
+
+        model_status_layout.addWidget(model_caption)
+        model_status_layout.addWidget(self._page_options.c1.model)
+        model_status_layout.addWidget(effort_caption)
+        model_status_layout.addWidget(self._page_options.c1.effort)
+
+        model_status_container.setToolTip(
+            self.tr("「HVE 設定」の「基本設定」にある「使用するモデル」と同じ値です。"
+            "ここで変更すると即座に反映されます。")
+        )
+        sb.addPermanentWidget(model_status_container)
+
+        # ここでの選択変更を settings_store へ即時反映する。反映しない場合、
+        # 後で「HVE 設定」ダイアログ側の別項目を保存した際に、ここで選んだ値が
+        # 古い設定値で上書きされてしまうため（_on_settings_changed が
+        # _page_options.c1 へ settings_store の値を再適用するため）。
+        self._page_options.c1.model.currentIndexChanged.connect(
+            self._on_execution_model_or_effort_changed
+        )
+        self._page_options.c1.effort.currentIndexChanged.connect(
+            self._on_execution_model_or_effort_changed
+        )
+
+    def _refresh_git_status_label(self) -> None:
+        try:
+            branch = _resolve_local_git_branch(self._repo_root)
+        except Exception:
+            branch = None
+        text = _format_git_status_text(
+            self._repo_root,
+            branch,
+        )
+        self._git_status_label.setText(text)
+        self._git_status_label.setToolTip(text)
+
+    def _on_execution_model_or_effort_changed(self, *_args: object) -> None:
+        """ステータスバーの「使用するモデル」/Effort 選択を settings_store へ即時保存し、
+        「HVE 設定」ダイアログが表示中であれば同じ値をそこへも反映する。
+
+        設定ダイアログ側コンボへの反映は blockSignals を使わない。モデル変更時は
+        設定ダイアログ側の `_C1Basic._refresh_effort_row`（Effort 選択肢の動的再構築）
+        を正しく連鎖させる必要があるため。連鎖の結果、設定ダイアログの autosave が
+        再度発火し `_on_settings_changed()` 経由で本ウィジェットへ値が再適用されるが、
+        値は既に一致しているため QComboBox はシグナルを再発火せず、ここで連鎖は
+        自然に停止する（無限ループにはならない）。
+        """
+        c1 = self._page_options.c1
+        model_value = c1.model.currentData()
+        effort_value = c1.effort.currentData() if c1.effort.isEnabled() else None
+
+        from . import settings_store as _ss
+
+        _ss.set_option("model", model_value if model_value else "Auto")
+        _ss.set_option("reasoning_effort", effort_value or "")
+
+        if self._settings_window is not None and self._settings_window.isVisible():
+            settings_c1 = self._settings_window._sections.get("C1")
+            settings_model_combo = getattr(settings_c1, "model", None)
+            settings_effort_combo = getattr(settings_c1, "effort", None)
+            for combo, value in (
+                (settings_model_combo, model_value),
+                (settings_effort_combo, effort_value),
+            ):
+                if combo is None:
+                    continue
+                idx = combo.findData(value)
+                if idx >= 0 and combo.currentIndex() != idx:
+                    combo.setCurrentIndex(idx)
 
     # ----------------------------------------------------------
     # モデル一覧の取得
@@ -903,9 +1088,6 @@ class MainWindow(QMainWindow):
         self._btn_stop.setVisible(step == _STEP_WORKBENCH)
         self._btn_stop.setEnabled(running)
 
-        # ヘッダー進捗
-        self._header.set_current_step(step)
-
         # ステータスバー
         if step == _STEP_WORKFLOW:
             wf_ids = self._page_workflow.selected_workflow_ids()
@@ -1027,6 +1209,13 @@ class MainWindow(QMainWindow):
             if pane is not None and hasattr(pane, "set_repo_root"):
                 pane.set_repo_root(self._repo_root)
 
+            # --- downstream workflow APP-ID 必須化チェック ---
+            # AAD-WEB / ASDW-WEB / ADFD / ADFDV は APP-ID 1 件以上の選択が必須。
+            # 未選択のまま orchestrator に到達すると後方互換 fallback により
+            # catalog 全 APP-ID が自動展開されてしまうため、ここで明示的に弾く。
+            if not self._validate_app_ids_for_downstream(wf_ids):
+                return  # ダイアログ表示済み、Step 1 に留まる
+
             # --- Step 1 統合 precheck（両モード共通） ---
             # FILE/WIZARD_INPUT の統合検査 + プランレビュー +
             # ギャップ適用ループ（最大 3 回）を Autopilot ON/OFF 共通で実行する。
@@ -1040,6 +1229,11 @@ class MainWindow(QMainWindow):
 
             # --- Autopilot ON: 旧 Step 2 (オプション設定) をスキップして Step 2 「実行中」へ直接遷移 ---
             if autopilot_enabled:
+                ok, msg = self._page_options.validate()
+                if not ok:
+                    QMessageBox.warning(self, self.tr("入力エラー"), msg)
+                    return
+
                 # 確認ダイアログ (Q5=b)
                 if not self._confirm_autopilot_start(wf_ids):
                     return
@@ -1052,6 +1246,45 @@ class MainWindow(QMainWindow):
             # precheck は _run_step1_unified_precheck で実施済みのため、
             # `_on_run_clicked` 側では skip する。
             self._on_run_clicked(skip_step1_precheck=True)
+
+    # ------------------------------------------------------------------
+    # APP-ID 必須化バリデーション
+    # ------------------------------------------------------------------
+    def _validate_app_ids_for_downstream(self, wf_ids: List[str]) -> bool:
+        """downstream workflow 選択時に APP-ID が 1 件以上選択されているか検証する。
+
+        対象 workflow: ``aad-web`` / ``asdw-web`` / ``adfd`` / ``adfdv``。
+        OptionsPage の C10.app_ids QLineEdit（AppIdChecklist と同期）が空の場合、
+        QMessageBox で警告を表示し False を返す（呼び出し元は Step 1 に留まる）。
+
+        この検証がない場合、orchestrator 側の後方互換 fallback
+        (``resolve_app_arch_scope(requested_app_ids=None)`` が catalog 全 APP-ID
+        を返す）により Step 2 で全 APP-ID が並列実行されてしまう。
+        """
+        downstream_workflows = ("aad-web", "asdw-web", "adfd", "adfdv")
+        downstream_selected = [
+            w for w in wf_ids if w in downstream_workflows
+        ]
+        if not downstream_selected:
+            return True
+        try:
+            app_ids_text = self._page_options.c10.app_ids.text().strip()
+        except AttributeError:
+            # OptionsPage 未初期化等の異常系は通常起こらないが防御。
+            app_ids_text = ""
+        if app_ids_text:
+            return True
+        wf_label = ", ".join(w.upper() for w in downstream_selected)
+        QMessageBox.warning(
+            self,
+            self.tr("APP-ID 未選択"),
+            self.tr(
+                "downstream workflow ({wf}) の実行には APP-ID を 1 件以上選択してください。\n\n"
+                "Step 1 右側「対象アプリケーション (APP-ID)」のチェックリストから "
+                "対象を選択してから再度「次へ」を押してください。"
+            ).format(wf=wf_label),
+        )
+        return False
 
     def _wait_catalog_ready(self, catalog_path: Path, intervals) -> bool:
         """R3: catalog ファイルの「存在＋非零サイズ」を指数バックオフで待機。
@@ -1076,6 +1309,14 @@ class MainWindow(QMainWindow):
             if MainWindow._is_catalog_ready(catalog_path):
                 return True
         return False
+
+    @Slot(str)
+    def _on_cloud_session_url_changed(self, url: str) -> None:
+        if url:
+            self._set_status(
+                StatusKind.RUNNING,
+                self.tr("Cloud Session: Mission Control URL を取得しました"),
+            )
 
     @staticmethod
     def _is_catalog_ready(catalog_path: Path) -> bool:
@@ -1231,15 +1472,54 @@ class MainWindow(QMainWindow):
             return None, set()
         return ",".join(step1_ids), step1_set
 
-    def _on_run_clicked(self, *, skip_step1_precheck: bool = False) -> None:
-        # --- Autopilot 分岐 ---
-        if self._page_workflow.is_autopilot_enabled():
-            self._start_autopilot()
-            return
+    def _merged_cloud_step_overrides_json(self, wf_id: str, raw: Optional[str]) -> Optional[str]:
+        """Step 1 の Cloud override と既存 JSON をマージして返す。"""
+        try:
+            overrides = self._page_workflow.cloud_step_overrides(wf_id)
+        except (AttributeError, RuntimeError):
+            overrides = {}
+        try:
+            scope_ids = set(self._page_workflow.cloud_step_override_scope_ids(wf_id))
+        except (AttributeError, RuntimeError):
+            scope_ids = set()
+        existing: Dict[str, bool] = {}
+        if raw:
+            try:
+                parsed = json.loads(raw)
+            except (TypeError, ValueError):
+                parsed = {}
+            if isinstance(parsed, dict):
+                for key, value in parsed.items():
+                    key_text = str(key).strip()
+                    if key_text and isinstance(value, bool):
+                        existing[key_text] = value
+        for sid in scope_ids:
+            existing.pop(sid, None)
+        existing.update(overrides)
+        if not existing:
+            return None
+        return json.dumps(
+            existing,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
 
+    def _apply_cloud_step_overrides(self, args: Any, wf_id: str) -> None:
+        """Step 1 の Cloud override を OrchestrateArgs にマージする。"""
+        args.cloud_session_step_overrides = self._merged_cloud_step_overrides_json(
+            wf_id,
+            getattr(args, "cloud_session_step_overrides", None),
+        )
+
+    def _on_run_clicked(self, *, skip_step1_precheck: bool = False) -> None:
         ok, msg = self._page_options.validate()
         if not ok:
             QMessageBox.warning(self, self.tr("入力エラー"), msg)
+            return
+
+        # --- Autopilot 分岐 ---
+        if self._page_workflow.is_autopilot_enabled():
+            self._start_autopilot()
             return
 
         workflow_ids = list(self._selected_workflow_ids)
@@ -1247,8 +1527,15 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self.tr("入力エラー"), self.tr("ワークフローが選択されていません。"))
             return
 
+        local_workflow_ids = list(workflow_ids)
+
+        # ASDW-WEB ハイブリッド CI/CD は Issue Template を開かず、通常のローカル実行
+        # 経路で行う。enable_auto_merge は build_args_for_workflow → to_argv
+        #（--enable-auto-merge）経由で orchestrator に渡り、Deploy Step だけが
+        # GitHub Actions (OIDC) へ委譲される。
+
         try:
-            ordered_workflows = _sort_workflows_by_dependencies(workflow_ids)
+            ordered_workflows = _sort_workflows_by_dependencies(local_workflow_ids)
         except ValueError as e:
             QMessageBox.warning(self, self.tr("依存関係エラー"), str(e))
             return
@@ -1268,6 +1555,7 @@ class MainWindow(QMainWindow):
                     wf_id, args.steps
                 )
                 args.steps = args_steps_csv
+                self._apply_cloud_step_overrides(args, wf_id)
                 args_queue.append(args)
 
                 wf = get_workflow(wf_id)
@@ -1840,6 +2128,7 @@ class MainWindow(QMainWindow):
                 workflow_id, args.steps
             )
             args.steps = args_steps_csv
+            self._apply_cloud_step_overrides(args, workflow_id)
             return args.to_argv()
 
         self._autopilot_controller = AutopilotController(
@@ -1895,6 +2184,7 @@ class MainWindow(QMainWindow):
         # 参照しないため第 2 引数は None。
         args_steps_csv, _ = self._resolve_steps_for_workflow(workflow_id, None)
         result.steps = args_steps_csv
+        result.cloud_session_step_overrides = self._merged_cloud_step_overrides_json(workflow_id, None)
         argv = result.to_orchestrate_argv()
         # title はログ表示用 (同一シグネチャ保持のため計算のみ残置)
         _ = title_template.format(
@@ -1969,6 +2259,7 @@ class MainWindow(QMainWindow):
         msgbox_body_template: str,
     ) -> None:
         """Autopilot 経路（prephase / main_workflow）共通の失敗通知。"""
+        self._page_workbench.freeze_progress_elapsed()
         self._set_status(
             StatusKind.ERROR,
             status_failed_template.format(
@@ -2449,7 +2740,7 @@ class MainWindow(QMainWindow):
             on_finished=self._on_autopilot_main_workflow_finished,
         )
 
-    @Slot(int)
+    @Slot("qlonglong")
     def _on_autopilot_main_workflow_finished(self, code: int, workflow_id: str, win) -> None:
         # gui-workbench-stats-propagation F3b:
         # WorkflowInstance.finished_at を確定させ、ツリー上のワークフロー行
@@ -2570,6 +2861,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_autopilot_finished(self) -> None:
+        self._page_workbench.freeze_progress_elapsed()
         self._set_status(StatusKind.SUCCESS, self.tr("Autopilot: 全 APP 完了"))
         # gui-autopilot-stop-button: 完了で controller の _timer が停止するため、
         # _is_any_execution_running() が False に転じる。ナビゲーション
@@ -2622,7 +2914,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    @Slot(int)
+    @Slot("qlonglong")
     def _on_process_finished(self, returncode: int) -> None:
         self._refresh_navigation()
         was_stopped = self._page_workbench.was_stopped_by_user()
@@ -2643,10 +2935,6 @@ class MainWindow(QMainWindow):
                 StatusKind.ERROR,
                 self.tr("Step 2: 致命的エラーで停止しました"),
             )
-            try:
-                self._header.mark_aborted(True)
-            except AttributeError:
-                pass
             self._btn_stop.setVisible(False)
             # fatal 時は「戻る」ボタンを例外的に有効化し Step 2 へ戻れるようにする。
             self._btn_back.setEnabled(True)
@@ -2667,8 +2955,6 @@ class MainWindow(QMainWindow):
             msg_text = self.tr("全てのタスクが終わりました（一部失敗あり）\nreturncode={rc}").format(rc=returncode)
             icon = QMessageBox.Icon.Warning
 
-        # ヘッダーの ③ を完了状態にする
-        self._header.mark_completed(True)
         # 停止ボタンを非表示（既に無効化されているが UX 改善）
         self._btn_stop.setVisible(False)
 
@@ -2731,10 +3017,17 @@ class MainWindow(QMainWindow):
             for i, wf_id in enumerate(wf_ids)
         }
         self._page_options.set_workflows(wf_ids, wf_name_map)
+        # ワークフロー切替直後にステップ選択も反映（CI/CD トグル表示条件の評価）。
+        self._page_options.set_selected_steps(self._page_workflow.all_enabled_steps())
         # ARD 添付ペインに repo_root を伝播（_on_next_clicked 内の同等処理と整合）
         pane = self._page_options.attachment_pane()
         if pane is not None and hasattr(pane, "set_repo_root"):
             pane.set_repo_root(self._repo_root)
+
+    def _on_steps_selection_changed(self, _wf_id: str, _step_ids: list) -> None:
+        # 左ペインのステップチェック変更 → 右ペイン OptionsPage の CI/CD トグル表示条件を更新。
+        # ASDW-WEB Step3.4/4.3・ADFDV Step1.2/3 の選択時のみ CI/CD 系トグルを表示する（ステップのチェック変更で即時反映）。
+        self._page_options.set_selected_steps(self._page_workflow.all_enabled_steps())
 
     # ----------------------------------------------------------
     # 新規セッション
@@ -2798,6 +3091,9 @@ class MainWindow(QMainWindow):
                 return
         # Phase D-4: Dock 表示状態の永続化
         self._persist_dock_visibility()
+        git_timer = getattr(self, "_git_status_timer", None)
+        if git_timer is not None:
+            git_timer.stop()
         self._page_workbench.cleanup()
         self._copilot_dock.shutdown()
         # --- Autopilot Controller の参照解放（detached の子プロセスは継続） ---

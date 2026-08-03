@@ -66,9 +66,9 @@ Describe 'workflow-registry.ps1' {
         }
 
         It 'returns correct depends_on' {
-            $step = Get-Step -WorkflowId 'adfd' -StepId '6.3'
-            $step.depends_on | Should -Contain '6.1'
-            $step.depends_on | Should -Contain '6.2'
+            $step = Get-Step -WorkflowId 'adfd' -StepId '3'
+            $step.depends_on | Should -Contain '1'
+            $step.depends_on | Should -Contain '2'
         }
     }
 

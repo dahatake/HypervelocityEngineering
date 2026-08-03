@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
 )
@@ -137,8 +138,7 @@ def test_main_window_set_status_reflects_on_banner(main_window):
 def test_qstatusbar_has_no_left_status_label(main_window):
     """T5-4: QStatusBar 左側から _status_label 相当の QLabel が撤去されている。
 
-    認証ステータス表示は廃止済み。残置するのは
-    [利用できるモデルの取得] ボタンのみ。
+    認証ステータス表示は廃止済み。状態表示は central の StatusBanner が担う。
     """
     sb = main_window.statusBar()
     labels = sb.findChildren(QLabel)
@@ -148,6 +148,14 @@ def test_qstatusbar_has_no_left_status_label(main_window):
         # それは StatusBanner の子であって QStatusBar の子ではない
         assert lab is not main_window._status_banner.description_label
         assert lab is not main_window._status_banner.status_label
+
+
+def test_qstatusbar_has_no_copilot_login_button(main_window):
+    """「Copilot にログイン」ボタンは廃止済み（認証は GitHub Copilot CLI 側で完結するため）。"""
+    assert not hasattr(main_window, "_btn_copilot_login")
+    sb = main_window.statusBar()
+    buttons = sb.findChildren(QPushButton)
+    assert not any("Copilot" in b.text() for b in buttons)
 
 
 def test_refresh_navigation_does_not_overwrite_completed_status(main_window, monkeypatch):

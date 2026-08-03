@@ -49,7 +49,7 @@ function Get-IssueMetadatum {
     .PARAMETER Body
         Issue body text
     .PARAMETER Key
-        Metadata key name (e.g. "root-issue", "branch", "auto-review")
+        Metadata key name (e.g. "root-issue", "branch", "adversarial-review")
     .OUTPUTS
         Value string, or empty string if not found.
     #>

@@ -2,7 +2,7 @@ name: Copilot Auto Feedback
 
 on:
   pull_request_target:
-    types: [labeled, ready_for_review]
+    types: [opened, edited, labeled, ready_for_review]
   issues:
     types: [labeled]
   workflow_dispatch:
@@ -252,8 +252,7 @@ jobs:
       group: copilot-auto-review-${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
       cancel-in-progress: false
     if: >
-      (github.event_name == 'pull_request_target'
-      && contains(github.event.pull_request.labels.*.name, 'auto-context-review'))
+      github.event_name == 'pull_request_target'
       || (github.event_name == 'workflow_dispatch' && inputs.target_pr != '')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -264,26 +263,52 @@ jobs:
       ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
       PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
       SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
-      PR_BODY: ${{ github.event.pull_request.body }}
 
     steps:
-      - name: Check opt-out marker in PR body (excluding quoted sections)
-        id: optout
+      - name: Resolve adversarial review trigger (excluding quoted sections)
+        id: trigger
         run: |
           set -euo pipefail
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}")
+          pr_body=$(printf '%s' "${pr_data}" | jq -r '.body // ""')
+          has_label=$(printf '%s' "${pr_data}" \
+            | jq -r '[.labels[].name] | if contains(["adversarial-review"]) then "true" else "false" end')
           # <!-- START COPILOT ORIGINAL PROMPT --> 以降（Copilot による元 Issue 引用部分）を除外し、
-          # PR 本文のみを対象に opt-out マーカーをチェックする
-          PR_BODY_HEAD=$(printf '%s' "${PR_BODY}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
-          if printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- auto-context-review: false -->'; then
-            echo "PR body の先頭部分に opt-out マーカーが含まれています。後続ステップをスキップします。"
+          # PR 本文のみを対象に marker をチェックする。false は label / true より優先する。
+          PR_BODY_HEAD=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- adversarial-review: false -->'; then
+            echo "PR body の先頭部分に opt-out マーカーが含まれています。"
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
             echo "opted_out=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${has_label}" = "true" ] \
+            || printf '%s' "${PR_BODY_HEAD}" | grep -qF '<!-- adversarial-review: true -->'; then
+            echo "敵対的レビューの明示トリガーを検出しました。"
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "opted_out=false" >> "${GITHUB_OUTPUT}"
           else
+            echo "敵対的レビューの明示トリガーがないためスキップします。"
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
             echo "opted_out=false" >> "${GITHUB_OUTPUT}"
           fi
+          echo "has_label=${has_label}" >> "${GITHUB_OUTPUT}"
+
+      - name: Normalize true marker to adversarial-review label
+        if: steps.trigger.outputs.enabled == 'true' && steps.trigger.outputs.has_label != 'true'
+        run: |
+          set -euo pipefail
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "adversarial-review"
+          echo "✅ true marker を adversarial-review ラベルへ正規化しました。"
+
+      - name: Enforce explicit opt-out by removing adversarial-review label
+        if: steps.trigger.outputs.opted_out == 'true' && steps.trigger.outputs.has_label == 'true'
+        run: |
+          set -euo pipefail
+          gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "adversarial-review"
+          echo "✅ false marker を優先し、adversarial-review ラベルを除去しました。"
 
       - name: Check for existing review comment
         id: guard
-        if: steps.optout.outputs.opted_out != 'true'
+        if: steps.trigger.outputs.enabled == 'true'
         run: |
           set -euo pipefail
           MARKER="<!-- copilot-auto-review-posted -->"
@@ -299,7 +324,7 @@ jobs:
           fi
 
       - name: Post auto review instruction to Copilot
-        if: steps.optout.outputs.opted_out != 'true' && steps.guard.outputs.posted != 'true'
+        if: steps.trigger.outputs.enabled == 'true' && steps.guard.outputs.posted != 'true'
         env:
           COMMENT_BODY: |
             <!-- copilot-auto-review-posted -->
@@ -314,7 +339,7 @@ jobs:
             ### 指示
 
             1. この PR の変更内容と、紐づく Issue の目的・受け入れ条件（AC）を確認してください。
-            2. 以下の **5つの検証軸** で問題を網羅的に検出してください:
+            2. 以下の **6つの検証軸** で問題を網羅的に検出してください:
 
             | 軸 | 検証内容 |
             |----|---------|
@@ -323,6 +348,7 @@ jobs:
             | **整合性** | 他ステップの成果物・既存ドキュメント・用語との矛盾がないか |
             | **非機能品質** | パフォーマンス・セキュリティ・保守性・テスト可能性 |
             | **捏造検出** | TBD/不明と書くべき箇所が根拠なく具体的な値で埋められていないか |
+            | **オーバーエンジニアリング検出** | YAGNI 違反、不要な抽象化・依存・設定追加がないか |
 
             3. 各問題に **Critical / Major / Minor** の重大度を付けてください:
                - **Critical**: 要件未達・データ破損リスク・セキュリティ脆弱性（修正必須）
@@ -345,7 +371,7 @@ jobs:
             以下の手順を **この順番で** 実行してください。
 
             #### ステップ 1: レビュー（指摘リスト作成）
-            5 つの検証軸で成果物を検証し、指摘事項を Critical / Major / Minor に分類して一覧化してください。
+            6 つの検証軸で成果物を検証し、指摘事項を Critical / Major / Minor に分類して一覧化してください。
 
             #### ステップ 2: 修正実行
             - **Critical の指摘は全て修正**してください。

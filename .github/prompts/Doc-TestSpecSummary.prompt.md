@@ -1,6 +1,6 @@
 ﻿> テスト仕様サマリーを集約する。
 
-> **WORK**: `/work/Doc-TestSpecSummary/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-TestSpecSummary/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

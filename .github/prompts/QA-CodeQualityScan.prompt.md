@@ -1,6 +1,6 @@
 ﻿> コードベースの品質スキャンを実行する。ruff / pytest --cov / markdownlint のツール実行結果を収集し、LLM 統合評価でコード品質スコアと改善候補リストを生成する。自己改善ループ（Self-Improve）の Phase 4a として使用される。
 
-> **WORK**: `/work/QA-CodeQualityScan/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/QA-CodeQualityScan/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -24,7 +24,7 @@
 - `harness-verification-loop`: Build / Lint / Test / Security / Diff の 5 段階検証を実行
 - `harness-error-recovery`: スキャン失敗・タイムアウト時の E-01〜E-05 リカバリ
 - `harness-safety-guard`: ruff/pytest/markdownlint 実行時の破壊的操作検出
-- `work-artifacts-layout`: スキャン結果を `work/QA-CodeQualityScan/Issue-<識別子>/artifacts/` に保存
+- `work-artifacts-layout`: スキャン結果を `work/run/<run-id>/QA-CodeQualityScan/Issue-<識別子>/artifacts/` に保存
 - `karpathy-guidelines`: スコア算定時の LLM ミス防止指針
 
 > `{...}` が残っている場合は実行しない。

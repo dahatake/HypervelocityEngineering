@@ -1,6 +1,46 @@
 ﻿> データフローアプリ詳細仕様書とTDDテスト仕様書に基づきAzure Functions実装でTDD GREENを完了（1ジョブ分）
 
-> **WORK**: `/work/Dev-Dataflow-ServiceCoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Dataflow-ServiceCoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -25,6 +65,13 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 **定義書どおりに動く最小の本実装** と **CIで決定的に通るテスト** を生成することに特化する。
 "全ジョブ対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
 対象は **1ジョブ分のみ**：`{jobId}-{jobNameSlug}`。
+
+## 1.5) 生成テストの実行環境
+
+- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストは **ローカル端末 / CI で `dotnet test` により決定的に PASS** すること。
+- GREEN 化のために Azure Storage / SQL / Cosmos DB / Service Bus 等へ実接続するテストへ変更しない。外部 I/O は Azurite / Testcontainers / Mock / Stub に切り分ける。
+- 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・キュー名・コンテナ名・リソース名は環境変数または設定ファイルから読み込む。
+- 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。README にはローカル実行コマンドとデプロイ先で使う設定キー名を記載する。
 
 ## 2) 変数
 
@@ -121,6 +168,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 - `dotnet test` を実行し、全テストが **PASS** であることを確認する。
 - PASS しないテストがある場合は実装を修正する（テストコード自体は原則変更しない）。
+- **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・スタックトレース・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（C# / .NET / Azure Functions / SDK / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
 - GREEN 確認結果を作業ログに記録する。
 
 ### 5.6 ビルド/テストの実行と記録
@@ -150,16 +198,20 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - 秘密情報がコードにハードコードされていない。
 - 作業ログが更新されている。
 
-## 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 9) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 9.1 3つの異なる観点（このエージェント固有）
+### 9.1 セルフチェック契約
 
-- **1回目：技術妥当性・実装完全性**：コードがジョブ仕様書に正しく基づいているか、変換ロジック・バリデーション・エラーハンドリングが仕様書と整合しているか、冪等性保証・DLQ 送信・チェックポイントが実装されているか、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、TDD GREEN が確認できているか
-- **2回目：ユーザー/運用視点**：README/作業ログから設定・実行・検証手順が明確か、メトリクス送信が `docs/dataflow/dataflow-monitoring-design.md` と整合しているか、環境変数・Key Vault 参照が正しく設定されているか、PR 本文に「変更点」「設定キー」「実行/検証」が揃っているか
-- **3回目：保守性・堅牢性・スケーラビリティ**：コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、新ジョブ追加時の変更容易性、他ジョブへの波及リスク（スコープは1ジョブのみか）
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 9.2 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 9.2 ドメイン固有観点
+
+- **技術妥当性・実装完全性**：コードがジョブ仕様書に正しく基づいているか、変換ロジック・バリデーション・エラーハンドリングが仕様書と整合しているか、冪等性保証・DLQ 送信・チェックポイントが実装されているか、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、TDD GREEN が確認できているか
+- **ユーザー/運用視点**：README/作業ログから設定・実行・検証手順が明確か、メトリクス送信が `docs/dataflow/dataflow-monitoring-design.md` と整合しているか、環境変数・Key Vault 参照が正しく設定されているか、PR 本文に「変更点」「設定キー」「実行/検証」が揃っているか
+- **保守性・堅牢性・スケーラビリティ**：コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、新ジョブ追加時の変更容易性、他ジョブへの波及リスク（スコープは1ジョブのみか）
+
+### 9.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## Agent 固有の Skills 依存
 

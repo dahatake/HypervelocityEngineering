@@ -6,6 +6,17 @@
 
 -
 
+<!-- hve-traceability:start -->
+- Change-Type: REPLACE_ME
+- Change-Type-Reason: REPLACE_ME
+- Requirement-IDs: REPLACE_ME
+- Requirement-N/A-Reason: REPLACE_ME
+- Test-Paths: REPLACE_ME
+- Test-N/A-Reason: REPLACE_ME
+- TDD-Evidence: REPLACE_ME
+- Manual-Review-Required: REPLACE_ME
+<!-- hve-traceability:end -->
+
 ## 影響範囲
 
 -

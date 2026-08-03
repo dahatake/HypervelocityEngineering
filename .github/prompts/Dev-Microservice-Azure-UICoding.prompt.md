@@ -1,6 +1,46 @@
 > 画面定義書に基づき、全ての画面のUIを実装し、サービスカタログに基づくAPIクライアント層を整備する。
 
-> **WORK**: `/work/Dev-Microservice-Azure-UICoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-UICoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS`（テスト側/共有設定ブロッカー確定時のみ `BLOCKED`）とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL/BLOCKED>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 # 役割（このエージェントがやること）
 - Web UIの実装
@@ -31,15 +71,22 @@
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 
+## 生成テストの実行環境
+
+- Step.4.1 が生成した UI テストは **ローカル端末 / CI で `npm test`、Jest、または Playwright により決定的に PASS** すること。
+- GREEN 化のためにテストコードを実 API / Azure Static Web Apps 固定へ変更しない。UI 単体・操作テストの API は mock/stub を使用し、E2E は `E2E_BASE_URL` 等の環境変数で base URL を注入する。
+- 実装コードはデプロイ先でも動くよう、API base URL や認証モードを環境変数または設定ファイルから読み込む。秘密情報をコード、README、ログにハードコードしない。
+- README または `{WORK}` にはローカル実行コマンド、必要な環境変数名、デプロイ先で同じ設定キーを使うことを記載する。
+
 # 入力（参照順）
 
 1. 画面定義書: `docs/screen/{screenId}-{screenNameSlug}-description.md`
-2. 画面一覧・遷移: `docs/catalog/screen-catalog.md`
+2. 画面一覧・遷移: `docs/catalog/screen-catalog-APP-*.md`（全 APP 集約 glob。`Arch-UI-List` Step 1 の per-APP fan-out 出力）
 3. サービスカタログ: `docs/catalog/service-catalog-matrix.md`
 4. UI実装技術: HTML5/CSS/JavaScript を基本とする。Vue SFC (.vue) / React (JSX/TSX) 等のフレームワークを使用する場合は、ビルド基盤（package.json + ビルドツール設定）を必ず同時に生成すること。画面定義書の複雑度が「静的ページ + API 呼び出し」程度であれば素の HTML/JS を優先する
 5. 参考: `docs/catalog/use-case-catalog.md`
 6. サンプルデータ: `src/data/sample-data.json`
-7. TDD テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（Step.3.0T の成果物）
+7. TDD テスト仕様書: `docs/test-specs/{screenId}-test-spec.md`（AAD-WEB Step 2.4 の成果物）
 8. アプリケーション一覧: `docs/catalog/app-catalog.md`（対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
@@ -52,7 +99,12 @@
   - **判定基準**: 生成する `.vue`、`.tsx`、`.ts` ファイルが1つでもある場合、ビルド基盤は必須
   - **素の HTML/CSS/JS のみの場合**: ビルド基盤は不要
 - 進捗: `{WORK}work-status.md`
-- テスト: `src/test/ui/` にテストコード（テスト仕様書から変換。Jest + jsdom をデフォルト、E2E は Playwright）
+- テスト: Step.4.1 が生成した `src/test/ui/{screenId}/` を参照して実行する（GREEN フェーズでは原則変更しない）
+
+## fan-out 共有設定ファイル保護（必須）
+- 本 Agent は画面別 fan-out 子として並列実行されるため、リポジトリルートの `package.json` / `jest.config.js` を作成・更新しない。
+- 既存のルート `package.json` / `jest.config.js` は読み取り専用の参照対象とし、画面固有の補助設定が必要な場合は `src/app/{screenId}/` または `{WORK}` に閉じる。
+- `src/test/ui/` は Step.4.1 の成果物として扱い、GREEN フェーズではテストコードを原則変更しない。テスト側/共有設定側の確定ブロッカーで実装だけでは GREEN 化不能な場合は成功扱いせず、共有設定を直さず `{WORK}` に記録する。この場合、`tdd-test-report.md` は `TDD-Judgement: BLOCKED`（gate は受理し下流を止めない）とし、completion-report で部分完了を成功として主張しない。実装未達など自ステップ起因の失敗は `FAIL` とする。
 
 # 進め方（1回の実行でやる範囲）
 
@@ -84,11 +136,10 @@
 - 資料から特定できない前提（ペルソナ条件、API仕様、遷移条件など）は質問（必要な項目をすべて）または TBD で前提を明示。
 - 質問が解消しないと安全に進められない場合は、plan/subissues と質問一覧を残して停止。
 
-## 2.5) テスト仕様書 → テストコード変換（TDD RED 準備）
-- `docs/test-specs/{screenId}-test-spec.md` の操作シナリオ（§2）・バリデーションテスト（§3）を、テストランナーのテストコードに変換する。
-- **UI テストフレームワーク**: デフォルトは Jest + jsdom。E2E テストが必要な場合は Playwright。リポジトリに既存フレームワークがあればそちらを優先。
-- API モック/テストダブル設計（§4.5）に基づき、API モックを構成する。
-- 既存テストがある場合は保持し、仕様書ベースで不足分を追加する。
+## 2.5) Step.4.1 RED テスト成果物の確認
+- `src/test/ui/{screenId}/` の既存テストが `docs/test-specs/{screenId}-test-spec.md` の操作シナリオ（§2）・バリデーションテスト（§3）に対応していることを確認する。
+- GREEN フェーズではテストコードを新規生成・拡張せず、既存テストを保持する。
+- テストコードや共有 Jest 設定の不足で実装だけでは GREEN 化できない場合は、`{WORK}` に不足事項を記録し、`tdd-test-report.md` は `TDD-Judgement: BLOCKED` とする（実装未達など自ステップ起因の失敗は `FAIL`）。部分完了を成功として主張しない。
 
 ## 2.6) RED 確認（TDD RED フェーズ）
 - テストを実行し、全テストが **FAIL** であることを確認する（UI 未実装のため）。
@@ -104,6 +155,10 @@
 - 進捗ファイル更新（下記）
 - テスト仕様書のテストケースが全て GREEN（PASS）であること（TDD GREEN 確認）
 - TDD REFACTOR フェーズ（`## 3.5)`）を実施し、リファクタリング後も全テストが **PASS** であること
+
+## 3.4) GREEN 化リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）
+- GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。
+- 各 FAIL 時は失敗の実出力（テスト名・アサーション差分・スタックトレース）から根本原因を特定し、次の修正を決める前に、利用可能な**当該技術（JavaScript / TypeScript / Jest / 使用ライブラリ）の公式ドキュメント・API を提供する MCP** で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した公式情報の URL を進捗ファイルに記録する。
 
 ## 3.5) REFACTOR（TDD REFACTOR フェーズ — 必須）
 テスト仕様書の「TDD 実行順序」（§5）の Refactor フェーズに記載された「回帰確認ポイント」を参照し、重点的にリファクタリング対象を選定する。
@@ -154,20 +209,20 @@ PASS しないテストが発生した場合はリファクタリングを戻し
 本実装が依頼の目的を確実に達成するため、以下の観点でレビューを実施する。
 
 ### 9.1 セルフチェック（必須）
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
 実装開始前に以下の3項目を確認：
 1. **AC（Done）を満たすか**
 2. **既存規約（命名/構造/例外/ログ）に合わせているか**
 3. **最低1つの検証（テスト/ビルド/静的解析）を実施したか**（不可なら理由と代替）
 
-- Skill adversarial-review に従う。
+### 9.2 ドメイン固有観点
+- **実装完全性・要件達成度**：画面定義書のすべての要素が実装されているか、状態管理（loading/empty/error）は完全か、API接続が画面の定義に基づいているか、ペルソナ差分は正しく実装されているか、トラブルシューティング・ログ出力は適切か、環境変数の注入と base URL フォールバック設定は正しいか
+- **ユーザー/利用者視点**：UI が直感的で使いやすいか、遷移がスムーズで期待通りか、エラーメッセージがユーザーフレンドリーか、開発用スタブ認証は明示されているか、アクセシビリティ（視認性・キーボード操作等）は十分か、画面応答性とローディング表示は適切か
+- **保守性・拡張性・堅牢性**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コード品質と既存規約への準拠、API クライアント層の設計が再利用可能か、エラーハンドリングは完全・一貫か、テスト拡張性（ユニット/E2E/スモークテスト）、将来の画面追加時の変更容易性、認証・認可・セキュリティの実装が適切か、秘密情報のハードコード有無
 
-### 9.3 3つの異なる観点（Web UI 実装の場合）
-- **1回目：実装完全性・要件達成度**：画面定義書のすべての要素が実装されているか、状態管理（loading/empty/error）は完全か、API接続が画面の定義に基づいているか、ペルソナ差分は正しく実装されているか、トラブルシューティング・ログ出力は適切か、環境変数の注入と base URL フォールバック設定は正しいか
-- **2回目：ユーザー/利用者視点**：UI が直感的で使いやすいか、遷移がスムーズで期待通りか、エラーメッセージがユーザーフレンドリーか、開発用スタブ認証は明示されているか、アクセシビリティ（視認性・キーボード操作等）は十分か、画面応答性とローディング表示は適切か
-- **3回目：保守性・拡張性・堅牢性**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コード品質と既存規約への準拠、API クライアント層の設計が再利用可能か、エラーハンドリングは完全・一貫か、テスト拡張性（ユニット/E2E/スモークテスト）、将来の画面追加時の変更容易性、認証・認可・セキュリティの実装が適切か、秘密情報のハードコード有無
-
-### 9.4 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 9.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

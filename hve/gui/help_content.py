@@ -201,7 +201,8 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "target_files": QT_TRANSLATE_NOOP("help_content", "AKM: 対象ファイルパス (省略時: --sources で選択したソース配下の全件)。"),
     "force_refresh": QT_TRANSLATE_NOOP("help_content", "AKM: 既存 knowledge/ 出力を完全に再生成する。"),
     "custom_source_dir": QT_TRANSLATE_NOOP("help_content", "AKM: custom_source_dir 追加入力（複数指定可）。"),
-    "enable_auto_merge": QT_TRANSLATE_NOOP("help_content", "AKM: PR の自動 Approve & Auto-merge を有効にする。"),
+    "enable_auto_merge": QT_TRANSLATE_NOOP("help_content", "ASDW-WEB の remote CI/CD 対象 Step では Step 専用ブランチを作成し、push / PR 作成 / 自動 Approve & Auto-merge / base branch 復帰を Step 単位で行う。その他の PR 作成経路では従来どおり PR の自動 Approve & Auto-merge を有効にする。"),
+    "delete_local_merged_branch": QT_TRANSLATE_NOOP("help_content", "FR-CLI-34: PR マージ完了（auto-approve-and-merge）を検知後、今回作成したローカル作業ブランチを削除する（既定: 有効）。PR 自動 Approve & Auto-merge が有効な場合のみ動作する。"),
     "target_scope": QT_TRANSLATE_NOOP("help_content", "AQOD: チェック対象スコープ（省略時: original-docs/）。"),
     "depth": QT_TRANSLATE_NOOP("help_content", "AQOD: 分析の深さ（standard / lightweight）。"),
     "focus_areas": QT_TRANSLATE_NOOP("help_content", "AQOD: 重点観点（任意）。"),
@@ -224,6 +225,8 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "no_self_improve": QT_TRANSLATE_NOOP("help_content", "自己改善ループ（Phase 4）を無効化する。"),
     "mdq_watch": QT_TRANSLATE_NOOP("help_content", "Markdown ファイルの追加/更新/削除を OS イベントで検知し索引を逐次更新する（既定 ON）。"),
     "mdq_watch_debounce_ms": QT_TRANSLATE_NOOP("help_content", "mdq watcher のデバウンス間隔（ms、既定 500）。"),
+    "cq_watch": QT_TRANSLATE_NOOP("help_content", "ソースファイルの追加/更新/削除を OS イベントで検知し cq 索引を逐次更新する（既定 ON）。cq 設定不在時は自動で無効化される。"),
+    "cq_watch_debounce_ms": QT_TRANSLATE_NOOP("help_content", "cq watcher のデバウンス間隔（ms）。0 のとき cq の既定値を使う。"),
 }
 
 
@@ -241,7 +244,6 @@ _OPTIONS_GUIDE_HINT: Dict[str, str] = {
     "target_files": "km-guide.md",
     "force_refresh": "km-guide.md",
     "custom_source_dir": "km-guide.md",
-    "enable_auto_merge": "km-guide.md",
     "target_scope": "original-docs-review.md",
     "depth": "original-docs-review.md",
     "focus_areas": "original-docs-review.md",
@@ -290,8 +292,12 @@ _CATEGORY_HELP: Dict[str, HelpEntry] = {
         guide_path="workflow-reference.md",
     ),
     "C5": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "GitHub Issue / PR の自動作成を設定します。--repo と GH_TOKEN が必要です。"),
+        short=QT_TRANSLATE_NOOP("help_content", "GitHub Issue / PR の自動作成・ベースブランチ・PR 自動 Approve & Auto-merge に加え、Fleet mode / Cloud Session（GitHub Copilot SDK）を設定します。Issue / PR 作成には --repo と GH_TOKEN が必要です。「ブランチ取得」でリポジトリのブランチ一覧を取得し、ベースブランチ欄に候補表示できます。"),
         guide_path="hve-cli-orchestrator-guide.md",
+    ),
+    "C6": HelpEntry(
+        short=QT_TRANSLATE_NOOP("help_content", "詳細出力 / 出力抑制 / モデル応答ストリーム表示 / Copilot CLI ログレベル / ANSI カラー無効化 / 起動時バナー表示等の出力制御を設定します。"),
+        guide_path="hve-gui-orchestrator-guide.md",
     ),
     "C7": HelpEntry(
         short=QT_TRANSLATE_NOOP("help_content", "MCP Server 設定ファイル・Copilot CLI 実行ファイルパス・外部 CLI サーバー URL を設定します。"),

@@ -2,10 +2,11 @@
 
 Design (per work/semantic-paragraph/plan.md):
 - Q3=C: primary tokenizer is `nltk.sent_tokenize` with the `punkt_tab` model.
-- Japanese support: nltk Punkt is trained for English. Before delegating to
-  nltk we insert hard line breaks after Japanese sentence terminators
-  (`。` `！` `？` `!?` halfwidth variants when at end of clause) so that
-  sent_tokenize sees clear English-like boundaries even in JA-only text.
+- Japanese support: nltk Punkt is trained for English and does not treat a
+  line break as a sentence boundary, so we cannot signal JA boundaries by
+  injecting newlines. Instead we cut the block at Japanese terminators
+  (`。` `！` `？` `．`) first and run Punkt inside each piece. Text without
+  those terminators reaches Punkt unchanged.
 - Fenced code blocks (```` ``` ```` / `~~~`) and pipe-tables are kept atomic:
   we never split inside a fence/table.
 - If nltk import or `punkt_tab` download fails, we fall back to a pure-regex
@@ -36,6 +37,10 @@ from typing import Iterable
 # from this set because they are commonly used inside English sentences too;
 # nltk handles those correctly.
 _JA_TERMINATORS = ("。", "！", "？", "．")
+
+# Zero-width cut just after a JA terminator. Used to hand Punkt one JA
+# sentence at a time without altering the text (offsets must stay valid).
+_JA_BOUNDARY_RE = re.compile("(?<=[" + "".join(_JA_TERMINATORS) + "])")
 
 # Fence/table detection (line-anchored).
 _FENCE_RE = re.compile(r"^(```|~~~)")
@@ -215,12 +220,17 @@ def _nltk_tokenize(block: str) -> list[str]:
     if not _NLTK_READY:
         raise RuntimeError("nltk punkt_tab unavailable")
 
-    # JA pre-processing: ensure terminators are followed by whitespace so
-    # Punkt detects the boundary.
-    pre = block
-    for term in _JA_TERMINATORS:
-        pre = pre.replace(term, term + "\n")
-    return [s.strip() for s in nltk.tokenize.sent_tokenize(pre) if s.strip()]
+    # Punkt ignores newlines, so JA boundaries are cut here rather than
+    # signalled to it. Nothing is inserted: callers map results back by
+    # substring search and need the text to stay identical.
+    out: list[str] = []
+    for segment in _JA_BOUNDARY_RE.split(block):
+        if not segment.strip():
+            continue
+        out.extend(
+            s.strip() for s in nltk.tokenize.sent_tokenize(segment) if s.strip()
+        )
+    return out
 
 
 def _regex_tokenize(block: str) -> list[str]:

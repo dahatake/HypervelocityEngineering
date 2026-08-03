@@ -44,8 +44,3 @@ def format_prefix(workflow_id: str, app_id: str) -> str:
     wf = (workflow_id or "").upper() or "-"
     app = (app_id or "").upper() or "-"
     return f"[{wf}:{app}]"
-
-
-def format_prefixed_line(event: LogLineEvent) -> str:
-    """マスター画面ログ向けの整形済み 1 行を返す。"""
-    return f"[{_fmt_ts(event.ts)}] {format_prefix(event.workflow_id, event.app_id)} {event.line}"

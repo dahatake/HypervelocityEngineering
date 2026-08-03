@@ -75,18 +75,22 @@ find_issue_number() {
     fi
   fi
 
-  # --- Method 2.6: PR コメントの sync-issue-labels マーカーから Issue 番号を復元 ---
+  # --- Method 2.6: PR コメント本文の sync-issue-labels マーカーから Issue 番号を復元 ---
+  # 投稿者種別 / login での絞り込みは行わず、本文マーカー
+  # (<!-- sync-issue-labels-done --> と sync-issue-labels-to-pr.yml) のみで抽出する。
+  # 抽出した Issue 番号は後続の API 検証（実在する Issue かつ PR ではない）で確認するが、
+  # 投稿者制限を外しているため、マーカー 2 種と Issue #N を含むコメントを誰でも投稿できる。
+  # API 検証は「実在する Issue かつ PR ではない」までであり、無関係な Open Issue を指す余地が残る。
+  # 複数の一致コメントがある場合は最新（末尾）のものを採用する。
   if [ -z "${ISSUE_NUMBER}" ]; then
     echo "=== Method 2.6: PR コメントの sync-issue-labels コメントから Issue 番号を復元 ==="
     COMMENT_ISSUE=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
       --paginate \
       --jq '.[]' 2>/dev/null \
-      | jq -rs '[.[] 
-          | select(.user.type == "Bot")
-          | select((.user.login == "github-actions[bot]") or (.user.login == "copilot-swe-agent[bot]"))
+      | jq -rs '[.[]
           | select(.body | contains("<!-- sync-issue-labels-done -->"))
           | select(.body | contains("sync-issue-labels-to-pr.yml"))
-          | .body] | .[0] // ""' \
+          | .body] | .[-1] // ""' \
       | grep -oP 'Issue #\K[0-9]+' \
       | head -1) || COMMENT_ISSUE=""
     if [ -n "${COMMENT_ISSUE}" ]; then
@@ -149,6 +153,32 @@ find_issue_number() {
           --jq --arg title "${PR_TITLE}" \
           "${jq_filter}" \
           2>/dev/null) || CANDIDATE=""
+      fi
+
+      if [ -z "${CANDIDATE}" ] || [ "${CANDIDATE}" = "null" ]; then
+        local fallback_payload=""
+        local fallback_count=""
+        local fallback_number=""
+        local fallback_assignee=""
+
+        for assignee in copilot-swe-agent Copilot; do
+          fallback_payload=$(gh api "/repos/${REPO}/issues?assignee=${assignee}&state=open&per_page=100" 2>/dev/null) || fallback_payload=""
+          if [ -z "${fallback_payload}" ]; then
+            continue
+          fi
+
+          fallback_count=$(printf '%s' "${fallback_payload}" | jq '[.[] | select(.pull_request == null)] | length' 2>/dev/null) || fallback_count=""
+          if [ "${fallback_count}" = "1" ]; then
+            fallback_number=$(printf '%s' "${fallback_payload}" | jq -r '[.[] | select(.pull_request == null) | .number] | .[0]' 2>/dev/null) || fallback_number=""
+            CANDIDATE="${fallback_number}"
+            fallback_assignee="${assignee}"
+            break
+          fi
+        done
+
+        if [ -n "${CANDIDATE}" ] && [ "${CANDIDATE}" != "null" ] && [ -n "${fallback_assignee}" ]; then
+          echo "✅ Method 3 フォールバック成功: Issue #${CANDIDATE}（${fallback_assignee} アサイン Open Issue が1件）"
+        fi
       fi
 
       if [ -n "${CANDIDATE}" ] && [ "${CANDIDATE}" != "null" ]; then

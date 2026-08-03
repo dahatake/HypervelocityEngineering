@@ -15,10 +15,12 @@
 5. `knowledge/`
 6. `qa/`
 7. `original-docs/`
-8. `work/`
-9. `sample/`
-10. `session-state/`
-11. `hve-dev/`
+8. `sample/`
+9. `hve-dev/`
+
+`work/` は **意図的に対象外**。run ごとの作業成果物が設計文書を再記述するため、索引すると旧い複写が正本を上回る。横断参照自体が禁止されていることとも整合する。
+
+> **注意**: `[index].roots` からルートを外しても、既存索引から当該チャンクは自動的には消えない。prune は「ディスク上に存在しないファイル」だけを削除するため、ルート構成を変えたときは索引 DB を削除してから再構築すること。
 
 実装位置: 本リポジトリルートの [`mdq.toml`](../../../../../mdq.toml) の `[index].roots`。汎用コード侧の最小フォールバックは `mdq.config.GENERIC_DEFAULT_ROOTS`。`mdq/cli.py` の `DEFAULT_ROOTS` はそのエイリアス。
 

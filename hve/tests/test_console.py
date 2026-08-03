@@ -875,6 +875,61 @@ class TestStepElapsedOutput(unittest.TestCase):
             c.step_elapsed("unknown")
         self.assertEqual(cap.stdout, "")
 
+    def test_step_elapsed_shows_running_action(self) -> None:
+        """実行中アクションがある場合、その名称を経過表示に付加する。"""
+        c = Console(verbose=True, quiet=False)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput():
+            c.action_start("3", "Run (PowerShell)", "dotnet test")
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertIn("Run (PowerShell)", cap.stdout)
+        self.assertIn("実行中", cap.stdout)
+
+    def test_step_elapsed_action_cleared_by_action_result(self) -> None:
+        """action_result 後は実行中アクション表示が消える。"""
+        c = Console(verbose=True, quiet=False)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput():
+            c.action_start("3", "Run (PowerShell)", "dotnet test")
+            c.action_result("3", "OK")
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertNotIn("Run (PowerShell)", cap.stdout)
+
+    def test_step_elapsed_action_cleared_by_empty_action_result(self) -> None:
+        """result_text が空でも action_result で追跡がクリアされる（runner の空結果経路）。"""
+        c = Console(verbose=True, quiet=False)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput():
+            c.action_start("3", "Run (PowerShell)", "dotnet test")
+            c.action_result("3", "")
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertNotIn("Run (PowerShell)", cap.stdout)
+        self.assertNotIn("3", c._step_current_action)
+
+    def test_step_elapsed_action_cleared_by_tool_result(self) -> None:
+        """tool_result（失敗経路）後も実行中アクション追跡がクリアされる。"""
+        c = Console(verbose=True, quiet=False)
+        c._step_start_times["3"] = c._start_time - 60
+        with _CaptureOutput():
+            c.action_start("3", "Run (PowerShell)", "dotnet test")
+            c.tool_result("3", False, error_msg="失敗")
+        with _CaptureOutput() as cap:
+            c.step_elapsed("3")
+        self.assertNotIn("Run (PowerShell)", cap.stdout)
+
+    def test_step_end_clears_current_action_tracking(self) -> None:
+        """step_end は実行中アクション追跡 dict もクリアする。"""
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput():
+            c.step_start("3", "テスト")
+            c.action_start("3", "Run (PowerShell)", "dotnet test")
+            c.step_end("3", "success", elapsed=1.0)
+        self.assertNotIn("3", c._step_current_action)
+        self.assertNotIn("3", c._step_action_start_times)
+
 
 class TestConsoleCliLog(unittest.TestCase):
     """Console.cli_log() の verbosity 別表示制御テスト。"""
@@ -1593,6 +1648,38 @@ class TestContextUsage(unittest.TestCase):
         with unittest.mock.patch.object(c, "_emit") as mock_emit:
             c.context_usage("step1", 800, 1000, 5)
         mock_emit.assert_not_called()
+
+
+class TestConsoleDiag(unittest.TestCase):
+    """`Console.diag` (診断専用ログ) のテスト。
+
+    `stats_event` と同じく verbosity / quiet に依らず出力し、
+    `final_only=True` のときのみ抑止する。AI Credit / Reqs 真因切り分け用。
+    """
+
+    def test_diag_shown_when_quiet(self) -> None:
+        c = Console(verbose=True, quiet=True)
+        with _CaptureOutput() as cap:
+            c.diag("diag-msg")
+        self.assertIn("diag-msg", cap.stdout)
+
+    def test_diag_shown_when_verbosity_zero(self) -> None:
+        c = Console(verbosity=0)
+        with _CaptureOutput() as cap:
+            c.diag("diag-msg")
+        self.assertIn("diag-msg", cap.stdout)
+
+    def test_diag_shown_when_verbose(self) -> None:
+        c = Console(verbose=True, quiet=False)
+        with _CaptureOutput() as cap:
+            c.diag("diag-msg")
+        self.assertIn("diag-msg", cap.stdout)
+
+    def test_diag_suppressed_when_final_only(self) -> None:
+        c = Console(final_only=True)
+        with _CaptureOutput() as cap:
+            c.diag("diag-msg")
+        self.assertEqual("", cap.stdout)
 
 
 if __name__ == "__main__":

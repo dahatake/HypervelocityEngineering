@@ -1,6 +1,6 @@
-﻿> バッチTDDテスト仕様書をジョブごとに docs/test-specs/{jobId}-test-spec.md に生成（推測禁止）
+> バッチTDDテスト仕様書をジョブごとに docs/test-specs/{appId}-test-spec.md に生成（推測禁止）
 
-> **WORK**: `/work/Arch-Dataflow-TDD-TestSpec/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-Dataflow-TDD-TestSpec/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -19,6 +19,7 @@
 
 ## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§2 テストダブル選択基準・§3 テストデータ戦略）を参照する。テスト戦略書からの抽出時に選択基準の根拠として使用する。
+  - 実行環境分類（Unit / 実装コード向け TDD RED/GREEN はローカル実行可能、Integration は構成済み外部サービスを環境変数・設定ファイルで接続）も参照する。
 
 ## 1) 目的と非目的
 
@@ -31,32 +32,32 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 ## 2) 変数
 
-- 対象ジョブID: {対象ジョブID（省略時は `docs/dataflow/dataflow-service-catalog.md` の全ジョブ）}
+- 対象APP-ID: {対象APP-ID（省略時は `docs/catalog/app-catalog.md` の全 APP-ID のうち、ADFD 対象アーキテクチャに該当するもの）}
 
 ## 3) 入力・出力
 
 ### 3.1 入力（必須）
 
-- `docs/dataflow/dataflow-test-strategy.md`（テスト戦略書 — Arch-Dataflow-TestStrategy の出力）
-- `docs/dataflow/dataflow-service-catalog.md`（バッチサービスカタログ — Arch-Dataflow-ServiceCatalog の出力）
+- `docs/catalog/test-strategy.md`（AAS の SoT — テスト戦略書）
+- `docs/catalog/service-catalog-matrix.md`（AAS の SoT — サービス × ジョブ DAG・スケジュール）
 
-### 3.2 入力（ジョブ仕様 — Step 5.1 成果物）
+### 3.2 入力（ジョブ仕様 — Step 6.1 成果物）
 
-- `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`（対象ジョブのみ）
+- `docs/dataflow/apps/{appId}-spec.md`（対象 APP-ID のみ）
 
-### 3.3 入力（監視設計 — Step 5.2 成果物）
+### 3.3 入力（監視設計 — Step 6.2 成果物）
 
 - `docs/dataflow/dataflow-monitoring-design.md`（Arch-Dataflow-MonitoringDesign の出力）
 
 ### 3.4 補助情報（存在すれば読む）
 
-- `docs/dataflow/dataflow-data-model.md`（エンティティ定義・冪等性キー・バリデーションルール）
-- `docs/dataflow/dataflow-app-catalog.md`（ジョブ一覧・依存 DAG・スケジュール）
-- `docs/dataflow/dataflow-domain-analytics.md`（Bounded Context・ドメインイベント）
+- `docs/catalog/data-model.md`（AAS の SoT — エンティティ定義・冪等性キー・バリデーションルール）
+- `docs/catalog/app-catalog.md`（AAS の SoT — APP-ID 一覧・主責務）
+- `docs/catalog/domain-analytics.md`（AAS の SoT — Bounded Context・ドメインイベント）
 
 ### 3.5 出力（必須）
 
-- `docs/test-specs/{jobId}-test-spec.md`（ジョブごとに1ファイル）
+- `docs/test-specs/{appId}-test-spec.md`（APP-ID ごとに1ファイル）
 - 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
 
 ### knowledge/ 参照（任意・存在する場合のみ）
@@ -73,8 +74,8 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 | 確認対象 | 停止条件 |
 |---|---|
-| `docs/dataflow/dataflow-test-strategy.md` | 存在しない・空・見出し `## 2.` がない |
-| `docs/dataflow/dataflow-service-catalog.md` | 存在しない・空 |
+| `docs/catalog/test-strategy.md` | 存在しない・空・見出し `## 2.` がない |
+| `docs/catalog/service-catalog-matrix.md` | 存在しない・空 |
 | `docs/dataflow/apps/` | 存在しない・空（`.md` ファイルがない） |
 | `docs/dataflow/dataflow-monitoring-design.md` | 存在しない・空 |
 
@@ -84,20 +85,21 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 ### 5.1 調査（read/search）
 
-1. `docs/dataflow/dataflow-test-strategy.md` を `read` する（テスト種別・テストダブル・カバレッジ方針を把握する）。
-2. `docs/dataflow/dataflow-service-catalog.md` を `read` する（対象 Job-ID 一覧・Azure サービスマッピングを取得する）。
+1. `docs/catalog/test-strategy.md` を `read` する（テスト種別・テストダブル・カバレッジ方針を把握する）。
+2. `docs/catalog/service-catalog-matrix.md` を `read` する（対象 APP-ID 一覧・Azure サービスマッピング・ジョブ DAG・スケジュールを取得する）。
 3. `docs/dataflow/apps/` 配下の全 `*.md` を `read` する（入出力スキーマ・変換ルール・バリデーション・エラーハンドリング・パフォーマンス要件を把握する）。
 4. `docs/dataflow/dataflow-monitoring-design.md` を `read` する（メトリクス定義・アラートルール・ログ設計を把握する）。
-5. `docs/dataflow/dataflow-data-model.md` が存在すれば `read` する（冪等性キー・エンティティ定義を把握する）。
-6. `docs/dataflow/dataflow-app-catalog.md` が存在すれば `read` する（ジョブ一覧・依存 DAG を把握する）。
+5. `docs/catalog/data-model.md` が存在すれば `read` する（冪等性キー・エンティティ定義を把握する）。
+6. `docs/catalog/app-catalog.md` が存在すれば `read` する（APP-ID 一覧・主責務を把握する）。
 
 ### 5.2 抽出（推測しない）
 
-6. `dataflow-test-strategy.md` の「2. バッチ固有テスト種別」から各テスト種別（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト・チェックポイント/リスタートテスト）の定義を抽出する。チェックポイント/リスタートの根拠は `docs/dataflow/dataflow-test-strategy.md`（チェックポイント/リスタート方針）、`docs/dataflow/apps/{jobId}-*-spec.md`（ジョブの中断・再実行仕様）、`docs/dataflow/dataflow-monitoring-design.md`（再実行手順・リカバリフロー）から取得する。
-7. `dataflow-test-strategy.md` の「4. テストダブル戦略」から、各依存パターンのテストダブル選択基準（Azurite/Testcontainers/Mock）を抽出する（`test-strategy-template` Skill §2 の選択基準も参照）。
-8. `dataflow-test-strategy.md` の「3. テストデータ戦略」からデータ生成方式（Faker/シード管理/サニタイズ）を抽出する（`test-strategy-template` Skill §3 の用途別選択方針も参照）。
-9. 各ジョブ仕様書から: Job-ID・入出力スキーマ・変換ルール・バリデーションルール・エラーハンドリング・パフォーマンス要件を抽出する。
-10. `batch-monitoring-design.md` から: Job-ID ごとのメトリクス定義・アラートルールを抽出する。
+6. `docs/catalog/test-strategy.md` の「2. バッチ固有テスト種別」から各テスト種別（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト・チェックポイント/リスタートテスト）の定義を抽出する。チェックポイント/リスタートの根拠は `docs/catalog/test-strategy.md`（チェックポイント/リスタート方針）、`docs/dataflow/apps/{appId}-spec.md`（APP の中断・再実行仕様）、`docs/dataflow/dataflow-monitoring-design.md`（再実行手順・リカバリフロー）から取得する。
+7. `docs/catalog/test-strategy.md` の「4. テストダブル戦略」から、各依存パターンのテストダブル選択基準（Azurite/Testcontainers/Mock）を抽出する（`test-strategy-template` Skill §2 の選択基準も参照）。
+8. `docs/catalog/test-strategy.md` の「3. テストデータ戦略」からデータ生成方式（Faker/シード管理/サニタイズ）を抽出する（`test-strategy-template` Skill §3 の用途別選択方針も参照）。
+9. 各 APP 仕様書から: APP-ID・入出力スキーマ・変換ルール・バリデーションルール・エラーハンドリング・パフォーマンス要件を抽出する。
+10. `docs/dataflow/dataflow-monitoring-design.md` から: APP-ID ごとのメトリクス定義・アラートルールを抽出する。
+11. 各テストケースについて、ローカル実行可能な Unit / TDD テストか、構成済み外部サービスを使う Integration かを分類し、必要な環境変数・設定ファイルを抽出する。根拠がない接続先や秘密情報は `TBD（要確認）` とする。
 
 ### 5.3 計画・分割
 
@@ -128,7 +130,7 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 ## 7) タスク固有の禁止事項
 
-- `docs/dataflow/dataflow-test-strategy.md` 等から確認できない情報を断定・補完・推測しない
+- `docs/catalog/test-strategy.md` 等から確認できない情報を断定・補完・推測しない
 - 根拠のないジョブID・テストケース・テストデータを捏造しない
 - テスト仕様書以外のドキュメント（`docs/dataflow/` 配下のファイル）を変更しない
 - コードファイル（`api/`・`src/test/`）を変更しない
@@ -136,23 +138,24 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 ## 8) 出力フォーマット（Markdown固定）
 
-## ジョブ別テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）
+## ジョブ別テスト仕様書（`docs/test-specs/{appId}-test-spec.md`）
 
 ### 1. 概要
 
-- ジョブID: {jobId}
+- ジョブID: {appId}
 - ジョブ名: {ジョブ名}
 - 処理パターン: {処理パターン}
 - 対象スコープ: {テスト対象範囲}
-- テスト戦略書参照: `docs/dataflow/dataflow-test-strategy.md`
+- テスト戦略書参照: `docs/catalog/test-strategy.md`
 - 出典: {ジョブ仕様書パス}
 
 ### 2. テストケース表（ユニット/統合テスト）
 
-| テストID | テスト対象（処理ステップ/メソッド） | テスト種別 | テストシナリオ | 入力 | 期待結果 | テストダブル | 実行環境 | 出典(ファイル#見出し) |
-|---|---|---|---|---|---|---|---|---|
+| テストID | テスト対象（処理ステップ/メソッド） | テスト種別 | テストシナリオ | 入力 | 期待結果 | テストダブル | 実行環境 | 外部サービス要否 | 必要設定 | 出典(ファイル#見出し) |
+|---|---|---|---|---|---|---|---|---|---|---|
 
-テスト種別は `dataflow-test-strategy.md` §1 のテストピラミッドに準拠する（ユニットテスト・統合テストを対象とする）。
+テスト種別は `docs/catalog/test-strategy.md` §1 のテストピラミッドに準拠する（ユニットテスト・統合テストを対象とする）。
+Unit / 実装コード向け TDD RED/GREEN はローカル実行可能を既定とし、外部 I/O は Mock / Stub / Emulator / Testcontainers へ切り分ける。Integration は構成済み外部サービスを使用してよいが、接続先・認証・base URL は環境変数またはテスト設定ファイルで注入し、未設定を PASS 扱いしない。
 
 ### 3. バッチ固有テストケース表
 
@@ -161,7 +164,7 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 | テストID | 対象処理 | 冪等性キー | テストシナリオ | 入力（1回目/2回目） | 期待結果 | 出典(ファイル#見出し) |
 |---|---|---|---|---|---|---|
 
-- 冪等性キーは `docs/dataflow/dataflow-data-model.md` の冪等性キー設計を根拠とする。
+- 冪等性キーは `docs/catalog/data-model.md` の冪等性キー設計を根拠とする。
 - 「DLQ に積まれたメッセージの再処理」シナリオを必ず含める。
 
 #### 3.2 データ品質テスト
@@ -198,14 +201,14 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 |---|---|---|---|---|
 
 - 中断→再開時のデータ整合性検証を含める。
-- このセクションの根拠は `docs/dataflow/dataflow-test-strategy.md`（チェックポイント/リスタート方針）、`docs/dataflow/apps/{jobId}-*-spec.md`（ジョブの中断・再実行仕様）、`docs/dataflow/dataflow-monitoring-design.md`（再実行手順・リカバリフロー）とし、これらの記述をすべて出典として明示する。
+- このセクションの根拠は `docs/catalog/test-strategy.md`（チェックポイント/リスタート方針）、`docs/dataflow/apps/{appId}-spec.md`（ジョブの中断・再実行仕様）、`docs/dataflow/dataflow-monitoring-design.md`（再実行手順・リカバリフロー）とし、これらの記述をすべて出典として明示する。
 
 ### 4. テストデータ定義
 
 | データID | エンティティ/フィールド | 型 | 値/生成方式 | 用途（正常/境界/異常/大量） | 制約/前提条件 | 出典(ファイル#見出し) |
 |---|---|---|---|---|---|---|
 
-生成方式は `dataflow-test-strategy.md` のテストデータ戦略に準じる（Faker/シード管理/サニタイズ/本番相当量）。
+生成方式は `docs/catalog/test-strategy.md` のテストデータ戦略に準じる（Faker/シード管理/サニタイズ/本番相当量）。
 
 ### 5. テストダブル設計
 
@@ -215,6 +218,7 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 - Azure Storage（Blob/Queue/Table）のテストダブル方針: Azurite（エミュレーター）を優先
 - 外部 DB（SQL/Cosmos）のテストダブル方針: Testcontainers を使用
 - 外部 HTTP クライアント・メッセージングのテストダブル方針: Mock/Stub を使用
+- 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をテストコード、README、ログにハードコードしない。
 
 ### 6. 監視・運用テスト
 
@@ -244,26 +248,30 @@ Step 4.5（データフローテスト戦略書）・Step 5.1（ジョブ詳細�
 
 - Q1 ...
 
-## 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 9) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 9.1 3つの異なる観点（このエージェント固有）
+### 9.1 セルフチェック契約
 
-- **1回目：機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §8 の全セクションが揃っているか / バッチ固有6テスト種別（§8 `### 3.1`〜`### 3.6`）が網羅されているか / テスト戦略書の方針（Azurite/Testcontainers/Mock）が反映されているか / 監視・運用テスト（§8 `### 6.`）が `batch-monitoring-design.md` のメトリクスとアラートルールをカバーしているか
-- **2回目：TDD実践可能性・トレーサビリティ**：
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+### 9.2 ドメイン固有観点
+
+- **機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §8 の全セクションが揃っているか / バッチ固有6テスト種別（§8 `### 3.1`〜`### 3.6`）が網羅されているか / テスト戦略書の方針（Azurite/Testcontainers/Mock）が反映されているか / 監視・運用テスト（§8 `### 6.`）が `docs/dataflow/dataflow-monitoring-design.md` のメトリクスとアラートルールをカバーしているか
+- **TDD実践可能性・トレーサビリティ**：
   - テストケースIDが一意か / Red フェーズで実行可能な順序か
-  - テストダブル設計（§8 `### 5.`）が `dataflow-test-strategy.md` の「テストダブル戦略」と一致しているか
+  - テストダブル設計（§8 `### 5.`）が `docs/catalog/test-strategy.md` の「テストダブル戦略」と一致しているか
   - ジョブ仕様書の全処理ステップ・バリデーションルールに対して正常系・異常系・境界値を含むテストケースが網羅されているか
-  - 冪等性テスト（§8 `### 3.1`）が `batch-data-model.md` の冪等性キー設計と一致しているか
-- **3回目：保守性・拡張性・堅牢性**：新ジョブ追加時にテストケースを追加しやすいか / テストデータが再利用可能か（Faker/シード管理） / 障害注入テストが DLQ・リトライ設計と整合しているか / Questions が明確か
+  - 冪等性テスト（§8 `### 3.1`）が `docs/catalog/data-model.md` の冪等性キー設計と一致しているか
+- **保守性・拡張性・堅牢性**：新ジョブ追加時にテストケースを追加しやすいか / テストデータが再利用可能か（Faker/シード管理） / 障害注入テストが DLQ・リトライ設計と整合しているか / Questions が明確か
 
-### 9.2 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 9.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## 10) 完了条件
 
 - `docs/test-specs/` 配下に対象ジョブのテスト仕様書が §8 のスキーマで生成/更新されている。
 - テストケース表（§8 `### 2.`）の行数がジョブ仕様書の処理ステップ数と一致する（または未反映理由を記載）。
-- バッチ固有テストケース（§8 `### 3.`）が `dataflow-test-strategy.md` のバッチ固有6テスト種別（冪等性・データ品質・大量データ・障害注入・パフォーマンス・チェックポイント/リスタート）をカバーする。
-- テストダブル設計（§8 `### 5.`）が `dataflow-test-strategy.md` のテストダブル戦略の全依存パターンをカバーする。
-- 監視・運用テスト（§8 `### 6.`）が `batch-monitoring-design.md` のメトリクスとアラートルールをカバーする。
+- バッチ固有テストケース（§8 `### 3.`）が `docs/catalog/test-strategy.md` のバッチ固有6テスト種別（冪等性・データ品質・大量データ・障害注入・パフォーマンス・チェックポイント/リスタート）をカバーする。
+- テストダブル設計（§8 `### 5.`）が `docs/catalog/test-strategy.md` のテストダブル戦略の全依存パターンをカバーする。
+- 監視・運用テスト（§8 `### 6.`）が `docs/dataflow/dataflow-monitoring-design.md` のメトリクスとアラートルールをカバーする。
 - TDD 実行順序（§8 `### 7.`）が Red フェーズで実行可能な順序になっている。

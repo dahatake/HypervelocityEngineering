@@ -325,11 +325,12 @@ class TestARDGroupStepExpansion(unittest.TestCase):
         from hve.template_engine import resolve_selected_steps
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
-        # orchestrator.py 内の展開ロジックと同じマッピングを再現
+        # orchestrator.py / workflow_registry._WORKFLOW_GROUP_MAPS と同じマッピングを再現
         _ARD_GROUP_MAP = {
             "1": ["1", "1.1", "1.2"],
             "2": ["2"],
-            "4": ["4.1", "4.2", "4.3"],
+            "3": ["2.1"],
+            "4": ["3.1", "3.2", "3.3"],
         }
         expanded = []
         for sid in group_ids:
@@ -341,9 +342,9 @@ class TestARDGroupStepExpansion(unittest.TestCase):
     def test_group_2_and_4_expands(self):
         active = self._resolve(["2", "4"])
         self.assertIn("2", active)
-        self.assertIn("4.1", active)
-        self.assertIn("4.2", active)
-        self.assertIn("4.3", active)
+        self.assertIn("3.1", active)
+        self.assertIn("3.2", active)
+        self.assertIn("3.3", active)
         self.assertNotIn("1", active)
         self.assertNotIn("1.1", active)
         self.assertNotIn("1.2", active)
@@ -354,17 +355,17 @@ class TestARDGroupStepExpansion(unittest.TestCase):
         self.assertIn("1.1", active)
         self.assertIn("1.2", active)
         self.assertNotIn("2", active)
-        self.assertNotIn("4.1", active)
+        self.assertNotIn("3.1", active)
 
     def test_group_4_only(self):
         active = self._resolve(["4"])
-        self.assertEqual(active, {"4.1", "4.2", "4.3"})
+        self.assertEqual(active, {"3.1", "3.2", "3.3"})
 
     def test_all_groups(self):
         active = self._resolve(["1", "2", "4"])
         self.assertEqual(
             active,
-            {"1", "1.1", "1.2", "2", "4.1", "4.2", "4.3"},
+            {"1", "1.1", "1.2", "2", "3.1", "3.2", "3.3"},
         )
 
     def test_orchestrator_expansion_applied(self):
@@ -376,7 +377,8 @@ class TestARDGroupStepExpansion(unittest.TestCase):
         _ARD_GROUP_MAP = {
             "1": ["1", "1.1", "1.2"],
             "2": ["2"],
-            "4": ["4.1", "4.2", "4.3"],
+            "3": ["2.1"],
+            "4": ["3.1", "3.2", "3.3"],
         }
         expanded = []
         for sid in selected:
@@ -384,7 +386,7 @@ class TestARDGroupStepExpansion(unittest.TestCase):
         seen = set()
         selected = [s for s in expanded if not (s in seen or seen.add(s))]
         active = resolve_selected_steps(wf, selected)
-        self.assertTrue({"2", "4.1", "4.2", "4.3"}.issubset(active))
+        self.assertTrue({"2", "3.1", "3.2", "3.3"}.issubset(active))
 
 
 class TestARDPromptConstant(unittest.TestCase):
@@ -410,23 +412,23 @@ class TestARDWorkflowRegistryBodyTemplatePaths(unittest.TestCase):
         s = wf.get_step("2")
         self.assertEqual(s.body_template_path, "templates/ard/step-2.md")
 
-    def test_step_3_body_template_path(self):
-        # Step 3 (KPI/OKR 定義・任意)
+    def test_step_2_1_body_template_path(self):
+        # Step 2.1 (KPI/OKR 定義・任意) — 旧 Step 3 から移動
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
-        s = wf.get_step("3")
-        self.assertEqual(s.body_template_path, "templates/ard/step-3.md")
+        s = wf.get_step("2.1")
+        self.assertEqual(s.body_template_path, "templates/ard/step-2.1.md")
 
-    def test_step_4_body_template_path(self):
-        # Sub-10 (ADR-0003): 旧 Step 3 は 4.1 / 4.2 / 4.3 に再採番された。
+    def test_step_3_x_body_template_path(self):
+        # 旧 Step 4.1/4.2/4.3 は Step 3.1/3.2/3.3 に再採番された。
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
-        s_41 = wf.get_step("4.1")
-        s_42 = wf.get_step("4.2")
-        s_43 = wf.get_step("4.3")
-        self.assertEqual(s_41.body_template_path, "templates/ard/step-4.1.md")
-        self.assertEqual(s_42.body_template_path, "templates/ard/step-4.2.md")
-        self.assertEqual(s_43.body_template_path, "templates/ard/step-4.3.md")
+        s_31 = wf.get_step("3.1")
+        s_32 = wf.get_step("3.2")
+        s_33 = wf.get_step("3.3")
+        self.assertEqual(s_31.body_template_path, "templates/ard/step-3.1.md")
+        self.assertEqual(s_32.body_template_path, "templates/ard/step-3.2.md")
+        self.assertEqual(s_33.body_template_path, "templates/ard/step-3.3.md")
 
 
 if __name__ == "__main__":

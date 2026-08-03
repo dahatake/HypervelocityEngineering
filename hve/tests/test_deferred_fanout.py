@@ -12,15 +12,15 @@ from hve.orchestrator import _expand_workflow_for_dag
 from hve.workflow_registry import get_workflow, StepDef, WorkflowDef, _make_state_labels
 
 
-def test_ard_step_4_2_is_deferred_when_skeleton_not_yet_generated(tmp_path: Path) -> None:
-    """ARD Step 4.2 は use-case-skeleton.md が未生成でも deferred として active に残る。"""
+def test_ard_step_3_2_is_deferred_when_skeleton_not_yet_generated(tmp_path: Path) -> None:
+    """ARD Step 3.2 は use-case-skeleton.md が未生成でも deferred として active に残る。"""
     wf = get_workflow("ard")
-    active = {"4.1", "4.2", "4.3"}
+    active = {"3.1", "3.2", "3.3"}
     expanded_wf, expanded_active, info = _expand_workflow_for_dag(wf, active, tmp_path)
 
-    assert "4.2" in info.empty_fanout_ids, "skeleton 不在で 4.2 は empty 判定されるはず"
-    assert "4.2" in info.deferred_fanout_ids, "4.2 は deferred 判定されるべき"
-    assert "4.2" in expanded_active, "deferred は active から discard されない"
+    assert "3.2" in info.empty_fanout_ids, "skeleton 不在で 3.2 は empty 判定されるはず"
+    assert "3.2" in info.deferred_fanout_ids, "3.2 は deferred 判定されるべき"
+    assert "3.2" in expanded_active, "deferred は active から discard されない"
 
 
 def test_non_deferred_empty_fanout_is_discarded(tmp_path: Path) -> None:

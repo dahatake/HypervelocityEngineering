@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QDockWidget
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -23,7 +23,7 @@ def qapp():
 
 
 @pytest.fixture
-def main_window(qapp, monkeypatch):
+def main_window(qapp, monkeypatch, tmp_path):
     """ユーザーの実設定ファイルから独立した MainWindow を生成する。
 
     実環境の ``settings_store`` は ``~/.hve/settings.toml`` 等を読み込むため、
@@ -49,7 +49,9 @@ def main_window(qapp, monkeypatch):
 
     from hve.gui.main_window import MainWindow
 
-    win = MainWindow()
+    # repo_root を構築時に渡す。__init__ 内の GuiSessionWorkdir.create() が
+    # work/run/<id>/ を作成するため、tmp_path で隔離して実リポジトリ汚染を防ぐ。
+    win = MainWindow(repo_root=tmp_path)
     yield win
     win.deleteLater()
 
@@ -141,3 +143,88 @@ def test_session_workdir_is_added_as_root(main_window) -> None:
     """GUI セッション work_root が FileTreePanel のルートとして登録される。"""
     roots = main_window._file_tree_dock._model.root_paths()
     assert main_window._session_workdir.work_root.resolve() in roots
+
+
+def test_copilot_dock_receives_workbench_page_reference(qapp, monkeypatch, tmp_path: Path) -> None:
+    """Steering 機能配線（T11）: CopilotChatPanel.set_workbench_page が
+    WorkbenchPage インスタンスで呼び出されることを確認する。
+
+    ``CopilotChatPanel`` に ``set_workbench_page`` が未実装（T13未実施）の場合でも
+    ``AttributeError`` にならず安全にスキップされることも合わせて確認する。
+    """
+    from hve.gui import settings_store
+
+    _real_defaults = settings_store.defaults()
+    monkeypatch.setattr(
+        settings_store,
+        "load",
+        lambda: {k: dict(v) for k, v in _real_defaults.items()},
+    )
+    monkeypatch.setattr(
+        settings_store,
+        "get_option",
+        lambda key, *, settings=None: _real_defaults["options"].get(key),  # noqa: ARG005
+    )
+    monkeypatch.setattr(settings_store, "set_option", lambda *a, **k: None)
+    monkeypatch.setattr(settings_store, "save", lambda *a, **k: None)
+
+    import hve.gui.main_window as main_window_mod
+
+    calls: list = []
+
+    class _FakeCopilotChatPanel(QDockWidget):
+        def __init__(self, parent=None, *, repo_root=None) -> None:  # noqa: ARG002
+            super().__init__("GitHub Copilot Chat", parent)
+
+        def hide(self) -> None:  # QDockWidget.hide をそのまま使う
+            super().hide()
+
+        def set_workbench_page(self, page) -> None:
+            calls.append(page)
+
+    monkeypatch.setattr(main_window_mod, "CopilotChatPanel", _FakeCopilotChatPanel)
+
+    from hve.gui.main_window import MainWindow
+
+    win = MainWindow(repo_root=tmp_path)
+    try:
+        assert len(calls) == 1
+        assert calls[0] is win._page_workbench
+    finally:
+        win.deleteLater()
+
+
+def test_copilot_dock_without_set_workbench_page_does_not_raise(
+    qapp, monkeypatch, tmp_path: Path
+) -> None:
+    """set_workbench_page 未実装の CopilotChatPanel でも MainWindow 生成が
+    AttributeError にならないことを確認する（後方互換フォールバック）。
+    """
+    from hve.gui import settings_store
+
+    _real_defaults = settings_store.defaults()
+    monkeypatch.setattr(
+        settings_store,
+        "load",
+        lambda: {k: dict(v) for k, v in _real_defaults.items()},
+    )
+    monkeypatch.setattr(
+        settings_store,
+        "get_option",
+        lambda key, *, settings=None: _real_defaults["options"].get(key),  # noqa: ARG005
+    )
+    monkeypatch.setattr(settings_store, "set_option", lambda *a, **k: None)
+    monkeypatch.setattr(settings_store, "save", lambda *a, **k: None)
+
+    import hve.gui.main_window as main_window_mod
+
+    class _NoSetterCopilotChatPanel(QDockWidget):
+        def __init__(self, parent=None, *, repo_root=None) -> None:  # noqa: ARG002
+            super().__init__("GitHub Copilot Chat", parent)
+
+    monkeypatch.setattr(main_window_mod, "CopilotChatPanel", _NoSetterCopilotChatPanel)
+
+    from hve.gui.main_window import MainWindow
+
+    win = MainWindow(repo_root=tmp_path)  # AttributeError にならないこと
+    win.deleteLater()

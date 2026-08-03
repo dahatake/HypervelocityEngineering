@@ -43,9 +43,9 @@ class TestSettingsStore(unittest.TestCase):
                 loaded = settings_store.load()
                 self.assertEqual(loaded["options"]["model"], "Auto")
 
-    def test_theme_default_is_dark(self) -> None:
+    def test_theme_default_is_light(self) -> None:
         d = settings_store.defaults()
-        self.assertEqual(d["options"]["theme"], "dark")
+        self.assertEqual(d["options"]["theme"], "light")
 
     def test_theme_roundtrip(self) -> None:
         with TemporaryDirectory() as d:

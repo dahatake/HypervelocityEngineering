@@ -34,8 +34,7 @@ class StepIntroBanner(QFrame):
 
         title_text = {
             0: self.tr("ℹ️  ① ワークフロー選択"),
-            1: self.tr("ℹ️  ② オプション選択"),
-            2: self.tr("ℹ️  ③ 実行"),
+            2: self.tr("ℹ️  ② 実行"),
         }.get(step_index, "ℹ️")
         title = QLabel(title_text)
         title.setStyleSheet("font-weight: bold; font-size: 13px;")

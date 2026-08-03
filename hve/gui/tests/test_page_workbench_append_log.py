@@ -28,8 +28,10 @@ def test_append_log_creates_instance_and_appends(qapp):
     state = page._state
     assert "app-a" in state.workflows
     inst = state.workflows["app-a"]
-    assert inst.log_buffer[-1] == "hello world"
-    assert inst.step_log_buffers["step1"][-1] == "hello world"
+    # append_workflow_log は `[WF大文字] [step_id] ` プリフィックスを付与する
+    # （workbench_state.format_log_prefix / Q3=i 仕様）。
+    assert inst.log_buffer[-1] == "[APP-A] [step1] hello world"
+    assert inst.step_log_buffers["step1"][-1] == "[APP-A] [step1] hello world"
 
 
 def test_append_log_mirrors_to_global_tab(qapp):
@@ -52,4 +54,6 @@ def test_append_log_empty_instance_id_uses_fallback(qapp):
 
     state = page._state
     assert "_global" in state.workflows
-    assert state.workflows["_global"].log_buffer[-1] == "fallback line"
+    # 空 instance_id は "_global"、空 step_id は "main" にフォールバックし
+    # `[_GLOBAL] [main] ` プリフィックスが付与される。
+    assert state.workflows["_global"].log_buffer[-1] == "[_GLOBAL] [main] fallback line"

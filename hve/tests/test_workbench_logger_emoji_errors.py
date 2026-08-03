@@ -4,7 +4,8 @@
 `state.add_user_action` 経由で「実行中の課題」へ反映されることを保証する:
 
   1. `[HH:MM:SS] ❌ ERROR: <msg>`              (console.py error())
-  2. `[HH:MM:SS] ⚠️ Session error [...]: ...`  (console.py session_error())
+  2. `[HH:MM:SS] ⚠️ <msg>`                     (console.py session_error() /
+     warning() 等が出力する任意の ⚠️ 警告行)
   3. `[HH:MM:SS] ❌ [step] Sub-agent 失敗: name - error`
 """
 
@@ -52,11 +53,15 @@ class TestSessionWarnFallback:
         assert a.level == "WARN"
         assert "Session error" in a.message
 
-    def test_unrelated_warning_emoji_ignored(self) -> None:
+    def test_unrelated_warning_emoji_recorded_as_warn(self) -> None:
         s = _state()
-        # `Session error` を含まない単なる警告は WARN として記録しない
+        # `⚠️` で始まる任意の警告行（Session error 以外）も WARN として記録する
         process_log_line(s, "[00:41:00]   \u26A0\uFE0F  disk almost full")
-        assert s.user_actions == []
+        assert len(s.user_actions) == 1
+        a = s.user_actions[0]
+        assert a.level == "WARN"
+        assert a.message == "disk almost full"
+        assert a.timestamp == "00:41:00"
 
 
 class TestSubagentFailedFallback:

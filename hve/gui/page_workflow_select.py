@@ -7,8 +7,8 @@
     チェックボックスで提示する。
   - ワークフロー選択時、そのワークフローのステップ一覧をチェックボックスで
     展開表示する（初期値: 全 ON）。
-  - ステップの OFF/ON 操作時、`depends_on` を辿って依存関係を自動連動させる
-    （OFF→依存先を自動 OFF / ON→依存元を自動 ON）。
+  - ステップの ON/OFF は各ステップ単独で行い、依存関係の自動連動は行わない
+    （前段ステップの成果物が既に存在する前提で、途中ステップから実行開始できる）。
   - 選択完了時は `selection_changed` シグナルを emit。
 """
 
@@ -20,6 +20,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -122,10 +123,10 @@ class _WorkflowStepsGroup(QWidget):
     steps_changed = Signal(str, list)  # workflow_id, enabled_step_ids
 
     # ARD: 4 グループ体系のラベル定義。
-    # `enabled_step_ids()` が返す ID は orchestrator 側の
-    # `_ARD_GROUP_MAP` で実 Step ID ("1","1.1","1.2" / "2" / "4.1","4.2","4.3") に展開される。
-    # "3" (KPI/OKR 定義・任意) は `_ARD_GROUP_MAP` に登録されていないため、orchestrator では `[sid]` で
-    # そのまま実 Step ID として通る（既定 OFF、ユーザーが明示 ON した時のみ実行）。
+    # `enabled_step_ids()` が返す ID は registry侧の
+    # `_WORKFLOW_GROUP_MAPS["ard"]` で実 Step ID
+    # （"1"→["1","1.1","1.2"] / "2"→["2"] / "3"→["2.1"] / "4"→["3.1","3.2","3.3"]）
+    # に展開される。
     _ARD_GROUPS: List[Tuple[str, str, bool]] = [
         ("1", "企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）", False),
         ("2", "要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）", True),
@@ -153,16 +154,10 @@ class _WorkflowStepsGroup(QWidget):
             self._steps = steps  # (id, title, depends_on)
             self._default_on = {sid: True for sid, _, _ in steps}
         self._checkboxes: Dict[str, QCheckBox] = {}
-        self._depends_on: Dict[str, List[str]] = {sid: deps for sid, _, deps in self._steps}
-        self._dependents: Dict[str, List[str]] = {sid: [] for sid, _, _ in self._steps}
-        for sid, _, deps in self._steps:
-            for d in deps:
-                if d in self._dependents:
-                    self._dependents[d].append(sid)
+        self._cloud_override_combos: Dict[str, QComboBox] = {}
         # ARD の旧 hidden ステップ（"1.1" 選択時に Step "1" を自動付与）仕様は撤廃。
-        # グループ ID "1" がそのまま `_ARD_GROUP_MAP` で 1/1.1/1.2 に展開される。
+        # グループ ID "1" がそのまま registry の `_WORKFLOW_GROUP_MAPS` で 1/1.1/1.2 に展開される。
         self._hidden_step_ids: set = set()
-        self._suppress_signals = False
         self._setup_ui(workflow_name)
 
     def _setup_ui(self, workflow_name: str) -> None:
@@ -209,6 +204,14 @@ class _WorkflowStepsGroup(QWidget):
             row = QHBoxLayout()
             row.setContentsMargins(16, 0, 0, 0)
             row.addWidget(cb)
+            cloud_combo = QComboBox()
+            cloud_combo.addItem(self.tr("☁ 継承"), userData=None)
+            cloud_combo.addItem(self.tr("☁ ON"), userData=True)
+            cloud_combo.addItem(self.tr("☁ OFF"), userData=False)
+            cloud_combo.setToolTip(self.tr("この Step の Cloud Session 使用を上書きします。未指定時は基本設定を継承します。"))
+            cloud_combo.setEnabled(cb.isChecked())
+            self._cloud_override_combos[step_id] = cloud_combo
+            row.addWidget(cloud_combo)
             row.addStretch()
             row_w = QWidget()
             row_w.setLayout(row)
@@ -223,42 +226,55 @@ class _WorkflowStepsGroup(QWidget):
             and self._checkboxes[sid].isChecked()
         ]
 
-    def _on_step_toggled(self, step_id: str, checked: bool) -> None:
-        if self._suppress_signals:
-            return
-        # ARD は各グループを単独で選択可能とするため依存伝播を行わない
-        if self._workflow_id == "ard":
-            self.steps_changed.emit(self._workflow_id, self.enabled_step_ids())
-            return
-        # 依存伝播 (Q3=b): OFF→依存先を自動 OFF / ON→依存元を自動 ON
-        self._suppress_signals = True
-        try:
-            if not checked:
-                for dep in self._collect_transitive(step_id, self._dependents):
-                    cb = self._checkboxes.get(dep)
-                    if cb is not None and cb.isChecked():
-                        cb.setChecked(False)
-            else:
-                for dep in self._collect_transitive(step_id, self._depends_on):
-                    cb = self._checkboxes.get(dep)
-                    if cb is not None and not cb.isChecked():
-                        cb.setChecked(True)
-        finally:
-            self._suppress_signals = False
-        self.steps_changed.emit(self._workflow_id, self.enabled_step_ids())
-
-    def _collect_transitive(
-        self, start: str, graph: Dict[str, List[str]]
-    ) -> List[str]:
-        seen: List[str] = []
-        stack: List[str] = list(graph.get(start, []))
-        while stack:
-            node = stack.pop()
-            if node in seen:
+    def cloud_step_overrides(self) -> Dict[str, bool]:
+        """明示指定された Step 単位 Cloud Session 上書きを返す。"""
+        result: Dict[str, bool] = {}
+        for sid, combo in self._cloud_override_combos.items():
+            cb = self._checkboxes.get(sid)
+            if cb is not None and not cb.isChecked():
                 continue
-            seen.append(node)
-            stack.extend(graph.get(node, []))
-        return seen
+            value = combo.currentData()
+            if isinstance(value, bool):
+                for effective_sid in self._effective_cloud_step_ids(sid):
+                    result[effective_sid] = value
+        return result
+
+    def cloud_step_override_scope_ids(self) -> List[str]:
+        """このグループの Cloud override が対象にする実 Step ID 一覧を返す。"""
+        result: List[str] = []
+        for sid, _, _ in self._steps:
+            if sid in self._hidden_step_ids:
+                continue
+            result.extend(self._effective_cloud_step_ids(sid))
+        return result
+
+    def _effective_cloud_step_ids(self, step_id: str) -> List[str]:
+        if self._workflow_id == "ard":
+            try:
+                from hve.workflow_registry import expand_group_step_ids
+                expanded = list(expand_group_step_ids(self._workflow_id, [step_id]))
+                return expanded or [step_id]
+            except Exception:
+                return [step_id]
+        return [step_id]
+
+    def _sync_cloud_override_enabled(self) -> None:
+        for sid, combo in self._cloud_override_combos.items():
+            cb = self._checkboxes.get(sid)
+            enabled = bool(cb is not None and cb.isChecked())
+            combo.setEnabled(enabled)
+            if not enabled:
+                combo.setCurrentIndex(0)
+
+    def _on_step_toggled(self, step_id: str, checked: bool) -> None:
+        # 依存伝播は行わない: 各 Step を単独で ON/OFF できる。
+        # 前段ステップの成果物が既に存在する前提で、途中ステップ（例: Step 2.1）から
+        # 実行を開始できるようにするため。CLI (`template_engine._prompt_steps`) および
+        # ARD グループ選択と同じ「単独選択」挙動に統一している。
+        # 選択 Step が必要とする入力ファイルの存在は Step 1 [次へ] のプランレビュー
+        # (`build_step1_plan_review` が各 Step の `required_input_paths` を実測) で確認される。
+        self._sync_cloud_override_enabled()
+        self.steps_changed.emit(self._workflow_id, self.enabled_step_ids())
 
 
 class WorkflowSelectPage(QWidget):
@@ -317,6 +333,20 @@ class WorkflowSelectPage(QWidget):
         if grp is None:
             return []
         return grp.enabled_step_ids()
+
+    def cloud_step_overrides(self, workflow_id: str) -> Dict[str, bool]:
+        """指定ワークフローの Step 単位 Cloud Session 上書きを返す。"""
+        grp = self._step_groups.get(workflow_id)
+        if grp is None:
+            return {}
+        return grp.cloud_step_overrides()
+
+    def cloud_step_override_scope_ids(self, workflow_id: str) -> List[str]:
+        """指定ワークフローの Cloud override 対象 Step ID 一覧を返す。"""
+        grp = self._step_groups.get(workflow_id)
+        if grp is None:
+            return []
+        return grp.cloud_step_override_scope_ids()
 
     def all_enabled_steps(self) -> Dict[str, List[str]]:
         """選択中の全ワークフローについて ON ステップを返す。"""
@@ -468,7 +498,8 @@ class WorkflowSelectPage(QWidget):
 
         # --- 左ペイン: 説明 · Autopilot · ワークフロー·ステップ ---
         # 旧 AutopilotInputPanel は廃止され、右ペインは OptionsPage 単独配置に統一された。
-        # タイトル表示は HeaderBar (「① ワークフローの選択」) に集約されたため、ページ内タイトルは置かない。
+        # タイトル表示はトップに別途進捗ヘッダーを置かず、各 StepIntroBanner 側で
+        # 「① ワークフロー選択」「② 実行」を表示する設計に変更されている。
         left_pane = QWidget()
         left_layout = QVBoxLayout(left_pane)
         left_layout.setContentsMargins(16, 12, 8, 12)

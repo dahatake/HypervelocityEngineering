@@ -49,6 +49,10 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 
 ![README 用 3 段構造フロー図](users-guide/images/readme-3-tier-flow.svg)
 
+次の俯瞰図は、**どのファイルがどのワークフローで生成されるか**（タスク = Custom Agent 群が入力ファイルを読み、出力ファイルを生成する）をデータフローとして示します。`knowledge/` は全設計・実装ワークフローが業務コンテキストとして参照します。各ワークフロー単体の入出力詳細は `users-guide/images/orchestration-task-data-flow-<id>.svg`（11 枚）を参照してください。
+
+![HVE オーケストレーション データフロー俯瞰](users-guide/images/orchestration-dataflow-overview.svg)
+
 ### `knowledge/` と `qa/` と `original-docs/` の関係
 
 - `original-docs/`—社内ドキュメント等の **取り込み元（読み取り専用）**。全 Prompt は記述を変更しません。
@@ -64,6 +68,10 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 - [users-guide/hve-technical-architecture.md](users-guide/hve-technical-architecture.md)
 
 開発者・運用者で内部構造を把握したい方は最初にこのドキュメントを参照してください。
+
+次の図は、3 Orchestrator が共有する実行エンジン（`orchestrator.py` → `dag_planner.py` → `dag_executor.py` → `runner.py` → `github-copilot-sdk`）と、ソフトウェアエンジニアが編集・設定できる **カスタマイズ点**（`workflow_registry.py` / `.github/prompts/` / `.github/io-contracts/` / `.github/skills/`）および **主要パラメータ／環境変数** を 1 枚に俯瞰したものです。内部構造の詳細図（7 枚）は上記の技術アーキテクチャ文書を参照してください。
+
+![HVE アプリケーションアーキテクチャ（カスタマイズ／パラメータ観点）](users-guide/images/readme-app-architecture-detail.svg)
 
 ### 中核となる Workflow ID
 
@@ -101,7 +109,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 
 | 系統 | 役割 | 実在する代表例 |
 |---|---|---|
-| `Arch-*` | 分析・設計 | `Arch-ApplicationAnalytics`, `Arch-Microservice-DomainAnalytics`, `Arch-Dataflow-AppCatalog` |
+| `Arch-*` | 分析・設計 | `Arch-ApplicationAnalytics`, `Arch-Microservice-DomainAnalytics`, `Arch-Dataflow-AppSpec` |
 | `Dev-*` | 実装・デプロイ | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`, `Dev-Dataflow-DataDeploy`, `Dev-Dataflow-FunctionsDeploy` |
 | `Doc-*` | ソースコード由来の技術文書生成 | `Doc-APISpec`, `Doc-ComponentDesign`, `Doc-TechDebt` |
 | `QA-*` | 品質確認・レビュー | `QA-CodeQualityScan`, `QA-DocConsistency`, `QA-PostImproveVerify` |
@@ -120,7 +128,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 
 ## Issue Template 一覧
 
-`.github/ISSUE_TEMPLATE/*.yml` に存在する 11 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。
+`.github/ISSUE_TEMPLATE/*.yml` に存在する 11 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
 
 > 自己改善（Self-Improve）は独立の Issue Template を持たず、上記の設計・実装テンプレートの `enable_self_improve` チェックボックスで起動します。
 
@@ -235,8 +243,8 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | `qa-merge` | 回答済みの質問票をマージし、統合 QA ドキュメントを生成 | `qa/` 配下の回答ファイル指定 |
 | `workiq-doctor` | Work IQ 連携の診断 | `--json`, `--skip-mcp-probe`, `--tenant-id`, `--timeout`, `--sdk-probe`, `--sdk-tool-probe`, `--sdk-event-trace`, `--sdk-tool-probe-tools-all` |
 | `emit-prompt` | プロンプトテンプレートの出力（ワークフロー内部用途・テスト用途） | `--comment-body` 等 |
-| `resume` | 保存済み実行セッションの管理と再開 | `list`, `show`, `rename`, `delete`, `continue` |
 | `login` | Copilot SDK のログイン補助 | — |
+| `pricing` | GitHub Copilot 料金表の表示・再取得 | `show`, `refresh` |
 
 ### 実行例
 
@@ -252,9 +260,6 @@ python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth 
 
 # knowledge/ を再生成
 python -m hve orchestrate --workflow akm --sources both
-
-# 保存済みセッションを確認
-python -m hve resume list
 ```
 
 ### ランチャースクリプトでの起動
@@ -332,6 +337,18 @@ git commit -m "chore: mark hve.sh as executable"
 - セットアップ・概要: [tools/skills/markdown_query/README.md](tools/skills/markdown_query/README.md)
 - 画面の使い方: [tools/skills/markdown_query/USAGE.md](tools/skills/markdown_query/USAGE.md)
 - 仕様: [users-guide/skills-markdown-query.md](users-guide/skills-markdown-query.md)
+
+### Skill: `code-query` 導入キット / HVE GUI
+
+`tools/skills/code_query/` は、コピー前に `sync-vendor` で `vendor/cq/` を生成し、
+**フォルダごと他リポジトリへコピー**すれば、そのリポジトリでも
+ソースコード専用のローカル検索 CLI `cq` を利用できる。
+独立 GUI はこの導入キットに同梱されていない。GUI 設定画面は HVE GUI 本体の
+`CqIndexSection` として実装されており、[設定] → skills → Code-Query から利用できる。
+
+- セットアップ・概要: [tools/skills/code_query/README.md](tools/skills/code_query/README.md)
+- 日常運用: [tools/skills/code_query/USAGE.md](tools/skills/code_query/USAGE.md)
+- 仕様・GUI 操作: [users-guide/skills-code-query.md](users-guide/skills-code-query.md)
 
 ## リポジトリ構造
 

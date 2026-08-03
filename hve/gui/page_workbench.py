@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
-from datetime import datetime
+from html import escape
 from pathlib import Path
 from types import MappingProxyType
 from typing import Dict, List, Mapping, Optional, TYPE_CHECKING
+from urllib.parse import urlparse
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QFontMetrics
@@ -55,6 +57,7 @@ from hve.workflow_registry import get_workflow
 
 if TYPE_CHECKING:
     from .qa_ipc_manager import QAIpcManager
+    from .workbench_state import WorkflowInstance
 
 
 _MAX_LOG_BLOCK_COUNT = 0  # 0 = 制限なし（全行保持）
@@ -62,10 +65,78 @@ _LOG_INITIAL_VISIBLE_LINES = 20
 _LOG_ROTATE_LINES = 10_000
 _UA_PANEL_HEIGHT = 7
 _BASE_NON_SPLITTER_HEIGHT = 15
+_CLOUD_SESSION_PREFIX = "[hve:cloud-session]"
 
 
 def _is_windows() -> bool:
     return sys.platform == "win32"
+
+
+def _build_step_label_pattern(step_id: str) -> "re.Pattern[str]":
+    """step_id を本文ラベル ``[<id>]`` / ``[Step.<id>]`` と照合する正規表現を返す。
+
+    autopilot 経路では fan-out 子ログが ``[main]`` へ落ち、行本文にのみ
+    ``[<base>/<child>]`` ラベルが残るため、log_buffer を本パターンで走査して
+    関連行を抽出する。``(?:/[^\\]]+)*`` により親 step 選択時に子孫
+    ``step_id/...`` も含める。``[4.1]`` と ``[4.10]`` のような別 ID は
+    末尾 ``\\]`` 固定によりマッチしない。
+    """
+    escaped = re.escape(step_id)
+    return re.compile(r"\[(?:Step\.)?" + escaped + r"(?:/[^\]]+)*\]")
+
+
+# --------------------------------------------------------------------------
+# console-log ダンプ（純関数）
+# --------------------------------------------------------------------------
+
+
+def _write_console_log(text: str, run_dir: Optional[Path]) -> Optional[Path]:
+    """GUI のログ全文を ``<run_dir>/console-log.txt`` に UTF-8 上書きする純関数。
+
+    GUI セッションのキュー全消化完了 / fatal / 停止確定時に呼ばれ、
+    画面表示中のログ全文を 1 ファイルへ集約する。
+
+    Args:
+        text: 書き出すログ全文。空文字列でも書き出す（0 バイトファイル）。
+        run_dir: 出力先ディレクトリ（GUI セッションの ``work/run/<run-id>/``）。
+            ``None`` の場合や存在しないディレクトリの場合は何もせず ``None`` を返す。
+
+    Returns:
+        書き出し成功時は ``<run_dir>/console-log.txt`` の Path。
+        ``run_dir`` が None / 不在 / 書き込み失敗時は ``None``（GUI 動作を止めない）。
+    """
+    if run_dir is None:
+        return None
+    try:
+        if not run_dir.exists() or not run_dir.is_dir():
+            return None
+        target = run_dir / "console-log.txt"
+        with target.open("w", encoding="utf-8", errors="replace") as f:
+            f.write(text)
+        return target
+    except OSError:
+        return None
+
+
+def _parse_cloud_session_line(line: str) -> Optional[dict]:
+    """Parse `[hve:cloud-session] {...}` lines."""
+    if not line.startswith(_CLOUD_SESSION_PREFIX):
+        return None
+    raw = line[len(_CLOUD_SESSION_PREFIX):].strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _is_safe_cloud_session_url(url: str) -> bool:
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in url):
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 # --------------------------------------------------------------------------
@@ -99,8 +170,8 @@ class _LogPane(QWidget):
         self._rotate_index = 0
         self._log_dir: Optional[Path] = None
         self._log_file_path: Optional[Path] = None
-        self._log_session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-        self._open_new_log_file()
+        # ログ永続化先。set_log_base_dir() で注入されるまで None（未注入時は永続化しない）。
+        self._log_base_dir: Optional[Path] = None
 
         copy_btn = CopyButton(
             get_text=lambda: self.log_view.toPlainText(),
@@ -117,10 +188,31 @@ class _LogPane(QWidget):
         layout.addLayout(header_row)
         layout.addWidget(self.log_view)
 
+    def set_log_base_dir(self, run_dir: Optional[Path]) -> None:
+        """ログ永続化先 ``<run_dir>/gui-logs/`` を登録し、最初のログファイルを開く。
+
+        ``run_dir`` が ``None`` の場合は永続化を無効化する。
+        """
+        if run_dir is None:
+            self._log_base_dir = None
+            self._log_dir = None
+            self._log_file_path = None
+            return
+        self._log_base_dir = run_dir / "gui-logs"
+        self._open_new_log_file()
+
     def _open_new_log_file(self) -> None:
-        """新しいログファイルを準備する（10,000 行ごとにローテーション）。"""
+        """新しいログファイルを準備する（10,000 行ごとにローテーション）。
+
+        ``set_log_base_dir()`` で出力先が未注入（``_log_base_dir is None``）の
+        場合は何もしない（ファイル永続化しない）。
+        """
+        if self._log_base_dir is None:
+            self._log_dir = None
+            self._log_file_path = None
+            return
         try:
-            base = Path.cwd() / "work" / "gui-logs" / f"session-{self._log_session_id}"
+            base = self._log_base_dir
             base.mkdir(parents=True, exist_ok=True)
             self._log_dir = base
             self._rotate_index += 1
@@ -163,13 +255,12 @@ class _EnhancedUserActionsPane(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
-        header = QLabel(self.tr("実行中の課題"))
-        header.setStyleSheet("font-weight: bold; padding: 2px;")
+        self._header = QLabel(self.tr("実行中の課題"))
+        self._header.setStyleSheet("font-weight: bold; padding: 2px;")
 
         self.view = QPlainTextEdit()
         self.view.setReadOnly(True)
         apply_cjk_wrap(self.view)
-        self.view.setMaximumHeight(120)
         self.view.setFont(preferred_log_font(9))
 
         copy_btn = CopyButton(
@@ -178,19 +269,25 @@ class _EnhancedUserActionsPane(QWidget):
         )
 
         header_row = QHBoxLayout()
-        header_row.addWidget(header)
+        header_row.addWidget(self._header)
         header_row.addStretch()
         header_row.addWidget(copy_btn)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(header_row)
-        layout.addWidget(self.view)
+        layout.addWidget(self.view, stretch=1)
 
     def update_from_state(self, state: WorkbenchState) -> None:
         """WorkbenchState から UserActions を更新。"""
+        total = len(state.user_actions)
+        if total > 0:
+            self._header.setText(self.tr("実行中の課題") + f" ({total})")
+        else:
+            self._header.setText(self.tr("実行中の課題"))
+
         lines = []
-        for action in state.user_actions_view():
+        for action in state.user_actions:
             step = action.step_id or "[main]"
             cat = action.category or action.level
             line = f"[{action.timestamp}] {step}: {cat}: {action.message}"
@@ -227,14 +324,16 @@ class WorkbenchPage(QWidget):
     """Step 2: Workbench ペイン（CUI版と同じ 7 ペインレイアウト）。
 
     Signals:
-        process_finished(int): サブプロセスが終了した時に returncode を emit
+        process_finished(qlonglong): サブプロセスが終了した時に returncode を emit
+            （Windows の符号なし 32bit 終了コードが int を超えるため 64bit）
         process_started(): サブプロセス起動成功時に emit
     """
 
-    process_finished = Signal(int)
+    process_finished = Signal("qlonglong")  # type: ignore[arg-type]  # PySide6 は文字列型名を許容（スタブ未対応）
     process_started = Signal()
     # 「全タスク停止」要求が完了したことを通知（main_window のステータス更新用）
     all_stopped = Signal()
+    cloud_session_url_changed = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -250,6 +349,7 @@ class WorkbenchPage(QWidget):
         self._workflow_step_status: Dict[str, Dict[str, str]] = {}
         self._workflow_subtask_status: Dict[str, Dict[str, List[tuple]]] = {}
         self._subtask_seq: Dict[tuple, int] = {}
+        self._last_emitted_cloud_session_url: str = ""
         # fan-out 初期化済み base step（wf_id -> base_id 集合）。
         # fanout_init で seed された base のみ集約完了判定を許可することで、
         # 子イベントが部分到着した状態での早期 "完了" 遷移を防ぐ。
@@ -278,6 +378,10 @@ class WorkbenchPage(QWidget):
         # None なら従来通り親 env をそのまま継承（後方互換 / テスト容易性）。
         self._env_overrides: Optional[Dict[str, str]] = None
 
+        # Steering（実行中ワークフローへの割り込み送信）用 IPC ディレクトリ。
+        # ワークフロー実行開始時に _start_next_in_queue が生成する（常時有効、UI トグル無し）。
+        self._steering_ipc_dir: Optional[str] = None
+
         # GUI セッション中に orchestrator が「書き込み」したファイルパスの累積リスト。
         # `[hve:stats] {"kind":"file_io","mode":"write",...}` イベントから収集する。
         # 順序保持・重複排除のため list + set で管理。
@@ -285,18 +389,30 @@ class WorkbenchPage(QWidget):
         self._session_artifacts: List[Path] = []
         self._session_artifacts_seen: set = set()
 
+        # GUI セッション全体のキュー消化完了 / fatal / 停止確定時に、
+        # `_global_view` のログ全文を ``<run_dir>/console-log.txt`` へダンプする
+        # ための出力先ディレクトリ。MainWindow から ``set_session_work_root`` で
+        # 注入される。未注入時は dump は no-op（既存挙動を維持）。
+        self._session_work_root: Optional[Path] = None
+
         # WorkbenchState を初期化（ダミー値で開始）
         self._state = WorkbenchState(
             workflow_id="unknown",
             run_id="unknown",
             model="unknown",
         )
-        # 統計履歴の永続化ストアを登録（書き込み失敗時は内部で握りつぶす）
+
+        # 料金表 (CopilotPricing) のキャッシュを起動時に注入する (Phase B)。
+        # `~/.hve/pricing/copilot-pricing.json` が存在すれば WorkbenchState に
+        # 渡し、pricing 経由の USD/JPY 計算を有効化する。キャッシュが無い場合は
+        # AI Credit (AIU) 表示は SDK 直接値で動作するため致命的ではない。
         try:
-            from hve.run_state import get_default_runs_dir
-            from .stats_history_store import StatsHistoryStore
-            self._state.set_history_store(StatsHistoryStore(get_default_runs_dir()))
+            from hve.pricing import load_cached_pricing
+            cached_pricing = load_cached_pricing()
+            if cached_pricing is not None:
+                self._state.set_pricing(cached_pricing)
         except Exception:
+            # pricing モジュール不可 / キャッシュ破損は無視 (UI を落とさない)
             pass
 
         self._setup_ui()
@@ -440,7 +556,9 @@ class WorkbenchPage(QWidget):
         if self._queue_index >= len(self._args_queue):
             self._is_running = False
             self._state.mark_all_done()
+            self.freeze_progress_elapsed()
             self._update_ui()
+            self._maybe_dump_console_log()
             if not self._return_codes:
                 self.process_finished.emit(0)
                 return
@@ -478,6 +596,21 @@ class WorkbenchPage(QWidget):
             self._state.set_model(args.model)
         self._update_command_view()
         self._update_ui()
+
+        # Steering IPC ディレクトリを常時生成し、args へ反映する（不明点4のデフォルト:
+        # ワークフロー実行ごとに新規ディレクトリ、UI トグル無し）。生成失敗時は Steering 機能を
+        # 無効化するのみで、ワークフロー実行自体は継続する（フォールバック、不明点8）。
+        import tempfile
+        try:
+            steering_ipc_root = Path(args.repo_root) / ".hve" / "steering-ipc"
+            steering_ipc_root.mkdir(parents=True, exist_ok=True)
+            self._steering_ipc_dir = tempfile.mkdtemp(
+                prefix="gui-", dir=str(steering_ipc_root)
+            )
+            args.steering_ipc_dir = self._steering_ipc_dir
+        except OSError:
+            self._steering_ipc_dir = None
+            args.steering_ipc_dir = None
 
         try:
             argv = args.to_argv()
@@ -641,6 +774,22 @@ class WorkbenchPage(QWidget):
     def is_running(self) -> bool:
         return self._is_running
 
+    def resolve_active_main_step_id(self) -> Optional[str]:
+        """現在 running 中のメインステップの step_id を返す。
+
+        ``WorkbenchState.running_step_ids`` の要素数が 1 の場合のみその値を返す。
+        0 件（未実行）または複数件（並列実行中）の場合は ``None`` を返す
+        （Steering 機能は単一 step 実行中のみサポートする設計、方式2プラン不明点2）。
+        """
+        running = getattr(self._state, "running_step_ids", None) or set()
+        if len(running) == 1:
+            return next(iter(running))
+        return None
+
+    def active_steering_ipc_dir(self) -> Optional[str]:
+        """現在のワークフロー実行の Steering IPC ディレクトリパスを返す（未起動/生成失敗時は None）。"""
+        return self._steering_ipc_dir
+
     def set_env_overrides(self, env_overrides: Optional[Dict[str, str]]) -> None:
         """子プロセス起動時に注入する env を設定する。
 
@@ -652,6 +801,13 @@ class WorkbenchPage(QWidget):
     def was_stopped_by_user(self) -> bool:
         """直近の完了がユーザー停止要求によるものかを返す。"""
         return self._stop_requested
+
+    def freeze_progress_elapsed(self) -> None:
+        """作業状況のジョブ全体の経過時間を終了時刻で固定する。"""
+        try:
+            self._progress_widget.freeze_elapsed()
+        except (AttributeError, RuntimeError):
+            pass
 
     # ----------------------------------------------------------
     # UI セットアップ
@@ -670,6 +826,11 @@ class WorkbenchPage(QWidget):
 
         # 1. Header2
         self._header2 = Header2Widget(self._state)
+        self._cloud_session_label = QLabel("")
+        self._cloud_session_label.setOpenExternalLinks(True)
+        self._cloud_session_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self._cloud_session_label.setStyleSheet("color: #0969da; padding: 2px;")
+        self._cloud_session_label.hide()
 
         # 2.5: 作業状況（Workflow/Step/Subtask の進捗ツリー）
         from . import settings_store
@@ -732,6 +893,7 @@ class WorkbenchPage(QWidget):
         layout.setSpacing(4)
         layout.addWidget(StepIntroBanner(2))
         layout.addWidget(self._header2)
+        layout.addWidget(self._cloud_session_label)
         layout.addWidget(self._splitter, stretch=1)
         layout.addWidget(self._footer)
         # ファイル永続化用の隠し _log_pane も親レイアウトに登録 (UI には現れない)。
@@ -783,9 +945,14 @@ class WorkbenchPage(QWidget):
     def _on_node_selected(self, instance_id: str, step_id: str) -> None:
         """DAG ノード選択時のハンドラ。
 
-        - Workflow ヘッダ（step_id=""）クリック時はインスタンス全体のログを表示
-        - Step ノードクリック時はその Step の ``step_log_buffers[step_id]`` を表示
-        - 該当 WorkflowInstance / Step バッファが無ければ空表示
+        - Workflow ヘッダ（step_id=""）: インスタンス全体の log_buffer を表示。
+        - Step / fan-out 子ノード: log_buffer から当該 step_id（および子孫
+          ``step_id/...``）に一致する本文ラベル/プレフィックスを持つ行を抽出。
+          autopilot 経路で ``[main]`` へ落ちた fan-out 子ログもラベルで救済する。
+        - subagent ノード（``parent::subagent::name``）: 親 step_id にフォールバック。
+        - 該当 WorkflowInstance が無ければ空表示。
+
+        表示は選択時点のスナップショット（選択後の追記はライブ反映しない）。
         """
         inst = self._state.workflows.get(instance_id)
         if inst is None:
@@ -793,11 +960,34 @@ class WorkbenchPage(QWidget):
             self._log_tabs.show_selected_tab()
             return
         if step_id:
-            lines = list(inst.step_log_buffers.get(step_id, []))
+            lines = self._filter_lines_for_step(inst, step_id)
         else:
             lines = list(inst.log_buffer)
         self._log_tabs.set_selected_content(lines)
         self._log_tabs.show_selected_tab()
+
+    def _filter_lines_for_step(
+        self, inst: "WorkflowInstance", step_id: str
+    ) -> List[str]:
+        """log_buffer から step_id に関連するログ行を抽出する。
+
+        - fan-out 子・通常 step: 本文ラベル/プレフィックスの step_id 一致行を抽出。
+          親 step 選択時は子孫 ``step_id/...`` も含める。
+        - subagent ノード（``parent::subagent::name``）: 本文ラベルを持たないため
+          親 step_id にフォールバックする。
+        - 一致が無ければ、マーカー経路（Plan/fleet）互換として
+          ``step_log_buffers`` の完全一致バッファを返す。
+
+        既知の制約（捏造回避）: 本文にサブ ID ラベルを持たない継続行
+        （例 ``skill`` 単独行、MCP 接続行）は帰属不能なため抽出されない。
+        直前行からの推測帰属は行わない。
+        """
+        filter_id = step_id.split("::", 1)[0] if "::" in step_id else step_id
+        pat = _build_step_label_pattern(filter_id)
+        matched = [ln for ln in inst.log_buffer if pat.search(ln)]
+        if matched:
+            return matched
+        return list(inst.step_log_buffers.get(step_id, []))
 
     # ------------------------------------------------------------------
     # T3.2: Autopilot からの統一ログ配信 API (gui-unified-workbench Wave 3)
@@ -828,6 +1018,7 @@ class WorkbenchPage(QWidget):
                 label=instance_id,
             )
         formatted = self._state.append_workflow_log(instance_id, step_id or None, line)
+        self._record_cloud_session_line(instance_id, line)
         # gui-workbench-stats-propagation F1':
         # `[hve:stats] {...}` 機械可読 JSON 行は UI ログタブに混入させない。
         # （Plan モード _on_line_received と同じ表示抑止ポリシー）
@@ -854,6 +1045,26 @@ class WorkbenchPage(QWidget):
             self._apply_log_line_to_instance_tree(instance_id, line)
         except (AttributeError, RuntimeError, TypeError):
             pass
+
+    def _record_cloud_session_line(self, instance_id: str, line: str) -> None:
+        payload = _parse_cloud_session_line(line)
+        if payload is None:
+            return
+        url = payload.get("url")
+        if not isinstance(url, str) or not url.strip():
+            return
+        step_id = payload.get("step_id")
+        if not isinstance(step_id, str):
+            step_id = ""
+        subtask_kind = payload.get("subtask_kind")
+        if not isinstance(subtask_kind, str):
+            subtask_kind = ""
+        self._state.record_cloud_session_url(
+            instance_id or self._current_workflow_id or "_global",
+            step_id=step_id.strip(),
+            subtask_kind=subtask_kind.strip(),
+            url=url.strip(),
+        )
 
     # ------------------------------------------------------------------
     # F3a / F3b: Workflow インスタンスの status 遷移公開 API
@@ -926,7 +1137,7 @@ class WorkbenchPage(QWidget):
                     break
             status = (payload.get("status") or "")
             status = status.strip() if isinstance(status, str) else ""
-            if sid and status in ("running", "done", "failed", "skipped"):
+            if sid and status in ("running", "done", "failed", "skipped", "blocked"):
                 # fan-out 子 step_id (`<base>/<key>` 形式) は base に集約する。
                 # 注: prefix strip 後に `/` 判定を行う（順序固定）。
                 if "/" in sid and instance_id and instance_id != "_global":
@@ -1093,7 +1304,7 @@ class WorkbenchPage(QWidget):
         """
         if not instance_id or instance_id == "_global" or not base_id:
             return
-        if child_status not in ("running", "done", "failed", "skipped"):
+        if child_status not in ("running", "done", "failed", "skipped", "blocked"):
             return
         # plan 外の base は対象外（捏造防止）
         base_node = self._state.find_step_in_instance(instance_id, base_id)
@@ -1128,7 +1339,7 @@ class WorkbenchPage(QWidget):
         if not fanout_children:
             return
         statuses = [getattr(c, "status", "pending") for c in fanout_children]
-        terminal = {"done", "failed", "skipped"}
+        terminal = {"done", "failed", "skipped", "blocked"}
         any_running = any(s == "running" for s in statuses)
         is_initialized = base_id in self._fanout_initialized.get(instance_id, set())
         all_terminal = (
@@ -1136,10 +1347,16 @@ class WorkbenchPage(QWidget):
             and all(s in terminal for s in statuses)
         )
         any_failed = any(s == "failed" for s in statuses)
+        any_blocked = any(s == "blocked" for s in statuses)
         if any_running:
             base_state_key = "running"
         elif all_terminal:
-            base_state_key = "failed" if any_failed else "done"
+            if any_failed:
+                base_state_key = "failed"
+            elif any_blocked:
+                base_state_key = "blocked"
+            else:
+                base_state_key = "done"
         else:
             # 全 pending、または fanout_init 未受信で完了判定不可 — base 未変更
             return
@@ -1162,6 +1379,7 @@ class WorkbenchPage(QWidget):
         signals.model_updated.connect(self._on_state_changed)
         signals.tool_counts_updated.connect(self._on_state_changed)
         signals.skill_counts_updated.connect(self._on_state_changed)
+        signals.workflow_instance_changed.connect(self._on_state_changed)
         signals.all_done.connect(self._on_state_all_done)
 
     def _setup_timers(self) -> None:
@@ -1283,6 +1501,8 @@ class WorkbenchPage(QWidget):
         if self._fatal_detected:
             self._terminate_subprocess_for_fatal()
 
+        self._record_cloud_session_line(self._current_workflow_id or "_global", line)
+
         process_subprocess_line(self._state, line)
         if not is_stats_line(line):
             # Plan モード: 表示用に `[wf_id]-[step]` プリフィックスを付与する。
@@ -1327,10 +1547,12 @@ class WorkbenchPage(QWidget):
             self._apply_stats_fanout_init(payload)
         if payload is not None and payload.get("kind") == "file_io":
             self._record_file_io_artifact(payload)
+        if payload is not None and payload.get("kind") in ("tool_invoked", "skill_invoked"):
+            self._apply_stats_step_activity(payload)
         self._update_workflow_progress_from_line(line)
         self._update_subtask_from_line(line)
 
-    @Slot(int)
+    @Slot("qlonglong")
     def _on_process_finished(self, returncode: int) -> None:
         self._return_codes.append(returncode)
         current_wf = self._current_workflow_id or "unknown"
@@ -1390,14 +1612,18 @@ class WorkbenchPage(QWidget):
             self._args_queue = self._args_queue[: self._queue_index]
             self._is_running = False
             self._state.mark_all_done()
+            self.freeze_progress_elapsed()
             self._update_ui()
+            self._maybe_dump_console_log()
             self.process_finished.emit(returncode)
             return
 
         if self._stop_requested:
             self._is_running = False
             self._state.mark_all_done()
+            self.freeze_progress_elapsed()
             self._update_ui()
+            self._maybe_dump_console_log()
             self.process_finished.emit(returncode)
             return
 
@@ -1633,6 +1859,41 @@ class WorkbenchPage(QWidget):
                 self._workflow_subtask_status,
             )
 
+    def _apply_stats_step_activity(self, payload: dict) -> None:
+        """``tool_invoked`` / ``skill_invoked`` stats から該当ステップの現在
+        アクティビティ文字列を組成し、DagStatusWidget へ反映する。
+
+        fan-out 子 step_id (``<base>/<key>``) は base step ノードへ集約して
+        表示する（折りたたみ表示時でも base ノードで進捗が見えるように）。
+        """
+        if not self._current_workflow_id:
+            return
+        sid = (payload.get("step") or payload.get("step_id") or "")
+        sid = sid.strip() if isinstance(sid, str) else ""
+        if not sid:
+            return
+        kind = payload.get("kind") or ""
+        if kind == "tool_invoked":
+            activity = (
+                str(payload.get("action_name") or "").strip()
+                or str(payload.get("tool_name") or "").strip()
+            )
+        elif kind == "skill_invoked":
+            name = str(payload.get("name") or "").strip()
+            activity = f"Skill: {name}" if name else ""
+        else:
+            activity = ""
+        if not activity:
+            return
+        # fan-out 子は base step ノードへ集約する。
+        target_sid = sid.partition("/")[0] if "/" in sid else sid
+        try:
+            self._progress_widget.set_step_activity(
+                self._current_workflow_id, target_sid, activity
+            )
+        except (AttributeError, RuntimeError):
+            pass
+
     def _apply_stats_step_status(self, payload: dict) -> None:
         """``[hve:stats] {"kind":"step_status",...}`` を ``_workflow_step_status``
         へ反映する。
@@ -1656,7 +1917,7 @@ class WorkbenchPage(QWidget):
             status = status.strip()
         else:
             status = ""
-        if not step_id or status not in ("running", "done", "failed", "skipped"):
+        if not step_id or status not in ("running", "done", "failed", "skipped", "blocked"):
             return
 
         # fan-out 子 step_id（"<base>/<key>" 形式）の場合、base step の subtask
@@ -1669,6 +1930,8 @@ class WorkbenchPage(QWidget):
 
         if status == "running":
             state_text = "実行中"
+        elif status == "blocked":
+            state_text = "ブロック"
         else:  # done / failed / skipped
             state_text = "完了"
         wf_step_map = self._workflow_step_status.setdefault(
@@ -1737,7 +2000,7 @@ class WorkbenchPage(QWidget):
                     subtask_id=child_id,
                     title=child_id,
                     kind="fanout_child",
-                    status=child_status if child_status in ("running", "done", "failed", "skipped") else "pending",  # type: ignore[arg-type]
+                    status=child_status if child_status in ("running", "done", "failed", "skipped", "blocked") else "pending",  # type: ignore[arg-type]
                 )
             except (AttributeError, ValueError):
                 pass
@@ -1751,7 +2014,7 @@ class WorkbenchPage(QWidget):
                 pass
 
         # base 状態を集約
-        terminal = {"done", "failed", "skipped"}
+        terminal = {"done", "failed", "skipped", "blocked"}
         any_running = any(s == "running" for _id, _t, s in sub_list)
         # fanout_init で base_id が seed 済みの場合のみ完了判定を許可。
         # 未 seed (fanout_init 不在 or 順序逆転) では running 判定のみ許可し、
@@ -1763,13 +2026,21 @@ class WorkbenchPage(QWidget):
             and all(s in terminal for _id, _t, s in sub_list)
         )
         any_failed = any(s == "failed" for _id, _t, s in sub_list)
+        any_blocked = any(s == "blocked" for _id, _t, s in sub_list)
 
         if any_running:
             base_state_text = "実行中"
             base_state_key = "running"
         elif all_terminal:
-            base_state_text = "完了"
-            base_state_key = "failed" if any_failed else "done"
+            if any_failed:
+                base_state_text = "完了"
+                base_state_key = "failed"
+            elif any_blocked:
+                base_state_text = "ブロック"
+                base_state_key = "blocked"
+            else:
+                base_state_text = "完了"
+                base_state_key = "done"
         else:
             # 全 pending、または fanout_init 未受信で完了判定不可 — 触らない
             return
@@ -2013,7 +2284,29 @@ class WorkbenchPage(QWidget):
         self._header2.update_state(self._state)
         self._user_actions_pane.update_from_state(self._state)
         self._footer.update_state(self._state)
+        self._update_cloud_session_label()
         self._apply_responsive_fallback()
+
+    def latest_cloud_session_url(self) -> str:
+        for inst in reversed(list(self._state.workflows.values())):
+            if inst.latest_cloud_session_url:
+                return inst.latest_cloud_session_url
+        return ""
+
+    def _update_cloud_session_label(self) -> None:
+        url = self.latest_cloud_session_url()
+        if not url or not _is_safe_cloud_session_url(url):
+            self._cloud_session_label.hide()
+            self._last_emitted_cloud_session_url = ""
+            return
+        safe_url = escape(url, quote=True)
+        self._cloud_session_label.setText(
+            self.tr('☁ Mission Control: <a href="{url}">{url}</a>').format(url=safe_url)
+        )
+        self._cloud_session_label.show()
+        if url != self._last_emitted_cloud_session_url:
+            self._last_emitted_cloud_session_url = url
+            self.cloud_session_url_changed.emit(url)
 
     def reset_for_autopilot(self) -> None:
         """Autopilot 起動時に Workbench の前回実行残骸をクリアする。
@@ -2124,6 +2417,33 @@ class WorkbenchPage(QWidget):
         except AttributeError:
             # WorkbenchState API 不整合時のフォールバック (レビュー #7)
             pass
+
+    def set_session_work_root(self, run_dir: Optional[Path]) -> None:
+        """GUI セッションの ``work/run/<run-id>/`` を console-log 出力先として登録する。
+
+        ``MainWindow`` の初期化時に ``GuiSessionWorkdir.work_root`` を 1 度だけ
+        注入する想定。``None`` を渡すと dump 機能は無効化される。
+
+        Args:
+            run_dir: GUI セッションの作業ディレクトリ。``None`` で dump 無効化。
+        """
+        self._session_work_root = run_dir
+        # _LogPane のローテーションログ永続化先も同一 run_dir 配下へ向ける。
+        self._log_pane.set_log_base_dir(run_dir)
+
+    def _maybe_dump_console_log(self) -> None:
+        """GUI セッション終了時に、画面のログ全文を ``console-log.txt`` へ書き出す。
+
+        ``_session_work_root`` が未設定の場合は何もしない（既存挙動維持）。
+        書き出し失敗は ``_write_console_log`` 内で握りつぶされる（GUI を止めない）。
+        """
+        if self._session_work_root is None:
+            return
+        try:
+            text = self._log_tabs.global_text()
+        except AttributeError:
+            return
+        _write_console_log(text, self._session_work_root)
 
     def remove_workflow_instance(self, instance_id: str) -> None:
         """placeholder インスタンスを ``state.workflows`` から削除する (T3b)。

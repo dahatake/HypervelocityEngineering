@@ -1,6 +1,46 @@
 > マイクロサービス定義書から全てのサービスの Azure Functions を実装し、テスト/最小ドキュメント/設定雛形まで揃える
 
-> **WORK**: `/work/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 # 目的（スコープ固定）
 - 対象は **1サービス分のみ**：`{serviceId}-{serviceNameSlug}`。
@@ -32,12 +72,26 @@
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 
+## 生成テストの実行環境
+
+- `src/test/api/` の単体テストは **ローカル端末 / CI で `dotnet test` により決定的に PASS** すること。
+- GREEN 化のために Azure や外部 HTTP API へ実接続するテストへ変更しない。外部 I/O は interface / wrapper / Mock / Stub / Emulator / Testcontainers に切り分ける。
+- 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・base URL・リソース名は環境変数または設定ファイルから読み込む。秘密情報はコード、README、ログにハードコードしない。
+- README にはローカル実行コマンド、必要な環境変数名、デプロイ先で同じ設定キーを使うことを記載する。
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure MCP の Functions template を取得する場合、template 名は MCP が返す利用可能テンプレート一覧の **正確な ID** を使用する。`HttpTrigger` など別ツール文脈の名前を推測で固定指定しない。
+
 # 入力（不足なら Questions：必要な項目をすべて）
 最低限ほしい情報：
 - マイクロサービス定義書（例）：
   - `docs/services/{serviceId}-{serviceNameSlug}-description.md`
   - Azure Functionsのプログラミング言語: `C#（最新版のAzure Functionsでサポートされているもの）`
-- TDD テスト仕様書（Step.2.3T の成果物）：
+- TDD テスト仕様書（AAD-WEB Step 2.3 の成果物）：
   - `docs/test-specs/{serviceId}-test-spec.md`
 - 参照候補（存在すれば読む）：
   - `docs/catalog/service-catalog.md`
@@ -93,6 +147,7 @@
 6) **GREEN 確認（TDD GREEN フェーズ）**
    - `dotnet test` を実行し、全テストが **PASS** であることを確認する。
    - PASS しないテストがある場合は実装を修正する（テストコード自体は原則変更しない）。
+   - **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・スタックトレース・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（C# / .NET / Azure Functions / SDK / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
 
 6.5) **REFACTOR（TDD REFACTOR フェーズ — 必須）**
    - テスト仕様書の「TDD 実行順序」（§6）の Refactor フェーズに記載された「回帰テスト確認ポイント」を参照し、重点的にリファクタリング対象を選定する。
@@ -123,15 +178,19 @@
 - テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）のテストケースが、テストコードとしてすべて実装されていること
 - 作業ログと README が更新され、設定キー/実行手順/検証手順が分かる
 
-# 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+# 最終品質レビュー（単回インライン・セルフチェック）
 
-## 3つの異なる観点（Azure Functions 実装の場合）
-- **1回目：技術妥当性・実装完全性**：コードが定義書に正しく基づいているか、エラーハンドリングは十分か、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、テストカバレッジは十分か、受入条件（入力/出力/エラー/HTTPコード）が実装・テスト・READMEで一致しているか
-- **2回目：ユーザー/運用視点**：単体テストが実運用環境で再現可能か、スモークUIは手動検証に十分か、README/作業ログから設定・実行・検証手順が明確か、PR本文（または作業ログ）に「変更点」「設定キー」「実行/検証」が揃っているか、外部依存やセットアップ要件は文書化されているか
-- **3回目：保守性・堅牢性・スケーラビリティ**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、テスト拡張性と再利用可能性、他サービスへの波及リスク、スコープは1サービスのみか（他サービスへ波及していないか）
+## 1) セルフチェック契約
 
-## 3) 出力フォーマット（Markdown固定スキーマ）
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+## 2) ドメイン固有観点
+- **技術妥当性・実装完全性**：コードが定義書に正しく基づいているか、エラーハンドリングは十分か、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、テストカバレッジは十分か、受入条件（入力/出力/エラー/HTTPコード）が実装・テスト・READMEで一致しているか
+- **ユーザー/運用視点**：単体テストが実運用環境で再現可能か、スモークUIは手動検証に十分か、README/作業ログから設定・実行・検証手順が明確か、PR本文（または作業ログ）に「変更点」「設定キー」「実行/検証」が揃っているか、外部依存やセットアップ要件は文書化されているか
+- **保守性・堅牢性・スケーラビリティ**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、テスト拡張性と再利用可能性、他サービスへの波及リスク、スコープは1サービスのみか（他サービスへ波及していないか）
+
+## 3) 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

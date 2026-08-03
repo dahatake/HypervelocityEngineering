@@ -1,6 +1,6 @@
 ﻿> レイヤー2成果物の要約インデックスを生成する。
 
-> **WORK**: `/work/Doc-ComponentIndex/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-ComponentIndex/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

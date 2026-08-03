@@ -50,6 +50,30 @@ gh auth login
 
 Copilot ライセンスが付与されているアカウントでログインしてください。
 
+### 2.1 GitHub Copilot SDK で認証
+
+HVE の Step 実行は GitHub Copilot SDK を使います。初回または認証切れ時は次を実行してください。
+
+```bash
+python -m hve login
+```
+
+GitHub Copilot SDK へのログインは、上記のとおり CLI（`python -m hve login`）から行います。ログイン完了後は、GUI ステータスバーの **「利用できるモデルの取得」** ボタン（または「HVE 設定」→「基本設定」の一番上にある同名ボタン）を押すと、利用可能なモデル一覧を取得できます。ステータスバーには **「使用するモデル」** / **「Effort」** の選択コンボがあり、その場で直接選択を変更できます（変更は即座に反映され、「HVE 設定」の表示にも反映されます）。
+
+> **GUI 設定画面からのログイン（任意）**
+>
+> 端末で `gh auth login` を実行する代わりに、GUI の **設定 → 連携 → GitHub** にある
+> **「GitHub CLI でログイン」** ボタンからも認証できます。押下すると埋め込み端末で
+> `gh auth login` を実行し、完了後に `gh auth token` で取得したトークンを
+> **このセッション限り** `GH_TOKEN` 環境変数へ設定します。これにより「ブランチ取得」や
+> Issue / PR 作成（GitHub REST を使う機能）が有効化されます。
+>
+> - 前提: `gh` がインストール済みで、PTY バックエンド（`pywinpty` / `ptyprocess`）が利用可能なこと。
+>   いずれかが無い場合はボタン押下時に案内文が表示されるので、端末で `gh auth login` を実行してください。
+> - トークンはディスクに保存されません（GUI 終了で破棄）。次回起動時は再度ログインするか、
+>   `gh auth token` を環境変数へ橋渡しして GUI を起動してください。
+> - `gh auth token` のスコープが不足する場合、Issue / PR 作成等が失敗することがあります。
+
 ### 3. `.venv` 作成 + GUI 依存をインストール
 
 セットアップスクリプトに **GUI extras を含める** オプションを付けて実行します。
@@ -60,7 +84,7 @@ Copilot ライセンスが付与されているアカウントでログインし
 hve\setup-hve.cmd
 ```
 
-> `hve\setup-hve.cmd` は GUI extras（PySide6 等）を**既定で導入**します。ダブルクリックでも実行できます。
+> `hve\setup-hve.cmd` は test extra（pytest）と GUI extras（PySide6 等）を**既定で導入**します。ダブルクリックでも実行できます。
 
 #### macOS / Linux
 
@@ -126,11 +150,11 @@ python -m hve gui
 
 ### 3. ウィザードで ARD を選択して実行
 
-GUI は 3 ステップ構成です（詳細は [hve-gui-orchestrator-guide.md の「3 ステップ操作ガイド」](./hve-gui-orchestrator-guide.md#3-ステップ操作ガイド)）。
+GUI は 2 ステップ構成です（詳細は [hve-gui-orchestrator-guide.md の「2 ステップ操作ガイド」](./hve-gui-orchestrator-guide.md#2-ステップ操作ガイド)）。
 
-#### ステップ 1: ワークフロー選択
+#### ステップ 1: ワークフロー選択とオプション設定
 
-起動直後の画面で、一覧から **ARD（Auto Requirement Definition）** を選択します。
+起動直後の画面は左ペイン（ワークフロー選択）と右ペイン（オプション設定）で構成されます。左ペインの一覧から **ARD（Auto Requirement Definition）** を選択します。
 
 ![GUI Step 1: ワークフロー選択画面（起動直後）](./images/screenshots/gui-01-main-window.png)
 
@@ -138,14 +162,14 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 
 ![GUI Step 1: ARD 選択時](./images/screenshots/gui-02-workflow-selected-ard.png)
 
-#### ステップ 2: パラメータ入力
+続いて右ペインのオプションで以下を設定します（同じ画面内です）。
 
    - `company-name`: `ロイヤルティサンプル` を入力
    - その他のオプションは既定値のままで OK
 
-#### ステップ 3: 実行確認と実行
+#### ステップ 2: 実行確認と実行
 
-「次へ」を押すと実行画面に遷移し、`Step 0/9` から進行が始まります。ログ・作業状況ツリー・実行中の課題などがリアルタイムで表示されます。
+「次へ」を押すと実行画面（Step 2）に遷移し、`Step 0/9` から進行が始まります。ログ・作業状況ツリー・実行中の課題などがリアルタイムで表示されます。
 
 ![GUI Step 2 (実行): 進行状況・ログ・作業状況ツリー](./images/screenshots/gui-04-step2-execution.png)
 
@@ -214,6 +238,7 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 ## 次のステップ
 
 - **GUI Orchestrator の本格利用**: [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)
+- **ローカルから CI/CD を有効化する**: [local-cicd-enablement.md](./local-cicd-enablement.md)
 - **要求定義ワークフローの詳細**: [01-business-requirement.md](./01-business-requirement.md)
 - **別の方式を試す**: [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md)
 - **全体像の把握**: [README.md](../README.md)

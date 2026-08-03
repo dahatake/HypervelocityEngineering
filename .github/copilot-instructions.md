@@ -8,6 +8,7 @@
 ## §0 最優先ルール（認知プライミング）
 
 - **出力言語**: 出力は日本語。見出し＋箇条書き中心で簡潔に。
+- **PowerShell は最新 `pwsh` 固定**: Windows の PowerShell 実行は `pwsh.exe`（PowerShell 7+ / PSEdition Core）の最新インストール済み版だけを使う。`powershell` / `powershell.exe` / Windows PowerShell 5.1 の直接実行・フォールバックは禁止。`pwsh` が無ければ PowerShell 7+ 必須として fail-closed で停止する。自動化・テスト・`.ps1` 実行は `pwsh.exe -NoLogo -NoProfile` を基本とする。
 - **出力は最小限**: 長文は `work/` 配下（Skill work-artifacts-layout）。
 - **変更は最小差分**: 無関係な整形・一括リファクタ・不要依存追加をしない。
 - **捏造禁止**: ID/URL/固有名/数値/事実を根拠なく作らない。不明は `TBD` / `不明（要確認）` と明記する。
@@ -15,7 +16,8 @@
 - **推論補完時**: `TBD（推論: {根拠}）` + 「この回答はCopilot推論をしたものです。」と明記する。
 - **task_scope=multi または context_size=large の扱い**:
   - **単独実行モード**（Orchestrator 配下でない Agent 単独起動・テスト等）: 実装開始禁止。plan.md + subissues.md のみ作成して終了する。
-  - **Orchestrator 配下モード**（HVE Cloud Agent Orchestrator / HVE CLI Orchestrator 実行配下）: Agent は plan.md + subissues.md を作成して当該 Step を終了する。**Orchestrator が** subissues.md を読み込み、`depends_on` 解決により wave 分割したサブタスクを並列実行（Sub-issue 生成 / サブセッション fork）し、全完了後に親 Step の後続または次タスクへ進む。`task_scope=multi` / `context_size=large` のいずれも対象。
+  - **Cloud Agent Orchestrator 配下モード**（Issue Template + GitHub Actions + Copilot Cloud Agent）: Agent は plan.md + subissues.md を作成して当該 Step を終了する。PR に `create-subissues` ラベルが付与されると GitHub Actions が subissues.md を読み込み、Sub-Issue を作成して Copilot Cloud Agent にアサインする。
+  - **CLI / GUI Orchestrator 配下モード**: GitHub Sub-Issue 作成は行わない。CLI / GUI の標準実行は workflow DAG / fan-out で分割・並列化する。`subissues.md` runtime fork は legacy / 実験用途の明示 opt-in（`OrchestratorContext.split_fork_enabled=True`、Copilot SDK fleet mode）のみ。**このモードでは Agent は `task_scope` / `context_size` による SPLIT_REQUIRED 判定を行わず、宣言された `output_paths` の主成果物を必ず生成してから終了すること**（`plan.md` / `subissues.md` のみの出力で終了すると後続 Step が成果物不在で skip / 失敗するため）。本モードを Agent 側で検知する一次手段は CLI/GUI Orchestrator が prompt 末尾に注入する `## 実行モード制約` セクション、二次的に Python 側ランタイム ([hve/runner.py](hve/runner.py)) が Step 完了時に `output_paths` 全欠落を検出して当該 Step を fail 化する。
   - **判別方法**: Orchestrator 起動時に生成される `OrchestratorContext` を Python 内部で明示的引数として `StepRunner` / `check_plan_md_metadata` 等へ伝播させる方式。詳細は Skill `task-dag-planning` 参照。
 - **plan.md 冒頭5行にメタデータ必須**（Skill task-dag-planning §2.1.2）。欠落は CI で自動拒否。
 - **最低1つの検証を実施**: テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記する。
@@ -29,10 +31,17 @@
 - **推論許可**：「推論で進めてください」の意思表示を以降「**推論許可**」と呼ぶ。
 - **書き込み失敗対策**：edit 後に read で空でないことを確認。空なら小チャンク（2,000〜5,000文字）に分割して再試行（最大3回）。
 - **work/ および qa/ 書き込みルール（絶対）**：`work/` または `qa/` 配下へのファイル書き込みは Skill `work-artifacts-layout` §4.1 準拠。例外なし。
+- **work/run 横断参照の禁止（絶対）**：標準ワークフロー Step は、他 Step の `work/run/<run-id>/...` 配下の作業成果物（`plan.md` / `contracts/` / `artifacts/` / `completion-report.md` 等）を入力として読まないこと。Step 間のデータ受け渡しは `## 入力` に列挙された `docs/` 成果物経由のみとする。SPLIT / Fleet サブタスクが依存完了報告を参照する場合は、コードが明示注入する `dependency_completion_reports` の絶対パスのみを用い、パスを自力推測しないこと。詳細は Skill `work-artifacts-layout` 参照。
 - **knowledge/ 書き込みルール（絶対）**：`knowledge/` 配下へのファイル書き込みも Skill `work-artifacts-layout` §4.1 準拠（削除→新規作成）。例外なし。
 - **knowledge/ 同時更新防止（LOCK）**: `knowledge/` 本体ファイルへ LOCK 情報を埋め込んではならない。LOCK が必要な場合は `work/` 配下のロックファイル、または Issue ラベル等、`knowledge/` の「削除→新規作成」ルールと両立する方式を用いる。他の Agent により対象 D{NN} の LOCK が取得済みであることを検知した場合、後続 Agent は当該 `knowledge/` ファイルを **読み取り専用** とし、書き込みを中止して再実行に回す。
 - **original-docs/ 読み取り専用（絶対）**: `original-docs/` 配下のファイルは全 Agent から **読み取り専用**。変更・削除・追記を禁止。
-- **Markdown 横断検索の既定手段**: リポジトリ内 Markdown 群への横断検索・要件参照は `markdown-query` Skill（`python -m mdq search`）を最初に試す。0 ヒット時、対象が `.md` 以外を含む場合、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。詳細は Skill `markdown-query`（`.github/skills/markdown-query/SKILL.md`）参照。
+- **Markdown 横断検索の既定手段**: リポジトリ内 Markdown 群への横断検索・要件参照は `markdown-query` Skill（`python -m mdq search`）を最初に試す。0 ヒット時、対象が `.md` 以外を含む場合、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。**ただし、fail-closed shell allowlist が markdown-query CLI を許可しない Step では、CLI を実行せず read/search tool で宣言済み入力を参照する。** 詳細は Skill `markdown-query`（`.github/skills/markdown-query/SKILL.md`）参照。
+- **ソースコード横断検索の既定手段**: リポジトリ内のソースコード（`.py` / `.cs` / `.js` / `.ts` / `.sh` / `.ps1` 等）に対する「どこで定義されているか」「何が呼んでいるか」「実装を探す」系の調査は `code-query` Skill（`python -m cq search`）を最初に試す。0 ヒット時、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。**ただし、fail-closed shell allowlist が code-query CLI を許可しない Step では、CLI を実行せず read/search tool で宣言済み入力を参照する。** 対象が `.md` の場合は `markdown-query` を使う（両者は索引対象が排他）。詳細は Skill `code-query`（`.github/skills/code-query/SKILL.md`）参照。
+- **ripgrep (rg) 利用ガイドライン（絶対）**:
+  - **glob パス区切り**: `-g` / `--glob` のパターンには **`/` 区切り**を使う。`\` 区切りや `'docs\catalog\{a.md,b.md}'` のような brace-glob のエスケープは禁止（ripgrep が `\{` をエスケープと解釈し `unopened alternate group; missing '{'` エラーになる）。
+    - ✗ 悪い例: `rg -g 'docs\catalog\{a.md,b.md}' pattern`
+    - ✓ 良い例: `rg -g 'docs/catalog/{a.md,b.md}' pattern`
+  - **存在未確定パスの事前チェック**: 宣言済み入力でも、上流 Step が部分完了で未生成の可能性があるパスは `Test-Path`（PowerShell）/ `[ -f ... ]`（bash）で事前確認してから rg を起動し、`os error 2` / `os error 3` のノイズログを抑制する。
 
 ---
 
@@ -43,16 +52,16 @@
 | 上位概念 | GitHub Issue 起点モード（Cloud） | CLI セッション起点モード（CLI） |
 |---|---|---|
 | **タスク** | Issue | `hve orchestrate` 1 回実行（CLI 起動セッション） |
-| **サブタスク** | Sub-issue（Copilot アサイン） | サブセッション |
+| **サブタスク** | Sub-issue（Copilot アサイン） | workflow DAG / fan-out の子 Step |
 | **タスク定義書** | Issue body | 起動時引数 / 起動時メタデータ |
-| **サブタスク定義書ファイル** | `subissues.md` | `subissues.md` |
-| **タスク完了報告** | PR body | `work/Issue-<識別子>/completion-report.md` |
+| **サブタスク定義書ファイル** | `subissues.md` | 原則なし（workflow 定義 / fan-out メタデータで表現） |
+| **タスク完了報告** | PR body | `work/run/<run-id>/Issue-<識別子>/completion-report.md` |
 | **タスク完了通知** | PR Merge / Issue Close | journal レコード（`hve/run_journal.py`）/ セッション終了 |
 | **検証マーカー書式** | `<!-- validation-confirmed -->` 等（`auto-approve-and-merge.yml` 自動判定対象） | 同書式（将来の自動化準備および人手レビュー時の可読性のため） |
 
 **補足**:
 
-- ファイル名 `subissues.md` は歴史的経緯（GitHub Sub-issue を直接想定した時期の名残）で残置している。本ファイル内では「サブタスク定義書（`subissues.md`）」と読み替える。
+- ファイル名 `subissues.md` は Cloud Agent Orchestrator の Sub-Issue 作成経路で使用する。CLI / GUI 標準経路では workflow DAG / fan-out でサブタスクを表現し、`subissues.md` runtime fork は legacy / 明示 opt-in のみ。
 - **混合運用ガイダンス**: CLI セッション起点で作業を進めつつ、後に GitHub へ push して PR を作成する混合運用の場合は、§7.2（GitHub 連携時の追加ルール）と §7.3（CLI セッション時の追加ルール）の **両方を適用** すること。
 - 「Issue」「PR」「Sub-issue」の語が単独で出てくる箇所は GitHub Issue 起点モード限定の文脈である。CLI セッション起点モードでは対応する用語（タスク / サブタスク等）に読み替える。
 
@@ -80,12 +89,12 @@ Agent の標準作業フローは以下の 5 フェーズで構成される。�
 [4. 検証]
   - Skill: harness-verification-loop（Build/Lint/Test/Security/Diff）
   - エラー発生時: Skill: harness-error-recovery
-  - レビュー（ユーザー指定時のみ）: Skill: adversarial-review
+  - 敵対的レビュー（marker / label / 明示的な敵対的レビュー依頼 / HVE Phase 3 のみ）: Skill: adversarial-review
         ↓
 [5. 完了報告とタスク終了]
   - タスク完了報告の出力先:
     - GitHub Issue 起点: PR body に記載 → §7.1 + §7.2 参照
-    - CLI セッション起点: `work/Issue-<識別子>/completion-report.md` に記載 → §7.1 + §7.3 参照
+    - CLI セッション起点: `work/run/<run-id>/Issue-<識別子>/completion-report.md` に記載 → §7.1 + §7.3 参照
   - 混合運用（CLI で作業した後 GitHub へ push）: §7.2 と §7.3 を併用
 ```
 
@@ -95,8 +104,8 @@ Agent の標準作業フローは以下の 5 フェーズで構成される。�
 
 ## §2 Skills ルーティング
 
-Skill の参照先選定は **Skill `_routing`**（`.github/skills/_routing/SKILL.md`）を参照すること。
-本体には強制ルール（§0, §3, §5-§10）を残し、ルーティング表は `_routing` Skill で管理する。
+Skill の参照先選定は **ルーティング表**（`.github/skills/_routing/README.md`）を参照すること。
+本体には強制ルール（§0, §3, §5-§10）を残し、ルーティング表は `_routing/README.md` で管理する。
 
 ---
 
@@ -178,7 +187,7 @@ Agent の動作仕様本文は `.github/prompts/<Name>.prompt.md` に、入出�
 
 ### §7.3 CLI セッション起点モード（completion-report.md）
 
-- **出力先**: `work/Issue-<識別子>/completion-report.md`（ファイル名 `Issue-` prefix は `work-artifacts-layout` Skill の既存規約により残置。`<識別子>` は CLI セッション識別子または作業ディレクトリ名）。
+- **出力先**: `work/run/<run-id>/Issue-<識別子>/completion-report.md`。`<run-id>` は `hve.split_fork.resolve_run_id()` が採番し、GUI/CLI 起動時に env `HVE_WORK_ROOT` / `HVE_RUN_ID` として伝播される。ファイル名 `Issue-` prefix は `work-artifacts-layout` Skill の既存規約により残置。`<識別子>` は CLI セッション識別子または作業ディレクトリ名。
 - **元タスク参照**: `<!-- parent-task: <work-dir-name> -->` を completion-report.md の先頭に記載する。GitHub Issue 由来であれば `<!-- parent-issue: #N -->` も併記可。
 - **タスク完了通知**: journal レコード（`hve/run_journal.py` の `end` イベント）として記録される。
 - **混合運用**: 後に GitHub へ push する場合、completion-report.md の内容を PR body に転記し、§7.2 のルールも適用する。
@@ -214,3 +223,11 @@ Agent の動作仕様本文は `.github/prompts/<Name>.prompt.md` に、入出�
 - **Copilot Coding Agent のセッションを GitHub UI から手動 Stop しない**。手動 Stop を行うと PR タイムラインに `The session was cancelled by the user.` というノイズイベント（タイムライン上に表示）が残る。
 - セッションは PR の merge / close によって Copilot プラットフォームが自動終了するため、明示的に停止する必要はない。
 - 詳細は [`knowledge/copilot-session-cancelled-event.md`](/knowledge/copilot-session-cancelled-event.md) を参照。
+
+---
+
+## §12 HVE アプリケーション保守ルーティング
+
+- HVE 対象変更では `.github/skills/hve-requirement-traceability/SKILL.md` を使用する。
+- HVE コアパスでは `.github/instructions/hve-maintenance.instructions.md` も適用する。
+- `hve-dev/requirement-definition.md` 全文を既定の入力にしない。

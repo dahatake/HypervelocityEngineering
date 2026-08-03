@@ -114,8 +114,11 @@ class AutopilotPlanReview:
 
     @property
     def has_blocking_gaps(self) -> bool:
-        """ギャップ提案が 1 件以上ある場合 True。"""
-        return bool(self.gaps)
+        """常に False。ブロッキング判定は Phase A Precheck (`run_step1_precheck`) に
+        統一済み（要件テーブル `workflow_step_requirements.summarize_requirements_for_selection`
+        が SoT）。Phase B プランレビュー Dialog の ``gaps`` は補完サジェスト情報のみで
+        [このプランで実行] ボタンを無効化しない。"""
+        return False
 
 
 __all__ = [

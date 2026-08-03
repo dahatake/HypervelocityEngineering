@@ -242,7 +242,7 @@ jobs:
           create_label "adfdv:running"                "E4E669" ""
           create_label "adfdv:done"                   "0E8A16" ""
           create_label "adfdv:blocked"                "D73A4A" ""
-          create_label "auto-context-review"        "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "adversarial-review"        "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-qa"                     "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready"          "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
@@ -349,12 +349,12 @@ jobs:
                   resource_group = ""
 
           # 対象データフローアプリ ID 抽出
-          app_ids = ""
+          job_ids = ""
           m = re.search(r"###\s*対象データフローアプリ\s*ID（カンマ区切り）\s*\n+(.+)", body)
           if m:
-              app_ids = m.group(1).strip()
-              if app_ids == "_No response_":
-                  app_ids = ""
+              job_ids = m.group(1).strip()
+              if job_ids == "_No response_":
+                job_ids = ""
 
           # 実行するステップからスキップ対象を検出
           # checkboxes は Step.1 / Step.2 / Step.3 / Step.4 の4項目
@@ -390,7 +390,7 @@ jobs:
 
           # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
           # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
-          auto_context_review = False
+          adversarial_review = False
           review_section = re.search(
               r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
               body, re.DOTALL
@@ -399,10 +399,10 @@ jobs:
               section_text = review_section.group(1)
               if re.search(r"スキップする", section_text):
                   # 旧形式（後方互換）: 未チェック = スキップしない = 有効
-                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+                  adversarial_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
               else:
                   # 新形式: チェック → 有効
-                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+                  adversarial_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
           # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
           # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
@@ -428,7 +428,7 @@ jobs:
           )
           if merge_section:
               section_text = merge_section.group(1)
-              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text) or re.search(r"^\s*有効にする\s*$", section_text, re.MULTILINE))
 
           # APP-ID 抽出（カンマ区切りで分割・正規化）
           app_ids_raw = ""
@@ -479,11 +479,11 @@ jobs:
           result = {
               "branch": branch,
               "resource_group": resource_group,
-              "app_ids": app_ids,
+              "job_ids": job_ids,
               "app_ids": app_ids_list,
               "skip_steps": list(skip_steps),
               "additional_comment": additional_comment,
-              "auto_context_review": auto_context_review,
+              "adversarial_review": adversarial_review,
               "auto_qa": auto_qa,
               "auto_merge": auto_merge,
               "tdd_max_retries": tdd_max_retries,
@@ -497,10 +497,10 @@ jobs:
 
           BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
           RESOURCE_GROUP=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['resource_group'])")
-          APP_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['app_ids'])")
+          JOB_IDS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['job_ids'])")
           SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
-          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          ADVERSARIAL_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('adversarial_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
             echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
@@ -523,9 +523,9 @@ jobs:
 
           echo "対象ブランチ: ${BRANCH}"
           echo "リソースグループ名: ${RESOURCE_GROUP}"
-          echo "対象データフローアプリ ID: ${APP_IDS}"
+          echo "対象データフローアプリ ID: ${JOB_IDS}"
           echo "スキップ Steps: ${SKIP_STEPS}"
-          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "敵対的レビュー (adversarial-review): ${ADVERSARIAL_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
           echo "対象 APP-IDs（フィルタ前）: ${APP_IDS:-（未指定 = 推薦アーキテクチャから自動選択）}"
@@ -559,13 +559,13 @@ jobs:
 
           export APP_IDS APP_ARCH_SCOPE_SECTION
 
-          # ---- Root Issue body に auto-context-review / auto-merge タグを埋め込み ----
+          # ---- Root Issue body に adversarial-review / auto-merge タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_MERGE}" "${TDD_MAX_RETRIES}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
-          auto_context_review = sys.argv[1]
+          adversarial_review = sys.argv[1]
           auto_merge = sys.argv[2]
           tdd_max_retries = sys.argv[3]
           branch = sys.argv[4]
@@ -575,7 +575,7 @@ jobs:
           output_file = sys.argv[8]
 
           tags = [
-              ("auto-context-review", auto_context_review),
+              ("adversarial-review", adversarial_review),
               ("auto-merge", auto_merge),
               ("tdd-max-retries", tdd_max_retries),
               ("branch", branch),
@@ -599,7 +599,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / tdd-max-retries / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に adversarial-review / auto-merge / tdd-max-retries / branch / self-improve タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -608,9 +608,12 @@ jobs:
           add_label "${ROOT_ISSUE}" "adfdv:initialized"
           echo "adfdv:initialized を付与しました。"
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            add_label "${ROOT_ISSUE}" "auto-context-review"
-            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "adversarial-review"
+            echo "Root Issue #${ROOT_ISSUE} に adversarial-review ラベルを付与しました。"
+          else
+            gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、Root Issue #${ROOT_ISSUE} の adversarial-review ラベルを除去しました。"
           fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then
@@ -633,12 +636,12 @@ jobs:
           fi
 
           # ---- Step Issue に埋め込む共通メタ情報 ----
-          # root-issue / branch / resource-group / app-ids / auto-context-review / auto-qa / auto-merge を埋め込む
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
-            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          # root-issue / branch / resource-group / app-ids / adversarial-review / auto-qa / auto-merge を埋め込む
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->\n<!-- adversarial-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           # 追加コメントセクション（空の場合は空文字）
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
@@ -653,18 +656,18 @@ jobs:
             RG_SECTION=""
           fi
 
-          if [[ -n "${APP_IDS}" ]]; then
-            JOB_SECTION=$(printf '\n\n## 対象データフローアプリ ID\n`%s`' "${APP_IDS}")
+          if [[ -n "${JOB_IDS}" ]]; then
+            JOB_SECTION=$(printf '\n\n## 対象データフローアプリ ID\n`%s`' "${JOB_IDS}")
           else
             JOB_SECTION=""
           fi
 
           # Step Issue に付与するラベルセット
           # auto-dataflow-dev を付与することで Issue 一覧のラベル絞り込み検索が可能になる（ADFD = Dataflow Design と同パターン）
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["adfdv:blocked","auto-dataflow-dev","auto-context-review","auto-qa"]'
-          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS='["adfdv:blocked","auto-dataflow-dev","auto-context-review"]'
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["adfdv:blocked","auto-dataflow-dev","adversarial-review","auto-qa"]'
+          elif [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["adfdv:blocked","auto-dataflow-dev","adversarial-review"]'
           elif [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS='["adfdv:blocked","auto-dataflow-dev","auto-qa"]'
           else
@@ -1035,11 +1038,11 @@ jobs:
 
           echo "対象ブランチ: ${BRANCH}"
 
-          # ---- auto-context-review / auto-qa PR ラベル付与 ----
-          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          # ---- adversarial-review / auto-qa PR ラベル付与 ----
+          ADVERSARIAL_REVIEW=$(python3 - <<'PY'
           import os, re
           body = os.environ.get('DONE_ISSUE_BODY', '')
-          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          m = re.search(r'<!--\s*adversarial-review:\s*(true|false)\s*-->', body)
           print(m.group(1) if m else 'false')
           PY
           )
@@ -1050,16 +1053,16 @@ jobs:
           print(m.group(1) if m else 'false')
           PY
           )
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
             LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
               --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
               2>/dev/null || true)
             if [[ -n "${LINKED_PRS}" ]]; then
               while IFS= read -r pr_num; do
-                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
-                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
-                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "adversarial-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に adversarial-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への adversarial-review ラベル付与に失敗しました。" >&2
                 fi
                 if [[ "${AUTO_QA}" == "true" ]]; then
                   gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \

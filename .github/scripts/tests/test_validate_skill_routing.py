@@ -1,4 +1,4 @@
-"""Tests for .github/scripts/validate-skill-routing.py."""
+﻿"""Tests for .github/scripts/validate-skill-routing.py."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def _run_validator(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[st
 
 def test_missing_reference_detected(tmp_path: Path) -> None:
     _write(
-        tmp_path / ".github/skills/_routing/SKILL.md",
+        tmp_path / ".github/skills/_routing/README.md",
         _routing_md(".github/skills/missing-skill/SKILL.md"),
     )
 
@@ -73,9 +73,104 @@ def test_missing_reference_detected(tmp_path: Path) -> None:
     assert "MISSING_REFERENCE" in result.stderr
 
 
+def test_external_user_skill_format_is_accepted_without_local_check(tmp_path: Path) -> None:
+    _write(
+        tmp_path / ".github/skills/_routing/README.md",
+        _routing_md(
+            ".github/skills/task-a/SKILL.md",
+            "~/.agents/skills/azure-ai/SKILL.md",
+        ),
+    )
+    _write(
+        tmp_path / ".github/skills/task-a/SKILL.md",
+        _skill_md("task-a"),
+    )
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 0
+    assert "MISSING_REFERENCE" not in result.stderr
+
+
+def test_nested_external_subskill_format_is_accepted(tmp_path: Path) -> None:
+    _write(
+        tmp_path / ".github/skills/_routing/README.md",
+        _routing_md(
+            ".github/skills/task-a/SKILL.md",
+            "~/.agents/skills/microsoft-foundry/models/deploy-model/SKILL.md",
+        ),
+    )
+    _write(
+        tmp_path / ".github/skills/task-a/SKILL.md",
+        _skill_md("task-a"),
+    )
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 0
+    assert "MISSING_REFERENCE" not in result.stderr
+
+
+def test_malformed_external_user_skill_reference_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path / ".github/skills/_routing/README.md",
+        _routing_md(
+            ".github/skills/task-a/SKILL.md",
+            "~/.agents/skill/azure-ai/SKILL.md",
+        ),
+    )
+    _write(
+        tmp_path / ".github/skills/task-a/SKILL.md",
+        _skill_md("task-a"),
+    )
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 1
+    assert "MISSING_REFERENCE" in result.stderr
+    assert "外部 Skill パス形式が不正" in result.stderr
+
+
+def test_external_user_skill_path_traversal_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path / ".github/skills/_routing/README.md",
+        _routing_md(
+            ".github/skills/task-a/SKILL.md",
+            "~/.agents/skills/../azure-ai/SKILL.md",
+        ),
+    )
+    _write(
+        tmp_path / ".github/skills/task-a/SKILL.md",
+        _skill_md("task-a"),
+    )
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 1
+    assert "MISSING_REFERENCE" in result.stderr
+    assert "外部 Skill パス形式が不正" in result.stderr
+
+
+def test_same_skill_may_serve_multiple_routing_triggers(tmp_path: Path) -> None:
+    local_skill = ".github/skills/task-a/SKILL.md"
+    _write(
+        tmp_path / ".github/skills/_routing/README.md",
+        _routing_md(local_skill, local_skill),
+    )
+    _write(
+        tmp_path / local_skill,
+        _skill_md("task-a"),
+    )
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 0
+    assert "DUPLICATE_SKILL_NAME" not in result.stderr
+
+
 def test_outside_root_reference_detected(tmp_path: Path) -> None:
     _write(
-        tmp_path / ".github/skills/_routing/SKILL.md",
+        tmp_path / ".github/skills/_routing/README.md",
         _routing_md("../../../../external/skill/SKILL.md"),
     )
 
@@ -88,7 +183,7 @@ def test_outside_root_reference_detected(tmp_path: Path) -> None:
 
 def test_unreferenced_skill_warned(tmp_path: Path) -> None:
     _write(
-        tmp_path / ".github/skills/_routing/SKILL.md",
+        tmp_path / ".github/skills/_routing/README.md",
         _routing_md(".github/skills/task-a/SKILL.md"),
     )
     _write(
@@ -109,7 +204,7 @@ def test_unreferenced_skill_warned(tmp_path: Path) -> None:
 
 def test_duplicate_skill_name_detected(tmp_path: Path) -> None:
     _write(
-        tmp_path / ".github/skills/_routing/SKILL.md",
+        tmp_path / ".github/skills/_routing/README.md",
         _routing_md(
             ".github/skills/azure-skills/appinsights-instrumentation/SKILL.md",
             ".github/skills/observability/appinsights-instrumentation/SKILL.md",
@@ -133,7 +228,7 @@ def test_duplicate_skill_name_detected(tmp_path: Path) -> None:
 
 def test_missing_frontmatter_version_detected(tmp_path: Path) -> None:
     _write(
-        tmp_path / ".github/skills/_routing/SKILL.md",
+        tmp_path / ".github/skills/_routing/README.md",
         _routing_md(".github/skills/karpathy-guidelines/SKILL.md"),
     )
     _write(

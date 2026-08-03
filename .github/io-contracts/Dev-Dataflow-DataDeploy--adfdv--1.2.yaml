@@ -6,7 +6,7 @@ inputs:
 - path: docs/dataflow/dataflow-app-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-AppCatalog--adfd--3
+  producer: Arch-Dataflow-AppCatalog--adfd--0.2
 - path: src/infra/azure/dataflow/create-batch-resources.sh
   required: true
   kind: agent_artifact
@@ -15,28 +15,30 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Dev-Dataflow-DataServiceSelect--adfdv--1.1
-- path: docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md
+- path: docs/dataflow/apps/{key}-spec.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-AppSpec--adfd--6.1
+  producer: Arch-Dataflow-AppSpec--adfd--1
 - path: docs/dataflow/dataflow-monitoring-design.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-MonitoringDesign--adfd--6.2
+  producer: Arch-Dataflow-MonitoringDesign--adfd--2
 - path: src/infra/azure/
   required: false
   kind: agent_artifact
   producer: Dev-Dataflow-DataServiceSelect--adfdv--1.1
-outputs:
+# Dev-Dataflow-DataDeploy.prompt.md 「knowledge/ 参照（任意・存在する場合のみ）」
+# — 生成物ではなく参照入力。
 - path: knowledge/
   required: false
-  mode: create
+  kind: static
 - path: knowledge/D15-非機能-運用-監視-DR-仕様書.md
-  required: true
-  mode: create
+  required: false
+  kind: static
 - path: knowledge/D20-セキュア設計-実装ガードレール.md
-  required: true
-  mode: create
+  required: false
+  kind: static
 - path: knowledge/D21-CI-CD-ビルド-リリース-供給網管理仕様書.md
-  required: true
-  mode: create
+  required: false
+  kind: static
+outputs: []

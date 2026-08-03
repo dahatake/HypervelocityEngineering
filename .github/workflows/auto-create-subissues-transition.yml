@@ -42,29 +42,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: PR 情報取得（issue_comment 対応）
+      - name: PR 情報取得（常に最新状態を再取得）
         id: pr-info
-        env:
-          EVENT_PR_BODY: ${{ inputs.pr_body }}
-          EVENT_PR_LABELS: ${{ inputs.pr_labels }}
         run: |
           set -euo pipefail
 
-          if [ "${EVENT_NAME}" = "issue_comment" ]; then
-            pr_api_err=$(mktemp)
-            pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
-              echo "PR #${PR_NUMBER} の情報取得に失敗しました。エラー詳細:"
-              cat "${pr_api_err}" || true
-              rm -f "${pr_api_err}"
-              exit 1
-            }
+          pr_api_err=$(mktemp)
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
+            echo "PR #${PR_NUMBER} の情報取得に失敗しました。エラー詳細:"
+            cat "${pr_api_err}" || true
             rm -f "${pr_api_err}"
-            pr_labels_json=$(echo "${pr_data}" | jq -c '[.labels[].name] // []')
-            pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
-          else
-            pr_labels_json=$(printf '%s' "${EVENT_PR_LABELS:-[]}" | jq -c '. // []')
-            pr_body="${EVENT_PR_BODY:-}"
-          fi
+            exit 1
+          }
+          rm -f "${pr_api_err}"
+          pr_labels_json=$(echo "${pr_data}" | jq -c '[.labels[].name] // []')
+          pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
 
           echo "PR_LABELS_JSON=${pr_labels_json}" >> "${GITHUB_ENV}"
           EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
@@ -81,6 +73,7 @@ jobs:
 
           has_create_subissues=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("create-subissues") == null then "false" else "true" end')
           has_split_mode=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("split-mode") == null then "false" else "true" end')
+          has_auto_approve_ready=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("auto-approve-ready") == null then "false" else "true" end')
 
           if [ "${has_create_subissues}" = "true" ]; then
             echo "create-subissues ラベルは既に付与済みです。スキップします。"
@@ -90,6 +83,12 @@ jobs:
 
           if [ "${has_split_mode}" != "true" ]; then
             echo "split-mode ラベルがないため対象外です。スキップします。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ "${has_auto_approve_ready}" != "true" ]; then
+            echo "strict gate 未完了（auto-approve-ready なし）のため待機します。"
             echo "proceed=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -147,15 +146,11 @@ jobs:
           echo "${files}"
           echo "found=true" >> "${GITHUB_OUTPUT}"
 
-      - name: 完了判定（QA/Review）
+      - name: 完了判定（strict gate）
         id: check-completion
         if: steps.early-skip.outputs.proceed == 'true' && steps.find-files.outputs.found == 'true'
         run: |
           set -euo pipefail
-
-          to_epoch() {
-            date -d "$1" +%s 2>/dev/null || echo 0
-          }
 
           ISSUE_NUMBER=""
           ISSUE_NUMBER=$(gh pr view "${PR_NUMBER}" --repo "${REPO}" \
@@ -175,165 +170,16 @@ jobs:
               | sed 's/.*parent-issue:[[:space:]]*#\([0-9][0-9]*\).*/\1/' | head -1 || true)
           fi
 
-          pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --paginate \
-            --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null) || pr_comments="[]"
-
-          has_auto_qa=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("auto-qa") == null then "false" else "true" end')
+          has_split_mode=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("split-mode") == null then "false" else "true" end')
+          has_auto_approve_ready=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("auto-approve-ready") == null then "false" else "true" end')
           QA_OK="true"
-          QA_REASON="auto-qa ラベルなしのため QA 判定はスキップ（OK）"
-
-          if [ "${has_auto_qa}" = "true" ]; then
-            QA_OK="false"
-            qa_posted_at=$(echo "${pr_comments}" \
-              | jq -r '[.[] | select(.body | startswith("<!-- copilot-auto-qa-posted -->"))] | .[-1].created_at')
-            if [ -z "${qa_posted_at}" ] || [ "${qa_posted_at}" = "null" ]; then
-              QA_REASON="QA 指示コメント（<!-- copilot-auto-qa-posted -->）が未検出"
-            else
-              user_reply_count=$(echo "${pr_comments}" \
-                | jq --arg qa_at "${qa_posted_at}" \
-                  '[.[] |
-                    select(.created_at > $qa_at) |
-                    select(.user.type != "Bot") |
-                    select(.body | ascii_downcase | contains("@copilot"))
-                  ] | length')
-              auto_answered_count=$(echo "${pr_comments}" \
-                | jq --arg qa_at "${qa_posted_at}" \
-                  '[.[] |
-                    select(.created_at > $qa_at) |
-                    select(.body | contains("<!-- auto-qa-default-answered -->"))
-                  ] | length')
-              total_reply_count=$((user_reply_count + auto_answered_count))
-
-              if [ "${total_reply_count}" -eq 0 ]; then
-                bot_replies_after_qa=$(echo "${pr_comments}" \
-                  | jq --arg qa_at "${qa_posted_at}" \
-                    '[.[] | select(.created_at > $qa_at and (.user.type == "Bot") and ((.user.login | startswith("copilot-swe-agent")) or .user.login == "Copilot"))]')
-                bot_reply_count=$(echo "${bot_replies_after_qa}" | jq 'length')
-                if [ "${bot_reply_count}" -gt 0 ]; then
-                  has_questionnaire=$(echo "${bot_replies_after_qa}" \
-                    | jq '[.[] | select(.body | test("^\\s*- \\[ \\]"; "m"))] | length')
-                  if [ "${has_questionnaire}" -eq 0 ]; then
-                    QA_OK="true"
-                    QA_REASON="質問なしパターンを検知（QA 完了）"
-                  else
-                    QA_REASON="QA 指示後に質問票あり。ユーザー回答待ち"
-                  fi
-                else
-                  QA_REASON="QA 指示後のユーザー回答/自動回答/Bot 回答が未検出"
-                fi
-              else
-                reply_at=$(echo "${pr_comments}" \
-                  | jq -r --arg qa_at "${qa_posted_at}" \
-                    '[.[] |
-                      select(.created_at > $qa_at) |
-                      select(
-                        ((.user.type != "Bot") and (.body | ascii_downcase | contains("@copilot")))
-                        or (.body | contains("<!-- auto-qa-default-answered -->"))
-                      )
-                    ] | .[0].created_at')
-                if [ "${EVENT_NAME}" = "pull_request_target" ]; then
-                  latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
-                    --paginate \
-                    --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
-                  if [ -n "${latest_commit_at}" ] && [ "$(to_epoch "${latest_commit_at}")" -gt "$(to_epoch "${reply_at}")" ]; then
-                    QA_OK="true"
-                    QA_REASON="ユーザー回答後に最新コミットを検知（QA 完了）"
-                  else
-                    QA_REASON="ユーザー回答後のコミット未検出"
-                  fi
-                else
-                  QA_OK="true"
-                  QA_REASON="issue_comment 経路で回答検知（QA 完了）"
-                fi
-              fi
-            fi
-          fi
-
-          has_auto_review=$(echo "${PR_LABELS_JSON}" | jq -r 'if index("auto-context-review") == null then "false" else "true" end')
-          REVIEW_OK="true"
-          REVIEW_REASON="auto-context-review ラベルなしのため Review 判定はスキップ（OK）"
-
-          if [ "${has_auto_review}" = "true" ]; then
-            REVIEW_OK="false"
-            review_instruction_at=$(echo "${pr_comments}" \
-              | jq -r '[.[] | select((.body | contains("<!-- copilot-auto-review-posted -->")) or (.body | contains("<!-- copilot-auto-recheck-posted -->")))] | .[-1].created_at')
-            if [ -z "${review_instruction_at}" ] || [ "${review_instruction_at}" = "null" ]; then
-              REVIEW_REASON="レビュー指示コメント（初回/再レビュー）が未検出"
-            else
-              bot_comments_after_review=$(echo "${pr_comments}" \
-                | jq --arg review_at "${review_instruction_at}" \
-                  '[.[] | select(
-                    .created_at > $review_at
-                    and (.user.type == "Bot")
-                    and ((.user.login | startswith("copilot-swe-agent")) or .user.login == "Copilot")
-                  )]')
-
-              latest_verdict=$(echo "${bot_comments_after_review}" \
-                | jq -r '
-                  [ .[] | select(
-                      (.body | contains("<!-- review-verdict: PASS -->"))
-                      or (.body | contains("<!-- review-verdict: FAIL -->"))
-                    )
-                  ] | .[-1] |
-                  if . == null then "none"
-                  elif (.body | contains("<!-- review-verdict: FAIL -->")) then "FAIL"
-                  else "PASS"
-                  end
-                ')
-
-              if [ "${latest_verdict}" = "none" ]; then
-                bot_comment_count=$(echo "${bot_comments_after_review}" | jq 'length')
-                fallback_verdict="none"
-                if [ "${bot_comment_count}" -gt 0 ] 2>/dev/null; then
-                  for i in $(seq $((bot_comment_count - 1)) -1 0); do
-                    body=$(echo "${bot_comments_after_review}" | jq -r ".[$i].body")
-                    if echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "✅" && echo "${body}" | grep -qi "PASS"; then
-                      fallback_verdict="PASS"
-                      break
-                    elif echo "${body}" | grep -q "合格判定" && echo "${body}" | grep -q "❌" && echo "${body}" | grep -qi "FAIL"; then
-                      fallback_verdict="FAIL"
-                      break
-                    fi
-                  done
-                fi
-                if [ "${fallback_verdict}" != "none" ]; then
-                  latest_verdict="${fallback_verdict}"
-                fi
-              fi
-
-              if [ "${latest_verdict}" = "PASS" ]; then
-                REVIEW_OK="true"
-                REVIEW_REASON="review-verdict: PASS を検知"
-              elif [ "${latest_verdict}" = "FAIL" ]; then
-                REVIEW_OK="false"
-                REVIEW_REASON="review-verdict: FAIL のため未完了（本WFでは再レビュー指示しない）"
-              else
-                if [ "${EVENT_NAME}" = "pull_request_target" ]; then
-                  latest_commit_at=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/commits" \
-                    --paginate \
-                    --jq '.[-1].commit.committer.date' 2>/dev/null | tail -1) || latest_commit_at=""
-                  if [ -n "${latest_commit_at}" ] && [ "$(to_epoch "${latest_commit_at}")" -gt "$(to_epoch "${review_instruction_at}")" ]; then
-                    REVIEW_OK="true"
-                    REVIEW_REASON="verdict マーカーなしフォールバック（レビュー指示後の最新コミット検知）"
-                  else
-                    REVIEW_REASON="verdict マーカーなし・レビュー指示後コミット未検出"
-                  fi
-                else
-                  bot_reply_count=$(echo "${bot_comments_after_review}" | jq 'length')
-                  if [ "${bot_reply_count}" -gt 0 ]; then
-                    REVIEW_OK="true"
-                    REVIEW_REASON="verdict マーカーなしフォールバック（issue_comment 経路で Bot 回答検知）"
-                  else
-                    REVIEW_REASON="verdict マーカーなし・Bot 回答未検出"
-                  fi
-                fi
-              fi
-            fi
-          fi
-
+          QA_REASON="QA/Review の完了判定は strict gate に集約"
+          REVIEW_OK="false"
+          REVIEW_REASON="strict gate 未完了（auto-approve-ready なし）"
           READY="false"
-          if [ "${QA_OK}" = "true" ] && [ "${REVIEW_OK}" = "true" ]; then
+          if [ "${has_split_mode}" = "true" ] && [ "${has_auto_approve_ready}" = "true" ]; then
+            REVIEW_OK="true"
+            REVIEW_REASON="strict gate が付与した auto-approve-ready を検知"
             READY="true"
           fi
 

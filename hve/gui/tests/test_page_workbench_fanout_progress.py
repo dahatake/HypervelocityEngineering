@@ -163,3 +163,72 @@ def test_non_fanout_step_uses_existing_path(qapp):
         {"kind": "step_status", "step": "1", "status": "done"}
     )
     assert page._workflow_step_status["wf-a"]["1"] == "完了"
+
+
+def test_blocked_child_with_all_terminal_promotes_base_to_blocked(qapp):
+    """子が blocked + done のみで、failed が無い場合、base は "ブロック" に昇格する。
+
+    集約優先順位: failed > blocked > done。
+    blocked はユーザー介入要求のため done より優先される。
+    """
+    page = _make_page(qapp)
+    page._apply_stats_fanout_init(
+        {
+            "kind": "fanout_init",
+            "workflow_id": "wf-a",
+            "base_id": "2.1",
+            "child_ids": ["2.1/A", "2.1/B"],
+        }
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/A", "status": "done"}
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/B", "status": "blocked"}
+    )
+    assert page._workflow_step_status["wf-a"]["2.1"] == "ブロック"
+
+
+def test_failed_overrides_blocked_in_fanout_aggregation(qapp):
+    """failed > blocked の優先順位を検証する。
+
+    failed と blocked が混在する場合、failed が優先され base は "完了" 表記
+    （既存マッピング: failed → "完了" の互換性維持）。
+    """
+    page = _make_page(qapp)
+    page._apply_stats_fanout_init(
+        {
+            "kind": "fanout_init",
+            "workflow_id": "wf-a",
+            "base_id": "2.1",
+            "child_ids": ["2.1/A", "2.1/B"],
+        }
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/A", "status": "blocked"}
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/B", "status": "failed"}
+    )
+    # failed が優先されるため base 表記は "完了"（既存 failed マッピング）
+    assert page._workflow_step_status["wf-a"]["2.1"] == "完了"
+
+
+def test_blocked_child_with_running_keeps_base_running(qapp):
+    """running が居れば blocked より優先される（running > blocked）。"""
+    page = _make_page(qapp)
+    page._apply_stats_fanout_init(
+        {
+            "kind": "fanout_init",
+            "workflow_id": "wf-a",
+            "base_id": "2.1",
+            "child_ids": ["2.1/A", "2.1/B"],
+        }
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/A", "status": "blocked"}
+    )
+    page._apply_stats_step_status(
+        {"kind": "step_status", "step": "2.1/B", "status": "running"}
+    )
+    assert page._workflow_step_status["wf-a"]["2.1"] == "実行中"

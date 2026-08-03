@@ -2,25 +2,23 @@
 
 {app_arch_scope_section}
 ## 目的
-ドメイン分析結果とデータソース分析結果を根拠に、バッチデータモデル（入力/ステージング/中間/出力モデル・冪等性キー・パーティション戦略・ER図）を設計する。
+サービスカタログとジョブ設計に基づき、監視・運用設計書を作成する。
 
 ## 入力
-- `docs/dataflow/dataflow-domain-analytics.md`
-- `docs/dataflow/dataflow-data-source-analysis.md`
-- `docs/catalog/data-model.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/app-catalog.md`
 
 ## 出力
-- `docs/dataflow/dataflow-data-model.md`
+- `docs/dataflow/dataflow-monitoring-design.md`
 
 {existing_artifact_policy}
 
 ## Custom Agent
-`Arch-Dataflow-DataModel` を使用
+`Arch-Dataflow-MonitoringDesign` を使用
 
 ## 依存
-- Step.1.1（バッチドメイン分析）が `adfd:done` であること（AND依存）
-- Step.1.2（データソース/デスティネーション分析）が `adfd:done` であること（AND依存）
+- Step.5（データフローテスト戦略書）が `adfd:done` であること
 
 ## 完了条件
-- `docs/dataflow/dataflow-data-model.md` が作成されている
+- `docs/dataflow/dataflow-monitoring-design.md` が作成されている
 {completion_instruction}{additional_section}

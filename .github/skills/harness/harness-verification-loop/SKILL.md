@@ -52,7 +52,7 @@ Phase 失敗時のエスカレーション: `references/verification-commands.md
 1. `git diff --stat` で変更サマリーを取得する
 2. 変更ファイルが タスク / AC（受け入れ条件）の対象スコープ内か確認する
 3. 無関係な変更（整形のみ、コメント追加のみ等）が含まれていないか確認する
-4. 結果を `work-artifacts-layout` Skill で定義される作業ディレクトリ直下の `verification-report.md`（例: `work/Issue-<識別子>/verification-report.md`）の Diff セクションに記録する
+4. 結果を `work-artifacts-layout` Skill で定義される作業ディレクトリ直下の `verification-report.md`（例: `work/run/<run-id>/Issue-<識別子>/verification-report.md`）の Diff セクションに記録する
 
 ---
 
@@ -63,4 +63,4 @@ Phase 失敗時のエスカレーション: `references/verification-commands.md
 | `harness-error-recovery` | 後続 | Phase失敗時のエスカレーション先（3要素出力） |
 | `harness-safety-guard` | 前提 | コマンド実行前の安全チェック |
 | `work-artifacts-layout` | 出力先 | `verification-report.md` の配置先と `{WORK}` 構造の参照先 |
-| `adversarial-review` | 補完 | 本Skillは自動検証、adversarial-reviewは人的レビュー |
+| `adversarial-review` | 条件付き補完 | 本Skillは通常の自動検証、adversarial-reviewは明示時のみの敵対的レビュー |

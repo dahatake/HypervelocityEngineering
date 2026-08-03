@@ -8,7 +8,10 @@ QPlainTextEdit に表示するメインウィンドウ。
 
 from __future__ import annotations
 
+import json
+from html import escape
 from typing import Dict, Optional
+from urllib.parse import urlparse
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QResizeEvent
@@ -33,6 +36,28 @@ from .wizard import WizardResult
 
 # ログ最大行数（メモリ節約のため QPlainTextEdit の上限を設定）
 _MAX_LOG_BLOCK_COUNT = 50_000
+_CLOUD_SESSION_PREFIX = "[hve:cloud-session]"
+
+
+def _parse_cloud_session_url(line: str) -> str:
+    if not line.startswith(_CLOUD_SESSION_PREFIX):
+        return ""
+    try:
+        payload = json.loads(line[len(_CLOUD_SESSION_PREFIX):].strip())
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    url = payload.get("url")
+    if not isinstance(url, str):
+        return ""
+    url = url.strip()
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in url):
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return url
 
 
 class _LogPane(QWidget):
@@ -128,7 +153,7 @@ class WorkbenchWindow(QMainWindow):
         :attr:`chain_finished` を emit する。
     """
 
-    chain_finished = Signal(int)  # Expose process completion signal
+    chain_finished = Signal("qlonglong")  # type: ignore[arg-type]  # Expose process completion signal（returncode は Windows の符号なし 32bit を許容するため 64bit）
     status_changed = Signal(str)  # ステータスバーテキスト更新を他コンポーネントにブリッジ
     stage_advanced = Signal(str)  # Autopilot チェーンで次段ワークフローに進んだときに名前を通知
 
@@ -199,6 +224,11 @@ class WorkbenchWindow(QMainWindow):
 
         self._log_pane = _LogPane("ログ")
         self._user_actions_pane = _UserActionsPane()
+        self._cloud_session_label = QLabel("")
+        self._cloud_session_label.setOpenExternalLinks(True)
+        self._cloud_session_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self._cloud_session_label.setStyleSheet("color: #0969da; padding: 2px;")
+        self._cloud_session_label.hide()
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(self._log_pane)
@@ -209,6 +239,7 @@ class WorkbenchWindow(QMainWindow):
 
         layout = QVBoxLayout(central)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.addWidget(self._cloud_session_label)
         layout.addWidget(splitter)
 
     def _setup_menu(self) -> None:
@@ -258,11 +289,19 @@ class WorkbenchWindow(QMainWindow):
     def _on_line_received(self, line: str) -> None:
         # `[hve:stats] {...}` 行は GUI ログペインでは非表示（page_workbench と同仕様）。
         from .workbench_logger import is_stats_line
+        url = _parse_cloud_session_url(line)
+        if url:
+            safe_url = escape(url, quote=True)
+            self._cloud_session_label.setText(
+                self.tr('☁ Mission Control: <a href="{url}">{url}</a>').format(url=safe_url)
+            )
+            self._cloud_session_label.show()
+            self._set_status(self.tr("Cloud Session: Mission Control URL を取得しました"))
         if is_stats_line(line):
             return
         self._log_pane.append_line(line)
 
-    @Slot(int)
+    @Slot("qlonglong")
     def _on_process_finished(self, returncode: int) -> None:
         self._is_running = False
         status_text = "完了" if returncode == 0 else f"終了 (code={returncode})"

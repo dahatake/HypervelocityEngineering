@@ -1,15 +1,15 @@
 name: Issue ラベル → PR 自動同期
 
 # PR が opened または ready_for_review になった時に、紐づく Issue の
-# auto-qa / auto-context-review ラベルを PR に自動コピーする。
+# auto-qa / adversarial-review ラベルを PR に自動コピーする。
 #
 # 順次制御:
-#   - auto-qa と auto-context-review の両方が Issue にある場合:
-#     → まず auto-qa のみ PR に付与（auto-context-review は QA 完了後に別ワークフローで付与）
+#   - auto-qa と adversarial-review の両方が Issue にある場合:
+#     → まず auto-qa のみ PR に付与（adversarial-review は QA 完了後に別ワークフローで付与）
 #   - auto-qa のみの場合:
 #     → auto-qa を PR に付与
-#   - auto-context-review のみの場合:
-#     → auto-context-review を PR に付与
+#   - adversarial-review のみの場合:
+#     → adversarial-review を PR に付与
 #
 # Issue の特定方法（優先順）:
 #   1. GraphQL closingIssuesReferences（PR が "Fixes/Closes/Resolves #NNN" を含む場合）
@@ -111,24 +111,43 @@ jobs:
           set -euo pipefail
 
           echo "=== Issue #${ISSUE_NUMBER} のラベルを取得 ==="
-          issue_labels=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
-            --jq '[.labels[].name]' 2>/dev/null) || issue_labels="[]"
+          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data='{}'
+          issue_labels=$(printf '%s' "${issue_data}" | jq '(.labels // []) | map(.name)' 2>/dev/null) || issue_labels="[]"
+          issue_body=$(printf '%s' "${issue_data}" | jq -r '.body // ""' 2>/dev/null) || issue_body=""
+          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""' 2>/dev/null) || pr_body=""
+          pr_body_head=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
           echo "Issue ラベル: ${issue_labels}"
 
           has_auto_qa=$(echo "${issue_labels}" | jq -r 'if contains(["auto-qa"]) then "true" else "false" end')
-          has_auto_review=$(echo "${issue_labels}" | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
+          has_adversarial_review=$(echo "${issue_labels}" | jq -r 'if contains(["adversarial-review"]) then "true" else "false" end')
+          if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+            has_adversarial_review="false"
+            echo "false marker を優先し、Issue の adversarial-review 設定を false に上書きしました。"
+          elif printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*true[[:space:]]*-->'; then
+            has_adversarial_review="true"
+            echo "Issue の true marker を敵対的レビュー有効として復元しました。"
+          fi
+          if printf '%s' "${pr_body_head}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+            has_adversarial_review="false"
+            echo "PR body の false marker をRoot Issue設定より優先しました。"
+          fi
           has_auto_approve_ready=$(echo "${issue_labels}" | jq -r 'if contains(["auto-approve-ready"]) then "true" else "false" end')
-          echo "auto-qa: ${has_auto_qa}, auto-context-review: ${has_auto_review}, auto-approve-ready: ${has_auto_approve_ready}"
+          echo "auto-qa: ${has_auto_qa}, adversarial-review: ${has_adversarial_review}, auto-approve-ready: ${has_auto_approve_ready}"
 
           labels_applied=""
           labels_deferred=""
 
-          if [ "${has_auto_qa}" = "true" ] && [ "${has_auto_review}" = "true" ]; then
-            # 両方ある場合: auto-qa のみ先に付与（auto-context-review は QA 完了後に自動付与）
+          if [ "${has_adversarial_review}" = "false" ]; then
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "adversarial-review=false のため、PR #${PR_NUMBER} から adversarial-review ラベルを除去しました。"
+          fi
+
+          if [ "${has_auto_qa}" = "true" ] && [ "${has_adversarial_review}" = "true" ]; then
+            # 両方ある場合: auto-qa のみ先に付与（adversarial-review は QA 完了後に自動付与）
             echo "=== 両方のラベルあり: auto-qa のみ先に PR に付与します ==="
             gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-qa"
             labels_applied="auto-qa"
-            labels_deferred="auto-context-review"
+            labels_deferred="adversarial-review"
             echo "deferred=true" >> "${GITHUB_OUTPUT}"
           elif [ "${has_auto_qa}" = "true" ]; then
             # auto-qa のみ
@@ -136,11 +155,11 @@ jobs:
             gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-qa"
             labels_applied="auto-qa"
             echo "deferred=false" >> "${GITHUB_OUTPUT}"
-          elif [ "${has_auto_review}" = "true" ]; then
-            # auto-context-review のみ
-            echo "=== auto-context-review のみ: PR に付与します ==="
-            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "auto-context-review"
-            labels_applied="auto-context-review"
+          elif [ "${has_adversarial_review}" = "true" ]; then
+            # adversarial-review のみ
+            echo "=== adversarial-review のみ: PR に付与します ==="
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label "adversarial-review"
+            labels_applied="adversarial-review"
             echo "deferred=false" >> "${GITHUB_OUTPUT}"
           else
             # QA も Review も無効の場合: auto-approve-ready の直接付与を検討
@@ -150,7 +169,7 @@ jobs:
               labels_applied="auto-approve-ready"
               echo "deferred=false" >> "${GITHUB_OUTPUT}"
             else
-              echo "auto-qa / auto-context-review / auto-approve-ready ラベルが Issue にありません。"
+              echo "auto-qa / adversarial-review / auto-approve-ready ラベルが Issue にありません。"
               echo "deferred=false" >> "${GITHUB_OUTPUT}"
             fi
           fi
@@ -175,7 +194,7 @@ jobs:
             # （マーカーを付けないと次の ready_for_review イベントで再実行されるため）
             echo "付与するラベルがないため、スキップコメントを投稿してマーカーを設定します。"
             # バックティックを printf のフォーマット内に置き、二重引用符での曖昧さを避ける
-            skip_msg=$(printf 'Issue #%s に `auto-qa` / `auto-context-review` ラベルがないため、PR へのラベル付与をスキップしました。' "${ISSUE_NUMBER}")
+            skip_msg=$(printf 'Issue #%s に `auto-qa` / `adversarial-review` ラベルがないため、PR へのラベル付与をスキップしました。' "${ISSUE_NUMBER}")
             if [ "${HAS_AUTO_APPROVE_READY}" = "true" ]; then
               skip_msg="${skip_msg} Issue 側には \`auto-approve-ready\` が設定されていますが、QA/レビュー完了後の遷移ワークフローで PR へ付与されます。"
             fi

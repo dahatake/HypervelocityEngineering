@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "queries": [
+    {
+      "id": "H-CAT-01",
+      "q": "サービス × データストア 所有権 マトリクス",
+      "group": "catalog",
+      "paths": ["docs/catalog/data-catalog.md"],
+      "expected": [{"path": "docs/catalog/data-catalog.md", "anchor": "## 4. サービス × データストア所有権マトリクス"}]
+    },
+    {
+      "id": "H-CAT-02",
+      "q": "ID体系 採番規則",
+      "group": "catalog",
+      "paths": ["docs/catalog/data-catalog.md"],
+      "expected": [{"path": "docs/catalog/data-catalog.md", "anchor": "## 6. ID体系・採番規則"}]
+    },
+    {
+      "id": "H-CAT-03",
+      "q": "Polyglot Persistence テスト方針",
+      "group": "catalog",
+      "paths": ["docs/catalog/test-strategy.md"],
+      "expected": [{"path": "docs/catalog/test-strategy.md", "anchor": "## 5. Polyglot Persistence テスト方針"}]
+    },
+    {
+      "id": "H-CAT-04",
+      "q": "テスト分類 定義",
+      "group": "catalog",
+      "paths": ["docs/catalog/test-strategy.md"],
+      "expected": [{"path": "docs/catalog/test-strategy.md", "anchor": "## 2. テスト分類定義"}]
+    },
+    {
+      "id": "H-CAT-05",
+      "q": "ペルソナ一覧",
+      "group": "catalog",
+      "paths": ["docs/catalog/persona-catalog.md"],
+      "expected": [{"path": "docs/catalog/persona-catalog.md", "anchor": "## 1. ペルソナ一覧"}]
+    },
+    {
+      "id": "H-DOC-01",
+      "q": "SVC-01 会員同意 公開インターフェース 非同期",
+      "group": "design-docs",
+      "paths": ["docs/services/SVC-01-member-consent-service-description.md"],
+      "expected": [{"path": "docs/services/SVC-01-member-consent-service-description.md", "anchor": "## 4. 公開インターフェース（非同期）"}]
+    },
+    {
+      "id": "H-DOC-02",
+      "q": "SVC-01 セキュリティ 権限",
+      "group": "design-docs",
+      "paths": ["docs/services/SVC-01-member-consent-service-description.md"],
+      "expected": [{"path": "docs/services/SVC-01-member-consent-service-description.md", "anchor": "## 6. セキュリティ・権限"}]
+    },
+    {
+      "id": "H-DOC-03",
+      "q": "APP-009-S008 A11y i18n",
+      "group": "design-docs",
+      "paths": ["docs/screen/APP-009-S008.md"],
+      "expected": [{"path": "docs/screen/APP-009-S008.md", "anchor": "## 6. A11y / i18n"}]
+    },
+    {
+      "id": "H-DOC-04",
+      "q": "APP-009-S008 バリデーション エラーメッセージ",
+      "group": "design-docs",
+      "paths": ["docs/screen/APP-009-S008.md"],
+      "expected": [{"path": "docs/screen/APP-009-S008.md", "anchor": "## 5. バリデーション & エラーメッセージ"}]
+    },
+    {
+      "id": "H-DOC-05",
+      "q": "エンティティ別 ストア選定 Azure",
+      "group": "design-docs",
+      "paths": ["docs/azure/azure-services-data.md"],
+      "expected": [{"path": "docs/azure/azure-services-data.md", "anchor": "## 1. エンティティ別ストア選定"}]
+    },
+    {
+      "id": "H-DOC-06",
+      "q": "ストア間 整合性 同期戦略",
+      "group": "design-docs",
+      "paths": ["docs/azure/azure-services-data.md"],
+      "expected": [{"path": "docs/azure/azure-services-data.md", "anchor": "## 2. ストア間の整合性/同期戦略"}]
+    },
+    {
+      "id": "H-DOC-07",
+      "q": "Azure 追加提案 サービス別",
+      "group": "design-docs",
+      "paths": ["docs/azure/azure-services-additional.md"],
+      "expected": [{"path": "docs/azure/azure-services-additional.md", "anchor": "## 2. 追加提案（サービス別）"}]
+    },
+    {
+      "id": "H-GUIDE-01",
+      "q": "ワークフロー 必須入力ファイル 一覧",
+      "group": "guides",
+      "paths": ["users-guide/workflow-reference.md"],
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "## ワークフロー必須入力ファイル一覧"}]
+    },
+    {
+      "id": "H-GUIDE-02",
+      "q": "Fan-out 並列実行 ADR-0002",
+      "group": "guides",
+      "paths": ["users-guide/workflow-reference.md"],
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "## Fan-out 並列実行"}]
+    },
+    {
+      "id": "H-GUIDE-03",
+      "q": "SDK ツール制限 環境変数",
+      "group": "guides",
+      "paths": ["users-guide/workflow-reference.md"],
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "## SDK ツール制限"}]
+    },
+    {
+      "id": "H-GUIDE-04",
+      "q": "Firewall 設定 Web UI",
+      "group": "guides",
+      "paths": ["users-guide/web-ui-guide.md"],
+      "expected": [{"path": "users-guide/web-ui-guide.md", "anchor": "## Firewall 設定"}]
+    },
+    {
+      "id": "H-REQ-01",
+      "q": "PR トレーサビリティブロック 記録 CI 検査",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-04**:"}]
+    },
+    {
+      "id": "H-REQ-02",
+      "q": "ルート Step 前提成果物 存在チェック",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-DAG-06**:"}]
+    },
+    {
+      "id": "H-REQ-03",
+      "q": "Workflow 状態ラベル initialized ready running done blocked",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-STATE-01**:"}]
+    },
+    {
+      "id": "H-INV-01",
+      "q": "normalise_relative パス正規化 実装",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-surface-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-surface-inventory.csv", "anchor": "cloud,function,normalise_relative,.github/scripts/hve_scope.py"}]
+    }
+  ]
+}

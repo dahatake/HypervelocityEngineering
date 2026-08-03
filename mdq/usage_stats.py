@@ -1,8 +1,7 @@
-"""mdq.usage_stats — markdown-query Skill 利用ログから 19 指標を集計する。
+"""mdq.usage_stats — markdown-query Skill 利用ログから 17 指標を集計する。
 
 入力: ``.mdq/usage.jsonl`` （``mdq.usage_log`` が追記）と
-``.mdq/index.sqlite`` 索引統計（``hve.gui.mdq_index_service.get_index_stats`` 経由）、
-および ``session-state/runs/<run_id>/state.json``（G1/G4 用）。
+``.mdq/index.sqlite`` 索引統計（``mdq.gui.index_service.get_index_stats`` 経由）。
 
 出力: 17 指標を含む dict（JSON シリアライズ可能）。
 
@@ -16,7 +15,7 @@ v1（15 項目）:
      v1.1 以前は ``A2_aad_web_calls_per_step`` で aad-web 限定だった）
   グループ③ Context 削減: B1 / B2 / B3
   グループ④ 結果品質: C1 / C2 / C3
-  グループ⑤ パフォーマンス / 成果: F1 / G1
+  グループ⑤ パフォーマンス: F1
 
 v1.1 追加（2 項目）:
   - D3: 典型クエリ出現率（template/typical-queries.json 参照）
@@ -25,7 +24,6 @@ v1.1 追加（2 項目）:
       キー名は ``D3_typical_query_rate`` に変更（BREAKING CHANGE）。
       合算値は patterns 定義済み workflow のみを分母にした micro-average。
       ``per_workflow`` 配下に workflow 別の内訳を保持する。
-  - G4: mdq 利用 run と未利用 run の Step あたり平均 retry_count の差
 
 v2.0 追加（2 項目, schema_version=2）:
   - H1_auto_strategy_distribution: ``--strategy auto`` 実行時に
@@ -36,16 +34,9 @@ v2.0 追加（2 項目, schema_version=2）:
 == 重要な制約 ==
 
 - **window_days の適用範囲**: ``aggregate_usage_stats(window_days=N)`` は
-  ``.mdq/usage.jsonl`` のレコード絞り込みにのみ適用される。G1 / G4 が読む
-  ``session-state/runs/`` 配下の state.json は **全期間** を対象に走査する
-  （長期平均値として解釈すること、users-guide も同旨）。
+  ``.mdq/usage.jsonl`` のレコード絞り込みに適用される。
 - **B1 の負値**: 複数 search 間で参照元ファイルの重複排除を行わないため、
   理論上 B1 が負になり得る。集計側で 0 以上にクリップし、note で明示する。
-- **G1 / G4 と run_id の正規化**: ``HVE_RUN_ID`` から記録される run_id と
-  ``runs_dir.iterdir()`` のディレクトリ名は ``_safe_run_id_component`` で
-  sanitize 後の形式に揃える必要がある。
-- **G4 retry_count の意味**: ``StepState.retry_count`` は fork_on_retry 経由の
-  再試行のみを記録する。Step 内部の自動リトライ（runner ループ）は含まれない。
 
 捏造禁止: データが存在しない / 算出不能な指標は ``None`` でなく
 ``{"value": None, "note": "サンプル不足"}`` のように明示する。
@@ -57,7 +48,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from hve import run_journal
+from mdq import usage_log
 
 
 # ロギング期間の既定ウィンドウ
@@ -100,8 +91,8 @@ def _paths_violate_donot_use(paths: Iterable[str]) -> bool:
 
 
 def _check_skill_routing_listed(repo_root: Path) -> bool:
-    """`.github/skills/_routing/SKILL.md` に ``markdown-query`` の文字列があるか。"""
-    p = repo_root / ".github" / "skills" / "_routing" / "SKILL.md"
+    """`.github/skills/_routing/README.md` に ``markdown-query`` の文字列があるか。"""
+    p = repo_root / ".github" / "skills" / "_routing" / "README.md"
     if not p.exists():
         return False
     try:
@@ -370,171 +361,6 @@ def _group_performance(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _step_completion_rate_from_state(state_path: Path) -> Optional[float]:
-    """state.json から Step 完了率を算出する。
-
-    進行中 run の偏りを除去するため、``status`` が ``completed`` /
-    ``failed`` / ``skipped`` の Step のみを母数に取り、completed の割合を
-    返す。``pending`` / ``running`` / ``blocked`` は "やるんだが未完了" と
-    "本当に未着手" が区別できず公平性を損ねるため除外し、評価以上が
-    進んだ Step だけを見る。対象 Step が 1 件も無ければ None。
-    読み込み失敗時も None。
-    """
-    try:
-        import json as _json
-        with state_path.open("r", encoding="utf-8") as f:
-            data = _json.load(f)
-    except (OSError, ValueError):
-        return None
-    steps = data.get("step_states") or {}
-    if not isinstance(steps, dict) or not steps:
-        return None
-    completed = 0
-    finished = 0
-    for _sid, st in steps.items():
-        if not isinstance(st, dict):
-            continue
-        status = str(st.get("status", ""))
-        if status not in ("completed", "failed", "skipped"):
-            continue
-        finished += 1
-        if status == "completed":
-            completed += 1
-    if finished == 0:
-        return None
-    return completed / finished
-
-
-def _group_outcome(repo_root: Path,
-                    records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """G1 / G4 を集計する。
-
-    - G1: mdq 利用 run と未利用 run の Step 完了率差。
-    - G4: mdq 利用 run と未利用 run の Step あたり平均 ``retry_count`` 差。
-          ``StepState.retry_count`` を root とする集計のため
-          ``run_journal`` への新規イベント追加は不要。
-
-    判定した run_id はディレクトリ名と照合されるため、両者を
-    ``RunState._safe_run_id_component`` 相当の sanitize を介した同じ形式に
-    揃えることが必要。
-    """
-    # run_id sanitize 関数を取得（run_state の同名内部関数を参照、
-    # 利用不能ならほぼ同一のロジックをローカルに実装）
-    try:
-        from hve.run_state import _safe_run_id_component as _sanitize  # type: ignore[attr-defined]
-    except Exception:  # pragma: no cover - defensive fallback
-        import re as _re
-        def _sanitize(s: str) -> str:  # type: ignore[no-redef]
-            return _re.sub(r"[^A-Za-z0-9._-]", "_", str(s))
-
-    run_ids_with_mdq: set[str] = set()
-    for r in records:
-        ctx = r.get("context") or {}
-        rid = ctx.get("run_id")
-        if rid:
-            run_ids_with_mdq.add(_sanitize(str(rid)))
-
-    runs_dir = repo_root / "session-state" / "runs"
-    used_rates: List[float] = []
-    unused_rates: List[float] = []
-    used_retry_avgs: List[float] = []
-    unused_retry_avgs: List[float] = []
-    if runs_dir.exists() and runs_dir.is_dir():
-        for d in runs_dir.iterdir():
-            if not d.is_dir():
-                continue
-            sp = d / "state.json"
-            if not sp.exists():
-                continue
-            rate = _step_completion_rate_from_state(sp)
-            retry_avg = _avg_retry_count_from_state(sp)
-            in_mdq = d.name in run_ids_with_mdq
-            if rate is not None:
-                (used_rates if in_mdq else unused_rates).append(rate)
-            if retry_avg is not None:
-                (used_retry_avgs if in_mdq else unused_retry_avgs).append(
-                    retry_avg
-                )
-
-    def _avg(xs: List[float]) -> Optional[float]:
-        return round(sum(xs) / len(xs), 4) if xs else None
-
-    used_avg = _avg(used_rates)
-    unused_avg = _avg(unused_rates)
-    if used_avg is not None and unused_avg is not None:
-        diff = round(used_avg - unused_avg, 4)
-        note = None
-    elif used_avg is not None and unused_avg is None:
-        diff = None
-        note = "mdq 未利用 run の state.json が無いため差分算出不能"
-    elif used_avg is None and unused_avg is not None:
-        diff = None
-        note = "mdq 利用 run の state.json が無いため差分算出不能"
-    else:
-        diff = None
-        note = "state.json が見つからないため算出不能"
-
-    used_retry_avg_v = _avg(used_retry_avgs)
-    unused_retry_avg_v = _avg(unused_retry_avgs)
-    if used_retry_avg_v is not None and unused_retry_avg_v is not None:
-        g4_diff = round(used_retry_avg_v - unused_retry_avg_v, 4)
-        g4_note = None
-    else:
-        g4_diff = None
-        g4_note = "retry_count を持つ state.json が両群に揃わないため算出不能"
-
-    return {
-        "G1_step_completion_rate_diff": {
-            "value": diff,
-            "used_avg": used_avg,
-            "unused_avg": unused_avg,
-            "used_run_count": len(used_rates),
-            "unused_run_count": len(unused_rates),
-            "run_ids_with_mdq_count": len(run_ids_with_mdq),
-            "note": note,
-        },
-        "G4_step_retry_count_diff": {
-            "value": g4_diff,
-            "used_avg": used_retry_avg_v,
-            "unused_avg": unused_retry_avg_v,
-            "used_run_count": len(used_retry_avgs),
-            "unused_run_count": len(unused_retry_avgs),
-            "note": g4_note,
-        },
-    }
-
-
-def _avg_retry_count_from_state(state_path: Path) -> Optional[float]:
-    """state.json から Step あたりの平均 ``retry_count`` を算出する。
-
-    Step が 1 件も無ければ None。``retry_count`` が int でないものはスキップ。
-
-    注: ``StepState.retry_count`` は ``fork_on_retry`` 経由の再試行のみを
-    記録するため、Step 内部の自動リトライ（runner ループ）は含まれない。
-    """
-    try:
-        import json as _json
-        with state_path.open("r", encoding="utf-8") as f:
-            data = _json.load(f)
-    except (OSError, ValueError):
-        return None
-    steps = data.get("step_states") or {}
-    if not isinstance(steps, dict) or not steps:
-        return None
-    total = 0
-    count = 0
-    for _sid, st in steps.items():
-        if not isinstance(st, dict):
-            continue
-        v = st.get("retry_count")
-        if isinstance(v, int) and v >= 0:
-            total += v
-            count += 1
-    if count == 0:
-        return None
-    return total / count
-
-
 # D3 対象ワークフロー（hve/orchestrator.py の _ARCH_FILTER_WORKFLOWS と同じ集合）。
 # 増減があれば双方を同時に更新すること。
 _D3_TARGET_WORKFLOWS: tuple[str, ...] = ("aad-web", "asdw-web", "adfd", "adfdv")
@@ -780,7 +606,7 @@ def _group_index(repo_root: Path, records: List[Dict[str, Any]]) -> Dict[str, An
         if r.get("command") == "index":
             e5_pruned += int((r.get("result") or {}).get("pruned_chunks", 0) or 0)
     try:
-        from hve.gui import mdq_index_service
+        from mdq.gui import index_service as mdq_index_service
         idx = mdq_index_service.get_index_stats(repo_root)
         e1 = {"files": int(idx.get("files", 0)),
               "chunks": int(idx.get("chunks", 0)),
@@ -849,7 +675,7 @@ def aggregate_usage_stats(
     since_iso = since.isoformat(timespec="seconds")
 
     if records is None:
-        records = run_journal.read_mdq_usage_records(
+        records = usage_log.read_records(
             repo_root, since_iso=since_iso
         )
 
@@ -868,7 +694,6 @@ def aggregate_usage_stats(
     result.update(_group_context_reduction(records))
     result.update(_group_quality(records))
     result.update(_group_performance(records))
-    result.update(_group_outcome(repo_root, records))
     result.update(_group_typical_queries(repo_root, records))
     result.update(_group_routing(records))
     return result

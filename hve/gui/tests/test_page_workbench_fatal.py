@@ -164,6 +164,28 @@ class TestFatalQueueStop(unittest.TestCase):
         self.assertIn("致命的", self.page._workflow_status.get("wf1") or "")
 
 
+class TestWorkbenchElapsedFreeze(unittest.TestCase):
+    def setUp(self) -> None:
+        _ensure_app()
+        self.page = WorkbenchPage()
+
+    def test_terminal_queue_freezes_elapsed_for_success_and_error(self) -> None:
+        """最終ジョブが成功・エラーのどちらでも経過時間を固定する。"""
+        for returncode in (0, 1):
+            with self.subTest(returncode=returncode):
+                self.page._args_queue = [MagicMock()]
+                self.page._queue_index = 1
+                self.page._return_codes = [returncode]
+                self.page._progress_widget = MagicMock()
+                captured: list[int] = []
+                self.page.process_finished.connect(captured.append)
+
+                self.page._start_next_in_queue()
+
+                self.page._progress_widget.freeze_elapsed.assert_called_once_with()
+                self.assertEqual(captured[-1], returncode)
+
+
 class TestStartOrchestratorsResetsFatalState(unittest.TestCase):
     def setUp(self) -> None:
         _ensure_app()

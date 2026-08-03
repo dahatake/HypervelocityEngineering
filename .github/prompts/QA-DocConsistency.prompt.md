@@ -1,6 +1,6 @@
 ﻿> docs/ 配下のMarkdownと既存コード・設計文書との整合性を検証し、論理矛盾・欠落・捏造を検出する。形式・リンク確認は補助観点。Self-Improve Phase 4a（ドキュメント整合性）として使用される。
 
-> **WORK**: `/work/QA-DocConsistency/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/QA-DocConsistency/Issue-<識別子>/`
 
 ## 0) モードディスパッチ
 
@@ -52,7 +52,7 @@
 ### フォーク KPI ログ参照（任意・存在する場合のみ）
 Fork-integration (T3.1): `HVE_FORK_ON_RETRY=true` で実行された場合、以下のログを**任意参照**する：
 
-- パス: `work/kpi/fork-kpi-<run_id>.jsonl`（JSON Lines 形式）
+- パス: `work/run/<run-id>/kpi/fork-kpi.jsonl`（JSON Lines 形式）
 - 用途: フォークが発火したステップで生成された **ドキュメントに矛盾や根拠欠落が出ていないか** を補強観点として確認
 - 既存出力（整合性レポート）は変更しない。ログ不在の場合は本セクションをスキップ
 - 機微情報（プロンプト本文・トークン値）は JSONL に含まれない（書き込み側で除外）

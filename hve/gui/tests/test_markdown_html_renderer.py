@@ -12,6 +12,34 @@ def test_basic_markdown_renders_to_html() -> None:
     assert "<strong>bold</strong>" in body
 
 
+def test_markdown_table_renders_to_html_table() -> None:
+    """Markdown のパイプ表が HTML table に変換される。"""
+    r = MarkdownHtmlRenderer()
+    body = r.render_body("| A | B |\n|---|---|\n| 1 | 2 |\n")
+    assert "<table>" in body
+    assert "<thead>" in body
+    assert "<tbody>" in body
+    assert "<th>A</th>" in body
+    assert "<td>1</td>" in body
+    assert "<p>| A | B |" not in body
+
+
+def test_markdown_table_alignment_is_preserved() -> None:
+    """Markdown 表の左寄せ・中央寄せ・右寄せが HTML style に反映される。"""
+    r = MarkdownHtmlRenderer()
+    body = r.render_body(
+        "| Left | Center | Right |\n"
+        "|:---|:---:|---:|\n"
+        "| a | b | c |\n"
+    )
+    assert '<th style="text-align:left">Left</th>' in body
+    assert '<th style="text-align:center">Center</th>' in body
+    assert '<th style="text-align:right">Right</th>' in body
+    assert '<td style="text-align:left">a</td>' in body
+    assert '<td style="text-align:center">b</td>' in body
+    assert '<td style="text-align:right">c</td>' in body
+
+
 def test_mermaid_fence_becomes_div() -> None:
     """```mermaid ... ``` が <div class="mermaid"> に変換される（敵対的レビュー #4）。"""
     r = MarkdownHtmlRenderer()

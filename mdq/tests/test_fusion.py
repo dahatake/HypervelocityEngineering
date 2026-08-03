@@ -7,10 +7,13 @@ without any fastembed/network dependency.
 """
 from __future__ import annotations
 
+import argparse
+import re
 from pathlib import Path
 
 import pytest
 
+from mdq import cli
 from mdq import search as searcher
 from mdq import store
 from mdq import embeddings as emb
@@ -106,3 +109,30 @@ def test_fusion_falls_back_when_provider_unavailable(tmp_path, monkeypatch):
     hits = searcher.search(conn, "alpha topic", fusion_alpha=0.5)
     assert hits
     assert hits[0].chunk_id == "c_a"
+
+
+def _fusion_alpha_action() -> argparse.Action:
+    """The ``--fusion-alpha`` action declared on the ``search`` subcommand."""
+    # argparse exposes no public accessor for a subcommand's actions.
+    subparsers = next(
+        action
+        for action in cli.build_parser()._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    return next(
+        action
+        for action in subparsers.choices["search"]._actions
+        if "--fusion-alpha" in action.option_strings
+    )
+
+
+def test_cli_help_matches_the_default_the_parser_applies() -> None:
+    """help が既定値を名指しする場合、argparse が適用する値と一致させる。"""
+    action = _fusion_alpha_action()
+    claimed = re.findall(r"Default:\s*(\S+?)\.(?:\s|$)", action.help or "")
+
+    assert all(value == str(action.default) for value in claimed), (
+        f"--fusion-alpha help claims {claimed} but argparse applies "
+        f"{action.default!r}, so a search that omits the flag does not blend "
+        "embeddings at all"
+    )

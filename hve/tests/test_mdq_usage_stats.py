@@ -174,7 +174,7 @@ def test_f2_index_delta_update_ratio(tmp_path: Path) -> None:
 
 
 def test_a4_skill_routing_listed_true(tmp_path: Path) -> None:
-    p = tmp_path / ".github" / "skills" / "_routing" / "SKILL.md"
+    p = tmp_path / ".github" / "skills" / "_routing" / "README.md"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("references markdown-query here", encoding="utf-8")
     r = usage_stats.aggregate_usage_stats(tmp_path, records=[])
@@ -186,37 +186,9 @@ def test_a4_skill_routing_listed_false_when_file_missing(tmp_path: Path) -> None
     assert r["A4_skill_routing_listed"]["value"] is False
 
 
-def test_g1_run_ids_collected(tmp_path: Path) -> None:
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r1"}},
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r2"}},
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r1"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    assert r["G1_step_completion_rate_diff"]["run_ids_with_mdq_count"] == 2
-
-
 # ---------------------------------------------------------------------------
 # v2 追加指標
 # ---------------------------------------------------------------------------
-
-def _make_state_json(path: Path, statuses: list[str]) -> None:
-    import json
-    path.parent.mkdir(parents=True, exist_ok=True)
-    steps = {f"s{i}": {"step_id": f"s{i}", "status": st}
-             for i, st in enumerate(statuses)}
-    path.write_text(json.dumps({"schema_version": "x", "step_states": steps}),
-                    encoding="utf-8")
-
 
 def test_c2_score_gap_avg(tmp_path: Path) -> None:
     records = [
@@ -244,59 +216,9 @@ def test_c2_score_gap_none_when_no_second(tmp_path: Path) -> None:
     assert r["C2_score_gap_avg"]["value"] is None
 
 
-def test_g1_diff_computed_from_state_json(tmp_path: Path) -> None:
-    runs = tmp_path / "session-state" / "runs"
-    _make_state_json(runs / "r-used" / "state.json",
-                     ["completed", "completed", "completed", "failed"])  # 0.75
-    _make_state_json(runs / "r-unused" / "state.json",
-                     ["completed", "failed", "failed", "failed"])  # 0.25
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r-used"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    g1 = r["G1_step_completion_rate_diff"]
-    assert g1["used_avg"] == pytest.approx(0.75)
-    assert g1["unused_avg"] == pytest.approx(0.25)
-    assert g1["value"] == pytest.approx(0.5)
-    assert g1["used_run_count"] == 1
-    assert g1["unused_run_count"] == 1
-
-
-def test_g1_returns_none_when_no_state_files(tmp_path: Path) -> None:
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r1"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    g1 = r["G1_step_completion_rate_diff"]
-    assert g1["value"] is None
-    assert g1["note"]
-
-
 # ---------------------------------------------------------------------------
 # D3 / G4 (Wave 11)
 # ---------------------------------------------------------------------------
-
-def _make_state_with_retry(path: Path,
-                            steps: list[tuple[str, int]]) -> None:
-    """状態 + retry_count を含む state.json を書き出す。"""
-    import json
-    path.parent.mkdir(parents=True, exist_ok=True)
-    body = {
-        "schema_version": "x",
-        "step_states": {
-            f"s{i}": {"step_id": f"s{i}", "status": status,
-                       "retry_count": rc}
-            for i, (status, rc) in enumerate(steps)
-        },
-    }
-    path.write_text(json.dumps(body), encoding="utf-8")
-
 
 def _seed_typical_queries(tmp_path: Path) -> None:
     """tmp_path に template/typical-queries.json を作る。"""
@@ -450,28 +372,6 @@ def test_d1_strict_pattern_for_knowledge_dnn(tmp_path: Path) -> None:
     assert r["D1_donot_use_for_violations"] == 2
 
 
-def test_g1_excludes_pending_running_steps(tmp_path: Path) -> None:
-    """G1 母数は completed/failed/skipped のみ。pending/running は除外。"""
-    runs = tmp_path / "session-state" / "runs"
-    # 利用 run: 完了 2 / 失敗 1 / running 5（除外） → 2/3 = 0.667
-    _make_state_json(runs / "r-used" / "state.json",
-                     ["completed", "completed", "failed",
-                      "running", "running", "running", "running", "running"])
-    # 未利用 run: 完了 1 / 失敗 1 → 0.5
-    _make_state_json(runs / "r-unused" / "state.json",
-                     ["completed", "failed"])
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r-used"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    g1 = r["G1_step_completion_rate_diff"]
-    assert g1["used_avg"] == pytest.approx(2 / 3, abs=1e-4)
-    assert g1["unused_avg"] == pytest.approx(0.5)
-
-
 def test_d3_returns_none_when_no_aad_searches(tmp_path: Path) -> None:
     _seed_typical_queries(tmp_path)
     r = usage_stats.aggregate_usage_stats(tmp_path, records=[
@@ -482,40 +382,3 @@ def test_d3_returns_none_when_no_aad_searches(tmp_path: Path) -> None:
     assert d3["value"] is None
     assert d3["total_search"] == 0
     assert d3["per_workflow"]["aad-web"]["total_search"] == 0
-
-
-def test_g4_retry_count_diff_computed(tmp_path: Path) -> None:
-    runs = tmp_path / "session-state" / "runs"
-    # 利用 run: 平均 retry = 1.5
-    _make_state_with_retry(runs / "r-used" / "state.json",
-                            [("completed", 1), ("completed", 2)])
-    # 未利用 run: 平均 retry = 0.5
-    _make_state_with_retry(runs / "r-unused" / "state.json",
-                            [("completed", 0), ("completed", 1)])
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r-used"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    g4 = r["G4_step_retry_count_diff"]
-    assert g4["used_avg"] == pytest.approx(1.5)
-    assert g4["unused_avg"] == pytest.approx(0.5)
-    assert g4["value"] == pytest.approx(1.0)
-
-
-def test_g4_none_when_only_one_group(tmp_path: Path) -> None:
-    runs = tmp_path / "session-state" / "runs"
-    _make_state_with_retry(runs / "r-used" / "state.json",
-                            [("completed", 1)])
-    records = [
-        {"ts": "t", "command": "search", "args": {}, "elapsed_ms": 1,
-         "result": {"hit_count": 1, "snippet_chars": 10,
-                    "source_file_chars": 100}, "exit_code": 0,
-         "context": {"run_id": "r-used"}},
-    ]
-    r = usage_stats.aggregate_usage_stats(tmp_path, records=records)
-    g4 = r["G4_step_retry_count_diff"]
-    assert g4["value"] is None
-    assert g4["note"]

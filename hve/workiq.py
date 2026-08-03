@@ -1387,11 +1387,8 @@ async def probe_workiq_copilot_session(
     # 1. SDK import
     try:
         import importlib
-        copilot_mod = importlib.import_module("copilot")
+        importlib.import_module("copilot")
         copilot_session_mod = importlib.import_module("copilot.session")
-        CopilotClient = copilot_mod.CopilotClient
-        SubprocessConfig = copilot_mod.SubprocessConfig
-        ExternalServerConfig = copilot_mod.ExternalServerConfig
         PermissionHandler = copilot_session_mod.PermissionHandler
         checks.append(WorkIQDiagnosticCheck(
             name="copilot_sdk_import",
@@ -1408,15 +1405,16 @@ async def probe_workiq_copilot_session(
 
     # 2. CopilotClient.start()
     try:
-        if cli_url:
-            sdk_cfg = ExternalServerConfig(url=cli_url)
-        else:
-            sdk_cfg = SubprocessConfig(
-                cli_path=cli_path,
-                github_token=github_token or None,
-                log_level="error",
-            )
-        client = CopilotClient(config=sdk_cfg)
+        try:
+            from .copilot_client_factory import create_copilot_client
+        except ImportError:  # pragma: no cover
+            from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+        client = create_copilot_client(
+            cli_path=cli_path,
+            cli_url=cli_url,
+            github_token=github_token or None,
+            log_level="error",
+        )
         await asyncio.wait_for(client.start(), timeout=timeout)
         checks.append(WorkIQDiagnosticCheck(
             name="copilot_client_start",
@@ -1561,11 +1559,8 @@ async def probe_workiq_copilot_tool_invocation(
 
     try:
         import importlib
-        copilot_mod = importlib.import_module("copilot")
+        importlib.import_module("copilot")
         copilot_session_mod = importlib.import_module("copilot.session")
-        CopilotClient = copilot_mod.CopilotClient
-        SubprocessConfig = copilot_mod.SubprocessConfig
-        ExternalServerConfig = copilot_mod.ExternalServerConfig
         PermissionHandler = copilot_session_mod.PermissionHandler
         checks.append(WorkIQDiagnosticCheck(
             name="copilot_tool_probe_import",
@@ -1581,15 +1576,16 @@ async def probe_workiq_copilot_tool_invocation(
         return checks
 
     try:
-        if cli_url:
-            sdk_cfg = ExternalServerConfig(url=cli_url)
-        else:
-            sdk_cfg = SubprocessConfig(
-                cli_path=cli_path,
-                github_token=github_token or None,
-                log_level="error",
-            )
-        client = CopilotClient(config=sdk_cfg)
+        try:
+            from .copilot_client_factory import create_copilot_client
+        except ImportError:  # pragma: no cover
+            from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+        client = create_copilot_client(
+            cli_path=cli_path,
+            cli_url=cli_url,
+            github_token=github_token or None,
+            log_level="error",
+        )
         await asyncio.wait_for(client.start(), timeout=timeout)
         checks.append(WorkIQDiagnosticCheck(
             name="copilot_tool_probe_client_start",

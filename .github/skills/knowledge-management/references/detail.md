@@ -16,7 +16,7 @@
 ## Non-goals（このスキルの範囲外）
 
 - **qa/ 配下のファイル作成** — Skill `work-artifacts-layout` が担当
-- **ドキュメント内容の品質評価** — Skill `adversarial-review` が担当
+- **ドキュメント内容の通常検証** — Skill `harness-verification-loop` または単回セルフチェックが担当。明示的な敵対的レビューだけ Skill `adversarial-review` を使用
 - **実装・デプロイ・テスト** — 各 Agent / harness Skill が担当
 
 ## ガイド一覧（references/）

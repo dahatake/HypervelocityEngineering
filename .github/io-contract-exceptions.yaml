@@ -11,7 +11,6 @@ static_paths:
   - "users-guide/01-business-requirement.md"
   - "users-guide/08-ai-agent.md"
   - "template/atdd-template.md"
-  - "docs/templates/testspec-vs-teststrategy.md"
   - "data/sample-data.json"
   - "src/data/sample-data.json"
   - ".github/skills/microservice-design-guide/references/microservice-definition.md"
@@ -32,7 +31,6 @@ static_paths:
   # Service / agent wildcard inputs (handled via producer in io-contract;
   # listed here for legacy paths that may still appear in docs/branches).
   - "docs/services/SVC-*.md"
-  - "docs/agent/agent-detail-{agentId}-*.md"
   # Directory-only references (producers output specific files within)
   - "src/agent/"
   - "src/api/"

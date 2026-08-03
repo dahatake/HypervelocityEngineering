@@ -18,46 +18,46 @@ that does not already have `mdq` installed, the launcher scripts
 | --- | --- |
 | `__init__.py` / `__main__.py` | Package entrypoints |
 | `cli.py` | `python -m mdq` argparse entry. `--strategy auto` lives here. |
-| `config.py` | Portable config loader (`mdq.toml` / `.mdq/config.toml` resolution, `GENERIC_DEFAULT_ROOTS`). |
-| `contextualizer.py` | Contextualizer template used by `semantic_paragraph`. |
+| `config.py` | Portable config loader (`mdq.toml` / `.mdq/config.toml` resolution, `GENERIC_DEFAULT_ROOTS`, `[index].tabular` globs). |
 | `embeddings.py` | Embedding provider abstraction (fastembed / null). |
-| `indexer.py` | File walker, chunk dataclass, `parent_chunk_id` assignment, `_subdivide` with `overlap_paragraphs`. |
+| `indexer.py` | File walker, chunk dataclass, `parent_chunk_id` assignment, `_subdivide` with `overlap_paragraphs`. Also tabular (CSV / TSV) row-level indexing (FR-MDQ-02). |
 | `sentence_splitter.py` | Sentence splitter (nltk / regex fallback) for `semantic_paragraph`. |
 | `strategies.py` | Strategy registry + per-strategy scanners. |
 | `strategies_semantic.py` | `semantic_paragraph` implementation (embedding-based subdivision). |
 | `strategies_pageindex.py` | `pageindex` implementation (heading tree + per-node summary). |
+| `strategies_graphrag.py` | `graphrag` strategy adapter (LightRAG; SQLite-independent). |
+| `graphrag_runtime.py` | LightRAG runtime wiring for the `graphrag` strategy. |
 | `search.py` | BM25 / grep / FTS5 search, parent chain (`with_parent_depth`), pageindex `tree_path`, dedup. |
 | `store.py` | SQLite schema (v6) and migrations. |
 | `query_router.py` | **Skill-side auto strategy router** invoked when `--strategy auto`. Pure rule-based, no LLM. |
+| `golden_eval.py` | Golden-query scoring (FR-MDQ-01). Line-range containment judgement shared by `benchmark.py`. |
 | `tokenize.py` | FTS5 tokenizer resolver. |
 | `usage_log.py` | JSONL append-only log. |
 | `usage_stats.py` | 19-metric aggregation (H1/H2 cover routing). |
 | `watcher.py` | watchdog-based realtime updater. |
 
-> When adding a new module upstream, append it to this table during sync.
+> New upstream modules are picked up by the sync scripts automatically; this
+> table is for humans. The machine check is `hve/tests/test_mdq_vendor_sync.py`.
 
 ## Re-syncing (when upgrading from upstream)
 
 Inside the HVE source repository:
 
 ```powershell
-# Windows
-Remove-Item -Recurse -Force tools/skills/markdown_query/vendor/mdq
-Copy-Item   -Recurse -Force -Exclude __pycache__,tests mdq tools/skills/markdown_query/vendor/mdq
-Remove-Item -Recurse -Force tools/skills/markdown_query/vendor/mdq/__pycache__ -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force tools/skills/markdown_query/vendor/mdq/tests       -ErrorAction SilentlyContinue
+pwsh -NoLogo -NoProfile -File tools/skills/markdown_query/sync-vendor.ps1
 ```
 
 ```bash
-# Linux / macOS
-rm -rf  tools/skills/markdown_query/vendor/mdq
-cp -R   mdq tools/skills/markdown_query/vendor/mdq
-rm -rf  tools/skills/markdown_query/vendor/mdq/__pycache__
-rm -rf  tools/skills/markdown_query/vendor/mdq/tests
+bash tools/skills/markdown_query/sync-vendor.sh
 ```
 
-Then commit the changes with a message referencing the upstream commit SHA
-that the vendored snapshot was taken from.
+Both scripts copy `mdq/` and then drop what must not ship: `tests/`,
+`__pycache__/` and `golden-queries.json` (the golden set pins paths and line
+numbers of this repository only).
+
+`vendor/mdq/` is tracked, so commit the result. `hve/tests/test_mdq_vendor_sync.py`
+fails when a distributed file is missing, extra, or byte-different, so a
+forgotten re-sync cannot ship.
 
 ## Do **not** edit files under `vendor/mdq/` directly
 

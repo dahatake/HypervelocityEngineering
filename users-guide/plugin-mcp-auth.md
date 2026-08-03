@@ -12,9 +12,10 @@
 
 ### 1.1 ユーザー影響サマリ
 
-- GUI から「Plugin / MCP Server 認証ダイアログ」を起動する手段は **現状ありません**。
+- GUI から任意 MCP Server の OAuth を自動実行する専用ダイアログは **現状ありません**。
+- GUI には GitHub REST 用の「GitHub CLI でログイン」、Work IQ 用の「Work IQ 認証確認」があります。GitHub Copilot SDK 自体の認証は CLI（`python -m hve login`）で行い、GUI に専用の認証ボタンはありません。ステータスバー / 「HVE 設定」→「基本設定」にある「利用できるモデルの取得」は、認証済みの GitHub Copilot SDK からモデル一覧を取得するのみです。
 - MCP サーバの登録・認証は GitHub Copilot CLI 標準の対話 UI（`/mcp add` / `/login` slash command）で行います。
-- HVE GUI の設定パネルには、現在登録済みの MCP サーバと Plugin の **一覧表示** 機能のみ残っています（実装: [hve/gui/page_options.py](../hve/gui/page_options.py)、薄いラッパ: [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py)）。
+- HVE GUI の設定パネルには、現在登録済みの MCP サーバと Plugin の **一覧表示** と **認証手順表示** が残っています（実装: [hve/gui/page_options.py](../hve/gui/page_options.py)、薄いラッパ: [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py)）。
 
 ### 1.2 実装状況（参考）
 
@@ -120,6 +121,8 @@ GUI フォームから `mcp_config` / `workiq_tenant_id` を入力する経路�
 | CLI 引数 | `--mcp-config <path>` | [hve/__main__.py](../hve/__main__.py)（argparse で受理、`_load_mcp_config()` で消費） |
 | CLI 引数 | `--workiq-tenant-id <id>` | [hve/__main__.py](../hve/__main__.py)（argparse で受理、`cfg.workiq_tenant_id` に代入） |
 | 環境変数 | `WORKIQ_TENANT_ID` | [hve/config.py](../hve/config.py)（`os.environ.get("WORKIQ_TENANT_ID")` で取得） |
+
+`--mcp-config` は、SDK に渡す直接 map 形式と、`.github/.mcp.json` などの `mcpServers` wrapper 形式の両方を受け付けます。
 
 各経路の詳細は §1.3 も併せて参照してください。
 

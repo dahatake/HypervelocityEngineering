@@ -220,6 +220,19 @@ jobs:
                   mode = 'closed'
                   break
 
+          # FR-CLOUD-06: registry と同期していない Cloud reusable workflow は dispatch しない。
+          # auto-app-dev-microservice-web-reusable.yml は hve/workflow_registry.py の
+          # ASDW-WEB Step 体系と非同期（冒頭に OUT-OF-SYNC NOTICE を自己申告）のため、
+          # ASDW-WEB の Cloud 起動を停止し、CLI / GUI 経路が supported であることを明示する。
+          # 他の Cloud workflow の挙動は変更しない。
+          cloud_dispatch_disabled_targets = {'ASDW-WEB'}
+          cloud_dispatch_disabled = ''
+          if target in cloud_dispatch_disabled_targets:
+              if mode != 'closed':
+                  cloud_dispatch_disabled = target
+              target = 'none'
+              mode = 'skip'
+
           out = os.environ['GITHUB_OUTPUT']
           with open(out, 'a', encoding='utf-8') as f:
             f.write(f'target={target}\n')
@@ -235,6 +248,47 @@ jobs:
             f.write(f'agentic_existing_design_diff_only={agentic_existing_design_diff_only}\n')
             f.write(f'foundry_sku_fallback_policy={foundry_sku_fallback_policy}\n')
             f.write(f'runner_type={runner_type}\n')
+            f.write(f'cloud_dispatch_disabled={cloud_dispatch_disabled}\n')
+          PY
+
+      - name: Notify Cloud dispatch stop (FR-CLOUD-06)
+        if: steps.detect.outputs.cloud_dispatch_disabled != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.detect.outputs.issue_number }}
+          DISABLED_TARGET: ${{ steps.detect.outputs.cloud_dispatch_disabled }}
+        run: |
+          python3 <<'PY'
+          import os, subprocess
+
+          issue = os.environ.get('ISSUE_NUMBER', '')
+          target = os.environ.get('DISABLED_TARGET', '')
+          if not issue or not target:
+              raise SystemExit(0)
+
+          marker = f'<!-- cloud-dispatch-disabled: {target} -->'
+          viewed = subprocess.run(
+              ['gh', 'issue', 'view', issue, '--json', 'comments'],
+              capture_output=True, text=True, check=True,
+          ).stdout
+          if marker in viewed:
+              raise SystemExit(0)
+
+          body = '\n'.join([
+              marker,
+              f'## ⛔ {target} の Cloud 起動は停止中です',
+              '',
+              f'`{target}` の Cloud reusable workflow は `hve/workflow_registry.py` の Step 体系と',
+              '同期していないため、HVE Cloud Agent Orchestrator からの起動を停止しています（FR-CLOUD-06）。',
+              '',
+              f'`{target}` は **CLI 経路 / GUI 経路が supported** です。次のいずれかで実行してください。',
+              '',
+              '- CLI: `python -m hve orchestrate --workflow asdw-web ...`',
+              '- GUI: `python -m hve` を起動し、Wizard で `asdw-web` を選択',
+              '',
+              '> この Issue に対して Sub-Issue の自動生成は行われません。',
+          ])
+          subprocess.run(['gh', 'issue', 'comment', issue, '--body', body], check=True)
           PY
 
   aad-web:
@@ -253,24 +307,10 @@ jobs:
       runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
-  asdw-web:
-    needs: detect
-    if: needs.detect.outputs.target == 'ASDW-WEB'
-    uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml
-    with:
-      mode: ${{ needs.detect.outputs.mode }}
-      issue_number: ${{ needs.detect.outputs.issue_number }}
-      event_action: ${{ needs.detect.outputs.event_action }}
-      label_name: ${{ needs.detect.outputs.label_name }}
-      issue_labels: ${{ needs.detect.outputs.issue_labels }}
-      enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}
-      agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}
-      foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}
-      agentic_data_sources_hint: ${{ needs.detect.outputs.agentic_data_sources_hint }}
-      agentic_existing_design_diff_only: ${{ needs.detect.outputs.agentic_existing_design_diff_only }}
-      foundry_sku_fallback_policy: ${{ needs.detect.outputs.foundry_sku_fallback_policy }}
-      runner_type: ${{ needs.detect.outputs.runner_type }}
-    secrets: inherit
+  # FR-CLOUD-06: ASDW-WEB の Cloud 起動ジョブは削除済み。
+  # auto-app-dev-microservice-web-reusable.yml が hve/workflow_registry.py の Step 体系と
+  # 非同期（OUT-OF-SYNC NOTICE を自己申告）のため、dispatcher からは起動しない。
+  # ASDW-WEB は CLI 経路 / GUI 経路が supported。detect ジョブが Issue へ案内コメントを投稿する。
 
   aag:
     needs: detect
@@ -408,6 +448,9 @@ jobs:
               "AAG":      [("AAGD", "AI Agent Dev & Deploy")],
           }
 
+          # FR-CLOUD-06: Cloud 起動を停止した workflow は CLI / GUI 経路を案内する。
+          cloud_dispatch_disabled_targets = {"ASDW-WEB": "asdw-web"}
+
           completed = os.environ.get("COMPLETED_WF", "")
           issue = os.environ.get("ISSUE_NUMBER", "")
           suggestions = chain_map.get(completed, [])
@@ -417,6 +460,13 @@ jobs:
 
           lines = [f"## ✅ {completed} 完了 — 次のワークフロー候補\n"]
           for wf_id, name in suggestions:
+              if wf_id in cloud_dispatch_disabled_targets:
+                  cli_id = cloud_dispatch_disabled_targets[wf_id]
+                  lines.append(
+                      f"- **{name}** (`{wf_id}`): Cloud 起動は停止中です（FR-CLOUD-06）。"
+                      f"CLI (`python -m hve orchestrate --workflow {cli_id} ...`) または GUI (`python -m hve`) から実行してください"
+                  )
+                  continue
               lines.append(f"- **{name}** (`{wf_id}`): Issue Template から `{wf_id}` 対応テンプレートで新しい Issue を作成してください")
           lines.append("\n> ⚠️ 各ワークフローのパラメータ（APP-ID, リソースグループ等）は個別に指定が必要です。")
 

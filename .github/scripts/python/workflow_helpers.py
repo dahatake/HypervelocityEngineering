@@ -79,16 +79,14 @@ def cmd_check_auto_merge(_: list[str]) -> int:
     labels = [l.get("name", "") for l in _as_list(issue.get("labels")) if isinstance(l, dict)]
     body = issue.get("body") or ""
     section = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=\n###|\Z)", body, flags=re.DOTALL)
+    section_text = section.group(1) if section else ""
     enabled = (
         "auto-approve-ready" in labels
         or bool(re.search(r"<!--\s*auto-merge:\s*true\s*-->", body))
-        or bool(
-            section
-            and re.search(
-                r"-\s*\[[xX]\]\s*PR の自動 Approve & Auto-merge を有効にする",
-                section.group(1),
-            )
-        )
+        # 旧 checkboxes 形式（後方互換）
+        or bool(re.search(r"-\s*\[[xX]\]\s*PR の自動 Approve & Auto-merge を有効にする", section_text))
+        # 新 dropdown 形式: 「有効にする」が行として選択されている（ラベル内テキストと区別するため行頭/末尾アンカー使用）
+        or bool(re.search(r"^\s*有効にする\s*$", section_text, flags=re.MULTILINE))
     )
     print("true" if enabled else "false")
     return 0

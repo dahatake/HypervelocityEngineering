@@ -15,11 +15,15 @@ from split_fork import SubIssueDef, SubIssuesParseError, compute_waves  # type: 
 class TestOrchestratorContext(unittest.TestCase):
     def test_defaults(self):
         ctx = OrchestratorContext()
-        self.assertTrue(ctx.split_fork_enabled)
+        self.assertFalse(ctx.split_fork_enabled)
         self.assertEqual(ctx.split_fork_depth, 0)
         self.assertEqual(ctx.split_fork_max_depth, 2)
         self.assertGreaterEqual(ctx.max_parallel_subtasks, 1)
         self.assertFalse(ctx.continue_on_error)
+
+    def test_split_fork_can_be_explicitly_enabled(self):
+        ctx = OrchestratorContext(split_fork_enabled=True)
+        self.assertTrue(ctx.split_fork_enabled)
 
     def test_continue_on_error_can_be_enabled(self):
         ctx = OrchestratorContext(continue_on_error=True)

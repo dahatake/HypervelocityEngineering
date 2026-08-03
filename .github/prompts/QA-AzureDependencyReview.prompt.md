@@ -1,6 +1,6 @@
 ﻿> サービスカタログ準拠で Azure 依存（参照・設定・IaC）を証跡付きで点検し、必要なら最小差分で修正する
 
-> **WORK**: `/work/QA-AzureDependencyReview/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/QA-AzureDependencyReview/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -23,7 +23,14 @@
 - `harness-verification-loop`: Azure 依存検証ステップ
 - `harness-safety-guard`: Azure CLI による破壊的変更を実行前に検出
 - `app-scope-resolution`: 対象 APP-ID 単位の Azure 依存を `docs/catalog/app-catalog.md` から特定
-- `work-artifacts-layout`: 監査結果を `work/QA-AzureDependencyReview/Issue-<識別子>/` に保存
+- `work-artifacts-layout`: 監査結果を `work/run/<run-id>/QA-AzureDependencyReview/Issue-<識別子>/` に保存
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+
 ## スコープ（このエージェントの専門）
 - **サービスカタログ（docs/usecase/<usecase>/service-catalog.md）を一次情報**として、コード/設定/IaC/CI が Azure リソースを **正しく参照**しているかを点検する。
 - 目的は「**依存関係の整合性レビュー + 証跡（evidence）付きレポート**」。
@@ -121,15 +128,19 @@
 
 ※最終出力は **レポートファイルの内容のみ**（途中の草稿・内部メモは出さない）。
 
-## 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 最終品質レビュー（単回インライン・セルフチェック）
 
-### 3つの異なる観点（Azure 依存関係レビューの場合）
-- **1回目：レビュー完全性・妥当性**：service-catalog に記載されたすべての Azure 依存が漏らさず抽出されているか、Expected vs Actual の照合が正確か、Severity の付与（Blocker/High/Medium/Low）が正当か、Evidence（参照元の具体的パス/行番号/ドキュメント見出し）は十分か、秘密値を含めず参照情報のみが記録されているか
-- **2回目：ユーザー/利用者視点**：レポートが実装チーム・運用チーム・セキュリティチームにわかりやすいか、Findings テーブルは検索・フィルタ可能か、修正内容は理解可能で実行可能か、リスク評価は妥当か、次アクション/推奨は明確か
-- **3回目：保守性・安全性・再現性**：秘密情報（接続文字列・キー・シークレット値）が混入していないか、推測や根拠なき判断が入っていないか、修正が最小差分で影響範囲が明確か、検証方法は再現可能か、Azure 実環境への非破壊操作に限定されているか、将来の依存追加時の更新方法は明確か
+### 1) セルフチェック契約
 
-### 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+### 2) ドメイン固有観点
+- **レビュー完全性・妥当性**：service-catalog に記載されたすべての Azure 依存が漏らさず抽出されているか、Expected vs Actual の照合が正確か、Severity の付与（Blocker/High/Medium/Low）が正当か、Evidence（参照元の具体的パス/行番号/ドキュメント見出し）は十分か、秘密値を含めず参照情報のみが記録されているか
+- **ユーザー/利用者視点**：レポートが実装チーム・運用チーム・セキュリティチームにわかりやすいか、Findings テーブルは検索・フィルタ可能か、修正内容は理解可能で実行可能か、リスク評価は妥当か、次アクション/推奨は明確か
+- **保守性・安全性・再現性**：秘密情報（接続文字列・キー・シークレット値）が混入していないか、推測や根拠なき判断が入っていないか、修正が最小差分で影響範囲が明確か、検証方法は再現可能か、Azure 実環境への非破壊操作に限定されているか、将来の依存追加時の更新方法は明確か
+
+### 3) 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

@@ -19,7 +19,7 @@
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
 - `input-file-validation` — 必読ファイル（事業要件入力）の存在確認と欠損時 TBD 処理
-- `work-artifacts-layout` — `work/Arch-ARD-BusinessAnalysis-Targeted/Issue-<識別子>/` 配下の成果物構造に準拠
+- `work-artifacts-layout` — `work/run/<run-id>/Arch-ARD-BusinessAnalysis-Targeted/Issue-<識別子>/` 配下の成果物構造に準拠
 - `task-questionnaire` — 対象事業・調査範囲が不明な場合の重要度付き質問票作成
 - `knowledge-lookup` — 既存ドメイン知識・市場前提の参照
 - `output/large-output-chunking` — 経営層向け事業分析レポート（数千行規模）の分割出力
@@ -56,7 +56,7 @@
 > **スコープ決定 (2026-05)**: 本セクションは 約 320 行と大きいが、`users-guide/` への外部化は実施しない。理由：
 > ・ LLM 実行時に追加のファイル読み込みステップが生じ、トークン量が増える可能性がある。
 > ・ 本文は出力レポートの **構造仕様（章立て・必須項目）**であり、Agent のコア責務。外部化は SoT の二重化を招く。
-> ・ 詳細の決定経緯は `work/Issue-orchestration-refactor/phase-4/decision-rationale.md` 参照。
+> ・ 詳細の決定経緯は旧 work スナップショット由来のため、実行時には参照しない。
 
 ```text
 # 役割

@@ -20,7 +20,7 @@ metadata:
 ## Non-goals
 
 - **分割軸の設計判断** — Agent が決定する。本スキルは分割の実行手順と閾値のみを提供する
-- **ファイル内容の品質評価** — Skill `adversarial-review` が担当
+- **ファイル内容の通常検証** — Skill `harness-verification-loop` または単回セルフチェックが担当。明示的な敵対的レビューだけ Skill `adversarial-review` を使用
 - **ファイル配置パスの決定** — Skill `work-artifacts-layout` が定義する
 
 ## §0 分割閾値（copilot-instructions.md §0 準拠）
@@ -58,5 +58,6 @@ metadata:
 | Skill | 関係 | 説明 |
 |-------|------|------|
 | `work-artifacts-layout` | 前提 | artifacts/ ディレクトリ構造の定義元 |
-| `adversarial-review` | 後続 | 分割後の各 part の品質検証 |
+| `harness-verification-loop` | 後続 | 分割後の各 part の通常検証 |
+| `adversarial-review` | 条件付き | 明示的な敵対的レビュー時のみ使用 |
 | `harness-error-recovery` | 関連 | 書き込み失敗（E-03）時のリトライルールと連携 |

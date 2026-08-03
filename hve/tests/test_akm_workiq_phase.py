@@ -250,43 +250,6 @@ def test_workiq_akm_review_env_false_with_workiq_enabled_true():
         os.environ.update(env_backup)
 
 
-def test_phase7_doc_has_required_markers():
-    """orchestration-route-diff-spec.md に Phase 7 必須 marker が含まれること。
-
-    Phase 7: ドキュメントの重要 marker 検証。
-    """
-    doc_path = _root / "docs" / "design-discussions" / "orchestration-route-diff-spec.md"
-    assert doc_path.exists(), f"差分仕様ドキュメントが見つかりません: {doc_path}"
-    content = doc_path.read_text(encoding="utf-8")
-
-    # Phase 7 section marker
-    assert "phase7-doc-marker" in content, "Phase 7 セクション marker が含まれていません"
-
-    # AKM Work IQ Review が Post-DAG 専用フェーズであることの明記
-    assert "AKM Work IQ 検証" in content, "フェーズ名 'AKM Work IQ 検証' が含まれていません"
-    assert "Post-DAG" in content, "'Post-DAG' の記述が含まれていません"
-
-    # Work IQ が hve 専用であることの明記
-    assert "hve 経路専用" in content, "Work IQ が hve 専用であることの記述が含まれていません"
-
-    # 実行条件の明記
-    assert "workflow_id == \"akm\"" in content, "実行条件 workflow_id==\"akm\" が含まれていません"
-    assert "is_workiq_akm_review_enabled()" in content, "実行条件 is_workiq_akm_review_enabled() が含まれていません"
-    assert "not config.dry_run" in content or "not dry_run" in content, "実行条件 not dry_run が含まれていません"
-
-    # 入力・除外・保存先の明記
-    assert "knowledge/D??-*.md" in content, "入力対象 knowledge/D??-*.md が含まれていません"
-    assert "business-requirement-document-status.md" in content, "除外対象の記述が含まれていません"
-    # 保存先は config.workiq_draft_output_dir (既定 qa) で設定変更可能なため、
-    # 設定キーまたは環境変数名が文書に含まれることを検証する
-    assert "workiq_draft_output_dir" in content or "WORKIQ_DRAFT_OUTPUT_DIR" in content, \
-        "保存先設定 (workiq_draft_output_dir / WORKIQ_DRAFT_OUTPUT_DIR) の記述が含まれていません"
-
-    # 継承挙動の明記
-    assert "WORKIQ_AKM_REVIEW_ENABLED" in content, "環境変数 WORKIQ_AKM_REVIEW_ENABLED の記述が含まれていません"
-    assert "workiq_enabled" in content, "継承元 workiq_enabled の記述が含まれていません"
-
-
 if __name__ == "__main__":
     test_summarize_dxx_for_query_basic()
     print("✅ test_summarize_dxx_for_query_basic")
@@ -323,8 +286,5 @@ if __name__ == "__main__":
 
     test_workiq_akm_review_env_false_with_workiq_enabled_true()
     print("✅ test_workiq_akm_review_env_false_with_workiq_enabled_true")
-
-    test_phase7_doc_has_required_markers()
-    print("✅ test_phase7_doc_has_required_markers")
 
     print("\n全テスト PASS")

@@ -71,7 +71,7 @@ HVE は **GitHub Copilot CLI** を実行エンジンとして、**Workflow（DAG
 |---|---|---|---|---|
 | **Cloud Agent** | GitHub Issue Template（ラベル付き Issue 作成） | GitHub Actions ランナー | bash + `assign-copilot.sh` で Sub-Issue を起こし、各 Sub-Issue を **GitHub Copilot Coding Agent** に委譲 | Sub-Issue / PR / ラベル遷移 |
 | **CLI** | `python -m hve orchestrate ...` | ユーザー端末（ローカルプロセス） | `hve/dag_executor.py` の `DAGExecutor` が `asyncio.Semaphore` で並列実行、各ステップは `StepRunner` 経由で `copilot` SDK を呼ぶ | Rich Live Workbench（TUI） |
-| **GUI** | `python -m hve`（既定）/ `python -m hve gui` | ユーザー端末（PySide6 プロセス + 子プロセス） | GUI から `python -m hve orchestrate ...` を **子プロセス** として起動。実行本体は CLI と完全同一 | PySide6 3-step Wizard + 埋め込み Workbench Pane |
+| **GUI** | `python -m hve`（既定）/ `python -m hve gui` | ユーザー端末（PySide6 プロセス + 子プロセス） | GUI から `python -m hve orchestrate ...` を **子プロセス** として起動。実行本体は CLI と完全同一 | PySide6 2-step Wizard + 埋め込み Workbench Pane |
 
 ### 2.2 共有実行エンジン（ゾーン A）
 
@@ -86,12 +86,16 @@ HVE は **GitHub Copilot CLI** を実行エンジンとして、**Workflow（DAG
 | `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体（11 ワークフロー）。 |
 | `hve/prompt_loader.py` | `.github/prompts/*.prompt.md` を読み込み、Agent の Prompt 本文を提供する（旧 `hve/agent_loader.py` の後継、Phase 2 で SDK への custom_agents 伝搬は廃止）。 |
 | `hve/skill_resolver.py` | `.github/skills/*/SKILL.md` の frontmatter から候補抽出（`skill_manifest.json` を活用）。 |
-| `hve/run_state.py` / `run_lock.py` | resume 用の状態永続化と排他制御。 |
+| `hve/run_state.py` | SDK セッション ID の決定論的生成（`make_session_id`）。fork-on-retry のフォーク用 ID 再構成に使用。 |
 | `hve/fork_kpi_logger.py` | Fork-on-Retry の KPI を `work/kpi/fork-kpi-<run_id>.jsonl` に出力。 |
 
 ### 2.3 Cloud だけが異なる点
 
 Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable workflow に展開** する点が CLI / GUI と本質的に異なる。`python -m hve` の補助呼び出し（`hve.app_arch_filter`, `hve.artifact_validation`, `hve.qa_merger` 等）は使うが、`DAGExecutor` を**直接は使わない**。代わりに各ステップを Sub-Issue として切り出し、ラベル遷移（`qa-to-review`, `review-to-approve`, `auto-approve-and-merge` 等）でフェーズ駆動する。詳細は §3。
+
+> **Deploy 検証に関する注意**: CLI / GUI 経路では `enable_auto_merge` 有効時に PR merge 後の check-run 状態を確認するが、Cloud Agent Orchestrator 経路は Sub-Issue / PR / ラベル遷移で駆動されるため、同じ `DAGExecutor` 内の post-merge check-run 待機は実行されない。Cloud 経路で Deploy step の妥当性を確認する場合は、各 Deploy Agent の `ac-verification.md`、PR body の検証マーカー、`auto-approve-and-merge.yml` の check-run / Deploy AC gate、および Sub-Issue の `*:blocked` ラベル有無を確認する。
+>
+> **既知制約**: `auto-app-dev-microservice-web-reusable.yml` はファイル先頭に `OUT-OF-SYNC NOTICE` を持ち、`hve/workflow_registry.py` の ASDW-WEB 現行 step 番号体系と同期していない。このため **ASDW-WEB の Cloud 起動は `auto-orchestrator-dispatcher.yml` から停止済み**（FR-CLOUD-06）で、ASDW-WEB は **CLI 経路 / GUI 経路が supported** である。`auto-app-dev-microservice-web` ラベル付き Issue を作成しても reusable workflow は起動せず、dispatcher が CLI / GUI への誘導コメントを投稿する。Cloud reusable workflow の step 体系移行は別タスクとして扱う。他の Cloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD / ADOC）の挙動は変更されていない。
 
 ---
 
@@ -103,7 +107,7 @@ Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable work
 
 1. **Issue 作成**: ユーザーが `.github/ISSUE_TEMPLATE/*.yml` から Issue を起こす。フォーム送信時に対応するワークフローラベル（例: `auto-app-selection`, `auto-app-detail-design-web`）が自動付与される。
 2. **Dispatcher 起動**: `.github/workflows/auto-orchestrator-dispatcher.yml` が `on: issues [opened, labeled, closed]` で発火。ラベルから `target` を判定し、対応する **reusable workflow** を `uses:` で呼び出す。
-3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD ほか）が実行される。共通処理として:
+3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD ほか。ASDW-WEB は FR-CLOUD-06 により Cloud 起動停止中）が実行される。共通処理として:
    - `env: COPILOT_PAT` を設定（Coding Agent アサインに必要な PAT）。
    - `.github/scripts/bash/lib/assign-copilot.sh` を source して `assign_copilot` 関数を読み込む。
    - ワークフローごとに定義された **Step 群** を順次処理し、各ステップで以下を実施：
@@ -160,7 +164,7 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 1. `workflow_registry.StepDef` から実行情報を取得（custom_agent, output_paths, depends_on 等）
 2. `prompt_loader.load(.github/prompts/<custom_agent>.prompt.md)` で Agent の Prompt 本文を読み込み（旧 `agent_loader.load(...)` は Phase 2 で廃止）
 3. `skill_resolver` で関連 Skill 候補を抽出（マニフェスト経由）
-4. `template_engine` / `prompt_templates` でプロンプトを組み立て
+4. `template_engine` と `prompts` の PROMPT 定数でプロンプトを組み立て
 5. `from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig` および `from copilot.session import PermissionHandler`（`hve/runner.py` 2336 行付近）
 6. `CopilotClient(SubprocessConfig(...))` または `CopilotClient(ExternalServerConfig(...))` を生成
 7. `session = await client.create_session(...)` で Copilot セッション開始
@@ -220,19 +224,16 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 | G2 | 実行は別プロセス | GUI から `python -m hve orchestrate ...` を `subprocess.Popen` で fork。Python API レベルで `hve.orchestrator` を直接呼ばない。 |
 | G3 | オプション網羅 | `orchestrate` が受け付ける **80 以上のオプション** を全てカテゴリ分けして GUI から指定可能にする。 |
 
-### 5.2 3 ステップ Wizard
+### 5.2 2 ステップ Wizard
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ HVE GUI Orchestrator — Session #1                       _□× │
 ├─────────────────────────────────────────────────────────────┤
-│ ＜ヘッダー：ステップ進捗バー＞                              │
-│ ① ワークフロー選択  →  ② オプション選択  →  ③ 実行（Workbench）│
-├─────────────────────────────────────────────────────────────┤
 │ ＜メイン：QStackedWidget（現在のステップに応じて切替）＞    │
-│  Step 1: ワークフロー一覧 (RadioButton + 説明)              │
-│  Step 2: カテゴリ別オプションフォーム (アコーディオン)      │
-│  Step 3: Workbench (ログ + ユーザーアクション)              │
+│  Step 1: ワークフロー一覧 + オプション設定                  │
+│           （RadioButton + 説明 + アコーディオン）           │
+│  Step 2: Workbench (ログ + ユーザーアクション)              │
 ├─────────────────────────────────────────────────────────────┤
 │ [戻る]                                       [次へ] / [実行] │
 └─────────────────────────────────────────────────────────────┘
@@ -244,23 +245,21 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 QMainWindow (MainWindow)
 └── QWidget (central)
     └── QVBoxLayout
-        ├── HeaderBar (QWidget) ··············· ステップ進捗
         ├── QStackedWidget (mainStack)
-        │   ├── WorkflowSelectPage (Step 1)
-        │   ├── OptionsPage (Step 2)
+        │   ├── WorkflowSelectPage (Step 1: 左ペイン=ワークフロー選択 / 右ペイン=OptionsPage)
         │   │   └── ARD 選択時は C14 セクションに添付 D&D ウィジェットを動的追加
-        │   └── WorkbenchPage (Step 3)
+        │   └── WorkbenchPage (Step 2: 実行)
         └── NavigationBar (QWidget) ············ [戻る] / [次へ] / [実行] / [停止]
 ```
 
 ### 5.3 Step 1: ワークフロー選択
 
 - `hve.workflow_registry.list_workflows()` から `WorkflowDef` を動的取得。
-- ラジオボタンで 1 つ選択 → `ard` の場合は Step 2 (ARD) に、それ以外は Step 2 (汎用) に遷移。
+- ラジオボタンで選択 → 右ペインのオプションが `ard` の場合は ARD 用、それ以外は汎用に切り替わる（同一画面・Step 1 の右ペイン）。
 - 説明文は `_WORKFLOW_DESCRIPTIONS` 辞書を `hve/gui/page_workflow_select.py` 内に定義（`hve/__main__.py` の `--workflow` add_argument の help テキストを参照）。
 - 表示名は `WorkflowDef.name` を正とする（help テキストの表記とは異なる場合あり）。
 
-### 5.4 Step 2: オプション選択（16 カテゴリ）
+### 5.4 Step 1（右ペイン）: オプション選択（16 カテゴリ）
 
 `orchestrate` のオプション群を **16 カテゴリ** にアコーディオン分類する。カテゴリの根拠は `hve/__main__.py` の `add_argument(...)` 呼び出しに付随するコメントセクション。
 
@@ -290,7 +289,7 @@ QMainWindow (MainWindow)
 - `--max-parallel` / `--timeout` は QSpinBox / QDoubleSpinBox。
 - `--workiq-akm-review`, `--workiq-akm-ingest`, `--banner`, `--force-refresh` は `argparse.BooleanOptionalAction` で **ON / OFF / 未指定の 3 状態** → `QComboBox`（"継承（未指定）" / "明示 ON" / "明示 OFF"）で表現。
 
-### 5.5 Step 2 (ARD): 添付ファイル D&D 取り込み
+### 5.5 Step 1（ARD オプション）: 添付ファイル D&D 取り込み
 
 CLI の `--attached-docs` は既存ファイルパスのカンマ区切り指定（`hve/__main__.py` の `--attached-docs` add_argument 参照）。GUI ではユーザーが任意形式のファイルを D&D で取り込み、自動 Markdown 変換 → `docs/attached/` 配置 → `--attached-docs` 引数の自動生成までを行う。
 
@@ -326,13 +325,13 @@ python -m hve orchestrate --workflow ard \
 | 変換ライブラリ未インストール | ダイアログで「`hve/setup-hve.ps1` または `hve/setup-hve.sh` をオプション無しで実行してください」表示。該当ファイルをスキップ。 |
 | ファイル読み取り失敗 | エラーダイアログ + リスト上で赤マーク表示。続行可能。 |
 | 100MB 超ファイル | 警告「変換に時間がかかる可能性があります。続行しますか?」 |
-| `docs/` 書き込み失敗 | エラー表示 → Step 3 への遷移をブロック。 |
+| `docs/` 書き込み失敗 | エラー表示 → Step 2 (Workbench) への遷移をブロック。 |
 
-### 5.6 Step 3: Workbench（実行）
+### 5.6 Step 2: Workbench（実行）
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Step 3: 実行 (ard, run_id=auto)                              │
+┌──────────────────────────────────────────────┐
+│ Step 2: 実行 (ard, run_id=auto)                              │
 │ 実行コマンド: python -m hve orchestrate --workflow ard ... [📋]│
 │ ┌─ ログ出力 ──────────────────────────────────── [📋] ──┐    │
 │ │ [2026-05-14 10:00:00] Step 1 started...               │    │
@@ -407,12 +406,12 @@ class AttachedFile:
 ### 5.10 状態遷移
 
 ```
-[INIT] → [STEP1_WORKFLOW] → [STEP2_OPTIONS] → [STEP3_RUNNING] → [STEP3_DONE]
-            ↑                    │
-            └──── (戻る) ────────┘
+[INIT] → [STEP1: WORKFLOW + OPTIONS] → [STEP2_RUNNING] → [STEP2_DONE]
+              ↑                              │
+              └────── (戻る / 実行中は不可) ──┘
 ```
 
-Step 3 移行後は戻り不可。新規セッション or ウィンドウクローズで終了。
+Step 2（Workbench）の実行中は戻り不可。新規セッション or ウィンドウクローズで終了。
 
 ### 5.11 GUI 既知の制約
 
@@ -424,7 +423,7 @@ Step 3 移行後は戻り不可。新規セッション or ウィンドウクロ
 | L4 | Windows OneDrive ロックファイル | D&D 時にロック中ファイルは読めない可能性あり。エラーハンドリングでメッセージ表示。 |
 | L5 | Windows `Popen.terminate()` はハードキル相当 | graceful にしたい場合は `creationflags=CREATE_NEW_PROCESS_GROUP` + `CTRL_BREAK_EVENT` を要検討。 |
 | L6 | `full-pipeline`（メタワークフロー）の表示 | `_META_REGISTRY`（`workflow_registry.py` 内に定義）に格納されており `list_workflows()` は返さない。表示要否は未確定。 |
-| L7 | 国際化（i18n）・アクセシビリティ | 本設計は日本語 UI のみ。スクリーンリーダー対応は `--screen-reader` フラグのみ。 |
+| L7 | アクセシビリティ | 国際化（i18n）は日本語 / English に対応（`hve/gui/i18n/`、`QTranslator`）。アクセシビリティはスクリーンリーダー対応が `--screen-reader` フラグのみで限定的。 |
 
 ### 5.12 GUI ファイル構成
 
@@ -434,14 +433,15 @@ Step 3 移行後は戻り不可。新規セッション or ウィンドウクロ
 | `hve/gui/main_window.py` | `MainWindow`（QStackedWidget 単一ウィンドウ） |
 | `hve/gui/header_bar.py` | ステップ進捗バー |
 | `hve/gui/page_workflow_select.py` | Step 1 ページ |
-| `hve/gui/page_options.py` | Step 2 ページ（共通カテゴリ） |
-| `hve/gui/page_options_ard.py` | Step 2 ページ（ARD 拡張、D&D） |
-| `hve/gui/page_workbench.py` | Step 3 ページ（既存 `WorkbenchWindow` を QWidget 化） |
+| `hve/gui/page_options.py` | Step 1 右ペイン（共通オプション） |
+| `hve/gui/page_options_ard.py` | Step 1 右ペイン（ARD 拡張、D&D） |
+| `hve/gui/page_workbench.py` | Step 2 ページ（既存 `WorkbenchWindow` を QWidget 化） |
 | `hve/gui/state_bridge.py` | `SubprocessReader` + `launch_orchestrator()`（`--workbench off` 自動注入） |
 | `hve/gui/orchestrate_args.py` | `OrchestrateArgs` dataclass |
 | `hve/gui/doc_convert.py` | ファイル変換ユーティリティ（markitdown 一本化） |
 | `hve/gui/copy_button.py` | 共通コピーアイコンウィジェット |
-| `hve/gui/auth_providers/` | 認証マニフェスト + PTY ハンドラ（§8） |
+| `hve/gui/gh_login_dialog.py` / `hve/gui/gh_cli.py` | GitHub CLI ログインと `GH_TOKEN` セッション橋渡し |
+| `hve/gui/page_workiq.py` | Work IQ 設定ページ（認証確認導線を含む） |
 | `hve/gui/app.py` | 複数ウィンドウ管理 |
 
 ### 5.13 orchestrate オプション コード位置
@@ -513,7 +513,7 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 | ゾーン | 名称 | 場所 | 責務 |
 |---|---|---|---|
-| **A** | HVE 独自 Python 制御コード | `hve/` 配下 | DAG 構築・実行、Workflow/Agent ローダ、GUI 制御、認証 UI、KPI、Resume |
+| **A** | HVE 独自 Python 制御コード | `hve/` 配下 | DAG 構築・実行、Workflow/Agent ローダ、GUI 制御、認証 UI、KPI |
 | **B** | GitHub Copilot CLI SDK | PyPI: `github-copilot-sdk` | `CopilotClient` / `CopilotSession` / `PermissionHandler` の Python API |
 | **C** | GitHub Copilot CLI 管理リソース | `copilot` バイナリ + OS 認証ストア | MCP Server / Plugin / Skill / モデル選択 / 認証情報 |
 | **D** | HVE 管理: Prompt / Workflow / Skill | `.github/prompts/`, `.github/skills/`, `hve/workflow_registry.py` | Prompt 定義、Workflow DAG 定義、Skill リファレンス |
@@ -567,39 +567,30 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 `copilot login` および `copilot mcp login <name>` の実体は **GitHub Copilot CLI** 側にあり、OAuth / Device Code Flow 等の認証フロー、トークンの暗号化保管・更新を全て担当する。HVE はこれら CLI コマンドを起動し、**完了判定のみ** を行う。
 
-### 8.2 GUI 認証パネルの仕組み
+### 8.2 GUI 認証導線の仕組み
 
-GUI には MCP Server / Plugin 単位の認証ボタンが用意される。実装は `hve/gui/auth_providers/`：
+現行 GUI は、任意 MCP Server の OAuth を独自に自動実行する認証パネルを持たない。認証の正本は GitHub Copilot CLI / GitHub CLI / Work IQ CLI 側にあり、GUI は以下の最小導線を提供する。
 
-1. **マニフェスト宣言**: `hve/gui/auth_providers/manifests/*.yml` に MCP/Plugin 単位の認証ハンドラを宣言。
-2. **PTY 統合**: `pty`（POSIX）/ `pywinpty`（Windows）で `copilot mcp login <name>` を埋込起動。
-3. **success_regex で完了判定**: 出力ストリームを正規表現で監視し、成功パターンマッチで完了通知。
-4. **資格情報は HVE に渡さない**: トークン本体は Copilot CLI が OS 認証ストアに保存。HVE は「成功した」という事実のみ受け取る。
+1. **GitHub Copilot**: CLI (`python -m hve login`) から `copilot login` を実行して認証する。GUI に専用の認証ボタンはない。認証後は GUI ステータスバー（または「HVE 設定」→「基本設定」）の「利用できるモデルの取得」でモデル一覧を取得する。
+2. **GitHub REST / Issue / PR**: 設定画面の「GitHub CLI でログイン」から `gh auth login` を埋め込み端末で起動し、`gh auth token` の結果を当該 GUI セッションの `GH_TOKEN` に橋渡しする。
+3. **Work IQ**: Work IQ 設定の「Work IQ 認証確認」から `@microsoft/workiq` の EULA / Microsoft 365 認証確認を実行する。
+4. **任意 MCP Server**: `copilot mcp list --json` の一覧表示と「認証手順...」の案内のみを行う。登録・OAuth 再認証は Copilot CLI 側で行う。
 
-### 8.3 マニフェストスキーマ
+資格情報の本体は各 CLI / OS 認証ストア側に保存され、HVE は永続保存しない。
 
-```yaml
-id: github                          # ハンドラ識別子
-match:
-  mcp_server_name_regex: "^github$" # 対応する MCP Server 名のパターン
-pre_auth_commands:                  # 認証前の準備コマンド（任意）
-  - "copilot mcp ensure github"
-main_command: "copilot mcp login github"
-success_regex: "(?i)success|logged in|complete"
-notes_md: |
-  GitHub MCP Server の認証手順。
-  Device Code が表示されたら表示の URL を開いて入力してください。
-```
+### 8.3 廃止済み GUI MCP 認証 manifest
+
+旧版の `hve/gui/auth_providers/` manifest 方式は現行リポジトリには存在しない。MCP Server の登録・再認証は GitHub Copilot CLI の対話 UI に委ねる。
 
 ### 8.4 検出ソース（MCP Server / Plugin 一覧の取得）
 
 | リソース | 取得コマンド | 用途 |
 |---|---|---|
-| MCP Server 一覧 | `copilot mcp list --json` | GUI 認証パネルの自動生成 |
-| Plugin 一覧 | `copilot plugin list` | 同上 |
+| MCP Server 一覧 | `copilot mcp list --json` | GUI の登録済み MCP Server 一覧表示 |
+| Plugin 一覧 | `copilot plugin list` | GUI の Plugin 一覧表示 |
 | モデル一覧 | `copilot model list --json` | Step 2 C1 のモデルドロップダウン（`hve/models_api.py` 経由、`hve/models_cache.py` でキャッシュ） |
 
-> HVE 側のキャッシュ更新は GUI の「利用できるモデルの取得」ボタンで明示的にトリガできる。
+> HVE 側のキャッシュ更新は、GUI の「利用できるモデルの取得」ボタン（ステータスバー、または「HVE 設定」→「基本設定」の一番上にある同名ボタン。機能は同一）で明示的にトリガーできる。ステータスバーの「使用するモデル」/「Effort」はその場で選択変更可能なコンボであり、変更は即座に `settings_store` へ保存され「HVE 設定」の表示にも反映される。
 
 ### 8.5 認証フローの統一原則
 
@@ -621,7 +612,7 @@ notes_md: |
 ### 8.7 関連ドキュメント
 
 - 利用者向け操作手順・トラブルシュート: [users-guide/plugin-mcp-auth.md](./plugin-mcp-auth.md)
-- GUI 認証パネル操作手順: [users-guide/hve-gui-orchestrator-guide.md#plugin--mcp-server-認証](./hve-gui-orchestrator-guide.md#plugin--mcp-server-認証)
+- GUI 認証導線の操作手順: [users-guide/hve-gui-orchestrator-guide.md#plugin--mcp-server-認証](./hve-gui-orchestrator-guide.md#plugin--mcp-server-認証)
 
 ---
 
@@ -654,7 +645,7 @@ notes_md: |
 ### 9.4 新しい MCP Server を追加する
 
 1. `copilot mcp add <name> <command>` で Copilot CLI に登録（HVE のコード変更不要）
-2. GUI 認証パネルに追加したい場合は `hve/gui/auth_providers/manifests/<name>.yaml` を作成
+2. GUI では登録済み MCP Server 一覧に表示される。OAuth 再認証は Copilot CLI 側で行う
 3. Prompt が利用する場合は `description` 内に MCP Server 名を明示
 
 ### 9.5 SDK アップグレード

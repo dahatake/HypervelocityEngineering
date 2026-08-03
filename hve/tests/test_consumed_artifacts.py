@@ -29,6 +29,7 @@ KNOWN_ARTIFACT_KEYS: frozenset[str] = frozenset(
         "test_strategy",
         "service_catalog_matrix",
         "use_case_catalog",
+        "persona_catalog",
         "dataflow_catalog",
         "batch_service_catalog",
         "batch_data_model",
@@ -224,8 +225,9 @@ class TestPhase1ReuseContextFilteringUnchanged:
         wf = get_workflow("aad-web")
         step = wf.get_step("2.3")
         assert step is not None
+        # Step 2.3 = サービス別 TDD テスト仕様書 (Step 2.4 = 画面別 TDD テスト仕様書 を新設して分離)
         assert set(step.consumed_artifacts) == {
-            "test_strategy", "screen_specs", "service_specs", "service_catalog_matrix",
+            "test_strategy", "service_specs", "service_catalog_matrix",
             "data_model", "domain_analytics", "app_catalog"
         }
 
@@ -266,19 +268,31 @@ class TestPhase4ConsumedArtifactsValues:
         assert "domain_analytics" in step.consumed_artifacts
         assert "app_catalog" in step.consumed_artifacts
 
-    def test_abd_step_11_uses_use_case_catalog(self) -> None:
+    def test_adfd_step1_uses_aas_catalogs(self) -> None:
+        """ADFD Step.1（ジョブ詳細仕様書）は AAS の共通カタログを SoT として参照する。"""
         wf = get_workflow("adfd")
-        step = wf.get_step("1.1")
+        step = wf.get_step("1")
         assert step is not None
-        assert "use_case_catalog" in step.consumed_artifacts
+        assert "app_catalog" in step.consumed_artifacts
+        assert "service_catalog_matrix" in step.consumed_artifacts
+        assert "data_model" in step.consumed_artifacts
 
-    def test_abd_step4_uses_batch_keys(self) -> None:
+    def test_adfd_step2_uses_aas_catalogs(self) -> None:
+        """ADFD Step.2（監視・運用設計書）は AAS の共通カタログを参照する。"""
         wf = get_workflow("adfd")
-        step = wf.get_step("4")
+        step = wf.get_step("2")
         assert step is not None
-        assert "dataflow_catalog" in step.consumed_artifacts
-        assert "batch_data_model" in step.consumed_artifacts
-        assert "batch_domain_analytics" in step.consumed_artifacts
+        assert "app_catalog" in step.consumed_artifacts
+        assert "service_catalog_matrix" in step.consumed_artifacts
+
+    def test_adfd_step3_uses_aas_catalogs(self) -> None:
+        """ADFD Step.3（TDDテスト仕様書）は AAS の test_strategy / service_catalog_matrix を参照する。"""
+        wf = get_workflow("adfd")
+        step = wf.get_step("3")
+        assert step is not None
+        assert "test_strategy" in step.consumed_artifacts
+        assert "service_catalog_matrix" in step.consumed_artifacts
+        assert "dataflow_specs" in step.consumed_artifacts
 
     def test_abdv_step21_uses_test_specs(self) -> None:
         wf = get_workflow("adfdv")
@@ -330,9 +344,16 @@ class TestPhase4ConsumedArtifactsValues:
         assert "domain_analytics" in step.consumed_artifacts
         assert "app_catalog" in step.consumed_artifacts
 
-    def test_asdw_web_step23t_uses_test_strategy(self) -> None:
-        wf = get_workflow("asdw-web")
-        step = wf.get_step("2.3T")
+    def test_aad_web_step23_uses_test_strategy(self) -> None:
+        wf = get_workflow("aad-web")
+        step = wf.get_step("2.3")
         assert step is not None
         assert "test_strategy" in step.consumed_artifacts
         assert "service_specs" in step.consumed_artifacts
+
+    def test_aad_web_step24_uses_test_strategy(self) -> None:
+        wf = get_workflow("aad-web")
+        step = wf.get_step("2.4")
+        assert step is not None
+        assert "test_strategy" in step.consumed_artifacts
+        assert "screen_specs" in step.consumed_artifacts

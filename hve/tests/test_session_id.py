@@ -24,6 +24,7 @@ from run_state import (  # type: ignore[import-not-found]
     DEFAULT_SESSION_ID_PREFIX,
     make_session_id,
     _safe_session_id_token,
+    _safe_run_id_component,
 )
 
 
@@ -203,6 +204,28 @@ class TestSafeSessionIdToken(unittest.TestCase):
 
     def test_empty_returns_empty(self) -> None:
         self.assertEqual(_safe_session_id_token(""), "")
+
+
+class TestSafeRunIdComponent(unittest.TestCase):
+    """補助関数 `_safe_run_id_component()` の挙動。"""
+
+    def test_normal_id_passes_through(self) -> None:
+        self.assertEqual(_safe_run_id_component("20260507T000000-abc123"),
+                         "20260507T000000-abc123")
+
+    def test_path_traversal_chars_removed(self) -> None:
+        # ".." やスラッシュ等は除去される
+        cleaned = _safe_run_id_component("../../etc/passwd-abc")
+        self.assertNotIn("..", cleaned)
+        self.assertNotIn("/", cleaned)
+
+    def test_empty_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            _safe_run_id_component("")
+
+    def test_only_unsafe_chars_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            _safe_run_id_component("///....")
 
 
 if __name__ == "__main__":  # pragma: no cover

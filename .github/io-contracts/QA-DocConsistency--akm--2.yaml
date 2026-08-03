@@ -8,7 +8,21 @@ inputs:
 - path: knowledge/D07-用語集-ドメインモデル定義書.md
   required: true
   kind: static
-- path: work/kpi/fork-kpi-<run_id>.jsonl
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
   required: true
   kind: external
-outputs: []
+- path: knowledge/{key}-*.md
+  required: true
+  kind: agent_artifact
+  producer: KnowledgeManager--akm--1
+- path: template/business-requirement-document-master-list.md
+  required: true
+  kind: static
+- path: knowledge/business-requirement-document-status.md
+  required: false
+  kind: agent_artifact
+  producer: KnowledgeManager--akm--1
+outputs:
+- path: knowledge/business-requirement-document-status.md
+  required: true
+  mode: upsert

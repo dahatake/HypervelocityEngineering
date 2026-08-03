@@ -1,6 +1,10 @@
-# markdown-query Skill 利用統計レポート
+# markdown-query Skill 利用統計レポート（旧出力先）
 
-このディレクトリには、Markdown-Query Skill の利用統計レポートが日次で生成・保存される。
+> **注記**: レポートの出力先は対象リポジトリ配下の `.mdq/usage-report/` へ変更された
+> （FR-KIT-04: 配布キットを任意のリポジトリへコピーしても無関係な階層を作らないため）。
+> 本ディレクトリのファイルは変更前に生成された履歴であり、今後更新されない。
+
+このディレクトリには、Markdown-Query Skill の利用統計レポートが日次で生成・保存されていた。
 
 ## ファイル構成
 
@@ -17,7 +21,7 @@ HVE GUI を起動すると、設定画面の `skills > Markdown-Query` が初期
 ### 手動生成
 
 ```powershell
-python tools/skills/markdown_query/generate_usage_report.py [--window-days 7] [--retention-days 90]
+python -m mdq.usage_report [--window-days 7] [--retention-days 90]
 ```
 
 GUI からも「利用統計レポートの再生成」ボタンで同等の処理を実行できる。

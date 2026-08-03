@@ -19,6 +19,7 @@ from typing import List
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QPalette, QColor
+from PySide6.QtCore import QLoggingCategory
 
 from .fonts import preferred_ui_font
 from .i18n import install_translator, resolve_language
@@ -112,6 +113,23 @@ def _resolve_repo_root() -> Path:
     return Path.cwd().resolve()
 
 
+def _configure_qt_logging() -> None:
+    """無害な ``qt.text.font.db`` フォントフォールバック警告を抑止する。
+
+    エージェント出力に文字化けで混入した Devanagari/Bengali 等の文字を
+    ログビューが描画する際、Windows の既定フォント列が当該スクリプトの
+    OpenType 整形テーブルを持たないため Qt が ``qt.text.font.db: OpenType
+    support missing for ...`` を出力する。Qt は適切なフォントへフォールバック
+    して正しく描画するため機能影響はなく、ターミナルを汚すノイズのみが問題となる。
+
+    ``qt.text.font.db.warning=false``（warning レベルのみ無効化）では当該
+    メッセージは抑止されない（実測で確認済み）ため、カテゴリ全体を無効化する。
+    本カテゴリはフォント DB の診断ログ専用であり、無効化してもアプリの挙動や
+    他カテゴリのログには影響しない。
+    """
+    QLoggingCategory.setFilterRules("qt.text.font.db=false")
+
+
 def run_app(args=None) -> int:
     """GUI モードのエントリポイント。
 
@@ -123,6 +141,8 @@ def run_app(args=None) -> int:
     Returns:
         プロセス終了コード（0 = 正常、2 = 引数不正等）
     """
+    _configure_qt_logging()
+
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv[:1])

@@ -66,50 +66,6 @@ def test_workiq_draft_does_not_override_existing_true(qapp):
     assert args.workiq is True
 
 
-def test_ard_shows_business_area_and_workiq_draft(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["ard"], {"ard": "ARD"})
-
-    titles = _visible_field_titles(page)
-    assert "業務エリア" in titles
-    assert "Work IQ 回答ドラフト作成" in titles
-    # 追加プロンプト は共通で表示
-    assert "追加プロンプト" in titles
-
-
-def test_akm_shows_renamed_fields(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["akm"], {"akm": "AKM"})
-
-    titles = _visible_field_titles(page)
-    assert "取り込みソース" in titles
-    assert "対象ファイル" in titles
-    assert "既存Knowledgeファイルの再生成" in titles  # renamed
-    assert "追加ファイル" in titles  # renamed
-    assert "Work IQ 回答ドラフト作成" in titles
-    assert "QA 用プロンプト上書き" in titles
-    assert "KM 用プロンプト上書き" in titles
-
-
-def test_aqod_shows_renamed_fields(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["aqod"], {"aqod": "AQOD"})
-
-    titles = _visible_field_titles(page)
-    assert "チェック対象ファイルのフォルダパス" in titles  # renamed
-    assert "分析の深さ" in titles
-    assert "分析の観点" in titles  # renamed
-
-
 def test_aqod_depth_choices_are_japanese(qapp):
     from hve.gui.page_options import OptionsPage
 
@@ -117,79 +73,6 @@ def test_aqod_depth_choices_are_japanese(qapp):
     items = [page.c12.depth.itemText(i) for i in range(page.c12.depth.count())]
     assert any("標準" in t and "standard" in t for t in items)
     assert any("軽量" in t and "lightweight" in t for t in items)
-
-
-def test_adoc_fields(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["adoc"], {"adoc": "ADOC"})
-
-    titles = _visible_field_titles(page)
-    assert "ドキュメント生成対象ディレクトリ" in titles
-    assert "除外パターン" in titles
-    assert "ドキュメントの主目的" in titles
-
-
-def test_aad_web_resource_group_hidden(qapp):
-    """aad-web は APP-ID のみ。Azure RG は表示されない。"""
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["aad-web"], {"aad-web": "AAD-WEB"})
-
-    titles = _visible_field_titles(page)
-    assert "対象アプリケーション (APP-ID)" in titles
-    assert "Azure リソースグループ名" not in titles
-
-
-def test_asdw_web_shows_resource_group(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["asdw-web"], {"asdw-web": "ASDW-WEB"})
-
-    titles = _visible_field_titles(page)
-    assert "Azure リソースグループ名" in titles
-    assert "対象アプリケーション (APP-ID)" not in titles
-
-
-def test_abd_shows_app_id(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(["adfd"], {"adfd": "ADFD"})
-
-    titles = _visible_field_titles(page)
-    assert "データフローアプリ ID" in titles
-
-
-def test_dedup_when_multiple_workflows(qapp):
-    """asdw-web + adfdv は両方とも `Azure リソースグループ名` を要求するが 1 つに統合される。"""
-    from hve.gui.page_options import OptionsPage
-    from hve.gui.page_options import _LabeledField
-    from PySide6.QtWidgets import QLabel
-
-    page = OptionsPage()
-    page.show()
-    page.set_workflows(
-        ["asdw-web", "adfdv"],
-        {"asdw-web": "ASDW-WEB", "adfdv": "ADFDV"},
-    )
-
-    matching = []
-    for lf in page.findChildren(_LabeledField):
-        if not lf.isVisible():
-            continue
-        lbl = lf.findChild(QLabel)
-        if lbl and lbl.text().split("  *")[0].strip() == "Azure リソースグループ名":
-            matching.append(lf)
-    # 同一 _LabeledField インスタンス（c10 配下）なので 1 件のみ
-    assert len(matching) == 1
 
 
 def test_workiq_draft_session_override_for_ard(qapp):

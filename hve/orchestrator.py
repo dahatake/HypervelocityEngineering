@@ -25,21 +25,21 @@ import asyncio
 import copy
 import functools
 import glob as _glob
-import json
 import os
+import shutil
 import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Set, Tuple, Union
+from urllib.parse import quote
 
 # -----------------------------------------------------------------------
 # 内部モジュールのインポート（相対 / 絶対 の両方に対応）
 # -----------------------------------------------------------------------
 try:
-    from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
+    from .config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model
     from .console import Console, timestamp_prefix
     from .prompts import (
         CODE_REVIEW_AGENT_FIX_PROMPT,
@@ -49,14 +49,13 @@ try:
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
-    from .runner import StepRunner, _is_review_fail, _extract_text
+    from .runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template
     from .dag_executor import DAGExecutor, StepResult
     from .dag_planner import build_dag_plan
-    from .run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id
-    from .keybind import KEY_CTRL_R, KeybindMonitor
+    from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .orchestrator_context import OrchestratorContext
 except ImportError:
-    from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT, SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # type: ignore[no-redef]
+    from config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
         CODE_REVIEW_AGENT_FIX_PROMPT,
@@ -66,17 +65,21 @@ except ImportError:
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
-    from runner import StepRunner, _is_review_fail, _extract_text  # type: ignore[no-redef]
+    from runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template  # type: ignore[no-redef]
     from dag_executor import DAGExecutor, StepResult  # type: ignore[no-redef]
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
-    from run_state import DEFAULT_SESSION_ID_PREFIX, RunState, StepState, make_session_id  # type: ignore[no-redef]
-    from keybind import KEY_CTRL_R, KeybindMonitor  # type: ignore[no-redef]
+    from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
 # -----------------------------------------------------------------------
-from hve.workflow_registry import get_workflow, WorkflowDef, list_workflows  # noqa: F401
+from hve.workflow_registry import (  # noqa: F401
+    get_local_phase_step_ids,
+    get_workflow,
+    WorkflowDef,
+    list_workflows,
+)
 from hve.template_engine import (
     render_template,
     resolve_selected_steps,
@@ -93,8 +96,21 @@ from hve.github_api import (
     link_sub_issue,
     post_comment,
     create_pull_request,
+    get_pull_request,
+    list_issue_comments,
+    list_check_runs_for_ref,
 )
 from hve.app_arch_filter import resolve_app_arch_scope
+from hve.cloud_session import (
+    acquire_cloud_session_slot,
+    apply_cloud_session_auto_routing,
+    attach_cloud_session_event_logger,
+    attach_cloud_session_limiter_release,
+    build_cloud_session_options,
+    is_policy_blocked_error,
+    resolve_cloud_repository,
+    should_use_cloud_session,
+)
 
 
 # -----------------------------------------------------------------------
@@ -107,7 +123,36 @@ _VALID_WORKFLOWS = [wf.id for wf in list_workflows()]
 # -----------------------------------------------------------------------
 # SDK ヘルパー
 # -----------------------------------------------------------------------
-async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts: Dict[str, Any]) -> Any:
+def _create_copilot_client_from_config(
+    config: SDKConfig,
+    *,
+    log_level: str = "error",
+    cli_args: Optional[List[str]] = None,
+) -> Any:
+    """SDK 1.0.0 RuntimeConnection API で CopilotClient を生成する。"""
+    try:
+        from .copilot_client_factory import create_copilot_client
+    except ImportError:  # pragma: no cover
+        from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+
+    return create_copilot_client(
+        cli_path=config.cli_path,
+        cli_url=config.cli_url,
+        github_token=config.resolve_token() or None,
+        log_level=log_level,
+        cli_args=cli_args,
+    )
+
+
+async def _create_session_with_auto_reasoning_fallback(
+    client: Any,
+    session_opts: Dict[str, Any],
+    *,
+    config: Optional[SDKConfig] = None,
+    step_id: Optional[str] = None,
+    subtask_kind: Optional[str] = None,
+    console: Optional[Any] = None,
+) -> Any:
     """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
 
     SDK バージョン < 0.3.0 互換のための防御。reasoning_effort が opts に
@@ -119,34 +164,125 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
 
     併せて、Skill レジストリへ `.github/skills` を登録する
     (`skill_directories` / `enable_config_discovery`) を呼び出し側で
-    未指定の場合のみ自動注入する。SDK が当該引数を未サポートの場合は
-    TypeError を契機に剥がして再試行する。
+    未指定の場合のみ自動注入する。CLI のスキル発見は深さ 1
+    (`<root>/<name>/SKILL.md`) のみ走査するため、`skill_directories`
+    には root に加えて各カテゴリ直下サブフォルダも列挙する。SDK が
+    当該引数を未サポートの場合は TypeError を契機に剥がして再試行する。
     """
     from pathlib import Path as _Path
 
     _opts_with_skills = dict(session_opts)
+    # context_tier: ユーザー設定 (SDKConfig.context_tier) を create_session へ伝播する。
+    # truthy のときのみ注入し、呼び出し側が明示済みなら尊重する。
+    if config is not None and getattr(config, "context_tier", None) and "context_tier" not in _opts_with_skills:
+        _opts_with_skills["context_tier"] = config.context_tier
+    _cloud_injected = False
+    _had_streaming_before_cloud = "streaming" in _opts_with_skills
+    _streaming_before_cloud = _opts_with_skills.get("streaming")
+    if config is not None and "cloud" not in _opts_with_skills:
+        _cloud_opts = build_cloud_session_options(
+            config,
+            step_id=step_id,
+            subtask_kind=subtask_kind,
+        )
+        if _cloud_opts is not None:
+            _opts_with_skills["cloud"] = _cloud_opts
+            _cloud_injected = True
+            _opts_with_skills["streaming"] = True
+        elif should_use_cloud_session(config, step_id=step_id, subtask_kind=subtask_kind) and console is not None:
+            owner, name, _branch = resolve_cloud_repository(config)
+            try:
+                if not owner or not name:
+                    console.warning(
+                        "Cloud Session repository owner/name が解決できないため、ローカルセッションにフォールバックします。"
+                    )
+                else:
+                    console.warning(
+                        "Cloud Session 型が現在の Copilot SDK で利用できないため、ローカルセッションにフォールバックします。"
+                    )
+            except Exception:
+                pass
     if "skill_directories" not in _opts_with_skills:
         _skills_dir = _Path.cwd() / ".github" / "skills"
         if _skills_dir.is_dir():
-            _opts_with_skills["skill_directories"] = [str(_skills_dir)]
+            # CLI のスキル発見は深さ 1 (`<root>/<name>/SKILL.md`) のみ走査するため、
+            # root に加えて各カテゴリ直下サブフォルダも列挙し、ネスト配置スキル
+            # (`<root>/<category>/<name>/SKILL.md`) を発見可能にする。
+            # SKILL.md 不在のサブフォルダを渡しても無害（CLI 側で無視される）。
+            _opts_with_skills["skill_directories"] = [str(_skills_dir)] + [
+                str(p) for p in sorted(_skills_dir.iterdir()) if p.is_dir()
+            ]
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
 
     async def _attempt(opts: Dict[str, Any]) -> Any:
+        limiter = None
         try:
-            return await client.create_session(**opts)
+            if "cloud" in opts and config is not None:
+                limiter = await acquire_cloud_session_slot(config)
+            session = await client.create_session(**opts)
+            if "cloud" in opts:
+                attach_cloud_session_event_logger(
+                    session,
+                    step_id=step_id,
+                    subtask_kind=subtask_kind,
+                )
+                if limiter is not None:
+                    attach_cloud_session_limiter_release(session, limiter)
+                    limiter = None
+            return session
         except TypeError as exc:
+            if limiter is not None:
+                limiter.release_slot()
             msg = str(exc)
             if "unexpected keyword argument" not in msg:
                 raise
             # Skill 系 / config discovery を未サポートの SDK に対するフォールバック
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier"):
                 if _kw in msg and _kw in opts:
+                    if _kw == "cloud" and console is not None:
+                        try:
+                            console.warning(
+                                "Cloud Session は現在の Copilot SDK で未サポートのため、ローカルセッションにフォールバックします。"
+                            )
+                        except Exception:
+                            pass
                     _stripped = {k: v for k, v in opts.items() if k != _kw}
+                    if _kw == "cloud" and _cloud_injected:
+                        if _had_streaming_before_cloud:
+                            _stripped["streaming"] = _streaming_before_cloud
+                        else:
+                            _stripped.pop("streaming", None)
                     return await _attempt(_stripped)
             if "reasoning_effort" in msg and "reasoning_effort" in opts:
                 _stripped = {k: v for k, v in opts.items() if k != "reasoning_effort"}
                 return await _attempt(_stripped)
+            raise
+        except Exception as exc:
+            if limiter is not None:
+                limiter.release_slot()
+            if is_policy_blocked_error(exc) and console is not None:
+                try:
+                    console.warning(
+                        "Cloud Session が組織ポリシーでブロックされました（policy_blocked）。リトライせず停止します。"
+                    )
+                except Exception:
+                    pass
+                raise
+            if "cloud" in opts and _cloud_injected:
+                if console is not None:
+                    try:
+                        console.warning(
+                            f"Cloud Session 作成に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
+                        )
+                    except Exception:
+                        pass
+                stripped = {k: v for k, v in opts.items() if k != "cloud"}
+                if _had_streaming_before_cloud:
+                    stripped["streaming"] = _streaming_before_cloud
+                else:
+                    stripped.pop("streaming", None)
+                return await _attempt(stripped)
             raise
 
     return await _attempt(_opts_with_skills)
@@ -162,19 +298,15 @@ def _apply_reasoning_effort(
     """ユーザー指定の reasoning_effort を session_opts へ適用する。
 
     優先順位:
-      1. ユーザーが明示指定した reasoning_effort (config.{kind}_reasoning_effort) を最優先で適用。
-      2. 未指定 + モデルが Auto/DEFAULT_MODEL → MODEL_AUTO_REASONING_EFFORT をフォールバック適用。
-      3. 未指定 + モデル明示 → 何もしない (SDK 既定動作)。
+      1. ユーザーが明示指定した reasoning_effort (config.{kind}_reasoning_effort) を適用。
+      2. 未指定 → 何もしない（SDK/サーバ既定動作。Auto モデル時はサーバ側 Auto Model
+         Selection がモデル毎に適切な effort を選ぶ）。
 
     Args:
         session_opts: SDK create_session に渡す dict (in-place 更新)。
         config: SDKConfig 互換 (reasoning_effort / review_reasoning_effort / qa_reasoning_effort 属性を参照)。
-        model_value: 評価対象のモデル文字列 (None なら config.model)。
+        model_value: 評価対象のモデル文字列（後方互換のため受け取るが現実装では未使用）。
         kind: "main" | "review" | "qa"。
-
-    注意:
-        - 呼び出し側は事前に `session_opts["model"]` を設定済みであること。
-        - 既存ハードコード `session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT` の置換用途。
     """
     if kind == "review":
         user_effort = getattr(config, "review_reasoning_effort", None)
@@ -185,12 +317,6 @@ def _apply_reasoning_effort(
 
     if user_effort:
         session_opts["reasoning_effort"] = user_effort
-        return
-
-    mv = model_value if model_value is not None else getattr(config, "model", None)
-    # Auto 経路 (= モデル未指定 or MODEL_AUTO_VALUE) のみフォールバック適用
-    if not mv or mv == MODEL_AUTO_VALUE:
-        session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
 
 
 # -----------------------------------------------------------------------
@@ -240,7 +366,7 @@ def _emit_context_injection_metrics(
 
 
 # -----------------------------------------------------------------------
-# Phase 2 (Resume): orchestrator レベルの SDK セッション ID ヘルパー
+# orchestrator レベルの SDK セッション ID ヘルパー
 # -----------------------------------------------------------------------
 def _orchestrator_session_id(config: SDKConfig, step_id: str, suffix: str = "") -> str:
     """orchestrator から作成する補助セッション用の決定論的 session_id を返す。
@@ -261,132 +387,6 @@ def _orchestrator_session_id(config: SDKConfig, step_id: str, suffix: str = "") 
         suffix=suffix,
         prefix=prefix,
     )
-
-
-# -----------------------------------------------------------------------
-# Phase 3 (Resume): SDKConfig 復元ヘルパー
-# -----------------------------------------------------------------------
-async def _auto_reconcile_on_resume(state: RunState, config: SDKConfig) -> None:
-    """Phase 5 (Resume 2-layer txn): Resume 開始直前の整合性チェック。
-
-    state.json 内で `running|failed` のステップが SDK 側に存在しない場合、
-    `pending` + `session_id=None` に戻して新規 `create_session` 経路へ送る。
-    SDK の `get_session_metadata(sid)` を使った O(1) 存在確認（Phase 0 で確認済）。
-
-    失敗は warn のみ。SDK 接続不可の場合は何もしない（既存の resume_session →
-    create_session fallback で救済される）。
-    """
-    try:
-        from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
-    except ImportError:
-        return  # SDK 未利用環境では何もしない
-
-    try:
-        from .reconciler import reconcile_run
-    except ImportError:
-        from reconciler import reconcile_run  # type: ignore[no-redef]
-
-    sdk_config = SubprocessConfig(
-        cli_path=config.cli_path,
-        github_token=config.resolve_token() or None,
-        log_level="error",
-    )
-    client = CopilotClient(config=sdk_config)
-    try:
-        await client.start()
-        result = await reconcile_run(state, sdk_client=client, dry_run=False)
-        if result.actions_taken:
-            print(
-                f"[reconcile] Resume 開始時: {len(result.actions_taken)} 件のステップを"
-                f" pending に戻しました",
-                file=sys.stderr,
-            )
-            for action in result.actions_taken:
-                print(f"  - {action}", file=sys.stderr)
-    finally:
-        try:
-            await client.stop()
-        except Exception:  # pragma: no cover
-            pass
-
-
-def _restore_config_from_state(config: SDKConfig, state: RunState) -> None:
-    """`state.config_snapshot` から `SDKConfig` のフィールドを復元する。
-
-    Phase 3 (Resume): 別プロセス / 別 PC で resume する際、保存時の実行設定を
-    復元する。ただし以下のフィールドは復元しない（snapshot にも含まれない）:
-      - github_token : 機密情報。環境変数から再取得する。
-      - repo         : テナント混入防止。環境変数 REPO から再取得する。
-      - cli_path / cli_url : 環境固有のため現在値を尊重。
-      - mcp_servers  : API キーや絶対パスを含むため現在の `config` を尊重。
-
-    また、既に呼び出し側で明示的に設定された値（`generate_run_id()` を経由せず
-    `SDKConfig(run_id=...)` のように直接渡された値）は **上書きされる**。
-    Resume の本質は「保存時の実行コンテキストの厳密な再現」であるため。
-
-    snapshot に存在しないキーや、`SDKConfig` 側に存在しない属性は無視する
-    （schema バージョン差を吸収するため）。
-    """
-    snapshot = state.config_snapshot or {}
-    if not snapshot:
-        return
-    for key, value in snapshot.items():
-        if not hasattr(config, key):
-            continue
-        try:
-            setattr(config, key, value)
-        except (AttributeError, TypeError):
-            # frozen フィールドや setter 制約がある場合はスキップ
-            continue
-    # run_id は確実に復元する（snapshot に含まれていなくても state.run_id を採用）
-    config.run_id = state.run_id
-
-
-def _build_step_complete_callback(
-    state: RunState,
-    console: Console,
-) -> Callable[[StepResult], None]:
-    """`DAGExecutor.on_step_complete` 用のコールバックを構築する。
-
-    Phase 3 (Resume): 各ステップの完了/失敗/スキップ/blocked を state.json に
-    永続化する。コールバック内の例外は warn のみで握り潰し、DAG 実行を
-    止めない（state I/O 失敗で実行成果物を犠牲にしない）。
-    """
-    def _on_step_complete(result: StepResult) -> None:
-        try:
-            now = datetime.now(timezone.utc).isoformat()
-            kwargs: Dict[str, Any] = {
-                "completed_at": now,
-                "elapsed_seconds": float(result.elapsed or 0.0),
-            }
-            if result.skipped:
-                kwargs["status"] = "skipped"
-                kwargs["skip_reason"] = result.reason or "inactive"
-            elif result.state == "blocked":
-                kwargs["status"] = "blocked"
-                kwargs["skip_reason"] = result.reason or "blocked"
-            elif result.success:
-                kwargs["status"] = "completed"
-                kwargs["error_summary"] = None
-            else:
-                kwargs["status"] = "failed"
-                kwargs["error_summary"] = (
-                    (result.error or "")[:500] if result.error else None
-                )
-            # Fork-integration (T2.2): retry_count / forked_session_id を state へ反映
-            retry_count = getattr(result, "retry_count", 0)
-            if isinstance(retry_count, int) and retry_count > 0:
-                kwargs["retry_count"] = retry_count
-            forked_sid = getattr(result, "forked_session_id", None)
-            if forked_sid:
-                kwargs["forked_session_id"] = forked_sid
-            state.update_step(result.step_id, **kwargs)
-        except Exception as exc:  # pragma: no cover - I/O 例外パスは E2E で確認
-            console.warning(
-                f"state.json への step 状態更新に失敗しました (step={result.step_id}): {exc}"
-            )
-
-    return _on_step_complete
 
 
 def _build_fork_kpi_logger(config: SDKConfig) -> Any:
@@ -526,6 +526,15 @@ def _collect_params_non_interactive(
         params["app_id"] = args["app_id"]
     if args.get("resource_group"):
         params["resource_group"] = args["resource_group"]
+    for key in (
+        "data_location",
+        "data_resource_suffix",
+        "data_vnet_cidr",
+        "data_private_endpoint_subnet_cidr",
+        "data_aci_subnet_cidr",
+    ):
+        if args.get(key) is not None:
+            params[key] = args[key]
     if args.get("usecase_id"):
         params["usecase_id"] = args["usecase_id"]
     if args.get("app_id"):
@@ -596,6 +605,26 @@ def _collect_params_non_interactive(
     return params
 
 
+def _validate_asdw_data_deploy_requested_app_scope(params: Mapping[str, Any]) -> Optional[str]:
+    """Reject an explicit ASDW app scope that would be normalized inconsistently."""
+    selected = params.get("app_ids")
+    singular = params.get("app_id")
+    if selected is None or singular is None:
+        return None
+    if (
+        type(selected) is not list
+        or len(selected) != 1
+        or type(selected[0]) is not str
+        or type(singular) is not str
+        or selected[0] != singular
+    ):
+        return (
+            "ASDW-WEB requires --app-id to match the one selected value in "
+            "--app-ids before scope filtering."
+        )
+    return None
+
+
 def _is_non_interactive(wf, cli_args: Optional[dict]) -> bool:
     """非対話モードで実行すべきかを判定する。
 
@@ -606,9 +635,329 @@ def _is_non_interactive(wf, cli_args: Optional[dict]) -> bool:
     return cli_args is not None
 
 
+def _apply_interactive_review_choice(config: SDKConfig, effective_params: dict) -> None:
+    """対話ウィザードのレビュー選択を HVE Phase 3 設定へ同期する。"""
+    config.auto_contents_review = not bool(
+        effective_params.get("skip_review", False)
+    )
+
+
+# -----------------------------------------------------------------------
+# Protected artifact guard（local generation checkpoint の成果物保持）
+# -----------------------------------------------------------------------
+
+# local 生成フェーズの成果物ルート。live deploy 失敗や再実行でこれらが
+# 失われたまま stage / commit / push されるのを防ぐ。
+PROTECTED_ARTIFACT_ROOTS: Tuple[str, ...] = ("src/api", "src/app", "src/test")
+
+# ルート -> そのルート配下に存在した相対パス集合
+ProtectedArtifactManifest = Dict[str, FrozenSet[str]]
+
+
+def capture_protected_artifact_manifest(
+    repo_root: Optional[Union[str, Path]] = None,
+) -> ProtectedArtifactManifest:
+    """保護対象ルート配下のファイル一覧を manifest として記録する。
+
+    存在しないルートは記録しない（未生成のものを欠落扱いしないため）。
+    """
+    root = Path(repo_root) if repo_root is not None else Path.cwd()
+    manifest: ProtectedArtifactManifest = {}
+    for protected in PROTECTED_ARTIFACT_ROOTS:
+        base = root / protected
+        if not base.is_dir():
+            continue
+        files = {
+            f"{protected}/{path.relative_to(base).as_posix()}"
+            for path in base.rglob("*")
+            if path.is_file()
+        }
+        manifest[protected] = frozenset(files)
+    return manifest
+
+
+def check_protected_artifact_regression(
+    baseline: Optional[ProtectedArtifactManifest],
+    repo_root: Optional[Union[str, Path]] = None,
+) -> List[str]:
+    """baseline 時点の成果物が失われていないかを検査する。
+
+    - 保護ルートの全消失
+    - 成功済み local 出力（baseline に存在したファイル）の欠落
+
+    のいずれかを検出した場合にエラーメッセージ一覧を返す。追加生成は違反にしない。
+    """
+    if not baseline:
+        return []
+    current = capture_protected_artifact_manifest(repo_root)
+    errors: List[str] = []
+    for protected in PROTECTED_ARTIFACT_ROOTS:
+        expected = baseline.get(protected)
+        if not expected:
+            continue
+        present = current.get(protected, frozenset())
+        if not present:
+            errors.append(
+                f"local generation checkpoint 後に保護成果物 '{protected}' が全消失しました。"
+                " stage / commit / push を中止します。"
+            )
+            continue
+        missing = sorted(expected - present)
+        if missing:
+            listed = ", ".join(missing[:10])
+            suffix = f" ほか {len(missing) - 10} 件" if len(missing) > 10 else ""
+            errors.append(
+                "local generation checkpoint 後に成功済み local 出力が欠落しました"
+                f"（{protected}）: {listed}{suffix}。stage / commit / push を中止します。"
+            )
+    return errors
+
+def should_retain_local_checkpoint(
+    workflow_id: str,
+    failed_step_ids: Any,
+) -> bool:
+    """live Step のみが失敗した場合に local checkpoint を保持すべきか判定する。
+
+    local Step が 1 つでも失敗している場合、checkpoint 自体が未完成のため
+    保持対象にしない。checkpoint を宣言しない workflow でも False を返す。
+    """
+    failed = {str(step_id) for step_id in (failed_step_ids or [])}
+    if not failed:
+        return False
+    local_ids = get_local_phase_step_ids(workflow_id)
+    if not local_ids:
+        return False
+    return not (failed & local_ids)
+
+
 # -----------------------------------------------------------------------
 # Git ヘルパー
 # -----------------------------------------------------------------------
+
+def _git_unmerged_paths() -> List[str]:
+    """Git index に残っている未解決パスを返す。
+
+    Branch 作成前の fail-fast 用。dirty worktree 全般は HVE の正常系でも
+    あり得るため、unmerged entry のみを対象にする。
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=U"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    paths: List[str] = []
+    for line in result.stdout.splitlines():
+        path = line.strip()
+        if path and path not in paths:
+            paths.append(path)
+    return paths
+
+
+def _format_git_unmerged_index_error(paths: List[str]) -> str:
+    """未解決 index のユーザー向けエラーメッセージを整形する。"""
+    lines = [
+        "Git index に未解決コンフリクトがあります。ブランチを作成できません。",
+        "以下を解決してから再実行してください:",
+    ]
+    lines.extend(f"  - {path}" for path in paths)
+    return "\n".join(lines)
+
+
+# HVE 自身のソースツリー（FR-CLI-74 / FR-CLI-75）。
+# アプリ生成 run はこれらを成果物として扱わない。未コミット変更や staging 混入は
+# 生成対象アプリの branch / commit / PR を汚染するため、fail-closed で拒否する。
+_HVE_SOURCE_PATH_PREFIXES: Tuple[str, ...] = (
+    "hve/",
+    "mdq/",
+    "hve-dev/",
+    ".github/prompts/",
+    ".github/skills/",
+    ".github/scripts/",
+    ".github/io-contracts/",
+)
+
+
+def _normalize_repo_relative_path(path: str) -> str:
+    """git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。"""
+    normalized = str(path).replace("\\", "/").strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
+
+
+def _parse_git_status_path(line: str) -> str:
+    """``git status --porcelain`` の 1 行から対象パスを取り出す。
+
+    rename エントリ (``R  old -> new``) は **新しい方** のパスを返す。
+    空白等を含み引用符で囲まれたパスは引用符を外す。
+    """
+    if len(line) < 4:
+        return ""
+    entry = line[3:]
+    if " -> " in entry:
+        entry = entry.split(" -> ", 1)[1]
+    entry = entry.strip()
+    if len(entry) >= 2 and entry.startswith('"') and entry.endswith('"'):
+        entry = entry[1:-1]
+    return _normalize_repo_relative_path(entry)
+
+
+def _is_hve_source_path(path: str) -> bool:
+    """パスが HVE 自身のソースツリーに属するかを返す。"""
+    normalized = _normalize_repo_relative_path(path)
+    if not normalized:
+        return False
+    return any(
+        normalized == prefix.rstrip("/") or normalized.startswith(prefix)
+        for prefix in _HVE_SOURCE_PATH_PREFIXES
+    )
+
+
+def _is_under_any_path(path: str, roots: Optional[List[str]]) -> bool:
+    """``path`` が ``roots`` のいずれかと一致、またはその配下かを返す。"""
+    if not roots:
+        return False
+    normalized = _normalize_repo_relative_path(path)
+    for root in roots:
+        root_normalized = _normalize_repo_relative_path(str(root)).rstrip("/")
+        if not root_normalized:
+            continue
+        if normalized == root_normalized or normalized.startswith(root_normalized + "/"):
+            return True
+    return False
+
+
+def _filter_hve_source_paths(
+    paths: List[str],
+    target_output_paths: Optional[List[str]] = None,
+) -> List[str]:
+    """HVE ソースパスだけを重複なく抽出する（target 出力パスは対象外）。"""
+    selected: List[str] = []
+    for path in paths:
+        if not _is_hve_source_path(path):
+            continue
+        if _is_under_any_path(path, target_output_paths):
+            # FR-CLI-74: 利用者が明示的に指定した target 出力パスは対象外。
+            continue
+        if path not in selected:
+            selected.append(path)
+    return selected
+
+
+def _git_dirty_hve_source_paths(
+    target_output_paths: Optional[List[str]] = None,
+    timeout: int = 30,
+) -> List[str]:
+    """HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。
+
+    未追跡ファイルも対象にする。git 引数はリストで渡すため shell を経由しない
+    （NFR-SEC-03）。git が利用できない / リポジトリ外で実行された場合は空リストを
+    返し、ワークフロー実行そのものは阻害しない。
+    """
+    command = [
+        "git",
+        "-c",
+        "core.quotePath=false",
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    parsed = [
+        parsed_path
+        for parsed_path in (_parse_git_status_path(line) for line in result.stdout.splitlines())
+        if parsed_path
+    ]
+    return _filter_hve_source_paths(parsed, target_output_paths)
+
+
+def _format_dirty_hve_source_error(paths: List[str]) -> str:
+    """dirty HVE source のユーザー向けエラーメッセージを整形する（一括報告）。"""
+    lines = [
+        f"HVE ソースに未コミット変更があります（{len(paths)} 件）。"
+        "アプリ生成 run は開始できません。",
+        "以下を全て commit / revert してから再実行してください:",
+    ]
+    lines.extend(f"  - {path}" for path in paths)
+    lines.append(
+        "HVE ソースの未コミット変更は生成対象アプリの branch / commit / PR へ"
+        "混入するため、この検査を無効化するオプションはありません。"
+    )
+    return "\n".join(lines)
+
+
+def _format_staged_hve_source_error(paths: List[str]) -> str:
+    """staged HVE source のユーザー向けエラーメッセージを整形する（一括報告）。"""
+    lines = [
+        f"HVE ソースが staging に混入しています（{len(paths)} 件）。"
+        "commit / push を中止し、index を unstage します。",
+        "以下を commit 対象から外してから再実行してください:",
+    ]
+    lines.extend(f"  - {path}" for path in paths)
+    lines.append(
+        "HVE ソースの変更は生成対象アプリの commit / PR へ混入するため、"
+        "この検査を無効化するオプションはありません。"
+    )
+    return "\n".join(lines)
+
+
+def _status_may_stage_hve_source(
+    status_stdout: str,
+    target_output_paths: Optional[List[str]] = None,
+) -> bool:
+    """``git add`` 後に HVE ソースが staged になり得るかを返す（FR-CLI-75）。
+
+    ``git add .`` が stage するのは ``git status --porcelain`` が報告した変更だけ
+    なので、その一覧に HVE ソース候補が 1 件も無ければ staged にもなり得ない。
+    判定は ``_filter_hve_source_paths`` を再利用する（二重定義しない）。
+    未追跡ディレクトリが 1 行に畳まれる場合（``?? .github/``）は配下に HVE ソースを
+    含み得るため候補として扱う（fail-closed）。
+    """
+    paths = [
+        parsed
+        for parsed in (_parse_git_status_path(line) for line in status_stdout.splitlines())
+        if parsed
+    ]
+    if _filter_hve_source_paths(paths, target_output_paths):
+        return True
+    return any(
+        path.endswith("/") and prefix.startswith(path)
+        for path in paths
+        for prefix in _HVE_SOURCE_PATH_PREFIXES
+    )
+
+
+def _explicit_target_output_paths(params: Optional[Mapping[str, Any]]) -> List[str]:
+    """利用者が明示指定した target 出力パスを返す（FR-CLI-74 の対象外判定用）。"""
+    raw = (params or {}).get("target_files")
+    if isinstance(raw, str):
+        candidates: List[str] = raw.split(",")
+    elif isinstance(raw, (list, tuple)):
+        candidates = [str(item) for item in raw]
+    else:
+        return []
+    return [candidate.strip() for candidate in candidates if str(candidate).strip()]
+
 
 def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console) -> bool:
     """ローカルで新ブランチを作成し checkout する。
@@ -618,10 +967,15 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
     失敗した場合はローカルの base_branch でフォールバックする。
     """
     try:
+        unmerged_paths = _git_unmerged_paths()
+        if unmerged_paths:
+            console.error(_format_git_unmerged_index_error(unmerged_paths))
+            return False
+
         # fetch して最新の origin/{base_branch} を取得
         fetch_result = subprocess.run(
             ["git", "fetch", "origin", base_branch],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
         )
         fetch_ok = fetch_result.returncode == 0
         if not fetch_ok:
@@ -631,7 +985,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         if fetch_ok:
             result = subprocess.run(
                 ["git", "checkout", "-b", new_branch, f"origin/{base_branch}"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
             )
             if result.returncode == 0:
                 console.event(f"ブランチ '{new_branch}' を 'origin/{base_branch}' から作成し checkout しました。")
@@ -641,7 +995,7 @@ def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console
         # フォールバック: ローカルの base_branch から作成
         fallback = subprocess.run(
             ["git", "checkout", "-b", new_branch, base_branch],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
         if fallback.returncode != 0:
             console.error(f"ブランチ作成に失敗しました: {fallback.stderr.strip()}")
@@ -661,17 +1015,35 @@ def _git_add_commit_push(
     commit_message: str,
     console: Console,
     ignore_paths: Optional[List[str]] = None,
+    protected_baseline: Optional["ProtectedArtifactManifest"] = None,
+    repo_root: Optional[Union[str, Path]] = None,
+    target_output_paths: Optional[List[str]] = None,
 ) -> bool:
     """変更を add + commit + push する。差分がなければ False を返す。
 
     ignore_paths に指定されたパスは git add の pathspec 除外で無視する。
     push 時は -u オプションを付与してリモートブランチをトラッキングする。
+
+    protected_baseline を渡した場合、local generation checkpoint 時点の成果物が
+    失われていないかを **git add より前** に検査し、違反時は index を触らずに
+    False を返す。
+
+    ``git add`` の後・``git commit`` の前に staged パスを検査し、HVE ソースが
+    混入していれば index を unstage して commit / push せずに False を返す
+    （FR-CLI-75）。``target_output_paths`` は FR-CLI-74 と同じ規則で検査対象から
+    除外する。
     """
+    if protected_baseline is not None:
+        guard_errors = check_protected_artifact_regression(protected_baseline, repo_root)
+        if guard_errors:
+            for guard_error in guard_errors:
+                console.error(guard_error)
+            return False
     try:
         # 差分確認
         status = subprocess.run(
             ["git", "status", "--porcelain"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
         if not status.stdout.strip():
             console.warning("コミット対象の変更がありません。")
@@ -689,16 +1061,56 @@ def _git_add_commit_push(
                     add_args.append(f":!{sanitized}")
         add_result = subprocess.run(
             add_args,
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
         if add_result.returncode != 0:
             console.error(f"git add に失敗しました: {add_result.stderr.strip()}")
             return False
 
+        # FR-CLI-75: staging へ混入した HVE ソースを commit 前に拒否する。
+        # add 前の status に HVE ソース候補が無ければ staged にもなり得ないため、
+        # その場合だけ追加の git 呼び出しを省く。
+        if _status_may_stage_hve_source(status.stdout, target_output_paths):
+            staged_result = subprocess.run(
+                ["git", "-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+            )
+            if staged_result.returncode != 0:
+                console.error(
+                    "staged パスを確認できないため commit を中止しました: "
+                    f"{staged_result.stderr.strip()}"
+                )
+                return False
+            staged_hve_paths = _filter_hve_source_paths(
+                [
+                    _normalize_repo_relative_path(line)
+                    for line in staged_result.stdout.splitlines()
+                    if line.strip()
+                ],
+                target_output_paths,
+            )
+            if staged_hve_paths:
+                console.error(_format_staged_hve_source_error(staged_hve_paths))
+                # index からの unstage のみ。--hard 等は使わず作業ツリーは変更しない。
+                reset_result = subprocess.run(
+                    ["git", "reset", "--mixed", "--quiet"],
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+                )
+                if reset_result.returncode == 0:
+                    console.warning(
+                        "staged 変更を unstage しました（作業ツリーのファイルは変更していません）。"
+                    )
+                else:
+                    console.error(
+                        "index の unstage に失敗しました。`git reset` を手動で実行してください: "
+                        f"{reset_result.stderr.strip()}"
+                    )
+                return False
+
         # ステージングエリアの差分確認（除外後に差分がなければスキップ）
         cached_diff = subprocess.run(
             ["git", "diff", "--cached", "--quiet"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
         if cached_diff.returncode == 0:
             console.warning("除外パスを適用後、コミット対象のステージング変更がありません。")
@@ -707,7 +1119,7 @@ def _git_add_commit_push(
         # git commit
         commit_result = subprocess.run(
             ["git", "commit", "-m", commit_message],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
         )
         if commit_result.returncode != 0:
             console.error(f"git commit に失敗しました: {commit_result.stderr.strip()}")
@@ -717,7 +1129,7 @@ def _git_add_commit_push(
         # git push（-u でリモートブランチをトラッキング）
         push_result = subprocess.run(
             ["git", "push", "-u", "origin", branch],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
         )
         if push_result.returncode != 0:
             console.error(f"git push に失敗しました: {push_result.stderr.strip()}")
@@ -730,6 +1142,412 @@ def _git_add_commit_push(
     except subprocess.TimeoutExpired:
         console.error("git 操作がタイムアウトしました。")
         return False
+
+
+def _git_push_branch(branch: str, console: Console) -> bool:
+    """現在の HEAD を origin/<branch> へ push する（差分なしブランチ作成にも使う）。"""
+    try:
+        push_result = subprocess.run(
+            ["git", "push", "-u", "origin", branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        if push_result.returncode != 0:
+            console.error(f"git push に失敗しました: {push_result.stderr.strip()}")
+            return False
+        console.event(f"ブランチ '{branch}' を push しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git push がタイムアウトしました。")
+        return False
+
+
+def _git_current_branch(console: Console) -> Optional[str]:
+    """現在 checkout されているブランチ名を返す。detached HEAD は None。"""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if result.returncode != 0:
+            console.warning(f"現在ブランチの取得に失敗しました: {result.stderr.strip()}")
+            return None
+        branch = result.stdout.strip()
+        return branch or None
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return None
+    except subprocess.TimeoutExpired:
+        console.error("git branch がタイムアウトしました。")
+        return None
+
+
+def _git_has_uncommitted_changes(console: Console) -> bool:
+    """未コミット変更（未追跡を含む）があるかを返す。取得失敗時は安全側で True。"""
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if result.returncode != 0:
+            console.warning(f"git status の取得に失敗しました: {result.stderr.strip()}")
+            return True
+        return bool(result.stdout.strip())
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return True
+    except subprocess.TimeoutExpired:
+        console.error("git status がタイムアウトしました。")
+        return True
+
+
+def _git_checkout_existing_branch(branch: str, console: Console) -> bool:
+    """既存ローカルブランチへ checkout する。"""
+    try:
+        result = subprocess.run(
+            ["git", "checkout", branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if result.returncode != 0:
+            console.warning(f"'{branch}' への checkout に失敗しました: {result.stderr.strip()}")
+            return False
+        console.event(f"'{branch}' へ checkout しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git checkout がタイムアウトしました。")
+        return False
+
+
+def _git_remote_branch_ahead(branch: str, console: Console) -> bool:
+    """origin/<branch> がローカル <branch> より先行している場合 True を返す。"""
+    try:
+        fetch = subprocess.run(
+            ["git", "fetch", "origin", branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+        )
+        if fetch.returncode != 0:
+            console.warning(f"git fetch origin {branch} に失敗しました: {fetch.stderr.strip()}")
+            return False
+
+        local_rev = subprocess.run(
+            ["git", "rev-parse", branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        remote_rev = subprocess.run(
+            ["git", "rev-parse", f"origin/{branch}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if local_rev.returncode != 0 or remote_rev.returncode != 0:
+            return False
+        local_sha = local_rev.stdout.strip()
+        remote_sha = remote_rev.stdout.strip()
+        if not local_sha or not remote_sha or local_sha == remote_sha:
+            return False
+
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", local_sha, remote_sha],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        return ancestor.returncode == 0
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git remote branch 状態確認がタイムアウトしました。")
+        return False
+
+
+def _git_checkout_base_branch(base_branch: str, console: Console) -> bool:
+    """base_branch へ checkout する。"""
+    try:
+        checkout = subprocess.run(
+            ["git", "checkout", base_branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if checkout.returncode != 0:
+            console.warning(
+                f"'{base_branch}' への checkout に失敗しました: {checkout.stderr.strip()}"
+            )
+            return False
+        console.event(f"'{base_branch}' へ checkout しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git checkout がタイムアウトしました。")
+        return False
+
+
+def _git_pull_ff_only_base_branch(base_branch: str, console: Console) -> bool:
+    """base_branch を origin/<base_branch> から fast-forward のみで更新する。"""
+    try:
+        pull = subprocess.run(
+            ["git", "pull", "--ff-only", "origin", base_branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        if pull.returncode != 0:
+            console.warning(
+                f"'{base_branch}' の fast-forward 更新に失敗しました: {pull.stderr.strip()}"
+            )
+            return False
+        console.event(f"'{base_branch}' を origin/{base_branch} へ fast-forward 更新しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git pull がタイムアウトしました。")
+        return False
+
+
+def _git_delete_local_branch(working_branch: str, base_branch: str, console: Console) -> bool:
+    """作業ブランチをローカル削除する（FR-CLI-34）。
+
+    現在ブランチは削除できないため base_branch へ checkout してから
+    ``git branch -D`` で強制削除する（squash マージではローカルが「マージ済み」と
+    判定されないため ``-D``）。checkout / 削除に失敗した場合は警告して False を返す。
+    """
+    try:
+        checkout = subprocess.run(
+            ["git", "checkout", base_branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if checkout.returncode != 0:
+            console.warning(
+                f"'{base_branch}' への checkout に失敗したため作業ブランチを削除しません: {checkout.stderr.strip()}"
+            )
+            return False
+        delete = subprocess.run(
+            ["git", "branch", "-D", working_branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
+        if delete.returncode != 0:
+            console.warning(
+                f"作業ブランチ '{working_branch}' のローカル削除に失敗しました: {delete.stderr.strip()}"
+            )
+            return False
+        console.event(f"マージ済みの作業ブランチ '{working_branch}' をローカルから削除しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git 操作がタイムアウトしました。")
+        return False
+
+
+def _git_delete_remote_branch(working_branch: str, console: Console) -> bool:
+    """作業ブランチを origin から削除する（失敗 PR cleanup 用）。"""
+    try:
+        delete = subprocess.run(
+            ["git", "push", "origin", "--delete", working_branch],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+        )
+        if delete.returncode != 0:
+            console.warning(
+                f"作業ブランチ '{working_branch}' のリモート削除に失敗しました: {delete.stderr.strip()}"
+            )
+            return False
+        console.event(f"作業ブランチ '{working_branch}' を origin から削除しました。")
+        return True
+    except FileNotFoundError:
+        console.error("git コマンドが見つかりません。")
+        return False
+    except subprocess.TimeoutExpired:
+        console.error("git 操作がタイムアウトしました。")
+        return False
+
+
+def _cleanup_failed_pr_if_created(
+    pr_number: int,
+    working_branch: Optional[str],
+    config: SDKConfig,
+    console: Console,
+) -> None:
+    """失敗 Step 後に PR が作成済みだった場合の best-effort cleanup。
+
+    GitHub の PR は通常 API で物理削除できないため、実質的な撤去として
+    自動化ラベル除去 → PR close → remote/local head branch 削除を試みる。
+    各処理の失敗は cleanup 全体を止めず warning として記録する。
+    """
+    token = config.resolve_token()
+    repo = config.repo
+    if token and repo:
+        for label in (
+            "auto-approve-ready",
+            "auto-qa",
+            "adversarial-review",
+            "auto-context-review",  # 旧PR cleanup用の後方互換
+        ):
+            try:
+                api_call(
+                    "DELETE",
+                    f"https://api.github.com/repos/{repo}/issues/{pr_number}/labels/{quote(label, safe='')}",
+                    token=token,
+                    max_retries=1,
+                )
+                console.event(f"PR #{pr_number} から '{label}' ラベルを削除しました。")
+            except GitHubAPIError as exc:
+                if exc.status != 404:
+                    console.warning(f"PR #{pr_number} の '{label}' ラベル削除に失敗しました: {exc}")
+        try:
+            api_call(
+                "PATCH",
+                f"https://api.github.com/repos/{repo}/pulls/{pr_number}",
+                data={"state": "closed"},
+                token=token,
+                max_retries=1,
+            )
+            console.event(
+                f"PR #{pr_number} を close しました（GitHub PR は物理削除ではなく close がサポートされた撤去手段です）。"
+            )
+        except GitHubAPIError as exc:
+            console.warning(f"PR #{pr_number} の close に失敗しました: {exc}")
+    else:
+        console.warning("GH_TOKEN または REPO が未設定のため、PR close / ラベル削除をスキップします。")
+
+    if working_branch:
+        _git_delete_remote_branch(working_branch, console)
+        _git_delete_local_branch(working_branch, config.base_branch, console)
+
+
+def _wait_pr_merged_and_delete_local_branch(
+    pr_number: int,
+    working_branch: str,
+    config: SDKConfig,
+    console: Console,
+    poll_interval: float = 15.0,
+    timeout: float = 600.0,
+) -> bool:
+    """PR の merged を検知して作業ブランチをローカル削除する（FR-CLI-34）。
+
+    リモートの auto-approve-and-merge 完了（PR が merged）を最大 ``timeout`` 秒、
+    ``poll_interval`` 秒間隔でポーリングする。merged 検知時のみ削除する。
+    未マージ（closed 等）・タイムアウト・状態取得失敗・中断時は削除せず警告する。
+    リモートブランチは削除しない（github.com の自動削除設定に委ねる）。
+    """
+    if not _wait_pr_merged(
+        pr_number=pr_number,
+        config=config,
+        console=console,
+        poll_interval=poll_interval,
+        timeout=timeout,
+    ):
+        return False
+    _git_delete_local_branch(working_branch, config.base_branch, console)
+    return True
+
+
+def _wait_pr_merged(
+    pr_number: int,
+    config: SDKConfig,
+    console: Console,
+    poll_interval: float = 15.0,
+    timeout: float = 600.0,
+    require_check_runs: bool = True,
+) -> bool:
+    """PR の merged と、必要に応じて merge commit の check-run 成功を待機する。"""
+    deploy_gate_block_marker = "<!-- auto-approve-deploy-gate-blocked -->"
+    token = config.resolve_token()
+    repo = config.repo
+    if not token or not repo:
+        console.warning(
+            "GH_TOKEN または REPO が未設定のため、PR マージ完了待機をスキップします。"
+        )
+        return False
+    console.event(
+        f"PR #{pr_number} のマージ完了を待機します（最大 {int(timeout)} 秒）。"
+    )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            pr = get_pull_request(pr_number, repo=repo, token=token)
+        except GitHubAPIError as exc:
+            console.warning(
+                f"PR #{pr_number} の状態取得に失敗しました: {exc}"
+            )
+            return False
+        if pr.get("merged"):
+            merge_ref = str(pr.get("merge_commit_sha") or "").strip()
+            if require_check_runs and merge_ref and not _wait_check_runs_success(
+                merge_ref, config, console, poll_interval=poll_interval, timeout=timeout
+            ):
+                console.warning(
+                    f"PR #{pr_number} はマージ済みですが、merge commit の check-run 成功を確認できません。"
+                )
+                return False
+            return True
+        if pr.get("state") == "closed":
+            console.warning(
+                f"PR #{pr_number} はマージされずクローズされました。"
+            )
+            return False
+        try:
+            comments = list_issue_comments(pr_number, repo=repo, token=token)
+        except GitHubAPIError as exc:
+            console.warning(
+                f"PR #{pr_number} のコメント取得に失敗しました: {exc}"
+            )
+            comments = []
+        if any(deploy_gate_block_marker in str(c.get("body") or "") for c in comments):
+            console.warning(
+                f"PR #{pr_number} は auto-approve Deploy/AC gate で停止しています。"
+            )
+            return False
+        time.sleep(poll_interval)
+    console.warning(
+        f"PR #{pr_number} のマージを {int(timeout)} 秒以内に確認できませんでした。"
+    )
+    return False
+
+
+def _wait_check_runs_success(
+    ref: str,
+    config: SDKConfig,
+    console: Console,
+    poll_interval: float = 15.0,
+    timeout: float = 600.0,
+) -> bool:
+    """merge commit の check-runs が失敗していないことを確認する。"""
+    token = config.resolve_token()
+    repo = config.repo
+    if not token or not repo:
+        console.warning("GH_TOKEN または REPO が未設定のため check-run 確認をスキップできません。")
+        return False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            runs = list_check_runs_for_ref(ref, repo=repo, token=token)
+        except GitHubAPIError as exc:
+            console.warning(f"check-runs API の取得に失敗しました: {exc}")
+            return False
+
+        if not runs:
+            console.warning("check-run が見つからないため、post-merge 検証成功とは判定しません。")
+            return False
+
+        failed = [
+            r for r in runs
+            if str(r.get("conclusion") or "").lower()
+            in {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}
+        ]
+        if failed:
+            names = ", ".join(str(r.get("name") or "unknown") for r in failed[:5])
+            console.warning(f"失敗 check-run を検出しました: {names}")
+            return False
+
+        incomplete = [r for r in runs if str(r.get("status") or "").lower() != "completed"]
+        if not incomplete:
+            return True
+        time.sleep(poll_interval)
+    console.warning(f"check-run の完了を {int(timeout)} 秒以内に確認できませんでした。")
+    return False
 
 
 # -----------------------------------------------------------------------
@@ -817,6 +1635,52 @@ def _create_issues_if_needed(
     return root_issue_num, step_issue_map
 
 
+def _collect_deploy_ac_verification_lines(max_lines: int = 30) -> List[str]:
+    """run scoped ``ac-verification.md`` から AC テーブル行だけを収集する。
+
+    PR body 用の短い検証サマリーとして使うため、AC 行以外はコピーしない。
+    これによりログ内のシークレットや任意テキストを PR body に載せるリスクを抑える。
+    """
+    if max_lines <= 0:
+        return []
+    try:
+        from hve.split_fork import resolve_work_root
+    except Exception:
+        return []
+    try:
+        work_root = resolve_work_root()
+    except Exception:
+        return []
+    if not work_root.exists():
+        return []
+
+    rows: List[str] = []
+    for report_path in sorted(work_root.glob("**/ac-verification.md")):
+        if len(rows) > max_lines:
+            break
+        try:
+            text = report_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("|"):
+                continue
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if not cells:
+                continue
+            ac_id = cells[0]
+            if not (ac_id.startswith("AC-") or ac_id.startswith("AC4B-")):
+                continue
+            rows.append("| " + " | ".join(cells[:3]) + " |")
+            if len(rows) > max_lines:
+                break
+
+    if len(rows) > max_lines:
+        return rows[:max_lines] + [f"...（{max_lines} 行上限で省略）"]
+    return rows
+
+
 # -----------------------------------------------------------------------
 # Fan-out 事前展開（ADR-0002 / 修正タスク fanout-fix）
 # -----------------------------------------------------------------------
@@ -831,6 +1695,8 @@ def _expand_workflow_for_dag(
     workflow: Any,
     active_step_ids: Set[str],
     repo_root: Any,
+    *,
+    app_ids: Optional[List[str]] = None,
 ) -> Tuple[Any, Set[str], Any]:
     """fan-out 展開済み workflow と拡張済み active_step_ids を返す。
 
@@ -838,6 +1704,10 @@ def _expand_workflow_for_dag(
         workflow: 元の WorkflowDef（``_ard_force_serial`` 等の deepcopy 改変後）。
         active_step_ids: フィルタ済みアクティブ step_id 集合（ベース ID を含む）。
         repo_root: catalog_parsers がカタログファイルを探すルート。
+        app_ids: GUI / CLI で指定された対象 APP-ID リスト。``None`` または空
+            リストの場合はフィルタを適用せず全 fan-out キーを展開する（後方互換）。
+            指定がある場合は ``expand_workflow_fanout`` 経由で
+            ``_APP_ID_FILTERABLE_PARSERS`` 対象 parser の展開キーを絞り込む。
 
     Returns:
         ``(expanded_workflow, expanded_active_step_ids, info)``
@@ -864,7 +1734,7 @@ def _expand_workflow_for_dag(
     except ImportError:  # pragma: no cover
         from catalog_parsers import get_parser_input_path  # type: ignore[no-redef]
 
-    info = expand_workflow_fanout(workflow, repo_root)
+    info = expand_workflow_fanout(workflow, repo_root, app_ids=app_ids)
 
     # fan-out が 1 件もなかった場合は元 workflow をそのまま返す
     if not info.fanout_map:
@@ -992,36 +1862,37 @@ def _build_step_prompt(
 ) -> str:
     """ステップのプロンプト文字列を構築する。
 
-    テンプレートが存在する場合はそれを展開して返す。
-    テンプレートが存在しない場合やレンダリングに失敗した場合は、
+    `step.body_template_path` が宣言されている場合はテンプレートを展開して返す。
+    展開に失敗した場合（例外送出・空文字列 / None）は簡易プロンプトへ
+    フォールバックせず、DAG 実行前にエラーとして停止させる (FR-CLI-71)。
+    `body_template_path` が宣言されていない Step は従来どおり
     「Step.{id}: タイトル」を先頭行とし、利用可能であれば
     branch / resource_group / app_id などのステップ情報を続けた
     複数行のシンプルなプロンプトを組み立てて返す。
     いずれの場合も additional_prompt が指定された場合は、
     末尾に空行を挟んで追記する。
     """
-    # P-B: Custom Agent が割り当たる Step には subissues.md フォーマット最小例を
-    # `_LANGUAGE_DIRECTIVE_JA` 直後に挿入する。プロンプト末尾 (`additional_prompt`)
-    # は変更しないため、`endswith()` を検証する既存テストを破壊しない。
-    _subissues_hint = _subissues_format_hint_for_step(step)
-
     if step.body_template_path:
-        try:
-            prompt = render_template_fn(
-                template_path=step.body_template_path,
-                root_issue_num=root_issue_num or 0,
-                params=params,
-                wf=wf,
-                execution_mode=execution_mode,
+        prompt = render_template_fn(
+            template_path=step.body_template_path,
+            root_issue_num=root_issue_num or 0,
+            params=params,
+            wf=wf,
+            execution_mode=execution_mode,
+        )
+        # FR-CLI-71: `render_template` はテンプレートが存在しない / 空の場合に
+        # 空文字列を返す。これを簡易プロンプトで代替すると壊れた縮退プロンプトで
+        # Agent セッションを開始してしまうため、レンダリング失敗として停止する。
+        if not prompt:
+            raise ValueError(
+                f"Step.{step.id}: body_template_path のレンダリング結果が空です: "
+                f"{step.body_template_path}"
             )
-            if prompt:
-                if additional_prompt:
-                    prompt = prompt + "\n\n" + additional_prompt
-                return _LANGUAGE_DIRECTIVE_JA + _subissues_hint + prompt
-        except Exception:
-            pass
+        if additional_prompt:
+            prompt = prompt + "\n\n" + additional_prompt
+        return _LANGUAGE_DIRECTIVE_JA + prompt
 
-    # フォールバック: シンプルなプロンプト
+    # body_template_path 未宣言 Step: シンプルなプロンプト（FR-CLI-71 の対象外）
     parts = [f"# Step.{step.id}: {step.title}\n"]
     if params.get("branch"):
         parts.append(f"対象ブランチ: `{params['branch']}`")
@@ -1035,46 +1906,7 @@ def _build_step_prompt(
     fallback = "\n".join(parts)
     if additional_prompt:
         fallback = fallback + "\n\n" + additional_prompt
-    return _LANGUAGE_DIRECTIVE_JA + _subissues_hint + fallback
-
-
-# P-B: subissues.md フォーマット最小例（インライン注入用）。
-# Agent が `task-dag-planning` Skill を読まずにテーブル形式で subissues.md を
-# 生成する事例が観測されたため、Custom Agent 割当 Step のプロンプト冒頭に
-# 直接フォーマット必須ルールを埋め込む。
-# 詳細仕様: `.github/skills/task-dag-planning/references/subissues-template.md`
-_SUBISSUES_FORMAT_HINT = (
-    "**subissues.md フォーマット必須ルール（task_scope=multi / context_size=large 時）**:\n"
-    "- 各サブタスクは下記 HTML コメントブロック形式で記述すること。**Markdown テーブル形式は禁止**。\n"
-    "- 詳細仕様: `.github/skills/task-dag-planning/references/subissues-template.md`\n"
-    "\n"
-    "```markdown\n"
-    "<!-- parent_issue: <番号 or TBD> -->\n"
-    "\n"
-    "<!-- subissue -->\n"
-    "<!-- title: <タイトル> -->\n"
-    "<!-- custom_agent: <Agent 名> -->\n"
-    "<!-- depends_on: <番号カンマ区切り or 空> -->\n"
-    "## Sub-1\n"
-    "- 対象: ...\n"
-    "- AC: ...\n"
-    "```\n"
-    "\n"
-)
-
-
-def _subissues_format_hint_for_step(step) -> str:
-    """Step に対して subissues.md フォーマット hint を返す。
-
-    Custom Agent が割り当てられたコンテナ以外の Step に対してのみ hint を返す。
-    それ以外（コンテナ Step / custom_agent=None）は空文字列を返し、プロンプトに
-    変更を加えない。
-    """
-    custom_agent = getattr(step, "custom_agent", None)
-    is_container = bool(getattr(step, "is_container", False))
-    if not custom_agent or is_container:
-        return ""
-    return _SUBISSUES_FORMAT_HINT
+    return _LANGUAGE_DIRECTIVE_JA + fallback
 
 
 # -----------------------------------------------------------------------
@@ -1118,11 +1950,11 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
         "service_catalog": "docs/catalog/service-catalog.md",
         "data_model": "docs/catalog/data-model.md",
         "domain_analytics": "docs/catalog/domain-analytics.md",
-        "screen_catalog": "docs/catalog/screen-catalog.md",
         "test_strategy": "docs/catalog/test-strategy.md",
         "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
         "use_case_catalog": "docs/catalog/use-case-catalog.md",
-        "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
+        "persona_catalog": "docs/catalog/persona-catalog.md",
+        "dataflow_catalog": "docs/catalog/app-catalog.md",  # ADFD は AAS の共通カタログを SoT として参照
         "batch_service_catalog": "docs/dataflow/dataflow-service-catalog.md",
         "batch_data_model": "docs/dataflow/dataflow-data-model.md",
         "batch_domain_analytics": "docs/dataflow/dataflow-domain-analytics.md",
@@ -1131,6 +1963,12 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     for key, path in catalog_files.items():
         if os.path.exists(path):
             existing[key] = path
+
+    # screen_catalog は per-APP 分割形式 (Arch-UI-List Step 1 fan-out)
+    # 1 件以上ヒットしたファイル一覧を返す。
+    screen_catalogs = _glob.glob("docs/catalog/screen-catalog-APP-*.md")
+    if screen_catalogs:
+        existing["screen_catalog"] = screen_catalogs
 
     # サービス詳細仕様書の検出
     service_specs = _glob.glob("docs/services/*.md")
@@ -1196,11 +2034,12 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "service_catalog": "docs/catalog/service-catalog.md",
     "data_model": "docs/catalog/data-model.md",
     "domain_analytics": "docs/catalog/domain-analytics.md",
-    "screen_catalog": "docs/catalog/screen-catalog.md",
+    "screen_catalog": "docs/catalog/screen-catalog-APP-*.md",
     "test_strategy": "docs/catalog/test-strategy.md",
     "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
     "use_case_catalog": "docs/catalog/use-case-catalog.md",
-    "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
+    "persona_catalog": "docs/catalog/persona-catalog.md",
+    "dataflow_catalog": "docs/catalog/app-catalog.md",  # ADFD は AAS の共通カタログを SoT として参照
     "batch_service_catalog": "docs/dataflow/dataflow-service-catalog.md",
     "batch_data_model": "docs/dataflow/dataflow-data-model.md",
     "batch_domain_analytics": "docs/dataflow/dataflow-domain-analytics.md",
@@ -1230,7 +2069,8 @@ _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
     "use_case_catalog": "ard",  # ARD Step 4.3 で生成（旧仕様では user_provided）
-    "dataflow_catalog": "adfd",
+    "persona_catalog": "aas",   # T-H3: AAS Step 9 (Arch-PersonaCatalog) で生成
+    "dataflow_catalog": "aas",  # docs/catalog/app-catalog.md を AAS Step.1 が生成
     "batch_service_catalog": "adfd",
     "batch_data_model": "adfd",
     "batch_domain_analytics": "adfd",
@@ -1315,7 +2155,17 @@ def _check_workflow_input_artifacts(
         console: Console インスタンス。
 
     Returns:
-        {"should_abort": bool, "error": str | None}
+        {"should_abort": bool, "error": str | None,
+         "blocked": bool, "blocked_step_ids": List[str]}
+
+        ``blocked`` は新 status ``"blocked"`` の入口フラグ。strict モードで
+        consumed_artifacts 不足を検出した場合に True となり、``blocked_step_ids``
+        に該当ルートステップ ID が列挙される。上位レイヤー (``_run_workflow``) は
+        この情報を結果 dict の ``"blocked"`` キーに伝播し、後続レイヤーが
+        「failed と区別された停止」として扱える。
+
+        warning モード時、または missing が無い場合は ``blocked=False`` /
+        ``blocked_step_ids=[]``。
     """
     all_missing: List[dict] = []
 
@@ -1331,7 +2181,12 @@ def _check_workflow_input_artifacts(
             all_missing.append({**m, "step_id": step.id})
 
     if not all_missing:
-        return {"should_abort": False, "error": None}
+        return {
+            "should_abort": False,
+            "error": None,
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
 
     # メッセージ構築
     lines = [
@@ -1350,21 +2205,39 @@ def _check_workflow_input_artifacts(
             f" (Step {item['step_id']}){hint}"
         )
 
+    # 重複なしの順序保持リスト (検出順)
+    blocked_step_ids: List[str] = []
+    for item in all_missing:
+        sid = item.get("step_id")
+        if sid and sid not in blocked_step_ids:
+            blocked_step_ids.append(sid)
+
     if config.require_input_artifacts:
         lines.append(
-            "\nstrict モード (HVE_REQUIRE_INPUT_ARTIFACTS=true) のため実行を中断します。"
+            "\nstrict モード (HVE_REQUIRE_INPUT_ARTIFACTS=true) のため実行を中断します "
+            "(status=blocked)。"
             "\n警告モードで実行するには HVE_REQUIRE_INPUT_ARTIFACTS=false（デフォルト）を設定してください。"
         )
         msg = "\n".join(lines)
         console.error(msg)
-        return {"should_abort": True, "error": msg}
+        return {
+            "should_abort": True,
+            "error": msg,
+            "blocked": True,
+            "blocked_step_ids": blocked_step_ids,
+        }
     else:
         lines.append(
             "\n(warning モード: 続行します。strict モードにするには HVE_REQUIRE_INPUT_ARTIFACTS=true を設定してください)"
         )
         msg = "\n".join(lines)
         console.warning(msg)
-        return {"should_abort": False, "error": None}
+        return {
+            "should_abort": False,
+            "error": None,
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
 
 
 def _check_required_skills_for_active_steps(
@@ -1373,7 +2246,15 @@ def _check_required_skills_for_active_steps(
     active_steps: Set[str],
     console: "Console",
 ) -> dict:
-    """active step に required_skills があれば、存在する skill 名かを事前検証する。"""
+    """active step に required_skills があれば、存在する skill 名かを事前検証する。
+
+    Returns:
+        dict: ``should_abort`` / ``error`` / ``blocked`` / ``blocked_step_ids``
+        を含む結果。``blocked`` は T-H1H2b で追加されたフィールドで、strict
+        モードかつ必須 Skill 不足を検出した場合に True となる。``blocked_step_ids``
+        には該当 step ID が wf.steps 順で重複除去されて列挙される。上位レイヤー
+        (``run_workflow``) は ``failed`` と区別して「停止」として扱える。
+    """
     try:
         try:
             from .skill_resolver import get_required_skills_for_step, validate_skill_names
@@ -1383,16 +2264,23 @@ def _check_required_skills_for_active_steps(
         console.warning(
             f"Skill resolver の読み込みに失敗したため skill 事前検証をスキップします: {exc}"
         )
-        return {"should_abort": False, "error": None}
+        return {"should_abort": False, "error": None, "blocked": False, "blocked_step_ids": []}
 
+    resolved_workflow_id = getattr(wf, "id", None)
+    if not isinstance(resolved_workflow_id, str) or not resolved_workflow_id:
+        resolved_workflow_id = workflow_id
+    active_base_step_ids = {
+        str(active_step_id).split("/", 1)[0]
+        for active_step_id in active_steps
+    }
     missing_rows: List[Dict[str, Any]] = []
     for step in wf.steps:
-        if step.is_container or step.id not in active_steps:
+        if step.is_container or step.id not in active_base_step_ids:
             continue
 
         declared = list(getattr(step, "required_skills", []) or [])
         required = get_required_skills_for_step(
-            workflow_id=workflow_id,
+            workflow_id=resolved_workflow_id,
             step_id=step.id,
             step_declared_required=declared,
         )
@@ -1411,7 +2299,7 @@ def _check_required_skills_for_active_steps(
             )
 
     if not missing_rows:
-        return {"should_abort": False, "error": None}
+        return {"should_abort": False, "error": None, "blocked": False, "blocked_step_ids": []}
 
     lines = ["必須 skill が見つかりません。以下を修正してください:"]
     for row in missing_rows:
@@ -1423,31 +2311,437 @@ def _check_required_skills_for_active_steps(
 
     msg = "\n".join(lines)
     console.error(msg)
-    return {"should_abort": True, "error": msg}
+    # T-H1H2b: 順序保持 dedup で blocked step ID を列挙
+    blocked_step_ids: List[str] = []
+    for row in missing_rows:
+        sid = row.get("step_id")
+        if sid and sid not in blocked_step_ids:
+            blocked_step_ids.append(sid)
+    return {
+        "should_abort": True,
+        "error": msg + " (status=blocked)",
+        "blocked": True,
+        "blocked_step_ids": blocked_step_ids,
+    }
 
 
-def collect_workflow_output_paths(workflow_id: str) -> List[str]:
-    """ワークフローの全ステップの output_paths を集約して返す。
+def _check_required_workflow_params_for_active_steps(
+    wf,
+    active_steps: Set[str],
+    params: Mapping[str, Any],
+    console: "Console",
+) -> dict:
+    """active step が宣言した必須 Workflow パラメータを実行開始前に検査する（FR-DAG-08）。
 
-    全 StepDef を走査して output_paths を収集し、重複除去・順序維持したリストを返す。
-    output_paths が未定義または空の Step が混在しても安全に動作する。
-    ワークフローが見つからない場合は空リストを返す。
+    `StepDef.required_params`（FR-DAG-07）を単一情報源として、値が
+    未設定 / ``None`` / 空白のみ / ``str`` 以外のいずれかであるキーを不足として扱う。
+
+    **不足は全件を 1 回で報告する**。1 件ずつしか報告しないと、利用者は
+    不足件数と同じ回数だけ長時間ワークフローを再実行することになる。
+
+    Returns:
+        dict: ``should_abort`` / ``error`` / ``blocked`` / ``blocked_step_ids``。
+        本チェックは常に strict（不足があれば ``should_abort=True``）である。
+        必須パラメータは同一ワークフロー内の先行 Step では解消され得ないため、
+        警告降格の余地がない。
+    """
+    try:
+        from .workflow_registry import steps_declaring_params
+    except ImportError:
+        from workflow_registry import steps_declaring_params  # type: ignore[no-redef]
+
+    missing_rows: List[Dict[str, Any]] = []
+    for step in steps_declaring_params(wf, active_steps):
+        for key in step.required_params:
+            value = params.get(key)
+            if isinstance(value, str) and value.strip():
+                continue
+            missing_rows.append(
+                {
+                    "step_id": step.id,
+                    "step_title": getattr(step, "title", step.id),
+                    "param": key,
+                    "has_default": key in step.default_params,
+                }
+            )
+
+    if not missing_rows:
+        return {
+            "should_abort": False,
+            "error": None,
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
+
+    lines = [
+        f"必須パラメータが未指定です（{len(missing_rows)} 件）。"
+        "以下を全て指定してから再実行してください:",
+    ]
+    for row in missing_rows:
+        note = "（既定値あり。指定値が不正の可能性）" if row["has_default"] else ""
+        lines.append(
+            f"  - Step.{row['step_id']} {row['step_title']}: {row['param']}{note}"
+        )
+    msg = "\n".join(lines)
+    console.error(msg)
+
+    blocked_step_ids: List[str] = []
+    for row in missing_rows:
+        sid = row["step_id"]
+        if sid not in blocked_step_ids:
+            blocked_step_ids.append(sid)
+    return {
+        "should_abort": True,
+        "error": msg + " (status=blocked)",
+        "blocked": True,
+        "blocked_step_ids": blocked_step_ids,
+    }
+
+
+def _check_dirty_hve_sources(
+    console: "Console",
+    target_output_paths: Optional[List[str]] = None,
+) -> dict:
+    """HVE ソースの未コミット変更を run 開始前に検査する（FR-CLI-74）。
+
+    HVE ソース（``hve/`` / ``mdq/`` / ``hve-dev/`` / ``.github/prompts/`` /
+    ``.github/skills/`` / ``.github/scripts/`` / ``.github/io-contracts/``）に
+    未コミット変更があるまま run を開始すると、その差分が生成対象アプリの
+    branch / commit / PR に混入する。**検出した全パスを 1 回で一括報告する**。
+    1 件ずつ報告すると、利用者は件数と同じ回数だけ run をやり直すことになる。
+
+    利用者が明示的に指定した target 出力パス配下は対象外とする。
+
+    本チェックは常に strict であり、無効化するフラグは提供しない
+    （FR-CLI-74: 「新しい override フラグを追加してはならない」）。
+
+    Returns:
+        dict: ``should_abort`` / ``error`` / ``blocked`` / ``blocked_step_ids``。
+        ``blocked_step_ids`` は Step 単位ではなくリポジトリ単位の停止のため
+        センチネル ``"hve-source-dirty"`` を返す。
+    """
+    dirty_paths = _git_dirty_hve_source_paths(target_output_paths=target_output_paths)
+    if not dirty_paths:
+        return {
+            "should_abort": False,
+            "error": None,
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
+
+    msg = _format_dirty_hve_source_error(dirty_paths)
+    console.error(msg)
+    return {
+        "should_abort": True,
+        "error": msg + " (status=blocked)",
+        "blocked": True,
+        "blocked_step_ids": ["hve-source-dirty"],
+    }
+
+
+def _collect_workflow_output_paths_by_step(
+    workflow_id: str,
+    repo_root: Path | str = ".",
+) -> Tuple[Any, Dict[str, List[str]], List[str]]:
+    """ベース Step ID → 具体 output_paths と fan-out キー一覧を収集する。
+
+    ``collect_workflow_output_paths``（平坦なリスト）と
+    ``workflow_output_paths_cover_workflow``（被覆判定）が同一の収集規則を
+    共有するための内部ヘルパー。fan-out は全ワークフローに対して試みる。
+    ワークフローが見つからない場合は ``(None, {}, [])`` を返す。
+    """
+    wf = get_workflow(workflow_id)
+    if wf is None:
+        return None, {}, []
+
+    by_step: Dict[str, List[str]] = {}
+
+    def _record(step_id: str, paths: Any) -> None:
+        bucket = by_step.setdefault(step_id, [])
+        for path in paths or []:
+            if path not in bucket:
+                bucket.append(path)
+
+    # 固定成果物は fan-out 親にも定義されるため、展開前に必ず収集する。
+    for step in wf.steps:
+        _record(step.id, getattr(step, "output_paths", None))
+
+    fanout_keys: List[str] = []
+    try:
+        try:
+            from .fanout_expander import expand_workflow_fanout
+        except ImportError:  # pragma: no cover - script execution
+            from fanout_expander import expand_workflow_fanout  # type: ignore[no-redef]
+
+        expanded = expand_workflow_fanout(wf, Path(repo_root))
+        for step in expanded.steps:
+            base_id = str(getattr(step, "base_step_id", "") or step.id)
+            _record(base_id, getattr(step, "output_paths", None))
+            key = str(getattr(step, "fanout_key", "") or "")
+            if key and key not in fanout_keys:
+                fanout_keys.append(key)
+    except Exception:
+        # catalog が未生成・不正でも固定成果物の収集は維持する。
+        # 実行時 fan-out と同様、scope 解決だけを理由に workflow を停止しない。
+        fanout_keys = []
+
+    return wf, by_step, fanout_keys
+
+
+def collect_workflow_output_paths(
+    workflow_id: str,
+    repo_root: Path | str = ".",
+) -> List[str]:
+    """ワークフローの全ステップの具体的な output_paths を集約して返す。
+
+    全 StepDef の固定 output_paths に加え、catalog を使って fan-out を展開し、
+    ``output_paths_template`` の ``{key}`` を解決する。AAGD の実装・テスト
+    ディレクトリは既存 StepDef の downstream input 契約から補完する。
+    重複を除去し、最初の出現順を維持する。ワークフローが見つからない場合は
+    空リストを返す。
 
     Self-Improve の target scope 解決（run_workflow 内）から呼び出されるほか、
     テストから直接インポートして利用することができる。
     """
-    wf = get_workflow(workflow_id)
+    wf, by_step, fanout_keys = _collect_workflow_output_paths_by_step(
+        workflow_id,
+        repo_root=repo_root,
+    )
     if wf is None:
         return []
-    seen: dict = {}
+
+    seen: Set[str] = set()
     result: List[str] = []
+
+    def _append(paths: Any) -> None:
+        for path in paths or []:
+            if path not in seen:
+                seen.add(path)
+                result.append(path)
+
     for step in wf.steps:
-        paths = getattr(step, "output_paths", None) or []
-        for p in paths:
-            if p not in seen:
-                seen[p] = True
-                result.append(p)
+        _append(getattr(step, "output_paths", None))
+    for step in wf.steps:
+        _append(by_step.get(step.id))
+
+    if workflow_id == "aagd":
+        # 現行 AAGD StepDef はこれらを downstream required_input_paths として
+        # 宣言している。Self-Improve scope には生成物側として明示的に含める。
+        for key in fanout_keys:
+            _append([
+                f"src/test/agent/{key}.Tests",
+                f"src/agent/{key}",
+            ])
+
     return result
+
+
+def workflow_output_paths_cover_workflow(
+    workflow_id: str,
+    repo_root: Path | str = ".",
+) -> bool:
+    """収集した具体 path が workflow 全体を代表しうるかを判定する。
+
+    Self-Improve の target scope は「その workflow が生成した成果物の集合」を
+    代表しなければならない。部分的な ``output_paths`` 宣言をそのまま scope と
+    して採用すると、未宣言 Step の成果物が恒久的に scope 外へ落ちる
+    （例: ADFDV で末尾の QA Step だけ宣言すると scope が既定の ``"."`` から
+    レビュー文書 2 件へ縮小する）。
+
+    判定規則: workflow の DAG 根（依存を持たない非コンテナ Step）が **すべて**
+    1 件以上の具体 path を寄与していること。根は必ず実行され基盤成果物を
+    生成するため、根の成果物すら含まない集合は workflow の末端断片であり
+    全体を代表しない。fan-out Step は展開に成功して初めて寄与とみなす
+    （catalog 未生成で展開できない場合、宣言した ``{key}`` 成果物が scope から
+    欠落し、宣言と実 scope が不一致になるため）。
+
+    False のとき呼び出し側は ``SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS`` の
+    既定ディレクトリ（floor）へフォールバックする。
+    """
+    wf, by_step, _ = _collect_workflow_output_paths_by_step(
+        workflow_id,
+        repo_root=repo_root,
+    )
+    if wf is None:
+        return False
+
+    root_ids = [step.id for step in wf.get_root_steps()]
+    if not root_ids:
+        return False
+    return all(by_step.get(step_id) for step_id in root_ids)
+
+
+def _self_improve_result_succeeded(
+    result: Optional[Dict[str, Any]],
+    task_goal: Optional[Any],
+) -> bool:
+    """Post-DAG Self-Improveが上位workflowを成功させてよいか判定する。"""
+    if not isinstance(result, dict):
+        return False
+    if result.get("stopped_reason") not in {
+        "no_improvement_needed",
+        "threshold_reached",
+    }:
+        return False
+    if result.get("blocked_reason"):
+        return False
+
+    verification = result.get("final_verification")
+    if (
+        not isinstance(verification, dict)
+        or verification.get("overall") != "PASS"
+    ):
+        return False
+
+    goal_definitions = (
+        task_goal.get("criterion_definitions", [])
+        if isinstance(task_goal, dict)
+        else []
+    )
+    required_ids = {
+        item.get("criterion_id")
+        for item in goal_definitions
+        if isinstance(item, dict)
+        and item.get("required_for_done") is True
+        and isinstance(item.get("criterion_id"), str)
+        and item.get("criterion_id")
+    }
+    if required_ids:
+        criterion_results = result.get("final_criterion_results", [])
+        if not isinstance(criterion_results, list):
+            return False
+        by_id = {
+            item.get("criterion_id"): item
+            for item in criterion_results
+            if isinstance(item, dict)
+        }
+        for criterion_id in required_ids:
+            criterion = by_id.get(criterion_id, {})
+            evidence = criterion.get("evidence", [])
+            if (
+                criterion.get("status") != "PASS"
+                or not isinstance(evidence, list)
+                or not evidence
+                or any(
+                    not isinstance(item, dict)
+                    or item.get("status") != "PASS"
+                    for item in evidence
+                )
+            ):
+                return False
+        if (
+            not isinstance(verification, dict)
+            or verification.get("overall") != "PASS"
+        ):
+            return False
+    return True
+
+
+def _agent_fanout_scope_precondition_error(
+    workflow_id: str,
+    output_paths: List[str],
+    repo_root: Path,
+) -> str:
+    """AAG/AAGDの固定成果物と全fan-out keyの実体を確認する。"""
+    try:
+        from .self_improve import _path_has_symlink_component
+    except ImportError:  # pragma: no cover - top-level module import compatibility
+        from self_improve import _path_has_symlink_component  # type: ignore[no-redef]
+
+    def _real_file(relative: str) -> bool:
+        return (
+            not _path_has_symlink_component(relative, repo_root)
+            and (repo_root / relative).is_file()
+        )
+
+    def _real_dir(relative: str) -> bool:
+        return (
+            not _path_has_symlink_component(relative, repo_root)
+            and (repo_root / relative).is_dir()
+        )
+
+    if workflow_id == "aag":
+        fixed = {
+            "docs/agent/agent-application-definition.md",
+            "docs/agent/agent-architecture.md",
+            "docs/ai-agent-catalog.md",
+        }
+        details = [
+            path for path in output_paths
+            if path.startswith("docs/agent/agent-detail-")
+            and path.endswith(".md")
+        ]
+        aag_missing = sorted(
+            path for path in [*fixed, *details]
+            if path not in output_paths or not _real_file(path)
+        )
+        if not details:
+            aag_missing.append("docs/agent/agent-detail-{key}.md")
+        if aag_missing:
+            return "required_agent_fanout_incomplete: " + ", ".join(aag_missing)
+        return ""
+    if workflow_id == "aagd":
+        agent_keys = {
+            path.removeprefix("src/agent/").rstrip("/")
+            for path in output_paths if path.startswith("src/agent/")
+        }
+        test_keys = {
+            path.removeprefix("src/test/agent/").removesuffix(".Tests").rstrip("/")
+            for path in output_paths
+            if path.startswith("src/test/agent/") and path.rstrip("/").endswith(".Tests")
+        }
+        spec_keys = {
+            path.removeprefix("docs/test-specs/").removesuffix("-test-spec.md")
+            for path in output_paths
+            if path.startswith("docs/test-specs/") and path.endswith("-test-spec.md")
+        }
+        all_keys = agent_keys | test_keys | spec_keys
+        aagd_missing: List[str] = []
+        definition = "docs/agent/agent-application-definition.md"
+        if definition not in output_paths or not _real_file(definition):
+            aagd_missing.append(definition)
+        if not all_keys:
+            aagd_missing.append("{agent-key}")
+        if agent_keys != all_keys or test_keys != all_keys or spec_keys != all_keys:
+            aagd_missing.append("fanout-key-set-mismatch")
+        for key in sorted(all_keys):
+            expected = (
+                (f"docs/test-specs/{key}-test-spec.md", _real_file),
+                (f"src/test/agent/{key}.Tests", _real_dir),
+                (f"src/agent/{key}", _real_dir),
+            )
+            aagd_missing.extend(path for path, predicate in expected if not predicate(path))
+        if aagd_missing:
+            return "required_agent_fanout_incomplete: " + ", ".join(sorted(set(aagd_missing)))
+        return ""
+    return ""
+
+
+def _uses_workflow_branch_mode(workflow_id: str, config: "SDKConfig") -> bool:
+    """DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。"""
+    if config.create_issues or config.create_pr:
+        # 明示的な Issue/PR 作成モードは既存互換の workflow-wide branch を維持する。
+        # ASDW-WEB の Step 単位 remote CI/CD は、GUI/CLI の github.com CI/CD
+        # (enable_auto_merge) のみを ON にしたローカル実行経路で適用する。
+        return True
+    # ASDW-WEB の github.com CI/CD は Step 単位ブランチへ分離する。
+    if workflow_id == "asdw-web" and getattr(config, "enable_auto_merge", False):
+        return False
+    # enable_auto_merge 単独で workflow-wide branch を作るのは ADFDV のみ。
+    return (
+        workflow_id == "adfdv"
+        and bool(getattr(config, "enable_auto_merge", False))
+    )
+
+
+def _remote_cicd_step_ids(wf: Any, active_steps: Set[str]) -> Set[str]:
+    """active_steps のうち Step 単位 remote CI/CD 対象 ID を返す。"""
+    return {
+        s.id for s in getattr(wf, "steps", [])
+        if not getattr(s, "is_container", False)
+        and s.id in active_steps
+        and bool(getattr(s, "requires_remote_cicd", False))
+    }
 
 
 def _compute_step_additional_prompt(
@@ -1519,14 +2813,14 @@ def _compute_step_additional_prompt(
     return result
 
 
-# NOTE: subissues.md フォーマット遵守は以下の 2 経路で担保する:
-#   1. **Orchestrator 側のインライン注入** (P-B / `_subissues_format_hint_for_step`):
-#      Custom Agent 割当 Step のプロンプト冒頭に最小例を直接埋め込む。
-#      Agent が Skill を読み飛ばしてもフォーマットを誤らせない一次防御。
-#   2. **Skill 経由の規約**:
-#      - Skill `task-dag-planning` §subissues.md 作成規約（SKILL.md 本体に明記）
-#      - Skill `agent-common-preamble` §subissues.md コミット前バリデーション
-#        （`.github/scripts/{bash,powershell}/validate-subissues.{sh,ps1}` を全 Agent 必須化）
+# NOTE: subissues.md フォーマット遵守は Skill 経由の規約で担保する:
+#   - Skill `task-dag-planning` §subissues.md 作成規約（SKILL.md 本体に明記）
+#   - Skill `agent-common-preamble` §subissues.md コミット前バリデーション
+#     （`.github/scripts/{bash,powershell}/validate-subissues.{sh,ps1}` を全 Agent 必須化）
+# FR-CLI-70: CLI / GUI 実行経路 (`_build_step_prompt`) では subissues.md の
+# フォーマット例をインライン注入しない。CLI / GUI Orchestrator 配下では
+# workflow DAG / fan-out で分割を表現し、`subissues.md` runtime fork は
+# legacy / 明示 opt-in であるため、常時注入は誤った作業指示になる。
 # 失敗時は `parse_subissues_md` がテーブル形式を検知して actionable なエラーを返す (P-A)。
 
 
@@ -1676,7 +2970,6 @@ async def _prefetch_workiq_detailed(
     _start = time.monotonic()
 
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
     except ImportError:
         console.warning(
@@ -1688,16 +2981,17 @@ async def _prefetch_workiq_detailed(
             elapsed_seconds=time.monotonic() - _start,
         )
 
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level="error",
+    try:
+        client = _create_copilot_client_from_config(config, log_level="error")
+    except ImportError:
+        console.warning(
+            "Copilot SDK が利用できないため Work IQ 事前取得をスキップします。"
         )
-
-    client = CopilotClient(config=sdk_cfg)
+        return WorkIQPrefetchResult(
+            error_type="sdk_import_failure",
+            error_message="Copilot SDK が利用できません",
+            elapsed_seconds=time.monotonic() - _start,
+        )
     await client.start()
 
     try:
@@ -1711,17 +3005,20 @@ async def _prefetch_workiq_detailed(
                 config, "orchestrator", suffix="workiq-prefetch"
             ),
         }
-        # Auto 選択時は明示的に DEFAULT_MODEL + reasoning_effort=high を指定する。
-        # CLI ユーザー設定 (~/.copilot/settings.json) で `claude-opus-4.7-high` 等の
-        # reasoning_effort 固定バリアントが設定されていると、SDK 経由で渡した
-        # reasoning_effort が CAPI 側で不整合となり 400 エラーになるため、
-        # 無印バリアントを明示してユーザー設定を上書きする。
-        if config.model and config.model != MODEL_AUTO_VALUE:
-            _session_opts["model"] = config.model
-        else:
-            _session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        # 明示モデル時はそのまま渡す。空 / None は payload から省略（CLI 既定動作）。
+        _wire_model = to_wire_model(config.model)
+        if _wire_model:
+            _session_opts["model"] = _wire_model
         _apply_reasoning_effort(_session_opts, config, kind="main")
-        session = await _create_session_with_auto_reasoning_fallback(client, _session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            _session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="orchestrator",
+            console=console,
+        )
 
         # ツール呼び出し追跡
         _called_tools: list = []
@@ -1856,67 +3153,6 @@ async def _prefetch_workiq_detailed(
         await client.stop()
 
 
-def _append_workiq_prefetch_log(
-    log_path: Path,
-    *,
-    event_type: str,
-    query_label: str,
-    content: str = "",
-    error_type: Optional[str] = None,
-    error_message: Optional[str] = None,
-    resolved_npx_command: Optional[str] = None,
-    tenant_id_specified: bool = False,
-    tool_called: Optional[bool] = None,
-    called_tools: Optional[list] = None,
-    mcp_status: Optional[str] = None,
-    event_subscription_succeeded: Optional[bool] = None,
-    result_source: Optional[str] = None,
-    safe_to_inject: Optional[bool] = None,
-) -> None:
-    """Work IQ prefetch の prompt / result / error を JSONL へ追記する。
-
-    エラーイベント（event_type が ``.error`` で終わるもの）または
-    error_type が指定されている場合は content が空でも書き込む。機微情報は含めないこと。
-    """
-    is_error_event = event_type.endswith(".error") or event_type.endswith("_error") or error_type is not None
-    if not is_error_event and (not content or not content.strip()):
-        return
-
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    record: dict = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "eventType": event_type,
-        "queryLabel": query_label,
-    }
-    if content:
-        record["content"] = content
-    if error_type:
-        record["errorType"] = error_type
-    if error_message:
-        record["message"] = error_message
-    if resolved_npx_command:
-        record["resolvedNpxCommand"] = resolved_npx_command
-    if tenant_id_specified:
-        record["tenantIdSpecified"] = True
-    if tool_called is not None:
-        record["toolCalled"] = tool_called
-    if called_tools is not None:
-        record["calledTools"] = called_tools
-    if mcp_status is not None:
-        record["mcpStatus"] = mcp_status
-    if event_subscription_succeeded is not None:
-        record["eventSubscriptionSucceeded"] = event_subscription_succeeded
-    if result_source is not None:
-        record["resultSource"] = result_source
-    if safe_to_inject is not None:
-        record["safeToInject"] = safe_to_inject
-    try:
-        with log_path.open("a", encoding="utf-8") as fp:
-            fp.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except OSError:
-        return
-
-
 # -----------------------------------------------------------------------
 # AKM Work IQ 検証フェーズ
 # -----------------------------------------------------------------------
@@ -2016,7 +3252,6 @@ async def _run_akm_workiq_verification(
 
     # SDK / セッション準備
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
     except ImportError:
         console.warning(
@@ -2024,16 +3259,7 @@ async def _run_akm_workiq_verification(
         )
         return
 
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level="error",
-        )
-
-    client = CopilotClient(config=sdk_cfg)
+    client = _create_copilot_client_from_config(config, log_level="error")
     await client.start()
 
     verified_count = 0
@@ -2053,14 +3279,20 @@ async def _run_akm_workiq_verification(
                 config, "akm-verify", suffix="workiq"
             ),
         }
-        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
-        if config.model and config.model != MODEL_AUTO_VALUE:
-            session_opts["model"] = config.model
-        else:
-            session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(config.model)
+        if _wire_model:
+            session_opts["model"] = _wire_model
         _apply_reasoning_effort(session_opts, config, kind="main")
 
-        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="orchestrator",
+            console=console,
+        )
 
         try:
             # MCP 接続確認
@@ -2293,7 +3525,6 @@ async def _run_akm_workiq_ingest(
 
     # SDK / セッション準備（_run_akm_workiq_verification と同方式）。
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
     except ImportError:
         console.warning(
@@ -2301,16 +3532,7 @@ async def _run_akm_workiq_ingest(
         )
         return
 
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level="error",
-        )
-
-    client = CopilotClient(config=sdk_cfg)
+    client = _create_copilot_client_from_config(config, log_level="error")
     await client.start()
 
     queried_count = 0
@@ -2328,13 +3550,20 @@ async def _run_akm_workiq_ingest(
                 config, "akm-ingest", suffix="workiq"
             ),
         }
-        if config.model and config.model != MODEL_AUTO_VALUE:
-            session_opts["model"] = config.model
-        else:
-            session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(config.model)
+        if _wire_model:
+            session_opts["model"] = _wire_model
         _apply_reasoning_effort(session_opts, config, kind="main")
 
-        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="orchestrator",
+            console=console,
+        )
 
         try:
             # MCP 接続確認
@@ -2584,22 +3813,12 @@ async def _run_ard_workiq_usecase(
 
     # SDK / セッション準備
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
     except ImportError:
         console.warning("Copilot SDK が利用できないため ARD Work IQ ユースケース取得をスキップします。")
         return
 
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level="error",
-        )
-
-    client = CopilotClient(config=sdk_cfg)
+    client = _create_copilot_client_from_config(config, log_level="error")
     await client.start()
 
     try:
@@ -2612,14 +3831,20 @@ async def _run_ard_workiq_usecase(
                 config, "ard-workiq", suffix="usecase"
             ),
         }
-        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
-        if config.model and config.model != MODEL_AUTO_VALUE:
-            session_opts["model"] = config.model
-        else:
-            session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(config.model)
+        if _wire_model:
+            session_opts["model"] = _wire_model
         _apply_reasoning_effort(session_opts, config, kind="main")
 
-        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="orchestrator",
+            console=console,
+        )
 
         try:
             workiq_result = await query_workiq(
@@ -2731,23 +3956,16 @@ async def _generate_target_business_from_sr(
         return sr_title
 
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig
         from copilot.session import PermissionHandler
     except ImportError:
         console.warning("Copilot SDK が利用できないため SR タイトルで代替します。")
         return sr_title
 
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
-            log_level="error",
-            cli_args=config.cli_args,
-        )
-
-    client = CopilotClient(config=sdk_cfg)
+    client = _create_copilot_client_from_config(
+        config,
+        log_level="error",
+        cli_args=config.cli_args,
+    )
     await client.start()
     try:
         session_opts: dict = {
@@ -2759,13 +3977,19 @@ async def _generate_target_business_from_sr(
                 suffix=sr_id.lower().replace(" ", "-"),
             ),
         }
-        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
-        if config.model and config.model != MODEL_AUTO_VALUE:
-            session_opts["model"] = config.model
-        else:
-            session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(config.model)
+        if _wire_model:
+            session_opts["model"] = _wire_model
         _apply_reasoning_effort(session_opts, config, kind="main")
-        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="orchestrator",
+            console=console,
+        )
         try:
             prompt = ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT.format(
                 company_name=params.get("company_name", ""),
@@ -2857,8 +4081,6 @@ async def run_workflow(
     params: Optional[dict] = None,
     config: Optional[SDKConfig] = None,
     *,
-    resume_state: Optional[RunState] = None,
-    session_name: Optional[str] = None,
     orchestrator_ctx: Optional["OrchestratorContext"] = None,
 ) -> dict:
     """ワークフローを SDK でローカル実行する。
@@ -2884,44 +4106,29 @@ async def run_workflow(
     8. Post-DAG 後処理（git push + PR 作成）
     9. サマリー表示
 
-    Phase 3 (Resume): `resume_state` を渡すと、その RunState の completed/skipped
-    ステップを事前登録した上で残ステップだけを実行する。`config.run_id` と
-    `params` は resume_state の値で上書きされる（途中までの実行コンテキストを
-    厳密に再現するため）。
-
-    Phase 4 (Resume): `session_name` を渡すと、新規 RunState 作成時の
-    `session_name` フィールドに設定する。Wizard でユーザーが入力した名前を
-    Resume 一覧の表示に使用するため。`resume_state` と併用された場合は
-    既存の `session_name` を尊重し、`session_name` 引数は無視される。
-
     Returns:
         結果情報の dict:
-          workflow_id, completed, failed, skipped, elapsed_total,
+          workflow_id, completed, failed, skipped, blocked, elapsed_total,
           code_review_error, pr_number, root_issue_num, working_branch, error
+
+        ``blocked`` (T-H1H2b): strict モードで Pre-check (入力成果物または
+        必須 Skill) 失敗を検出した場合に該当 step ID のリストが入る。上位
+        レイヤーは ``failed`` と区別して「停止」として扱える。それ以外は空配列。
     """
     if config is None:
         config = SDKConfig()
 
-    # Phase 3 (Resume): resume_state があれば config と params を復元する。
-    # Resume 時は run_id を強制上書きし、params も snapshot を真とする
-    # （途中までの実行コンテキストを破壊しないため）。
-    if resume_state is not None:
-        _restore_config_from_state(config, resume_state)
-        if params is None:
-            params = {}
-        merged_params: dict = dict(resume_state.params_snapshot or {})
-        merged_params.update(params)
-        params = merged_params
-
-        # Phase 5 (Resume 2-layer txn): SDK セッション実体との整合性チェック。
-        # state_only な session_id は SDK 側で失われており、そのまま resume すると
-        # `resume_session` 失敗 → `create_session` フォールバックの 2 回呼び出しが
-        # 発生する。事前に pending に戻して create 経路に直接送ることで効率化する。
-        # 失敗は warn のみで実行を継続（reconcile が無くても従来の fallback で救済可能）。
-        try:
-            await _auto_reconcile_on_resume(resume_state, config)
-        except Exception as exc:  # pragma: no cover - top-level guard
-            print(f"WARN: resume 開始時の auto-reconcile で例外: {exc}", file=sys.stderr)
+    # AAG/AAGD は生成する Agent の能力契約を既定で Post-DAG 再評価する。
+    # 明示的な --no-self-improve / scope=disabled は安全弁として優先する。
+    # 呼び出し元の config を別 workflow で再利用しても既定値を汚染しないよう、
+    # 自動有効化は shallow copy 上だけで行う。
+    if (
+        workflow_id in {"aag", "aagd"}
+        and not config.self_improve_skip
+        and config.self_improve_scope != "disabled"
+    ):
+        config = copy.copy(config)
+        config.auto_self_improve = True
 
     # run_id が未設定の場合、ワークフロー実行開始時に1回生成する（並列安全性）
     if not config.run_id:
@@ -2993,6 +4200,34 @@ async def run_workflow(
         import atexit as _atexit
         _atexit.register(_mdq_watcher.stop)
 
+    # --- cq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
+    # ソースファイルの変更を .cq/index-<profile>.sqlite へ逐次反映する。
+    # cq は設定不在を fail-closed で拒否するため（FR-CQ-01）、設定が無い
+    # リポジトリでは警告のみで本体実行を継続する。
+    _cq_watcher = None
+    if getattr(config, "cq_watch", True) and not getattr(config, "dry_run", False):
+        try:
+            from cq import config as _cq_config  # type: ignore
+            from cq import store as _cq_store  # type: ignore
+            from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEBOUNCE  # type: ignore
+            from cq.watcher import CqWatcher  # type: ignore
+            _cq_repo_root = Path.cwd()
+            _cq_profile_name = next(iter(_cq_config.resolve_profiles(_cq_repo_root)))
+            _cq_watcher = CqWatcher(
+                _cq_repo_root,
+                _cq_config.resolve_profile(_cq_repo_root, _cq_profile_name),
+                db_path=_cq_repo_root / _cq_store.db_path_for(_cq_profile_name),
+                debounce_ms=getattr(config, "cq_watch_debounce_ms", _CQ_DEBOUNCE),
+            )
+            if not _cq_watcher.start():
+                _cq_watcher = None
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"WARN: cq watcher 起動をスキップしました ({exc})", file=sys.stderr)
+            _cq_watcher = None
+    if _cq_watcher is not None:
+        import atexit as _atexit
+        _atexit.register(_cq_watcher.stop)
+
     # --- 1. ワークフロー定義取得 ---
     wf = get_workflow(workflow_id)
     if wf is None:
@@ -3009,9 +4244,11 @@ async def run_workflow(
     display_name = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
     console.header(f"Copilot SDK Orchestrator: [{wf.id.upper()}] {display_name}")
 
+    _workflow_branch_mode = _uses_workflow_branch_mode(wf.id, config)
+
     # フェーズ構成の動的算出
     _phases: List[str] = ["ワークフロー定義取得", "パラメータ収集", "ステップフィルタリング"]
-    if config.create_issues or config.create_pr:
+    if _workflow_branch_mode:
         _phases.append("ブランチ作成")
     if config.create_issues:
         _phases.append("Issue 作成")
@@ -3039,14 +4276,14 @@ async def run_workflow(
         # Post-DAG の前（"後処理 (git push + PR)" の前）に挿入
         # create_issues/create_pr の場合は後処理の前、そうでなければ末尾
         idx = len(_phases)
-        if config.create_issues or config.create_pr:
+        if _workflow_branch_mode:
             # "後処理 (git push + PR)" の前に挿入
             for i, phase_name in enumerate(_phases):
                 if "後処理" in phase_name:
                     idx = i
                     break
         _phases.insert(idx, "自己改善ループ")
-    if config.create_issues or config.create_pr:
+    if _workflow_branch_mode:
         _phases.append("後処理 (git push + PR)")
     _phases.append("サマリー")
     _total_phases = len(_phases)
@@ -3066,6 +4303,7 @@ async def run_workflow(
     phase_start = time.time()
     console.phase_start(p, _total_phases, "パラメータ収集")
 
+    params_were_provided = params is not None
     if params is None:
         params = {}
     # Agent プロンプトでは done ラベル付与を要求しない（付与は orchestrator 側で実施）。
@@ -3073,7 +4311,10 @@ async def run_workflow(
 
     # dry_run 時は常に非対話モード（インタラクティブプロンプト不要）
     # CLI 引数が揃っていれば非対話モード、そうでなければ対話モード
-    if config.dry_run or _is_non_interactive(wf, params):
+    if config.dry_run or _is_non_interactive(
+        wf,
+        params if params_were_provided else None,
+    ):
         effective_params = _collect_params_non_interactive(wf, params)
     else:
         try:
@@ -3097,6 +4338,7 @@ async def run_workflow(
         # 'steps' キー（CLI側）→ 'selected_steps'（orchestrate.py側）の正規化
         if "steps" in params and params["steps"]:
             effective_params["selected_steps"] = params["steps"]
+        _apply_interactive_review_choice(config, effective_params)
 
     # dry_run を params に反映
     if config.dry_run:
@@ -3107,6 +4349,21 @@ async def run_workflow(
     # --- 2.5. 推薦アーキテクチャ APP-ID フィルタ ---
     _ARCH_FILTER_WORKFLOWS = {"aad-web", "asdw-web", "adfd", "adfdv"}
     if wf.id in _ARCH_FILTER_WORKFLOWS:
+        if wf.id == "asdw-web":
+            _app_scope_error = _validate_asdw_data_deploy_requested_app_scope(
+                effective_params
+            )
+            if _app_scope_error:
+                console.error(_app_scope_error)
+                elapsed = time.time() - start_total
+                return {
+                    "workflow_id": workflow_id,
+                    "completed": [],
+                    "failed": [],
+                    "skipped": [],
+                    "elapsed_total": elapsed,
+                    "error": _app_scope_error,
+                }
         _requested_ids = effective_params.get("app_ids") or (
             [effective_params["app_id"]] if effective_params.get("app_id") else None
         )
@@ -3167,43 +4424,85 @@ async def run_workflow(
     console.phase_start(p, _total_phases, "ステップフィルタリング")
 
     selected_step_ids: List[str] = effective_params.get("selected_steps") or []
-    # ARD: グループ ID (1/2/4) を実 Step ID (1,1.1,1.2 / 2 / 4.1,4.2,4.3) に展開する。
+    # ARD: グループ ID (1/2/3/4) を現行の実 Step ID
+    # (1,1.1,1.2 / 2 / 2.1 / 3.1,3.2,3.3) に展開する。
     # Wizard / CLI 側はグループ ID を返す契約のため、フィルタ前にここで展開する。
     # 既に実 Step ID が直接渡された場合は素通し（後方互換）。
     # 展開ロジックは hve.workflow_registry の SSOT (expand_group_step_ids) を使用。
     if workflow_id == "ard" and selected_step_ids:
         from hve.workflow_registry import expand_group_step_ids
         _expanded: List[str] = expand_group_step_ids("ard", selected_step_ids)
-        # ARD Step 3 (任意): 以下のいずれかで active_steps に含まれる。
+        # ARD Step 2.1 (KPI/OKR、任意): 以下のいずれかで active_steps に含まれる。
         #   (a) `include_kpi_okr=True` パラメータ（CLI `--include-kpi-okr` / 対話ウィザード）
-        #   (b) `selected_steps` に "3" が直接含まれる（GUI ワークフロー選択画面のグループ "3" チェック / CLI `--steps 3`）
-        # Step 3 は Step 2 出力（または skip_fallback で Step 1.2 出力）を入力として
-        # docs/recommended-kpi-okr.md を生成し、後続 Step 4.x / aas が任意参照する。
+        #   (b) `selected_steps` のグループ "3" または実 Step "2.1" が直接選択される。
+        # Step 2.1 は Step 2 出力（または skip_fallback で Step 1.2 出力）を入力として
+        # docs/recommended-kpi-okr.md を生成し、後続 Step 3.x / aas が任意参照する。
         _include_kpi_okr = bool(effective_params.get("include_kpi_okr", False))
-        _step_3_selected_directly = "3" in _expanded
-        if _step_3_selected_directly and not _include_kpi_okr:
+        _kpi_step_selected_directly = (
+            "3" in selected_step_ids or "2.1" in selected_step_ids
+        )
+        if _kpi_step_selected_directly and not _include_kpi_okr:
             # GUI / CLI 経路: "3" が直接選択されたら include_kpi_okr フラグも True に同期させ、
-            # 後続の任意参照（Step 4.x / aas）が一貫して動作するようにする。
+            # 後続の任意参照（Step 3.x / aas）が一貫して動作するようにする。
             effective_params["include_kpi_okr"] = True
             _include_kpi_okr = True
-        _has_step2_or_group4 = any(sid == "2" or sid.startswith("4") for sid in _expanded)
+        _has_step2_or_group4 = any(
+            sid == "2" or sid in {"3.1", "3.2", "3.3"}
+            for sid in _expanded
+        )
         if _include_kpi_okr and _has_step2_or_group4:
-            if "3" not in _expanded:
-                # Step 2 の直後、Step 4.x の直前に挿入する（実行順序の見やすさのため）
+            if "2.1" not in _expanded:
+                # Step 2 の直後、Step 3.x の直前に挿入する（実行順序の見やすさのため）
                 _insert_idx = len(_expanded)
                 for _i, _sid in enumerate(_expanded):
-                    if _sid.startswith("4"):
+                    if _sid in {"3.1", "3.2", "3.3"}:
                         _insert_idx = _i
                         break
-                _expanded.insert(_insert_idx, "3")
-        elif _include_kpi_okr and not _has_step2_or_group4 and not _step_3_selected_directly:
+                _expanded.insert(_insert_idx, "2.1")
+        elif _include_kpi_okr and not _has_step2_or_group4 and not _kpi_step_selected_directly:
             console.warning(
                 "include_kpi_okr=True が指定されましたが、Step 2 / Step 4 が選択されていないため "
-                "Step 3 (KPI/OKR 定義) は実行されません。"
+                "Step 2.1 (KPI/OKR 定義) は実行されません。"
             )
         _seen: Set[str] = set()
-        selected_step_ids = [s for s in _expanded if not (s in _seen or _seen.add(s))]
+        selected_step_ids = []
+        for step_id in _expanded:
+            if step_id in _seen:
+                continue
+            _seen.add(step_id)
+            selected_step_ids.append(step_id)
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
+
+    # --- FR-DAG-07 / FR-DAG-08: Step パラメータ契約の既定値適用と pre-flight ---
+    # DAG 実行はもちろん dry-run 計画表示よりも前に判定する。判定材料は起動時点で
+    # 出揃っており、Step 実行時まで遅らせると長時間実行の全損を招くため。
+    # 対象は下流へ渡る正本（StepRunner へ workflow_params として渡る）effective_params。
+    try:
+        from .workflow_registry import apply_step_default_params
+    except ImportError:
+        from workflow_registry import apply_step_default_params  # type: ignore[no-redef]
+    _applied_defaults = apply_step_default_params(wf, active_steps, effective_params)
+    if _applied_defaults:
+        console.event(
+            "既定値を適用したパラメータ: " + ", ".join(_applied_defaults)
+        )
+    _param_check = _check_required_workflow_params_for_active_steps(
+        wf=wf,
+        active_steps=active_steps,
+        params=effective_params,
+        console=console,
+    )
+    if _param_check["should_abort"]:
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "blocked": list(_param_check["blocked_step_ids"]),
+            "elapsed_total": time.time() - start_total,
+            "error": _param_check["error"],
+        }
+
     _ard_force_serial = (
         workflow_id == "ard"
         and "1" in active_steps
@@ -3215,8 +4514,8 @@ async def run_workflow(
     if _ard_force_serial:
         # bridge mode: target_business 未指定 + Step 1 & 2 同時実行時、
         # Step 2 を Step 1 に依存させて直列化する。
-        # Step 3 は静的に depends_on=["2"] のため Step 2 完了後に自動的に直列化される
-        # （effective_max_parallel=1 のため Step 3 と Step 4.1 は順次実行）。
+        # Step 2.1 は静的に depends_on=["2"] のため Step 2 完了後に自動的に直列化される
+        # （effective_max_parallel=1 のため Step 2.1 と Step 3.1 は順次実行）。
         try:
             wf_for_dag = copy.deepcopy(wf)
             _step2 = wf_for_dag.get_step("2")
@@ -3230,7 +4529,7 @@ async def run_workflow(
 
     console.event(f"実行対象ステップ数: {len(active_steps)}")
     if _ard_force_serial:
-        console.event("ARD bridge mode: Step 1 → Step 2 → Step 3 を直列実行します。")
+        console.event("ARD bridge mode: Step 1 → Step 2 → Step 2.1 を直列実行します。")
     console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
     # Fan-out 事前展開（fanout-fix）:
@@ -3238,10 +4537,16 @@ async def run_workflow(
     # orchestrator 側で expand_workflow_fanout を呼び active_steps も同期拡張する。
     # 注: dry-run 経路（直後の dry_run_plan）と本番経路（後段の dag_plan）の両方が
     # 展開後 wf_for_dag / active_steps を参照するため、ここで一度だけ展開する。
+    # APP-ID フィルタ:
+    #   effective_params["app_ids"] が指定されている場合（GUI で Step 1 の対象
+    #   APP-ID を選択した場合）、その APP-ID に紐付く fan-out キーのみに絞り込む。
+    #   未指定の場合は全 fan-out キーを展開する（後方互換）。
+    #   詳細: hve/fanout_expander.py _APP_ID_FILTERABLE_PARSERS 参照。
     _expand_info: Any = None
     try:
         _expanded_wf, _expanded_active, _expand_info = _expand_workflow_for_dag(
-            wf_for_dag, active_steps, Path(__file__).resolve().parent.parent
+            wf_for_dag, active_steps, Path(__file__).resolve().parent.parent,
+            app_ids=effective_params.get("app_ids"),
         )
         wf_for_dag = _expanded_wf
         active_steps = _expanded_active
@@ -3291,9 +4596,77 @@ async def run_workflow(
             "dag_plan_waves": len(dry_run_plan.waves),
         }
 
-    # --- 4. 新ブランチ作成（--create-issues または --create-pr 時） ---
+    # --- FR-CLI-74: dirty HVE source pre-flight ---
+    # branch 作成（workflow-wide / Step 単位 CI/CD の両方）および Agent セッション
+    # 開始より前に実行する。
+    #
+    # --dry-run は直前で return 済み: Agent を起動せず branch も commit も作らないため、
+    # HVE ソースの未コミット変更が生成対象アプリへ混入する経路が無く、停止する理由がない。
+    #
+    # 適用範囲は HVE CLI / GUI Orchestrator 配下（`orchestrator_ctx` あり）の
+    # アプリ生成 run。`orchestrator_ctx is None` は orchestrator_context モジュールが
+    # 定義するとおり「単独実行モード（ライブラリ直接呼び出し・テスト等）」であり、
+    # HVE 自身のリポジトリ状態を前提にできないため対象外とする。
+    # FR-CLI-75 の staging 検査（`_git_add_commit_push`）でも同じ除外パスを使う。
+    _target_output_paths = _explicit_target_output_paths(params)
+    if orchestrator_ctx is not None:
+        _hve_source_check = _check_dirty_hve_sources(
+            console=console,
+            target_output_paths=_target_output_paths,
+        )
+        if _hve_source_check["should_abort"]:
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "blocked": list(_hve_source_check["blocked_step_ids"]),
+                "elapsed_total": time.time() - start_total,
+                "error": _hve_source_check["error"],
+            }
+
+    # ASDW-WEB github.com CI/CD: workflow 全体ではなく、remote CI/CD が必要な
+    # Step だけ一時ブランチを作成する。create_pr/create_issues は従来の
+    # workflow-wide branch mode を優先する。
+    step_scoped_cicd_branches: Dict[str, str] = {}
+    # local generation checkpoint（最初の Deploy wave 直前）で記録する成果物 manifest。
+    # 以降の stage / commit / push はこれを基準に成果物欠落を拒否する。
+    protected_baseline: Optional[ProtectedArtifactManifest] = None
+    if (
+        wf.id == "asdw-web"
+        and getattr(config, "enable_auto_merge", False)
+        and not _workflow_branch_mode
+    ):
+        prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper()).lower()
+        for step_id in sorted(_remote_cicd_step_ids(wf_for_dag, active_steps)):
+            safe_step_id = step_id.replace(".", "-").replace("/", "-").lower()
+            step_scoped_cicd_branches[step_id] = (
+                f"copilot-sdk/{prefix}-step-{safe_step_id}-{uuid.uuid4().hex[:8]}"
+            )
+        if step_scoped_cicd_branches:
+            console.event(
+                "ASDW-WEB Step 単位 CI/CD ブランチ: "
+                + ", ".join(f"Step.{sid}={branch}" for sid, branch in step_scoped_cicd_branches.items())
+            )
+            unmerged_paths = _git_unmerged_paths()
+            if unmerged_paths:
+                error = _format_git_unmerged_index_error(unmerged_paths)
+                console.error(error)
+                elapsed = time.time() - start_total
+                return {
+                    "workflow_id": workflow_id,
+                    "completed": [],
+                    "failed": [],
+                    "skipped": [],
+                    "blocked": [],
+                    "elapsed_total": elapsed,
+                    "error": error,
+                }
+
+    # --- 4. 新ブランチ作成（--create-issues / --create-pr、または
+    #         ADFDV で --enable-auto-merge（全自動）時） ---
     working_branch: Optional[str] = None
-    if config.create_issues or config.create_pr:
+    if _workflow_branch_mode:
         p = _next_phase()
         phase_start = time.time()
         console.phase_start(p, _total_phases, "ブランチ作成")
@@ -3462,77 +4835,11 @@ async def run_workflow(
                         "error": msg,
                     }
 
-    # --- Phase 3 (Resume): RunState の確保と running 状態への遷移 ---
-    # resume_state が None なら新規作成し、既存があれば最新の active_steps を反映する。
-    # いずれの場合も status="running" にして即座に save する（クラッシュ時の resume の起点）。
-    if resume_state is None:
-        # Phase 4 (Resume): wizard / CLI から渡された session_name を優先し、
-        # 未指定なら default_session_name() でワークフロー表示名 + 時刻を生成する。
-        try:
-            from .run_state import default_session_name
-        except ImportError:
-            from run_state import default_session_name  # type: ignore[no-redef]
-        _wf_disp = _WORKFLOW_DISPLAY_NAMES.get(workflow_id, workflow_id)
-        _effective_session_name = (session_name or "").strip() or default_session_name(
-            workflow_id=workflow_id,
-            params=effective_params,
-            workflow_display_name=_wf_disp,
-        )
-        resume_state = RunState.new(
-            run_id=config.run_id,
-            workflow_id=workflow_id,
-            config=config,
-            params=effective_params,
-            selected_step_ids=sorted(active_steps),
-            session_name=_effective_session_name,
-        )
-    else:
-        # 既存 resume_state を再開: active_steps の差分を吸収する
-        # （DAG 構成変更や新規 step 追加にも追随）
-        resume_state.selected_step_ids = sorted(active_steps)
-        for sid in active_steps:
-            if sid not in resume_state.step_states:
-                resume_state.step_states[sid] = StepState(status="pending")
-    resume_state.status = "running"
-    resume_state.pause_reason = None
-    try:
-        resume_state.save()
-    except Exception as exc:
-        console.warning(f"state.json の初期保存に失敗しました: {exc}")
-
-    # Phase 6 (Resume 2-layer txn): StepRunner に RunJournal を注入し、
-    # 各 phase 完了時の checkpoint marker を `work/runs/<run_id>/journal.jsonl` に
-    # 記録する。失敗は warn のみで実行を継続（runner 側 _record_checkpoint で握る）。
-    try:
-        try:
-            from .run_journal import RunJournal
-            from .run_state import sync_intent_log_from_journal
-        except ImportError:
-            from run_journal import RunJournal  # type: ignore[no-redef]
-            from run_state import sync_intent_log_from_journal  # type: ignore[no-redef]
-        _journal_run_dir = resume_state.state_path.parent
-        _step_journal: Optional[Any] = RunJournal(_journal_run_dir)
-        # resume_state に journal_path を記録（v0.5 fields）
-        resume_state.journal_path = str(_step_journal.path.relative_to(_journal_run_dir.parent)) \
-            if _journal_run_dir.parent in _step_journal.path.parents \
-            else str(_step_journal.path)
-        # v1.0.3 (Major #15): journal の pending intent を state.intent_log に同期。
-        # クラッシュ復帰後の Resume 開始時に未完了 intent の可視化に役立つ。
-        sync_intent_log_from_journal(resume_state, _step_journal)
-        try:
-            resume_state.save()
-        except Exception:  # pragma: no cover
-            pass
-    except Exception as exc:  # pragma: no cover - 防御的 fallback
-        console.warning(f"RunJournal 初期化に失敗（checkpoint 記録なしで続行）: {exc}")
-        _step_journal = None
-
     runner = StepRunner(
         config=config,
         console=console,
-        resume_state=resume_state,
-        journal=_step_journal,
         orchestrator_ctx=orchestrator_ctx,
+        workflow_params=effective_params,
     )
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
@@ -3594,11 +4901,15 @@ async def run_workflow(
             except Exception:
                 pass
         else:
+            # T-H1H2b: strict モードで artifact 不足を検出した場合、
+            # 結果 dict の "blocked" キーに該当ルートステップ ID を含めて返す。
+            # 後続レイヤーは "failed" と区別して「停止」として扱える。
             return {
                 "workflow_id": workflow_id,
                 "completed": [],
                 "failed": [],
                 "skipped": [],
+                "blocked": list(_artifact_check.get("blocked_step_ids", [])),
                 "elapsed_total": time.time() - start_total,
                 "error": _artifact_check["error"],
             }
@@ -3622,11 +4933,14 @@ async def run_workflow(
             except Exception:
                 pass
         else:
+            # T-H1H2b: strict モードで Skill 不足を検出した場合も artifact 不足と同様
+            # 結果 dict の "blocked" キーに該当 step ID を含めて返す。
             return {
                 "workflow_id": workflow_id,
                 "completed": [],
                 "failed": [],
                 "skipped": [],
+                "blocked": list(_skill_check.get("blocked_step_ids", [])),
                 "elapsed_total": time.time() - start_total,
                 "error": _skill_check["error"],
             }
@@ -3680,15 +4994,28 @@ async def run_workflow(
             _w2_injection_max = _injection_chars
         _phase = step.id.split(".", 1)[0]
         _w2_injection_phase_breakdown[_phase] = _w2_injection_phase_breakdown.get(_phase, 0) + _injection_chars
-        step_prompts[step.id] = _build_step_prompt(
-            step=step,
-            params=effective_params,
-            root_issue_num=root_issue_num,
-            render_template_fn=render_template,
-            wf=wf,
-            additional_prompt=step_additional,
-            execution_mode=execution_mode,
-        )
+        step_params = effective_params
+        if step.id in step_scoped_cicd_branches:
+            step_params = dict(effective_params)
+            step_params["branch"] = step_scoped_cicd_branches[step.id]
+        # FR-CLI-71: プロンプトテンプレート展開失敗は DAG 実行前に停止させる。
+        # ここで握り潰すと壊れた縮退プロンプトで Agent セッションが開始される。
+        try:
+            step_prompts[step.id] = _build_step_prompt(
+                step=step,
+                params=step_params,
+                root_issue_num=root_issue_num,
+                render_template_fn=render_template,
+                wf=wf,
+                additional_prompt=step_additional,
+                execution_mode=execution_mode,
+            )
+        except Exception as exc:
+            console.error(
+                f"Step.{step.id} のプロンプトテンプレート展開に失敗しました: "
+                f"template={step.body_template_path} ({type(exc).__name__}: {exc})"
+            )
+            raise
 
     # Fan-out 子ステップへ base prompt を伝播（fanout-fix）:
     # step_prompts は wf.steps（非展開）を反復するためベース ID 分のみ構築済み。
@@ -3712,6 +5039,98 @@ async def run_workflow(
     )
 
     # --- 6-7. DAGExecutor 実行 ---
+    step_scoped_cicd_pr_numbers: Dict[str, int] = {}
+
+    def _step_scoped_cicd_ignore_paths() -> List[str]:
+        # remote CI/CD Step の branch には src/infra/azure や app/api 実装を含める。
+        return [p for p in (config.ignore_paths or []) if p != "src"]
+
+    def _prepare_step_scoped_cicd_branch(step_id: str) -> bool:
+        branch = step_scoped_cicd_branches.get(step_id)
+        if not branch:
+            return True
+        console.event(f"Step.{step_id}: remote CI/CD 用ブランチ '{branch}' を作成します。")
+        if not _git_checkout_new_branch(branch, config.base_branch, console):
+            return False
+        pushed = _git_add_commit_push(
+            branch=branch,
+            commit_message=f"[ASDW-WEB] Step.{step_id} remote CI/CD 前の成果物",
+            console=console,
+            ignore_paths=_step_scoped_cicd_ignore_paths(),
+            protected_baseline=protected_baseline,
+            target_output_paths=_target_output_paths,
+        )
+        if not pushed:
+            # 差分がない場合でも remote workflow の --ref で参照できるよう branch 自体は push する。
+            return _git_push_branch(branch, console)
+        return True
+
+    def _finalize_step_scoped_cicd_branch(step_id: str, step_success: bool) -> bool:
+        branch = step_scoped_cicd_branches.get(step_id)
+        if not branch:
+            return step_success
+        if not step_success:
+            console.warning(
+                f"Step.{step_id} が失敗したため PR 作成をスキップし、base branch へ戻ります。"
+            )
+            _git_checkout_base_branch(config.base_branch, console)
+            return False
+
+        if _git_remote_branch_ahead(branch, console):
+            console.event(
+                f"Step.{step_id}: remote CI/CD ブランチ '{branch}' は Agent により更新済みのため、"
+                "stale local branch の final push をスキップします。"
+            )
+        else:
+            current_branch = _git_current_branch(console)
+            if current_branch != branch:
+                if _git_has_uncommitted_changes(console):
+                    console.error(
+                        f"Step.{step_id}: 現在ブランチが '{current_branch or 'detached HEAD'}' で、"
+                        f"期待する Step ブランチ '{branch}' ではありません。未コミット変更があるため final push を中止します。"
+                    )
+                    return False
+                if not _git_checkout_existing_branch(branch, console):
+                    return False
+
+            pushed = _git_add_commit_push(
+                branch=branch,
+                commit_message=f"[ASDW-WEB] Step.{step_id} remote CI/CD 成果物",
+                console=console,
+                ignore_paths=_step_scoped_cicd_ignore_paths(),
+                protected_baseline=protected_baseline,
+                target_output_paths=_target_output_paths,
+            )
+            if not pushed and not _git_push_branch(branch, console):
+                return False
+
+        pr_num = _create_pr_if_needed(
+            wf=wf,
+            head_branch=branch,
+            base_branch=config.base_branch,
+            config=config,
+            console=console,
+            root_issue_num=root_issue_num,
+            workiq_report_paths=sorted(workiq_report_paths),
+            task_goal=None,
+            goal_sources=[],
+            all_steps_succeeded=True,
+        )
+        if pr_num is None:
+            _git_checkout_base_branch(config.base_branch, console)
+            return False
+        step_scoped_cicd_pr_numbers[step_id] = pr_num
+        if not _wait_pr_merged(pr_num, config, console, require_check_runs=False):
+            _git_checkout_base_branch(config.base_branch, console)
+            return False
+        if getattr(config, "delete_local_merged_branch", True):
+            if not _git_delete_local_branch(branch, config.base_branch, console):
+                return False
+        else:
+            if not _git_checkout_base_branch(config.base_branch, console):
+                return False
+        return _git_pull_ff_only_base_branch(config.base_branch, console)
+
     async def run_step_fn(
         step_id: str,
         title: str,
@@ -3732,15 +5151,27 @@ async def run_workflow(
                     config=config,
                     base_additional_prompt=effective_additional_prompt,
                 )
-                _prompt = _build_step_prompt(
-                    step=step,
-                    params=effective_params,
-                    root_issue_num=root_issue_num,
-                    render_template_fn=render_template,
-                    wf=wf,
-                    additional_prompt=step_additional,
-                    execution_mode=execution_mode,
-                )
+                # FR-CLI-71: 展開失敗時はフォールバックせず、原因テンプレートを
+                # 1 行で提示したうえで例外をそのまま伝播させる。
+                try:
+                    _prompt = _build_step_prompt(
+                        step=step,
+                        params=effective_params,
+                        root_issue_num=root_issue_num,
+                        render_template_fn=render_template,
+                        wf=wf,
+                        additional_prompt=step_additional,
+                        execution_mode=execution_mode,
+                    )
+                except Exception as exc:
+                    console.error(
+                        f"Step.{step_id} のプロンプトテンプレート展開に失敗しました: "
+                        f"template={step.body_template_path} ({type(exc).__name__}: {exc})"
+                    )
+                    raise
+
+        if not _prepare_step_scoped_cicd_branch(step_id):
+            return False
 
         success = await runner.run_step(
             step_id=step_id,
@@ -3756,25 +5187,309 @@ async def run_workflow(
                 params=effective_params,
                 console=console,
             )
+        success = _finalize_step_scoped_cicd_branch(step_id, success)
         return success
 
-    # T-D3: deferred fan-out のランタイム展開時に resume_state へ子 step を seed する。
-    # selected_step_ids にも子 ID を追加して resume 時に拾えるようにする。
-    def _on_dynamic_expand(base_id: str, child_ids: List[str]) -> None:
+    def _on_wave_start(executable_steps: List[Any], wave_index: int) -> None:
+        nonlocal protected_baseline
+        # enable_auto_merge（全自動）時、Deploy Step を含む wave の前に生成済み
+        # workflow/成果物を push する（Deploy Agent の `gh workflow run --ref` 用）。
+        # enable_auto_merge OFF はリポジトリ操作を手動とするため push しない。
+        if (
+            getattr(config, "enable_auto_merge", False)
+            and working_branch
+        ):
+            from hve.artifact_validation import wave_has_deploy_step
+
+            if wave_has_deploy_step(executable_steps):
+                # 最初の Deploy wave 直前 = local generation checkpoint。
+                # この時点の local 成果物を baseline として固定する。
+                if protected_baseline is None:
+                    protected_baseline = capture_protected_artifact_manifest()
+                    console.event(
+                        "  🔒 local generation checkpoint の成果物を記録しました: "
+                        + ", ".join(
+                            f"{root}({len(files)})"
+                            for root, files in sorted(protected_baseline.items())
+                        )
+                    )
+                # Deploy Agent が `gh workflow run` で実行する workflow は
+                # src/infra/azure/*.sh 等を参照するため、Deploy 境界 push では
+                # 既定 ignore_paths から "src" を除外して Deploy 成果物を含める。
+                _deploy_ignore = [
+                    p for p in (config.ignore_paths or []) if p != "src"
+                ]
+                _git_add_commit_push(
+                    branch=working_branch,
+                    commit_message=(
+                        "[HVE] github.com CI/CD: Deploy 前のローカル成果物を push"
+                        f" (wave {wave_index})"
+                    ),
+                    console=console,
+                    ignore_paths=_deploy_ignore,
+                    protected_baseline=protected_baseline,
+                    target_output_paths=_target_output_paths,
+                )
+        routing = apply_cloud_session_auto_routing(
+            config,
+            executable_steps,
+            workflow_id=workflow_id,
+            wave_index=wave_index,
+            parallel_limit=effective_max_parallel,
+            local_min=1,
+        )
+        if not routing:
+            return
+        if min(len(executable_steps), max(1, int(effective_max_parallel or 1))) <= 1:
+            # 単一 task wave / 実効並列数 1 は原則 local。通常ログは増やさない。
+            return
+        cloud_ids = sorted([sid for sid, use_cloud in routing.items() if use_cloud])
+        local_ids = sorted([sid for sid, use_cloud in routing.items() if not use_cloud])
         try:
-            for cid in child_ids:
-                if cid not in resume_state.step_states:
-                    resume_state.step_states[cid] = StepState(status="pending")
-            existing = set(resume_state.selected_step_ids)
-            for cid in child_ids:
-                if cid not in existing:
-                    resume_state.selected_step_ids.append(cid)
-                    existing.add(cid)
-            resume_state.save()
-        except Exception as exc:  # pragma: no cover
-            console.warning(
-                f"on_dynamic_expand で resume_state 更新失敗 (base={base_id}): {exc}"
+            console.event(
+                "  ☁️ Cloud Session 自動振り分け: "
+                f"cloud={cloud_ids or ['(manual/none)']} / local={local_ids or ['(manual/none)']}"
             )
+        except Exception:
+            pass
+
+    def _build_fleet_wave_runner() -> Optional[Callable[[List[Any], int], Any]]:
+        """Build an optional SDK Fleet backend for workflow-level DAG waves."""
+        if not bool(getattr(config, "fleet_mode_enabled", False)):
+            return None
+
+        repo_root = Path(__file__).resolve().parent.parent
+
+        async def _fleet_wave_runner(executable_steps: List[Any], wave_index: int) -> Optional[Dict[str, StepResult]]:
+            if len(executable_steps) <= 1:
+                return None
+            try:
+                from copilot.session import PermissionHandler  # type: ignore[import]
+            except ImportError:
+                console.warning(
+                    "Fleet mode requested but GitHub Copilot SDK is unavailable. "
+                    "Falling back to normal DAG execution."
+                )
+                return None
+            try:
+                from .fleet_mode import (
+                    DagWaveFleetTask,
+                    FleetEventCollector,
+                    build_dag_wave_fleet_prompt,
+                    start_fleet,
+                )
+                from .split_fork import check_subtask_completion, resolve_work_root
+            except ImportError:  # pragma: no cover
+                from fleet_mode import (  # type: ignore[no-redef]
+                    DagWaveFleetTask,
+                    FleetEventCollector,
+                    build_dag_wave_fleet_prompt,
+                    start_fleet,
+                )
+                from split_fork import check_subtask_completion, resolve_work_root  # type: ignore[no-redef]
+
+            tasks = []
+            for step in executable_steps:
+                prompt_text = step_prompts.get(step.id, "")
+                fanout_meta: Optional[Dict[str, Any]] = None
+                if getattr(step, "fanout_key", "") and getattr(step, "base_step_id", ""):
+                    fanout_meta = {
+                        "fanout_key": step.fanout_key,
+                        "base_step_id": step.base_step_id,
+                        "additional_prompt_template_path": getattr(step, "additional_prompt_template_path", None),
+                        "per_key_mcp_servers": getattr(step, "per_key_mcp_servers", None),
+                    }
+                    prompt_text = _apply_fanout_prompt_template(
+                        prompt=prompt_text,
+                        fanout_meta=fanout_meta,
+                        console=console,
+                    )
+                tasks.append(DagWaveFleetTask(
+                    step_id=step.id,
+                    title=getattr(step, "title", step.id),
+                    prompt=prompt_text,
+                    custom_agent=getattr(step, "custom_agent", None),
+                    fanout_key=(fanout_meta or {}).get("fanout_key", ""),
+                    base_step_id=(fanout_meta or {}).get("base_step_id", ""),
+                    output_paths=tuple(getattr(step, "output_paths", []) or []),
+                    required_input_paths=tuple(getattr(step, "required_input_paths", []) or []),
+                ))
+
+            try:
+                fleet_run_id = config.run_id or generate_run_id()
+                # Worker prompt の completion_report 指示先と parent 側の
+                # check_subtask_completion 監視先を必ず同じ root に揃える。
+                work_root = resolve_work_root()
+                fleet_plan = build_dag_wave_fleet_prompt(
+                    tasks=tasks,
+                    workflow_id=workflow_id,
+                    wave_index=wave_index,
+                    repo_root=repo_root,
+                    run_id=fleet_run_id,
+                    work_root=work_root,
+                )
+            except ValueError as exc:
+                console.warning(
+                    f"Fleet wave prompt could not be built (wave={wave_index}): {exc}. "
+                    "Falling back to normal DAG execution."
+                )
+                return None
+
+            client = _create_copilot_client_from_config(config, log_level=config.log_level)
+            session = None
+            unsubscribe = None
+            started_at = time.time()
+            try:
+                await client.start()
+                session_opts: Dict[str, Any] = {
+                    "on_permission_request": PermissionHandler.approve_all,
+                    "streaming": True,
+                    "session_id": make_session_id(
+                        run_id=fleet_run_id,
+                        step_id=f"fleet-wave-{wave_index}",
+                        prefix=(config.session_id_prefix or DEFAULT_SESSION_ID_PREFIX),
+                    ),
+                }
+                _wire_model = to_wire_model(config.model)
+                if _wire_model:
+                    session_opts["model"] = _wire_model
+                # Fleet parent session does not receive project MCP servers by default.
+                # This keeps the opt-in Fleet backend narrower than normal per-step
+                # sessions and avoids broad MCP/tool exposure from one parent prompt.
+                # Individual standard Step execution still receives configured MCP servers.
+                if config.available_tools:
+                    session_opts["available_tools"] = list(config.available_tools)
+                if config.excluded_tools:
+                    session_opts["excluded_tools"] = list(config.excluded_tools)
+                if config.auto_compaction:
+                    session_opts["infinite_sessions"] = {"enabled": True}
+                _apply_reasoning_effort(session_opts, config, model_value=config.model, kind="main")
+
+                session = await _create_session_with_auto_reasoning_fallback(
+                    client,
+                    session_opts,
+                    config=None,  # Fleet mode is a local SDK backend, not SDK Cloud Sessions.
+                    step_id=f"fleet-wave-{wave_index}",
+                    subtask_kind="fleet",
+                    console=console,
+                )
+                collector = FleetEventCollector(console=console, wave_index=wave_index)
+                maybe_unsubscribe = session.on(collector.handle_event)
+                if callable(maybe_unsubscribe):
+                    unsubscribe = maybe_unsubscribe
+                work_root_resolved = work_root.resolve()
+                for report_dir in fleet_plan.report_dirs.values():
+                    report_path = (work_root / report_dir).resolve()
+                    report_path.relative_to(work_root_resolved)
+                    if report_path.exists():
+                        shutil.rmtree(report_path)
+                    report_path.mkdir(parents=True, exist_ok=True)
+                fleet_step_ids = list(fleet_plan.task_step_ids)
+                display_step_ids = fleet_step_ids[:10]
+                if len(fleet_step_ids) > len(display_step_ids):
+                    display_step_ids.append(
+                        f"...(+{len(fleet_step_ids) - len(display_step_ids)})"
+                    )
+                # 所要時間の計測はシステム時刻変更の影響を受けない monotonic を使う。
+                fleet_start_request_at = time.monotonic()
+                console.status(
+                    f"Fleet wave {wave_index}: Fleet 起動要求を送信します "
+                    f"steps={display_step_ids}"
+                )
+                outcome = await start_fleet(session, fleet_plan.prompt)
+                fleet_start_elapsed = time.monotonic() - fleet_start_request_at
+                if not outcome.started:
+                    console.warning(
+                        f"Fleet mode did not start for wave={wave_index} "
+                        f"after {fleet_start_elapsed:.1f}s: {outcome.reason}. "
+                        "Falling back to normal DAG execution."
+                    )
+                    return None
+                console.status(
+                    f"Fleet wave {wave_index}: Fleet 起動完了 "
+                    f"({fleet_start_elapsed:.1f}s)。completion-report 待機を開始します"
+                )
+
+                deadline = time.monotonic() + max(1.0, float(config.timeout_seconds or 1.0))
+                completion_state: Dict[str, tuple[bool, str]] = {}
+                # GUI Workbench が無音に見えないようにするための低頻度 heartbeat。
+                # 大量 fan-out でログが埋まらないよう 30 秒間隔に固定する。
+                heartbeat_interval = 30.0
+                last_heartbeat_at = 0.0
+                while True:
+                    completion_state = {
+                        step_id: check_subtask_completion(work_root, report_dir)
+                        for step_id, report_dir in fleet_plan.report_dirs.items()
+                    }
+                    now = time.monotonic()
+                    if now - last_heartbeat_at >= heartbeat_interval:
+                        missing_ids = [
+                            step_id
+                            for step_id, (ok, _reason) in completion_state.items()
+                            if not ok
+                        ]
+                        if missing_ids:
+                            display_ids = missing_ids[:10]
+                            if len(missing_ids) > len(display_ids):
+                                display_ids.append(f"...(+{len(missing_ids) - len(display_ids)})")
+                            # collector.handle_event は同一イベントループスレッドで呼ばれ
+                            # （SDK は call_soon_threadsafe でループへ戻す）、この set() 区間に
+                            # await が無いため反復中の dict 変更は起こらない（ロック不要）。
+                            running_names = sorted(set(collector.running.values()))
+                            display_running = running_names[:10]
+                            if len(running_names) > len(display_running):
+                                display_running.append(
+                                    f"...(+{len(running_names) - len(display_running)})"
+                                )
+                            console.status(
+                                f"Fleet wave {wave_index}: completion-report 待機中 "
+                                f"missing={display_ids} "
+                                f"実行中={display_running} 完了={len(collector.completed)}"
+                            )
+                        last_heartbeat_at = now
+                    if all(ok for ok, _reason in completion_state.values()):
+                        break
+                    if collector.has_failed:
+                        break
+                    if time.monotonic() >= deadline:
+                        break
+                    await asyncio.sleep(0.5)
+
+                results: Dict[str, StepResult] = {}
+                for step_id in fleet_plan.task_step_ids:
+                    ok, reason = completion_state.get(step_id, (False, "completion state missing"))
+                    success = bool(ok)
+                    failure_reason = reason
+                    if not success and collector.has_failed:
+                        failure_reason = f"{reason}; fleet_failed={collector.failed}"
+                    results[step_id] = StepResult(
+                        step_id,
+                        success=success,
+                        elapsed=time.time() - started_at,
+                        error=None if success else failure_reason,
+                        state="success" if success else "failed",
+                        reason="fleet-wave" if success else failure_reason,
+                    )
+                if collector.has_failed:
+                    console.error(f"Fleet wave failed (wave={wave_index}): {collector.failed}")
+                return results
+            finally:
+                if callable(unsubscribe):
+                    try:
+                        unsubscribe()
+                    except Exception:
+                        pass
+                if session is not None:
+                    try:
+                        await session.disconnect()
+                    except Exception as cleanup_exc:
+                        console.warning(f"[cleanup] fleet session.disconnect() failed: {cleanup_exc}")
+                try:
+                    await client.stop()
+                except Exception as cleanup_exc:
+                    console.warning(f"[cleanup] fleet client.stop() failed: {cleanup_exc}")
+
+        return _fleet_wave_runner
 
     executor = DAGExecutor(
         workflow=wf_for_dag,
@@ -3784,7 +5499,6 @@ async def run_workflow(
         console=console,
         step_prompts=step_prompts,
         dag_plan=dag_plan,
-        on_step_complete=_build_step_complete_callback(resume_state, console),
         repo_root=Path(__file__).resolve().parent.parent,
         # Fork-integration (T2.6/T2.8): フィーチャフラグ off （既定）で旧挙動と完全一致
         fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
@@ -3792,66 +5506,24 @@ async def run_workflow(
         on_fork_retry=runner.set_fork_index,
         # T-E1: deferred fan-out ランタイム再展開
         deferred_fanout_ids=set(getattr(_expand_info, "deferred_fanout_ids", []) or []),
-        on_dynamic_expand=_on_dynamic_expand,
+        on_wave_start=_on_wave_start,
+        fleet_wave_runner=_build_fleet_wave_runner(),
         workflow_id=workflow_id,
+        # APP-ID フィルタ (fan-out 子ステップを GUI 選択 APP-ID のみに絞る):
+        # deferred fan-out のランタイム再展開時にも同じ app_ids で絞り込むため、
+        # DAGExecutor に保持させる。事前展開 (L3237 の _expand_workflow_for_dag) と
+        # 同じ effective_params["app_ids"] を伝播。
+        app_ids=effective_params.get("app_ids"),
+        # per-step wall-clock タイムアウト（ハングした 1 ステップが DAG 全体を
+        # 無期限停止させるのを防ぐ）。config 既定 7200s / None・<=0 で無効。
+        step_timeout_seconds=getattr(config, "step_timeout_seconds", None),
     )
-
-    # Phase 3 (Resume): 完了/スキップ済みステップを事前登録し、再実行を回避する。
-    # DAG の next_steps 走査が completed/skipped を「依存解決済み」とみなすため、
-    # ここで状態を流し込むだけで残ステップから自動で再開できる。
-    _resume_completed_count = 0
-    _resume_skipped_count = 0
-    for sid, st in resume_state.step_states.items():
-        if sid not in active_steps:
-            continue
-        if st.status == "completed":
-            executor.completed.add(sid)
-            _resume_completed_count += 1
-        elif st.status == "skipped":
-            executor.skipped.add(sid)
-            _resume_skipped_count += 1
-    if _resume_completed_count or _resume_skipped_count:
-        _remaining = len(active_steps) - _resume_completed_count - _resume_skipped_count
-        console.event(
-            f"  ↻ Resume mode: 完了済み={_resume_completed_count} / "
-            f"スキップ済み={_resume_skipped_count} / "
-            f"残り実行={_remaining}"
-        )
 
     # 実行計画を事前表示
     waves = executor.compute_waves()
     if waves:
         console.execution_plan(waves, len(active_steps), effective_max_parallel)
 
-    # Phase 6 (Resume): Ctrl+R で graceful pause を可能にする。
-    # KeybindMonitor は別スレッドで stdin を監視し、Ctrl+R 検出時に pause_event を
-    # 立てる。メインループは executor.execute() と pause_event.wait() を競合させ、
-    # pause が先に発火したら executor をキャンセルして state を paused に保存する。
-    # 監視は実行中のみ有効にし、必ず finally で stop する（端末モード復元）。
-    pause_event = asyncio.Event()
-    monitor = KeybindMonitor()  # __init__ で env 判定（pytest / non-tty で自動無効化）
-
-    if monitor.enabled:
-        console.event(
-            "  💡 実行中に Ctrl+R で state を保存して中断できます "
-            "（再開は次回起動時の Resume プロンプトから）"
-        )
-
-    async def _on_ctrl_r() -> None:
-        """Ctrl+R 検出時のハンドラー（asyncio ループ上で実行される）。"""
-        if pause_event.is_set():
-            return  # 二重押し防止
-        pause_event.set()
-        try:
-            console.event(
-                "\n  ⏸ Ctrl+R 検出: 実行中ステップの完了を待たず state を保存して中断します..."
-            )
-        except Exception:  # pragma: no cover
-            pass
-
-    monitor.register(KEY_CTRL_R, _on_ctrl_r)
-
-    paused_by_user: bool = False
     # Workbench UI の起動（TTY/quiet/final_only/HVE_NO_WORKBENCH 等で自動降格）
     _wb = None
     if getattr(console, "workbench_enabled", False) and not getattr(config, "no_workbench", False):
@@ -3870,7 +5542,7 @@ async def run_workflow(
             wb_state = WorkbenchState(
                 workflow_id=workflow_id,
                 workflow_name=getattr(wf, "name", "") or "",
-                run_id=str(getattr(resume_state, "run_id", "")),
+                run_id=str(config.run_id),
                 model=getattr(config, "model", "unknown"),
                 steps=steps_view,
                 body_window=int(getattr(config, "workbench_body_lines", 10)),
@@ -3921,137 +5593,90 @@ async def run_workflow(
             _wb = None
 
     try:
-        # Workbench 起動中は stdin 競合を避けるため KeybindMonitor を起動しない。
-        # Workbench モードでは完了後に `/exit` で終了する。
-        # Workbench 非起動時のみ Ctrl+R 監視を有効化。
-        _monitor_started = False
-        if _wb is None or not getattr(_wb, "active", False):
-            monitor.start()
-            _monitor_started = True
-        executor_task = asyncio.create_task(executor.execute(), name="hve-executor")
-        pause_task = asyncio.create_task(pause_event.wait(), name="hve-pause-wait")
+        # T4: continue_on_error=True かつ executor 側で fatal 例外が発生した場合は
+        # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
+        # recoverable 例外は従来通り再送出。
         try:
-            done, _pending = await asyncio.wait(
-                [executor_task, pause_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-        except asyncio.CancelledError:
-            # 親（asyncio.run の cancel 等）から送られた場合は通常の cancel として伝播
-            executor_task.cancel()
-            pause_task.cancel()
-            raise
-
-        if pause_task in done and not executor_task.done():
-            paused_by_user = True
-            executor_task.cancel()
+            results = await executor.execute()
+        except BaseException as _exec_exc:  # noqa: BLE001
             try:
-                await executor_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                # キャンセル / 実行中例外いずれも握り潰す（state 保存を優先）
-                pass
-            results = dict(getattr(executor, "_results", {}) or {})
-        else:
-            # 通常完了（または executor 側で例外）
-            pause_task.cancel()
-            try:
-                await pause_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
-            # T4: continue_on_error=True かつ executor 側で fatal 例外が発生した場合は
-            # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
-            # recoverable 例外は従来通り再送出。
-            try:
-                results = await executor_task
-            except BaseException as _exec_exc:  # noqa: BLE001
+                from .error_severity import classify_error as _classify_err
+            except ImportError:  # pragma: no cover
+                from error_severity import classify_error as _classify_err  # type: ignore[no-redef]
+            _severity = _classify_err(_exec_exc)
+            if _continue_on_error and _severity == "fatal":
                 try:
-                    from .error_severity import classify_error as _classify_err
-                except ImportError:  # pragma: no cover
-                    from error_severity import classify_error as _classify_err  # type: ignore[no-redef]
-                _severity = _classify_err(_exec_exc)
-                if _continue_on_error and _severity == "fatal":
-                    try:
-                        console.error(
-                            f"⚠️ 致命的エラーを検出: {type(_exec_exc).__name__}: {_exec_exc} "
-                            "（残ステップを skip マークして正常終了します）"
-                        )
-                    except Exception:
-                        pass
-                    # GUI Orchestrator が致命的エラー発生を検知して
-                    # 後続ワークフローのキュー実行を停止できるよう、stdout に
-                    # 構造化マーカーを 1 行出力する（console 経由ではなく素の
-                    # print を使うことで timestamp/絵文字置換等の影響を避ける）。
-                    #
-                    # 出力条件:
-                    #   - GUI 経路 (cfg.no_workbench=True / `--workbench=off`) → 必須
-                    #   - CLI 経路 (Workbench UI 起動 or 通常 plain 出力) → ノイズ抑制のため出さない
-                    #   - 環境変数 HVE_EMIT_FATAL_MARKER=1 で強制 ON (E2E テスト用)
-                    #
-                    # NOTE: ensure_ascii=True にして Windows + cp932 環境で
-                    # `_configure_stdio_encoding` の errors="replace" による
-                    # 多バイト文字置換が起きても JSON 構造が壊れないようにする。
-                    try:
-                        import os as _os_fatal
-                        _force_marker = (
-                            _os_fatal.environ.get("HVE_EMIT_FATAL_MARKER", "")
-                            .strip().lower()
-                            in {"1", "true", "yes"}
-                        )
-                        _gui_mode = bool(getattr(config, "no_workbench", False))
-                        if _force_marker or _gui_mode:
-                            import json as _json_fatal
-                            import sys as _sys_fatal
-                            _fatal_payload = _json_fatal.dumps(
-                                {
-                                    "kind": "fatal_abort",
-                                    "exception_type": type(_exec_exc).__name__,
-                                    "message": str(_exec_exc),
-                                },
-                                ensure_ascii=True,
-                            )
-                            print(
-                                f"[hve:fatal] {_fatal_payload}",
-                                file=_sys_fatal.stdout,
-                                flush=True,
-                            )
-                    except Exception:
-                        pass
-                    # 残ステップを skip マーク
-                    _all_step_ids = {
-                        s.id for s in wf.steps
-                        if not s.is_container and s.id in active_steps
-                    }
-                    _processed = (
-                        set(executor.completed)
-                        | set(executor.failed)
-                        | set(executor.skipped)
+                    console.error(
+                        f"⚠️ 致命的エラーを検出: {type(_exec_exc).__name__}: {_exec_exc} "
+                        "（残ステップを skip マークして正常終了します）"
                     )
-                    for _sid in sorted(_all_step_ids - _processed):
-                        try:
-                            executor.skipped.add(_sid)
-                            from .dag_executor import StepResult as _SR
-                        except ImportError:  # pragma: no cover
-                            from dag_executor import StepResult as _SR  # type: ignore[no-redef]
-                        _skip_res = _SR(
-                            _sid, success=True, elapsed=0.0,
-                            skipped=True, state="skipped",
-                            reason="fatal-abort",
+                except Exception:
+                    pass
+                # GUI Orchestrator が致命的エラー発生を検知して
+                # 後続ワークフローのキュー実行を停止できるよう、stdout に
+                # 構造化マーカーを 1 行出力する（console 経由ではなく素の
+                # print を使うことで timestamp/絵文字置換等の影響を避ける）。
+                #
+                # 出力条件:
+                #   - GUI 経路 (cfg.no_workbench=True / `--workbench=off`) → 必須
+                #   - CLI 経路 (Workbench UI 起動 or 通常 plain 出力) → ノイズ抑制のため出さない
+                #   - 環境変数 HVE_EMIT_FATAL_MARKER=1 で強制 ON (E2E テスト用)
+                #
+                # NOTE: ensure_ascii=True にして Windows + cp932 環境で
+                # `_configure_stdio_encoding` の errors="replace" による
+                # 多バイト文字置換が起きても JSON 構造が壊れないようにする。
+                try:
+                    import os as _os_fatal
+                    _force_marker = (
+                        _os_fatal.environ.get("HVE_EMIT_FATAL_MARKER", "")
+                        .strip().lower()
+                        in {"1", "true", "yes"}
+                    )
+                    _gui_mode = bool(getattr(config, "no_workbench", False))
+                    if _force_marker or _gui_mode:
+                        import json as _json_fatal
+                        import sys as _sys_fatal
+                        _fatal_payload = _json_fatal.dumps(
+                            {
+                                "kind": "fatal_abort",
+                                "exception_type": type(_exec_exc).__name__,
+                                "message": str(_exec_exc),
+                            },
+                            ensure_ascii=True,
                         )
-                        executor._results[_sid] = _skip_res
-                    # journal に fatal=true を記録（best effort）
+                        print(
+                            f"[hve:fatal] {_fatal_payload}",
+                            file=_sys_fatal.stdout,
+                            flush=True,
+                        )
+                except Exception:
+                    pass
+                # 残ステップを skip マーク
+                _all_step_ids = {
+                    s.id for s in wf.steps
+                    if not s.is_container and s.id in active_steps
+                }
+                _processed = (
+                    set(executor.completed)
+                    | set(executor.failed)
+                    | set(executor.skipped)
+                )
+                for _sid in sorted(_all_step_ids - _processed):
                     try:
-                        resume_state.fatal = True
-                        resume_state.fatal_reason = (
-                            f"{type(_exec_exc).__name__}: {_exec_exc}"
-                        )
-                        resume_state.save()
-                    except Exception:
-                        pass
-                    results = dict(getattr(executor, "_results", {}) or {})
-                else:
-                    raise
+                        executor.skipped.add(_sid)
+                        from .dag_executor import StepResult as _SR
+                    except ImportError:  # pragma: no cover
+                        from dag_executor import StepResult as _SR  # type: ignore[no-redef]
+                    _skip_res = _SR(
+                        _sid, success=True, elapsed=0.0,
+                        skipped=True, state="skipped",
+                        reason="fatal-abort",
+                    )
+                    executor._results[_sid] = _skip_res
+                results = dict(getattr(executor, "_results", {}) or {})
+            else:
+                raise
     finally:
-        if _monitor_started:
-            monitor.stop()
         # Workbench UI を停止し Console から detach
         if _wb is not None:
             # 全タスク完了を宣言し、useractions レポートを保存（冪等）。
@@ -4095,65 +5720,6 @@ async def run_workflow(
             except Exception:
                 pass
 
-    # Phase 6 (Resume): Ctrl+R で中断された場合は state を paused にして早期 return。
-    if paused_by_user:
-        # 実行中だったステップは failed にマークする（次回 resume で再実行対象）
-        for sid in sorted(executor.running):
-            try:
-                resume_state.update_step(
-                    sid,
-                    status="failed",
-                    error_summary="ユーザーにより Ctrl+R で中断",
-                )
-            except Exception as exc:  # pragma: no cover
-                console.warning(
-                    f"中断ステップ {sid} の state 更新に失敗しました: {exc}"
-                )
-        resume_state.status = "paused"
-        resume_state.pause_reason = "ctrl+r"
-        try:
-            resume_state.save()
-        except Exception as exc:
-            console.warning(f"state.json の paused 保存に失敗しました: {exc}")
-
-        completed_ids_paused = sorted(executor.completed)
-        failed_ids_paused = sorted(executor.failed)
-        skipped_ids_paused = sorted(executor.skipped)
-        console.event(
-            f"  ✅ state.json 保存完了: {resume_state.state_path}"
-        )
-        console.event(
-            f"  📊 中断時点: 完了={len(completed_ids_paused)} / "
-            f"失敗={len(failed_ids_paused)} / "
-            f"スキップ={len(skipped_ids_paused)} / "
-            f"残り={len(active_steps) - len(completed_ids_paused) - len(skipped_ids_paused)}"
-        )
-        console.phase_end(p, _total_phases, "実行計画 → DAG 実行 (paused)", time.time() - phase_start_dag)
-        return {
-            "workflow_id": workflow_id,
-            "paused": True,
-            "run_id": resume_state.run_id,
-            "completed": completed_ids_paused,
-            "failed": failed_ids_paused,
-            "skipped": skipped_ids_paused,
-            "blocked": [],
-            "elapsed_total": time.time() - phase_start_dag,
-            "code_review_error": None,
-            "pr_number": None,
-            "root_issue_num": None,
-            "working_branch": None,
-            "error": None,
-            "aqod_validation": None,
-        }
-
-    # Phase 3 (Resume): DAG 実行完了後に status を確定する。
-    # 失敗が 1 件でもあれば failed、全て成功 / skip ならば completed とする。
-    # この後の Self-Improve や PR 作成は status に影響しない（あくまで DAG の達成度を反映）。
-    resume_state.status = "failed" if executor.failed else "completed"
-    try:
-        resume_state.save()
-    except Exception as exc:
-        console.warning(f"state.json の最終保存に失敗しました: {exc}")
     if config.create_issues and step_issue_map:
         token = config.resolve_token()
         repo = config.repo
@@ -4231,6 +5797,8 @@ async def run_workflow(
     # PR 作成フェーズで参照するため事前初期化（auto_self_improve=False 時の NameError 防止）
     si_task_goal: Optional["TaskGoal"] = None
     si_disc_sources: List[str] = []
+    si_result: Optional[Dict[str, Any]] = None
+    si_error: Optional[str] = None
 
     # --- Self-Improve（オプション） ---
     # scope が "" または "workflow" の場合のみ実行。"step" / "disabled" の場合はスキップ。
@@ -4254,15 +5822,31 @@ async def run_workflow(
         # ワークフロー種別に応じたデフォルト target_scope（config.py の定数を使用）
         _si_scope_defaults = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
 
-        _workflow_outputs = collect_workflow_output_paths(workflow_id)
+        _self_improve_repo_root = Path(__file__).resolve().parent.parent
+        _workflow_outputs = collect_workflow_output_paths(
+            workflow_id,
+            repo_root=_self_improve_repo_root,
+        )
         _workflow_default = _si_scope_defaults.get(workflow_id, "")
 
+        # 部分的な output_paths 宣言をそのまま scope にすると、未宣言 Step の
+        # 成果物が scope 外へ落ちる。DAG 根を被覆できた場合のみパス直指定へ
+        # 切り替え、それ以外は既定ディレクトリを floor として維持する。
+        _outputs_cover_workflow = bool(_workflow_outputs) and (
+            workflow_output_paths_cover_workflow(
+                workflow_id,
+                repo_root=_self_improve_repo_root,
+            )
+        )
+
         # target_scope が明示指定されている場合はそれを優先する。
-        # 未指定かつ output_paths が集約できた場合は scope 文字列は不要（パス直指定）。
-        # output_paths が空の場合（output_paths 未設定ワークフロー）は workflow_default へフォールバック。
+        # 未指定かつ output_paths が workflow 全体を被覆できた場合は
+        # scope 文字列は不要（パス直指定）。
+        # 被覆できない場合（未宣言・部分宣言・fan-out 展開失敗）は
+        # workflow_default へフォールバックする。
         effective_si_scope = (
             config.self_improve_target_scope
-            or (_workflow_default if not _workflow_outputs else "")
+            or (_workflow_default if not _outputs_cover_workflow else "")
         )
         orig_scope = config.self_improve_target_scope
         config.self_improve_target_scope = effective_si_scope
@@ -4270,8 +5854,28 @@ async def run_workflow(
         # scan_codebase に渡せるよう一時属性として保持（設定前の値を退避）
         _prev_resolved_step_paths = getattr(config, "_resolved_step_output_paths", None)
         _prev_resolved_wf_default = getattr(config, "_resolved_workflow_default", "")
+        _prev_scope_ceiling_paths = getattr(
+            config,
+            "_resolved_scope_ceiling_paths",
+            None,
+        )
+        _prev_scope_precondition_error = getattr(
+            config,
+            "_resolved_scope_precondition_error",
+            "",
+        )
         config._resolved_step_output_paths = _workflow_outputs  # type: ignore[attr-defined]
         config._resolved_workflow_default = _workflow_default  # type: ignore[attr-defined]
+        config._resolved_scope_ceiling_paths = (  # type: ignore[attr-defined]
+            _workflow_outputs if workflow_id in {"aag", "aagd"} else None
+        )
+        config._resolved_scope_precondition_error = (  # type: ignore[attr-defined]
+            _agent_fanout_scope_precondition_error(
+                workflow_id,
+                _workflow_outputs,
+                _self_improve_repo_root,
+            )
+        )
 
         # タスクゴールを確定する（TDD 的: ループ開始前に成功条件を定義）
         _user_goal = getattr(config, "self_improve_goal", "")
@@ -4287,7 +5891,7 @@ async def run_workflow(
                 _disc_result = discover_task_goal_from_docs(
                     workflow_id=workflow_id,
                     target_scope=effective_si_scope,
-                    repo_root=".",
+                    repo_root=str(_self_improve_repo_root),
                 )
                 task_goal = _disc_result["task_goal"]
                 si_disc_sources = _disc_result["sources"]
@@ -4304,12 +5908,20 @@ async def run_workflow(
         # config.self_improve_success_criteria が指定されていれば success_criteria を上書き
         _override_criteria = getattr(config, "self_improve_success_criteria", [])
         if _override_criteria:
+            _existing_criterion_definitions = task_goal.get(
+                "criterion_definitions",
+                [],
+            )
             task_goal = TaskGoal(
                 goal_description=task_goal["goal_description"],
                 success_criteria=_override_criteria,
                 reward_weights=task_goal["reward_weights"],
                 tdd_phase=task_goal["tdd_phase"],
             )
+            if _existing_criterion_definitions:
+                task_goal["criterion_definitions"] = list(
+                    _existing_criterion_definitions
+                )
 
         si_task_goal = task_goal
 
@@ -4321,21 +5933,39 @@ async def run_workflow(
             # run_improvement_loop は同期関数（内部で subprocess.run を使用）のため、
             # asyncio イベントループをブロックしないようスレッドプールに委譲する
             loop = asyncio.get_running_loop()
+            try:
+                from .split_fork import resolve_work_root as _rwr
+            except ImportError:  # pragma: no cover - top-level module import compatibility
+                from split_fork import resolve_work_root as _rwr  # type: ignore[no-redef]
             si_result = await loop.run_in_executor(
                 None,
                 functools.partial(
                     run_improvement_loop,
                     config=config,
-                    work_dir=Path(f"work/self-improve/run-{config.run_id}"),
-                    repo_root=".",
+                    work_dir=_rwr() / "self-improve",
+                    repo_root=str(_self_improve_repo_root),
                     task_goal=task_goal,
                 ),
             )
+            if si_result is None:  # pragma: no cover - defensive executor boundary
+                si_result = {
+                    "iterations_completed": 0,
+                    "final_score": 0,
+                    "records": [],
+                    "stopped_reason": "blocked",
+                    "reward_history": [],
+                    "final_goal_achievement_pct": 0.0,
+                    "final_criterion_results": [],
+                    "final_verification": {"overall": "BLOCKED"},
+                    "blocked_reason": "self_improve_executor_returned_none",
+                }
         finally:
             config.self_improve_target_scope = orig_scope  # 復元
             config.workflow_id = _prev_workflow_id  # type: ignore[attr-defined]
             config._resolved_step_output_paths = _prev_resolved_step_paths  # type: ignore[attr-defined]
             config._resolved_workflow_default = _prev_resolved_wf_default  # type: ignore[attr-defined]
+            config._resolved_scope_ceiling_paths = _prev_scope_ceiling_paths  # type: ignore[attr-defined]
+            config._resolved_scope_precondition_error = _prev_scope_precondition_error  # type: ignore[attr-defined]
 
         console.event(
             f"Self-Improve 完了: {si_result['iterations_completed']} イテレーション, "
@@ -4343,6 +5973,13 @@ async def run_workflow(
             f"ゴール達成率={si_result['final_goal_achievement_pct'] * 100:.1f}%, "
             f"終了理由={si_result['stopped_reason']}"
         )
+        if not _self_improve_result_succeeded(si_result, si_task_goal):
+            si_error = (
+                "Post-DAG Self-Improve が成功条件を満たさず停止しました: "
+                f"reason={si_result.get('stopped_reason', 'unknown')}, "
+                f"blocked_reason={si_result.get('blocked_reason', '') or 'none'}"
+            )
+            console.error(si_error)
         console.phase_end(p, _total_phases, "自己改善ループ", time.time() - phase_start_si)
 
     # --- 8. Post-DAG: 統一後処理 ---
@@ -4364,37 +6001,90 @@ async def run_workflow(
             # AQOD の Phase 2 QA で生成される qa/ 成果物を
             # PR 作成時にコミット対象へ含めるため、qa を除外対象から外す。
             _ignore_paths_for_commit = [p for p in _ignore_paths_for_commit if p != "qa"]
+        if config.enable_auto_merge and "src" in _ignore_paths_for_commit:
+            # enable_auto_merge（全自動）時は Deploy 成果物（src/infra/azure 等）を PR に
+            # 含めるため src を除外対象から外す。Deploy 境界 push に加え、create_pr 等で
+            # working_branch が作られる経路でも最終 push に Deploy 成果物を含める。
+            _ignore_paths_for_commit = [p for p in _ignore_paths_for_commit if p != "src"]
 
         prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
         display_name_for_commit = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
-        pushed = _git_add_commit_push(
-            branch=working_branch,
-            commit_message=f"[{prefix}] {display_name_for_commit} — SDK ローカル実行の成果物",
-            console=console,
-            ignore_paths=_ignore_paths_for_commit,
-        )
-        if pushed:
-            pr_number = _create_pr_if_needed(
-                wf=wf,
-                head_branch=working_branch,
-                base_branch=config.base_branch,
-                config=config,
-                console=console,
-                root_issue_num=root_issue_num,
-                workiq_report_paths=sorted(workiq_report_paths),
-                task_goal=si_task_goal,
-                goal_sources=si_disc_sources,
+        if si_error:
+            pushed = False
+            pr_error = si_error
+            console.warning(
+                "Self-Improve 未達のため commit / push / PR 作成をスキップしました。"
             )
-            if pr_number is None:
-                pr_error = "PR 作成に失敗しました。ログを確認してください。"
-            elif config.auto_coding_agent_review:
-                code_review_error = await _request_code_review(
-                    pr_number=pr_number,
+        else:
+            pushed = _git_add_commit_push(
+                branch=working_branch,
+                commit_message=f"[{prefix}] {display_name_for_commit} — SDK ローカル実行の成果物",
+                console=console,
+                ignore_paths=_ignore_paths_for_commit,
+                protected_baseline=protected_baseline,
+                target_output_paths=_target_output_paths,
+            )
+        if pushed:
+            # live フェーズだけが失敗した場合、local generation checkpoint の
+            # 成果物は完成しているため破棄せず draft PR として残す。
+            retain_checkpoint = should_retain_local_checkpoint(
+                wf.id, getattr(executor, "failed", None)
+            )
+            if executor.failed and not retain_checkpoint:
+                pr_error = "失敗 Step があるため PR 作成をスキップしました。"
+                console.warning(pr_error)
+            else:
+                if retain_checkpoint:
+                    console.warning(
+                        "live フェーズの Step が失敗しました。local generation checkpoint の"
+                        "成果物を draft PR として保持します（auto-merge しません）。"
+                    )
+                pr_number = _create_pr_if_needed(
+                    wf=wf,
+                    head_branch=working_branch,
+                    base_branch=config.base_branch,
                     config=config,
                     console=console,
+                    root_issue_num=root_issue_num,
+                    workiq_report_paths=sorted(workiq_report_paths),
+                    task_goal=si_task_goal,
+                    goal_sources=si_disc_sources,
+                    all_steps_succeeded=not executor.failed,
+                    local_checkpoint_only=retain_checkpoint,
                 )
+                if pr_number is None:
+                    pr_error = "PR 作成に失敗しました。ログを確認してください。"
+                elif config.auto_coding_agent_review:
+                    code_review_error = await _request_code_review(
+                        pr_number=pr_number,
+                        config=config,
+                        console=console,
+                    )
+            if pr_number is not None and executor.failed and not retain_checkpoint:
+                console.warning("失敗 Step がある状態で PR が作成済みのため、cleanup を実行します。")
+                _cleanup_failed_pr_if_created(pr_number, working_branch, config, console)
+                pr_number = None
+                pr_error = "失敗 Step があるため作成済み PR を close / branch cleanup しました。"
+            # FR-CLI-34: enable_auto_merge による auto-approve-and-merge 完了を検知し、
+            # 今回作成した作業ブランチをローカルのみ削除する（既定有効・全 Step 成功時のみ）。
+            # マージ検知はポーリングのため、最大 timeout 秒ブロックしうる。
+            if (
+                pr_number is not None
+                and working_branch
+                and getattr(config, "delete_local_merged_branch", True)
+                and getattr(config, "enable_auto_merge", False)
+                and not executor.failed
+            ):
+                if not _wait_pr_merged_and_delete_local_branch(
+                    pr_number=pr_number,
+                    working_branch=working_branch,
+                    config=config,
+                    console=console,
+                ):
+                    pr_error = "PR マージ後の check-run 成功を確認できませんでした。"
         else:
-            console.warning("コミット対象の変更がないため PR 作成をスキップしました。")
+            if not si_error:
+                console.warning("コミット対象の変更がないため PR 作成をスキップしました。")
         console.phase_end(p, _total_phases, "後処理 (git push + PR)", time.time() - phase_start_post)
 
     # --- 9. サマリー ---
@@ -4406,6 +6096,8 @@ async def run_workflow(
     failed_ids = list(executor.failed)
     skipped_ids = list(executor.skipped)
     blocked_ids = list(getattr(executor, "blocked", set()))
+    if si_error and "self-improve" not in blocked_ids:
+        blocked_ids.append("self-improve")
 
     console.summary({
         "success": len(completed_ids),
@@ -4433,7 +6125,19 @@ async def run_workflow(
         console.event(f"除外パス: {', '.join(config.ignore_paths)}")
     if pr_number:
         console.event(f"PR #{pr_number} が作成されています。")
-        console.event("PR のレビューとマージはご自身で実施してください。")
+        if getattr(config, "enable_auto_merge", False) and not failed_ids:
+            console.event("auto-approve-ready ラベルにより自動 Approve & merge されます。")
+        elif getattr(config, "enable_auto_merge", False) and failed_ids:
+            console.event("失敗 Step があるため auto-approve-ready ラベルは付与されません。レビューしてください。")
+        else:
+            console.event("PR のレビューとマージはご自身で実施してください。")
+    if step_scoped_cicd_pr_numbers:
+        console.event(
+            "Step 単位 CI/CD PR: "
+            + ", ".join(f"Step.{sid}=#{num}" for sid, num in sorted(step_scoped_cicd_pr_numbers.items()))
+        )
+    elif failed_ids and (working_branch or step_scoped_cicd_branches):
+        console.event("失敗 Step があるため PR 作成をスキップしました。auto-approve-ready ラベルは付与されません。")
 
     return {
         "workflow_id": workflow_id,
@@ -4444,10 +6148,13 @@ async def run_workflow(
         "elapsed_total": elapsed_total,
         "code_review_error": code_review_error,
         "pr_number": pr_number,
+        "step_pr_numbers": dict(step_scoped_cicd_pr_numbers),
         "root_issue_num": root_issue_num,
         "working_branch": working_branch,
-        "error": pr_error,
+        "error": pr_error or si_error,
         "aqod_validation": aqod_validation_result,
+        # criteria evidence と停止理由を含む Post-DAG Self-Improve の正本結果。
+        "self_improve_result": si_result,
         # Wave 2-7: 計測項目
         "w2_none_steps": _w2_none_steps,
         "w2_injection_total_chars": _w2_injection_total,
@@ -4568,7 +6275,7 @@ def _get_git_diff(base_ref: str, console: Console, max_diff_chars: int = _MAX_DI
     try:
         result = subprocess.run(
             ["git", "diff", base_ref],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
         if result.returncode != 0:
             console.warning(f"git diff {base_ref} に失敗: {result.stderr.strip()}")
@@ -4621,8 +6328,6 @@ async def _request_code_review(
 
     # 2. Copilot CLI SDK インポート確認（runner.py と同じパターン）
     try:
-        from copilot import CopilotClient  # type: ignore[import]
-        from copilot import SubprocessConfig, ExternalServerConfig  # type: ignore[import]
         from copilot.session import PermissionHandler  # type: ignore[import]
     except ImportError:
         return (
@@ -4638,16 +6343,17 @@ async def _request_code_review(
         if config.verbosity >= 3 and config.log_level == "error"
         else config.log_level
     )
-    if config.cli_url:
-        sdk_config = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_config = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.resolve_token() or None,
+    try:
+        client = _create_copilot_client_from_config(
+            config,
             log_level=_effective_log_level,
             cli_args=config.cli_args,
         )
-    client = CopilotClient(config=sdk_config)
+    except ImportError:
+        return (
+            "GitHub Copilot SDK がインストールされていません。\n"
+            "  pip install github-copilot-sdk  # または適切なパッケージ名で再試行してください。"
+        )
     await client.start()
 
     session = None
@@ -4661,13 +6367,19 @@ async def _request_code_review(
                 config, "code-review", suffix="agent"
             ),
         }
-        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避
-        if _review_model and _review_model != MODEL_AUTO_VALUE:
-            _review_session_opts["model"] = _review_model
-        else:
-            _review_session_opts["model"] = DEFAULT_MODEL
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(_review_model)
+        if _wire_model:
+            _review_session_opts["model"] = _wire_model
         _apply_reasoning_effort(_review_session_opts, config, model_value=_review_model, kind="review")
-        session = await _create_session_with_auto_reasoning_fallback(client, _review_session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            _review_session_opts,
+            config=config,
+            step_id="orchestrator",
+            subtask_kind="review",
+            console=console,
+        )
         if _review_model != config.model:
             console.event(f"Code Review Agent モデル: {_review_model}")
 
@@ -4747,7 +6459,14 @@ async def _request_code_review(
                 console.event("修正をスキップしました。")
 
     except Exception as exc:
-        error_msg = f"Code Review Agent の実行中にエラーが発生しました: {exc}"
+        try:
+            from .runner import format_exception_for_log
+        except ImportError:
+            from runner import format_exception_for_log  # type: ignore[no-redef]
+        error_msg = (
+            "Code Review Agent の実行中にエラーが発生しました: "
+            f"{format_exception_for_log(exc)}"
+        )
         console.error(error_msg)
         return error_msg
     finally:
@@ -4778,12 +6497,25 @@ def _create_pr_if_needed(
     workiq_report_paths: Optional[List[str]] = None,
     task_goal: Optional["TaskGoal"] = None,
     goal_sources: Optional[List[str]] = None,
+    all_steps_succeeded: bool = True,
+    local_checkpoint_only: bool = False,
 ) -> Optional[int]:
     """PR を作成する。
+
+    Args:
+        all_steps_succeeded: 全 Step が成功したか。False の場合は PR を作成しない
+            （失敗成果物の PR 化と auto-merge 誤発火を防ぐ fail-closed 条件）。
+        local_checkpoint_only: live フェーズだけが失敗し、local generation
+            checkpoint の成果物を draft PR として残す場合に True。
+            この PR は auto-merge しない。
 
     Returns:
         PR 番号 (int) または None（作成失敗時）
     """
+    if not all_steps_succeeded and not local_checkpoint_only:
+        console.warning("失敗 Step があるため PR 作成をスキップします。")
+        return None
+
     token = config.resolve_token()
     repo = config.repo
     if not token or not repo:
@@ -4866,16 +6598,50 @@ def _create_pr_if_needed(
         body_lines.append("")
         body_lines.append(f"Closes #{root_issue_num}")
 
+    if getattr(config, "enable_auto_merge", False) and all_steps_succeeded and not local_checkpoint_only:
+        # 案 P: auto-approve-and-merge ワークフローは検証マーカーを要求する。
+        # HVE ローカル実行（TDD GREEN 等）の検証を経た成果物として付与し、
+        # auto-approve-ready ラベルと併せて自動 Approve & merge を発火させる。
+        # 失敗 Step がある場合は検証未達のため付与しない（誤った auto-merge を防止）。
+        ac_lines = _collect_deploy_ac_verification_lines()
+        if ac_lines:
+            body_lines.extend([
+                "",
+                "## Deploy AC Verification",
+                "`ac-verification.md` の AC-ID / 内容 / 状態のみを転記します。",
+                "",
+            ])
+            body_lines.extend(ac_lines)
+        body_lines.append("")
+        body_lines.append("<!-- validation-confirmed -->")
+
     try:
-        pr_num = create_pull_request(
-            title=f"[{prefix}] {display_name}",
-            body="\n".join(body_lines),
-            head=head_branch,
-            base=base_branch,
-            repo=repo,
-            token=token,
-        )
+        _pr_kwargs: Dict[str, Any] = {
+            "title": f"[{prefix}] {display_name}"
+            + (" — local checkpoint (draft)" if local_checkpoint_only else ""),
+            "body": "\n".join(body_lines),
+            "head": head_branch,
+            "base": base_branch,
+            "repo": repo,
+            "token": token,
+        }
+        if local_checkpoint_only:
+            _pr_kwargs["draft"] = True
+        pr_num = create_pull_request(**_pr_kwargs)
         console.event(f"PR #{pr_num} を作成しました。")
+        # 案 P: enable_auto_merge（全自動）かつ全 Step 成功時のみ auto-approve-ready
+        # ラベルを付与し、auto-approve-and-merge ワークフローによる自動 Approve & merge
+        # を発火させる。失敗 Step がある場合は付与しない（誤った auto-merge を防止）。
+        if getattr(config, "enable_auto_merge", False) and all_steps_succeeded and not local_checkpoint_only:
+            try:
+                add_labels(pr_num, ["auto-approve-ready"], repo=repo, token=token)
+                console.event(
+                    f"PR #{pr_num} に auto-approve-ready ラベルを付与しました。"
+                )
+            except Exception as exc:  # noqa: BLE001 - ラベル付与失敗は PR 作成成功を妨げない
+                console.warning(
+                    f"auto-approve-ready ラベルの付与に失敗しました: {exc}"
+                )
         return pr_num
     except GitHubAPIError as exc:
         console.error(f"PR 作成中にエラーが発生しました: {exc}")

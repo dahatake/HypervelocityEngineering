@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 880" role="img" aria-labelledby="title desc">
+  <title id="title">HVE オーケストレーション データフロー俯瞰（どのファイルがどのワークフローで作られるか）</title>
+  <desc id="desc">タスク=Custom Agent 群を束ねた各ワークフローが入力ファイルを読み、出力ファイルを生成する全体データフロー。左列は knowledge パイプライン（original-docs/ → AQOD → qa/ → AKM → knowledge/D01-D21）、中央は設計→実装パイプライン（ARD → AAS → AAD-WEB/ADFD/AAG → ASDW-WEB/ADFDV/AAGD → ADOC）。上流の成果物ファイルが下流ワークフローの入力になる。knowledge/ は全設計・実装ワークフローが業務コンテキストとして参照する。</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans CJK JP", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; fill: #1f2937; }
+      .title { font-size: 23px; font-weight: 700; }
+      .subtitle { font-size: 12.5px; fill: #475569; }
+      .lane { font-size: 13px; font-weight: 700; fill: #64748b; }
+      .card { rx: 9; ry: 9; stroke-width: 1.5; }
+      .infile { fill: #e0f2fe; stroke: #0369a1; }
+      .wf { fill: #ede9fe; stroke: #7c3aed; }
+      .know { fill: #fef3c7; stroke: #d97706; }
+      .outfile { fill: #dcfce7; stroke: #15803d; }
+      .wflabel { font-size: 13.5px; font-weight: 700; fill: #5b21b6; }
+      .flabel { font-size: 12px; font-weight: 700; }
+      .mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10.5px; fill: #0f172a; }
+      .small { font-size: 10.5px; fill: #475569; }
+      .arrow { fill: none; stroke: #334155; stroke-width: 2; marker-end: url(#a); }
+      .ref { fill: none; stroke: #d97706; stroke-width: 1.8; stroke-dasharray: 7 4; marker-end: url(#a); }
+      .panel { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1360" height="880" fill="#ffffff"/>
+  <text x="26" y="40" class="title">HVE オーケストレーション データフロー俯瞰</text>
+  <text x="26" y="62" class="subtitle">各ワークフロー（= Custom Agent タスク群）が入力ファイルを読み、出力ファイルを生成。上流の成果物が下流の入力になる。成果物パスは README「中核となる Workflow ID」表に準拠。</text>
+
+  <!-- ===== LEFT: knowledge pipeline ===== -->
+  <rect x="20" y="78" width="320" height="356" class="panel"/>
+  <text x="34" y="98" class="lane">knowledge パイプライン</text>
+
+  <rect x="36" y="106" width="288" height="40" class="card infile"/>
+  <text x="48" y="124" class="flabel" fill="#0369a1">original-docs/</text>
+  <text x="48" y="139" class="small">原本ドキュメント（読み取り専用・手動配置）</text>
+
+  <path class="arrow" d="M180 146 L180 166"/>
+  <rect x="36" y="168" width="288" height="42" class="card wf"/>
+  <text x="48" y="186" class="wflabel">AQOD</text>
+  <text x="48" y="202" class="small">横断分析 → 質問票生成</text>
+
+  <path class="arrow" d="M180 210 L180 230"/>
+  <rect x="36" y="232" width="288" height="42" class="card infile"/>
+  <text x="48" y="250" class="flabel" fill="#0369a1">qa/</text>
+  <text x="48" y="266" class="mono">D01〜D21-*-questionnaire.md / cross-*</text>
+
+  <path class="arrow" d="M180 274 L180 294"/>
+  <rect x="36" y="296" width="288" height="42" class="card wf"/>
+  <text x="48" y="314" class="wflabel">AKM（KnowledgeManager）</text>
+  <text x="48" y="330" class="small">qa/ + original-docs/ を読み込み生成</text>
+
+  <path class="arrow" d="M180 338 L180 358"/>
+  <rect x="36" y="360" width="288" height="62" class="card know"/>
+  <text x="48" y="380" class="flabel" fill="#b45309">knowledge/D01〜D21-*.md</text>
+  <text x="48" y="397" class="small">確定済み業務コンテキスト。</text>
+  <text x="48" y="413" class="small">全設計・実装 WF が参照（右へ）。</text>
+
+  <!-- ===== CENTER/RIGHT: design -> impl pipeline ===== -->
+  <text x="360" y="98" class="lane">設計 → 実装パイプライン（上流ファイル → 下流ワークフロー）</text>
+
+  <!-- Stage ARD -->
+  <rect x="360" y="106" width="220" height="46" class="card wf"/>
+  <text x="372" y="128" class="wflabel">ARD</text>
+  <text x="372" y="144" class="small">要求定義の自動化</text>
+  <path class="arrow" d="M580 129 L612 129"/>
+  <rect x="614" y="106" width="722" height="46" class="card outfile"/>
+  <text x="626" y="124" class="flabel" fill="#15803d">docs/ 要求定義成果物</text>
+  <text x="626" y="142" class="mono">company-business-requirement.md / business-requirement.md / catalog/use-case-catalog.md / recommended-kpi-okr.md(任意)</text>
+
+  <path class="arrow" d="M470 152 L470 176"/>
+
+  <!-- Stage AAS -->
+  <rect x="360" y="178" width="220" height="46" class="card wf"/>
+  <text x="372" y="200" class="wflabel">AAS</text>
+  <text x="372" y="216" class="small">アプリアーキ設計</text>
+  <path class="arrow" d="M580 201 L612 201"/>
+  <rect x="614" y="178" width="722" height="46" class="card outfile"/>
+  <text x="626" y="196" class="flabel" fill="#15803d">docs/catalog/ アプリ・画面・サービス・データ</text>
+  <text x="626" y="214" class="mono">catalog/app-catalog.md / screen・service・data catalog / docs/test-specs/</text>
+
+  <path class="arrow" d="M470 224 L470 248"/>
+
+  <!-- Stage design: AAD-WEB / ADFD / AAG -->
+  <rect x="360" y="250" width="220" height="44" class="card wf"/>
+  <text x="372" y="271" class="wflabel">AAD-WEB</text>
+  <text x="372" y="287" class="small">Web/Microservice 設計</text>
+  <path class="arrow" d="M580 272 L612 272"/>
+  <rect x="614" y="250" width="722" height="44" class="card outfile"/>
+  <text x="626" y="268" class="flabel" fill="#15803d">docs/ Web 設計成果物</text>
+  <text x="626" y="285" class="mono">catalog/screen-catalog.md / service-catalog-matrix.md / docs/screen/ / docs/services/ / docs/test-specs/</text>
+
+  <rect x="360" y="300" width="220" height="40" class="card wf"/>
+  <text x="372" y="319" class="wflabel">ADFD</text>
+  <text x="372" y="334" class="small">Dataflow 設計</text>
+  <path class="arrow" d="M580 320 L612 320"/>
+  <rect x="614" y="300" width="722" height="40" class="card outfile"/>
+  <text x="626" y="325" class="mono">docs/dataflow/*.md（per-job 仕様・監視設計・TDD テスト仕様）</text>
+
+  <rect x="360" y="346" width="220" height="40" class="card wf"/>
+  <text x="372" y="365" class="wflabel">AAG</text>
+  <text x="372" y="380" class="small">AI Agent 設計</text>
+  <path class="arrow" d="M580 366 L612 366"/>
+  <rect x="614" y="346" width="722" height="40" class="card outfile"/>
+  <text x="626" y="371" class="mono">docs/agent/（Agent 定義・粒度設計・詳細設計）</text>
+
+  <path class="arrow" d="M470 294 L470 300"/>
+  <path class="arrow" d="M470 392 L470 416"/>
+
+  <!-- Stage impl: ASDW-WEB / ADFDV / AAGD -->
+  <rect x="360" y="418" width="220" height="44" class="card wf"/>
+  <text x="372" y="439" class="wflabel">ASDW-WEB</text>
+  <text x="372" y="455" class="small">Web 実装・デプロイ</text>
+  <path class="arrow" d="M580 440 L612 440"/>
+  <rect x="614" y="418" width="722" height="44" class="card outfile"/>
+  <text x="626" y="436" class="flabel" fill="#15803d">src/ 実装 + Azure</text>
+  <text x="626" y="453" class="mono">src/ / src/test/ / Azure リソース（Functions / Static Web Apps 等）</text>
+
+  <rect x="360" y="468" width="220" height="40" class="card wf"/>
+  <text x="372" y="487" class="wflabel">ADFDV</text>
+  <text x="372" y="502" class="small">Dataflow 実装</text>
+  <path class="arrow" d="M580 488 L612 488"/>
+  <rect x="614" y="468" width="722" height="40" class="card outfile"/>
+  <text x="626" y="493" class="mono">src/ / src/test/ / src/infra/azure/dataflow/</text>
+
+  <rect x="360" y="514" width="220" height="40" class="card wf"/>
+  <text x="372" y="533" class="wflabel">AAGD</text>
+  <text x="372" y="548" class="small">AI Agent 実装</text>
+  <path class="arrow" d="M580 534 L612 534"/>
+  <rect x="614" y="514" width="722" height="40" class="card outfile"/>
+  <text x="626" y="539" class="mono">docs/agent/ / src/test/agent/ / Azure Agent 関連</text>
+
+  <!-- Stage ADOC (reverse: src -> docs-generated) -->
+  <path class="arrow" d="M470 554 L470 586"/>
+  <rect x="360" y="588" width="220" height="44" class="card wf"/>
+  <text x="372" y="609" class="wflabel">ADOC</text>
+  <text x="372" y="625" class="small">src/ → 技術文書</text>
+  <path class="arrow" d="M580 610 L612 610"/>
+  <rect x="614" y="588" width="722" height="44" class="card outfile"/>
+  <text x="626" y="606" class="flabel" fill="#15803d">docs-generated/</text>
+  <text x="626" y="624" class="mono">コンポーネント設計 / API 仕様 / アーキ概要 / 技術負債 等</text>
+
+  <!-- knowledge/ reference (dashed) to design/impl -->
+  <path class="ref" d="M324 391 C 348 391, 348 470, 360 470"/>
+  <text x="244" y="452" class="small" fill="#b45309">knowledge/ を</text>
+  <text x="244" y="467" class="small" fill="#b45309">全設計・実装 WF</text>
+  <text x="244" y="482" class="small" fill="#b45309">が業務コンテキスト</text>
+  <text x="244" y="497" class="small" fill="#b45309">として参照</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="700" width="1316" height="158" class="panel"/>
+  <text x="34" y="724" class="lane">凡例・読み方</text>
+  <rect x="36" y="736" width="22" height="16" class="card wf"/><text x="66" y="749" class="small">ワークフロー（= Custom Agent タスク群。入力ファイルを読み、出力ファイルを生成）</text>
+  <rect x="36" y="760" width="22" height="16" class="card infile"/><text x="66" y="773" class="small">入力 / 中間ファイル（original-docs/ は読み取り専用、qa/ は質問票・回答）</text>
+  <rect x="36" y="784" width="22" height="16" class="card know"/><text x="66" y="797" class="small">knowledge/（確定済み業務コンテキスト。全設計・実装 WF が参照）</text>
+  <rect x="36" y="808" width="22" height="16" class="card outfile"/><text x="66" y="821" class="small">生成される成果物ファイル / ディレクトリ（docs/ ・ src/ ・ docs-generated/ ・ Azure）</text>
+  <line x1="40" y1="844" x2="62" y2="844" class="arrow"/><text x="66" y="848" class="small">データフロー（上流ファイル → 下流ワークフロー → 下流ファイル）</text>
+  <line x1="640" y1="844" x2="662" y2="844" class="ref"/><text x="666" y="848" class="small">knowledge/ の参照（業務コンテキスト注入）</text>
+  <text x="640" y="773" class="small">各ワークフロー単体の入出力詳細は users-guide/images/orchestration-task-data-flow-&lt;id&gt;.svg（11 枚）を参照。</text>
+  <text x="640" y="797" class="small">標準の進行順: ARD → AAS → AAD-WEB / ADFD / AAG → ASDW-WEB / ADFDV / AAGD（ADOC は実装後に逆方向で文書化）。</text>
+  <text x="640" y="821" class="small">CLI / GUI は DAGExecutor で実行、Cloud は Sub-Issue + reusable workflow で同じ DAG を展開。</text>
+</svg>

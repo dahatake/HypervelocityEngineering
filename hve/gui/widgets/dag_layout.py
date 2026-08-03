@@ -100,3 +100,76 @@ def grid_dimensions(
         rows_per_rank[r] = max(rows_per_rank.get(r, 0), order[sid] + 1)
     rows = max(rows_per_rank.values()) if rows_per_rank else 0
     return (cols, rows)
+
+
+def compute_row_y_offsets(
+    rank: Dict[str, int],
+    order: Dict[str, int],
+    child_heights: Dict[str, int],
+    *,
+    node_h: int,
+    row_gap: int,
+) -> Tuple[Dict[int, int], Dict[str, int]]:
+    """各行（同一 ``order`` 値のグループ）の y オフセットと、行内で同一行に属する
+    各 step の子ブロック先頭の追加 y オフセットを計算する純関数。
+
+    ``DagStatusWidget`` の Fanout 子ノード描画が、上下方向で他のノードや子ブロックと
+    重ならないようにするためのレイアウト計算ヘルパー。
+
+    Args:
+        rank: ``step_id -> 0 始まり rank（左→右）``。``compute_layout`` の戻り値想定。
+        order: ``step_id -> 0 始まり order（上→下の行 index）``。``compute_layout`` の戻り値想定。
+        child_heights: ``step_id -> 子ブロックが行内で占有する合計垂直スペース px``。
+            「親 Step 下のパディング + 子ノード行数 × (CHILD_NODE_H + CHILD_ROW_GAP) - CHILD_ROW_GAP」
+            のように、呼び出し側で必要な padding を含めた合計値を渡すこと。子なし
+            or 折りたたみの step は 0 を設定するか dict から省略する（省略時は 0 扱い）。
+        node_h: Step ノード本体の高さ px。
+        row_gap: 行間のギャップ px（最後の子ブロック下端と次行先頭 Step 上端の間隔）。
+
+    Returns:
+        ``(row_top_y, within_row_child_offset)``。
+        - ``row_top_y[order_value]`` = その行の上辺 y オフセット（最上行 = 0、stripe_top
+          を起点とする相対座標）。``order`` が空の場合は空 dict。隣接行間は
+          ``row_top_y[o+1] - row_top_y[o] = node_h + (その行の child_heights 合計) + row_gap``
+          を満たし、最後の子ブロック下端と次行 Step 上端の間隔が ``row_gap`` になる。
+        - ``within_row_child_offset[step_id]`` = その step の子ブロック上辺 y の、
+          「stripe_top + row_top_y[o] + node_h」 からの追加オフセット。同一行内で
+          ``rank`` が小さい兄弟の ``child_heights`` 累積値（rank 最小の兄弟は 0）。
+          子ブロックを持たない step も dict に必ず含まれる（用途は呼び出し側次第）。
+
+    Notes:
+        - ``rank`` と ``order`` の両方に存在する step_id のみを処理対象とする。
+          どちらか片方にしか存在しない step_id は無視する（捏造禁止のため警告等は
+          出さない）。``child_heights`` に余剰 step_id がある場合も無視する。
+        - 同一 ``(rank, order)`` の step_id が複数あった場合は ``rank`` 昇順、
+          tie-breaker として ``step_id`` 昇順で並べ、その順で縦に積み上げる。
+        - 入力の鍵順序に依存しない決定的出力を保証するため、内部で
+          ``(rank, step_id)`` 昇順にソートしてから累積する。
+    """
+    if not order:
+        return ({}, {})
+
+    valid_ids = [sid for sid in rank if sid in order]
+
+    rows: Dict[int, List[str]] = {}
+    for sid in valid_ids:
+        rows.setdefault(order[sid], []).append(sid)
+    for o in rows:
+        rows[o].sort(key=lambda sid: (rank[sid], sid))
+
+    within_row_child_offset: Dict[str, int] = {}
+    row_total_child_height: Dict[int, int] = {}
+    for o, sids in rows.items():
+        cumulative = 0
+        for sid in sids:
+            within_row_child_offset[sid] = cumulative
+            cumulative += child_heights.get(sid, 0)
+        row_total_child_height[o] = cumulative
+
+    row_top_y: Dict[int, int] = {}
+    cur_y = 0
+    for o in sorted(rows.keys()):
+        row_top_y[o] = cur_y
+        cur_y += node_h + row_total_child_height[o] + row_gap
+
+    return row_top_y, within_row_child_offset

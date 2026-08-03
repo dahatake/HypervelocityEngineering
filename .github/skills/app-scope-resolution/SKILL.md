@@ -44,10 +44,19 @@ AAD-WEB / ASDW-WEB / ADFD / ADFDV では、APP-ID 未指定時に全対象とは
 `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` を参照し、
 workflow に対応する推薦アーキテクチャの APP-ID のみを対象とする。
 
-| workflow | 対象推薦アーキテクチャ |
+| workflow | 対象となる実行分類 |
 |---------|---------------------|
-| `aad-web` / `asdw-web` | `Webフロントエンド + クラウド` |
-| `adfd` / `adfdv` | `データデータフロー処理` または `バッチ` |
+| `aad-web` / `asdw-web` | `web-cloud` |
+| `adfd` / `adfdv` | `batch` |
+
+推薦アーキテクチャ文字列は次の順で実行分類へ変換する。
+
+1. 既知の表記（`Webフロントエンド + クラウド` / `データデータフロー処理` / `データフロー処理` / `バッチ`）は既存の対応を優先する。
+2. 非空の未知表記に「バッチ」「ETL」「集計」「データ処理」「データパイプライン」「DWH」「BI」「Analytics」「分析」が含まれる場合は `batch` とする。
+3. それ以外の非空表記は `web-cloud` とする。
+4. 空の推薦は分類しない。
+
+英字キーワードは大文字小文字を区別せず、`BI` は独立した英数字語として扱う。このフォールバックは既存カタログや生成契約違反の値に対する防御であり、固定候補外の推薦名を許可するものではない。
 
 - `docs/catalog/app-arch-catalog.md` が存在しない場合 → fail-fast（非 dry-run）または warning 継続（dry-run）
 - APP-ID が `docs/catalog/app-arch-catalog.md` に存在しない場合 → unknown として除外

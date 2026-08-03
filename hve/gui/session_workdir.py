@@ -4,17 +4,18 @@ Issue-gui-session-workdir-isolation T3 で導入。
 
 目的:
   - GUI MainWindow 1 インスタンス = 1 セッションとして
-    `<repo>/work/gui-runs/<session_run_id>/` を作成し、
-    子プロセスに `HVE_WORK_ROOT` / `HVE_GUI_SESSION_ID` env で渡す。
-  - 既存 `work/Issue-*/` 群（CLI 由来・過去 GUI 由来）との干渉を物理的に排除する。
+        `<repo>/work/run/<session_run_id>/` を作成し、
+    子プロセスに `HVE_WORK_ROOT` / `HVE_RUN_ID` / `HVE_GUI_SESSION_ID` env で渡す。
+    - 過去の `work/run/<別 run-id>/` 群との干渉を物理的に排除する。
 
 session_run_id:
-  - `gui-{hve.config.generate_run_id()}` 形式（既存 ID 生成器を流用）。
-  - 例: ``"gui-20260521T074921-a1b2c3"``。
+  - `hve.config.generate_run_id()` 出力をそのまま使用（プレフィックスなし）。
+  - 例: ``"20260521T074921-a1b2c3"``。
+  - GUI 起源の識別が必要な場合は env ``HVE_GUI_SESSION_ID`` を参照する。
 
 cleanup_policy:
   - ``"keep"``    : 何もしない (既定)。
-  - ``"archive"`` : ``work/gui-runs/.archive/<session_run_id>.zip`` に zip 化して元 dir 削除。
+  - ``"archive"`` : ``work/archive/<session_run_id>.zip`` に zip 化して元 dir 削除。
   - ``"purge"``   : ``work_root`` を rmtree 削除。
 
 参考:
@@ -41,6 +42,7 @@ __all__ = [
     "GuiSessionWorkdir",
     "CleanupPolicy",
     "ARCHIVE_DIRNAME",
+    "GUI_RUN_DIRNAME",
     "GUI_RUNS_DIRNAME",
     "SESSION_ID_PREFIX",
 ]
@@ -49,9 +51,11 @@ logger = logging.getLogger(__name__)
 
 CleanupPolicy = Literal["keep", "archive", "purge"]
 
-ARCHIVE_DIRNAME: str = ".archive"
-GUI_RUNS_DIRNAME: str = "gui-runs"
-SESSION_ID_PREFIX: str = "gui-"
+ARCHIVE_DIRNAME: str = "archive"
+GUI_RUN_DIRNAME: str = "run"
+# 後方互換 alias。外部テスト / 呼び出し側の import を壊さないため残置する。
+GUI_RUNS_DIRNAME: str = GUI_RUN_DIRNAME
+SESSION_ID_PREFIX: str = ""
 
 
 def _is_valid_policy(policy: str) -> bool:
@@ -64,7 +68,7 @@ class GuiSessionWorkdir:
 
     Attributes:
         session_run_id: ``gui-<generate_run_id()>`` 形式の一意 ID。
-        work_root: ``<repo>/work/gui-runs/<session_run_id>/`` の絶対 Path。
+        work_root: ``<repo>/work/run/<session_run_id>/`` の絶対 Path。
         cleanup_policy: セッション終了時の挙動。
         had_env_override: 起動時に既に `HVE_WORK_ROOT` が env にセットされていたか
             （Q16: WARNING ログ出力のために保持）。
@@ -105,7 +109,7 @@ class GuiSessionWorkdir:
 
         session_run_id = f"{SESSION_ID_PREFIX}{generate_run_id()}"
         work_root = (
-            repo_root.resolve() / "work" / GUI_RUNS_DIRNAME / session_run_id
+            repo_root.resolve() / "work" / GUI_RUN_DIRNAME / session_run_id
         )
         work_root.mkdir(parents=True, exist_ok=True)
 
@@ -130,11 +134,22 @@ class GuiSessionWorkdir:
     # -----------------------------------------------------------------
 
     def env_overrides(self) -> Dict[str, str]:
-        """子プロセスに注入すべき環境変数を返す (Q10: 2 種)。"""
-        return {
+        """子プロセスに注入すべき環境変数を返す。
+
+        - ``HVE_WORK_ROOT``: ``work/run/<run-id>/`` 絶対 Path
+        - ``HVE_RUN_ID``: ``<run-id>`` 単体（``hve.split_fork.resolve_run_id`` 用）
+        - ``HVE_GUI_SESSION_ID``: GUI 起源識別用（dir 名がプレフィックス無しのため必要）
+        - ``HVE_RUN_ID_TZ``: ``<run-id>`` 生成タイムゾーン（親プロセス env を継承）
+        """
+        env = {
             "HVE_WORK_ROOT": str(self.work_root),
+            "HVE_RUN_ID": self.session_run_id,
             "HVE_GUI_SESSION_ID": self.session_run_id,
         }
+        tz = os.environ.get("HVE_RUN_ID_TZ", "").strip()
+        if tz:
+            env["HVE_RUN_ID_TZ"] = tz
+        return env
 
     def apply_to_env(self, env: Dict[str, str]) -> Dict[str, str]:
         """与えられた env dict に overrides を適用した新 dict を返す。"""
@@ -174,7 +189,9 @@ class GuiSessionWorkdir:
         shutil.rmtree(self.work_root, ignore_errors=False)
 
     def _archive(self) -> None:
-        archive_root = self.work_root.parent / ARCHIVE_DIRNAME
+        # sibling 配置: work/run/<id>/ の祖父母階層 (= work/) 直下の archive/。
+        # 旧 work/gui-runs/.archive/<id>.zip からの移行先。
+        archive_root = self.work_root.parent.parent / ARCHIVE_DIRNAME
         archive_root.mkdir(parents=True, exist_ok=True)
         zip_path = archive_root / f"{self.session_run_id}.zip"
 

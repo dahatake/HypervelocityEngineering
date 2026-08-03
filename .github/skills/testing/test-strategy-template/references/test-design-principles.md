@@ -34,6 +34,18 @@
 2. **Testcontainers**: DB・外部サービスのコンテナ化が可能な場合に採用
 3. **Mock / Stub**: 上記が適用できない場合、または Unit Test レベルで十分な場合に採用
 
+## §2.5. 実行環境の分類
+
+| 分類 | 既定の実行場所 | 外部サービス | 設定の渡し方 |
+|---|---|---|---|
+| Unit / Component | ローカル / CI | Mock / Stub / Emulator / Testcontainers に置換 | テストプロジェクト内の fixture / test settings |
+| 実装コード向け TDD RED / GREEN | ローカル / CI | 原則テストダブル化。実装コード側は本番設定を外部化 | `dotnet test` / `pytest` / `npm test` 等で決定的に実行 |
+| Integration | ローカル / CI / デプロイ先 | 構成済み外部サービスを利用可 | Endpoint / Resource 名 / 認証情報を環境変数またはテスト設定ファイルで注入 |
+| Post-deploy / E2E | ローカル / CI / デプロイ先 | デプロイ済み URL / 実サービスを利用 | `*_BASE_URL` / `E2E_BASE_URL` 等の環境変数を優先 |
+
+- 外部サービス未設定を PASS 扱いしない。必須設定が不足する場合は環境ブロッカーとして明示する。
+- Secret / token / connection string / Function key はコード・README・ログへハードコードしない。
+
 ---
 
 ## §3. テストデータ戦略

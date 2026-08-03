@@ -2,6 +2,12 @@
 
 ← [README](../README.md)
 
+> ⚠️ **移行ノート（AAS 共通化対応）**: 本ワークフローは AAS（Application Architecture Selection）の共通カタログを SoT として参照する構成に再設計されました。
+> - 旧 Step.1.1〜5（バッチドメイン分析・データソース分析・データモデル・ジョブカタログ・サービスカタログ・テスト戦略）は AAS Step.3.1〜7 に統合されました（プロンプトおよび `docs/catalog/*` 出力に冪等性・チェックポイント・データソース統合等のバッチ補強注記を追加）。
+> - 現行 ADFD は Step.1（per-job 詳細仕様）・Step.2（監視・運用設計）・Step.3（TDD テスト仕様）の 3 ステップのみです。入力は `docs/catalog/*`（AAS 出力）に切り替わっています。
+> - **「概要」「前提条件」「Agent チェーン図」（3 SVG: `chain-adfd.svg` / `infographic-adfd.svg` / `orchestration-task-data-flow-adfd.svg`）「ステップ概要」のステップ表は現行 3 ステップ構成（`docs/catalog/*` 入力）に更新済みです。** 「手動実行ガイド」「自動実行ガイド」配下の Step.1.1〜5 説明セクションは、旧 9 ステップ構成の参考情報として `[旧]` を明記のうえ残置しています（現行 ADFD では実行されません）。
+> - 旧 `docs/dataflow/dataflow-*.md` 系の生成は廃止されました。ADFDV（dataflow dev）ワークフローは旧 dataflow-*.md を必須依存としていますが、現状は AAS 共通カタログ＋ per-job 詳細を参照する形へ追従修正が必要です（[CHANGELOG](../CHANGELOG.md) の Known Issues 参照）。
+
 ---
 
 ## 目次
@@ -26,21 +32,19 @@
 
 ### フローの目的・スコープ
 
-Issue Form から親 Issue を作成するだけで、Step.1.1〜Step.6.3 のデータフロー処理設計タスクが
+Issue Form から親 Issue を作成するだけで、Step.1〜Step.3 のデータフロー処理設計タスクが
 Sub-issue として自動生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
 
-本ワークフローはバッチデータ処理に特化しており、以下の設計成果物を自動生成します:
-- バッチドメイン分析（冪等性・トランザクション境界・最終的一貫性）
-- データソース/デスティネーション分析
-- バッチデータモデル（冪等性キー・パーティション戦略）
-- ジョブ設計書（DAG・リトライ・チェックポイント/リスタート）
-- サービスカタログ（Azureサービスマッピング）
-- テスト戦略書（冪等性テスト・データ品質テスト・障害注入テスト）
-- ジョブ詳細仕様書・監視運用設計書・TDDテスト仕様書
+本ワークフローはバッチ／データフロー処理に特化しており、AAS が生成した共通カタログ（`docs/catalog/*`）を入力に、以下の 3 つの設計成果物を自動生成します:
+- ジョブ詳細仕様書（per-job・fanout。`docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`）
+- 監視・運用設計書（`docs/dataflow/dataflow-monitoring-design.md`）
+- TDD テスト仕様書（per-job・fanout。`docs/test-specs/{jobId}-test-spec.md`）
+
+> 旧 9 ステップ構成のバッチドメイン分析・データソース分析・データモデル・ジョブ設計書・サービスカタログ・テスト戦略書は AAS の共通カタログ（`docs/catalog/*`）に統合され、ADFD 単独では生成されません。
 
 ### 前提条件
 
-- `docs/catalog/use-case-catalog.md` が存在すること（Step.1.1/1.2 の主入力）
+- `docs/catalog/app-catalog.md` / `docs/catalog/data-model.md` / `docs/catalog/service-catalog-matrix.md` / `docs/catalog/test-strategy.md` が存在すること（Step.1〜3 の主入力。いずれも AAS 出力）
 - `docs/catalog/app-arch-catalog.md` が存在すること（APP-ID フィルタリングの正本）
 - Architecture Design（AAS）ワークフローが完了していること
 - セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
@@ -53,7 +57,7 @@ Sub-issue として自動生成され、Copilot が依存関係に従って順�
 以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
 
 
-![ADFD: Arch-Dataflow-DomainAnalytics → Arch-Dataflow-TDD-TestSpec の9ステップチェーン（並列2箇所含む）](./images/chain-adfd.svg)
+![ADFD: ジョブ詳細仕様書(Arch-Dataflow-AppSpec) と 監視・運用設計(Arch-Dataflow-MonitoringDesign) を並列実行し、TDDテスト仕様書(Arch-Dataflow-TDD-TestSpec) へ AND 合流する 3 ステップチェーン](./images/chain-adfd.svg)
 
 
 ### アーキテクチャ図
@@ -79,32 +83,24 @@ GitHub Copilot cloud agent を使用します。ツールの詳細は [README.md
 ### 依存グラフ
 
 ```
-step-1.1 ──┐
-            ├──► step-2 ──► step-3 ──► step-4 ──► step-5 ──► step-6.1 ──┐
-step-1.2 ──┘                                                    └──► step-6.2 ──┤
-                                                                                ▼
-                                                                            step-6.3
+step-1 ──┐
+          ├──► step-3
+step-2 ──┘
 ```
 
-**重要な依存関係:**
-- `step-1.1` と `step-1.2` は**並列開始**されます
-- `step-2` は `step-1.1` **AND** `step-1.2` の**両方が完了した後**に開始されます（AND依存）
-- `step-6.1` と `step-6.2` は `step-5` 完了後に**並列開始**されます
-- `step-6.3` は `step-6.1` **AND** `step-6.2` の**両方が完了した後**に開始されます（AND依存）
+**重要な依存関係（現行 ADFD = 3 ステップ）:**
+- `step-1`（ジョブ詳細仕様書）と `step-2`（監視・運用設計書）は ADFD 起動時に**並列開始**されます
+- `step-3`（TDDテスト仕様書）は `step-1` **AND** `step-2` の**両方が完了した後**に開始されます（AND依存）
+
+> **NOTE**: 旧ステップ体系 (step-1.1〜5: バッチドメイン分析・データソース分析・データモデル・ジョブ設計書・サービスカタログ・テスト戦略書) は AAS の共通カタログ (`docs/catalog/*`) に統合され、ADFD 単独では実行されません。
 
 ### 各ステップの入出力
 
 | Step ID   | タイトル                                    | Prompt                         | 入力                                                                                         | 出力                                                    | 依存                      |
 |-----------|---------------------------------------------|-------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------------------------|---------------------------|
-| step-1.1  | Step.1.1 バッチドメイン分析                 | Arch-Dataflow-DomainAnalytics     | docs/catalog/use-case-catalog.md                                                                         | docs/dataflow/dataflow-domain-analytics.md                    | なし                      |
-| step-1.2  | Step.1.2 データソース/デスティネーション分析 | Arch-Dataflow-DataSourceAnalysis  | docs/catalog/use-case-catalog.md, docs/catalog/data-model.md（任意）                                             | docs/dataflow/dataflow-data-source-analysis.md                | なし                      |
-| step-2    | Step.2 バッチデータモデル                   | Arch-Dataflow-DataModel           | docs/dataflow/dataflow-domain-analytics.md, docs/dataflow/dataflow-data-source-analysis.md, docs/catalog/data-model.md | docs/dataflow/dataflow-data-model.md                   | step-1.1 AND step-1.2     |
-| step-3    | Step.3 ジョブ設計書                         | Arch-Dataflow-AppCatalog          | docs/dataflow/dataflow-domain-analytics.md, docs/dataflow/dataflow-data-source-analysis.md, docs/dataflow/dataflow-data-model.md | docs/dataflow/dataflow-app-catalog.md          | step-2                    |
-| step-4    | Step.4 サービスカタログ（データフローアプリ版）   | Arch-Dataflow-ServiceCatalog      | docs/dataflow/dataflow-app-catalog.md, docs/dataflow/dataflow-data-model.md, docs/dataflow/dataflow-domain-analytics.md | docs/dataflow/dataflow-service-catalog.md             | step-3                    |
-| step-5    | Step.5 テスト戦略書（バッチ固有）           | Arch-Dataflow-TestStrategy        | docs/dataflow/dataflow-service-catalog.md, docs/dataflow/dataflow-data-model.md                         | docs/dataflow/dataflow-test-strategy.md                       | step-4                    |
-| step-6.1  | Step.6.1 データフローアプリ詳細仕様書             | Arch-Dataflow-AppSpec             | docs/dataflow/dataflow-service-catalog.md, docs/dataflow/dataflow-app-catalog.md, docs/dataflow/dataflow-data-model.md | docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md     | step-5                    |
-| step-6.2  | Step.6.2 監視・運用設計書                   | Arch-Dataflow-MonitoringDesign    | docs/dataflow/dataflow-service-catalog.md, docs/dataflow/dataflow-app-catalog.md                        | docs/dataflow/dataflow-monitoring-design.md                   | step-5                    |
-| step-6.3  | Step.6.3 TDDテスト仕様書                    | Arch-Dataflow-TDD-TestSpec        | docs/dataflow/dataflow-test-strategy.md, docs/dataflow/dataflow-service-catalog.md, docs/dataflow/apps/*-spec.md, docs/dataflow/dataflow-monitoring-design.md | docs/test-specs/{jobId}-test-spec.md           | step-6.1 AND step-6.2     |
+| step-1  | Step.1 データフローアプリ詳細仕様書             | Arch-Dataflow-AppSpec             | docs/catalog/app-catalog.md, docs/catalog/data-model.md, docs/catalog/service-catalog-matrix.md | docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md     | なし（root）              |
+| step-2  | Step.2 監視・運用設計書                   | Arch-Dataflow-MonitoringDesign    | docs/catalog/app-catalog.md, docs/catalog/service-catalog-matrix.md                        | docs/dataflow/dataflow-monitoring-design.md                   | なし（root）              |
+| step-3  | Step.3 TDDテスト仕様書                    | Arch-Dataflow-TDD-TestSpec        | docs/catalog/test-strategy.md, docs/catalog/service-catalog-matrix.md, docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md, docs/dataflow/dataflow-monitoring-design.md | docs/test-specs/{jobId}-test-spec.md           | step-1 AND step-2     |
 
 ---
 
@@ -114,12 +110,12 @@ step-1.2 ──┘                                                    └──�
 > Step.1.1 と Step.1.2 は並列で実行できます。いずれも主な入力は `docs/catalog/use-case-catalog.md` であり、Step.1.2 では必要に応じて `docs/catalog/data-model.md` も併用できるため、同時に依頼しても構いません。
 > Step.2 以降は前段ステップの成果物を入力とするため、順番通りに進めてください。
 
-### Step.1. データフロー処理ドメイン分析とデータソース分析
+### [旧仕様・AAS統合済み] Step.1. データフロー処理ドメイン分析とデータソース分析
 
 ユースケースの情報をもとに、データフロー処理に特化したドメイン分析とデータソース/デスティネーション分析を行います。
 これらは独立しているため、**並列**で実行できます。
 
-#### Step.1.1. ドメイン分析
+#### [旧] Step.1.1. ドメイン分析
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-DomainAnalytics
@@ -135,7 +131,7 @@ step-1.2 ──┘                                                    └──�
 - `docs/dataflow/dataflow-domain-analytics.md`
 ```
 
-#### Step.1.2. データソース/デスティネーション分析
+#### [旧] Step.1.2. データソース/デスティネーション分析
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-DataSourceAnalysis
@@ -154,7 +150,7 @@ step-1.2 ──┘                                                    └──�
 
 ---
 
-### Step.2. バッチデータモデル作成
+### [旧仕様・AAS統合済み] Step.2. バッチデータモデル作成
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-DataModel
@@ -174,7 +170,7 @@ step-1.2 ──┘                                                    └──�
 
 ---
 
-### Step.3. ジョブ設計書の作成
+### [旧仕様・AAS統合済み] Step.3. ジョブ設計書の作成
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-AppCatalog
@@ -194,7 +190,7 @@ step-1.2 ──┘                                                    └──�
 
 ---
 
-### Step.4. サービスカタログ表の作成
+### [旧仕様・AAS統合済み] Step.4. サービスカタログ表の作成
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-ServiceCatalog
@@ -214,7 +210,7 @@ step-1.2 ──┘                                                    └──�
 
 ---
 
-### Step.5. テスト戦略書の作成
+### [旧仕様・AAS統合済み] Step.5. テスト戦略書の作成
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-TestStrategy
@@ -233,12 +229,12 @@ step-1.2 ──┘                                                    └──�
 
 ---
 
-### Step.6. ジョブ詳細仕様書・監視運用設計書の作成
+### ADFD 全ステップ（Step.1〜Step.3）
 
-Step.5 完了後、Step.6.1 と Step.6.2 は**並列**で実行できます。
-Step.6.3 は Step.6.1 と Step.6.2 の**両方が完了してから**実行してください。
+ADFD ワークフロー起動時、Step.1 と Step.2 は**並列**で実行されます。
+Step.3 は Step.1 と Step.2 の**両方が完了してから**実行されます（AND依存）。
 
-#### Step.6.1. ジョブ詳細仕様書
+#### Step.1. ジョブ詳細仕様書
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-AppSpec
@@ -256,7 +252,7 @@ Step.6.3 は Step.6.1 と Step.6.2 の**両方が完了してから**実行し�
 - `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`（ジョブごとに1ファイル）
 ```
 
-#### Step.6.2. 監視・運用設計書
+#### Step.2. 監視・運用設計書
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-MonitoringDesign
@@ -273,7 +269,7 @@ Step.6.3 は Step.6.1 と Step.6.2 の**両方が完了してから**実行し�
 - `docs/dataflow/dataflow-monitoring-design.md`
 ```
 
-#### Step.6.3. TDDテスト仕様書
+#### Step.3. TDDテスト仕様書
 
 - 使用するカスタムエージェント
   - Arch-Dataflow-TDD-TestSpec
@@ -409,7 +405,7 @@ cron 式によるスケジュール定義とジョブ間の時間的依存を管
 
 ### フォーム表示の確認
 
-1. `.github/ISSUE_TEMPLATE/batch-design.yml` がリポジトリに存在することを確認する
+1. `.github/ISSUE_TEMPLATE/dataflow-design.yml` がリポジトリに存在することを確認する
 2. Issues タブ → New Issue → **Dataflow Design** テンプレートが表示されることを確認する
 3. テンプレートのフォームフィールド（APP-ID・ブランチ・Runner・ステップ選択・モデル設定・レビュー設定・質問票設定・自己改善設定・自己改善 最大イテレーション数・自己改善 品質スコア目標値・PR 自動化設定・追加コメント）が正しく表示されることを確認する
 
@@ -426,7 +422,7 @@ cron 式によるスケジュール定義とジョブ間の時間的依存を管
 9. step-1.2 の Issue を close し、step-2 に `adfd:ready` + `adfd:running` が付与され Copilot が assign されることを確認する（AND依存解消）
 10. Step.1.1/1.2/2〜6 すべてを選択して Issue を作成し直し、全 Step Issue が生成されることを確認する
 11. Step.4 を close して step-5 が起動することを確認する
-12. Step.5 を close して step-6.1 と step-6.2 が**並列で**開始されることを確認する
-13. step-6.1 を close して step-6.3 がまだ起動しないことを確認する（step-6.2 が未完了のため）
-14. step-6.2 を close して step-6.3 が自動起動することを確認する（AND依存）
-15. step-6.3 を close して Root Issue に完了通知コメントが投稿されることを確認する
+12. Step.5 を close して step-1 と step-2 が**並列で**開始されることを確認する
+13. step-1 を close して step-3 がまだ起動しないことを確認する（step-2 が未完了のため）
+14. step-2 を close して step-3 が自動起動することを確認する（AND依存）
+15. step-3 を close して Root Issue に完了通知コメントが投稿されることを確認する

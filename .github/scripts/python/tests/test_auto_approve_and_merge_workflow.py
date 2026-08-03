@@ -248,6 +248,76 @@ class TestAutoApproveAndMergeWorkflowT5(unittest.TestCase):
             "steps.check-validation.outputs.has_validation != 'false'", if_condition
         )
 
+    def test_deploy_ac_gate_uses_ac_table_rows_mode(self):
+        """Deploy/AC gate が PR body 等の AC テーブル行を優先評価すること。"""
+        self.assertIn("ac_table_rows=", self.content)
+        self.assertIn('if [ -n "${ac_table_rows}" ]; then', self.content)
+        self.assertIn("AC テーブル行", self.content)
+
+    def test_deploy_ac_gate_checks_agent_specific_ac_ids(self):
+        """StepRunner 側で使う agent-specific AC-ID を auto-approve 側でも扱うこと。"""
+        for ac_id in ["AC-2", "AC-3", "AC-6", "AC-8", "AC-9", "AC4B-1"]:
+            self.assertIn(ac_id, self.content)
+
+    def test_deploy_ac_gate_preserves_legacy_ac1_fallback(self):
+        """AC テーブル行が無い場合の既存 AC-1 / AC-13 フォールバックを保持すること。"""
+        self.assertIn("AC テーブル行が無い場合", self.content)
+        self.assertIn("`AC-1 ✅` が確認できません。", self.content)
+        self.assertIn("AI/LLM 文脈で `AC-13 ✅`", self.content)
+
+
+class TestAutoApproveAndMergeWorkflowInitialPlanGuard(unittest.TestCase):
+    """auto-approve-and-merge.yml の Initial plan スキップガードが保持されていることを静的検証する。"""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.content = WORKFLOW.read_text(encoding="utf-8")
+        cls.yaml_data = yaml.safe_load(cls.content)
+        cls.steps = (
+            cls.yaml_data.get("jobs", {})
+            .get("approve-and-merge", {})
+            .get("steps", [])
+        )
+
+    def _get_step(self, step_name: str) -> dict:
+        step = next(
+            (s for s in self.steps if s.get("name") == step_name), None
+        )
+        self.assertIsNotNone(step, f"ステップ '{step_name}' が見つかりません")
+        assert step is not None
+        return step
+
+    def test_initial_plan_skip_reason_exists(self):
+        """`skip_reason=initial_plan` がワークフロー本文に存在すること。"""
+        self.assertIn("skip_reason=initial_plan", self.content)
+
+    def test_approve_step_has_initial_plan_guard(self):
+        """PR を Approve ステップの if ガードに skip_reason != 'initial_plan' 条件が含まれること。"""
+        approve_step = self._get_step("PR を Approve")
+        if_condition = approve_step.get("if", "")
+        self.assertIn(
+            "steps.check-validation.outputs.skip_reason != 'initial_plan'",
+            if_condition,
+        )
+
+    def test_merge_step_has_initial_plan_guard(self):
+        """Auto-merge を有効化ステップの if ガードに skip_reason != 'initial_plan' 条件が含まれること。"""
+        merge_step = self._get_step("Auto-merge を有効化（squash）")
+        if_condition = merge_step.get("if", "")
+        self.assertIn(
+            "steps.check-validation.outputs.skip_reason != 'initial_plan'",
+            if_condition,
+        )
+
+    def test_summary_comment_step_has_initial_plan_guard(self):
+        """サマリーコメントを PR に投稿ステップの if ガードに skip_reason != 'initial_plan' 条件が含まれること。"""
+        summary_step = self._get_step("サマリーコメントを PR に投稿")
+        if_condition = summary_step.get("if", "")
+        self.assertIn(
+            "steps.check-validation.outputs.skip_reason != 'initial_plan'",
+            if_condition,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

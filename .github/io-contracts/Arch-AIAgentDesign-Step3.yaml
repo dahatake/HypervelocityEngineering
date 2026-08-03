@@ -2,19 +2,19 @@ inputs:
 - path: docs/catalog/use-case-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ARD-UseCaseCatalog
+  producer: Arch-ARD-UseCaseCatalog--ard--3.3
 - path: docs/catalog/domain-analytics.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-DomainAnalytics
+  producer: Arch-Microservice-DomainAnalytics--aas--3.1
 - path: docs/catalog/data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling
+  producer: Arch-DataModeling--aas--4.1
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
@@ -26,11 +26,11 @@ inputs:
 - path: docs/azure/azure-services-data.md
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-DataDesign
+  producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
 - path: docs/azure/azure-services-additional.md
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-AddServiceDesign
+  producer: Dev-Microservice-Azure-AddServiceDesign--asdw-web--2.1
 - path: users-guide/08-ai-agent.md
   required: true
   kind: static
@@ -46,18 +46,18 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step2
-- path: docs/catalog/screen-catalog.md
+- path: docs/catalog/screen-catalog-APP-*.md
   required: true
   kind: agent_artifact
-  producer: Arch-UI-List
+  producer: Arch-UI-List--aad-web--1
 - path: docs/screen/{screenId}-*.md
   required: true
   kind: agent_artifact
-  producer: Arch-UI-Detail
+  producer: Arch-UI-Detail--aad-web--2.1
 - path: src/data/sample-data.json
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling
+  producer: Arch-DataModeling--aas--4.2
 - path: .github/skills/agent-common-preamble/references/agent-playbook.md
   required: false
   kind: static
@@ -80,7 +80,7 @@ inputs:
   required: true
   kind: static
 outputs:
-- path: docs/agent/agent-detail-{AgentID}-{AgentName}.md
+- path: docs/agent/agent-detail-{key}.md
   required: true
   mode: create
 - path: docs/ai-agent-catalog.md

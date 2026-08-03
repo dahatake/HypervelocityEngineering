@@ -25,7 +25,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: action
-        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャ = Webフロントエンド + クラウド の APP-ID のみを対象にする"
+        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャを実行分類へ変換して web-cloud の APP-ID のみを対象にする"
     reason: "AAD-WEB では APP-ID 未指定時に全対象とせず推薦アーキテクチャでフィルタリングする"
 
   - id: adfd-no-app-id-uses-arch-filter
@@ -33,8 +33,40 @@ test_cases:
     expected_trigger: true
     verify:
       - type: action
-        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャ = データデータフロー処理 または バッチ の APP-ID のみを対象にする"
+        detail: "docs/catalog/app-arch-catalog.md の A) サマリ表（全APP横断）を参照し、推薦アーキテクチャを実行分類へ変換して batch の APP-ID のみを対象にする"
     reason: "ADFD では APP-ID 未指定時に全対象とせず推薦アーキテクチャでフィルタリングする"
+
+  - id: aad-web-bff-falls-back-to-web-cloud
+    input: "app-arch-catalog.md で推薦が BFF + 会員管理マイクロサービスの APP は aad-web の対象になるか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "非空の未知表記で batch 判定語を含まないため web-cloud に分類し、aad-web の対象にする"
+    reason: "未知の非空推薦を未分類にせず web-cloud へ振り分けるフォールバックを確認する"
+
+  - id: adfd-dwh-analytics-falls-back-to-batch
+    input: "app-arch-catalog.md で推薦が クラウドDWH + BI/Analytics Platform の APP は adfd の対象になるか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "DWH、独立語 BI、Analytics を含むため batch に分類し、adfd の対象にする"
+    reason: "DWH・分析系の非空推薦を batch へ振り分けるフォールバックを確認する"
+
+  - id: adfd-lowercase-dwh-analytics-falls-back-to-batch
+    input: "推薦が cloud dwh + analytics platform の APP は adfd の対象になるか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "英字キーワードを大文字小文字を区別せず検出し、batch に分類する"
+    reason: "英字キーワードの大小文字を区別しない規則を確認する"
+
+  - id: aad-web-bi-substring-does-not-trigger-batch
+    input: "推薦が BIBLE Platform の APP は BI を含むものとして adfd の対象になるか"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "BIBLE 内の BI は独立した英数字語ではないため batch 判定語として扱わず、web-cloud に分類する"
+    reason: "BI の単純な部分一致による誤分類を防ぐ境界規則を確認する"
 
   # --- 負のテストケース ---
   - id: not-for-service-implementation

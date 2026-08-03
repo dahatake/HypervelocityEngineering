@@ -22,8 +22,8 @@ class TestIssueTemplateQaControls(unittest.TestCase):
         "web-app-dev.yml",
         "ai-agent-design.yml",
         "ai-agent-dev.yml",
-        "batch-design.yml",
-        "batch-dev.yml",
+        "dataflow-design.yml",
+        "dataflow-dev.yml",
         "sourcecode-to-documentation.yml",
         "knowledge-management.yml",
         "original-docs-review.yml",
@@ -45,6 +45,16 @@ class TestIssueTemplateQaControls(unittest.TestCase):
         for template in self._TEMPLATES_OUT_OF_SCOPE:
             with self.subTest(template=template):
                 self.assertNotIn("id: enable_qa", self._read_template(template))
+
+    def test_agent_templates_keep_qa_control_but_remove_self_improve_enable(self) -> None:
+        """AAG/AAGDはQA任意制御を維持し、Post-DAG Self-ImproveだけCloud必須にする。"""
+        for template in ("ai-agent-design.yml", "ai-agent-dev.yml"):
+            with self.subTest(template=template):
+                content = self._read_template(template)
+                self.assertIn("id: enable_qa", content)
+                self.assertNotIn("id: enable_self_improve", content)
+                self.assertIn("id: self_improve_max_iterations", content)
+                self.assertIn("id: self_improve_quality_threshold", content)
 
 
 class TestWorkflowAutoQaParity(unittest.TestCase):
@@ -168,11 +178,42 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
                     content,
                     re.DOTALL,
                 )
-                self.assertIsNotNone(m, "QA_REVIEW_SECTION が見つかりません")
+                if m is None:
+                    self.fail("QA_REVIEW_SECTION が見つかりません")
                 section = m.group("section")
                 self.assertIn("## 追加コンテキストの参照", section)
                 self.assertIn("## 検証結果（PR本文に必須）", section)
                 self.assertIn("<!-- validation-confirmed -->", section)
+
+    def test_workflow_qa_sections_prohibit_cross_step_work_run_read(self) -> None:
+        """全 Cloud ワークフローの QA 参照セクションに work/run 横断参照禁止の明確化が含まれること。
+
+        QA 参照セクションは CLI/GUI 側 (hve/template_engine.py の
+        _build_qa_review_context_section) と Cloud 側 (各 auto-*.yml) の二重実装であり、
+        片方だけ更新すると文言がドリフトする。両者の cross-step work/run 読取り禁止文の
+        存在を担保してドリフトを防ぐ（auto-aqod.yml は heredoc 形式のため本テストで併せて検査）。
+        """
+        prohibition = "`work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと"
+        targets = [
+            "auto-ai-agent-design-reusable.yml",
+            "auto-ai-agent-dev-reusable.yml",
+            "auto-app-detail-design-web-reusable.yml",
+            "auto-app-dev-microservice-web-reusable.yml",
+            "auto-app-documentation-reusable.yml",
+            "auto-app-selection-reusable.yml",
+            "auto-dataflow-design-reusable.yml",
+            "auto-dataflow-dev-reusable.yml",
+            "auto-knowledge-management-reusable.yml",
+            "auto-aqod.yml",
+        ]
+        for filename in targets:
+            with self.subTest(filename=filename):
+                content = self._read_workflow(filename)
+                self.assertIn(
+                    prohibition,
+                    content,
+                    f"{filename} の QA セクションに cross-step work/run 読取り禁止文がありません",
+                )
 
     def test_akm_aqod_python_heredoc_blocks_are_compilable(self) -> None:
         """AKM/AQODワークフローのPython heredocブロックが構文的に有効であることを検証する。"""

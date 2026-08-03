@@ -1,6 +1,6 @@
 > 全画面の実装用画面定義書（UX/A11y/セキュリティ含む）を docs/screen/ に生成/更新
 
-> **WORK**: `/work/Arch-UI-Detail/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-UI-Detail/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -26,17 +26,24 @@
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
 ## 1) 目的（このagent固有）
-`docs/catalog/screen-catalog.md` に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
+`docs/catalog/screen-catalog-APP-*.md` (APP ごとに分割された per-APP 画面カタログ) に列挙された **全画面**を対象に、実装に使える「画面定義書」を生成する。
+
+> **fan-out 実行コンテキスト**: 本 Agent は AAD-WEB Step 2.1 として `screen_catalog` parser による per-screen fan-out で起動される。fan-out key (`{key}` = `APP-NN-S###`) ごとに 1 画面分を担当する。
+
 - アクター毎に別の画面を作成する。
 - UX / A11y / セキュリティ / テスト可能な受け入れ基準を含める
 - 参照元ドキュメントと整合し、**不明点は捏造せず TODO/Questions に落とす**
+- **共通画面（PSC-XXX）参照ルール**: 担当画面の `screen-catalog-APP-*.md` 行の `notes` 列に `common_ref: PSC-XXX` が記載されている場合、`docs/catalog/persona-screen-catalog.md` の該当 `persona_screen_id` から共通骨格（操作意味・主要状態・A11y 観点）を継承する。画面定義書テンプレ §1 「目的と非目的」の冒頭に `共通画面参照: PSC-XXX` を明記する。APP 固有差分（タイトル・項目・遷移先の APP 固有部分）のみを各章に展開し、共通骨格と矛盾する記述は禁止。分岐ルール: `notes` に `common_ref` が記載されていない画面は従来通り単独で画面定義を作成する。`common_ref: PSC-XXX` が記載されているが `persona-screen-catalog.md` が存在しない、または当該 `persona_screen_id` が見つからない場合は、共通骨格を捏造せず、画面定義書に `共通画面参照: PSC-XXX（未解決）` と記載し、未解決として `{WORK}screen-detail-work-status.md` の `## Issues / Questions` に記録する。
 
 ## 2) 入力（存在確認して読む）
 必須:
-- `docs/catalog/screen-catalog.md`
+- `docs/catalog/screen-catalog-APP-*.md` (per-APP 画面カタログ glob)
+  - fan-out 起動時は `docs/catalog/screen-catalog-{{APP-ID}}.md` を最初に参照し、対象画面を特定する
+  - 全 APP 横断の画面整合性確認が必要な場合に限り他 APP も参照する
 
 推奨（存在すれば読む）:
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面の所属 APP-ID 確認に使用）
+- `docs/catalog/persona-screen-catalog.md`（AAS Step.8 で生成されたペルソナ別共通画面カタログ。screen-catalog の `notes` 列に `common_ref: PSC-XXX` が記載されている画面は、本カタログから共通骨格を継承する。存在しなければ参照不要）
 - `docs/catalog/domain-analytics.md`
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/data-model.md`
@@ -138,15 +145,19 @@
 3) 進捗更新（追記のみ）
 - `{WORK}screen-detail-work-status.md` に Done/Pending を更新（フォーマット固定）
 
-### 4.4 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+### 4.4 最終品質レビュー（単回インライン・セルフチェック）
 
-### 4.4.2 3つの異なる観点（このエージェント固有）
-- **1回目：機能完全性・要件達成度**：画面定義書（UX/A11y/セキュリティ/AC）が screen-list および参照ドキュメントと整合し、対応する実装に使用可能か
-- **2回目：ユーザー視点・使いやすさ**：A11y/i18n/エラーメッセージが妥当で、ユーザーが操作・理解できるか
-- **3回目：保守性・拡張性・堅牢性**：テンプレ構造が統一され、サンプルデータ/API接続/状態管理が明確で、将来の画面追加に対応可能か
+#### 4.4.1 セルフチェック契約
 
-### 4.4.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+#### 4.4.2 ドメイン固有観点
+- **機能完全性・要件達成度**：画面定義書（UX/A11y/セキュリティ/AC）が screen-list および参照ドキュメントと整合し、対応する実装に使用可能か
+- **ユーザー視点・使いやすさ**：A11y/i18n/エラーメッセージが妥当で、ユーザーが操作・理解できるか
+- **保守性・拡張性・堅牢性**：テンプレ構造が統一され、サンプルデータ/API接続/状態管理が明確で、将来の画面追加に対応可能か
+
+#### 4.4.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## 5) 書き込み失敗（空ファイル化等）対策（このagent固有・必須）
 - 1回の edit の目安: **最大200行 or 6–8KB**
@@ -180,6 +191,7 @@
 ```md
 ## 1) 目的と非目的
 * 所属アプリケーション: APP-xx（`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照）
+* 共通画面参照: PSC-XXX（`screen-catalog-APP-*.md` の `notes` 列に `common_ref: PSC-XXX` が記載されている場合のみ記載。未解決時は `PSC-XXX（未解決）`）
 * 目的 / 想定ユーザー / 前提
 
 ## 2. 画面構成

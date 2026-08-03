@@ -29,15 +29,96 @@ jobs:
         id: resolve
         run: |
           set -euo pipefail
-          issue_number=$(printf '%s' "${PR_BODY}" | python3 -c "
-          import sys, re
-          body = sys.stdin.read()
-          m = re.search(r'<!--\s*parent-issue:\s*#([0-9]+)\s*-->', body or '')
-          print(m.group(1) if m else '')
-          " 2>/dev/null || echo '')
+          issue_number=''
+          owner="${REPO%%/*}"
+          repo_name="${REPO#*/}"
+
+          # Method 1: GraphQL closingIssuesReferences
+          gql_issue=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $pr: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) {
+                  closingIssuesReferences(first: 10) {
+                    nodes {
+                      number
+                    }
+                  }
+                }
+              }
+            }
+          ' -f owner="${owner}" -f repo="${repo_name}" -F pr="${PR_NUMBER}" \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[0].number' \
+            2>/dev/null || echo '')
+          if [ -n "${gql_issue}" ] && [ "${gql_issue}" != "null" ]; then
+            issue_number="${gql_issue}"
+            echo "PR #${PR_NUMBER}: closingIssuesReferences から Issue #${issue_number} を解決しました。"
+          fi
+
+          # Method 2: PR body の Closes/Fixes/Resolves #N（owner/repo#N 形式含む）
+          if [ -z "${issue_number}" ]; then
+            body_issue=$(printf '%s' "${PR_BODY}" \
+              | grep -oiP '(?:fix(?:es)?|close[sd]?|resolve[sd]?)\s+(?:[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+)?#\K[0-9]+' \
+              | head -1 || true)
+            if [ -n "${body_issue}" ]; then
+              issue_number="${body_issue}"
+              echo "PR #${PR_NUMBER}: PR body から Issue #${issue_number} を解決しました。"
+            fi
+          fi
+
+          # Method 3: PR title の #N（Issue 実在かつ PR ではないことを確認）
+          if [ -z "${issue_number}" ]; then
+            pr_title=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.title' 2>/dev/null || echo '')
+            title_issue=$(printf '%s' "${pr_title}" | grep -oP '#\K[0-9]+' | tail -1 || true)
+            if [ -n "${title_issue}" ]; then
+              is_issue=$(gh api "/repos/${REPO}/issues/${title_issue}" \
+                --jq 'if .pull_request == null then "true" else "false" end' \
+                2>/dev/null || echo 'false')
+              if [ "${is_issue}" = "true" ]; then
+                issue_number="${title_issue}"
+                echo "PR #${PR_NUMBER}: PR title から Issue #${issue_number} を解決しました。"
+              fi
+            fi
+          fi
+
+          # Method 4: PR body の parent-issue マーカー（後方互換）
+          if [ -z "${issue_number}" ]; then
+            issue_number=$(printf '%s' "${PR_BODY}" | python3 -c "
+            import sys, re
+            body = sys.stdin.read()
+            m = re.search(r'<!--\s*parent-issue:\s*#([0-9]+)\s*-->', body or '')
+            print(m.group(1) if m else '')
+            " 2>/dev/null || echo '')
+            if [ -n "${issue_number}" ]; then
+              echo "PR #${PR_NUMBER}: parent-issue マーカーから Issue #${issue_number} を解決しました。"
+            fi
+          fi
+
+          # Method 5: PR timeline の cross-referenced Issue から解決（フォールバック）
+          if [ -z "${issue_number}" ]; then
+            xref_issues=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/timeline" \
+              --paginate \
+              --jq '[.[] | select(.event == "cross-referenced") | select(.source.issue.pull_request == null) | .source.issue.number] | unique | .[]' \
+              2>/dev/null || true)
+            xref_unique=$(printf '%s\n' "${xref_issues}" | grep -E '^[0-9]+$' | sort -u || true)
+            xref_count=$(printf '%s\n' "${xref_unique}" | sed '/^$/d' | wc -l | tr -d '[:space:]')
+
+            if [ "${xref_count}" = "1" ]; then
+              xref_issue=$(printf '%s\n' "${xref_unique}" | head -1 || true)
+              managed_issue=$(gh api "/repos/${REPO}/issues/${xref_issue}" 2>/dev/null | python3 -c "import json, sys; issue = json.load(sys.stdin); title = issue.get('title', ''); labels = [l.get('name', '') for l in issue.get('labels', [])]; prefixes = ('aas','aad-web','asdw-web','adfd','adfdv','aag','aagd','akm','adoc','aqod','aad','asdw'); title_tokens = ('[AAS]','[AAD-WEB]','[ASDW-WEB]','[ADFD]','[ADFDV]','[AAG]','[AAGD]','[AKM]','[ADOC]','[AQOD]','[AAD]','[ASDW]'); print('true' if (title.startswith(title_tokens) or any(any(lbl.startswith(f'{p}:') for p in prefixes) for lbl in labels)) else 'false')" 2>/dev/null || echo 'false')
+              if [ "${managed_issue}" = "true" ]; then
+                issue_number="${xref_issue}"
+                echo "PR #${PR_NUMBER}: Method 5 (PR timeline cross-referenced) から Issue #${issue_number} を解決しました。"
+              else
+                echo "PR #${PR_NUMBER}: Method 5 は管理対象 Step Issue ではないため採用しません。"
+              fi
+            elif [ "${xref_count}" -gt 1 ]; then
+              echo "PR #${PR_NUMBER}: Method 5 は候補が複数のため採用しません。"
+            fi
+          fi
+
           echo "issue_number=${issue_number}" >> "${GITHUB_OUTPUT}"
           if [ -z "${issue_number}" ]; then
-            echo "PR #${PR_NUMBER}: parent-issue マーカーを解決できません。スキップします。"
+            echo "PR #${PR_NUMBER}: Issue 番号を解決できません。スキップします。"
           fi
 
       - name: 系列プレフィックス判定
@@ -156,6 +237,7 @@ jobs:
               "${PREFIX}" "${added_done}")
             echo "${done_label} が存在しないため、残置ラベル削除をスキップします。"
             echo "result=${result}" >> "${GITHUB_OUTPUT}"
+            echo "done_present=${done_present}" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
@@ -166,6 +248,54 @@ jobs:
           result=$(printf 'prefix=%s, done_added=%s, removed=[%s,%s,%s,%s]' \
             "${PREFIX}" "${added_done}" "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}")
           echo "result=${result}" >> "${GITHUB_OUTPUT}"
+          echo "done_present=${done_present}" >> "${GITHUB_OUTPUT}"
+
+      - name: Issue を冪等にクローズ
+        id: close-issue
+        if: steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != ''
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+          DONE_PRESENT: ${{ steps.transition-labels.outputs.done_present }}
+        run: |
+          set -euo pipefail
+          AUTO_CLOSE_MARKER='<!-- auto-close-done -->'
+          close_status='skipped'
+
+          if [ "${DONE_PRESENT}" != "true" ]; then
+            echo "done ラベル未確認のため、クローズをスキップします。"
+            echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          issue_state=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.state' 2>/dev/null || echo '')
+          if [ -z "${issue_state}" ]; then
+            echo "::warning::Issue #${ISSUE_NUMBER} の state 取得に失敗したため、クローズをスキップします。"
+            close_status='skipped'
+          elif [ "${issue_state}" != "open" ]; then
+            echo "Issue #${ISSUE_NUMBER} は既に ${issue_state} のためクローズ不要です。"
+            close_status='already-closed'
+          else
+            marker_exists=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+              --paginate --jq '.[]' 2>/dev/null \
+              | jq -s --arg marker "${AUTO_CLOSE_MARKER}" 'any(.[]; (.body // "") | contains($marker))' \
+              2>/dev/null || echo 'false')
+
+            if [ "${marker_exists}" != "true" ]; then
+              auto_close_comment=$(printf '## ✅ Auto Close\n\nPR マージ後の状態遷移処理により、この Issue を自動クローズします。\n\n%s' "${AUTO_CLOSE_MARKER}")
+              if ! gh issue comment "${ISSUE_NUMBER}" --repo "${REPO}" --body "${auto_close_comment}" >/dev/null 2>&1; then
+                echo "::warning::Issue #${ISSUE_NUMBER} への auto-close コメント投稿に失敗しました。"
+              fi
+            fi
+
+            if gh issue close "${ISSUE_NUMBER}" --repo "${REPO}" --reason completed >/dev/null 2>&1; then
+              close_status='closed'
+            else
+              echo "::warning::Issue #${ISSUE_NUMBER} のクローズに失敗しました。"
+              close_status='close-failed'
+            fi
+          fi
+
+          echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
 
       - name: 処理結果コメントを Issue に投稿
         if: steps.resolve.outputs.issue_number != ''
@@ -173,20 +303,32 @@ jobs:
           ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
           PREFIX: ${{ steps.detect-prefix.outputs.prefix }}
           RESULT: ${{ steps.transition-labels.outputs.result }}
+          CLOSE_STATUS: ${{ steps.close-issue.outputs.close_status }}
         run: |
           set -euo pipefail
           MARKER='<!-- state-transition-on-pr-merge-done -->'
 
           if [ -z "${PREFIX}" ]; then
             SUMMARY='prefix 判定不能のためスキップ'
+            CLOSE_SUMMARY='スキップ（prefix 判定不能）'
           elif [ -n "${RESULT}" ]; then
             SUMMARY="${RESULT}"
+            if [ "${CLOSE_STATUS}" = "closed" ]; then
+              CLOSE_SUMMARY='実行した'
+            elif [ "${CLOSE_STATUS}" = "already-closed" ]; then
+              CLOSE_SUMMARY='既にクローズ済み'
+            elif [ -n "${CLOSE_STATUS}" ]; then
+              CLOSE_SUMMARY="スキップ/失敗（${CLOSE_STATUS}）"
+            else
+              CLOSE_SUMMARY='スキップ（条件不一致）'
+            fi
           else
             SUMMARY='遷移ステップ未実行（条件不一致）'
+            CLOSE_SUMMARY='スキップ（条件不一致）'
           fi
 
-          COMMENT=$(printf '%s\n\n## ✅ PR merge 起点の状態遷移\n\n- PR: #%s\n- Issue: #%s\n- 結果: %s\n\n> ℹ️ このコメントは `state-transition-on-pr-merge.yml` によって自動投稿されました。' \
-            "${MARKER}" "${PR_NUMBER}" "${ISSUE_NUMBER}" "${SUMMARY}")
+          COMMENT=$(printf '%s\n\n## ✅ PR merge 起点の状態遷移\n\n- PR: #%s\n- Issue: #%s\n- 結果: %s\n- クローズ: %s\n\n> ℹ️ このコメントは `state-transition-on-pr-merge.yml` によって自動投稿されました。' \
+            "${MARKER}" "${PR_NUMBER}" "${ISSUE_NUMBER}" "${SUMMARY}" "${CLOSE_SUMMARY}")
 
           comment_id=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
             --paginate --jq '.[]' 2>/dev/null \

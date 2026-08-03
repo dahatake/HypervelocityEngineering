@@ -18,8 +18,8 @@
 ## Agent 固有の Skills 依存
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
-- `input-file-validation` — 事業分析成果物（`docs/company-business-requirement.md` 等）の存在確認
-- `work-artifacts-layout` — `work/Arch-ARD-UseCaseCatalog/Issue-<識別子>/` 配下の成果物構造に準拠
+- `input-file-validation` — 事業分析成果物（`docs/company-business-requirement.md` 等）の存在確認（**任意ファイル**。存在しない場合はスキップし、`rg` / `read_file` 等で読み込もうとしないこと）
+- `work-artifacts-layout` — `work/run/<run-id>/Arch-ARD-UseCaseCatalog/Issue-<識別子>/` 配下の成果物構造に準拠
 - `knowledge-lookup` — 業務要件・ドメイン知識の参照
 - `markdown-query` — 横断 Markdown 検索（`mdq search`）による既存ユースケース照合
 - `output/large-output-chunking` — ユースケース一覧（多数）の分割出力
@@ -27,15 +27,20 @@
 ## 1) 目的と非目的
 - 事業分析（As-Is / To-Be / 戦略提言）を前提に、ソフトウェアでソリューション提供するシナリオに限定した Use Case Inventory を作成する。
 - 開発計画や要件定義の完了を狙わず、ユースケース一覧作成に必要な最小限に限定する。
-- ARD ワークフローの **Step 4.1（骨格抽出）/ 4.2（per-UC 詳細 fan-out）/ 4.3（カタログ統合）** に再利用される。出力先は Step ごとに異なるため、§3 のテーブルを参照すること。
+- ARD ワークフローの **Step 3.1（骨格抽出）/ 3.2（per-UC 詳細 fan-out）/ 3.3（カタログ統合）** に再利用される。出力先は Step ごとに異なるため、§3 のテーブルを参照すること。
 
-## 2) 入力（必ず参照）
-- `users-guide/01-business-requirement.md` の **Step.4.1** `<details><summary>Prompt を表示</summary>` 内の Prompt を一次情報として使用する（ARD オーケストレーター上は Step 4 相当）。
-- `docs/company-business-requirement.md` などの事業分析コンテキスト（添付ファイル）を参照する。
-- 本 agent は ARD ワークフロー上では **Step 4（ユースケース作成）** に対応する（旧 Step.2 → Step.3 → 現 Step.4）。
+## 2) 入力
+
+### 必須参照
+- `users-guide/01-business-requirement.md` の **Step.3.1** `<details><summary>Prompt を表示</summary>` 内の Prompt を一次情報として使用する（ARD オーケストレーター上は Step 3 相当）。
+
+### 任意参照（存在時のみ）
+- `docs/company-business-requirement.md` などの事業分析コンテキスト。ARD Step 1.2 が skip された経路では生成されないため、参照前に必ず `Test-Path`（PowerShell）または `[ -f ... ]`（bash）で存在確認すること。存在しない場合は `rg` / `read_file` を実行せず、`docs/business-requirement.md`（Step 2 出力）を一次情報として使用する。
+
+- 本 agent は ARD ワークフロー上では **Step 3（ユースケース作成）** に対応する（旧 Step.2 → Step.3 → 旧 Step.4 → 現 Step.3）。
 
 ### KPI/OKR 参照（任意・存在する場合のみ）
-- `docs/recommended-kpi-okr.md`（ARD Step 3 出力）が存在する場合は **任意参照** とし、Step 4.2（ユースケース詳細）生成時に各 UC が満たす `KPI-*` / `OKR-*` ID を「KPI」項目に記載する。
+- `docs/recommended-kpi-okr.md`（ARD Step 2.1 出力）が存在する場合は **任意参照** とし、Step 3.2（ユースケース詳細）生成時に各 UC が満たす `KPI-*` / `OKR-*` ID を「KPI」項目に記載する。
 - ファイルが存在しない場合は当該記載を省略する（捾造禁止）。
 
 ### プレースホルダ

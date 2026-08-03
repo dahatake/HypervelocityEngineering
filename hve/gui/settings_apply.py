@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Iterable, Optional, Set, Tuple
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -73,9 +73,9 @@ def _set(widget: Any, value: Any) -> None:
         return
     if isinstance(widget, QComboBox):
         if hasattr(widget, "set_tristate"):
-            if value == "on":
+            if value is True or value == "on":
                 widget.set_tristate(True)
-            elif value == "off":
+            elif value is False or value == "off":
                 widget.set_tristate(False)
             else:
                 widget.set_tristate(None)
@@ -118,6 +118,8 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "reasoning_effort": "effort",
         "review_reasoning_effort": "review_effort",
         "qa_reasoning_effort": "qa_effort",
+        "context_tier": "context_tier",
+        "run_id_timezone": "run_id_timezone",
         # 旧 C2 / C8 / C6 から移動
         "max_parallel": "max_parallel",
         "timeout": "timeout",
@@ -135,7 +137,6 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "auto_coding_agent_review_auto_approval": "auto_coding_agent_review_auto_approval",
         # 旧 C16 / C15 から移動
         "self_improve": "self_improve",
-        "no_self_improve": "no_self_improve",
         "self_improve_max_iterations": "self_improve_max_iterations",
         "self_improve_target_scope": "self_improve_target_scope",
         "self_improve_goal": "self_improve_goal",
@@ -151,10 +152,26 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         # 旧 C9 / C11 から移動
         "branch": "branch",
         "enable_auto_merge": "enable_auto_merge",
+        "delete_local_merged_branch": "delete_local_merged_branch",
+        # 旧 C1 から移動: Fleet mode / Cloud Sessions
+        "fleet_mode_enabled": "fleet_mode_enabled",
+        "cloud_session_enabled": "cloud_session_enabled",
+        "cloud_session_repository_branch": "cloud_session_repository_branch",
+        "cloud_session_max_concurrency": "cloud_session_max_concurrency",
+        "cloud_session_integration_id": "cloud_session_integration_id",
+        "cloud_session_mc_base_url": "cloud_session_mc_base_url",
+        "cloud_session_step_overrides": "cloud_session_step_overrides",
+        "cloud_session_subtask_overrides": "cloud_session_subtask_overrides",
     },
     "C7": {"cli_path": "cli_path", "cli_url": "cli_url"},
     "AZURE": {
         "resource_group": "resource_group",
+        # FR-GUI-03: ASDW-WEB Step 1.3 の required_params（FR-DAG-07）を永続化する。
+        "data_location": "data_location",
+        "data_resource_suffix": "data_resource_suffix",
+        "data_vnet_cidr": "data_vnet_cidr",
+        "data_private_endpoint_subnet_cidr": "data_private_endpoint_subnet_cidr",
+        "data_aci_subnet_cidr": "data_aci_subnet_cidr",
     },
     "C4": {
         "workiq": "workiq",
@@ -210,6 +227,12 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "mdq_watch": "mdq_watch",
         "mdq_watch_debounce_ms": "mdq_watch_debounce_ms",
     },
+    # CQ: profile / build_profiles は `[cq]` セクションへ CqIndexSection が直接
+    # 書き込む。ここへ載せるのは `[options]` 側の watch 2 キーだけ（FR-GUI-04）。
+    "CQ": {
+        "cq_watch": "cq_watch",
+        "cq_watch_debounce_ms": "cq_watch_debounce_ms",
+    },
     "LANG": {
         "language": "language",
     },
@@ -218,6 +241,7 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "step1_show_plan_review_always": "step1_show_plan_review_always",
         "autopilot_show_app_id_picker": "autopilot_show_app_id_picker",
         "autopilot_app_id_picker_timeout_sec": "autopilot_app_id_picker_timeout_sec",
+        "auto_compaction": "auto_compaction",
     },
     # EXPLORER: 値は ";" 区切り文字列。QListWidget との同期は
     # ``_CExplorerSection`` 内部で完結し、settings_apply 経由では QLineEdit
@@ -229,15 +253,30 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
 
 
 def apply_to_widgets(
-    sections: Dict[str, QWidget], settings: Dict[str, Dict[str, Any]]
+    sections: Dict[str, QWidget],
+    settings: Dict[str, Dict[str, Any]],
+    *,
+    skip_keys: Optional[Iterable[Tuple[str, str]]] = None,
 ) -> None:
-    """settings dict をウィジェット群へ書き込む。"""
+    """settings dict をウィジェット群へ書き込む。
+
+    Args:
+        sections: セクションキー (例: ``"C10"``) → 対象 widget のマッピング。
+        settings: ``settings_store.load()`` の戻り値。
+        skip_keys: 上書きを抑止する ``(section_key, option_key)`` の集合。
+            例: ``{("C10", "app_ids")}`` を渡すと、Settings dialog 経由の
+            空文字 autosave で OptionsPage の APP-ID 欄が上書きされる経路を
+            遮断できる（Step 1 の AppIdChecklist を SSOT として保護する）。
+    """
     options = settings.get("options", {})
+    skip_set: Set[Tuple[str, str]] = set(skip_keys) if skip_keys else set()
     for sec_key, fields in _SECTION_FIELDS.items():
         widget = sections.get(sec_key)
         if widget is None:
             continue
         for opt_key, attr_name in fields.items():
+            if (sec_key, opt_key) in skip_set:
+                continue
             if opt_key not in options:
                 continue
             sub = getattr(widget, attr_name, None)

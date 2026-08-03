@@ -31,7 +31,7 @@ class TestPromptsNotEmpty(unittest.TestCase):
         self.assertTrue(REVIEW_PROMPT.strip(), "REVIEW_PROMPT should not be empty")
 
     def test_review_prompt_mentions_adversarial_review(self) -> None:
-        """REVIEW_PROMPT には敵対的レビューの5軸検証に関する記述が含まれる。"""
+        """REVIEW_PROMPT には敵対的レビューの6軸検証に関する記述が含まれる。"""
         self.assertIn("敵対的レビュアー", REVIEW_PROMPT)
         self.assertIn("要件充足性", REVIEW_PROMPT)
         self.assertIn("合格判定", REVIEW_PROMPT)
@@ -437,11 +437,11 @@ class TestYamlWorkflowPromptDriftPhase5(unittest.TestCase):
         self.assertIn("source \"${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh\"", content)
         self.assertIn(':qa-drafting', content)
 
-    def test_yaml_has_auto_context_review_opt_out_marker(self) -> None:
-        """YAML auto-review ジョブに opt-out マーカー 'auto-context-review: false' の参照が含まれること。"""
+    def test_yaml_has_adversarial_review_opt_out_marker(self) -> None:
+        """YAML auto-review ジョブに専用 opt-out マーカーが含まれること。"""
         content = self._read_yaml_content()
-        self.assertIn("auto-context-review: false", content,
-                      "copilot-auto-feedback.yml に 'auto-context-review: false' opt-out マーカーの参照がありません。"
+        self.assertIn("adversarial-review: false", content,
+                      "copilot-auto-feedback.yml に 'adversarial-review: false' opt-out マーカーの参照がありません。"
                       "レビューの opt-out 機能が失われています。")
 
 
@@ -502,14 +502,12 @@ class TestOverEngineeringBan(unittest.TestCase):
 
     def test_questionnaire_prompts_contain_oe_ban(self) -> None:
         from prompts import (
-            AQOD_QA_PROMPT,
             PRE_EXECUTION_QA_PROMPT_V2,
             QA_PROMPT_V2,
         )
         for name, body in [
             ("PRE_EXECUTION_QA_PROMPT_V2", PRE_EXECUTION_QA_PROMPT_V2),
             ("QA_PROMPT_V2", QA_PROMPT_V2),
-            ("AQOD_QA_PROMPT", AQOD_QA_PROMPT),
         ]:
             self.assertIn(self.OE_MARKER, body, f"{name} missing OE ban")
 
@@ -518,12 +516,6 @@ class TestOverEngineeringBan(unittest.TestCase):
         from prompts import REVIEW_PROMPT
         self.assertIn("6つの検証軸", REVIEW_PROMPT)
         self.assertIn("オーバーエンジニアリング検出", REVIEW_PROMPT)
-
-    def test_build_implementation_forbids_overengineering(self) -> None:
-        from prompt_templates import build_implementation
-        out = build_implementation()
-        self.assertIn("オーバーエンジニアリング", out)
-        self.assertIn("YAGNI", out)
 
     def test_fanout_common_files_contain_oe_ban(self) -> None:
         repo_root = pathlib.Path(__file__).resolve().parents[2]

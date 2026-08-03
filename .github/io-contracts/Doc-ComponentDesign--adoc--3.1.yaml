@@ -3,6 +3,6 @@ inputs:
   required: true
   kind: external
 outputs:
-- path: docs-generated/components/{component}.md
+- path: docs-generated/components/{module-name}.md
   required: true
   mode: create

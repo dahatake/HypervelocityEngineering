@@ -1,226 +1,75 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 1100" font-family="system-ui, -apple-system, sans-serif">
-  <title>ABD: バッチ設計 データフロー</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">ADFD データフロー（各 Prompt の入出力ファイル）</title>
+  <desc id="desc">ADFD 3 ステップの各 Prompt が読み書きするファイル。step-1 Arch-Dataflow-AppSpec と step-2 Arch-Dataflow-MonitoringDesign は docs/catalog/* を入力に成果物を生成し、step-3 Arch-Dataflow-TDD-TestSpec は step-1/step-2 の出力も入力にして TDD テスト仕様書を生成する。</desc>
   <defs>
-    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-      <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
-    </marker>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#586069"/></marker>
+    <marker id="dep" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#e36209"/></marker>
   </defs>
+  <style>
+    text { font-family: "Noto Sans CJK JP", "Noto Sans JP", system-ui, -apple-system, sans-serif; fill: #24292e; }
+    .t { font-size: 16px; font-weight: 700; }
+    .hd { font-size: 13px; font-weight: 700; }
+    .in { fill: #e8f0fe; stroke: #0366d6; stroke-width: 1.4; rx: 7; }
+    .ag { fill: #e8d5f5; stroke: #6f42c1; stroke-width: 1.8; rx: 8; }
+    .out { fill: #d4edda; stroke: #28a745; stroke-width: 1.4; rx: 7; }
+    .f { font-size: 10px; fill: #1f2937; }
+    .ag-t { font-size: 11.5px; font-weight: 700; fill: #6f42c1; }
+    .ln { stroke: #586069; stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+    .dep { stroke: #e36209; stroke-width: 1.6; fill: none; stroke-dasharray: 5 3; marker-end: url(#dep); }
+    .sub { font-size: 10.5px; fill: #475569; }
+  </style>
+  <rect width="1200" height="560" fill="#f6f8fa" rx="12"/>
+  <text x="24" y="34" class="t">ADFD データフロー（各 Prompt の入出力）</text>
+  <text x="40" y="64" class="hd" fill="#0366d6">入力ファイル</text>
+  <text x="520" y="64" class="hd" fill="#6f42c1">Prompt（= Custom Agent）</text>
+  <text x="900" y="64" class="hd" fill="#28a745">出力ファイル</text>
 
-  <!-- Background -->
-  <rect width="1300" height="1100" fill="#f6f8fa" rx="12"/>
+  <!-- step-1 -->
+  <rect x="40" y="84" width="300" height="74" class="in"/>
+  <text x="52" y="104" class="f">docs/catalog/app-catalog.md</text>
+  <text x="52" y="122" class="f">docs/catalog/data-model.md</text>
+  <text x="52" y="140" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <rect x="470" y="92" width="320" height="58" class="ag"/>
+  <text x="486" y="116" class="ag-t">step-1: Arch-Dataflow-AppSpec</text>
+  <text x="486" y="136" class="sub">ジョブ詳細仕様書（per-job fanout・root）</text>
+  <rect x="900" y="92" width="276" height="58" class="out"/>
+  <text x="912" y="116" class="f">docs/dataflow/apps/</text>
+  <text x="912" y="134" class="f">{jobId}-{jobNameSlug}-spec.md</text>
+  <path class="ln" d="M340 121 L468 121"/>
+  <path class="ln" d="M790 121 L898 121"/>
 
-  <!-- Title -->
-  <text x="650" y="34" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">ABD: バッチ設計 データフロー</text>
-  <text x="650" y="54" text-anchor="middle" font-size="11" fill="#586069">各 Prompt の入出力ファイル</text>
+  <!-- step-2 -->
+  <rect x="40" y="186" width="300" height="58" class="in"/>
+  <text x="52" y="208" class="f">docs/catalog/app-catalog.md</text>
+  <text x="52" y="226" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <rect x="470" y="188" width="320" height="54" class="ag"/>
+  <text x="486" y="210" class="ag-t">step-2: Arch-Dataflow-MonitoringDesign</text>
+  <text x="486" y="230" class="sub">監視・運用設計書（root）</text>
+  <rect x="900" y="188" width="276" height="54" class="out"/>
+  <text x="912" y="210" class="f">docs/dataflow/</text>
+  <text x="912" y="228" class="f">dataflow-monitoring-design.md</text>
+  <path class="ln" d="M340 215 L468 215"/>
+  <path class="ln" d="M790 215 L898 215"/>
 
-  <!-- ========== Steps 1.1 and 1.2 (parallel) ========== -->
-  <text x="650" y="75" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行</text>
-  <line x1="350" y1="79" x2="490" y2="79" stroke="#e36209" stroke-width="1" stroke-dasharray="4,3"/>
-  <line x1="810" y1="79" x2="950" y2="79" stroke="#e36209" stroke-width="1" stroke-dasharray="4,3"/>
+  <!-- step-3 -->
+  <rect x="40" y="300" width="300" height="116" class="in"/>
+  <text x="52" y="322" class="f">docs/catalog/test-strategy.md</text>
+  <text x="52" y="340" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <text x="52" y="364" class="f" fill="#e36209">docs/dataflow/apps/{jobId}-…-spec.md ←step-1</text>
+  <text x="52" y="388" class="f" fill="#e36209">docs/dataflow/dataflow-monitoring-design.md ←step-2</text>
+  <rect x="470" y="322" width="320" height="64" class="ag"/>
+  <text x="486" y="346" class="ag-t">step-3: Arch-Dataflow-TDD-TestSpec</text>
+  <text x="486" y="366" class="sub">TDD テスト仕様書（per-job fanout）</text>
+  <text x="486" y="380" class="sub">depends: step-1 AND step-2</text>
+  <rect x="900" y="322" width="276" height="64" class="out"/>
+  <text x="912" y="348" class="f">docs/test-specs/</text>
+  <text x="912" y="366" class="f">{jobId}-test-spec.md</text>
+  <path class="ln" d="M340 358 L468 354"/>
+  <path class="ln" d="M790 354 L898 354"/>
 
-  <!-- Step 1.1 (left) -->
-  <text x="330" y="92" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 1.1</text>
-  <!-- Input 1.1 -->
-  <rect x="20" y="100" width="250" height="38" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="145" y="123" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
-  <!-- Agent 1.1 -->
-  <rect x="285" y="98" width="230" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="400" y="118" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-Batch-DomainAnalytics</text>
-  <text x="400" y="134" text-anchor="middle" font-size="9" fill="#586069">バッチドメイン分析</text>
-  <!-- Output 1.1 -->
-  <rect x="530" y="105" width="260" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="660" y="128" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-domain-analytics.md</text>
-  <!-- Arrows 1.1 -->
-  <line x1="270" y1="119" x2="285" y2="119" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="515" y1="122" x2="530" y2="124" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Step 1.2 (right) -->
-  <text x="970" y="92" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 1.2</text>
-  <!-- Input 1.2 -->
-  <rect x="810" y="98" width="210" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="915" y="118" text-anchor="middle" font-size="10" fill="#24292e">use-case-catalog.md</text>
-  <text x="915" y="134" text-anchor="middle" font-size="10" fill="#24292e">data-model.md</text>
-  <!-- Agent 1.2 -->
-  <rect x="1035" y="98" width="230" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="1150" y="118" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-Batch-DataSourceAnalysis</text>
-  <text x="1150" y="134" text-anchor="middle" font-size="9" fill="#586069">データソース分析</text>
-  <!-- Output 1.2 inline -->
-  <rect x="1035" y="170" width="260" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="1165" y="188" text-anchor="middle" font-size="9" fill="#24292e">batch-data-source-analysis.md</text>
-  <!-- Arrows 1.2 -->
-  <line x1="1020" y1="125" x2="1035" y2="125" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="1150" y1="153" x2="1150" y2="170" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- AND-join annotation -->
-  <rect x="530" y="185" width="260" height="28" rx="6" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
-  <text x="660" y="203" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">AND-JOIN: 1.1 AND 1.2 完了後</text>
-
-  <!-- Convergence arrows to step 2 -->
-  <line x1="660" y1="143" x2="660" y2="185" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <path d="M 1150 208 L 1150 230 L 660 230 L 660 213" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 2 ========== -->
-  <text x="650" y="250" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2</text>
-  <!-- Input 2 -->
-  <rect x="20" y="257" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="277" text-anchor="middle" font-size="10" fill="#24292e">batch-domain-analytics.md</text>
-  <text x="175" y="293" text-anchor="middle" font-size="10" fill="#24292e">batch-data-source-analysis.md</text>
-  <text x="175" y="309" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md</text>
-  <!-- Agent 2 -->
-  <rect x="430" y="257" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="280" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Batch-DataModel</text>
-  <text x="565" y="296" text-anchor="middle" font-size="10" fill="#586069">バッチデータモデル</text>
-  <text x="565" y="312" text-anchor="middle" font-size="9" fill="#959da5">バッチ用データ構造定義</text>
-  <!-- Output 2 -->
-  <rect x="800" y="270" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="293" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-data-model.md</text>
-  <!-- Arrows 2 -->
-  <line x1="330" y1="289" x2="430" y2="289" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="289" x2="800" y2="289" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 3 ========== -->
-  <text x="650" y="348" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 3</text>
-  <line x1="565" y1="322" x2="565" y2="351" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <!-- Input 3 -->
-  <rect x="20" y="358" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="378" text-anchor="middle" font-size="10" fill="#24292e">batch-domain-analytics.md</text>
-  <text x="175" y="394" text-anchor="middle" font-size="10" fill="#24292e">batch-data-source-analysis.md</text>
-  <text x="175" y="410" text-anchor="middle" font-size="10" fill="#24292e">batch-data-model.md</text>
-  <!-- Agent 3 -->
-  <rect x="430" y="358" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="381" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Batch-JobCatalog</text>
-  <text x="565" y="397" text-anchor="middle" font-size="10" fill="#586069">ジョブカタログ生成</text>
-  <text x="565" y="413" text-anchor="middle" font-size="9" fill="#959da5">バッチジョブ一覧・依存整理</text>
-  <!-- Output 3 -->
-  <rect x="800" y="371" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="394" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-job-catalog.md</text>
-  <!-- Arrows 3 -->
-  <line x1="330" y1="390" x2="430" y2="390" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="390" x2="800" y2="390" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 4 ========== -->
-  <text x="650" y="448" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 4</text>
-  <line x1="565" y1="423" x2="565" y2="451" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <!-- Input 4 -->
-  <rect x="20" y="458" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="478" text-anchor="middle" font-size="10" fill="#24292e">batch-job-catalog.md</text>
-  <text x="175" y="494" text-anchor="middle" font-size="10" fill="#24292e">batch-data-model.md</text>
-  <text x="175" y="510" text-anchor="middle" font-size="10" fill="#24292e">batch-domain-analytics.md</text>
-  <!-- Agent 4 -->
-  <rect x="430" y="458" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="481" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Batch-ServiceCatalog</text>
-  <text x="565" y="497" text-anchor="middle" font-size="10" fill="#586069">バッチサービスカタログ</text>
-  <text x="565" y="513" text-anchor="middle" font-size="9" fill="#959da5">サービス設計・インターフェース</text>
-  <!-- Output 4 -->
-  <rect x="800" y="471" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="494" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-service-catalog.md</text>
-  <!-- Arrows 4 -->
-  <line x1="330" y1="490" x2="430" y2="490" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="490" x2="800" y2="490" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 5 ========== -->
-  <text x="650" y="548" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 5</text>
-  <line x1="565" y1="523" x2="565" y2="551" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
-  <!-- Input 5 -->
-  <rect x="20" y="558" width="310" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="578" text-anchor="middle" font-size="10" fill="#24292e">batch-service-catalog.md</text>
-  <text x="175" y="594" text-anchor="middle" font-size="10" fill="#24292e">batch-data-model.md</text>
-  <!-- Agent 5 -->
-  <rect x="430" y="558" width="270" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="581" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Batch-TestStrategy</text>
-  <text x="565" y="597" text-anchor="middle" font-size="10" fill="#586069">テスト戦略策定</text>
-  <!-- Output 5 -->
-  <rect x="800" y="565" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="588" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/batch-test-strategy.md</text>
-  <!-- Arrows 5 -->
-  <line x1="330" y1="585" x2="430" y2="585" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="585" x2="800" y2="584" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Fork label -->
-  <text x="650" y="638" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行 (Fork)</text>
-  <line x1="565" y1="613" x2="565" y2="640" stroke="#e36209" stroke-width="1" stroke-dasharray="4,3"/>
-
-  <!-- Fork arrows to 6.1 and 6.2 -->
-  <path d="M 565 640 L 330 640 L 330 665" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
-  <path d="M 565 640 L 940 640 L 940 665" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 6.1 (left) ========== -->
-  <text x="330" y="660" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 6.1</text>
-  <!-- Input 6.1 -->
-  <rect x="20" y="668" width="220" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="130" y="688" text-anchor="middle" font-size="9" fill="#24292e">batch-service-catalog.md</text>
-  <text x="130" y="704" text-anchor="middle" font-size="9" fill="#24292e">batch-job-catalog.md</text>
-  <text x="130" y="720" text-anchor="middle" font-size="9" fill="#24292e">batch-data-model.md</text>
-  <!-- Agent 6.1 -->
-  <rect x="255" y="668" width="200" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="355" y="691" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-Batch-JobSpec</text>
-  <text x="355" y="707" text-anchor="middle" font-size="9" fill="#586069">ジョブ仕様書生成</text>
-  <text x="355" y="720" text-anchor="middle" font-size="9" fill="#959da5">各ジョブの詳細設計</text>
-  <!-- Output 6.1 -->
-  <rect x="470" y="680" width="200" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="570" y="698" text-anchor="middle" font-size="9" fill="#24292e">docs/batch/jobs/</text>
-  <text x="570" y="710" text-anchor="middle" font-size="9" fill="#24292e">{jobId}-spec.md</text>
-  <!-- Arrows 6.1 -->
-  <line x1="240" y1="700" x2="255" y2="700" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="455" y1="700" x2="470" y2="699" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 6.2 (right) ========== -->
-  <text x="940" y="660" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 6.2</text>
-  <!-- Input 6.2 -->
-  <rect x="760" y="668" width="220" height="55" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="870" y="688" text-anchor="middle" font-size="9" fill="#24292e">batch-service-catalog.md</text>
-  <text x="870" y="704" text-anchor="middle" font-size="9" fill="#24292e">batch-job-catalog.md</text>
-  <!-- Agent 6.2 -->
-  <rect x="995" y="668" width="210" height="55" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="1100" y="688" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">Arch-Batch-MonitoringDesign</text>
-  <text x="1100" y="704" text-anchor="middle" font-size="9" fill="#586069">監視設計</text>
-  <!-- Output 6.2 -->
-  <rect x="895" y="745" width="260" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="1025" y="763" text-anchor="middle" font-size="9" fill="#24292e">batch-monitoring-design.md</text>
-  <!-- Arrows 6.2 -->
-  <line x1="980" y1="695" x2="995" y2="695" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="1100" y1="723" x2="1100" y2="745" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="1025" y1="745" x2="1025" y2="783" stroke="#586069" stroke-width="1"/>
-
-  <!-- AND-join annotation 6.3 -->
-  <rect x="430" y="790" width="340" height="28" rx="6" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
-  <text x="600" y="808" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">AND-JOIN: 6.1 AND 6.2 完了後</text>
-
-  <!-- Join arrows to 6.3 -->
-  <path d="M 570 718 L 570 805 L 430 805" stroke="#586069" stroke-width="1.5" fill="none"/>
-  <line x1="430" y1="805" x2="430" y2="819" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <path d="M 1025 783 L 1025 805 L 770 805" stroke="#586069" stroke-width="1.5" fill="none"/>
-  <line x1="770" y1="805" x2="770" y2="819" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- ========== Step 6.3 (bottom center) ========== -->
-  <text x="600" y="820" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 6.3</text>
-  <!-- Input 6.3 -->
-  <rect x="20" y="828" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="848" text-anchor="middle" font-size="10" fill="#24292e">batch-test-strategy.md</text>
-  <text x="175" y="864" text-anchor="middle" font-size="10" fill="#24292e">docs/batch/jobs/*-spec.md</text>
-  <text x="175" y="880" text-anchor="middle" font-size="10" fill="#24292e">batch-monitoring-design.md</text>
-  <!-- Agent 6.3 -->
-  <rect x="430" y="828" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="565" y="851" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-Batch-TDD-TestSpec</text>
-  <text x="565" y="867" text-anchor="middle" font-size="10" fill="#586069">TDDテスト仕様書生成</text>
-  <text x="565" y="883" text-anchor="middle" font-size="9" fill="#959da5">バッチジョブ・テストケース</text>
-  <!-- Output 6.3 -->
-  <rect x="800" y="840" width="360" height="38" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="980" y="858" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/{jobId}-test-spec.md</text>
-  <!-- Arrows 6.3 -->
-  <line x1="330" y1="860" x2="430" y2="860" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="700" y1="860" x2="800" y2="859" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
-
-  <!-- Legend -->
-  <rect x="20" y="940" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
-  <text x="260" y="957" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
-  <rect x="35" y="965" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="52" y="975" font-size="10" fill="#24292e">入力ファイル</text>
-  <rect x="145" y="965" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="162" y="975" font-size="10" fill="#24292e">Prompt</text>
-  <rect x="270" y="965" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="287" y="975" font-size="10" fill="#24292e">成果物</text>
-  <rect x="380" y="965" width="12" height="12" rx="2" fill="#fff8e6" stroke="#e36209" stroke-width="1.5"/>
-  <text x="397" y="975" font-size="10" fill="#24292e">AND-JOIN / 並列</text>
+  <!-- dependency arrows: step-1/step-2 outputs feed step-3 inputs -->
+  <path class="dep" d="M1036 150 C 1090 220, 360 250, 300 358"/>
+  <path class="dep" d="M1036 242 C 1070 280, 360 270, 300 382"/>
+  <text x="360" y="470" class="sub" fill="#e36209">破線: step-1 / step-2 の出力が step-3 の入力になる（AND 依存）。</text>
+  <text x="360" y="490" class="sub">step-1 / step-3 は dataflow_catalog fanout でジョブごとに per-job 展開。</text>
 </svg>

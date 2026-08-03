@@ -1,0 +1,58 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.5, pytest-9.1.0, pluggy-1.6.0 -- C:\Users\dahatake\AppData\Local\Programs\Python\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\GitHub\RoyalytyService2ndGen\hve
+configfile: pytest.ini
+plugins: asyncio-1.4.0, timeout-2.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 39 items
+
+hve\gui\tests\test_github_cicd.py::TestIsGithubCicdWorkflow::test_asdw_web_is_target PASSED [  2%]
+hve\gui\tests\test_github_cicd.py::TestIsGithubCicdWorkflow::test_adfdv_is_target PASSED [  5%]
+hve\gui\tests\test_github_cicd.py::TestIsGithubCicdWorkflow::test_other_workflow_is_not_target PASSED [  7%]
+hve\gui\tests\test_github_cicd.py::TestIsGithubCicdWorkflow::test_workflows_constant_matches PASSED [ 10%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_asdw_web_template PASSED [ 12%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_adfdv_template PASSED [ 15%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_prefill_fields_included PASSED [ 17%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_empty_fields_omitted PASSED [ 20%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_special_chars_are_percent_encoded PASSED [ 23%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_repo_with_surrounding_slashes_normalized PASSED [ 25%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_normal_repo_segments_not_altered PASSED [ 28%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_repo_segment_special_chars_encoded PASSED [ 30%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_invalid_repo_raises PASSED [ 33%]
+hve\gui\tests\test_github_cicd.py::TestBuildIssueFormUrl::test_unsupported_workflow_raises PASSED [ 35%]
+hve\gui\tests\test_github_cicd_gui.py::TestGitHubCicdDialog::test_open_button_disabled_when_repo_empty PASSED [ 38%]
+hve\gui\tests\test_github_cicd_gui.py::TestGitHubCicdDialog::test_open_button_enabled_with_valid_repo PASSED [ 41%]
+hve\gui\tests\test_github_cicd_gui.py::TestGitHubCicdDialog::test_repo_edit_toggles_button PASSED [ 43%]
+hve\gui\tests\test_github_cicd_gui.py::TestGitHubCicdDialog::test_prefill_detail_includes_values PASSED [ 46%]
+hve\gui\tests\test_github_cicd_gui.py::TestGitHubCicdDialog::test_open_clicked_calls_openurl_and_accepts PASSED [ 48%]
+hve\gui\tests\test_github_cicd_gui.py::TestC10Toggle::test_toggle_exists_in_c10 PASSED [ 51%]
+hve\gui\tests\test_github_cicd_gui.py::TestC10Toggle::test_to_args_reflects_toggle_on PASSED [ 53%]
+hve\gui\tests\test_github_cicd_gui.py::TestC10Toggle::test_to_args_reflects_toggle_off PASSED [ 56%]
+hve\gui\tests\test_github_cicd_gui.py::TestOptionsPageVisibility::test_shows_for_asdw_web PASSED [ 58%]
+hve\gui\tests\test_github_cicd_gui.py::TestOptionsPageVisibility::test_shows_for_adfdv PASSED [ 61%]
+hve\gui\tests\test_github_cicd_gui.py::TestOptionsPageVisibility::test_hidden_for_other_workflow PASSED [ 64%]
+hve\gui\tests\test_github_cicd_gui.py::TestMaybeLaunchGithubCicd::test_off_returns_false PASSED [ 66%]
+hve\gui\tests\test_github_cicd_gui.py::TestMaybeLaunchGithubCicd::test_on_with_target_shows_dialog PASSED [ 69%]
+hve\gui\tests\test_github_cicd_gui.py::TestMaybeLaunchGithubCicd::test_on_with_non_target_returns_false PASSED [ 71%]
+hve\gui\tests\test_github_cicd_gui.py::TestMaybeLaunchGithubCicd::test_mixed_selection_picks_target_workflow PASSED [ 74%]
+hve\gui\tests\test_github_cicd_gui.py::TestRunClickedGithubCicdPrerequisiteFlow::test_prerequisite_selection_runs_only_prerequisite_locally PASSED [ 76%]
+hve\gui\tests\test_github_cicd_gui.py::TestRunClickedGithubCicdPrerequisiteFlow::test_target_without_prerequisite_cancel_does_not_open_dialog PASSED [ 79%]
+hve\gui\tests\test_github_cicd_gui.py::TestRunClickedGithubCicdPrerequisiteFlow::test_target_without_prerequisite_continue_opens_dialog PASSED [ 82%]
+hve\gui\tests\test_github_cicd_gui.py::TestRunClickedGithubCicdPrerequisiteFlow::test_pending_cicd_success_defers_completion_popup PASSED [ 84%]
+hve\gui\tests\test_github_cicd_gui.py::TestRunClickedGithubCicdPrerequisiteFlow::test_pending_cicd_failure_clears_pending PASSED [ 87%]
+hve\gui\tests\test_github_cicd_git.py::test_parse_github_remote_url_https PASSED [ 89%]
+hve\gui\tests\test_github_cicd_git.py::test_parse_github_remote_url_ssh PASSED [ 92%]
+hve\gui\tests\test_github_cicd_git.py::test_current_branch_rejects_detached_head PASSED [ 94%]
+hve\gui\tests\test_github_cicd_git.py::test_commit_and_push_stops_when_cached_diff_errors PASSED [ 97%]
+hve\gui\tests\test_github_cicd_git.py::test_commit_and_push_success PASSED [100%]
+
+============================== warnings summary ===============================
+gui/tests/test_github_cicd_gui.py: 45 warnings
+  C:\GitHub\RoyalytyService2ndGen\hve\gui\fonts.py:16: DeprecationWarning: Function: 'QFontDatabase.QFontDatabase()' is marked as deprecated, please check the documentation for more information.
+    families = set(QFontDatabase().families())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====================== 39 passed, 45 warnings in 31.59s =======================
+
+PYTEST_EXIT=0

@@ -11,7 +11,7 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-DataModeling--aas--4.1
-- path: docs/catalog/screen-catalog.md
+- path: docs/catalog/screen-catalog-APP-*.md
   required: false
   kind: agent_artifact
   producer: Arch-UI-List--aad-web--1

@@ -1,6 +1,6 @@
 ﻿> Step 1.1 で作成した Azure データリソーススクリプトを実行・検証し、データフロー用 Azure データリソースをデプロイする（Step 1.2: Azure データリソース Deploy）
 
-> **WORK**: `/work/Dev-Dataflow-DataDeploy/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Dataflow-DataDeploy/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -48,7 +48,14 @@ Step 1.1（Dev-Dataflow-DataServiceSelect）で作成された **Azure リソー
 ### 3.3 出力（必須）
 
 - Azure データリソース実行ログ・検証結果（`{WORK}deploy-work-status.md` に記録）
+- AC 検証結果（`{WORK}ac-verification.md` に記録。Orchestrator gate は `Issue-<識別子>` 直下を検査するため `artifacts/` 配下に置かない）
 - 作業ログ: `{WORK}` 配下
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -95,6 +102,14 @@ A-exec) Azure リソース作成スクリプトの実行と検証
    - **成功判定**: exit code 0、かつ全リソースの `provisioningState` が `Succeeded` であること。
 3. べき等性検証: ステップ 1 を **もう1回実行** し、exit code 0 で既存リソースが skip されることを確認する（`azure-cli-deploy-scripts` Skill §2.2 チェックリスト参照）。
 4. 取得した値（Function App URL / Resource ID / Connection Strings 等）を `{WORK}deploy-work-status.md` に記録する（機密値は記録しない）。
+5. `{WORK}ac-verification.md` に AC-3 の検証結果を 1 行 1 AC のテーブル行で記録する。
+
+#### AC-3 の検証手順（必須）
+
+- `src/infra/azure/dataflow/verify-batch-resources.sh` を実行し、exit code 0 かつ全リソースの `provisioningState == "Succeeded"` を確認する。
+- `ac-verification.md` には例の形式で記録する: `| AC-3 | batch resources verified | ✅ | <verify-batch-resources.sh GREEN ログ抜粋> |`
+- 実在系 **AC-3 は `✅` のみ許容**。`❌` / `⏳` / `NEEDS-VERIFICATION` のまま success / 成功扱いにしてはならない。
+- ブロッカー・タイムアウト・権限不足などで GREEN 未達の場合も `{WORK}ac-verification.md` を作成し、AC-3 を `❌` として理由を記録して終了する。
 
 **Azure CLI 利用不可の場合**: `azure-cli-deploy-scripts` Skill §3 に従う。対象 README: `src/infra/azure/dataflow/README.md`。
 

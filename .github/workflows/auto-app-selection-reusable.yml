@@ -235,7 +235,7 @@ jobs:
           create_label "aas:running"        "E4E669" ""
           create_label "aas:done"           "0E8A16" ""
           create_label "aas:blocked"        "D73A4A" ""
-          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-qa"             "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
@@ -449,10 +449,10 @@ jobs:
               if additional_comment == "_No response_":
                   additional_comment = ""
 
-          # レビュー設定の抽出（統合済み: セルフレビュー + 内容のレビュー）
+          # 敵対的レビュー設定の抽出
           # レビュー設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
           # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
-          auto_context_review = False
+          adversarial_review = False
           review_section = re.search(
               r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)",
               body, re.DOTALL
@@ -461,10 +461,10 @@ jobs:
               section_text = review_section.group(1)
               if re.search(r"スキップする", section_text):
                   # 旧形式（後方互換）: 未チェック = スキップしない = 有効
-                  auto_context_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
+                  adversarial_review = not bool(re.search(r"-\s*\[[xX]\]", section_text))
               else:
                   # 新形式: チェック → 有効
-                  auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+                  adversarial_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
           # 質問票設定: チェック [x] → 有効 (True)、未チェック → 無効 (False)
           # 後方互換: 旧形式「スキップする」はロジック反転（未チェック → 有効）
@@ -490,7 +490,7 @@ jobs:
           )
           if merge_section:
               section_text = merge_section.group(1)
-              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text) or re.search(r"^\s*有効にする\s*$", section_text, re.MULTILINE))
 
           # 自己改善設定
           enable_self_improve = False
@@ -514,7 +514,7 @@ jobs:
               if n:
                   self_improve_quality_threshold = n.group(1)
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "auto_context_review": auto_context_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "adversarial_review": adversarial_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "enable_self_improve": enable_self_improve, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold}
           print(json.dumps(result))
           PYEOF
           )
@@ -522,7 +522,7 @@ jobs:
           BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
           SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
-          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          ADVERSARIAL_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('adversarial_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
             echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
@@ -540,9 +540,17 @@ jobs:
           SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
           export SELECTED_MODEL SELECTED_REVIEW_MODEL SELECTED_QA_MODEL
 
+          # ---- Step.9 が SKIP の場合、Step.8 も強制 SKIP (Step.8 は Step.9 の出力 persona-catalog.md に依存) ----
+          if echo " ${SKIP_STEPS} " | grep -q " 9 "; then
+            if ! echo " ${SKIP_STEPS} " | grep -q " 8 "; then
+              SKIP_STEPS="${SKIP_STEPS} 8"
+              echo "Step.9 スキップ検知: Step.8 (persona-screen-catalog) も依存関係により強制スキップします"
+            fi
+          fi
+
           echo "対象ブランチ: ${BRANCH}"
           echo "スキップ Steps: ${SKIP_STEPS}"
-          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "敵対的レビュー (adversarial-review): ${ADVERSARIAL_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
@@ -602,13 +610,13 @@ jobs:
             echo "全ステップ実行のため Root Issue body の更新は不要です。"
           fi
 
-          # ---- Root Issue に auto-context-review タグを埋め込み ----
+          # ---- Root Issue に adversarial-review タグを埋め込み ----
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
-          auto_context_review = sys.argv[1]
+          adversarial_review = sys.argv[1]
           auto_merge = sys.argv[2]
           branch = sys.argv[3]
           enable_si = sys.argv[4]
@@ -617,7 +625,7 @@ jobs:
           output_file = sys.argv[7]
 
           tags = [
-              ("auto-context-review", auto_context_review),
+              ("adversarial-review", adversarial_review),
               ("auto-merge", auto_merge),
               ("branch", branch),
               ("enable-self-improve", enable_si),
@@ -640,7 +648,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-merge / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に adversarial-review / auto-merge / branch / self-improve タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -648,9 +656,12 @@ jobs:
           # aas:initialized は step 2.5 で既に付与済みのため、ここでの再付与は不要。
           # （Wave 4: 二重 API コール削減）
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            add_label "${ROOT_ISSUE}" "auto-context-review"
-            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "adversarial-review"
+            echo "Root Issue #${ROOT_ISSUE} に adversarial-review ラベルを付与しました。"
+          else
+            gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、Root Issue #${ROOT_ISSUE} の adversarial-review ラベルを除去しました。"
           fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then
@@ -677,16 +688,19 @@ jobs:
           S2_NUM="" S2_ID=""
           S31_NUM="" S31_ID=""
           S32_NUM="" S32_ID=""
-          S4_NUM="" S4_ID=""
+          S41_NUM="" S41_ID=""
+          S42_NUM="" S42_ID=""
           S5_NUM="" S5_ID=""
           S6_NUM="" S6_ID=""
           S7_NUM="" S7_ID=""
+          S8_NUM="" S8_ID=""
+          S9_NUM="" S9_ID=""
 
           # 各 Step Issue の body 先頭に埋め込む共通メタ情報
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- review-model: %s -->\n<!-- qa-model: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${SELECTED_REVIEW_MODEL}" "${SELECTED_QA_MODEL}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- adversarial-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- review-model: %s -->\n<!-- qa-model: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${SELECTED_REVIEW_MODEL}" "${SELECTED_QA_MODEL}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
@@ -718,10 +732,10 @@ jobs:
           }
 
           # Step Issue に付与するラベルセット
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
-            STEP_LABELS='["auto-app-selection","auto-context-review","auto-qa"]'
-          elif [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS='["auto-app-selection","auto-context-review"]'
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]] && [[ "${AUTO_QA}" == "true" ]]; then
+            STEP_LABELS='["auto-app-selection","adversarial-review","auto-qa"]'
+          elif [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            STEP_LABELS='["auto-app-selection","adversarial-review"]'
           elif [[ "${AUTO_QA}" == "true" ]]; then
             STEP_LABELS='["auto-app-selection","auto-qa"]'
           else
@@ -793,16 +807,29 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.4 ----
-          if ! skip_step "4"; then
-            BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+          # ---- Step.4.1 ----
+          if ! skip_step "4.1"; then
+            BODY_S41=$(render_aas_step_body "4.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.4: データモデル" \
-              "${BODY_S4}" \
+              "[AAS] Step.4.1: データモデル" \
+              "${BODY_S41}" \
               "${STEP_LABELS}")
-            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
-            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
-            echo "Step.4 作成: #${S4_NUM}"
+            S41_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S41_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4.1 作成: #${S41_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.4.2 ----
+          if ! skip_step "4.2"; then
+            BODY_S42=$(render_aas_step_body "4.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.4.2: サンプルデータ生成" \
+              "${BODY_S42}" \
+              "${STEP_LABELS}")
+            S42_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S42_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4.2 作成: #${S42_NUM}"
             sleep 3
           fi
 
@@ -845,16 +872,45 @@ jobs:
             sleep 3
           fi
 
+          # ---- Step.9 (ペルソナカタログ) ----
+          if ! skip_step "9"; then
+            BODY_S9=$(render_aas_step_body "9" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.9: ペルソナカタログ" \
+              "${BODY_S9}" \
+              "${STEP_LABELS}")
+            S9_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S9_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.9 作成: #${S9_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.8 (ペルソナ別共通画面カタログ) ----
+          if ! skip_step "8"; then
+            BODY_S8=$(render_aas_step_body "8" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.8: ペルソナ別共通画面カタログ" \
+              "${BODY_S8}" \
+              "${STEP_LABELS}")
+            S8_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S8_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.8 作成: #${S8_NUM}"
+            sleep 3
+          fi
+
           # ---- Sub Issue 紐付け ----
           echo "Sub Issue 紐付けを開始します..."
           [[ -n "${S1_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
           [[ -n "${S2_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
           [[ -n "${S31_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S31_ID}"; echo "Root → Step.3.1 紐付け完了"; }
           [[ -n "${S32_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S32_ID}"; echo "Root → Step.3.2 紐付け完了"; }
-          [[ -n "${S4_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S41_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S41_ID}"; echo "Root → Step.4.1 紐付け完了"; }
+          [[ -n "${S42_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S42_ID}"; echo "Root → Step.4.2 紐付け完了"; }
           [[ -n "${S5_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
           [[ -n "${S6_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S6_ID}"; echo "Root → Step.6 紐付け完了"; }
           [[ -n "${S7_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S7_ID}"; echo "Root → Step.7 紐付け完了"; }
+          [[ -n "${S9_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S9_ID}"; echo "Root → Step.9 紐付け完了"; }
+          [[ -n "${S8_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S8_ID}"; echo "Root → Step.8 紐付け完了"; }
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S1_NUM}" ]]; then
@@ -1122,11 +1178,11 @@ jobs:
 
           echo "対象ブランチ: ${BRANCH}"
 
-          # ---- auto-context-review / auto-qa PR ラベル付与 ----
-          AUTO_CONTEXT_REVIEW=$(python3 - <<'PY'
+          # ---- adversarial-review / auto-qa PR ラベル付与 ----
+          ADVERSARIAL_REVIEW=$(python3 - <<'PY'
           import os, re
           body = os.environ.get('DONE_ISSUE_BODY', '')
-          m = re.search(r'<!--\s*auto-context-review:\s*(true|false)\s*-->', body)
+          m = re.search(r'<!--\s*adversarial-review:\s*(true|false)\s*-->', body)
           print(m.group(1) if m else 'false')
           PY
           )
@@ -1137,16 +1193,16 @@ jobs:
           print(m.group(1) if m else 'false')
           PY
           )
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]] || [[ "${AUTO_QA}" == "true" ]]; then
             LINKED_PRS=$(gh api "/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}/timeline?per_page=100" \
               --jq '[.[] | select(.event == "cross-referenced" and .source.type == "pull_request" and .source.issue.state == "open") | .source.issue.number] | unique | .[]' \
               2>/dev/null || true)
             if [[ -n "${LINKED_PRS}" ]]; then
               while IFS= read -r pr_num; do
-                if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-context-review" 2>/dev/null \
-                    && echo "PR #${pr_num} に auto-context-review ラベルを付与しました。" \
-                    || echo "WARNING: PR #${pr_num} への auto-context-review ラベル付与に失敗しました。" >&2
+                if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+                  gh pr edit "${pr_num}" --repo "${REPO}" --add-label "adversarial-review" 2>/dev/null \
+                    && echo "PR #${pr_num} に adversarial-review ラベルを付与しました。" \
+                    || echo "WARNING: PR #${pr_num} への adversarial-review ラベル付与に失敗しました。" >&2
                 fi
                 if [[ "${AUTO_QA}" == "true" ]]; then
                   gh pr edit "${pr_num}" --repo "${REPO}" --add-label "auto-qa" 2>/dev/null \
@@ -1211,21 +1267,36 @@ jobs:
               ;;
 
             "3.2")
-              S4_NUM=$(get_sub_issue_number '\[AAS\] Step\.4:')
-              if [[ -n "${S4_NUM}" ]]; then
-                activate_with_prereq_check "${S4_NUM}" "4" \
+              S41_NUM=$(get_sub_issue_number '\[AAS\] Step\.4\.1:')
+              if [[ -n "${S41_NUM}" ]]; then
+                activate_with_prereq_check "${S41_NUM}" "4.1" \
                   "docs/catalog/service-catalog.md" \
                   "docs/catalog/domain-analytics.md"
               fi
               ;;
 
-            "4")
+            "4.1")
+              # Step.4.2 (サンプルデータ生成) を起動
+              S42_NUM=$(get_sub_issue_number '\[AAS\] Step\.4\.2:')
+              if [[ -n "${S42_NUM}" ]]; then
+                activate_with_prereq_check "${S42_NUM}" "4.2" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/app-catalog.md" \
+                  "docs/catalog/domain-analytics.md" \
+                  "docs/catalog/service-catalog.md"
+              fi
+              # Step.5 (データカタログ) は data-model.md のみに依存するため Step.4.2 と並列起動可能
               S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
               if [[ -n "${S5_NUM}" ]]; then
                 activate_with_prereq_check "${S5_NUM}" "5" \
                   "docs/catalog/data-model.md" \
                   "docs/catalog/domain-analytics.md"
               fi
+              ;;
+
+            "4.2")
+              # Step.5 は "4.1" 完了時に既に起動済み。Step.4.2 完了時は遷移なし
+              echo "Step.4.2 完了。Step.5 は Step.4.1 完了時点で起動済みのため遷移なし。"
               ;;
 
             "5")
@@ -1249,10 +1320,41 @@ jobs:
               ;;
 
             "7")
-              # Step.7 完了 → Root Issue に aas:done + 完了コメント
+              # Step.7 完了 → Step.9 (ペルソナカタログ) 起動
+              S9_NUM=$(get_sub_issue_number '\[AAS\] Step\.9:')
+              if [[ -n "${S9_NUM}" ]]; then
+                activate_with_prereq_check "${S9_NUM}" "9" \
+                  "docs/catalog/use-case-catalog.md" \
+                  "docs/catalog/app-catalog.md"
+              else
+                # Step.9 がスキップされている場合は直接 aas:done
+                add_label "${ROOT_ISSUE}" "aas:done"
+                echo "Step.9 スキップ。Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
+                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜7）が完了しました（Step.8/9 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
+              fi
+              ;;
+
+            "9")
+              # Step.9 完了 → Step.8 (ペルソナ別共通画面カタログ) 起動
+              S8_NUM=$(get_sub_issue_number '\[AAS\] Step\.8:')
+              if [[ -n "${S8_NUM}" ]]; then
+                activate_with_prereq_check "${S8_NUM}" "8" \
+                  "docs/catalog/persona-catalog.md" \
+                  "docs/catalog/use-case-catalog.md" \
+                  "docs/catalog/app-catalog.md"
+              else
+                # Step.8 がスキップされている場合は直接 aas:done
+                add_label "${ROOT_ISSUE}" "aas:done"
+                echo "Step.8 スキップ。Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
+                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップが完了しました（Step.8 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`"
+              fi
+              ;;
+
+            "8")
+              # Step.8 完了 → Root Issue に aas:done + 完了コメント
               add_label "${ROOT_ISSUE}" "aas:done"
               echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜7）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
+              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜9）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`\n- \`docs/catalog/persona-screen-catalog.md\`"
               ;;
 
             *)

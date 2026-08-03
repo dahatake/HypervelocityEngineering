@@ -1,0 +1,12 @@
+..............................                                           [100%]
+============================== warnings summary ===============================
+gui/tests/test_main_window_cicd_steps_sync.py::test_steps_selection_signal_wired_to_options
+gui/tests/test_main_window_cicd_steps_sync.py::test_steps_selection_signal_wired_to_options
+gui/tests/test_main_window_cicd_steps_sync.py::test_steps_selection_signal_wired_to_options
+gui/tests/test_main_window_cicd_steps_sync.py::test_steps_selection_signal_wired_to_options
+gui/tests/test_main_window_cicd_steps_sync.py::test_steps_selection_signal_wired_to_options
+  C:\GitHub\RoyalytyService2ndGen\hve\gui\fonts.py:16: DeprecationWarning: Function: 'QFontDatabase.QFontDatabase()' is marked as deprecated, please check the documentation for more information.
+    families = set(QFontDatabase().families())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+30 passed, 5 warnings in 62.29s (0:01:02)

@@ -263,15 +263,20 @@ if (-not $Repo) {
 }
 
 # Check parent labels for propagation
-$hasContextReview = $false
+$hasAdversarialReview = $false
 $hasQa = $false
 if ($ParentIssue -and $ParentIssue -ne '0') {
     try {
         $parentData = Get-GitHubIssue -IssueNum $ParentIssue -Repo $Repo
         if ($parentData) {
-            if ($parentData.labels -contains 'auto-context-review') {
-                $hasContextReview = $true
-                Write-Information '  auto-context-review ラベル伝播: true'
+            $parentBody = if ($parentData.body) { [string]$parentData.body } else { '' }
+            if ($parentBody -match '<!--\s*adversarial-review:\s*false\s*-->') {
+                $hasAdversarialReview = $false
+            }
+            elseif (($parentData.labels -contains 'adversarial-review') -or
+                ($parentBody -match '<!--\s*adversarial-review:\s*true\s*-->')) {
+                $hasAdversarialReview = $true
+                Write-Information '  adversarial-review 設定伝播: true'
             }
             if ($parentData.labels -contains 'auto-qa') {
                 $hasQa = $true
@@ -318,6 +323,7 @@ for ($i = 0; $i -lt $blocks.Count; $i++) {
         $metaLines += "<!-- pr-number: $PrNumber -->`n"
     }
     $metaLines += "<!-- pr-head-branch: $BaseBranch -->`n"
+    $metaLines += "<!-- adversarial-review: $($hasAdversarialReview.ToString().ToLowerInvariant()) -->`n"
     $body = $metaLines + $body
 
     # Build label list
@@ -325,8 +331,8 @@ for ($i = 0; $i -lt $blocks.Count; $i++) {
     if ($labelsRaw) {
         $allLabels = @($labelsRaw -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     }
-    if ($hasContextReview -and $allLabels -notcontains 'auto-context-review') {
-        $allLabels += 'auto-context-review'
+    if ($hasAdversarialReview -and $allLabels -notcontains 'adversarial-review') {
+        $allLabels += 'adversarial-review'
     }
     if ($hasQa -and $allLabels -notcontains 'auto-qa') {
         $allLabels += 'auto-qa'
@@ -340,7 +346,12 @@ for ($i = 0; $i -lt $blocks.Count; $i++) {
 
     # Create labels
     foreach ($lbl in $allLabels) {
-        try { New-GitHubLabel -Name $lbl -Color 'bfd4f2' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
+        if ($lbl -eq 'adversarial-review') {
+            try { New-GitHubLabel -Name $lbl -Color 'B60205' -Description 'explicit adversarial review trigger for Copilot review workflow' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
+        }
+        else {
+            try { New-GitHubLabel -Name $lbl -Color 'bfd4f2' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
+        }
     }
 
     Write-Information "  Creating: $title"

@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/scripts/bash/**'
       - '.github/scripts/bash/lib/*.py'
+      - '.github/scripts/pr-common.sh'
       - '.github/scripts/powershell/**'
       - '.github/scripts/tests/**'
       - '.github/workflows/test-cli-scripts.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - '.github/scripts/bash/**'
       - '.github/scripts/bash/lib/*.py'
+      - '.github/scripts/pr-common.sh'
       - '.github/scripts/powershell/**'
       - '.github/scripts/tests/**'
       - '.github/workflows/test-cli-scripts.yml'
@@ -41,7 +43,14 @@ jobs:
 
       - name: shellcheck — static analysis
         run: |
-          shellcheck -S warning .github/scripts/bash/*.sh .github/scripts/bash/lib/*.sh
+          for f in .github/scripts/bash/*.sh .github/scripts/bash/lib/*.sh; do
+            case "$(basename "$f")" in
+              orchestrate.sh) shellcheck -S warning -e SC2221,SC2222 "$f" ;;
+              validate-plan.sh) shellcheck -S warning -e SC2034 "$f" ;;
+              *) shellcheck -S warning "$f" ;;
+            esac
+          done
+          shellcheck -S warning .github/scripts/pr-common.sh
           shellcheck -S warning .github/scripts/tests/test-bash.sh
           shellcheck -S warning .github/scripts/tests/test-assign-copilot.sh
 

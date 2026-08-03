@@ -1,6 +1,6 @@
 > 機能要件に Chat-Bot / AI Agent / RAG が含まれるサービスについて、製品非依存の Agentic Retrieval 機能要件詳細仕様を作成する
 
-> **WORK**: `work/Arch-AgenticRetrieval-Detail/Issue-<識別子>/`（以降 `{WORK}` と表記。末尾スラッシュを含む）
+> **WORK**: `work/run/<run-id>/Arch-AgenticRetrieval-Detail/Issue-<識別子>/`（以降 `{WORK}` と表記。末尾スラッシュを含む）
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` を継承する。
@@ -26,7 +26,6 @@
 - `.github/skills/mcp-server-design/SKILL.md`
 - `.github/skills/task-questionnaire/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
-- `.github/skills/harness/adversarial-review/SKILL.md`
 
 # 1) 参照順序（最優先の根拠）
 
@@ -152,13 +151,19 @@
 - 前提不足や追加確認が必要な点
 - 10 件を超える場合は影響度（高/中/低）で優先順位付けし、上位 10 件のみ記載する。残りは `{WORK}plan.md` の「未決事項補足」セクションへ移す
 
-## 3.5 最終品質レビュー（adversarial-review 準拠・3 観点）
+## 3.5 最終品質レビュー（単回インライン・セルフチェック）
 
-- **1回目：機能完全性・要件達成度** — 章立てが全 8 章揃い、判定根拠が記録されているか
-- **2回目：ユーザー視点・実装可能性** — 推測/捏造がなく、TBD 運用が妥当か。Azure 固有名が混入していないか
-- **3回目：保守性・拡張性・堅牢性** — 根拠が明確で、重複行がなく、再実行に耐えられるか
+### 3.5.1 セルフチェック契約
 
-レビュー記録は `{WORK}` に保存（Skill `work-artifacts-layout` §4.1）。PR 本文にも記載。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+### 3.5.2 ドメイン固有観点
+- **機能完全性・要件達成度** — 章立てが全 8 章揃い、判定根拠が記録されているか
+- **ユーザー視点・実装可能性** — 推測/捏造がなく、TBD 運用が妥当か。Azure 固有名が混入していないか
+- **保守性・拡張性・堅牢性** — 根拠が明確で、重複行がなく、再実行に耐えられるか
+
+### 3.5.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## 3.6 残作業の切り出し（必須）
 - 未処理サービスが残る場合:

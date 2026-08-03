@@ -282,14 +282,19 @@ main() {
   fi
 
   # Check parent labels for propagation
-  local has_context_review=false has_qa=false
+  local has_adversarial_review=false has_qa=false
   if [[ -n "${parent_issue}" && "${parent_issue}" != "0" ]]; then
     local parent_json
     parent_json=$(get_issue "${parent_issue}" "${resolved_repo}" 2>/dev/null) || true
     if [[ -n "${parent_json}" ]]; then
-      if echo "${parent_json}" | jq -r '.labels[]' 2>/dev/null | grep -q "auto-context-review"; then
-        has_context_review=true
-        echo "  auto-context-review ラベル伝播: true"
+      local parent_body
+      parent_body=$(echo "${parent_json}" | jq -r '.body // ""' 2>/dev/null) || true
+      if printf '%s' "${parent_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+        has_adversarial_review=false
+      elif echo "${parent_json}" | jq -r '.labels[]' 2>/dev/null | grep -q "adversarial-review" \
+        || printf '%s' "${parent_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*true[[:space:]]*-->'; then
+        has_adversarial_review=true
+        echo "  adversarial-review 設定伝播: true"
       fi
       if echo "${parent_json}" | jq -r '.labels[]' 2>/dev/null | grep -q "auto-qa"; then
         has_qa=true
@@ -332,6 +337,7 @@ main() {
       meta_lines+="<!-- pr-number: ${pr_number} -->"$'\n'
     fi
     meta_lines+="<!-- pr-head-branch: ${base_branch} -->"$'\n'
+    meta_lines+="<!-- adversarial-review: ${has_adversarial_review} -->"$'\n'
     body="${meta_lines}${body}"
 
     # Build label list
@@ -343,12 +349,12 @@ main() {
         [[ -n "${lbl}" ]] && all_labels+=("${lbl}")
       done
     fi
-    if [[ "${has_context_review}" == true ]]; then
+    if [[ "${has_adversarial_review}" == true ]]; then
       local found=false
       for lbl in "${all_labels[@]+"${all_labels[@]}"}"; do
-        [[ "${lbl}" == "auto-context-review" ]] && found=true
+        [[ "${lbl}" == "adversarial-review" ]] && found=true
       done
-      [[ "${found}" == false ]] && all_labels+=("auto-context-review")
+      [[ "${found}" == false ]] && all_labels+=("adversarial-review")
     fi
     if [[ "${has_qa}" == true ]]; then
       local found=false
@@ -366,7 +372,11 @@ main() {
 
     # Create labels
     for lbl in "${all_labels[@]+"${all_labels[@]}"}"; do
-      create_label "${lbl}" "bfd4f2" "" "${resolved_repo}" 2>/dev/null || true
+      if [[ "${lbl}" == "adversarial-review" ]]; then
+        create_label "${lbl}" "B60205" "explicit adversarial review trigger for Copilot review workflow" "${resolved_repo}" 2>/dev/null || true
+      else
+        create_label "${lbl}" "bfd4f2" "" "${resolved_repo}" 2>/dev/null || true
+      fi
     done
 
     echo "  Creating: ${title}"

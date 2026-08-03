@@ -21,9 +21,9 @@ Describe 'issue-parser.ps1' {
             Get-IssueMetadatum -Body $body -Key 'branch' | Should -Be 'main'
         }
 
-        It 'extracts auto-context-review flag' {
-            $body = '<!-- auto-context-review: true -->'
-            Get-IssueMetadatum -Body $body -Key 'auto-context-review' | Should -Be 'true'
+        It 'extracts adversarial-review flag' {
+            $body = '<!-- adversarial-review: true -->'
+            Get-IssueMetadatum -Body $body -Key 'adversarial-review' | Should -Be 'true'
         }
 
         It 'returns empty string when key not found' {

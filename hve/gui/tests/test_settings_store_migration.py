@@ -66,6 +66,61 @@ class TestObsoleteKeyMigration:
         assert "workiq_tenant_id" not in on_disk
         assert "repo" in on_disk
 
+
+class TestSelfImproveTriStateMigration:
+    @pytest.mark.parametrize(
+        ("legacy_enabled", "legacy_disabled", "expected"),
+        [
+            ("true", "false", "on"),
+            ("false", "true", "off"),
+            ("false", "false", ""),
+        ],
+    )
+    def test_migrates_legacy_boolean_pair(
+        self,
+        tmp_settings: Path,
+        legacy_enabled: str,
+        legacy_disabled: str,
+        expected: str,
+    ) -> None:
+        _write(
+            tmp_settings,
+            "[options]\n"
+            f"self_improve = {legacy_enabled}\n"
+            f"no_self_improve = {legacy_disabled}\n",
+        )
+
+        merged = settings_store.load()
+
+        assert merged["options"]["self_improve"] == expected
+        assert "no_self_improve" not in merged["options"]
+        on_disk = tmp_settings.read_text(encoding="utf-8")
+        assert "no_self_improve" not in on_disk
+        assert f"self_improve = {expected}" in on_disk
+
+    @pytest.mark.parametrize("value", ["on", "off"])
+    def test_preserves_new_tristate_value(
+        self,
+        tmp_settings: Path,
+        value: str,
+    ) -> None:
+        _write(tmp_settings, f"[options]\nself_improve = {value}\n")
+        before = tmp_settings.read_text(encoding="utf-8")
+
+        merged = settings_store.load()
+
+        assert merged["options"]["self_improve"] == value
+        assert tmp_settings.read_text(encoding="utf-8") == before
+
+    def test_missing_settings_uses_inherit_without_legacy_key(
+        self,
+        tmp_settings: Path,
+    ) -> None:
+        assert not tmp_settings.exists()
+        merged = settings_store.load()
+        assert merged["options"]["self_improve"] == ""
+        assert "no_self_improve" not in merged["options"]
+
     def test_no_migration_when_keys_absent(self, tmp_settings: Path) -> None:
         original = "[options]\nrepo = owner/r\n"
         _write(tmp_settings, original)

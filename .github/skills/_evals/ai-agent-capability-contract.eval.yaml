@@ -1,0 +1,70 @@
+skill: ai-agent-capability-contract
+skill_path: .github/skills/ai-agent-capability-contract/SKILL.md
+description: AAG / AAGD で生成する AI Agent の Goal Loop、検索、REST Tool、MCP、Agent Skill の共通能力契約。
+
+test_cases:
+  - id: aag-agent-detail-with-search-and-tools
+    input: "AAG で、公開Webと社内文書を検索し、承認後にケース状態を更新する AI Agent を詳細設計したい"
+    expected_trigger: true
+    verify:
+      - type: contract
+        detail: "AG-CAP-01〜06を設計し、Web/enterprise検索、REST mutation、MCP、Skill要否を決定する"
+    reason: "AAGのAI Agent詳細設計で、検索と業務Toolの共通能力契約が必要"
+
+  - id: aagd-implement-goal-loop
+    input: "AAGD Step 2.3 で、テストが通るまでではなくユーザー目的のDoneを評価して再計画する Agent を実装する"
+    expected_trigger: true
+    verify:
+      - type: contract
+        detail: "Goal Contractと有限Runtime Goal Loopを実装し、HVE Post-DAG Self-Improveと混同しない"
+    reason: "AAGDのAgent実装とRuntime Goal Loopは本Skillの対象"
+
+  - id: aagd-agent-search-routing
+    input: "AI Agent が M365、Fabric、構造化数値を検索するときの Work IQ / Fabric IQ / SQL の経路を決めたい"
+    expected_trigger: true
+    verify:
+      - type: routing
+        detail: "データ種別ごとにPreferred/Fallback/Blocked、権限、citationを設計する"
+    reason: "生成AI Agentの検索ルーティング契約に該当"
+
+  - id: agent-skill-packaging-decision
+    input: "Agent の同じTool手順が4回出るので、SKILL.mdと必要なscriptへ分離すべきか判断したい"
+    expected_trigger: true
+    verify:
+      - type: packaging
+        detail: "3回ルール、再利用根拠、runtime loadingを判定し、必要なresourcesだけ作る"
+    reason: "AAG/AAGD生成Agent固有のSkill packaging判断に該当"
+
+  - id: simple-agent-with-no-search-or-mutation
+    input: "AAGでローカル入力を分類するだけのAI Agentを設計する。検索、更新、MCPは使わない"
+    expected_trigger: true
+    verify:
+      - type: boundary
+        detail: "AG-CAP-01/02は設計し、AG-CAP-03〜05は理由と根拠付きN/A、AG-CAP-06はnot-requiredを判定する"
+    reason: "検索やmutationがなくても、AAG生成AgentはGoal Loopと能力N/A判定が必要"
+
+  - id: reject-mcp-only-business-mutation
+    input: "AAGDで、REST APIを使わずMCP Toolだけから業務データを更新するAgentを実装したい"
+    expected_trigger: true
+    verify:
+      - type: boundary
+        detail: "本Skillを発動し、C/U/Dのprimary経路をREST Function Toolへ戻し、MCPによるpolicy迂回を拒否する"
+    reason: "AAGD生成AgentのREST mutationとMCP責務境界を検証するedge case"
+
+  - id: general-web-api-without-agent
+    input: "通常のWebアプリ向けに会員情報REST APIを設計したい。AI Agentは作らない"
+    expected_trigger: false
+    expected_skill: microservice-design-guide
+    reason: "AI Agentを生成しない一般API設計は本Skillの対象外"
+
+  - id: generic-mcp-server-design
+    input: "既存データベースを公開する汎用MCP Serverの責務とAPIを設計したい"
+    expected_trigger: false
+    expected_skill: mcp-server-design
+    reason: "生成AgentのMCP接続ではなく、汎用MCP Server設計は別Skillの責務"
+
+  - id: standalone-sql-query
+    input: "売上テーブルから月別合計を取得するSQL文だけを書いてほしい"
+    expected_trigger: false
+    expected_skill: null
+    reason: "AAG/AAGDのAgent設計・実装を伴わない単発SQLは本Skillの対象外"

@@ -39,7 +39,7 @@ else:
 
 **禁止**: 上書き更新(edit/update/patch) / 追記(append) / 削除省略 / 存在しないパスを検索ツールに渡すこと
 
-**適用範囲**: `work/` 全ファイル・サブディレクトリ / `qa/` 全ファイル / `knowledge/` 全ファイル / §2.3 分割モードのファイル / 全 Custom Agent（AGENTS.md §8 により例外なし）
+**適用範囲**: `work/` 全ファイル・サブディレクトリ（全て `work/run/<run-id>/` 配下に隠離） / `qa/` 全ファイル / `knowledge/` 全ファイル / §2.3 分割モードのファイル / 全 Custom Agent（AGENTS.md §8 により例外なし）
 
 > **理由**：上書き更新は残留データの原因。delete→create でクリーン状態を保証。
 
@@ -58,31 +58,34 @@ else:
 
 ### 方式別の分離戦略
 
-- **Web UI 方式**: Issue 番号（`Issue-<N>`）で自動分離（変更不要）
+- **Web UI 方式**: Issue 番号を run-id に流用（`work/run/issue-<N>/Issue-<N>/`）
 - **CLI SDK 方式**:
-  - `work` ディレクトリ: `work/self-improve/run-{run_id}/step-{step_id}/`
+  - `work` ディレクトリ: `work/run/<run-id>/self-improve/step-{step_id}/`
   - `qa` ファイル: `qa/{run_id}-{step_id}-execution-qa-merged.md`（HVE 実行補助 QA の回答マージ。AQOD 本体成果物 `qa/QA-DocConsistency-*.md` とは別物）
   - `qa-merged.md`（`execution-` なし）: **非推奨**（v2 以前の出力形式、新規生成は `execution-qa-merged.md` を使用）
-  - ロックファイル: `work/self-improve/run-{run_id}/.self-improve-lock`
+  - ロックファイル: `work/run/<run-id>/self-improve/.self-improve-lock`
 
 ### ディレクトリ構造（CLI SDK 方式）
 
 ```
 work/
-├── <Agent名>/Issue-<番号>/           ← Web UI方式（変更なし）
-│   ├── README.md
-│   ├── plan.md
-│   ├── contracts/
-│   └── artifacts/
-└── self-improve/                     ← CLI SDK方式
-    └── run-20260413T143022-a1b2c3/   ← run_id で分離
-        ├── .self-improve-lock        ← ロックファイル
-        ├── step-1.1/                 ← step_id で分離
+└── runs/
+    └── <run-id>/                          ← resolve_run_id() で解決
+        ├── <Agent名>/Issue-<番号>/
+        │   ├── README.md
+        │   ├── plan.md
+        │   ├── contracts/
         │   └── artifacts/
-        │       └── learning-001.md
-        └── step-2.3/
-            └── artifacts/
-                └── learning-001.md
+        ├── self-improve/                  ← Self-Improve
+        │   ├── .self-improve-lock         ← ロックファイル
+        │   ├── step-1.1/                  ← step_id で分離
+        │   │   └── artifacts/
+        │   │       └── learning-001.md
+        │   └── step-2.3/
+        │       └── artifacts/
+        │           └── learning-001.md
+        └── kpi/
+            └── fork-kpi.jsonl             ← Fork KPI ログ
 ```
 
 ### `run_id` のライフサイクル

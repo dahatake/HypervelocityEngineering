@@ -151,11 +151,53 @@ jobs:
 
           echo "デバウンス期間中の Copilot コメント数: ${recent_bot_comments}"
 
-          if [ "${recent_bot_comments:-0}" -gt 0 ]; then
-            echo "⏳ Copilot がデバウンス期間中にコメントを投稿しています。作業継続中の可能性があるため Ready 化を見送ります。"
+          # HEAD コミット日時がデバウンス窓内かを確認
+          recent_commit="false"
+          head_sha=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null) || head_sha=""
+          if [ -z "${head_sha}" ]; then
+            echo "::warning::HEAD SHA の取得に失敗したため、安全側に倒して Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          head_commit_json=$(gh api "/repos/${REPO}/commits/${head_sha}" 2>/dev/null) || head_commit_json=""
+          if [ -z "${head_commit_json}" ]; then
+            echo "::warning::HEAD コミット情報の取得に失敗したため、安全側に倒して Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          head_commit_date=$(echo "${head_commit_json}" | jq -r '.commit.committer.date // ""')
+          head_commit_subject=$(echo "${head_commit_json}" | jq -r '(.commit.message // "") | split("\n")[0]' | tr -d '\r')
+          if [ -z "${head_commit_date}" ]; then
+            echo "::warning::HEAD コミット日時の取得に失敗したため、安全側に倒して Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          head_commit_epoch=""
+          if head_commit_epoch=$(date -u -d "${head_commit_date}" +%s 2>/dev/null); then
+            :
+          elif head_commit_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "${head_commit_date}" +%s 2>/dev/null); then
+            :
+          fi
+          if [ -z "${head_commit_epoch}" ]; then
+            echo "::warning::HEAD コミット日時のパースに失敗したため、安全側に倒して Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ "${head_commit_epoch}" -ge "${CUTOFF_EPOCH}" ]; then
+            recent_commit="true"
+          fi
+          echo "HEAD コミット日時: ${head_commit_date}（カットオフ ${CUTOFF_ISO} 以降か: ${recent_commit}）"
+          if [ "${head_commit_subject}" = "Initial plan" ]; then
+            echo "⏳ HEAD コミット subject が 'Initial plan' のため、Agent 作業未完と判断し Ready 化を見送ります。"
+            echo "proceed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ "${recent_bot_comments:-0}" -gt 0 ] || [ "${recent_commit}" = "true" ]; then
+            echo "⏳ デバウンス期間中に Copilot のコメントまたはコミットがあります。作業継続中の可能性があるため Ready 化を見送ります。"
             echo "proceed=false" >> "${GITHUB_OUTPUT}"
           else
-            echo "✅ デバウンス期間中に Copilot の活動はありません。Ready 化を続行します。"
+            echo "✅ デバウンス期間中に Copilot の活動（コメント/コミット）はありません。Ready 化を続行します。"
             echo "proceed=true" >> "${GITHUB_OUTPUT}"
           fi
 
@@ -194,7 +236,7 @@ jobs:
               '<!-- auto-draft-to-ready-done -->' \
               '## 🔓 Draft PR 自動 Ready 化' \
               "${STATUS}" \
-              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため、Copilot の作業完了と判定しました。" \
+              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため Ready 化しました。" \
               '- 🏷️ **トリガー**: `auto-approve-ready` ラベル + draft PR の検知' \
               '> ℹ️ このコメントは `auto-draft-to-ready.yml` によって自動投稿されました。')
           else
@@ -202,7 +244,7 @@ jobs:
             COMMENT=$(printf '%s\n\n%s\n\n%s\n\n%s\n%s' \
               '## 🔓 Draft PR 自動 Ready 化' \
               "${STATUS}" \
-              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため、Copilot の作業完了と判定しました。" \
+              "- ⏱️ **デバウンス待機**: ${DEBOUNCE_SECONDS}秒間新コミットがなかったため Ready 化を試行しました。" \
               '- 🏷️ **トリガー**: `auto-approve-ready` ラベル + draft PR の検知' \
               '> ℹ️ このコメントは `auto-draft-to-ready.yml` によって自動投稿されました。')
           fi

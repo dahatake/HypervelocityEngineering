@@ -30,7 +30,7 @@ class TestCreate:
 
     def test_work_root_layout(self, tmp_path: Path):
         s = GuiSessionWorkdir.create(tmp_path)
-        # work/gui-runs/<id>/
+        # work/run/<id>/
         assert s.work_root.parent.name == GUI_RUNS_DIRNAME
         assert s.work_root.parent.parent.name == "work"
 
@@ -45,12 +45,17 @@ class TestCreate:
 
 
 class TestEnvOverrides:
-    def test_env_overrides_has_two_keys(self, tmp_path: Path):
+    def test_env_overrides_has_three_keys(self, tmp_path: Path, monkeypatch):
+        # HVE_RUN_ID_TZ は親 env 継承時のみ追加される条件付きキー
+        # (session_workdir.env_overrides は os.environ に値がある時だけ付与)。
+        # 基本契約 (3 キー) を決定的に検証するため、ambient な値を明示除去する。
+        monkeypatch.delenv("HVE_RUN_ID_TZ", raising=False)
         s = GuiSessionWorkdir.create(tmp_path)
         env = s.env_overrides()
         assert env["HVE_WORK_ROOT"] == str(s.work_root)
         assert env["HVE_GUI_SESSION_ID"] == s.session_run_id
-        assert set(env.keys()) == {"HVE_WORK_ROOT", "HVE_GUI_SESSION_ID"}
+        assert env["HVE_RUN_ID"] == s.session_run_id
+        assert set(env.keys()) == {"HVE_WORK_ROOT", "HVE_GUI_SESSION_ID", "HVE_RUN_ID"}
 
     def test_apply_to_env_merges(self, tmp_path: Path):
         s = GuiSessionWorkdir.create(tmp_path)
@@ -85,7 +90,8 @@ class TestCleanup:
         s = GuiSessionWorkdir.create(tmp_path, cleanup_policy="archive")
         self._make_file(s, "a/b/c.txt")
         s.cleanup()
-        zip_path = s.work_root.parent / ARCHIVE_DIRNAME / f"{s.session_run_id}.zip"
+        # sibling 配置: work/run/<id>/ の祖父母階層 (= work/) 直下の archive/
+        zip_path = s.work_root.parent.parent / ARCHIVE_DIRNAME / f"{s.session_run_id}.zip"
         assert zip_path.is_file()
         assert not s.work_root.exists()
         with zipfile.ZipFile(zip_path) as zf:

@@ -12,7 +12,8 @@ name: Copilot PR body への Closes #N 自動補完
 #
 # 処理フロー:
 #   1. PR 作成者が Copilot かどうか確認（copilot-swe-agent[bot] / Copilot Bot）
-#   2. 冪等化チェック（<!-- link-copilot-pr-to-issue-done --> マーカーで重複防止）
+#   2. 冪等化チェック（成功時の <!-- link-copilot-pr-to-issue-done --> マーカーで重複防止。
+#      Issue 特定失敗コメントだけがある場合は ready_for_review でも再試行）
 #   3. 元 Issue 番号を .github/scripts/pr-common.sh の find_issue_number() で特定:
 #      Method 1  : GraphQL closingIssuesReferences
 #      Method 2  : PR body の Closes/Fixes/Resolves #N（既にリンクあり → body 追記スキップ）
@@ -32,10 +33,11 @@ name: Copilot PR body への Closes #N 自動補完
 #   - COPILOT_PAT 優先、未設定時は GITHUB_TOKEN にフォールバック
 #   - ${{ }} 式をシェル変数に直接展開せず、env 経由で渡す（スクリプトインジェクション対策）
 #   - API 操作ステップは continue-on-error: true により、失敗しても PR 作成を妨げない
+#   - opened で特定失敗しても ready_for_review で再試行する
 
 on:
   pull_request_target:
-    types: [opened]
+    types: [opened, ready_for_review]
 
 concurrency:
   group: link-copilot-pr-to-issue-${{ github.event.pull_request.number }}
@@ -86,14 +88,32 @@ jobs:
         run: |
           set -euo pipefail
           MARKER="<!-- link-copilot-pr-to-issue-done -->"
+          FAILURE_TEXT="元 Issue を特定できませんでした"
+          existing_closing=$(printf '%s' "${PR_BODY}" \
+            | grep -oiP '(?:fix(?:es)?|close[sd]?|resolve[sd]?)\s+(?:[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+)?#\K[0-9]+' \
+            | head -1 || true)
           existing=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate \
             --jq '.[]' 2>/dev/null \
-            | jq -s --arg marker "${MARKER}" '[.[] | select(.body | contains($marker))] | length' \
+            | jq -s --arg marker "${MARKER}" --arg failure "${FAILURE_TEXT}" '[
+                .[]
+                | select(.body | contains($marker))
+                | select((.body | contains($failure)) | not)
+                | select(
+                    ((.user.type // "") == "Bot")
+                    or ((.author_association // "") == "OWNER")
+                    or ((.author_association // "") == "MEMBER")
+                    or ((.author_association // "") == "COLLABORATOR")
+                  )
+              ] | length' \
             2>/dev/null) || existing=0
-          if [ "${existing:-0}" -gt 0 ]; then
-            echo "既に処理済みです。スキップします。"
+
+          if [ -n "${existing_closing}" ]; then
+            echo "PR body に既存の closing キーワード（#${existing_closing}）があります。スキップします。"
             echo "done=true" >> "${GITHUB_OUTPUT}"
+          elif [ "${existing:-0}" -gt 0 ]; then
+            echo "done マーカーはありますが closing キーワードが無いため再試行します。"
+            echo "done=false" >> "${GITHUB_OUTPUT}"
           else
             echo "done=false" >> "${GITHUB_OUTPUT}"
           fi

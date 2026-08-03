@@ -1,7 +1,7 @@
 ---
 name: adversarial-review
 description: >
-  成果物の敵対的レビューを実行するスキル。5つの検証軸で問題を発見し、 Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。 PHASE: 成果物作成後（PR/マージ前または検証ループ完了後のユーザー指定時に使用）。 USE FOR: quality review, 5-axis review, adversarial check. DO NOT USE FOR: implementation (agents do that), pre-execution safety check (use harness-safety-guard), build/test verification (use harness-verification-loop), error recovery (use harness-error-recovery). WHEN: 成果物のレビューが必要、PR/マージ前の品質チェック。
+  明示的に要求された敵対的レビューを実行するスキル。6つの検証軸で問題を発見し、 Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。 PHASE: 成果物作成後（PR/マージ前または検証ループ完了後の明示時に使用）。 USE FOR: explicit adversarial review requested by marker, label, user, or HVE Phase 3. DO NOT USE FOR: 通常のコードレビュー、通常の品質確認、通常のセルフチェック、implementation (agents do that), pre-execution safety check (use harness-safety-guard), build/test verification (use harness-verification-loop), error recovery (use harness-error-recovery). WHEN: marker/label/ユーザー依頼/HVE Phase 3 で敵対的レビューが明示されたとき。
 metadata:
   origin: user
   version: 2.0.0
@@ -13,9 +13,9 @@ metadata:
 
 ## When to Activate（発動条件）
 
-コード・ドキュメント・設計書のレビュー、PR/マージ前の品質チェック、設計・仕様・アーキテクチャレビューが必要なとき。
+marker / label / ユーザー依頼 / HVE Phase 3 のいずれかで、コード・ドキュメント・設計書の敵対的レビューが明示されたとき。
 
-> ⚠️ AGENTS.md §7 ワークフロー内では `references/review-activation-rules.md` の「実施条件」が優先。ユーザーが明示（`<!-- adversarial-review: true -->` またはラベル）しない限り実施しません。
+> ⚠️ 発動条件の正本は `references/review-activation-rules.md`。Prompt のレビュー観点は敵対的レビューの発動条件ではない。通常時は Prompt 固有の観点を単回のセルフチェックに使用し、本 Skill は発動しない。
 
 ---
 
@@ -23,13 +23,14 @@ metadata:
 
 **ステップ 1: タスク目的の確認** — 目的・依頼内容・期待成果・対象読者・制約条件を確認する。
 
-**ステップ 2: 5つの検証軸による網羅的レビュー** — 詳細チェック項目は `references/five-axis-checklist.md` を参照。
+**ステップ 2: 6つの検証軸による網羅的レビュー** — 詳細チェック項目は `references/five-axis-checklist.md` を参照（ファイル名は後方互換のため維持）。
 
 - **軸1: 目的適合性**（要件充足性）— 抜け漏れ、スコープ外、目的逸脱
 - **軸2: 内容の妥当性**（技術的正確性）— 技術的誤り、ロジック矛盾
 - **軸3: 整合性** — 内部矛盾、用語の一貫性、参照先整合性
 - **軸4: 品質・運用性**（非機能品質）— 可読性、保守性、セキュリティリスク
 - **軸5: 根拠性・不確実性管理**（捏造検出）— 根拠のない断定、推測の事実化
+- **軸6: オーバーエンジニアリング検出** — YAGNI 違反、不要な抽象化・依存・設定追加
 
 **ステップ 3: 重大度の分類**
 
@@ -53,7 +54,7 @@ metadata:
 
 ## §7.4 出力方法
 
-- 結果は `work/<Custom Agent Name>/Issue-<識別子>/artifacts/adversarial-review-result.md` に記録（削除→新規作成ルール遵守）
+- 結果は `work/run/<run-id>/<Custom Agent Name>/Issue-<識別子>/artifacts/adversarial-review-result.md` に記録（削除→新規作成ルール遵守）
 
 ## 禁止事項
 
@@ -65,7 +66,7 @@ metadata:
 
 | ファイル | 内容 |
 |---------|------|
-| `references/five-axis-checklist.md` | 軸1〜5詳細チェック項目、問題リストアップ数ルール、AGENTS.md §7.2 軸名対応表 |
+| `references/five-axis-checklist.md` | 軸1〜6詳細チェック項目、問題リストアップ数ルール（互換ファイル名） |
 | `references/review-activation-rules.md` | §7統合セクション全体（実施条件、例外、誤適用防止、セルフレビューとの違いテーブル） |
 
 ---
@@ -86,4 +87,4 @@ metadata:
 |-------|------|------|
 | `work-artifacts-layout` | 出力先 | adversarial-review-result.md の配置パス（§4 パス規則） |
 | `harness-verification-loop` | 補完 | 本Skillは品質レビュー、verification-loopは自動検証。別フェーズで併用 |
-| `task-dag-planning` | 前提 | 分割モード（Plan-Only）では本Skillの敵対的レビューを省略 |
+| `task-dag-planning` | 前提 | 明示triggerなしの分割モード（Plan-Only）では省略。marker / label / ユーザー依頼 / HVE Phase 3 の明示時は実施 |

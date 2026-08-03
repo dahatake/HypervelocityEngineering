@@ -1,6 +1,6 @@
 ﻿> 非機能要件の現状分析を作成する。
 
-> **WORK**: `/work/Doc-NFRAnalysis/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-NFRAnalysis/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

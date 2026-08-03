@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 import pytest
 
 from hve import workflow_registry as wr
-from hve.catalog_parsers import KNOWN_PARSERS
+from hve.catalog_parsers import KNOWN_PARSERS, parse_agent_catalog
 from hve.fanout_expander import expand_workflow_fanout, FanoutChildStep
 from hve.fanout_expander import expand_single_step_fanout
 from hve.dag_executor import DAGExecutor, StepResult
@@ -97,6 +97,26 @@ def test_fanout_child_carries_fanout_meta(tmp_path):
     assert child.additional_prompt_template_path is not None
 
 
+def test_fanout_child_inherits_remote_cicd_flag(tmp_path):
+    """FanoutChildStep は StepDef 互換属性 requires_remote_cicd を継承する。"""
+    fake = wr.StepDef(
+        id="R",
+        title="remote",
+        custom_agent=None,
+        consumed_artifacts=[],
+        fanout_static_keys=["K1"],
+        requires_remote_cicd=True,
+    )
+    fake_wf = wr.WorkflowDef(
+        id="test_remote_cicd_fanout", name="t", label_prefix="t",
+        state_labels=wr._make_state_labels("t"),
+        params=[], steps=[fake],
+    )
+    expanded = expand_workflow_fanout(fake_wf, tmp_path)
+    child = next(s for s in expanded.steps if s.id == "R/K1")
+    assert child.requires_remote_cicd is True
+
+
 def test_fanout_empty_parser_marks_skip(tmp_path):
     """カタログファイルが存在しない fanout_parser は empty_fanout_ids に入る。"""
     # 動的 fanout を持つ仮 StepDef を作る
@@ -140,6 +160,116 @@ def test_output_paths_template_resolves_with_key(tmp_path):
     child_d02 = next(s for s in expanded.steps if s.id == "Y/D02")
     assert child_d01.output_paths == ["docs/foo/D01-detail.md", "docs/bar/D01.md"]
     assert child_d02.output_paths == ["docs/foo/D02-detail.md", "docs/bar/D02.md"]
+
+
+def test_required_input_paths_resolve_with_key(tmp_path):
+    """required_input_paths の {key} が fan-out 子の実キーへ置換されること。"""
+    fake = wr.StepDef(
+        id="Y",
+        title="fake",
+        custom_agent=None,
+        consumed_artifacts=[],
+        fanout_static_keys=["AG-01"],
+        required_input_paths=[
+            "docs/agent/agent-detail-{key}.md",
+            "docs/shared/input.md",
+        ],
+    )
+    fake_wf = wr.WorkflowDef(
+        id="test_required_input_template", name="t", label_prefix="t",
+        state_labels=wr._make_state_labels("t"),
+        params=[], steps=[fake],
+    )
+    expanded = expand_workflow_fanout(fake_wf, tmp_path)
+    child = next(s for s in expanded.steps if s.id == "Y/AG-01")
+    assert child.required_input_paths == [
+        "docs/agent/agent-detail-AG-01.md",
+        "docs/shared/input.md",
+    ]
+
+
+def test_agent_catalog_uses_step2_canonical_agt_ids(tmp_path):
+    """Step 2 の Agent Inventory から canonical AGT ID を取得する。"""
+    definition = tmp_path / "docs" / "agent" / "agent-application-definition.md"
+    definition.parent.mkdir(parents=True, exist_ok=True)
+    definition.write_text("# Application Definition\n\nAgent ID は未採番。\n", encoding="utf-8")
+    architecture = tmp_path / "docs" / "agent" / "agent-architecture.md"
+    architecture.write_text(
+        "# Agent Architecture\n\n| Agent ID | Name |\n|---|---|\n"
+        "| AGT-UC-01-01 | Support |\n| AGT-UC-01-02 | Audit |\n",
+        encoding="utf-8",
+    )
+
+    assert parse_agent_catalog(tmp_path) == ["AGT-UC-01-01", "AGT-UC-01-02"]
+
+
+def test_agent_catalog_falls_back_to_standard_catalog_second_column(tmp_path):
+    """primaryが0件なら標準AI Agent一覧の第2列Agent IDへfallbackする。"""
+    architecture = tmp_path / "docs" / "agent" / "agent-architecture.md"
+    architecture.parent.mkdir(parents=True, exist_ok=True)
+    architecture.write_text("# Agent Architecture\n\nAgent一覧は未生成。\n", encoding="utf-8")
+    catalog = tmp_path / "docs" / "ai-agent-catalog.md"
+    catalog.write_text(
+        "# AI Agent 一覧\n\n"
+        "| # | Agent ID | Agent Name | 種別 |\n"
+        "|---|---|---|---|\n"
+        "| 1 | AGT-UC-01-01 | Support | Single |\n"
+        "| 2 | AGT-UC-01-02 | Audit | Single |\n",
+        encoding="utf-8",
+    )
+
+    assert parse_agent_catalog(tmp_path) == ["AGT-UC-01-01", "AGT-UC-01-02"]
+
+
+def test_aag_step2_is_single_and_step3_fans_out_from_architecture(tmp_path):
+    """Agent ID producerのStep 2は単発、consumerのStep 3だけをfan-outする。"""
+    architecture = tmp_path / "docs" / "agent" / "agent-architecture.md"
+    architecture.parent.mkdir(parents=True, exist_ok=True)
+    architecture.write_text(
+        "| Agent ID | Name |\n|---|---|\n| AGT-UC-01-01 | Support |\n",
+        encoding="utf-8",
+    )
+
+    aag = wr.get_workflow("aag")
+    assert aag.get_step("2").fanout_parser is None
+    assert aag.get_step("3").fanout_parser == "agent_catalog"
+    expanded = expand_workflow_fanout(aag, tmp_path)
+    assert "2" not in expanded.fanout_map
+    assert expanded.fanout_map["3"] == ["3/AGT-UC-01-01"]
+
+
+def test_aagd_real_steps_resolve_all_agent_specific_required_inputs(tmp_path):
+    """AAGDの実Stepを展開するとAgent固有input/outputにplaceholderが残らない。"""
+    architecture = tmp_path / "docs" / "agent" / "agent-architecture.md"
+    architecture.parent.mkdir(parents=True, exist_ok=True)
+    architecture.write_text(
+        "| Agent ID | Name |\n|---|---|\n| AGT-UC-01-01 | Support |\n",
+        encoding="utf-8",
+    )
+
+    expanded = expand_workflow_fanout(wr.get_workflow("aagd"), tmp_path)
+    expected_paths = {
+        "2.1": ["docs/test-specs/AGT-UC-01-01-test-spec.md"],
+        "2.2": [
+            "docs/agent/agent-detail-AGT-UC-01-01.md",
+            "docs/test-specs/AGT-UC-01-01-test-spec.md",
+        ],
+        "2.3": [
+            "docs/agent/agent-detail-AGT-UC-01-01.md",
+            "docs/test-specs/AGT-UC-01-01-test-spec.md",
+            "src/test/agent/AGT-UC-01-01.Tests/",
+        ],
+        "3": [
+            "docs/agent/agent-detail-AGT-UC-01-01.md",
+            "src/agent/AGT-UC-01-01/",
+        ],
+    }
+    for step_id, expected in expected_paths.items():
+        child = next(s for s in expanded.steps if s.id == f"{step_id}/AGT-UC-01-01")
+        agent_paths = child.output_paths + child.required_input_paths
+        for path in expected:
+            assert path in agent_paths
+        assert all("{" not in p and "}" not in p for p in expected)
 
 
 def test_output_paths_inherited_when_template_absent(tmp_path):
@@ -520,3 +650,279 @@ def test_dag_executor_passes_propagated_prompt_to_child(tmp_path):
     assert by_id["1/D01"]["prompt"] == "BASE_PROMPT_FOR_STEP_1"
     assert by_id["1/D21"]["prompt"] == "BASE_PROMPT_FOR_STEP_1"
     assert by_id["2"]["prompt"] == "BASE_PROMPT_FOR_STEP_2"
+
+
+# ---------------------------------------------------------------------------
+# T03/T04: APP-ID フィルタ (Step 1 で APP-07 単独選択時に Step 2 全件展開バグ対応)
+# ---------------------------------------------------------------------------
+
+
+from hve.fanout_expander import _filter_keys_by_app_ids, _SCREEN_KEY_PREFIX_RE
+
+
+def _write_min_app_catalog(tmp_path, app_ids):
+    """app-catalog.md の最小版を tmp_path に書き出す（A 節サマリ表のみ）。"""
+    p = tmp_path / "docs" / "catalog" / "app-catalog.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    rows = "\n".join(f"| {aid} | name-{aid} |" for aid in app_ids)
+    p.write_text(
+        "# App Catalog\n\n## A. サマリ\n\n"
+        "| APP-ID | 名称 |\n"
+        "|---|---|\n"
+        f"{rows}\n",
+        encoding="utf-8",
+    )
+
+
+def _write_min_screen_catalogs(tmp_path, screens_by_app):
+    """screen-catalog-APP-NN.md を APP-ID 毎に作成する。
+
+    screens_by_app: {"APP-07": ["S001", "S002"], "APP-100": ["S001"]}
+    """
+    for app_id, screen_ids in screens_by_app.items():
+        p = tmp_path / "docs" / "catalog" / f"screen-catalog-{app_id}.md"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        rows = "\n".join(
+            f"| {app_id}-{sid} | screen-{sid} |" for sid in screen_ids
+        )
+        p.write_text(
+            f"# Screen Catalog {app_id}\n\n"
+            "| 画面ID | 名称 |\n"
+            "|---|---|\n"
+            f"{rows}\n",
+            encoding="utf-8",
+        )
+
+
+def _write_min_service_catalog(tmp_path, svc_to_app):
+    """service-catalog.md の最小版を tmp_path に書き出す（A 節サマリ表）。
+
+    svc_to_app: {"SVC-09": "APP-07", "SVC-11": "APP-09"}
+    """
+    p = tmp_path / "docs" / "catalog" / "service-catalog.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    rows = "\n".join(
+        f"| {svc} | name-{svc} | API | A | desc | {app} |"
+        for svc, app in svc_to_app.items()
+    )
+    p.write_text(
+        "# Service Catalog\n\n## A. サマリ\n\n"
+        "| SVC-ID | 名称 | 種別 | カテゴリ | 説明 | 利用APP |\n"
+        "|---|---|---|---|---|---|\n"
+        f"{rows}\n\n## B. 詳細\n\n",
+        encoding="utf-8",
+    )
+
+
+def test_filter_app_catalog_keeps_only_specified_app_ids(tmp_path):
+    keys = ["APP-01", "APP-07", "APP-09", "APP-16"]
+    assert _filter_keys_by_app_ids("app_catalog", keys, ["APP-07"], tmp_path) == ["APP-07"]
+    assert _filter_keys_by_app_ids("app_catalog", keys, ["APP-07", "APP-09"], tmp_path) == ["APP-07", "APP-09"]
+
+
+def test_filter_app_catalog_returns_empty_when_no_match(tmp_path):
+    keys = ["APP-01", "APP-09"]
+    assert _filter_keys_by_app_ids("app_catalog", keys, ["APP-07"], tmp_path) == []
+
+
+def test_filter_screen_catalog_uses_prefix_regex(tmp_path):
+    keys = [
+        "APP-07-S001", "APP-07-S002",
+        "APP-09-S001",
+        "APP-10-S001",
+        "APP-100-S001",
+    ]
+    out = _filter_keys_by_app_ids("screen_catalog", keys, ["APP-07"], tmp_path)
+    assert out == ["APP-07-S001", "APP-07-S002"]
+
+
+def test_filter_screen_catalog_does_not_confuse_app10_and_app100(tmp_path):
+    """APP-10 指定時に APP-100-S001 を含めない（startswith ベース実装の誤マッチ防止）。"""
+    keys = ["APP-10-S001", "APP-100-S001"]
+    out_10 = _filter_keys_by_app_ids("screen_catalog", keys, ["APP-10"], tmp_path)
+    out_100 = _filter_keys_by_app_ids("screen_catalog", keys, ["APP-100"], tmp_path)
+    assert out_10 == ["APP-10-S001"]
+    assert out_100 == ["APP-100-S001"]
+
+
+def test_filter_service_catalog_uses_svc_app_mapping(tmp_path):
+    _write_min_service_catalog(tmp_path, {
+        "SVC-09": "APP-07",
+        "SVC-11": "APP-09",
+        "SVC-19": "APP-16",
+    })
+    keys = ["SVC-09", "SVC-11", "SVC-19"]
+    assert _filter_keys_by_app_ids("service_catalog", keys, ["APP-07"], tmp_path) == ["SVC-09"]
+    assert _filter_keys_by_app_ids("service_catalog", keys, ["APP-09"], tmp_path) == ["SVC-11"]
+    assert _filter_keys_by_app_ids("service_catalog", keys, ["APP-07", "APP-16"], tmp_path) == ["SVC-09", "SVC-19"]
+
+
+def test_filter_service_catalog_returns_keys_when_mapping_empty(tmp_path):
+    """service-catalog.md が存在しない（mapping 空）場合はフィルタ無効化して全件返す（後方互換）。"""
+    keys = ["SVC-09", "SVC-11"]
+    # tmp_path に service-catalog.md を作らない → parse は空辞書を返す
+    assert _filter_keys_by_app_ids("service_catalog", keys, ["APP-07"], tmp_path) == keys
+
+
+def test_filter_unfilterable_parsers_passthrough(tmp_path):
+    """app_catalog / screen_catalog / service_catalog / dataflow_catalog 以外はフィルタ対象外。"""
+    for parser in ("business_candidate", "use_case_skeleton", "agent_catalog"):
+        assert _filter_keys_by_app_ids(parser, ["k1", "k2"], ["APP-07"], tmp_path) == ["k1", "k2"]
+
+
+def test_filter_with_none_or_empty_app_ids_passes_through(tmp_path):
+    """app_ids=None または [] のとき、対象 parser でもフィルタを適用しない（後方互換）。"""
+    keys = ["APP-01", "APP-07"]
+    assert _filter_keys_by_app_ids("app_catalog", keys, None, tmp_path) == keys
+    assert _filter_keys_by_app_ids("app_catalog", keys, [], tmp_path) == keys
+
+
+def test_screen_key_prefix_regex_strict_match():
+    assert _SCREEN_KEY_PREFIX_RE.match("APP-07-S001").group(1) == "APP-07"
+    assert _SCREEN_KEY_PREFIX_RE.match("APP-100-S001").group(1) == "APP-100"
+    # APP-NN だけ（hyphen 終端なし）はマッチしない
+    assert _SCREEN_KEY_PREFIX_RE.match("APP-07") is None
+
+
+def test_expand_workflow_fanout_filters_aad_web_with_min_catalogs(tmp_path):
+    """tmp_path に最小カタログを置いて aad-web の fan-out が app_ids でフィルタされることを確認。"""
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-07", "APP-09"])
+    _write_min_screen_catalogs(tmp_path, {
+        "APP-07": ["S001", "S002"],
+        "APP-09": ["S001"],
+    })
+    _write_min_service_catalog(tmp_path, {
+        "SVC-09": "APP-07",
+        "SVC-11": "APP-09",
+    })
+    aad_web = wr.get_workflow("aad-web")
+    expanded = expand_workflow_fanout(aad_web, tmp_path, app_ids=["APP-07"])
+    assert expanded.fanout_map.get("1") == ["1/APP-07"]
+    assert expanded.fanout_map.get("2.1") == ["2.1/APP-07-S001", "2.1/APP-07-S002"]
+    assert expanded.fanout_map.get("2.2") == ["2.2/SVC-09"]
+    assert expanded.fanout_map.get("2.3") == ["2.3/SVC-09"]
+
+
+def test_expand_workflow_fanout_app_ids_none_returns_all(tmp_path):
+    """app_ids=None は後方互換で全件返す（フィルタ適用なし）。"""
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-07", "APP-09"])
+    aad_web = wr.get_workflow("aad-web")
+    ex_none = expand_workflow_fanout(aad_web, tmp_path, app_ids=None)
+    ex_default = expand_workflow_fanout(aad_web, tmp_path)
+    assert ex_none.fanout_map.get("1") == ex_default.fanout_map.get("1")
+    assert len(ex_none.fanout_map.get("1", [])) == 3
+
+
+def test_expand_workflow_fanout_filter_zero_match_marks_empty(tmp_path):
+    """フィルタ結果が 0 件の base step は empty_fanout_ids に登録される。"""
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-09"])
+    # screen は APP-09 のみ作る → APP-07 指定でフィルタ結果 0 件
+    _write_min_screen_catalogs(tmp_path, {"APP-09": ["S001"]})
+    aad_web = wr.get_workflow("aad-web")
+    expanded = expand_workflow_fanout(aad_web, tmp_path, app_ids=["APP-07"])
+    # Step 1: app_catalog 内に APP-07 が無い → 0 件 → empty
+    assert "1" in expanded.empty_fanout_ids
+    # Step 2.1: screen_catalog APP-07 のキーが無い → 0 件 → empty
+    assert "2.1" in expanded.empty_fanout_ids
+
+
+def test_expand_single_step_fanout_filters_screen_catalog(tmp_path):
+    """expand_single_step_fanout も app_ids で screen_catalog を絞り込む。"""
+    _write_min_screen_catalogs(tmp_path, {
+        "APP-07": ["S001", "S002"],
+        "APP-09": ["S001"],
+    })
+    step = wr.StepDef(
+        id="2.1", title="screen", custom_agent=None,
+        consumed_artifacts=[], fanout_parser="screen_catalog",
+    )
+    children = expand_single_step_fanout(step, tmp_path, app_ids=["APP-07"])
+    assert children is not None
+    assert [c.id for c in children] == ["2.1/APP-07-S001", "2.1/APP-07-S002"]
+
+
+def test_expand_single_step_fanout_app_ids_none_returns_all(tmp_path):
+    """expand_single_step_fanout も app_ids=None で後方互換維持。"""
+    _write_min_screen_catalogs(tmp_path, {
+        "APP-07": ["S001"],
+        "APP-09": ["S001"],
+    })
+    step = wr.StepDef(
+        id="2.1", title="screen", custom_agent=None,
+        consumed_artifacts=[], fanout_parser="screen_catalog",
+    )
+    children_none = expand_single_step_fanout(step, tmp_path, app_ids=None)
+    children_default = expand_single_step_fanout(step, tmp_path)
+    assert children_none is not None and children_default is not None
+    assert [c.id for c in children_none] == [c.id for c in children_default]
+    assert len(children_none) == 2
+
+
+def test_service_app_mapping_returns_empty_when_no_a_section(tmp_path):
+    """service-catalog.md に '## A.' セクションが無い場合、mapping は空辞書。
+
+    parse_service_app_mapping のサブセクション検出ロジックの境界ケース。
+    A 節不在時に B/C 節の SVC 行を誤って拾わないことを保証する。
+    """
+    from hve.catalog_parsers import parse_service_app_mapping
+
+    p = tmp_path / "docs" / "catalog" / "service-catalog.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        "# Service Catalog\n\n## B. 詳細\n\n"
+        "| SVC-ID | 名称 | 種別 | カテゴリ | 説明 | 利用APP |\n"
+        "|---|---|---|---|---|---|\n"
+        "| SVC-09 | name | API | A | desc | APP-07 |\n",
+        encoding="utf-8",
+    )
+    assert parse_service_app_mapping(tmp_path) == {}
+
+
+# ---------------------------------------------------------------------------
+# T3.3 (Major No.5): parse_dataflow_catalog × adfd 結合テスト
+# ---------------------------------------------------------------------------
+
+
+def test_parse_dataflow_catalog_fallback_to_app_catalog(tmp_path):
+    """app-arch-catalog.md が無い場合は app-catalog.md の全 APP-ID を返す（フォールバック）。"""
+    from hve.catalog_parsers import parse_dataflow_catalog
+
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-07", "APP-09"])
+    # app-arch-catalog.md は作らない
+    result = parse_dataflow_catalog(tmp_path)
+    assert set(result) == {"APP-01", "APP-07", "APP-09"}
+
+
+def test_parse_dataflow_catalog_returns_empty_when_no_catalog(tmp_path):
+    """app-catalog.md も app-arch-catalog.md も無い場合は空リスト。"""
+    from hve.catalog_parsers import parse_dataflow_catalog
+
+    assert parse_dataflow_catalog(tmp_path) == []
+
+
+def test_expand_workflow_fanout_adfd_uses_app_catalog(tmp_path):
+    """ADFD の fan-out が app-catalog.md の APP-ID で展開されることを確認（フォールバック経路）。"""
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-07"])
+    adfd = wr.get_workflow("adfd")
+    expanded = expand_workflow_fanout(adfd, tmp_path)
+    # Step.6.1 / 6.3 は dataflow_catalog 由来で APP-ID 数だけ展開、
+    # Step.6.2 (Monitoring) は fanout 対象外 (per-job 詳細ではない) と想定し、
+    # fanout_map に登場するキー数を確認
+    fanout_keys = set(expanded.fanout_map.keys())
+    # Step.6.1 と Step.6.3 が fanout_parser=dataflow_catalog なら 2 つ
+    # Step.6.2 が fanout 対象なら 3 つ
+    assert len(fanout_keys) >= 1
+    # 6.1 が APP-01, APP-07 で展開されることを確認
+    if "6.1" in expanded.fanout_map:
+        child_ids = expanded.fanout_map["6.1"]
+        assert set(child_ids) == {"6.1/APP-01", "6.1/APP-07"}
+
+
+def test_expand_workflow_fanout_adfd_filters_by_app_ids(tmp_path):
+    """ADFD の fan-out が app_ids 指定でフィルタされる（HVE CLI 経路）。"""
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-07", "APP-09"])
+    adfd = wr.get_workflow("adfd")
+    expanded = expand_workflow_fanout(adfd, tmp_path, app_ids=["APP-07"])
+    if "6.1" in expanded.fanout_map:
+        child_ids = expanded.fanout_map["6.1"]
+        assert child_ids == ["6.1/APP-07"]

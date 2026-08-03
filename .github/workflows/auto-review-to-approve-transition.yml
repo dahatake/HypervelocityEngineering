@@ -1,10 +1,10 @@
 name: レビュー完了 → auto-approve-ready 自動遷移
 
-# copilot-auto-review.yml がレビュー指示を投稿し、Copilot が修正コミットを push した後、
+# copilot-auto-feedback.yml がレビュー指示を投稿し、Copilot が修正コミットを push した後、
 # レビュー結果を検証して auto-approve-ready ラベルを PR に付与する。
 #
 # 判定条件（すべて満たす必要あり）:
-#   1. PR に auto-context-review ラベルが付いている
+#   1. PR に adversarial-review ラベルが付いている
 #   2. PR に auto-approve-ready ラベルがまだ付いていない
 #   3. PR が draft でない（job if の pull_request_target 分岐で `&& !github.event.pull_request.draft` を判定。issue_comment 分岐では判定しない）
 #   4. <!-- copilot-auto-review-posted --> マーカーが PR コメントに存在する（レビュー指示済み）
@@ -56,7 +56,7 @@ permissions:
 jobs:
   transition:
     # 事前フィルタ（pull_request_target の場合）:
-    #   - PR に auto-context-review ラベルが付いている
+    #   - PR に adversarial-review ラベルが付いている
     #   - PR に auto-approve-ready ラベルがまだ付いていない
     #   - PR が draft でない
     # 事前フィルタ（issue_comment の場合）:
@@ -77,40 +77,42 @@ jobs:
       - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
         uses: actions/checkout@v4
 
-      - name: PR 情報を取得（issue_comment 対応）
+      - name: PR 情報を取得（常に最新状態を再取得）
         id: pr-info
         run: |
           set -euo pipefail
 
-          if [ "${EVENT_NAME}" = "issue_comment" ]; then
-            pr_api_err=$(mktemp)
-            pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
-              echo "PR #${PR_NUMBER} の情報取得に失敗しました。スキップします。エラー詳細:"
-              cat "${pr_api_err}" || true
-              rm -f "${pr_api_err}"
-              echo "skip=true" >> "${GITHUB_OUTPUT}"
-              exit 0
-            }
+          pr_api_err=$(mktemp)
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
+            echo "PR #${PR_NUMBER} の情報取得に失敗しました。スキップします。エラー詳細:"
+            cat "${pr_api_err}" || true
             rm -f "${pr_api_err}"
-            has_context_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-context-review"]) then "true" else "false" end')
-            has_approve_ready=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-approve-ready"]) then "true" else "false" end')
-            if [ "${has_context_review}" != "true" ] || [ "${has_approve_ready}" = "true" ]; then
-              echo "スキップ条件: auto-context-review=${has_context_review}, auto-approve-ready=${has_approve_ready}"
-              echo "skip=true" >> "${GITHUB_OUTPUT}"
-              exit 0
-            fi
-            # PR body を GITHUB_ENV に設定（find_issue_number Method 2 用）
-            pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
-            EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
-            {
-              echo "PR_BODY<<${EOF_MARKER}"
-              echo "${pr_body}"
-              echo "${EOF_MARKER}"
-            } >> "${GITHUB_ENV}"
-            echo "skip=false" >> "${GITHUB_OUTPUT}"
-          else
-            echo "skip=false" >> "${GITHUB_OUTPUT}"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+          rm -f "${pr_api_err}"
+          has_adversarial_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["adversarial-review"]) then "true" else "false" end')
+          has_approve_ready=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-approve-ready"]) then "true" else "false" end')
+          pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+          pr_body_head=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          if printf '%s' "${pr_body_head}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+            has_adversarial_review="false"
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、PR の adversarial-review 設定を false に上書きしました。"
           fi
+          if [ "${has_adversarial_review}" != "true" ] || [ "${has_approve_ready}" = "true" ]; then
+            echo "スキップ条件: adversarial-review=${has_adversarial_review}, auto-approve-ready=${has_approve_ready}"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # PR body を GITHUB_ENV に設定（find_issue_number Method 2 用）
+          EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+          {
+            echo "PR_BODY<<${EOF_MARKER}"
+            echo "${pr_body}"
+            echo "${EOF_MARKER}"
+          } >> "${GITHUB_ENV}"
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
 
       - name: 紐づく Issue 番号を特定
         id: find-issue
@@ -512,7 +514,7 @@ jobs:
             最新コミットを対象に再レビューを実行してください。
 
              ### 要件
-             1. 5軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
+             1. 6軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
              2. 最終サマリーの合格判定直後に、必ず次のいずれかを出力すること。
                 - `<!-- review-verdict: PASS -->`（残存 Critical = 0）
                 - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
@@ -595,7 +597,7 @@ jobs:
             "<!-- copilot-auto-review-fix-requested -->" \
             "${SHA_MARKER}" \
             "@copilot" \
-            "The automated context review returned **FAIL**." \
+            "The automated adversarial review returned **FAIL**." \
             "Please update the existing changes in this pull request by addressing the review findings below." \
             "**Requirements:**" \
             "- Do not create unrelated changes." \

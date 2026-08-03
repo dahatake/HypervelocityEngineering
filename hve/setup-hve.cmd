@@ -60,8 +60,8 @@ if errorlevel 1 (
         endlocal
         exit /b 1
     )
-    REM Refresh PATH so the freshly installed pwsh is discoverable in this session.
-    for /f "usebackq tokens=*" %%P in (`powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')"`) do set "PATH=%%P"
+    REM Refresh only the known PowerShell 7 locations. Never invoke legacy Windows PowerShell 5.x.
+    set "PATH=%LOCALAPPDATA%\Microsoft\WindowsApps;%ProgramFiles%\PowerShell\7;%PATH%"
     where pwsh >nul 2>&1
     if errorlevel 1 (
         echo [ERROR] pwsh still not found on PATH after install. Open a new terminal and re-run.
@@ -72,7 +72,7 @@ if errorlevel 1 (
 
 REM Forward all arguments verbatim. -ExecutionPolicy Bypass is scoped
 REM to this process only and does not change machine policy.
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%PS1%" %*
+pwsh.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%PS1%" %*
 set "RC=%ERRORLEVEL%"
 
 REM Pause only when double-clicked (no args) so users see the result.

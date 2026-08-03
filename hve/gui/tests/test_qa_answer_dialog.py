@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from PySide6.QtWidgets import QApplication
 
 from hve.qa_merger import Choice, QADocument, QAQuestion
-from hve.gui.qa_answer_dialog import QAAnswerDialog
+from hve.gui.qa_answer_dialog import QAAnswerDialog, _COL_CHOICES
 
 
 _app: QApplication | None = None
@@ -85,6 +85,48 @@ class TestQAAnswerDialog(unittest.TestCase):
         # Q2: default B) NG → B 選択
         labels = [qw.selected_label() for qw in dlg._question_widgets]
         self.assertEqual(labels, ["A", "B"])
+        dlg.close()
+
+    def test_choices_column_shows_full_text(self) -> None:
+        """選択肢列に各選択肢の全文が「ラベル) 本文」形式・改行区切りで表示される。"""
+        doc = _make_doc_with_choices()
+        dlg = QAAnswerDialog(doc)
+        item = dlg._table.item(0, _COL_CHOICES)
+        assert item is not None
+        # 選択肢は「ラベル) 本文」を改行で連結して縦に並べる
+        self.assertEqual(item.text(), "A) はい\nB) いいえ")
+        dlg.close()
+
+    def test_choices_column_header_label(self) -> None:
+        """新設列のヘッダが「選択肢」である。"""
+        doc = _make_doc_with_choices()
+        dlg = QAAnswerDialog(doc)
+        header_item = dlg._table.horizontalHeaderItem(_COL_CHOICES)
+        assert header_item is not None
+        self.assertEqual(header_item.text(), "選択肢")
+        dlg.close()
+
+    def test_answer_combo_shows_label_only(self) -> None:
+        """回答コンボは選択肢のラベル記号のみを表示し、serialize 用ラベルは不変。"""
+        doc = _make_doc_with_choices()
+        dlg = QAAnswerDialog(doc)
+        combo = dlg._question_widgets[0].combo
+        assert combo is not None
+        self.assertEqual(combo.itemText(0), "A")
+        self.assertEqual(combo.itemText(1), "B")
+        # 全文は回答コンボには表示しない
+        self.assertNotIn("はい", combo.itemText(0))
+        # serialize 用のラベルは維持
+        self.assertEqual(dlg._question_widgets[0].selected_label(), "A")
+        dlg.close()
+
+    def test_free_text_choices_column_is_empty(self) -> None:
+        """自由記述質問（choices 空）の選択肢列は空欄。"""
+        doc = _make_doc_with_free_text()
+        dlg = QAAnswerDialog(doc)
+        item = dlg._table.item(0, _COL_CHOICES)
+        assert item is not None
+        self.assertEqual(item.text(), "")
         dlg.close()
 
     def test_submit_emits_answers(self) -> None:

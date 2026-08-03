@@ -186,8 +186,8 @@ def check_plan_md_metadata(
         plan_path: plan.md ファイルへのパス（通常 `work/**/plan.md`）
         orchestrator_ctx: Orchestrator 配下で実行されている場合のコンテキスト。
             `None` の場合は単独実行モード（従来通り SPLIT_REQUIRED で停止）。
-            非 None の場合は Orchestrator が subissues.md を並列 fork する旨の
-            継続可注記を追記する（task_scope=multi / context_size=large 両方が対象）。
+            非 None の場合も CLI / GUI 標準経路では runtime split-fork は既定無効。
+            Cloud 版は GitHub Actions の Sub-Issue 作成経路へ handoff する。
 
     Returns:
         違反メッセージのリスト。空なら全条件 OK。
@@ -235,14 +235,23 @@ def check_plan_md_metadata(
             f"{plan_path}: SPLIT_REQUIRED — 実装着手禁止 ({', '.join(triggers)})。"
             " plan.md + subissues.md のみ作成して停止すること (copilot-instructions.md §0)"
         )
-        # Orchestrator 配下では subissues.md からサブタスクを並列 fork するため、
-        # task_scope=multi / context_size=large どちらでも継続可。
-        # 単独実行モード (orchestrator_ctx is None) では従来通り停止。
+        # Cloud 版の SPLIT_REQUIRED は PR + create-subissues ラベルから
+        # GitHub Actions が Sub-Issue を作成する経路が正式。CLI / GUI 標準経路の
+        # runtime split-fork は既定無効で、legacy / 実験用途の明示 opt-in のみ。
         if orchestrator_ctx is not None:
-            message += (
-                " [Orchestrator 配下のため別 Context (Sub-issue / サブセッション) で"
-                "実装継続可。本 Agent は plan.md + subissues.md 作成後に正常終了すること]"
-            )
+            if bool(getattr(orchestrator_ctx, "split_fork_enabled", False)):
+                message += (
+                    " [Orchestrator 配下かつ split_fork_enabled=True のため、"
+                    "legacy runtime split-fork で実装継続可。本 Agent は"
+                    " plan.md + subissues.md 作成後に正常終了すること]"
+                )
+            else:
+                message += (
+                    " [Orchestrator 配下だが runtime split-fork は既定無効。"
+                    "Cloud 版は PR に create-subissues ラベルを付与して GitHub Actions で"
+                    " Sub-Issue を作成する。CLI / GUI は workflow DAG / fan-out に"
+                    "分割して実行すること]"
+                )
         issues.append(message)
 
     return issues

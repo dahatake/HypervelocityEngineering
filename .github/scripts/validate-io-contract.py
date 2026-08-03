@@ -1,3 +1,4 @@
+# pyright: reportMissingTypeStubs=false
 """validate-io-contract.py
 
 Validates every `.github/io-contracts/*.yaml` file against the schema defined
@@ -24,7 +25,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-import yaml
+yaml = __import__("yaml")
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IO_CONTRACTS_DIR = REPO_ROOT / ".github" / "io-contracts"
@@ -32,7 +33,13 @@ EXCEPTIONS_FILE = REPO_ROOT / ".github" / "io-contract-exceptions.yaml"
 
 VALID_INPUT_KINDS = {"agent_artifact", "static", "runtime_param", "external"}
 VALID_OUTPUT_MODES = {"create", "append", "overwrite", "upsert"}
+VALID_OUTPUT_OWNERS = {"agent", "hve"}
+VALID_EVIDENCE_SOURCES = {"stage_results"}
 VALID_BOOLS = {True, False}
+RUNTIME_OUTPUT_PREFIXES = (
+    "tests/run/<run-id>/",
+    "work/run/<run-id>/",
+)
 
 
 def load_exceptions() -> dict:
@@ -101,6 +108,38 @@ def validate_io_contract(agent_name: str, contract: dict) -> list[str]:
                     errors.append(f"{agent_name}: outputs[{i}].mode missing")
                 elif item["mode"] not in VALID_OUTPUT_MODES:
                     errors.append(f"{agent_name}: outputs[{i}].mode invalid: {item['mode']}")
+                owner = item.get("owner")
+                if owner is not None and owner not in VALID_OUTPUT_OWNERS:
+                    errors.append(
+                        f"{agent_name}: outputs[{i}].owner invalid: {owner}"
+                    )
+                evidence_source = item.get("evidence_source")
+                if (
+                    evidence_source is not None
+                    and evidence_source not in VALID_EVIDENCE_SOURCES
+                ):
+                    errors.append(
+                        f"{agent_name}: outputs[{i}].evidence_source invalid: "
+                        f"{evidence_source}"
+                    )
+                if evidence_source is not None and owner != "hve":
+                    errors.append(
+                        f"{agent_name}: outputs[{i}].evidence_source requires "
+                        "owner=hve"
+                    )
+                acceptance_criteria = item.get("acceptance_criteria")
+                if acceptance_criteria is not None and (
+                    not isinstance(acceptance_criteria, list)
+                    or not acceptance_criteria
+                    or any(
+                        not isinstance(value, str) or not value.strip()
+                        for value in acceptance_criteria
+                    )
+                ):
+                    errors.append(
+                        f"{agent_name}: outputs[{i}].acceptance_criteria "
+                        "must be a non-empty string list"
+                    )
 
     return errors
 
@@ -113,6 +152,23 @@ def collect_producers(agents: dict[str, dict]) -> dict[str, list[str]]:
             if isinstance(out, dict) and out.get("path"):
                 producers[out["path"]].append(name)
     return producers
+
+
+def is_runtime_output_path(path: str) -> bool:
+    """Return True for run-scoped artifacts that are not StepDef output_paths."""
+    normalized = (path or "").replace("\\", "/")
+    return any(normalized.startswith(prefix) for prefix in RUNTIME_OUTPUT_PREFIXES)
+
+
+def _contract_output_paths(contract: dict) -> set[str]:
+    """Return io-contract output paths excluding runtime-only artifacts."""
+    return {
+        (o.get("path") or "").strip()
+        for o in (contract.get("outputs") or [])
+        if isinstance(o, dict)
+        and (o.get("path") or "").strip()
+        and not is_runtime_output_path((o.get("path") or "").strip())
+    }
 
 
 def check_integrity(agents: dict[str, dict], producers: dict[str, list[str]], exc: dict) -> list[str]:
@@ -142,6 +198,16 @@ def check_integrity(agents: dict[str, dict], producers: dict[str, list[str]], ex
         # 2. Wildcard
         if "*" in path:
             matches = [p for p in producers if fnmatch.fnmatchcase(p, path)]
+            if not matches:
+                # Per-key fan-out outputs use '{key}' placeholder (e.g. screen-catalog-{key}.md).
+                # Substitute '{key}' -> '*' in producers and check bidirectional glob equivalence
+                # against the input path (e.g. screen-catalog-APP-*.md).
+                for p in producers:
+                    if "{key}" not in p:
+                        continue
+                    p_pat = p.replace("{key}", "*")
+                    if fnmatch.fnmatchcase(p_pat, path) or fnmatch.fnmatchcase(path, p_pat):
+                        matches.append(p)
             if matches:
                 return sum((producers[m] for m in matches), [])
         # 3. Basename fallback (only if path has no '/')
@@ -264,10 +330,7 @@ def check_registry_mismatch(agents: dict[str, dict]) -> list[str]:
                 if i.get("required") is True and i.get("kind") == "agent_artifact"
             ]
             ri_paths = {(i.get("path") or "").strip() for i in ri}
-            ao_paths = {
-                (o.get("path") or "").strip()
-                for o in (contract.get("outputs") or [])
-            }
+            ao_paths = _contract_output_paths(contract)
             step_in = {p.strip() for p in (step.required_input_paths or [])}
             step_out = {p.strip() for p in (step.output_paths or [])} | {
                 p.strip() for p in (step.output_paths_template or [])

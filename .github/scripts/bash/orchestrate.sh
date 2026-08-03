@@ -2,9 +2,8 @@
 # orchestrate.sh — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
 #
 # ============================================================
-# DEPRECATED: このスクリプトは GitHub Actions ワークフローからは
-# 直接呼び出されていません（grep で参照 0 件を確認済み）。
-# ローカルでのデバッグ・手動実行用途として残されています。
+# LEGACY MANUAL ENTRY: このスクリプトは GitHub Actions からは直接呼ばれませんが、
+# run-workflow.sh のローカル手動 Cloud Issue 作成経路として利用されます。
 # 本番フローは .github/workflows/auto-*-reusable.yml を使用してください。
 # ============================================================
 #
@@ -80,8 +79,8 @@ _build_root_ref() {
   local branch="${2:-main}"
   local resource_group="${3:-}"
   local app_id="${4:-}"
-  local app_id="${5:-}"
-  local auto_review="${6:-true}"
+  local job_ids="${5:-}"
+  local adversarial_review="${6:-true}"
   local auto_qa="${7:-true}"
 
   local parts=()
@@ -89,11 +88,10 @@ _build_root_ref() {
   parts+=("<!-- branch: ${branch} -->")
 
   [[ -n "${resource_group}" ]] && parts+=("<!-- resource-group: ${resource_group} -->")
-  [[ -n "${app_id}" ]]         && parts+=("<!-- app-id: ${app_id} -->")
-  [[ -n "${app_id}" ]]   && parts+=("<!-- app-ids: ${app_id} -->")
+  [[ -n "${app_id}" ]]  && parts+=("<!-- app-ids: ${app_id} -->")
+  [[ -n "${job_ids}" ]] && parts+=("<!-- job-ids: ${job_ids} -->")
 
-  parts+=("<!-- auto-review: ${auto_review} -->")
-  parts+=("<!-- auto-context-review: true -->")
+  parts+=("<!-- adversarial-review: ${adversarial_review} -->")
   parts+=("<!-- auto-qa: ${auto_qa} -->")
 
   local IFS=$'\n'
@@ -131,10 +129,10 @@ render_template() {
   local branch="${3:-main}"
   local resource_group="${4:-}"
   local app_id="${5:-}"
-  local app_id="${6:-}"
+  local job_ids="${6:-}"
   local usecase_id="${7:-}"
   local additional_comment="${8:-}"
-  local auto_review="${9:-true}"
+  local adversarial_review="${9:-true}"
   local auto_qa="${10:-true}"
   local target_dirs="${11:-}"
   local exclude_patterns="${12:-node_modules/,vendor/,dist/,*.lock,__pycache__/}"
@@ -145,7 +143,7 @@ render_template() {
   body=$(_load_template "${template_path}") || return 1
 
   local root_ref
-  root_ref=$(_build_root_ref "${root_issue_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${auto_review}" "${auto_qa}")
+  root_ref=$(_build_root_ref "${root_issue_num}" "${branch}" "${resource_group}" "${app_id}" "${job_ids}" "${adversarial_review}" "${auto_qa}")
   local additional_section
   additional_section=$(_build_additional_section "${additional_comment}")
   local app_id_section
@@ -153,7 +151,7 @@ render_template() {
   local rg_section
   rg_section=$(_build_rg_section "${resource_group}")
   local job_section
-  job_section=$(_build_job_section "${app_id}")
+  job_section=$(_build_job_section "${job_ids}")
 
   # Perform placeholder substitutions
   body="${body//\{root_ref\}/${root_ref}}"
@@ -182,7 +180,7 @@ _build_root_issue_body() {
   local branch="${2:-main}"
   local resource_group="${3:-}"
   local app_id="${4:-}"
-  local app_id="${5:-}"
+  local job_ids="${5:-}"
   local usecase_id="${6:-}"
   local additional_comment="${7:-}"
   local skip_review="${8:-false}"
@@ -195,8 +193,8 @@ _build_root_issue_body() {
   local prefix="${_WORKFLOW_PREFIX[${workflow_id}]:-}"
   local display_name="${_WORKFLOW_DISPLAY_NAMES[${workflow_id}]:-}"
 
-  local auto_review="true"
-  [[ "${skip_review}" == "true" ]] && auto_review="false"
+  local adversarial_review="true"
+  [[ "${skip_review}" == "true" ]] && adversarial_review="false"
   local auto_qa="true"
   [[ "${skip_qa}" == "true" ]] && auto_qa="false"
 
@@ -205,10 +203,9 @@ _build_root_issue_body() {
   lines+=("")
   lines+=("<!-- branch: ${branch} -->")
   [[ -n "${resource_group}" ]] && lines+=("<!-- resource-group: ${resource_group} -->")
-  [[ -n "${app_id}" ]]         && lines+=("<!-- app-id: ${app_id} -->")
-  [[ -n "${app_id}" ]]   && lines+=("<!-- app-ids: ${app_id} -->")
-  lines+=("<!-- auto-review: ${auto_review} -->")
-  lines+=("<!-- auto-context-review: true -->")
+  [[ -n "${app_id}" ]]  && lines+=("<!-- app-ids: ${app_id} -->")
+  [[ -n "${job_ids}" ]] && lines+=("<!-- job-ids: ${job_ids} -->")
+  lines+=("<!-- adversarial-review: ${adversarial_review} -->")
   lines+=("<!-- auto-qa: ${auto_qa} -->")
   lines+=("")
   lines+=("ワークフロー: **${display_name}**")
@@ -217,7 +214,7 @@ _build_root_issue_body() {
   [[ -n "${app_id}" ]]         && lines+=("APP-ID: \`${app_id}\`")
   [[ -n "${resource_group}" ]] && lines+=("リソースグループ: \`${resource_group}\`")
   [[ -n "${usecase_id}" ]]     && lines+=("ユースケースID: \`${usecase_id}\`")
-  [[ -n "${app_id}" ]]   && lines+=("データフローアプリ ID: \`${app_id}\`")
+  [[ -n "${job_ids}" ]] && lines+=("データフローアプリ ID: \`${job_ids}\`")
   if [[ "${workflow_id}" == "adoc" ]]; then
     [[ -n "${target_dirs}" ]]      && lines+=("target_dirs: \`${target_dirs}\`")
     [[ -n "${exclude_patterns}" ]] && lines+=("exclude_patterns: \`${exclude_patterns}\`")
@@ -268,7 +265,7 @@ orchestrate() {
   local steps_csv="${3:-}"
   local resource_group="${4:-}"
   local app_id="${5:-}"
-  local app_id="${6:-}"
+  local job_ids="${6:-}"
   local usecase_id="${7:-}"
   local additional_comment="${8:-}"
   local skip_review="${9:-false}"
@@ -300,8 +297,8 @@ orchestrate() {
     return 1
   fi
 
-  local auto_review="true"
-  [[ "${skip_review}" == "true" ]] && auto_review="false"
+  local adversarial_review="true"
+  [[ "${skip_review}" == "true" ]] && adversarial_review="false"
   local auto_qa="true"
   [[ "${skip_qa}" == "true" ]] && auto_qa="false"
 
@@ -458,14 +455,14 @@ orchestrate() {
     create_label "${label_name}" "ededed" "" "${repo}" 2>/dev/null || true
   done
   create_label "${trigger_label}" "ededed" "" "${repo}" 2>/dev/null || true
-  create_label "auto-context-review" "1D76DB" "" "${repo}" 2>/dev/null || true
+  create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow" "${repo}" 2>/dev/null || true
   create_label "auto-qa" "BFD4F2" "" "${repo}" 2>/dev/null || true
 
   # 2. Create Root Issue
   echo ""
   echo "📝 Root Issue 作成..."
   local root_body
-  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}")
+  root_body=$(_build_root_issue_body "${workflow_id}" "${branch}" "${resource_group}" "${app_id}" "${job_ids}" "${usecase_id}" "${additional_comment}" "${skip_review}" "${skip_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}")
   local root_title="[${prefix}] ${display_name}"
   local initialized_label
   initialized_label=$(echo "${wf_json}" | jq -r '.state_labels.initialized // ""')
@@ -482,8 +479,10 @@ orchestrate() {
   root_num=$(echo "${root_result}" | awk '{print $1}')
   echo "  ✅ Root Issue 作成: #${root_num}"
 
-  # Add auto-context-review / auto-qa labels to Root
-  add_label "${root_num}" "auto-context-review" "${repo}" 2>/dev/null || true
+  # Add adversarial-review / auto-qa labels to Root
+  if [[ "${adversarial_review}" == "true" ]]; then
+    add_label "${root_num}" "adversarial-review" "${repo}" 2>/dev/null || true
+  fi
   if [[ "${auto_qa}" == "true" ]]; then
     add_label "${root_num}" "auto-qa" "${repo}" 2>/dev/null || true
   fi
@@ -494,7 +493,7 @@ orchestrate() {
 
   # Build step labels
   local step_labels=("${trigger_label}")
-  step_labels+=("auto-context-review")
+  [[ "${adversarial_review}" == "true" ]] && step_labels+=("adversarial-review")
   [[ "${auto_qa}" == "true" ]] && step_labels+=("auto-qa")
 
   local app_id_suffix=""
@@ -530,11 +529,11 @@ orchestrate() {
     local issue_body=""
 
     if [[ -n "${template_path}" ]]; then
-      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${usecase_id}" "${additional_comment}" "${auto_review}" "${auto_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}") || true
+      issue_body=$(render_template "${template_path}" "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${job_ids}" "${usecase_id}" "${additional_comment}" "${adversarial_review}" "${auto_qa}" "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}") || true
     fi
     if [[ -z "${issue_body}" ]]; then
       local root_ref
-      root_ref=$(_build_root_ref "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${app_id}" "${auto_review}" "${auto_qa}")
+      root_ref=$(_build_root_ref "${root_num}" "${branch}" "${resource_group}" "${app_id}" "${job_ids}" "${adversarial_review}" "${auto_qa}")
       local additional_section
       additional_section=$(_build_additional_section "${additional_comment}")
       issue_body="${root_ref}"$'\n\n'"Step.${sid}: ${step_title}${additional_section}"
@@ -714,9 +713,9 @@ Options:
   --app-id <id>            ASDW: Application ID
   --resource-group <name>  ASDW/ADFDV: Resource group name
   --usecase-id <id>        ASDW: Usecase ID
-  --app-id <ids>     ADFDV: Batch job IDs (comma-separated)
+  --job-ids <ids>          ADFDV: Batch job IDs (comma-separated)
   --comment <text>         Additional comment
-  --skip-review            Skip self-review
+  --skip-review            Skip adversarial review (legacy option name)
   --skip-qa                Skip QA questionnaire
   --repo <owner/repo>      Repository (env: REPO)
   --model <name>           Copilot model（省略時は Auto。GitHub が最適モデルを動的選択）
@@ -731,7 +730,7 @@ EOF
 
 main() {
   local workflow="" branch="main" steps="" app_id="" resource_group="" usecase_id="" model=""
-  local app_id="" comment="" skip_review="false" skip_qa="false"
+  local job_ids="" comment="" skip_review="false" skip_qa="false"
   local target_dirs="" exclude_patterns="node_modules/,vendor/,dist/,*.lock,__pycache__/" doc_purpose="all" max_file_lines="500"
 
   while (( $# > 0 )); do
@@ -742,7 +741,7 @@ main() {
       --app-id)          app_id="${2:?--app-id requires an argument}"; shift 2 ;;
       --resource-group)  resource_group="${2:?--resource-group requires an argument}"; shift 2 ;;
       --usecase-id)      usecase_id="${2:?--usecase-id requires an argument}"; shift 2 ;;
-      --app-id)    app_id="${2:?--app-id requires an argument}"; shift 2 ;;
+      --job-ids)         job_ids="${2:?--job-ids requires an argument}"; shift 2 ;;
       --comment)         comment="${2:?--comment requires an argument}"; shift 2 ;;
       --skip-review)     skip_review="true"; shift ;;
       --skip-qa)         skip_qa="true"; shift ;;
@@ -782,7 +781,7 @@ main() {
   fi
 
   orchestrate "${workflow}" "${branch}" "${steps}" "${resource_group}" "${app_id}" \
-    "${app_id}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}" \
+    "${job_ids}" "${usecase_id}" "${comment}" "${skip_review}" "${skip_qa}" "${model}" \
     "${target_dirs}" "${exclude_patterns}" "${doc_purpose}" "${max_file_lines}"
 }
 

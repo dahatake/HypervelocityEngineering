@@ -48,7 +48,7 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
     from PySide6.QtGui import QFont, QFontDatabase
 
-    from gui.settings_section import MdqIndexSection
+    from mdq.gui.settings_section import MdqIndexSection
 
     app = QApplication.instance() or QApplication(sys.argv)
 

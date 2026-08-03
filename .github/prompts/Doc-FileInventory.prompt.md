@@ -1,6 +1,6 @@
 ﻿> 対象ファイルの列挙・言語判定・分割計画を作成する。
 
-> **WORK**: `/work/Doc-FileInventory/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-FileInventory/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

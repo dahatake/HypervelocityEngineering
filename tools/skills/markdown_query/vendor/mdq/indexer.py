@@ -1,11 +1,15 @@
 """Markdown indexer: extracts frontmatter and heading-based chunks.
 
+Also indexes declared tabular files (CSV / TSV) row-by-row (FR-MDQ-02).
+
 Pure-stdlib implementation. Handles fenced code blocks so '#' inside code
 is not misread as a heading.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import json
 import re
 from dataclasses import dataclass, field
@@ -514,6 +518,94 @@ def iter_markdown(root: Path, roots: Iterable[str]) -> Iterable[Path]:
                 yield p
 
 
+# --- Tabular (CSV / TSV) row-level indexing (FR-MDQ-02) -------------------
+
+TABULAR_SUFFIXES: frozenset[str] = frozenset({".csv", ".tsv"})
+
+# Number of leading columns used to build the machine-generated context
+# header (heading_path) and tags for each row.
+TABULAR_CONTEXT_COLUMNS = 3
+
+
+def iter_tabular(root: Path, globs: Iterable[str] | None) -> Iterable[Path]:
+    """Yield tabular files matching repo-root-relative glob patterns.
+
+    Absolute patterns and patterns containing ``..`` are rejected so a config
+    file cannot pull content from outside the repository.
+    """
+    seen: set[Path] = set()
+    for raw in globs or []:
+        pattern = str(raw).replace("\\", "/").strip()
+        if not pattern:
+            continue
+        if pattern.startswith("/") or ".." in pattern.split("/") or ":" in pattern:
+            continue
+        for p in sorted(root.glob(pattern)):
+            if not p.is_file() or p.suffix.lower() not in TABULAR_SUFFIXES:
+                continue
+            resolved = p.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            yield p
+
+
+def _row_context(header: list[str], row: list[str],
+                 limit: int = TABULAR_CONTEXT_COLUMNS) -> list[str]:
+    """``name=value`` for the first ``limit`` columns, skipping empty values."""
+    out: list[str] = []
+    for i, name in enumerate(header[:limit]):
+        value = row[i].strip() if i < len(row) else ""
+        if not name or not value:
+            continue
+        out.append(f"{name}={value}")
+    return out
+
+
+def scan_tabular_file(repo_root: Path,
+                      file_path: Path) -> tuple[dict, list[Chunk]]:
+    """Turn each data row of a CSV / TSV file into one :class:`Chunk`.
+
+    ``start_line`` / ``end_line`` are **physical** line numbers, so a record
+    with a quoted newline spans more than one line. The header row is never
+    emitted as a chunk.
+    """
+    rel = file_path.relative_to(repo_root).as_posix()
+    stem = file_path.stem
+    delimiter = "\t" if file_path.suffix.lower() == ".tsv" else ","
+    text = file_path.read_text(encoding="utf-8-sig", errors="replace")
+
+    chunks: list[Chunk] = []
+    header: list[str] | None = None
+    prev_line = 0
+    reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
+    for row in reader:
+        start_line = prev_line + 1
+        end_line = max(reader.line_num, start_line)
+        prev_line = end_line
+        if header is None:
+            header = [str(c).strip() for c in row]
+            continue
+        pairs = [
+            (name, row[i].strip())
+            for i, name in enumerate(header)
+            if name and i < len(row) and row[i].strip()
+        ]
+        if not pairs:
+            continue
+        context = _row_context(header, [str(c) for c in row])
+        chunks.append(Chunk(
+            path=rel,
+            heading_path=" > ".join([stem, *context]),
+            level=0,
+            start_line=start_line,
+            end_line=end_line,
+            text="\n".join(f"{n}: {v}" for n, v in pairs),
+            tags=context,
+        ))
+    return {}, chunks
+
+
 def _sha1_bytes(b: bytes) -> str:
     return hashlib.sha1(b).hexdigest()
 
@@ -559,7 +651,11 @@ def index_one_file(repo_root: Path, file_path: Path, conn,
     # 'heading' strategy (Q3=A in the design plan): overlap applies only
     # to 'heading_recursive'. Even when a user passes
     # --strategy heading --overlap-paragraphs 2, we force overlap=0 here.
-    if strategy and strategy != "heading":
+    is_tabular = file_path.suffix.lower() in TABULAR_SUFFIXES
+    if is_tabular:
+        # Row chunks are strategy-independent by contract (FR-MDQ-02).
+        fm, chunks = scan_tabular_file(repo_root, file_path)
+    elif strategy and strategy != "heading":
         from . import strategies as _strat
         fm, chunks = _strat.scan_file_for_strategy(
             repo_root, file_path, _strat.normalize(strategy),
@@ -605,6 +701,10 @@ def index_one_file(repo_root: Path, file_path: Path, conn,
         if c.heading_path not in by_hp and c.part_index <= 0:
             by_hp[c.heading_path] = c.chunk_id
     for c in chunks:
+        # Tabular rows have no heading hierarchy; a " > " prefix match would
+        # link unrelated rows to each other.
+        if is_tabular:
+            break
         hp = c.heading_path or ""
         if not hp or hp in ("(preface)", "(window)"):
             continue
@@ -648,8 +748,13 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
                 max_chunk_chars: int = 0,
                 strategy: str = "heading",
                 overlap_paragraphs: int | None = None,
-                progress_callback=None) -> dict:
+                progress_callback=None,
+                tabular_globs: Iterable[str] | None = None) -> dict:
     """Walk Markdown files under roots and persist chunks.
+
+    ``tabular_globs`` (optional): repo-root-relative glob patterns of CSV /
+    TSV files indexed row-by-row (FR-MDQ-02). ``None``/empty means no tabular
+    file is indexed.
 
     Returns a summary dict: {files_indexed, files_skipped, chunks_written,
     pruned_files, pruned_chunks}.
@@ -678,7 +783,9 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
     roots_list = [r.rstrip("/") for r in roots]
 
     # Pre-enumerate so progress_callback knows the total up front.
+    tabular_list = [str(g) for g in (tabular_globs or [])]
     all_paths = list(iter_markdown(repo_root, roots_list))
+    all_paths.extend(iter_tabular(repo_root, tabular_list))
     total = len(all_paths)
     for idx, path in enumerate(all_paths, start=1):
         rel = path.relative_to(repo_root).as_posix()
@@ -701,14 +808,20 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
     pruned_files = 0
     pruned_chunks = 0
     if prune and not rebuild:
+        import fnmatch as _fnmatch
+
         stored = _store.list_all_paths(conn)
         for stored_path in stored:
             if stored_path in seen:
                 continue
-            # Only prune files that belong to one of the requested roots.
+            # Only prune files that belong to one of the requested roots or
+            # match a declared tabular glob.
             in_scope = any(
                 stored_path == r or stored_path.startswith(r + "/")
                 for r in roots_list
+            ) or any(
+                _fnmatch.fnmatch(stored_path, g.replace("\\", "/"))
+                for g in tabular_list
             )
             if not in_scope:
                 continue
@@ -722,4 +835,147 @@ def build_index(repo_root: Path, roots: Iterable[str], conn,
         "chunks_written": chunks_written,
         "pruned_files": pruned_files,
         "pruned_chunks": pruned_chunks,
+    }
+
+
+# --- GraphRAG strategy dispatch -------------------------------------------
+#
+# The ``graphrag`` strategy bypasses the SQLite index entirely. LightRAG
+# (lightrag-hku) owns its own working directory layout (KV / Vector /
+# Graph stores) and provides its own change-detection. The CLI calls
+# ``build_graphrag_index`` instead of ``build_index`` when
+# ``--strategy graphrag`` is selected.
+
+def build_graphrag_index(
+    repo_root: Path,
+    roots: Iterable[str],
+    working_dir: Path,
+    *,
+    rebuild: bool = False,
+    progress_callback=None,
+) -> dict:
+    """Walk Markdown files under ``roots`` and insert them into LightRAG.
+
+    Parameters
+    ----------
+    repo_root, roots:
+        Same semantics as :func:`build_index`. ``roots`` are repo-relative
+        directory or file prefixes.
+    working_dir:
+        Directory LightRAG uses for its KV/Vector/Graph storage. The CLI
+        computes this as ``.mdq/graphrag-<lang>/``.
+    rebuild:
+        When ``True``, the entire ``working_dir`` is removed and recreated
+        before inserting. As a safety measure the directory must look like
+        a LightRAG working directory (i.e. contain one of the known LightRAG
+        marker files) or be empty; otherwise a ``ValueError`` is raised so
+        a mistyped ``--graphrag-working-dir`` cannot wipe an unrelated path.
+        LightRAG's internal duplicate detection (doc_id / content hash)
+        skips already-ingested content when ``rebuild=False``.
+    progress_callback:
+        Optional ``Callable[[str, int, int], None]`` invoked after each
+        file with ``(rel, current, total)``. Callback exceptions are
+        swallowed to keep behaviour identical to :func:`build_index`.
+
+    Returns a summary dict::
+
+        {
+            "strategy": "graphrag",
+            "working_dir": str(working_dir),
+            "files_total": int,
+            "files_ok": int,
+            "files_skipped": int,
+            "files_error": int,
+            "errors": [(rel, message), ...],
+        }
+    """
+    # Lazy import: keeps the indexer module import-time independent of the
+    # optional ``graphrag`` extra.
+    from . import strategies_graphrag as _gr
+
+    working_dir = Path(working_dir)
+    if rebuild and working_dir.exists():
+        # Safety: only rmtree directories that look like a LightRAG working
+        # directory. If the user accidentally points --graphrag-working-dir
+        # at an unrelated path (e.g. their home directory or `/`), refuse to
+        # delete its contents. Empty directories are allowed.
+        _LIGHTRAG_MARKERS = (
+            "kv_store_doc_status.json",
+            "kv_store_full_docs.json",
+            "kv_store_text_chunks.json",
+            "vdb_entities.json",
+            "vdb_relationships.json",
+            "vdb_chunks.json",
+            "graph_chunk_entity_relation.graphml",
+        )
+        has_marker = any((working_dir / m).exists() for m in _LIGHTRAG_MARKERS)
+        try:
+            is_empty = not any(working_dir.iterdir())
+        except OSError:
+            is_empty = False
+        if not (has_marker or is_empty):
+            raise ValueError(
+                f"--rebuild refused: {working_dir} does not look like a "
+                "LightRAG working directory (no LightRAG marker files "
+                "found and the directory is not empty). Remove it manually "
+                "or choose a different --graphrag-working-dir."
+            )
+        import shutil
+        shutil.rmtree(working_dir)
+    working_dir.mkdir(parents=True, exist_ok=True)
+
+    all_paths = list(iter_markdown(repo_root, list(roots)))
+    total = len(all_paths)
+    if total == 0:
+        return {
+            "strategy": "graphrag",
+            "working_dir": str(working_dir),
+            "files_total": 0,
+            "files_ok": 0,
+            "files_skipped": 0,
+            "files_error": 0,
+            "errors": [],
+        }
+
+    # Batch all files into a single LightRAG session so initialise_storages
+    # and finalize_storages run exactly once per build. Forward per-file
+    # progress to ``progress_callback`` in real time (converting absolute
+    # paths back to repo-relative for display).
+    def _per_file_cb(path_str: str, cur: int, tot: int, status: str) -> None:
+        if progress_callback is None:
+            return
+        try:
+            rel = Path(path_str).relative_to(repo_root).as_posix()
+        except ValueError:
+            rel = path_str
+        try:
+            progress_callback(rel, cur, tot)
+        except Exception:  # noqa: BLE001 -- never propagate UI errors
+            pass
+
+    results = _gr.insert_paths_sync(working_dir, all_paths, progress_callback=_per_file_cb)
+
+    files_ok = 0
+    files_skipped = 0
+    files_error = 0
+    errors: list[tuple[str, str]] = []
+    for path in all_paths:
+        rel = path.relative_to(repo_root).as_posix()
+        status = results.get(str(path), "error: missing from results")
+        if status == "ok":
+            files_ok += 1
+        elif status.startswith("skipped"):
+            files_skipped += 1
+        else:
+            files_error += 1
+            errors.append((rel, status))
+
+    return {
+        "strategy": "graphrag",
+        "working_dir": str(working_dir),
+        "files_total": total,
+        "files_ok": files_ok,
+        "files_skipped": files_skipped,
+        "files_error": files_error,
+        "errors": errors,
     }

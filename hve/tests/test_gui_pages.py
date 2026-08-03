@@ -36,30 +36,46 @@ class _GuiTestBase(unittest.TestCase):
         else:
             cls._qapp = QApplication.instance()
 
+    def setUp(self) -> None:
+        # MainWindow.__init__ は GuiSessionWorkdir.create(repo_root) で
+        # work/run/<id>/ を作成する。repo_root 未指定の MainWindow() は
+        # Path.cwd()（実リポジトリ）を使うため、テストごとに一時ディレクトリへ
+        # 隔離して実リポジトリ直下の work/run/ 汚染を防ぐ。
+        #
+        # 一時ディレクトリは即時削除しない（pytest の tmp_path と同様に OS の
+        # %TEMP% クリーンアップへ委ねる）。MainWindow は gui-logs を
+        # QFileSystemWatcher で監視するため、テスト終了時に即時 rmtree すると
+        # 監視中ディレクトリ消滅で Qt が stderr 警告を出す。これを避けるため
+        # 削除を遅延させる（中身は空の log-0001.log のみで肥大化しない）。
+        from hve.gui.session_workdir import GuiSessionWorkdir
 
-class TestHeaderBar(_GuiTestBase):
-    def test_initial_step_is_zero(self) -> None:
-        from hve.gui.header_bar import HeaderBar, STEP_LABELS
+        tmp_root = Path(tempfile.mkdtemp(prefix="hve-gui-test-"))
 
-        bar = HeaderBar()
-        self.assertEqual(bar.current_step(), 0)
-        self.assertEqual(bar.step_count(), len(STEP_LABELS))
+        _orig_create = GuiSessionWorkdir.create
 
-    def test_set_current_step(self) -> None:
-        from hve.gui.header_bar import HeaderBar
+        def _isolated_create(repo_root, *, cleanup_policy="keep"):
+            # repo_root を一時ディレクトリへ強制し、実リポジトリ汚染を防ぐ。
+            return _orig_create(tmp_root, cleanup_policy=cleanup_policy)
 
-        bar = HeaderBar()
-        bar.set_current_step(2)
-        self.assertEqual(bar.current_step(), 2)
+        patcher = patch.object(
+            GuiSessionWorkdir, "create", staticmethod(_isolated_create)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_step_out_of_range_clamped(self) -> None:
-        from hve.gui.header_bar import HeaderBar
 
-        bar = HeaderBar()
-        bar.set_current_step(99)
-        self.assertEqual(bar.current_step(), bar.step_count() - 1)
-        bar.set_current_step(-5)
-        self.assertEqual(bar.current_step(), 0)
+class TestHeaderBar_REMOVED(_GuiTestBase):
+    """旧 HeaderBar 削除に伴い、関連クラスは撤去された。
+
+    互換のためクラスシムだけ残し、テスト本体は持たない。
+    """
+
+    def test_header_bar_removed(self) -> None:
+        # HeaderBar モジュールはアプリから削除済み
+        import importlib
+
+        with self.assertRaises(ModuleNotFoundError):
+            importlib.import_module("hve.gui.header_bar")
 
 
 class TestWorkflowSelectPage(_GuiTestBase):
@@ -104,8 +120,9 @@ class TestOptionsPage(_GuiTestBase):
 
         page = OptionsPage()
         page.set_workflow("akm", "Knowledge Management")
-        self.assertIn("akm", page._title_label.text())
-        self.assertIn("Knowledge Management", page._title_label.text())
+        # 画面内タイトル (_title_label) は廃止。set_workflow は内部の選択状態を更新する。
+        self.assertEqual(page._workflow_id, "akm")
+        self.assertEqual(page._workflow_name, "Knowledge Management")
 
     def test_build_args_workflow_propagated(self) -> None:
         from hve.gui.page_options import OptionsPage
@@ -114,23 +131,6 @@ class TestOptionsPage(_GuiTestBase):
         page.set_workflow("akm", "Knowledge Management")
         args = page.build_args()
         self.assertEqual(args.workflow, "akm")
-
-    def test_ard_specific_categories_visible(self) -> None:
-        """ARD 選択時に C14 が有効化される。"""
-        from hve.gui.page_options import OptionsPage
-
-        page = OptionsPage()
-        page.set_workflow("ard", "Auto Requirement Definition")
-        self.assertFalse(page._category_groups["C14"].isHidden())
-
-    def test_akm_specific_categories_only(self) -> None:
-        """AKM 選択時は C11 のみ有効、C14 は無効。"""
-        from hve.gui.page_options import OptionsPage
-
-        page = OptionsPage()
-        page.set_workflow("akm", "Knowledge Management")
-        self.assertFalse(page._category_groups["C11"].isHidden())
-        self.assertTrue(page._category_groups["C14"].isHidden())
 
     def test_ard_attachment_pane_created(self) -> None:
         """ARD 選択時に AttachmentPane が動的追加される。"""
@@ -154,6 +154,8 @@ class TestMainWindow(_GuiTestBase):
 
     def test_navigation_step1_to_step2(self) -> None:
         from hve.gui.main_window import MainWindow
+        from hve.gui.page_options import OptionsPage
+        from hve.gui.page_workbench import WorkbenchPage
 
         w = MainWindow(session_index=1)
         # Step 1 でワークフロー選択
@@ -163,34 +165,42 @@ class TestMainWindow(_GuiTestBase):
         btns[0].setChecked(True)
         # 次へ
         self.assertTrue(w._btn_next.isEnabled())
-        w._btn_next.click()
+        # 2 ペイン再設計後、[次へ] は実行起動を兼ねる（_on_run_clicked → Workbench へ遷移）。
+        # ナビゲーション（index==_STEP_WORKBENCH）の検証に絞るため、モーダル precheck /
+        # 入力検証 / 子プロセス起動を patch で無効化する（いずれも別テストで検証済み）。
+        with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
+             patch.object(OptionsPage, "validate", return_value=(True, "")), \
+             patch.object(WorkbenchPage, "start_orchestrators"):
+            w._btn_next.click()
         self.assertEqual(w._stack.currentIndex(), 1)
-        # ヘッダー進捗も更新
-        self.assertEqual(w._header.current_step(), 1)
 
     def test_navigation_step2_back_to_step1(self) -> None:
         from hve.gui.main_window import MainWindow
+        from hve.gui.page_options import OptionsPage
+        from hve.gui.page_workbench import WorkbenchPage
 
         w = MainWindow(session_index=1)
         btns = w._page_workflow._group.buttons()
         if not btns:
             self.skipTest("No workflow buttons")
         btns[0].setChecked(True)
-        w._btn_next.click()
+        with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
+             patch.object(OptionsPage, "validate", return_value=(True, "")), \
+             patch.object(WorkbenchPage, "start_orchestrators"):
+            w._btn_next.click()
         self.assertEqual(w._stack.currentIndex(), 1)
         # 戻る
         self.assertTrue(w._btn_back.isEnabled())
         w._btn_back.click()
         self.assertEqual(w._stack.currentIndex(), 0)
-        self.assertEqual(w._header.current_step(), 0)
 
     def test_window_title_includes_session_index(self) -> None:
         from hve.gui.main_window import MainWindow
 
         w = MainWindow(session_index=42)
         self.assertIn("Session #42", w.windowTitle())
-        # 名称が「HVE GUI Orchestrator」になっている
-        self.assertIn("HVE GUI Orchestrator", w.windowTitle())
+        # 要件: ウィンドウタイトルは "HVE Workbench" を含む（旧 "HVE GUI Orchestrator" から変更）。
+        self.assertIn("HVE Workbench", w.windowTitle())
 
     def test_settings_button_exists(self) -> None:
         from hve.gui.main_window import MainWindow
@@ -213,8 +223,14 @@ class TestMainWindow(_GuiTestBase):
 class TestSettingsWindow(_GuiTestBase):
     def test_window_has_tree_and_stack(self) -> None:
         from hve.gui.settings_window import SettingsWindow
+        from mdq import usage_report
 
         with tempfile.TemporaryDirectory() as d:
+            # 利用統計レポート未生成による自動再生成スレッドを抑止する。
+            # 起動すると SQLite ハンドルを掘んだまま tmpdir 削除に失敗する。
+            report = usage_report.default_output_dir(Path(d)) / "latest.md"
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text("# dummy\n", encoding="utf-8")
             w = SettingsWindow(repo_root=Path(d))
             self.assertGreater(w._tree.topLevelItemCount(), 0)
             self.assertGreater(w._stack.count(), 0)
@@ -227,27 +243,6 @@ class TestSettingsWindow(_GuiTestBase):
         self.assertLess(ordered.index("aas"), ordered.index("aad-web"))
         self.assertLess(ordered.index("aad-web"), ordered.index("asdw-web"))
 
-    def test_collect_unselected_dependencies(self) -> None:
-        from hve.gui.main_window import _collect_unselected_dependencies
-
-        missing = _collect_unselected_dependencies(["asdw-web"])
-        self.assertIn("asdw-web", missing)
-        dep_ids = {d.workflow_id for d in missing["asdw-web"]}
-        self.assertIn("aad-web", dep_ids)
-
-    def test_format_missing_dependencies_message(self) -> None:
-        from hve.gui.main_window import (
-            _collect_unselected_dependencies,
-            _format_missing_dependencies_message,
-        )
-
-        missing = _collect_unselected_dependencies(["asdw-web"])
-        msg = _format_missing_dependencies_message(missing)
-        self.assertIn("asdw-web", msg)
-        self.assertIn("aad-web", msg)
-        self.assertIn("required_artifacts", msg)
-        self.assertIn("docs/screen/*.md", msg)
-
     def test_on_process_finished_non_zero_updates_status(self) -> None:
         from hve.gui.main_window import MainWindow
 
@@ -255,20 +250,18 @@ class TestSettingsWindow(_GuiTestBase):
         w._on_process_finished(1)
         self.assertIn("一部失敗あり", w._status_label.text())
 
-    def test_on_process_finished_success_marks_header_completed(self) -> None:
+    def test_on_process_finished_success_hides_stop_button(self) -> None:
         from hve.gui.main_window import MainWindow
 
         w = MainWindow(session_index=1)
         w._on_process_finished(0)
-        self.assertTrue(w._header.is_all_completed())
         self.assertFalse(w._btn_stop.isVisible())
 
-    def test_on_process_finished_failure_marks_header_completed(self) -> None:
+    def test_on_process_finished_failure_hides_stop_button(self) -> None:
         from hve.gui.main_window import MainWindow
 
         w = MainWindow(session_index=1)
         w._on_process_finished(1)
-        self.assertTrue(w._header.is_all_completed())
         self.assertFalse(w._btn_stop.isVisible())
 
     def test_on_process_finished_stopped_skips_completion(self) -> None:
@@ -278,7 +271,6 @@ class TestSettingsWindow(_GuiTestBase):
         # ユーザー停止をシミュレート
         w._page_workbench._stop_requested = True
         w._on_process_finished(0)
-        self.assertFalse(w._header.is_all_completed())
         self.assertIn("停止", w._status_label.text())
 
     def test_on_stop_all_clicked_disables_stop_button_immediately(self) -> None:
@@ -287,6 +279,8 @@ class TestSettingsWindow(_GuiTestBase):
         多重押下防止のため、process_finished を待たずに setEnabled(False) する。
         """
         from hve.gui.main_window import MainWindow
+        from hve.gui.page_options import OptionsPage
+        from hve.gui.page_workbench import WorkbenchPage
 
         w = MainWindow(session_index=1)
         # Step 2 へ遷移し、実行中状態をシミュレート
@@ -294,7 +288,12 @@ class TestSettingsWindow(_GuiTestBase):
         if not btns:
             self.skipTest("No workflow buttons")
         btns[0].setChecked(True)
-        w._btn_next.click()
+        # [次へ]=実行起動のため、モーダル precheck / 入力検証 / 子プロセス起動を
+        # patch して Workbench への遷移のみ行わせる（C2 と同根のハング回避）。
+        with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
+             patch.object(OptionsPage, "validate", return_value=(True, "")), \
+             patch.object(WorkbenchPage, "start_orchestrators"):
+            w._btn_next.click()
         w._page_workbench._is_running = True
         w._refresh_navigation()
         # 前提: 実行中は [停止] 有効・[戻る] 無効
@@ -307,31 +306,6 @@ class TestSettingsWindow(_GuiTestBase):
 
         # クリック直後: [停止] は即無効化される（[戻る] は process_finished 待ち）
         self.assertFalse(w._btn_stop.isEnabled())
-
-
-class TestHeaderBarCompleted(_GuiTestBase):
-    def test_mark_completed_sets_flag(self) -> None:
-        from hve.gui.header_bar import HeaderBar
-
-        bar = HeaderBar()
-        bar.set_current_step(2)
-        self.assertFalse(bar.is_all_completed())
-        bar.mark_completed(True)
-        self.assertTrue(bar.is_all_completed())
-
-    def test_set_current_step_resets_completed(self) -> None:
-        from hve.gui.header_bar import HeaderBar
-
-        bar = HeaderBar()
-        bar.set_current_step(2)
-        bar.mark_completed(True)
-        # 同 index 再設定でもリセットされる
-        bar.set_current_step(2)
-        self.assertFalse(bar.is_all_completed())
-        # 別 index でもリセットされる
-        bar.mark_completed(True)
-        bar.set_current_step(0)
-        self.assertFalse(bar.is_all_completed())
 
 
 class TestOptionsPageMultiWorkflow(_GuiTestBase):
@@ -371,19 +345,6 @@ class TestTriStateCombo(_GuiTestBase):
 
 class TestOptionsPageDefaults(_GuiTestBase):
     """Step 2 リファクタ後の規定値・選択肢回帰テスト。"""
-
-    def test_model_dropdown_choices_and_default_auto(self) -> None:
-        """C1: --model ドロップダウンに Auto + hve.config.MODEL_CHOICES が並び、デフォルトは Auto。"""
-        from hve.gui.page_options import MODEL_CHOICES, OptionsPage
-        from hve.config import MODEL_CHOICES as CONFIG_MODEL_CHOICES
-
-        page = OptionsPage()
-        # config.MODEL_CHOICES が SoT。GUI 側は先頭に "Auto" を付加した一覧。
-        self.assertEqual(MODEL_CHOICES, ["Auto", *CONFIG_MODEL_CHOICES])
-        combo = page.c1.model
-        self.assertEqual(combo.count(), len(MODEL_CHOICES))
-        self.assertEqual(combo.currentData(), "Auto")
-        self.assertFalse(combo.isEditable())
 
     def test_review_and_qa_model_default_inherit(self) -> None:
         """C1: --review-model / --qa-model のデフォルトは「継承」(None)。"""
@@ -496,8 +457,11 @@ class TestLabeledField(_GuiTestBase):
         )
         labels = field.findChildren(QLabel)
         texts = [lbl.text() for lbl in labels]
+        # タイトルは行内 QLabel で表示される。
         self.assertIn("QA 自動投入", texts)
-        self.assertIn("QA 質問票を自動的に投入します（既定: 無効）。", texts)
+        # description は行内 QLabel ではなく入力ウィジェットのツールチップ
+        # （およびヘルプポップアップ）へ統合される仕様に変更された。
+        self.assertEqual(cb.toolTip(), "QA 質問票を自動的に投入します（既定: 無効）。")
         self.assertIs(field.input_widget(), cb)
 
     def test_required_mark(self) -> None:

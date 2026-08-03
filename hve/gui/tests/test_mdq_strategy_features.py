@@ -39,27 +39,22 @@ def qapp():
 
 @pytest.fixture
 def patched_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """HVE 側 ``settings_path`` を tmp_path 配下に向ける。
+    """GUI 設定と利用統計レポートの参照先を tmp_path 配下へ隔離する。
 
-    standalone settings_store は ``_try_hve_settings_store()`` で HVE 側へ
-    委譲するため、HVE 側のパスを切り替えるだけで両者が同一ファイルを参照する。
+    共有 ``mdq.gui.settings_store`` はリポジトリルートからパスを決めるため、
+    ``repo_root=tmp_path`` で構築する限り HVE の実設定ファイルへ触れない。
+    HVE 側 ``settings_path`` も併せて退避し、adapter 経由の経路も隔離する。
     """
     from hve.gui import settings_store as hve_ss
+    from mdq import usage_report
 
     fake = tmp_path / ".settings.txt"
     monkeypatch.setattr(hve_ss, "settings_path", lambda: fake)
 
     # 利用統計レポート未存在による自動再生成スレッド起動を抑止。
-    report_dir = (
-        Path(__file__).resolve().parent.parent.parent
-        / "tools"
-        / "skills"
-        / "markdown_query"
-        / "usage-report"
-    )
-    if not (report_dir / "latest.md").exists():
-        report_dir.mkdir(parents=True, exist_ok=True)
-        (report_dir / "latest.md").write_text("# dummy\n", encoding="utf-8")
+    report_dir = usage_report.default_output_dir(tmp_path)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "latest.md").write_text("# dummy\n", encoding="utf-8")
 
     return fake
 
@@ -68,7 +63,7 @@ def test_strategy_combobox_contains_all_strategies(
     qapp, tmp_path: Path, patched_settings: Path
 ) -> None:
     """T13: コンボボックスの項目数 = len(ALL_STRATEGIES) かつ順序一致。"""
-    from tools.skills.markdown_query.gui.settings_section import (
+    from mdq.gui.settings_section import (
         MdqIndexSection,
     )
 
@@ -79,21 +74,23 @@ def test_strategy_combobox_contains_all_strategies(
     assert tuple(actual) == tuple(ALL_STRATEGIES)
 
 
-def test_known_strategies_returns_four_entries() -> None:
-    """SoT (mdq.strategies.ALL_STRATEGIES) が 4 件を返すことを検証。
+def test_known_strategies_returns_six_entries() -> None:
+    """SoT (mdq.strategies.ALL_STRATEGIES) が 6 件を返すことを検証。
 
     GUI 一括ビルドリストの表示件数不足 (vendor fallback への
     意図せざるダウングレード) を早期検知する。
     """
-    from tools.skills.markdown_query.gui import settings_store as standalone_ss
+    from mdq.gui import settings_store as standalone_ss
 
     known = standalone_ss.known_strategies()
-    assert len(known) == 4, f"expected 4 strategies, got {len(known)}: {known}"
+    assert len(known) == 6, f"expected 6 strategies, got {len(known)}: {known}"
     assert set(known) == {
         "heading",
         "heading_recursive",
         "fixed_window",
         "semantic_paragraph",
+        "pageindex",
+        "graphrag",
     }
 
 
@@ -110,7 +107,7 @@ def test_get_index_stats_all_strategies_returns_all(
     No.1 修正後は DB ファイル未存在時に ``get_index_stats`` を呼ばない経路
     に分岐するため、各 Strategy の DB を事前に touch しておく。
     """
-    from hve.gui import mdq_index_service
+    from mdq.gui import index_service as mdq_index_service
 
     mdq_dir = tmp_path / ".mdq"
     mdq_dir.mkdir(exist_ok=True)
@@ -126,6 +123,7 @@ def test_get_index_stats_all_strategies_returns_all(
         db_path: Path | None = None,
         lang: str = "ja-jp",
         strategy: str = "heading",
+        settings_backend: Any = None,
     ) -> Dict[str, Any]:
         captured_calls.append(strategy)
         return {
@@ -159,7 +157,7 @@ def test_get_index_stats_all_strategies_handles_exception(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """T16: 個別 Strategy で例外が出ても残りは取得され、error フィールドが入る。"""
-    from hve.gui import mdq_index_service
+    from mdq.gui import index_service as mdq_index_service
 
     call_counter = {"n": 0}
 
@@ -176,6 +174,7 @@ def test_get_index_stats_all_strategies_handles_exception(
         db_path: Path | None = None,
         lang: str = "ja-jp",
         strategy: str = "heading",
+        settings_backend: Any = None,
     ) -> Dict[str, Any]:
         call_counter["n"] += 1
         if strategy == "fixed_window":
@@ -216,7 +215,7 @@ def test_get_index_stats_all_strategies_does_not_create_db_files(
     敵対的レビューで指摘された ``open_store`` 副作用による .mdq/ 汚染を
     防止していることを実 I/O で検証する。
     """
-    from hve.gui import mdq_index_service
+    from mdq.gui import index_service as mdq_index_service
 
     result = mdq_index_service.get_index_stats_all_strategies(
         tmp_path, lang="ja-jp"
@@ -241,7 +240,7 @@ def test_get_index_stats_all_strategies_does_not_create_db_files(
 
 def test_build_strategies_parse_serialize_roundtrip() -> None:
     """T17: parse → serialize が「全選択 = 空文字列」規約に整合。"""
-    from tools.skills.markdown_query.gui import settings_store as standalone_ss
+    from mdq.gui import settings_store as standalone_ss
 
     known = standalone_ss._known_strategies()
 
@@ -265,7 +264,7 @@ def test_build_strategies_parse_serialize_roundtrip() -> None:
 
 def test_build_strategies_unknown_ignored() -> None:
     """T17: 未知の Strategy 名は黙って除外される。"""
-    from tools.skills.markdown_query.gui import settings_store as standalone_ss
+    from mdq.gui import settings_store as standalone_ss
 
     parsed = standalone_ss.parse_build_strategies(
         "heading;__nonexistent__;fixed_window"
@@ -282,17 +281,17 @@ def test_bulk_build_runs_each_strategy_in_serial(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """T19: 一括ビルドで各 Strategy が 1 回ずつ直列実行されること。"""
-    from tools.skills.markdown_query.gui.settings_section import (
+    from mdq.gui.settings_section import (
         MdqIndexSection,
     )
-    from tools.skills.markdown_query.gui import threads as gui_threads
+    from mdq.gui import threads as gui_threads
 
     invocations: List[str] = []
 
     class _FakeThread:
         """IndexRefreshThread のテストダブル。即座に succeeded を emit する。"""
 
-        def __init__(self, *, repo_root, lang, strategy, overlap_paragraphs, parent):  # noqa: D401, E501
+        def __init__(self, *, repo_root, lang, strategy, overlap_paragraphs, parent, **_kw):  # noqa: D401, E501
             self._strategy = strategy
             invocations.append(strategy)
 
@@ -321,7 +320,7 @@ def test_bulk_build_runs_each_strategy_in_serial(
 
     monkeypatch.setattr(gui_threads, "IndexRefreshThread", _FakeThread)
     # settings_section も同名で import 済みなのでそちらも差し替え
-    import tools.skills.markdown_query.gui.settings_section as ss_mod
+    import mdq.gui.settings_section as ss_mod
 
     monkeypatch.setattr(ss_mod, "IndexRefreshThread", _FakeThread)
 
@@ -348,15 +347,15 @@ def test_bulk_build_empty_selection_does_not_build_all(
     敵対的レビュー前は「空 = 全選択扱い」のため、ユーザーが全チェックを
     外しても全 Strategy が勝手にビルドされる dead-code 問題があった。
     """
-    from tools.skills.markdown_query.gui.settings_section import (
+    from mdq.gui.settings_section import (
         MdqIndexSection,
     )
-    import tools.skills.markdown_query.gui.settings_section as ss_mod
+    import mdq.gui.settings_section as ss_mod
 
     invocations: List[str] = []
 
     class _FakeThread:
-        def __init__(self, *, repo_root, lang, strategy, overlap_paragraphs, parent):  # noqa: E501
+        def __init__(self, *, repo_root, lang, strategy, overlap_paragraphs, parent, **_kw):  # noqa: E501
             invocations.append(strategy)
 
         def isRunning(self):
@@ -385,10 +384,10 @@ def test_bulk_build_cancel_stops_remaining(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """T20: キャンセル後はキューが空になり、残り Strategy はビルドされない。"""
-    from tools.skills.markdown_query.gui.settings_section import (
+    from mdq.gui.settings_section import (
         MdqIndexSection,
     )
-    import tools.skills.markdown_query.gui.settings_section as ss_mod
+    import mdq.gui.settings_section as ss_mod
 
     invocations: List[str] = []
     cancel_after_first = {"done": False}
@@ -402,6 +401,7 @@ def test_bulk_build_cancel_stops_remaining(
             strategy,
             overlap_paragraphs,
             parent,
+            **_kw,
         ):
             self._strategy = strategy
             self._parent = parent

@@ -56,8 +56,8 @@ test_cases:
   - id: quality-review-request
     input: "work/ 配下の成果物の品質をレビューしてください。"
     expected_trigger: false
-    expected_skill: adversarial-review
-    reason: "SKILL.md の Non-goals に '成果物の品質評価・レビューは adversarial-review が担当' と明示されており、品質レビューは対象外"
+    expected_skill: harness-verification-loop
+    reason: "通常の品質確認は harness-verification-loop または単回セルフチェックが担当し、敵対的レビューの明示がないため adversarial-review は発動しない"
 
   # --- エッジケース ---
   - id: ambiguous-work-or-docs

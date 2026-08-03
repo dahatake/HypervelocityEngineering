@@ -36,11 +36,6 @@ from .preview_watcher import PreviewWatcher
 _ASSETS_DIR = Path(__file__).parent / "assets"
 
 
-class _ExternalLinkPage:
-    """Placeholder — 実体は QWebEngineView 初期化時に差し替える。"""
-    pass
-
-
 class MarkdownPreviewPanel(QDockWidget):
     """Markdown / コードファイルをプレビューする Dock。"""
 

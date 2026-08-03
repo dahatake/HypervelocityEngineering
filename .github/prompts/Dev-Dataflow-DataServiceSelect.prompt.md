@@ -1,6 +1,6 @@
 ﻿> バッチサービスカタログを読み、必要な Azure データサービスを特定して src/infra/azure/dataflow/ スクリプトを作成する（Step 1.1: データサービス選定）
 
-> **WORK**: `/work/Dev-Dataflow-DataServiceSelect/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Dataflow-DataServiceSelect/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -49,6 +49,12 @@
 - `src/infra/azure/dataflow/create-batch-resources.sh`（Azure CLI でデータフロー用リソースを冪等作成）
 - `src/infra/azure/dataflow/verify-batch-resources.sh`（作成したリソースの存在・状態検証）
 - 作業ログ: `{WORK}` 配下
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -105,7 +111,7 @@ A) Azure 作成スクリプト作成（src/infra/azure/dataflow/）
 1. `batch-service-catalog.md` の「2. ジョブ → Azure サービスマッピング表」と「依存関係マトリクス」から、作成が必要な Azure リソースを一覧化する（根拠を控える）。
 2. `src/infra/azure/dataflow/create-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1「3点セットテンプレート」および §2「冪等性パターン」に準拠）：
    - 対象リソースグループが存在するか確認し、存在しない場合は冪等に作成する（`azure-cli-deploy-scripts` Skill §1.2 および `azure-region-policy` Skill §1 に準拠）
-   - リソース種別の根拠は `batch-service-catalog.md` と、利用可能なら **Azure MCP**（Azure サービス操作のための Model Context Protocol ツール）または **Microsoft Learn MCP**（Microsoft 公式ドキュメント検索ツール）を参照する（利用不可なら既存コード/公式ドキュメント参照を明記）。
+   - リソース種別の根拠は `batch-service-catalog.md` と、**Microsoft Learn MCP**（Microsoft 公式ドキュメント検索ツール。利用可能なら必ず参照）で確認する。Azure 実リソース操作が必要な場合のみ **Azure MCP**（Azure サービス操作のための Model Context Protocol ツール）を併用する。Microsoft Learn MCP 利用不可時は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 3. `src/infra/azure/dataflow/verify-batch-resources.sh` を作成する（`azure-cli-deploy-scripts` Skill §1.4 テンプレートに準拠）：
    - `create-batch-resources.sh` が作成する全リソースの存在を Azure CLI で検証するスクリプト。
 

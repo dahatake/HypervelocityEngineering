@@ -19,7 +19,7 @@
 > - 同ディレクトリに `subissues.md` を作成し、各 Sub に `<!-- subissue -->` マーカーを付ける
 > - `subissues_count` を `subissues.md` の `<!-- subissue -->` ブロック数に合わせる
 >
-> **Orchestrator 例外**: `task_scope=multi` または `context_size=large` のいずれかで SPLIT_REQUIRED になった場合でも、HVE Cloud / CLI Orchestrator 配下では Agent は plan.md+subissues.md 作成後に正常終了し、Orchestrator が Sub-issue（Cloud）またはサブセッション並列 fork（CLI）で実装を継続する。Orchestrator/単独 の判別は Python 内部の `OrchestratorContext` 引数で行い、`HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。詳細は `detail.md` の「Orchestrator 例外」節および `copilot-instructions.md §0` を参照。
+> **Orchestrator 例外**: `task_scope=multi` または `context_size=large` のいずれかで SPLIT_REQUIRED になった場合、HVE Cloud Agent Orchestrator（Issue Template + GitHub Actions + Copilot Cloud Agent）では Agent は plan.md+subissues.md 作成後に正常終了し、GitHub Actions が `create-subissues` ラベル経由で Sub-Issue を作成して実装を継続する。CLI / GUI 標準経路では GitHub Sub-Issue 作成も runtime split-fork も行わず、workflow DAG / fan-out で分割・並列化する。`HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。詳細は `detail.md` の「Orchestrator 例外」節および `copilot-instructions.md §0` を参照。
 
 # Plan: [タスク名]
 

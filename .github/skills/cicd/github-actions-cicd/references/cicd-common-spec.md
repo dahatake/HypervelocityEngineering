@@ -60,6 +60,16 @@ Copilot cloud agent が push したコミットでは GitHub Actions Workflow �
 2. **フォールバック**: Actions タブ → 対象 Workflow → 「Run workflow」ボタン → ブランチを指定
 ```
 
+### HVE local orchestrator 経路の branch / PR 境界
+
+HVE GUI/CLI の ASDW-WEB Step 単位 CI/CD では、通常の Cloud Agent PR description 案内とは別に、HVE Orchestrator が Step ごとの一時ブランチを作成し、Step 完了後に push → PR 作成 → `auto-approve-ready` → merge 待機 → base branch 復帰を行う。
+
+- Deploy Agent は Orchestrator から提供された `<branch>` を、default branch に存在する workflow の `gh workflow run ... --ref <branch>` に使う。
+- 同一 Step 内で新規作成した workflow を dispatch しない。workflow を新規追加する必要がある場合は、当該 workflow が default branch に反映された後の Step / run で実行する。
+- Deploy Agent は新規 branch 作成、任意の checkout、`gh pr create`、merge を行わない。
+- workflow_dispatch 実行前に workflow YAML や app/API 成果物を GitHub 側へ反映する必要がある場合でも、`git push origin HEAD` を実行しない。`main` または base branch へ push しない。push が不可欠な場合は、現在 branch が Orchestrator から提供された `<branch>` と一致することを確認し、許可される push は `git push origin HEAD:<branch>` のみに限定する。一致しない場合は push せず、ブロッカーとして作業ログに記録する。
+- Cloud Agent / 手動 PR 経路では、従来どおり PR description へ手動実行案内を記載する。
+
 ---
 
 ## 3. ワークフロー共通仕様

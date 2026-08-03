@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="980" viewBox="0 0 1700 980" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="880" viewBox="0 0 1700 880" role="img" aria-labelledby="title desc">
   <title id="title">ASDW-WEB データフロー図</title>
   <desc id="desc">入力ファイルからPromptタスクを経由して出力ファイルへ到達する関係を示す。</desc>
   <style>
@@ -61,33 +61,23 @@
 
   <!-- Row 4 -->
   <rect class="card input" x="60" y="470" width="500" height="72"/>
-  <text class="label" x="80" y="498">docs/screen/ / service-catalog-matrix.md</text>
-  <text class="label" x="80" y="520">docs/catalog/test-strategy.md</text>
+  <text class="label" x="80" y="498">src/app/ / service-catalog-matrix.md</text>
+  <text class="label" x="80" y="520">docs/test-specs/</text>
   <rect class="card agent" x="650" y="470" width="420" height="72"/>
-  <text class="label" x="670" y="498">Arch-TDD-TestSpec</text>
-  <text class="step" x="670" y="520">Step.3.0T</text>
+  <text class="label" x="670" y="498">E2ETesting-Playwright</text>
+  <text class="step" x="670" y="520">Step.3.3</text>
   <rect class="card output" x="1160" y="470" width="500" height="72"/>
-  <text class="label" x="1180" y="510">docs/test-specs/{screenId}-test-spec.md</text>
+  <text class="label" x="1180" y="510">E2E 実行結果（artifact）</text>
 
   <!-- Row 5 -->
   <rect class="card input" x="60" y="570" width="500" height="72"/>
-  <text class="label" x="80" y="598">src/app/ / service-catalog-matrix.md</text>
-  <text class="label" x="80" y="620">docs/test-specs/</text>
+  <text class="label" x="80" y="598">docs/catalog/service-catalog-matrix.md</text>
+  <text class="label" x="80" y="620">src/ / infra/</text>
   <rect class="card agent" x="650" y="570" width="420" height="72"/>
-  <text class="label" x="670" y="598">E2ETesting-Playwright</text>
-  <text class="step" x="670" y="620">Step.3.3</text>
+  <text class="label" x="670" y="598">QA-AzureDependencyReview</text>
+  <text class="step" x="670" y="620">Step.4.2</text>
   <rect class="card output" x="1160" y="570" width="500" height="72"/>
-  <text class="label" x="1180" y="610">E2E 実行結果（artifact）</text>
-
-  <!-- Row 6 -->
-  <rect class="card input" x="60" y="670" width="500" height="72"/>
-  <text class="label" x="80" y="698">docs/catalog/service-catalog-matrix.md</text>
-  <text class="label" x="80" y="720">src/ / infra/</text>
-  <rect class="card agent" x="650" y="670" width="420" height="72"/>
-  <text class="label" x="670" y="698">QA-AzureDependencyReview</text>
-  <text class="step" x="670" y="720">Step.4.2</text>
-  <rect class="card output" x="1160" y="670" width="500" height="72"/>
-  <text class="label" x="1180" y="710">docs/azure/dependency-review-report.md</text>
+  <text class="label" x="1180" y="610">docs/azure/dependency-review-report.md</text>
 
   <!-- Arrows per row -->
   <path class="arrow" d="M560 206 L650 206"/>
@@ -100,11 +90,9 @@
   <path class="arrow" d="M1070 506 L1160 506"/>
   <path class="arrow" d="M560 606 L650 606"/>
   <path class="arrow" d="M1070 606 L1160 606"/>
-  <path class="arrow" d="M560 706 L650 706"/>
-  <path class="arrow" d="M1070 706 L1160 706"/>
 
-  <rect class="legend" x="60" y="790" width="1600" height="150"/>
-  <text class="label" x="90" y="828">凡例: 灰=入力ファイル、緑=Prompt タスク、紫=出力ファイル</text>
-  <text class="label" x="90" y="858">色のセマンティクス: ファイルと実行主体を視覚的に分離し、監査時の差分確認を容易化</text>
-  <text class="label" x="90" y="888">読み順: 上から下へ。各行で「入力 → Agent → 出力」の関係を追跡する</text>
+  <rect class="legend" x="60" y="690" width="1600" height="150"/>
+  <text class="label" x="90" y="728">凡例: 灰=入力ファイル、緑=Prompt タスク、紫=出力ファイル</text>
+  <text class="label" x="90" y="758">色のセマンティクス: ファイルと実行主体を視覚的に分離し、監査時の差分確認を容易化</text>
+  <text class="label" x="90" y="788">読み順: 上から下へ。各行で「入力 → Agent → 出力」の関係を追跡する</text>
 </svg>

@@ -45,16 +45,16 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 |---|---|---|---|
 | ① 呼び出し元 | Agent / User CLI / GUI / HVE Orchestrator | `python -m mdq` サブプロセスを起動 | 検索リクエスト・索引更新要求・watcher 起動 |
 | ② CLI 層 | `mdq/__main__.py`, `mdq/cli.py` | argparse でサブコマンド振り分け + usage_log 記録 | `index` / `search` / `get` / `list` / `stats` / `watch` |
-| ③ Indexing | `indexer.py`, `strategies.py`, `strategies_semantic.py`, `strategies_pageindex.py`, `embeddings.py`, `sentence_splitter.py`, `contextualizer.py`, `tokenize.py` | Markdown を Chunking Strategy ごとに分割し、永続化用 row を生成 | `cmd_index` / `cmd_watch` |
+| ③ Indexing | `indexer.py`, `strategies.py`, `strategies_semantic.py`, `strategies_pageindex.py`, `embeddings.py`, `sentence_splitter.py`, `tokenize.py` | Markdown を Chunking Strategy ごとに分割し、永続化用 row を生成 | `cmd_index` / `cmd_watch` |
 | ④ Search | `query_router.py`, `search.py` | クエリを 7 ルールで分類して strategy 選定 → BM25 検索 → snippet 生成 | `cmd_search` / `cmd_get` |
 | ⑤ Watcher | `watcher.py` (watchdog) | ファイル変更を daemon thread で監視し増分索引 | `cmd_watch` または HVE CLI Orchestrator から組み込み起動 |
-| ⑦ Storage | `store.py` + `.mdq/index-<lang>-<strategy>.sqlite` | スキーマ管理 (SCHEMA v6) + マイグレーション + CRUD | `open_store()` 経由 |
+| ⑦ Storage | `store.py` + `.mdq/index-<lang>-<strategy>.sqlite` | スキーマ管理 (SCHEMA v7) + マイグレーション + CRUD | `open_store()` 経由 |
 | ⑦ Logging | `usage_log.py` + `usage_stats.py` + `.mdq/usage.jsonl` | 全 CLI 呼び出しを append-only JSONL に記録 → 15 指標集計 | 全サブコマンド完了時 |
 
 ### 1.2 設計上の重要な前提
 
 - **物理ファイル分離**: 索引 DB は `(lang, strategy)` の組み合わせごとに独立した SQLite ファイル `.mdq/index-<lang>-<strategy>.sqlite` を持つ (`store.db_path_for`)。これにより、検索時に Strategy だけを切り替えれば適切な DB が選択される。
-- **既定 11 ディレクトリ走査** (`mdq/cli.py:DEFAULT_ROOTS`): `docs, docs-generated, users-guide, template, knowledge, qa, original-docs, work, sample, session-state, hve-dev`。GUI `target_folders` 設定で上書き可能。
+- **既定 10 ディレクトリ走査** (`mdq/cli.py:DEFAULT_ROOTS`): `docs, docs-generated, users-guide, template, knowledge, qa, original-docs, work, sample, hve-dev`。GUI `target_folders` 設定で上書き可能。
 - **任意拡張**: `watchdog` (Watcher)、`rank_bm25` (検索スコア)、`fastembed + nltk + numpy` (semantic_paragraph) は任意依存。未導入時は `_MiniBM25` / regex sentence splitter / `heading_recursive` フォールバックで動作する。
 - **Cloud Agent 制約**: HVE Cloud Agent Orchestrator (GitHub Issue 起点) では Watcher daemon thread は起動しない。手動 `mdq index` または GUI 索引化で索引を更新する。
 
@@ -69,7 +69,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 | PageIndex 分割 | `mdq/strategies_pageindex.py` | `PAGEINDEX_*` 定数, `scan_file_pageindex`, `_RUNTIME_CONFIG` |
 | クエリ分類 | `mdq/query_router.py` | `classify_query` (L200), `discover_available_strategies` (L317), `_FALLBACK_ORDER` |
 | 検索 | `mdq/search.py` | `Hit`, `_MiniBM25`, `_make_snippet` |
-| ストレージ | `mdq/store.py` | `SCHEMA`, `_migrate` (v1→v5), `open_store`, `db_path_for` |
+| ストレージ | `mdq/store.py` | `SCHEMA`, `_migrate` (v1→v7), `open_store`, `db_path_for` |
 | Watcher | `mdq/watcher.py` | `MdqWatcher`, `_flush_once`, `_fallback_reindex`, `_note_event` |
 | 利用ログ | `mdq/usage_log.py` | `append_record`, JSONL スキーマ |
 
@@ -87,7 +87,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 
 - **増分判定**: `index_one_file` は `(stored_sha1, current_sha1)` 一致時に `{"action":"skipped"}` を返す (`mdq/indexer.py` L550)。SHA1 は `_sha1_bytes(raw_bytes)`、mtime は `Path.stat().st_mtime`。
 - **chunk_id 安定性**: SHA1(path \0 heading_path \0 part_index \0 text_first_64) で生成 (L352)。行番号変動に強い。
-- **semantic_paragraph 専用処理**: 埋め込み生成 → Kamradt 二分探索で意味境界決定 → `contextualizer.contextualize()` で `[Context] {path} > {heading_path}\n\n{body}` を本文に prepend。原文は `chunks.text_raw`、埋め込み (任意) は `chunks.chunk_embedding` 列に保存。
+- **semantic_paragraph 専用処理**: 埋め込み生成 → Kamradt 二分探索で意味境界決定 → `strategies_semantic._CTX_TEMPLATE` で `[Context] {path} > {heading_path}\n\n{body}` を本文に prepend。原文は `chunks.text_raw`、埋め込み (任意) は `chunks.chunk_embedding` 列に保存。
 - **書き込み完了後**: `usage_log.append_record` が `.mdq/usage.jsonl` に 1 行 JSON を append (`command="index"`, args, elapsed_ms, result, exit_code)。
 
 ### 2.2 検索シーケンス — `python -m mdq search --strategy auto`
@@ -116,7 +116,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 その他の重要ポイント:
 
 - **BM25 実装**: `rank_bm25` パッケージがあれば使用、無ければ `_MiniBM25` (k1=1.5, b=0.75) で stdlib のみで完結。
-- **Snippet 生成**: 最もマッチ語トークンが多い行を中心に半径 2 行・最大 400 字を切り出し (`_make_snippet`)。
+- **Snippet 生成**: 最もマッチ語トークンが多い行を中心に半径 2 行・最大 400 字を切り出し (`_make_snippet`)。`--return-unit chunk` を指定した場合は切り出さずチャンク本文をそのまま返す (`_excerpt`)。
 - **Parent expansion**: `--include-parent` (深さ 1) / `--with-parent-depth N` 指定時に `chunks.parent_chunk_id` を再帰取得して `expansion.parent` に含める。SCHEMA v4 で導入。
 - **Late fusion (任意)**: semantic_paragraph + `--late-chunking` 索引時の `chunk_embedding` 列がある場合、`--fusion-alpha α` で BM25 と embedding 類似度を線形加重で統合する。
 
@@ -172,7 +172,7 @@ Skill をフォークしてカスタム Strategy を追加する場合の手順:
 
 ### 3.3 contextualize テンプレート (semantic_paragraph)
 
-`mdq/contextualizer.py:TEMPLATE`:
+`mdq/strategies_semantic.py:_CTX_TEMPLATE`:
 
 ```text
 [Context] {path} > {heading_path}
@@ -181,6 +181,39 @@ Skill をフォークしてカスタム Strategy を追加する場合の手順:
 ```
 
 これを prepend した文字列を `chunks.body` に保存し、原文は `chunks.text_raw` に保存する。検索 hit の snippet には contextualize 済み body が使われるため、Agent が hit の意味的位置を即時把握できる。`--no-semantic-contextualize` で無効化可能 (その場合 `text_raw` は NULL)。
+
+### 3.4 `graphrag` 戦略（任意・LLM 必須・別系統）
+
+> ⚠️ **この戦略は SQLite 索引を使わない別系統**です。`heading` / `semantic_paragraph` / `pageindex` のドロップイン置換ではありません。LLM 呼び出しコストが発生するため、既定の SQLite-backed 戦略で十分なケースでは選択不要です。
+
+[`mdq/strategies_graphrag.py`](../mdq/strategies_graphrag.py)（adapter）と [`mdq/graphrag_runtime.py`](../mdq/graphrag_runtime.py)（LLM/embed callable factory）で構成され、商用利用可能な OSS パッケージ [LightRAG (lightrag-hku, MIT License)](https://github.com/HKUDS/LightRAG) をバックエンドにする。
+
+| 項目 | 値 |
+|---|---|
+| インストール | `pip install -e .[graphrag]`（`pyproject.toml` の `[project.optional-dependencies] graphrag = ["lightrag-hku>=1.4.16,<1.5"]`） |
+| LLM provider（既定） | `ollama`（loopback 限定。`127.0.0.1` / `localhost` / `[::1]` のみ）+ オフライン用の `mock`（決定論的スタブ） |
+| Storage | LightRAG 専用 working_dir（既定 `.mdq/graphrag-<lang>/`）。SQLite 索引 (`.mdq/index-*.sqlite`) は **作成・参照されない** |
+| 戻り値 | 文字列の LLM 生成回答（`chunk_id` / `path` / `lines` を返さない＝ citation 非対応） |
+| Query mode | `local`（既定）/ `naive` のみ許可。`global` / `hybrid` / `mix` 等の他モードは安定性とコスト観点から **禁止** |
+| `--strategy auto` 対象 | **対象外**（`--strategy graphrag` を明示した時のみ起動） |
+
+#### CLI フラグ（抜粋）
+
+```sh
+# index（ollama backend）
+python -m mdq index --strategy graphrag \
+    --graphrag-llm-provider ollama \
+    --graphrag-llm-model qwen2.5:7b \
+    --graphrag-embed-provider ollama \
+    --graphrag-embed-model nomic-embed-text
+
+# search
+python -m mdq search --strategy graphrag --q "<質問文>" --graphrag-query-mode local --graphrag-top-k 10
+```
+
+`--graphrag-base-url` で Ollama エンドポイント上書き（loopback 必須。リモートを明示許可するには `--graphrag-allow-remote-ollama` を併用し、`RuntimeWarning` を受領する）。テスト・CI では `--graphrag-llm-provider mock --graphrag-embed-provider mock` で外部依存なしの決定論的応答が得られる。
+
+詳細仕様（既定値の出典・セキュリティ制約 R2/R4/R5/R7・制限事項）は [`.github/skills/markdown-query/references/graphrag-strategy.md`](../.github/skills/markdown-query/references/graphrag-strategy.md) を参照。
 
 ---
 
@@ -199,7 +232,7 @@ Skill をフォークしてカスタム Strategy を追加する場合の手順:
 | 同 `chunks.chunk_embedding` 列 (v5 で追加) | float32 埋め込みベクトル (1024 次元 intfloat/multilingual-e5-large) | semantic_paragraph + `--late-chunking` 索引時のみ | 索引再構築時 | チャンク数 × 4 KB |
 | 同 `chunks.summary` 列 (v6 で追加) | pageindex のノードサマリ（先頭 N 文字抽出） | pageindex 索引時のみ | 索引再構築時 | チャンク数 × 最大 2 KB |
 | `.mdq/usage.jsonl` | 全 mdq CLI 呼び出しの append-only ログ | 全サブコマンド完了時 (index / search / get / list / stats) | 高 (検索ごと 1 行) | 1 行 ~500 B、月数 MB 〜 |
-| GUI 利用統計レポート (`tools/skills/markdown_query/usage-report/*.md`) | 15 指標の人間可読集計 | GUI 起動時に前回生成から 24h 超なら自動再生成、または「再生成」ボタン手動実行 | 1 日 1 回 〜 | 数 KB |
+| GUI 利用統計レポート (`<repo>/.mdq/usage-report/*.md`) | 15 指標の人間可読集計 | GUI 起動時に前回生成から 24h 超なら自動再生成、または「再生成」ボタン手動実行 | 1 日 1 回 〜 | 数 KB |
 | HVE GUI 設定 (`hve/.settings.txt` の `[mdq]` セクション) | target_folders / build_strategies / semantic_* | GUI で「保存」または target_folders 変更 (即時保存) | 低 (運用変更時のみ) | 数 KB |
 
 ### 4.2 索引整合性の前提と運用 Tips
@@ -239,14 +272,14 @@ C1〜C3 (Context 削減率)、H1 (Strategy 分布)、H2 (parent 展開率) な�
 
 - セットアップ手順: `tools/skills/markdown_query/README.md`<!-- TBD: SETUP.md は不在、README.md にセットアップスクリプトと使い方が集約されている -->
 - 画面の使い方: [tools/skills/markdown_query/USAGE.md](../tools/skills/markdown_query/USAGE.md)
-- 画面の実体: [`MdqIndexSection`](../tools/skills/markdown_query/gui/settings_section.py)
+- 画面の実体: [`MdqIndexSection`](../mdq/gui/settings_section.py)
   — HVE GUI と独立ランチャーの両方が同じクラスを参照する単一 SoT。
 
 スクリーンショット（基本タブ）:
 
 ![基本タブ](../tools/skills/markdown_query/docs/images/screenshot-basic.png)
 
-レポートはローカルで生成され、`tools/skills/markdown_query/usage-report/`
+レポートはローカルで生成され、対象リポジトリの `.mdq/usage-report/`
 配下に保存される。GUI 起動時に最新生成が 24 時間以上前であれば自動再生成される（設定画面の
 「利用統計レポートの再生成」ボタンでも手動再生成可能）。
 
@@ -257,7 +290,7 @@ GUI 設定画面（および `hve-mdq` CLI の `--lang` / `--strategy`）で **�
 作成される。
 
 - 言語: `ja-jp`（既定）/ `en-us`
-  - `ja-jp`: FTS5 で `trigram` tokenizer を使用（SQLite 3.34+ で標準搭載）。
+  - `ja-jp`: FTS5 で `trigram` tokenizer を使用（SQLite 3.34+ で標準搭載、`detail=none`）。`detail=none` ではフレーズクエリが使えないため、検索側は語をトリグラムへ分解して AND 結合し、SQL の `LIKE` で確定照合する。3 文字未満の語は trigram 索引で表現できないため in-memory BM25 へフォールバックする。
     未対応環境では `unicode61` にフォールバック。
   - `en-us`: FTS5 で `unicode61` tokenizer を使用。
 - Chunking Strategy:
@@ -291,9 +324,14 @@ GUI 設定画面（および `hve-mdq` CLI の `--lang` / `--strategy`）で **�
     `.mdq/index-ja-jp-pageindex.sqlite`
 - SCHEMA v5: `text_raw`（原文。contextualize ON の場合のみ非 NULL）と
   `chunk_embedding`（float32 BLOB。`--late-chunking` 有効時のみ非 NULL）列が追加された。
-- SCHEMA v6 (現行): `summary`（`pageindex` ストラテジ時のノードサマリ。
+- SCHEMA v6: `summary`（`pageindex` ストラテジ時のノードサマリ。
   それ以外のストラテジでは NULL）列が追加。
   いずれも ADD COLUMN マイグレーションで既存 DB は破壊されない。
+- SCHEMA v7 (現行): `ja-jp` の `chunks_fts`（`trigram`）を `detail=none` で作り直す。
+  位置情報を持たない分だけ索引が小さくなる（実測: FTS5 領域 139.6MB → 8.7MB）。
+  ADD COLUMN ではなくミラーの DROP + rebuild だが、`chunks` 本体は破壊されない。
+  **`VACUUM` は行わない**ため既存ファイルのサイズは縮まない。縮めたい場合は
+  `mdq index --rebuild` で作り直すか `VACUUM` を 1 度実行する（実測: 164.9MB → 30.2MB）。
 
 CLI 利用例:
 
@@ -443,7 +481,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 - 算出: `mdq stats` の `files` / `chunks`。
 - 解釈: 索引対象のファイル数とチャンク数。極端に少ない場合は索引未生成、
   または対象ディレクトリ（既定 `docs/`, `docs-generated/`, `users-guide/`, `template/`,
-  `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `session-state/`, `hve-dev/`）が
+  `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`）が
   存在しない可能性がある。
 
 #### E2 索引鮮度（age_seconds）
@@ -486,7 +524,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 #### A4 Skill _routing 記載
 
-- 算出: `.github/skills/_routing/SKILL.md` 内に `markdown-query` の文字列が存在するか。
+- 算出: `.github/skills/_routing/README.md` 内に `markdown-query` の文字列が存在するか。
 - 解釈: `False` の場合、ルーティング表に未登録 = Agent から発見されにくい状態。導線整備の Issue 化を推奨。
 
 #### D1 DO NOT USE FOR 違反 (knowledge/D 検索)
@@ -542,10 +580,9 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 - 解釈: Skill の応答性能。p95 が極端に大きいと Agent が回避するインセンティブが生まれる。
   索引サイズに対して遅すぎる場合は `--engine fts5` 有効化検討。
 
-#### G1 mdq 利用 Step 完了率差
+#### G1 mdq 利用 Step 完了率差 — 廃止（v1.1）
 
-- 算出: `session-state/runs/<run_id>/state.json` を走査し、各 run の Step 完了率（`completed / 総Step 数`）を計算。`.mdq/usage.jsonl` に `context.run_id` が出現する run を「mdq 利用 run」と見なし、平均完了率の差（利用 - 未利用）を返す。
-- 解釈: 正の値は mdq を利用した run のほうが完了率が高いことを意味する（仮説: 質の高いコンテキスト → ループ削減→ 完了率上昇）。少量サンプルでは偏りが大きいため、`used_run_count` / `unused_run_count` とあわせて解釈すること。どちらか一方が 0 の場合は `value` は `null` + `note` で理由を明示する。
+- **廃止**: 算出に必要だった `session-state/runs/<run_id>/state.json` が Session State（Resume）機能の全廃に伴い削除されたため、本指標（`G1_step_completion_rate_diff`）は `aggregate_usage_stats` の出力から除外された。
 
 ## v2 以降の対応予定指標
 
@@ -569,18 +606,16 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 - 辞書の拡張: `template/typical-queries.json` の `workflows.<workflow_id>` 配列にエントリを追加するだけで反映される。現状 `aad-web` のみ patterns が定義済みで、他 workflow は patterns 未定義（`note: "template/typical-queries.json に <workflow_id> エントリ未定義"` として表示される）。
 - 注意: 「マッチ件数の合計」ではなく「マッチした search 数」を分子にしているため、1 件の search が複数パターンにヒットしても 1 としてカウントする。
 
-### G4 Step 再実行回数差（平均/Step）
+### G4 Step 再実行回数差（平均/Step）— 廃止（v1.1）
 
-- 算出: `session-state/runs/<run_id>/state.json` の `step_states.*.retry_count` を平均し、mdq 利用 run / 未利用 run の平均差を返す（利用 - 未利用）。
-- 解釈: 負の値は mdq 利用 run の方が Step あたり再実行回数が少ない＝**質の高いコンテキスト → 失敗が減る** という仮説を支持する。正の値や差が無い場合は Skill の効果が他要因に埋もれている可能性があり、サンプルサイズと併せて解釈する。
-- データソース: `StepState.retry_count`（`hve.run_state` で永続化済み）。`run_journal` への新規イベント追加は不要。
+- **廃止**: 算出に必要だった `session-state/runs/<run_id>/state.json` の `step_states.*.retry_count` が Session State（Resume）機能の全廃に伴い削除されたため、本指標（`G4_step_retry_count_diff`）は `aggregate_usage_stats` の出力から除外された。
 
 ## 保留中の運用判断
 
 ### C2 推奨閾値
 
 - 状況: v1 で C2（上位 2 件 score 差の平均）を算出可能としたが、「健全範囲」の閾値は未定。
-- 判断材料が揃う条件: 同一ワークスペースで `aad-web` 等の代表ワークフローを **30 run 以上** 実行し、`tools/skills/markdown_query/usage-report/*.json` の C2 値分布（p10/p50/p90）を集計できた時点。
+- 判断材料が揃う条件: 同一ワークスペースで `aad-web` 等の代表ワークフローを **30 run 以上** 実行し、`.mdq/usage-report/*.json` の C2 値分布（p10/p50/p90）を集計できた時点。
 - 進め方: 集計結果と「Skill 改善前後の B1 削減率の変化」を突合し、C2 が小さい時に B1 が悪化する傾向が出れば、その境界を黄信号閾値として users-guide に明記する。
 
 ### v2 残指標の段階対応
@@ -604,7 +639,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 |---|---|---|---|
 | 必須 | `mdq/` パッケージ一式（`__init__.py`, `__main__.py`, `cli.py`, `indexer.py`, `search.py`, `store.py`, `strategies.py`, `tokenize.py`, `usage_log.py`, `watcher.py`） | 必須 | CLI 本体 |
 | 必須 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) と `references/`, `examples/` | 必須 | Skill 定義 |
-| 任意 | `mdq/usage_stats.py`, `tools/skills/markdown_query/generate_usage_report.py` | 任意 | 利用統計レポート |
+| 任意 | `mdq/usage_stats.py`, `mdq/usage_report.py` | 任意 | 利用統計レポート |
 | 任意 | `tools/skills/markdown_query/benchmark.py`, `queries.sample.txt` | 任意 | 削減率の自リポジトリ実測 |
 | 必須 | `.gitignore` への `.mdq/` 追加 | 必須 | 索引 DB / 利用ログをコミットしない |
 
@@ -643,7 +678,7 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 
 #### 4. Skill ルーティング表で `.md` 限定優先を明示する
 
-各リポジトリの Skill ルーティング相当文書（本リポジトリでは [.github/skills/_routing/SKILL.md](../.github/skills/_routing/SKILL.md)）に、`grep_search` 系ツールの行から `markdown-query` への誘導文言を追加する。
+各リポジトリの Skill ルーティング相当文書（本リポジトリでは [.github/skills/_routing/README.md](../.github/skills/_routing/README.md)）に、`grep_search` 系ツールの行から `markdown-query` への誘導文言を追加する。
 
 例:
 
@@ -663,7 +698,7 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 
 ### 採用率の検証手順（移植後）
 
-1. 移植後 1〜2 週間運用してから [tools/skills/markdown_query/generate_usage_report.py](../tools/skills/markdown_query/generate_usage_report.py) を実行（任意機能を移植している場合）。
+1. 移植後 1〜2 週間運用してから `python -m mdq.usage_report` を実行（任意機能を移植している場合）。
 2. 本ガイド §「v1 採用 15 指標」の **A1（サブコマンド別呼び出し回数）** で `search` の件数を確認。
 3. 件数が想定タスク数に対して極端に少ない（例: タスク 10 件に対して `search` 0 回）場合は、上記 1〜5 のうち未実施項目がないか再点検する。
 4. 自リポジトリでの実測トークン削減率を `python tools/skills/markdown_query/benchmark.py` で取得し、本ガイド冒頭の HVE 実測値と比較する。データ規模・クエリ分布が異なれば数値は変動するため、絶対値ではなく **同一ベンチを Skill 改善前後で 2 回実行して相対変化を見る** ことを推奨。
@@ -675,11 +710,11 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 
 ## レポートファイル
 
-- `tools/skills/markdown_query/usage-report/YYYY-MM-DD.json` — 機械可読
-- `tools/skills/markdown_query/usage-report/YYYY-MM-DD.md` — 人間可読
-- `tools/skills/markdown_query/usage-report/latest.json` / `latest.md` — 最新版コピー
+- `<repo>/.mdq/usage-report/YYYY-MM-DD.json` — 機械可読
+- `<repo>/.mdq/usage-report/YYYY-MM-DD.md` — 人間可読
+- `<repo>/.mdq/usage-report/latest.json` / `latest.md` — 最新版コピー
 
-保持期間（既定 90 日、`--retention-days` で変更可能）を超えた日付付きレポートは `generate_usage_report.py` 実行時に自動削除される。`latest.*` は常に保持される。`--retention-days 0` で削除を無効化できる。
+保持期間（既定 90 日、`--retention-days` で変更可能）を超えた日付付きレポートは `python -m mdq.usage_report` 実行時に自動削除される。`latest.*` は常に保持される。`--retention-days 0` で削除を無効化できる。
 
 レポート保存先の詳細は [tools/skills/markdown_query/usage-report/README.md](../tools/skills/markdown_query/usage-report/README.md) を参照。
 
@@ -691,5 +726,5 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
     送信・アップロードする際は内容を確認すること。
 - 索引 DB: `.mdq/index-<lang>-<strategy>.sqlite`（lang × strategy の組み合わせごとに別ファイル）
 - 集計モジュール: [mdq/usage_stats.py](../mdq/usage_stats.py)
-- レポート生成スクリプト: [tools/skills/markdown_query/generate_usage_report.py](../tools/skills/markdown_query/generate_usage_report.py)
+- レポート生成モジュール: [mdq/usage_report.py](../mdq/usage_report.py)
 - Skill 定義: [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md)

@@ -8,6 +8,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEFAULT_DEBOUNCE_MS
+
 DEFAULT_MODEL: str = "claude-opus-4.7"
 DEFAULT_CONTEXT_INJECTION_MAX_CHARS: int = 20_000
 
@@ -65,17 +67,31 @@ SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
 }
 
 MODEL_AUTO_VALUE: str = "Auto"
-MODEL_AUTO_REASONING_EFFORT: str = "high"
-"""Auto モデル選択時に明示する reasoning_effort 値。
+"""hve 内部センチネル（UI 表示・既存 Issue/PR/CLI 引数の後方互換）。"""
 
-GitHub 側の Auto Model Selection が claude-opus-4.7-high 等の
-reasoning_effort='high' のみ許容するバリアントへ解決した場合の
-400 エラーを回避する目的で固定値 'high' を付与する。
-SDK README 上の許容値: 'low' | 'medium' | 'high' | 'xhigh'。
+MODEL_AUTO_WIRE_VALUE: str = "auto"
+"""GitHub Copilot SDK の create_session(model=...) に渡す Auto モデル ID。
 
-参照: https://pypi.org/project/github-copilot-sdk/ （0.3.0 時点で確認）
-本 fallback 実装は SDK バージョン < 0.3.0 互換を _create_session_with_auto_reasoning_fallback で確保する。
+GitHub Copilot サーバの models.list レスポンスに正規モデル ID として
+``{"id": "auto", "name": "Auto"}`` が含まれており、CLI の ``--model auto``
+および SDK の ``create_session(model="auto")`` で Auto Model Selection
+（サーバ側動的ルーティング）が発動する。
 """
+
+def to_wire_model(model: Optional[str]) -> Optional[str]:
+    """hve 内部センチネル ``"Auto"`` を SDK が受理する ``"auto"`` に変換する。
+
+    - ``MODEL_AUTO_VALUE`` ("Auto") → ``MODEL_AUTO_WIRE_VALUE`` ("auto")
+    - その他の文字列 → そのまま返す
+    - None / 空文字 → None（呼び出し側で「model キーを payload から省略」と判断）
+    """
+    if not model:
+        return None
+    if model == MODEL_AUTO_VALUE:
+        return MODEL_AUTO_WIRE_VALUE
+    return model
+
+
 MODEL_CHOICES: tuple[str, ...] = (
     "claude-opus-4.7",
     "claude-opus-4.6",
@@ -181,13 +197,43 @@ def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
     return normalized
 
 
-def generate_run_id() -> str:
+def generate_run_id(tz: Optional[str] = None) -> str:
     """ワークフロー実行ごとのユニークID。
 
     タイムスタンプ（人間可読 + ソート可能）+ UUID短縮（衝突防止）
     例: "20260413T143022-a1b2c3"
+
+    タイムゾーン解決順:
+      1. 引数 ``tz`` (IANA 名)
+      2. 環境変数 ``HVE_RUN_ID_TZ``
+      3. ``Asia/Tokyo`` (JST 既定)
+
+    不正なタイムゾーン名は警告なしで既定 ``Asia/Tokyo`` にフォールバックする。
     """
-    ts = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
+    import os
+    from datetime import datetime, timezone, timedelta
+    try:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    except ImportError:  # pragma: no cover - Python 3.9+ 想定
+        ZoneInfo = None  # type: ignore[assignment]
+        ZoneInfoNotFoundError = Exception  # type: ignore[assignment,misc]
+
+    tz_name = (tz or os.environ.get("HVE_RUN_ID_TZ", "")).strip() or "Asia/Tokyo"
+    tzobj = None
+    if ZoneInfo is not None:
+        for candidate in (tz_name, "Asia/Tokyo"):
+            try:
+                tzobj = ZoneInfo(candidate)
+                break
+            except (ZoneInfoNotFoundError, ValueError, OSError):
+                continue
+    if tzobj is None and tz_name == "Asia/Tokyo":
+        # Windows で tzdata 未導入時の JST 既定フォールバック (UTC+9 固定)。
+        tzobj = timezone(timedelta(hours=9))
+    if tzobj is not None:
+        ts = datetime.now(tzobj).strftime("%Y%m%dT%H%M%S")
+    else:
+        ts = time.strftime("%Y%m%dT%H%M%S", time.gmtime())
     short_uuid = uuid.uuid4().hex[:6]
     return f"{ts}-{short_uuid}"
 
@@ -205,6 +251,53 @@ def _env_bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("true", "1", "yes")
+
+
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    """bool / 文字列を bool に正規化する。"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        raw = value.strip().lower()
+        if raw in ("true", "1", "yes", "on"):
+            return True
+        if raw in ("false", "0", "no", "off", ""):
+            return False
+    return bool(value)
+
+
+def _parse_bool_mapping(value: Any) -> Dict[str, bool]:
+    """JSON 文字列または dict を ``{str: bool}`` に正規化する。
+
+    Cloud Session の Step / subtask override 用。無効値は安全側で除外する。
+    """
+    if value is None or value == "":
+        return {}
+    parsed: Any = value
+    if isinstance(value, str):
+        try:
+            import json as _json
+            parsed = _json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+    if not isinstance(parsed, dict):
+        return {}
+    result: Dict[str, bool] = {}
+    for key, raw_value in parsed.items():
+        key_text = str(key).strip()
+        if not key_text:
+            continue
+        if isinstance(raw_value, bool):
+            result[key_text] = raw_value
+        elif isinstance(raw_value, str):
+            lowered = raw_value.strip().lower()
+            if lowered in ("true", "1", "yes", "on"):
+                result[key_text] = True
+            elif lowered in ("false", "0", "no", "off"):
+                result[key_text] = False
+    return result
 
 
 def _parse_workiq_akm_ingest_dxx(value: str) -> List[str]:
@@ -243,12 +336,21 @@ class SDKConfig:
     review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
     qa_model: Optional[str] = None          # QA 専用モデル（未指定時は model）
     # --- reasoning_effort (SDK が返す supported_reasoning_efforts から選択された値) ---
-    # None: 未指定。Auto モデル時は MODEL_AUTO_REASONING_EFFORT ("high") をフォールバック、
-    # 明示モデル時は SDK 既定振る舞いを使う。
+    # None: 未指定。Auto モデル時は何も指定せず、サーバ側 Auto Model Selection が
+    # モデル毎に適切な effort を選ぶ。明示モデル時も None は SDK 既定振る舞いを使う。
     reasoning_effort: Optional[str] = None
     review_reasoning_effort: Optional[str] = None
     qa_reasoning_effort: Optional[str] = None
+    # --- context_tier (SDK の create_session(context_tier=...) へ渡す) ---
+    # "default" | "long_context" | None。None は未指定（SDK/サーバ既定）。
+    # GUI 設定の既定値 (long_context) は GUI 層 (settings_store / OrchestrateArgs) が
+    # 担い、本フィールドの既定は None として CLI 直接実行時の従来挙動を保つ。
+    context_tier: Optional[str] = None
     timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
+    # per-step wall-clock タイムアウト（秒）。DAG の 1 ステップ実行が本値を超えたら
+    # 当該ステップを失敗扱いで打ち切り、ハングによる DAG 全体の無期限停止を防ぐ。
+    # idle タイムアウト(timeout_seconds)とは別物。None または <=0 で無効化。
+    step_timeout_seconds: Optional[float] = 7200.0  # 既定 2h
     base_branch: str = "main"               # ベースブランチ
     cli_path: Optional[str] = None          # Copilot CLI のパス (COPILOT_CLI_PATH)
     cli_url: Optional[str] = None           # 外部 CLI サーバー URL (例: localhost:4321)
@@ -264,6 +366,7 @@ class SDKConfig:
     qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, "autopilot" = 全問既定値自動採用（GUI）, "gui-file" = GUI 経由 IPC ファイル, None = 実行時に選択
     qa_auto_defaults: bool = False          # True: QA Phase 2b で全問デフォルト値を自動採用（設定元: __main__.py wizard / 消費先: runner.py _collect_qa_answers）
     qa_ipc_dir: Optional[str] = None        # qa_answer_mode="gui-file" 時の IPC ディレクトリパス（GUI ↔ CLI ファイルベース通信）
+    steering_ipc_dir: Optional[str] = None  # Steering（実行中ワークフローへの割り込み送信）用 IPC ディレクトリパス（GUI ↔ CLI ファイルベース通信）
 
     force_interactive: bool = False         # True のとき sys.stdin.isatty() 判定をバイパスしてインタラクティブモードを強制する（--force-interactive）
     qa_input_timeout_seconds: float = 300.0  # QA 回答入力専用タイムアウト秒数（デフォルト: 300 秒）
@@ -278,6 +381,16 @@ class SDKConfig:
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない
     create_pr: bool = False                 # デフォルト: 作成しない
+    # PR 自動 Approve & Auto-merge。単独で branch 作成を有効にするのは
+    # ASDW-WEB（Step 単位）と ADFDV（workflow 単位）のみ。他 workflow で
+    # branch を作るには create_issues/create_pr の明示指定が必要で、この設定は
+    # その結果作成される PR の自動マージにだけ使用する。
+    # GUI/CLI から --enable-auto-merge として渡される。
+    enable_auto_merge: bool = False
+    # FR-CLI-34: enable_auto_merge による auto-approve-and-merge 完了（PR が merged）を
+    # ポーリング検知後、今回作成した作業ブランチをローカルのみ削除する（既定: 有効）。
+    # GUI/CLI から --no-delete-local-merged-branch で無効化。enable_auto_merge 無効時は作動しない。
+    delete_local_merged_branch: bool = True
     ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "qa", "src", "work"])
     # qa/ は PR commit 対象外（ignore_paths に含まれる）。
     # 例外: AQOD ワークフローでは qa/ の成果物が主成果物となる場合がある。
@@ -333,6 +446,30 @@ class SDKConfig:
     # ポーティングを検討する。
     available_tools: Optional[List[str]] = None
     excluded_tools: Optional[List[str]] = None
+
+    # --- Auto Compaction ---
+    # True 時: サブステップ実行の create_session に infinite_sessions={"enabled": True}
+    # を渡し、SDK 側の自動コンテキスト圧縮（compaction）を有効化する。既定 OFF。
+    auto_compaction: bool = False
+
+    # --- Fleet mode (GitHub Copilot SDK 1.0.0+) ---
+    # True 時: 複数 Step の DAG wave を Copilot SDK Fleet mode に委譲する。
+    # 既定 OFF。SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out / DAG wave が対象。
+    fleet_mode_enabled: bool = False
+
+    # --- Cloud Sessions (GitHub Copilot SDK 1.0.0+) ---
+    cloud_session_enabled: bool = False
+    cloud_session_repository_owner: Optional[str] = None
+    cloud_session_repository_name: Optional[str] = None
+    cloud_session_repository_branch: Optional[str] = None
+    cloud_session_max_concurrency: int = 5
+    cloud_session_integration_id: Optional[str] = None
+    cloud_session_mc_base_url: Optional[str] = None
+    cloud_session_step_overrides: Dict[str, bool] = field(default_factory=dict)
+    cloud_session_subtask_overrides: Dict[str, bool] = field(default_factory=dict)
+    cloud_session_runtime_step_overrides: Dict[str, bool] = field(default_factory=dict)
+    # 実行中の DAG wave ごとに自動算出される local/cloud ルーティング。
+    # CLI/GUI 永続設定ではなく、Cloud Session 自動振り分けの runtime 状態。
 
     # --- MCP Servers ---
     mcp_servers: Optional[Dict[str, Any]] = None
@@ -411,21 +548,21 @@ class SDKConfig:
     pricing_usd_jpy_rate: float = 150.0        # USD → JPY 換算レート（固定値）。HVE_USD_JPY_RATE で上書き可能
     pricing_currency: str = "auto"             # "auto" (locale=ja → both, それ以外 → usd) / "usd" / "jpy" / "both"
     pricing_auto_refresh: bool = True          # 月初判定で価格表を自動再取得する。HVE_PRICING_AUTO_REFRESH で上書き可能
-    pricing_statusline_enabled: bool = True    # CUI 1Hz ステータスラインを有効化。HVE_NO_STATUSLINE=1 / --no-statusline で抑止可能
+    pricing_statusline_enabled: bool = True    # HVE_PRICING_STATUSLINE_ENABLED / HVE_NO_STATUSLINE=1 で上書き可。※本フラグを読む実装は現在なく（hve/statusline.py は未配線）、CLI オプションも存在しない
     pricing_plan_id: str = ""                  # 料金計算で使う plan_id (空=自動推定)。HVE_PRICING_PLAN_ID で上書き可能
 
     # --- 実行 ID ---
     run_id: str = ""                        # ワークフロー実行ごとのユニークID（空の場合は run_workflow() で自動生成）
-    session_id_prefix: str = ""             # SDK session_id の prefix。Resume 時に固定値を強制したい場合のみ非空にする。
+    session_id_prefix: str = ""             # SDK session_id の prefix。固定値を強制したい場合のみ非空にする。
     # 空文字（デフォルト）: hve.run_state.DEFAULT_SESSION_ID_PREFIX ("hve") を使用する。
-    # Phase 2 (Resume): make_session_id() に渡され、`{prefix}-{run_id}-step-{step_id}` 形式の
+    # make_session_id() に渡され、`{prefix}-{run_id}-step-{step_id}` 形式の
     # 決定論的 session_id を生成する基底となる。HVE_SESSION_ID_PREFIX 環境変数で上書き可能。
 
     # --- Fork-on-Retry (T2.7) ---
     fork_on_retry: bool = False
     """失敗ステップを 1 回だけフォーク (新 session_id) で自動リトライするかどうか。
     既定: False（旧挙動と完全一致）。HVE_FORK_ON_RETRY 環境変数で上書き可能。
-    フォーク発火時は KPI ログ (`work/kpi/fork-kpi-<run_id>.jsonl`) を出力する。
+    フォーク発火時は KPI ログ (`work/run/<run-id>/kpi/fork-kpi.jsonl`) を出力する。
     """
 
     # --- その他 ---
@@ -452,6 +589,19 @@ class SDKConfig:
     """
     mdq_watch_debounce_ms: int = 500
     """watcher のデバウンス間隔（ms）。既定 500ms。"""
+
+    # --- cq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
+    cq_watch: bool = True
+    """``True`` で run_workflow 起動時に cq.watcher を起動し、ソース
+    ファイルの追加/更新/削除を ``.cq/index-<profile>.sqlite`` へ逐次反映する。
+
+    - 監視対象は cq 設定ファイルで最初に宣言された profile。
+    - 既定 ON。watchdog 未導入時や cq 設定不在時は自動で無効化（警告のみ）。
+    - ``--no-cq-watch`` / 環境変数 ``HVE_CQ_WATCH=0`` で OFF。
+    - Cloud Agent / GitHub Actions では使用しない（本機能は CLI 専用）。
+    """
+    cq_watch_debounce_ms: int = _CQ_DEFAULT_DEBOUNCE_MS
+    """watcher のデバウンス間隔（ms）。既定値は ``cq.watcher`` が SoT。"""
     # ※ プロンプトサニタイズの有効/無効は HVE_PROMPT_SANITIZATION 環境変数で直接制御する（security.is_sanitization_enabled() 参照）
 
     # --- メイン成果物改善制御 ---
@@ -515,6 +665,37 @@ class SDKConfig:
             self.reuse_context_filtering = True
         if not isinstance(self.context_injection_max_chars, int) or self.context_injection_max_chars <= 0:
             self.context_injection_max_chars = DEFAULT_CONTEXT_INJECTION_MAX_CHARS
+        self.cloud_session_enabled = _coerce_bool(self.cloud_session_enabled, default=False)
+        for _attr in (
+            "cloud_session_repository_owner",
+            "cloud_session_repository_name",
+            "cloud_session_repository_branch",
+            "cloud_session_integration_id",
+            "cloud_session_mc_base_url",
+        ):
+            _value = getattr(self, _attr)
+            if isinstance(_value, str):
+                _value = _value.strip() or None
+                setattr(self, _attr, _value)
+        try:
+            self.cloud_session_max_concurrency = int(self.cloud_session_max_concurrency)
+        except (TypeError, ValueError):
+            self.cloud_session_max_concurrency = 5
+        if self.cloud_session_max_concurrency < 1:
+            self.cloud_session_max_concurrency = 1
+        # per-step wall-clock タイムアウトの正規化: <=0 / 不正値は無効(None)扱い
+        if self.step_timeout_seconds is not None:
+            try:
+                self.step_timeout_seconds = float(self.step_timeout_seconds)
+            except (TypeError, ValueError):
+                self.step_timeout_seconds = None
+            else:
+                if self.step_timeout_seconds <= 0:
+                    self.step_timeout_seconds = None
+        self.fleet_mode_enabled = _coerce_bool(self.fleet_mode_enabled, default=False)
+        self.cloud_session_step_overrides = _parse_bool_mapping(self.cloud_session_step_overrides)
+        self.cloud_session_subtask_overrides = _parse_bool_mapping(self.cloud_session_subtask_overrides)
+        self.cloud_session_runtime_step_overrides = _parse_bool_mapping(self.cloud_session_runtime_step_overrides)
         # self_improve_scope は from_env() と同様に正規化してから検証し、
         # 直接コンストラクタ呼び出し時も挙動を統一する。
         self.self_improve_scope = (self.self_improve_scope or "").strip().lower()
@@ -600,6 +781,12 @@ class SDKConfig:
             )
         except (TypeError, ValueError):
             env_context_injection_max_chars = DEFAULT_CONTEXT_INJECTION_MAX_CHARS
+        try:
+            env_cloud_session_max_concurrency = int(
+                os.environ.get("HVE_CLOUD_SESSION_MAX_CONCURRENCY", "5") or "5"
+            )
+        except (TypeError, ValueError):
+            env_cloud_session_max_concurrency = 5
 
         def _parse_tool_list(value: str) -> Optional[List[str]]:
             """HVE_AVAILABLE_TOOLS / HVE_EXCLUDED_TOOLS をパースしてリスト化する。
@@ -621,7 +808,7 @@ class SDKConfig:
 
         return cls(
             model=env_model,
-            github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", ""),
+            github_token=os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or "",
             repo=os.environ.get("REPO", ""),
             cli_path=os.environ.get("COPILOT_CLI_PATH"),
             review_model=_normalize_model_with_warning(os.environ.get("REVIEW_MODEL") or None),
@@ -655,10 +842,16 @@ class SDKConfig:
             apply_self_improve_to_main=_env_bool("HVE_APPLY_SELF_IMPROVE_TO_MAIN", default=True),
             self_improve_scope=env_si_scope,
             require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
+            run_id=(os.environ.get("HVE_RUN_ID", "") or "").strip(),
             session_id_prefix=os.environ.get("HVE_SESSION_ID_PREFIX", "").strip(),
             fork_on_retry=_env_bool("HVE_FORK_ON_RETRY", default=False),
             mdq_watch=_env_bool("HVE_MDQ_WATCH", default=True),
             mdq_watch_debounce_ms=int(os.environ.get("HVE_MDQ_WATCH_DEBOUNCE_MS", "500") or "500"),
+            cq_watch=_env_bool("HVE_CQ_WATCH", default=True),
+            cq_watch_debounce_ms=int(
+                os.environ.get("HVE_CQ_WATCH_DEBOUNCE_MS", "") or _CQ_DEFAULT_DEBOUNCE_MS
+            ),
+            fleet_mode_enabled=_env_bool("HVE_FLEET_MODE_ENABLED", default=False),
             pricing_usd_jpy_rate=float(os.environ.get("HVE_USD_JPY_RATE", "150.0") or "150.0"),
             pricing_currency=(os.environ.get("HVE_PRICING_CURRENCY", "auto") or "auto").strip().lower(),
             pricing_auto_refresh=_env_bool("HVE_PRICING_AUTO_REFRESH", default=True),
@@ -668,6 +861,15 @@ class SDKConfig:
                 else _env_bool("HVE_PRICING_STATUSLINE_ENABLED", default=True)
             ),
             pricing_plan_id=(os.environ.get("HVE_PRICING_PLAN_ID", "") or "").strip(),
+            cloud_session_enabled=_env_bool("HVE_CLOUD_SESSION_ENABLED", default=False),
+            cloud_session_repository_owner=(os.environ.get("HVE_CLOUD_SESSION_REPOSITORY_OWNER", "") or "").strip() or None,
+            cloud_session_repository_name=(os.environ.get("HVE_CLOUD_SESSION_REPOSITORY_NAME", "") or "").strip() or None,
+            cloud_session_repository_branch=(os.environ.get("HVE_CLOUD_SESSION_REPOSITORY_BRANCH", "") or "").strip() or None,
+            cloud_session_max_concurrency=env_cloud_session_max_concurrency,
+            cloud_session_integration_id=(os.environ.get("GITHUB_COPILOT_INTEGRATION_ID", "") or "").strip() or None,
+            cloud_session_mc_base_url=(os.environ.get("COPILOT_MC_BASE_URL", "") or "").strip() or None,
+            cloud_session_step_overrides=_parse_bool_mapping(os.environ.get("HVE_CLOUD_SESSION_STEP_OVERRIDES", "")),
+            cloud_session_subtask_overrides=_parse_bool_mapping(os.environ.get("HVE_CLOUD_SESSION_SUBTASK_OVERRIDES", "")),
         )
 
     def get_review_model(self) -> str:
@@ -690,4 +892,4 @@ class SDKConfig:
         if self.github_token:
             return self.github_token
         import os
-        return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN", "")
+        return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""

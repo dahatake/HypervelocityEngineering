@@ -1,38 +1,41 @@
 # ============================================================
-# hve/setup-hve.ps1  EHVE 完�EセチE�E��E�アチE�E�E (Windows / PowerShell)
+# hve/setup-hve.ps1 — HVE 完全セットアップ (Windows / PowerShell)
 #
-# 目皁E
-#   OS しか入ってぁE�E��E�ぁE�E��E�リーンな Windows 環墁E�E��E�ら、HVE の CLI と GUI の
-#   全機�Eを実行できる .venv をゼロから構築する、E
+# 目的:
+#   OS しか入っていないクリーンな Windows 環境から、HVE の CLI と GUI の
+#   全機能を実行できる .venv をゼロから構築する。
 #
-# 既定で導�Eする extras (pyproject.toml [project.optional-dependencies] と一致):
+# 既定で導入する extras (pyproject.toml [project.optional-dependencies] と一致):
+#   - test         : pytest (repository / VS Code task verification)
 #   - mdq-watch    : rank_bm25, tiktoken, watchdog
-#   - mdq-ja       : (現状空。封E�E��E�の形態素解析器拡張用)
+#   - mdq-ja       : (現状空。将来の形態素解析器拡張用)
 #   - semantic     : fastembed, nltk, numpy   (semantic_paragraph 戦略)
 #   - gui          : PySide6, markdown-it-py, mdit-py-plugins, Pygments
-#   - gui-pty      : pywinpty  (GUI 冁EPTY で copilot/az/gh の対話認証)
+#   - gui-pty      : pywinpty  (GUI 内 PTY で copilot/az/gh の対話認証)
 #   - gui-docconvert: markitdown[pdf,docx,pptx,xlsx,xls,outlook]
 #
 # 追加で行うこと:
-#   - .venv 作�E / 検証 (Python 3.11+ 忁E�E��E�E
-#   - pip / setuptools / wheel をアチE�E�EグレーチE
+#   - .venv 作成 / 検証 (Python 3.11+ 必須)
+#   - pip / setuptools / wheel をアップグレード
 #   - editable install: pip install -e .
-#   - nltk punkt_tab を事前ダウンローチE(semantic 初回ビルド�Eオフライン安定化)
-#   - Mermaid / KaTeX アセチE�E��E� DL (Markdown プレビュー)
-#   - GUI 翻訳 .ts ↁE.qm コンパイル (pyside6-lrelease)
-#   - git / gh / Python の存在確認と winget での導�E手頁E�E��E��E�E
+#   - github-copilot-sdk を最新化 (--no-deps で pydantic-core 不整合を回避)
+#   - nltk punkt_tab を事前ダウンロード (semantic 初回ビルドのオフライン安定化)
+#   - Mermaid / KaTeX アセット DL (Markdown プレビュー)
+#   - GUI 翻訳 .ts → .qm コンパイル (pyside6-lrelease)
+#   - git / gh / Python の存在確認と winget での導入手順案内
 #
-# 使ぁE�E��E�:
-#   powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
-#       既宁E 全 extras を導�E (CLI + GUI 完�E構�E)
-#   ... -CheckOnly       状態確認�Eみ。変更なぁE
-#   ... -NoGui           GUI 系 extras をスキチE�E�E (CLI 専用)
-#   ... -Minimal         base のみ (extras なぁE。検証/開発の最小構�E
-#   ... -Force           .venv を無条件削除し�E構篁E
-#   ... -SkipNltkDownload  nltk punkt_tab の事前 DL をスキチE�E�E
-#   ... -WithSkills      microsoft/skills めEnpx で .github/skills/azure-skills/ に導�E
+# 使い方:
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1
+#       既定: 全 extras を導入 (CLI + GUI 完全構成)
+#   ... -CheckOnly         状態確認のみ。変更なし
+#   ... -NoGui             GUI 系 extras をスキップ (CLI 専用)
+#   ... -Minimal           runtime base のみ (extras / pytest なし)
+#   ... -Force             .venv を無条件削除し再構築
+#   ... -SkipNltkDownload  nltk punkt_tab の事前 DL をスキップ
+#   ... -WithSkills        microsoft/skills を npx で .github/skills/azure-skills/ に導入
+#   ... -Yes               確認プロンプトをスキップ (Python の winget 自動導入を含む)
+#   ... -NoInstallPython   Python の winget 自動導入を行わない
 # ============================================================
-
 [CmdletBinding()]
 param(
     [switch]$CheckOnly,
@@ -48,8 +51,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $script:WarningCount = 0
 
-# PowerShell 7+ 必須（Windows PowerShell 5.x は非対応）
-if ($PSVersionTable.PSVersion.Major -lt 7) {
+# PowerShell 7+ (PSEdition Core) 必須。Windows PowerShell 5.x へはフォールバックしない。
+if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host "[ERROR] PowerShell 7+ is required. Current: $($PSVersionTable.PSVersion)" -ForegroundColor Red
     Write-Host "        Install via: winget install --id Microsoft.PowerShell -e --source winget" -ForegroundColor Yellow
     Write-Host "        Or: https://aka.ms/install-powershell" -ForegroundColor Yellow
@@ -73,11 +76,11 @@ function Invoke-Checked {
 
 function Invoke-Probe {
     param([string]$Exe, [string[]]$ArgList)
-    # ネイチE��ブコマンド�E stderr めEStop ポリシー下でも例外化しなぁE��ぁE��時的に Continue、E
+    # ネイティブコマンドの stderr が Stop ポリシー下でも例外化しないよう、一時的に Continue。
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        # 出力�E捨て、終亁E��ード�Eみ取得、E
+        # 出力は捨て、終了コードのみ取得。
         $null = & $Exe @ArgList 2>&1
         return $LASTEXITCODE
     } finally {
@@ -86,7 +89,7 @@ function Invoke-Probe {
 }
 
 function Find-Python311 {
-    # 候補生戁E py launcher (バ�Eジョン別) + python / python3
+    # 候補生成: py launcher (バージョン別) + python / python3
     $candidates = @()
     if (Get-Command py -ErrorAction SilentlyContinue) {
         foreach ($ver in '-3.14','-3.13','-3.12','-3.11','-3') {
@@ -102,7 +105,7 @@ function Find-Python311 {
     $ErrorActionPreference = 'Continue'
     try {
         foreach ($c in $candidates) {
-            # `--version` は "Python X.Y.Z" を返す。f-string めE�E��E�用符を避けて堁E�E��E�化、E
+            # `--version` は "Python X.Y.Z" を返す。f-string の二重引用符を避けて堅牢化。
             $verArgs = $c.ExtraArgs + @('--version')
             $raw = & $c.Exe @verArgs 2>&1
             if ($LASTEXITCODE -ne 0 -or -not $raw) { continue }
@@ -131,9 +134,9 @@ $venvDir   = Join-Path $repoRoot '.venv'
 $venvPy    = Join-Path $venvDir 'Scripts\python.exe'
 Set-Location $repoRoot
 
-# ---------- フラグ整吁E----------
+# ---------- フラグ整理 ----------
 if ($Minimal -and ($Force -or $WithSkills)) {
-    # Minimal でめEForce/Skills は許容するぁEGUI extras は強制 OFF
+    # Minimal でも Force/Skills は許容するが、GUI extras は強制 OFF
 }
 $installGui = -not $NoGui -and -not $Minimal
 
@@ -141,7 +144,7 @@ Write-Host "HVE setup (Windows / PowerShell)"
 Write-Host "  CheckOnly=$CheckOnly  NoGui=$NoGui  Minimal=$Minimal  Force=$Force  SkipNltkDownload=$SkipNltkDownload  WithSkills=$WithSkills"
 Write-Host "  repoRoot=$repoRoot"
 
-# ---------- 忁E�E��E�チE�Eル ----------
+# ---------- 必須ツール ----------
 Write-Step 'Checking required OS tools'
 
 $git = Get-Command git -ErrorAction SilentlyContinue
@@ -230,11 +233,11 @@ if ($Minimal) {
     Write-Step 'Installing HVE (base only, no extras)'
     Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e','.')
 } else {
-    $extras = @('mdq-watch','mdq-ja','semantic')
+    $extras = @('test','mdq-watch','mdq-ja','semantic')
     if ($installGui) { $extras += @('gui','gui-pty','gui-docconvert') }
-    $target = "-e .[" + ($extras -join ',') + "]"
+    $target = ".[" + ($extras -join ',') + "]"
     Write-Step "Installing HVE with extras: [$($extras -join ',')]"
-    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install',$target)
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e',$target)
 }
 
 # ---------- github-copilot-sdk: 最新へ ----------
@@ -285,7 +288,7 @@ sys.exit(1)
     else { Write-Warn2 'nltk punkt_tab download failed (see error above). semantic_paragraph will fallback to regex split until network is available.' }
 }
 
-# ---------- Mermaid / KaTeX アセチE�E��E� ----------
+# ---------- Mermaid / KaTeX アセット ----------
 if ($installGui) {
     Write-Step 'Downloading Mermaid / KaTeX assets for Markdown preview'
     try {
@@ -321,7 +324,7 @@ if ($installGui) {
     }
 }
 
-# ---------- microsoft/skills (任愁E ----------
+# ---------- microsoft/skills (任意) ----------
 if ($WithSkills) {
     Write-Step 'Installing microsoft/skills via npx'
     $npx = Get-Command npx -ErrorAction SilentlyContinue
@@ -337,7 +340,6 @@ if ($WithSkills) {
 
 # ---------- 検証 ----------
 Write-Step 'Verifying installation'
-$ok = $true
 
 $checks = @(
     @{ Name='hve --help';     Args=@('-m','hve','--help') },
@@ -365,7 +367,7 @@ if ($installGui) {
 foreach ($c in $checks) {
     $code = Invoke-Probe -Exe $venvPy -ArgList $c.Args
     if ($code -eq 0) { Write-Ok $c.Name }
-    else { Write-Warn2 "$($c.Name) verification failed"; $ok = $false }
+    else { Write-Warn2 "$($c.Name) verification failed" }
 }
 
 # FTS5 trigram (ja-jp)
@@ -384,13 +386,13 @@ if ((Invoke-Probe -Exe $venvPy -ArgList @('-c',$trigramCode)) -eq 0) {
     Write-Warn2 'SQLite < 3.34: FTS5 trigram unavailable. Falls back to unicode61.'
 }
 
-# gh auth (惁E�E��E�のみ)
+# gh auth (情報のみ)
 if ($gh) {
     if ((Invoke-Probe -Exe $gh.Source -ArgList @('auth','status')) -eq 0) { Write-Ok 'gh auth status' }
     else { Write-Warn2 "gh not authenticated. Run: gh auth login" }
 }
 
-# ---------- まとめE----------
+# ---------- まとめ ----------
 Write-Step 'Next steps'
 Write-Host "  CLI : $venvPy -m hve --help     (or .\hve.cmd --help)"
 if ($installGui) {

@@ -144,8 +144,8 @@ def test_ard_group_id_csv_and_expanded_display() -> None:
     assert csv is not None
     assert set(csv.split(",")) == {"1", "4"}
     # display は実 Step ID 展開済 (Q4=A 既定: expand_group_step_ids 利用)
-    # _WORKFLOW_GROUP_MAPS["ard"]: "1"→["1","1.1","1.2"], "4"→["4.1","4.2","4.3"]
-    expected = {"1", "1.1", "1.2", "4.1", "4.2", "4.3"}
+    # _WORKFLOW_GROUP_MAPS["ard"]: "1"→["1","1.1","1.2"], "4"→["3.1","3.2","3.3"]
+    expected = {"1", "1.1", "1.2", "3.1", "3.2", "3.3"}
     assert display == expected
     assert "2" not in display  # グループ 2 は未選択
 
@@ -160,7 +160,7 @@ def test_ard_text_override_and_intersect_at_group_level() -> None:
     # AND 結果: {"2","4"}. 順序は step1_ids の順序保持に依存するため非依存検証。
     assert csv is not None
     assert set(csv.split(",")) == {"2", "4"}
-    expected = {"2", "4.1", "4.2", "4.3"}
+    expected = {"2", "3.1", "3.2", "3.3"}
     assert display == expected
 
 

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
+import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -16,6 +18,7 @@ from hve.auth import (
     AuthError,
     AuthInfo,
     TOKEN_ENV_VARS,
+    ensure_authenticated,
     find_copilot_binary,
     get_auth_status,
     is_authenticated,
@@ -232,6 +235,43 @@ class TestIsAuthenticated:
             assert is_authenticated(timeout=5.0) is False
 
 
+class TestEnsureAuthenticated:
+    def test_returns_existing_authenticated_status_without_login(self):
+        info = AuthInfo(is_authenticated=True, login="alice")
+        with patch("hve.auth.get_auth_status", return_value=info) as status_mock, \
+             patch("hve.auth.run_login") as login_mock:
+            result = ensure_authenticated(interactive=True)
+        assert result is info
+        status_mock.assert_called_once()
+        login_mock.assert_not_called()
+
+    def test_non_interactive_returns_unauthenticated_without_login(self):
+        info = AuthInfo(is_authenticated=False, status_message="not signed in")
+        with patch("hve.auth.get_auth_status", return_value=info), \
+             patch("hve.auth.run_login") as login_mock:
+            result = ensure_authenticated(interactive=False)
+        assert result is info
+        login_mock.assert_not_called()
+
+    def test_interactive_runs_login_then_rechecks_status(self):
+        before = AuthInfo(is_authenticated=False)
+        after = AuthInfo(is_authenticated=True, login="alice")
+        with patch("hve.auth.get_auth_status", side_effect=[before, after]) as status_mock, \
+             patch("hve.auth.run_login", return_value=0) as login_mock:
+            result = ensure_authenticated(interactive=True, host="https://github.com")
+        assert result is after
+        assert status_mock.call_count == 2
+        login_mock.assert_called_once()
+
+    def test_interactive_reports_login_failure(self):
+        before = AuthInfo(is_authenticated=False)
+        with patch("hve.auth.get_auth_status", return_value=before), \
+             patch("hve.auth.run_login", return_value=2):
+            result = ensure_authenticated(interactive=True)
+        assert result.is_authenticated is False
+        assert result.status_message == "copilot login exited with 2"
+
+
 # =====================================================================
 # find_copilot_binary
 # =====================================================================
@@ -246,15 +286,13 @@ class TestFindCopilotBinary:
 
     def test_falls_back_to_which_when_bundle_missing(self, monkeypatch, tmp_path):
         # copilot.bin の __file__ を非存在パスに差し替えて同梱バイナリ未検出を再現
-        import copilot.bin as real_bin
-
-        fake_bin = MagicMock()
+        fake_bin = types.ModuleType("copilot.bin")
         fake_bin.__file__ = str(tmp_path / "nonexistent" / "__init__.py")
-        monkeypatch.setattr("copilot.bin", fake_bin, raising=False)
+        monkeypatch.setitem(sys.modules, "copilot.bin", fake_bin)
         # parent module の属性も差し替え (import copilot.bin as _bin は親属性経由)
         import copilot as copilot_pkg
 
-        monkeypatch.setattr(copilot_pkg, "bin", fake_bin)
+        monkeypatch.setattr(copilot_pkg, "bin", fake_bin, raising=False)
         with patch("shutil.which", return_value="/usr/bin/copilot"):
             result = find_copilot_binary()
         assert result == "/usr/bin/copilot"

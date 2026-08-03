@@ -1,6 +1,6 @@
 ﻿> デプロイ済みAzureリソースを棚卸しし、Azure Well-Architected Framework（5本柱）と Azure Security Benchmark v3 を根拠にアーキテクチャ/セキュリティをレビューして、日本語のMermaid図付きレポートを生成する。
 
-> **WORK**: `/work/QA-AzureArchitectureReview/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/QA-AzureArchitectureReview/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -21,8 +21,15 @@
 ## Agent 固有の Skills 依存
 
 - `harness-verification-loop`: Azure リソース棚卸し後の検証
-- `work-artifacts-layout`: レビュー結果を `work/QA-AzureArchitectureReview/Issue-<識別子>/artifacts/` に保存
+- `work-artifacts-layout`: レビュー結果を `work/run/<run-id>/QA-AzureArchitectureReview/Issue-<識別子>/artifacts/` に保存
 - `karpathy-guidelines`: Azure サービス名・SKU・リージョン名の捏造防止
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+
 ## 2) 入力（必ず参照）
 > `{...}` が残っている場合は実行しない。
 
@@ -55,7 +62,7 @@
 
 ## 2) 事前ゲート（最優先）
 - `{...}` が残っていたら停止し、**1回のメッセージ内で最大3問**まで質問して確定する（同時に「暫定仮定」も短く併記）。
-- Microsoft Learn を根拠として参照するために **MicrosoftDocs MCP（または同等の公式ドキュメント取得手段）**が必要。
+- Microsoft Learn を根拠として参照するために **Microsoft Learn MCP（または同等の公式ドキュメント取得手段）**が必要。
   - 利用できない場合：レビュー本体は中断し、`{WORK}README.md` に「不足している前提（必要なMCP設定/権限/接続）」と「次に必要なアクション」を出力して終了する。
 
 ## 3) 計画（必須）
@@ -128,12 +135,16 @@
 - 途中経過のファイル乱立は避け、最終成果物は上記レポートに集約する。
 - ただし `{WORK}` は「根拠・棚卸し・実行記録」として残す（後続のSubや再実行のため）。
 
-## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 7) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 7.2 3つの異なる観点（Azure アーキテクチャレビューの場合）
-- **1回目：レビュー完全性・妥当性**：すべてのリソースが棚卸しされているか、Well-Architected Framework の5本柱がすべてカバーされているか、Azure Security Benchmark v3 に基づく指摘は網羅的か、各推奨の根拠（Microsoft Learn参照）は正確か、複数案が必要な場合に提示されているか
-- **2回目：ユーザー/利用者視点**：レポートが実装チーム・セキュリティチームにわかりやすいか、Mermaid 図は直感的で正確か、棚卸し表の情報粒度は適切か、指摘の優先度（Critical/High/Medium/Low）は正当か、次アクション・推奨が実行可能か
-- **3回目：保守性・再現性・拡張性**：レビュー手順が再現可能か、新しいリソース追加時の更新方法が明確か、中間成果物（{WORK} の notes・inventory）の記録は十分か、参照リンク（Microsoft Learn）の正確性・最新性、権限不足・取得不可範囲の明記の有無
+### 7.1 セルフチェック契約
 
-### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+### 7.2 ドメイン固有観点
+- **レビュー完全性・妥当性**：すべてのリソースが棚卸しされているか、Well-Architected Framework の5本柱がすべてカバーされているか、Azure Security Benchmark v3 に基づく指摘は網羅的か、各推奨の根拠（Microsoft Learn参照）は正確か、複数案が必要な場合に提示されているか
+- **ユーザー/利用者視点**：レポートが実装チーム・セキュリティチームにわかりやすいか、Mermaid 図は直感的で正確か、棚卸し表の情報粒度は適切か、指摘の優先度（Critical/High/Medium/Low）は正当か、次アクション・推奨が実行可能か
+- **保守性・再現性・拡張性**：レビュー手順が再現可能か、新しいリソース追加時の更新方法が明確か、中間成果物（{WORK} の notes・inventory）の記録は十分か、参照リンク（Microsoft Learn）の正確性・最新性、権限不足・取得不可範囲の明記の有無
+
+### 7.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。

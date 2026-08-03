@@ -1,7 +1,8 @@
 """report.py — useractions レポート保存（冪等 + 排他制御）。
 
 出力パス:
-    work/<workflow_id>/<run_id>-<YYYYMMDD-HHMMSS>-useractions-report.md
+    work/run/<run-id>/<workflow_id>/<run_id>-<YYYYMMDD-HHMMSS>-useractions-report.md
+    work/run/<run-id>/<workflow_id>/<run_id>-<YYYYMMDD-HHMMSS>-tasktree-report.md
 
 衝突時は末尾に `-2`, `-3`... のサフィックスを付与する（O_EXCL 相当の排他作成）。
 """
@@ -10,10 +11,13 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 if TYPE_CHECKING:
     from .state import WorkbenchState
+
+
+_PathLike = Union[str, Path]
 
 
 def _format_wall(epoch: float) -> str:
@@ -27,6 +31,21 @@ def _format_path_ts(epoch: float) -> str:
 def _escape_cell(s: str) -> str:
     # Markdown テーブルセル内のパイプ / 改行を無害化
     return s.replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+
+def _resolve_report_base_dir(base_dir: Optional[_PathLike]) -> Path:
+    """Workbench レポートの出力 root を返す。
+
+    ``base_dir`` 明示指定時は既存互換としてその値を使う。未指定時は
+    HVE の run-scoped work root (`work/run/<run-id>/`) を使う。
+    """
+    if base_dir is not None:
+        return Path(base_dir)
+    try:
+        from hve.split_fork import resolve_work_root
+    except ImportError:  # pragma: no cover - script execution path
+        from split_fork import resolve_work_root  # type: ignore[import-not-found,no-redef]
+    return resolve_work_root()
 
 
 def _build_markdown(
@@ -88,7 +107,7 @@ def save_useractions_report(
     workflow_id: str,
     run_id: str,
     started_at_wall: Optional[float] = None,
-    base_dir: Path = Path("work"),
+    base_dir: Optional[_PathLike] = None,
 ) -> Path:
     """useractions を Markdown レポートとして保存する。
 
@@ -103,7 +122,7 @@ def save_useractions_report(
     ended_at_wall = time.time()
 
     ts = _format_path_ts(started_at_wall)
-    target_dir = base_dir / workflow_id
+    target_dir = _resolve_report_base_dir(base_dir) / workflow_id
     target_dir.mkdir(parents=True, exist_ok=True)
     base_path = target_dir / f"{run_id}-{ts}-useractions-report.md"
 
@@ -189,9 +208,9 @@ def save_tasktree_report(
     workflow_id: str,
     run_id: str,
     started_at_wall: Optional[float] = None,
-    base_dir: Path = Path("work"),
+    base_dir: Optional[_PathLike] = None,
 ) -> Path:
-    """TaskTree を Markdown レポートとして保存する（作業用、work/ 配下）。
+    """TaskTree を Markdown レポートとして保存する（作業用、work/run/<run-id>/ 配下）。
 
     冪等性: state.tasktree_report_saved=True の場合は no-op で Path("") を返す。
     """
@@ -203,7 +222,7 @@ def save_tasktree_report(
     ended_at_wall = time.time()
 
     ts = _format_path_ts(started_at_wall)
-    target_dir = base_dir / workflow_id
+    target_dir = _resolve_report_base_dir(base_dir) / workflow_id
     target_dir.mkdir(parents=True, exist_ok=True)
     base_path = target_dir / f"{run_id}-{ts}-tasktree-report.md"
 

@@ -2,11 +2,11 @@ inputs:
 - path: docs/screen/{screenId}-{screenNameSlug}-description.md
   required: true
   kind: agent_artifact
-  producer: Arch-UI-Detail
-- path: docs/catalog/screen-catalog.md
+  producer: Arch-UI-Detail--aad-web--2.1
+- path: docs/catalog/screen-catalog-APP-*.md
   required: true
   kind: agent_artifact
-  producer: Arch-UI-List
+  producer: Arch-UI-List--aad-web--1
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
@@ -14,11 +14,11 @@ inputs:
 - path: docs/catalog/use-case-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ARD-UseCaseCatalog
+  producer: Arch-ARD-UseCaseCatalog--ard--3.3
 - path: src/data/sample-data.json
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling
+  producer: Arch-DataModeling--aas--4.2
 - path: docs/test-specs/{screenId}-test-spec.md
   required: true
   kind: agent_artifact

@@ -12,8 +12,9 @@ CLI ↔ GUI IPC フローでの責務:
 
 表形式 UI（C 仕様: 全質問を 1 つの表に並べる）:
     - 1 行 = 1 質問
-    - 列: [No.] [優先度] [分類] [質問文] [既定値候補] [理由] [回答]
-    - 回答列は QComboBox（選択肢あり）または QLineEdit（自由記述）
+    - 列: [No.] [優先度] [分類] [質問文] [選択肢] [既定値候補] [理由] [回答]
+    - 選択肢列は各選択肢を「ラベル) 本文」形式で改行区切り表示（読み取り専用）
+    - 回答列は QComboBox（ラベル記号のみ表示）または QLineEdit（自由記述）
     - 各行はダイアログ表示時に既定値候補で初期選択される
 """
 
@@ -55,10 +56,11 @@ _COL_NO = 0
 _COL_PRIORITY = 1
 _COL_CATEGORY = 2
 _COL_QUESTION = 3
-_COL_DEFAULT = 4
-_COL_REASON = 5
-_COL_ANSWER = 6
-_COL_HEADERS = ["No.", "優先度", "分類", "質問", "既定値候補", "理由", "回答"]
+_COL_CHOICES = 4
+_COL_DEFAULT = 5
+_COL_REASON = 6
+_COL_ANSWER = 7
+_COL_HEADERS = ["No.", "優先度", "分類", "質問", "選択肢", "既定値候補", "理由", "回答"]
 
 
 class _QuestionRow:
@@ -134,7 +136,7 @@ class QAAnswerDialog(QDialog):
         if step_id:
             title = f"{title} - Step {step_id}"
         self.setWindowTitle(title)
-        self.resize(1100, 600)
+        self.resize(1250, 600)
 
         outer = QVBoxLayout(self)
 
@@ -199,6 +201,7 @@ class QAAnswerDialog(QDialog):
         hh.setSectionResizeMode(_COL_PRIORITY, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(_COL_CATEGORY, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(_COL_QUESTION, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(_COL_CHOICES, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(_COL_DEFAULT, QHeaderView.ResizeMode.Interactive)
         hh.setSectionResizeMode(_COL_REASON, QHeaderView.ResizeMode.Interactive)
         hh.setSectionResizeMode(_COL_ANSWER, QHeaderView.ResizeMode.Interactive)
@@ -217,6 +220,8 @@ class QAAnswerDialog(QDialog):
 
             table.setItem(row_idx, _COL_CATEGORY, QTableWidgetItem(q.category or ""))
             table.setItem(row_idx, _COL_QUESTION, QTableWidgetItem(q.question or ""))
+            choices_text = "\n".join(f"{c.label}) {c.text}" for c in q.choices)
+            table.setItem(row_idx, _COL_CHOICES, QTableWidgetItem(choices_text))
             table.setItem(row_idx, _COL_DEFAULT, QTableWidgetItem(q.default_answer or ""))
             table.setItem(row_idx, _COL_REASON, QTableWidgetItem(q.reason or ""))
 
@@ -234,7 +239,7 @@ class QAAnswerDialog(QDialog):
             default_label = self._extract_default_label(q)
             selected_index = 0
             for i, choice in enumerate(q.choices):
-                combo.addItem(f"{choice.label}) {choice.text}", userData=choice.label.upper())
+                combo.addItem(choice.label, userData=choice.label.upper())
                 if default_label and choice.label.upper() == default_label.upper():
                     selected_index = i
             combo.setCurrentIndex(selected_index)

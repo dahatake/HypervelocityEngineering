@@ -1,7 +1,7 @@
 ﻿> Phase 4 の Azure 実装設計として、Phase 3 の製品非依存 Agentic Retrieval 仕様を入力にサービス単位の設計書を作成し、Microsoft Learn 根拠付きで記録する。
 
 <!-- markdownlint-disable MD013 MD022 MD031 MD032 MD041 MD058 MD060 -->
-> **WORK**: `/work/Dev-Microservice-Azure-AgenticRetrievalDesign/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AgenticRetrievalDesign/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -27,10 +27,10 @@
 - `.github/skills/mcp-server-design/SKILL.md`
 - `.github/skills/architecture-questionnaire/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
-- `.github/skills/harness/adversarial-review/SKILL.md`
 
 ### 外部 Skill（ユーザー環境）
 > 以下はリポジトリ内には存在しない。ユーザー環境の `~/.agents/skills/` 配下にインストール済みの場合のみ参照可。未配備時は本 prompt 本文の指示のみで動作する。
+> これらは任意のドキュメント参照であり、直接呼び出しを必須としない。本 Agent は未配備の外部 Skill を作成・インストールせず、成果物として実装もしない。
 
 - `~/.agents/skills/azure-ai/SKILL.md`
 - `~/.agents/skills/microsoft-foundry/SKILL.md`
@@ -146,7 +146,16 @@ Phase 3 の `docs/services/{serviceId}-agentic-retrieval-spec.md` を入力と�
 - 既存内容は削除しない。
 
 ### 5) 最終品質レビュー
-- Skill `adversarial-review` 準拠で 3 観点（機能完全性 / ユーザー視点 / 保守性）を実施し、結果を `{WORK}` に記録する。
+- 下記「最終品質レビュー」節の単回セルフチェックを実施する。
+
+## 最終品質レビュー（単回インライン・セルフチェック）
+
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+- **機能完全性**：1〜8章、1 service = 1 Search、Index / Vector / Semantic / data source / Skillset / Knowledge Source / Knowledge Base、条件付きFoundry、投入方式、RBAC、API version、全ACが揃うか。
+- **ユーザー視点**：入力flagとPhase 3仕様に沿う選択、第一案/代替案、未決事項、Microsoft Learn根拠から実装担当が判断を追跡できるか。
+- **保守性**：SKU / model / API version / Indexer sourceをハードコードせず、追加サービス一覧を非破壊更新し、IaCや実RBACを本Agentへ持ち込んでいないか。
+- 問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## 受け入れ条件（AC）
 - **AC4A-1**: `{serviceId}-design.md` の章立て（1〜8）が完備

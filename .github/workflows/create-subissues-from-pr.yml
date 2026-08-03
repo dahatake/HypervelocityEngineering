@@ -25,6 +25,21 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
 
     steps:
+      - name: Validate strict split gate
+        run: |
+          set -euo pipefail
+          pr_labels=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '[.labels[].name] // []')
+          has_split_mode=$(printf '%s' "${pr_labels}" \
+            | jq -r 'if index("split-mode") then "true" else "false" end')
+          has_auto_approve_ready=$(printf '%s' "${pr_labels}" \
+            | jq -r 'if index("auto-approve-ready") then "true" else "false" end')
+          if [ "${has_split_mode}" != "true" ] || [ "${has_auto_approve_ready}" != "true" ]; then
+            echo "::error::create-subissues requires split-mode + auto-approve-ready (split-mode=${has_split_mode}, auto-approve-ready=${has_auto_approve_ready})."
+            exit 1
+          fi
+          echo "✅ strict split gate confirmed: split-mode + auto-approve-ready"
+
       - name: Checkout PR head branch
         uses: actions/checkout@v4
         with:
@@ -181,8 +196,8 @@ jobs:
             echo "No parent issue detected — sub-issue links will not be created."
           fi
 
-          # ── check auto-context-review / auto-qa labels and auto-merge tag on parent issue ─────
-          HAS_CONTEXT_REVIEW="false"
+          # ── check adversarial-review / auto-qa labels and auto-merge tag on parent issue ─────
+          HAS_ADVERSARIAL_REVIEW="false"
           HAS_QA="false"
           HAS_AUTO_MERGE="false"
           PARENT_MODEL=""
@@ -197,8 +212,20 @@ jobs:
             if ! _PARENT_BODY=$(printf '%s' "${_PARENT_ISSUE}" | jq -r '.body // ""' 2>/dev/null); then
               _PARENT_BODY=""
             fi
-            if ! HAS_CONTEXT_REVIEW=$(printf '%s' "${_PARENT_LABELS}" | jq -r 'if index("auto-context-review") then "true" else "false" end' 2>/dev/null); then
-              HAS_CONTEXT_REVIEW="false"
+            if ! HAS_ADVERSARIAL_REVIEW=$(printf '%s' "${_PARENT_LABELS}" | jq -r 'if index("adversarial-review") then "true" else "false" end' 2>/dev/null); then
+              HAS_ADVERSARIAL_REVIEW="false"
+            fi
+            if printf '%s' "${_PARENT_BODY}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+              HAS_ADVERSARIAL_REVIEW="false"
+              echo "false marker を優先し、Parent Issue の adversarial-review 設定を false に上書きしました。"
+            elif printf '%s' "${_PARENT_BODY}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*true[[:space:]]*-->'; then
+              HAS_ADVERSARIAL_REVIEW="true"
+              echo "Parent Issue の true marker を敵対的レビュー有効として復元しました。"
+            fi
+            PR_BODY_HEAD=$(printf '%s' "${PR_BODY}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+            if printf '%s' "${PR_BODY_HEAD}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+              HAS_ADVERSARIAL_REVIEW="false"
+              echo "PR body の false marker をParent Issue設定より優先しました。"
             fi
             if ! HAS_QA=$(printf '%s' "${_PARENT_LABELS}" | jq -r 'if index("auto-qa") then "true" else "false" end' 2>/dev/null); then
               HAS_QA="false"
@@ -210,7 +237,7 @@ jobs:
               HAS_AUTO_MERGE="true"
             fi
           fi
-          echo "auto-context-review ラベル伝播: ${HAS_CONTEXT_REVIEW}"
+          echo "adversarial-review ラベル伝播: ${HAS_ADVERSARIAL_REVIEW}"
           echo "auto-qa ラベル伝播: ${HAS_QA}"
           echo "auto-merge メタコメント伝播: ${HAS_AUTO_MERGE}"
 
@@ -387,12 +414,12 @@ jobs:
                   label_args="${label_args} --label ${lbl}"
                 done < <(printf '%s' "$labels" | tr ',' '\n')
               fi
-              if [ "$HAS_CONTEXT_REVIEW" = "true" ]; then
-                if [ ! -f "/tmp/auto-context-review-label-created" ]; then
-                  gh label create "auto-context-review" --color "1D76DB" --repo "$REPO" 2>/dev/null || true
-                  touch "/tmp/auto-context-review-label-created"
+              if [ "$HAS_ADVERSARIAL_REVIEW" = "true" ]; then
+                if [ ! -f "/tmp/adversarial-review-label-created" ]; then
+                  gh label create "adversarial-review" --color "B60205" --description "explicit adversarial review trigger for Copilot review workflow" --repo "$REPO" 2>/dev/null || true
+                  touch "/tmp/adversarial-review-label-created"
                 fi
-                label_args="${label_args} --label auto-context-review"
+                label_args="${label_args} --label adversarial-review"
               fi
               if [ "$HAS_QA" = "true" ]; then
                 if [ ! -f "/tmp/auto-qa-label-created" ]; then

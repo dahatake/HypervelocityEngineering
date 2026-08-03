@@ -7,7 +7,7 @@
 #   全機能を実行できる .venv をゼロから構築する。
 #
 # 既定で導入する extras (pyproject.toml と一致):
-#   mdq-watch, mdq-ja, semantic, gui, gui-pty, gui-docconvert
+#   test, mdq-watch, mdq-ja, semantic, gui, gui-pty, gui-docconvert
 #
 # 行うこと:
 #   - OS prereq 確認 (git / gh / python3.11+) と install hints
@@ -283,7 +283,7 @@ if [[ "$MINIMAL" == true ]]; then
   step 'Installing HVE (base only, no extras)'
   run "$VENV_PY" -m pip install -e .
 else
-  extras="mdq-watch,mdq-ja,semantic"
+  extras="test,mdq-watch,mdq-ja,semantic"
   if [[ "$INSTALL_GUI" == true ]]; then
     extras="$extras,gui,gui-pty,gui-docconvert"
   fi

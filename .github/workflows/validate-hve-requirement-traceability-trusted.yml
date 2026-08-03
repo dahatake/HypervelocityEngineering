@@ -1,0 +1,39 @@
+name: HVE Requirement Traceability Trusted
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: HVE Requirement Traceability Trusted
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted base validator
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          fetch-depth: 1
+      - name: Check out pull request contents as data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: subject
+          fetch-depth: 0
+      - name: Validate HVE requirement traceability without executing PR code
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          pr_body_file="$RUNNER_TEMP/pr-body.md"
+          changed_files_file="$RUNNER_TEMP/changed-files.txt"
+          printf '%s' "$PR_BODY" > "$pr_body_file"
+          git -C "$GITHUB_WORKSPACE/subject" diff --name-status "$BASE_SHA" "$HEAD_SHA" > "$changed_files_file"
+          python "$GITHUB_WORKSPACE/trusted/.github/scripts/validate-hve-requirement-traceability.py" --root "$GITHUB_WORKSPACE/subject" --pr-body-file "$pr_body_file" --changed-files-file "$changed_files_file"

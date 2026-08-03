@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 
 from hve.gui.workflow_step_requirements import (
+    AUTOPILOT_PSEUDO_WORKFLOW_ID,
     FILE_KIND_TO_SPEC,
     INPUT_FIELD_KEYS,
     REQUIREMENT_TABLE,
@@ -41,7 +42,9 @@ class TestTableIntegrity:
     def test_all_workflows_have_at_least_one_entry(self):
         defined_wfs = {wf for wf, _ in REQUIREMENT_TABLE.keys()}
         expected_wfs = set(WORKFLOW_PRIORITY)
-        assert defined_wfs == expected_wfs
+        # autopilot は仮想ワークフロー（WORKFLOW_PRIORITY 非掲載）。
+        # 実 WF の網羅性のみ検証するため仮想 WF を除外する。
+        assert defined_wfs - {AUTOPILOT_PSEUDO_WORKFLOW_ID} == expected_wfs
 
     def test_priority_matches_section_keys(self):
         # すべての優先順位ワークフローが配置先セクションを持つ
@@ -100,10 +103,10 @@ class TestNaturalStepKey:
         assert sorted_keys == ["1", "1.1", "1.2", "2", "2.1", "10"]
 
     def test_non_numeric_part_goes_last(self):
-        # "2.3T" は (2, 9999) として末尾扱い（非数値部は決定論的に大きい値）
-        assert _natural_step_key("2.3") < _natural_step_key("2.3T")
+        # "2.3X" のような非数値接尾辞付きキーは (2, 9999) として末尾扱い（決定論的に大きい値）
+        assert _natural_step_key("2.3") < _natural_step_key("2.3X")
         # 数値ステップは非数値ステップより手前に並ぶ
-        assert _natural_step_key("2.4") < _natural_step_key("2.3T")
+        assert _natural_step_key("2.4") < _natural_step_key("2.3X")
 
 
 # --------------------------------------------------------------------------
@@ -139,9 +142,9 @@ class TestPickTargetStep:
         assert pick_target_step([("ard", [])]) is None
 
     def test_natural_order_within_workflow(self):
-        # adfd は "1.1" と "2" → "1.1" が選ばれる
-        result = pick_target_step([("adfd", ["2", "1.1"])])
-        assert result == ("adfd", "1.1")
+        # adfd は "6.1" と "6.2" を登録 → "6.1" が選ばれる
+        result = pick_target_step([("adfd", ["6.2", "6.1"])])
+        assert result == ("adfd", "6.1")
 
 
 # --------------------------------------------------------------------------

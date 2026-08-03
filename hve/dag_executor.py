@@ -16,7 +16,7 @@ import asyncio
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Callable, Coroutine, Dict, List, Optional, Set
+from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Optional, Set
 
 # Fork-integration (M12): ホットパスでの動的 import を避けるため、モジュールトップで一度だけ解決する
 try:
@@ -99,6 +99,7 @@ class DAGExecutor:
         console: Any = None,
         step_prompts: Optional[Dict[str, str]] = None,
         dag_plan: Any = None,
+        on_step_start: Optional[Callable[[str], None]] = None,
         on_step_complete: Optional[Callable[[StepResult], None]] = None,
         repo_root: Optional[Any] = None,
         enable_fanout: bool = True,
@@ -108,11 +109,24 @@ class DAGExecutor:
         on_fork_retry_ui: Optional[Callable[[str, int], None]] = None,
         deferred_fanout_ids: Optional[Set[str]] = None,
         on_dynamic_expand: Optional[Callable[[str, List[str]], None]] = None,
+        on_wave_start: Optional[Callable[[List[Any], int], None]] = None,
+        fleet_wave_runner: Optional[Callable[[List[Any], int], Awaitable[Optional[Dict[str, StepResult]]]]] = None,
         workflow_id: Optional[str] = None,
+        *,
+        app_ids: Optional[List[str]] = None,
+        step_timeout_seconds: Optional[float] = None,
     ) -> None:
         self.workflow = workflow
         self.dag_plan = dag_plan
         self.run_step_fn = run_step_fn
+        # per-step wall-clock タイムアウト（秒）。None / <=0 で無効。
+        # 有効時、run_step_fn が本値を超えたら当該ステップを失敗扱いで打ち切り、
+        # ハングした 1 ステップが DAG 全体を無期限停止させるのを防ぐ。
+        self._step_timeout_seconds: Optional[float] = (
+            float(step_timeout_seconds)
+            if step_timeout_seconds and step_timeout_seconds > 0
+            else None
+        )
 
         # ADR-0002: Fan-out 展開（既定で有効。リポジトリルートから動的解決パーサを呼ぶ）
         self._fanout_map: Dict[str, List[str]] = {}
@@ -120,6 +134,10 @@ class DAGExecutor:
         self._fanout_child_to_parent: Dict[str, str] = {}
         self._fanout_parent_remaining: Dict[str, Set[str]] = {}
         self._fanout_parent_failed: Set[str] = set()
+        # APP-ID フィルタ (Step 1 で対象 APP-ID を選択した場合の絞り込み):
+        # `expand_workflow_fanout` および `expand_single_step_fanout` の双方に
+        # 同じ app_ids を伝播する。None または空リスト時はフィルタ無効化（後方互換）。
+        self._app_ids: Optional[List[str]] = list(app_ids) if app_ids else None
         if enable_fanout and dag_plan is None:
             # dag_plan 併用経路（production）では orchestrator._expand_workflow_for_dag が
             # build_dag_plan 直前に fan-out を事前展開済み。
@@ -134,7 +152,7 @@ class DAGExecutor:
                     expand_workflow_fanout = None  # type: ignore[assignment]
             if expand_workflow_fanout is not None:
                 _root = repo_root if repo_root is not None else _Path.cwd()
-                expanded = expand_workflow_fanout(workflow, _root)
+                expanded = expand_workflow_fanout(workflow, _root, app_ids=self._app_ids)
                 self._fanout_map = dict(expanded.fanout_map)
                 self._fanout_empty_ids = list(expanded.empty_fanout_ids)
                 # 元 workflow.steps を差し替えるのではなく、ローカルに保持
@@ -167,9 +185,10 @@ class DAGExecutor:
             getattr(step, "id", ""): step for step in self._expanded_steps
         }
 
-        # Phase 3 (Resume): ステップ完了/skip/blocked 通知の同期コールバック。
-        # state.json への永続化など、実行中継ぎ込みたい副作用をフックする。
+        # ステップ完了/skip/blocked 通知の同期コールバック（任意のフック）。
+        # Fleet 委譲ステップの状態通知など、実行中に継ぎ込みたい副作用をフックする。
         # コールバック内の例外は実行を止めないよう warn ログのみで握り潰す。
+        self._on_step_start = on_step_start
         self._on_step_complete = on_step_complete
 
         # Fork-integration (T2.5/T2.6): フォーク機構
@@ -186,6 +205,8 @@ class DAGExecutor:
         # parser 入力パスを満たした」契機に expand_single_step_fanout で再展開する。
         self._deferred_fanout_ids: Set[str] = set(deferred_fanout_ids or set())
         self._on_dynamic_expand = on_dynamic_expand
+        self._on_wave_start = on_wave_start
+        self._fleet_wave_runner = fleet_wave_runner
         self._repo_root = repo_root
         self._workflow_id = workflow_id or getattr(workflow, "id", "unknown")
         # T-D2: ランタイム展開された fan-out の進捗管理
@@ -209,13 +230,26 @@ class DAGExecutor:
         self._wave_counter: int = 0
         self._total_waves: int = 0
 
+    def _emit_step_start(self, step_id: str) -> None:
+        """`on_step_start` フックを安全に呼ぶ。"""
+        if self._on_step_start is None:
+            return
+        try:
+            self._on_step_start(step_id)
+        except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
+            if self.console is not None:
+                self.console.warning(
+                    f"on_step_start フックの実行に失敗しました (step={step_id}): {exc}"
+                )
+
     def _emit_step_complete(self, result: StepResult) -> None:
         """`on_step_complete` フックを安全に呼ぶ。
 
-        Phase 3 (Resume): state.json 更新などの副作用を発火するための同期フック。
+        副作用を発火するための任意の同期フック。
         コールバック内の例外で DAG 実行が止まらないよう、warn を出して握り潰す。
         """
-        if self._on_step_complete is None:            return
+        if self._on_step_complete is None:
+            return
         try:
             self._on_step_complete(result)
         except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
@@ -223,6 +257,26 @@ class DAGExecutor:
                 self.console.warning(
                     f"on_step_complete フックの実行に失敗しました (step={result.step_id}): {exc}"
                 )
+
+    def _emit_step_status_event(
+        self,
+        step_id: str,
+        status: str,
+        *,
+        title: Optional[str] = None,
+    ) -> None:
+        """GUI Workbench 向けの step_status stats event を安全に出力する。"""
+        if self.console is None:
+            return
+        try:
+            self.console.stats_event(
+                "step_status",
+                step_id=step_id,
+                status=status,
+                title=title,
+            )
+        except Exception:
+            pass
 
     def compute_waves(self) -> List[List[Any]]:
         """DAG を事前走査して Wave 分割を計算する。
@@ -335,7 +389,9 @@ class DAGExecutor:
             if not deps_resolved:
                 continue
             try:
-                children = expand_single_step_fanout(base_step, self._repo_root)
+                children = expand_single_step_fanout(
+                    base_step, self._repo_root, app_ids=self._app_ids,
+                )
             except Exception as exc:  # pragma: no cover - parser 例外は実行を止めない
                 if self.console is not None:
                     self.console.warning(
@@ -376,6 +432,16 @@ class DAGExecutor:
                 self._fanout_child_to_parent[cid] = base_id
             self._dynamic_fanout_remaining[base_id] = set(child_ids)
             self._dynamic_child_ids.update(child_ids)
+            # fanout-fix: deferred で動的展開された子へ base prompt を伝播
+            # _run_with_semaphore は self._step_prompts.get(step.id, "") で prompt を引くため、
+            # 子 ID にエントリが無いと空 prompt で起動してしまう。
+            # orchestrator 側の事前展開経路 (`_expand_workflow_for_dag`) と同じ semantics を
+            # ランタイム展開でも保証する（fanout_meta の addendum は runner 側で付与される）。
+            _base_prompt = self._step_prompts.get(base_id)
+            if _base_prompt is not None:
+                for cid in child_ids:
+                    if cid not in self._step_prompts:
+                        self._step_prompts[cid] = _base_prompt
             # deferred から外す
             self._deferred_fanout_ids.discard(base_id)
 
@@ -399,7 +465,7 @@ class DAGExecutor:
                 except Exception:
                     pass
 
-            # on_dynamic_expand フック呼び出し（resume_state 更新等の副作用）
+            # on_dynamic_expand フック呼び出し（ランタイム展開時の副作用）
             if self._on_dynamic_expand is not None:
                 try:
                     self._on_dynamic_expand(base_id, list(child_ids))
@@ -485,8 +551,7 @@ class DAGExecutor:
 
         while True:
             # T-D2: deferred fan-out のうち依存解決済みのものを再展開試行する。
-            # 上流 step が完了して入力ファイルが揃っているケースをここで検出する
-            # （resume mode で再起動直後の deferred も拾える）。
+            # 上流 step が完了して入力ファイルが揃っているケースをここで検出する。
             _expanded_count_before = len(self._dynamic_child_ids)
             if self._deferred_fanout_ids:
                 self._try_dynamic_expand("__loop_top__")
@@ -518,7 +583,7 @@ class DAGExecutor:
                         reason="inactive",
                     )
                     self._results[s.id] = _skip_result
-                    # Phase 3 (Resume): skip も state.json に反映する
+                    # skip もフックで通知する
                     self._emit_step_complete(_skip_result)
                     newly_skipped = True
 
@@ -543,10 +608,33 @@ class DAGExecutor:
 
             if executable:
                 self._wave_counter += 1
+                if self._on_wave_start is not None:
+                    try:
+                        self._on_wave_start(executable, self._wave_counter)
+                    except Exception as exc:
+                        if self.console is not None:
+                            self.console.warning(
+                                f"on_wave_start フックの実行に失敗しました (wave={self._wave_counter}): {exc}"
+                            )
                 if self.console is not None:
                     self.console.dag_wave_start(
                         self._wave_counter, self._total_waves, executable,
                     )
+
+                fleet_results = await self._try_run_fleet_wave(
+                    executable, self._wave_counter,
+                )
+                if fleet_results is not None:
+                    for result in fleet_results.values():
+                        if result.success and not result.skipped:
+                            self._maybe_mark_dynamic_fanout_parent_complete(result.step_id)
+                            self._try_dynamic_expand(result.step_id)
+                    if self.console is not None:
+                        self.console.dag_progress(
+                            len(self.completed), len(self.running),
+                            len(self.active_step_ids),
+                        )
+                    continue
 
                 for step in executable:
                     self.running.add(step.id)
@@ -604,6 +692,170 @@ class DAGExecutor:
 
         return self._results
 
+    async def _try_run_fleet_wave(
+        self,
+        executable: List[Any],
+        wave_index: int,
+    ) -> Optional[Dict[str, StepResult]]:
+        """Run a parallel DAG wave through an optional Fleet backend.
+
+        The hook is deliberately opt-in and conservative: single-task waves are
+        never sent to Fleet, explicit ``None`` means "not dispatched" and falls
+        back to the existing semaphore path, while backend exceptions or
+        incomplete/invalid result maps fail the wave to avoid duplicate side
+        effects.
+        """
+        if self._fleet_wave_runner is None or len(executable) <= 1:
+            return None
+
+        step_ids = [step.id for step in executable]
+        expected_ids = set(step_ids)
+        # Fleet backend は StepRunner/Console.step_start を通らないため、
+        # parent 側で running を明示 emit しないと GUI Workbench が
+        # Wave 見出し以降の進行を表示できない。
+        for step in executable:
+            self.running.add(step.id)
+            self._emit_step_start(step.id)
+            self._emit_step_status_event(
+                step.id,
+                "running",
+                title=getattr(step, "title", step.id),
+            )
+
+        try:
+            raw_results = await self._fleet_wave_runner(executable, wave_index)
+        except asyncio.CancelledError:
+            for step_id in expected_ids:
+                self.running.discard(step_id)
+            raise
+        except Exception as exc:  # noqa: BLE001 - fallback to existing executor path
+            if self.console is not None:
+                self.console.error(
+                    f"Fleet wave runner failed for wave={wave_index}: {exc}. "
+                    "Marking the wave as failed to avoid duplicate side effects."
+                )
+            return self._mark_fleet_wave_failed(
+                expected_ids,
+                reason=f"fleet_wave_runner_exception: {type(exc).__name__}: {exc}",
+            )
+
+        if raw_results is None:
+            for step_id in expected_ids:
+                self.running.discard(step_id)
+            return None
+
+        result_ids = set(raw_results.keys())
+        if result_ids != expected_ids:
+            if self.console is not None:
+                self.console.error(
+                    f"Fleet wave runner returned unexpected step ids for wave={wave_index}: "
+                    f"expected={sorted(expected_ids)}, actual={sorted(result_ids)}. "
+                    "Marking the wave as failed to avoid duplicate side effects."
+                )
+            return self._mark_fleet_wave_failed(
+                expected_ids,
+                reason="fleet_wave_runner_unexpected_step_ids",
+            )
+
+        for step_id, result in raw_results.items():
+            if not isinstance(result, StepResult):
+                if self.console is not None:
+                    self.console.error(
+                        f"Fleet wave runner returned non-StepResult for step={step_id}. "
+                        "Marking the wave as failed to avoid duplicate side effects."
+                    )
+                return self._mark_fleet_wave_failed(
+                    expected_ids,
+                    reason="fleet_wave_runner_non_step_result",
+                )
+            if result.step_id != step_id:
+                if self.console is not None:
+                    self.console.error(
+                        f"Fleet wave runner result key/step mismatch for wave={wave_index}: "
+                        f"key={step_id}, result.step_id={result.step_id}. "
+                        "Marking the wave as failed to avoid state corruption."
+                    )
+                return self._mark_fleet_wave_failed(
+                    expected_ids,
+                    reason="fleet_wave_runner_step_id_mismatch",
+                )
+            if result.state not in {"success", "failed", "skipped", "blocked"}:
+                if self.console is not None:
+                    self.console.error(
+                        f"Fleet wave runner returned unknown state for step={step_id}: "
+                        f"{result.state!r}. Marking the wave as failed."
+                    )
+                return self._mark_fleet_wave_failed(
+                    expected_ids,
+                    reason="fleet_wave_runner_unknown_state",
+                )
+
+        normalized: Dict[str, StepResult] = {}
+        for step_id in step_ids:
+            result = raw_results[step_id]
+            self._apply_fleet_wave_result(result)
+            normalized[step_id] = result
+
+        return normalized
+
+    def _mark_fleet_wave_failed(
+        self,
+        step_ids: Set[str],
+        *,
+        reason: str,
+    ) -> Dict[str, StepResult]:
+        results: Dict[str, StepResult] = {}
+        for step_id in sorted(step_ids):
+            result = StepResult(
+                step_id,
+                success=False,
+                elapsed=0.0,
+                error=reason,
+                state="failed",
+                reason=reason,
+            )
+            self._apply_fleet_wave_result(result)
+            results[step_id] = result
+        return results
+
+    def _apply_fleet_wave_result(self, result: StepResult) -> None:
+        """Apply one Fleet wave StepResult using the same terminal sets as DAG execution."""
+        step_id = result.step_id
+        self.running.discard(step_id)
+        self._results[step_id] = result
+        if result.state == "blocked":
+            self.blocked.add(step_id)
+            status = "blocked"
+        elif result.skipped:
+            self.skipped.add(step_id)
+            status = "skipped"
+        elif result.success:
+            self.completed.add(step_id)
+            status = "done"
+        else:
+            self.failed.add(step_id)
+            status = "failed"
+        self._emit_step_status_event(step_id, status)
+        self._emit_step_complete(result)
+
+    async def _invoke_run_step(self, _kwargs: Dict[str, Any]) -> bool:
+        """run_step_fn を呼ぶ。step_timeout_seconds が有効なら wall-clock で打ち切る。
+
+        タイムアウト時は asyncio.TimeoutError を送出する（呼び出し側で失敗扱い）。
+        ハングしたステップが DAG 全体を無期限停止させるのを防ぐ。
+
+        注: asyncio.wait_for はタイムアウト時に inner coroutine をキャンセルし、
+        その完了（finally のクリーンアップ含む）を待ってから TimeoutError を送出する。
+        したがって run_step_fn 側の finally クリーンアップ（session.disconnect /
+        client.stop 等）が有界であることを前提とする。
+        """
+        if self._step_timeout_seconds:
+            return await asyncio.wait_for(
+                self.run_step_fn(**_kwargs),
+                timeout=self._step_timeout_seconds,
+            )
+        return await self.run_step_fn(**_kwargs)
+
     async def _run_with_semaphore(self, step: Any) -> StepResult:
         """Semaphore で並列数を制御しつつ 1 ステップを実行する。
 
@@ -647,7 +899,14 @@ class DAGExecutor:
 
             # 初回試行
             try:
-                success = await self.run_step_fn(**_kwargs)
+                success = await self._invoke_run_step(_kwargs)
+            except asyncio.TimeoutError:
+                success = False
+                error_msg = (
+                    f"step-timeout: {self._step_timeout_seconds:g}s 経過により打ち切り"
+                )
+                if self.console is not None:
+                    self.console.warning(f"  ⏱ [Step.{step.id}] {error_msg}")
             except Exception as exc:
                 success = False
                 error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -706,7 +965,14 @@ class DAGExecutor:
                         pass
                     error_msg = None
                     try:
-                        success = await self.run_step_fn(**_kwargs)
+                        success = await self._invoke_run_step(_kwargs)
+                    except asyncio.TimeoutError:
+                        success = False
+                        error_msg = (
+                            f"step-timeout: {self._step_timeout_seconds:g}s 経過により打ち切り"
+                        )
+                        if self.console is not None:
+                            self.console.warning(f"  ⏱ [Step.{step.id}] {error_msg}")
                     except Exception as exc:
                         success = False
                         error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -765,7 +1031,7 @@ class DAGExecutor:
                         self.console.warning(
                             f"fork_kpi_logger 失敗 (step={step.id}): {log_exc}"
                         )
-            # Phase 3 (Resume): completed / failed をフックで通知し state.json を更新する
+            # completed / failed をフックで通知する
             self._emit_step_complete(result)
             return result
 
@@ -865,7 +1131,7 @@ class DAGExecutor:
                 reason=reason,
             )
             self._results[step_id] = _blocked_result
-            # Phase 3 (Resume): blocked も state.json に反映する
+            # blocked もフックで通知する
             self._emit_step_complete(_blocked_result)
 
     def _blocked_reason(self, node: Any) -> str:

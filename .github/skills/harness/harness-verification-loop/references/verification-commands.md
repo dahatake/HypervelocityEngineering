@@ -46,11 +46,13 @@
 |---|---|---|
 | C# | `dotnet test --no-build --verbosity normal` | 全テスト PASS、失敗 0 件 |
 | Python | `pytest -x --tb=short` | 全テスト PASS、`-x` で最初の失敗で停止 |
+| JavaScript / UI | `npm test` または対象プロジェクトの Jest / Playwright コマンド | 全テスト PASS、失敗 0 件 |
 | Shell | スクリプト固有の検証手段（bats 等） | exit code 0 |
 
 **失敗時の一般的な原因と対処**:
 - テストが存在しない場合: `SKIP(テストファイルなし)` として記録
-- 環境依存（DB 接続等）の失敗: `SKIP(環境依存 - ローカル実行不可)` として記録
+- 外部サービス用 Integration / Post-deploy / E2E の必須設定（Endpoint / base URL / Resource 名 / 認証経路）が不足する場合: `FAIL(環境ブロッカー)` または Step 固有の blocked として記録し、未実行のまま成功扱いしない
+- Unit / 実装コード向け TDD RED / TDD GREEN で環境依存（DB 接続等）が出る場合: テストダブル化漏れを疑い、Mock / Stub / Emulator / Testcontainers へ切り分ける
 - ロジックエラー: スタックトレースを確認し、実装コードを修正
 
 ---
@@ -94,6 +96,14 @@ git diff --cached --stat
 ## §2 検証レポートテンプレート（コピペ用）
 
 以下を `{WORK}verification-report.md` としてコピーして使用する。
+
+TDD RED/GREEN Step の実テスト結果は、汎用検証レポートとは別に次の TDD 専用レポートへ記録する:
+
+`tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+
+- `verification-report.md`: Build / Lint / Test / Security / Diff の汎用検証サマリー。
+- `tdd-test-report.md`: RED/GREEN の実行コマンド、期待結果、実結果、`TDD-Judgement`、`Secret-Redaction`、`Test-Files-Changed` を含む TDD 専用証跡。
+- 同一内容を `docs/` や `src/` に追記しない。
 
 ```markdown
 # VERIFICATION REPORT

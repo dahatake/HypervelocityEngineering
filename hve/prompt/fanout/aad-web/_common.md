@@ -8,7 +8,7 @@
 - テスト仕様の場合: `docs/test-specs/{{key}}-test-spec.md`
 
 ## 必須参照
-- `docs/catalog/screen-catalog.md` / `docs/catalog/service-catalog.md` / `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/screen-catalog-APP-*.md` （per-APP に分割された画面カタログ。`{{key}}` の APP 部に該当するファイル） / `docs/catalog/service-catalog.md` / `docs/catalog/service-catalog-matrix.md`
 - 関連 D 文書（`docs/agent/`, `knowledge/D11`, `knowledge/D09` 等）
 
 ## 並列実行ルール

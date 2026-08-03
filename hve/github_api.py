@@ -24,7 +24,13 @@ __all__ = [
     "add_labels",
     "link_sub_issue",
     "post_comment",
+    "list_issue_comments",
     "create_pull_request",
+    "get_pull_request",
+    "list_check_runs_for_ref",
+    "list_branches",
+    "get_repository_metadata",
+    "list_viewer_repositories",
 ]
 
 _GITHUB_API_BASE = "https://api.github.com"
@@ -210,6 +216,33 @@ def api_call(
     ) from last_error
 
 
+def get_repository_metadata(
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> dict:
+    """リポジトリの metadata を取得する。"""
+    resolved_repo = _resolve_repo(repo)
+    resp = api_call("GET", f"{_GITHUB_API_BASE}/repos/{resolved_repo}", token=token)
+    return resp if isinstance(resp, dict) else {}
+
+
+def list_viewer_repositories(
+    token: Optional[str] = None,
+    per_page: int = 100,
+) -> list[dict]:
+    """認証ユーザーが参照可能なリポジトリ一覧（先頭 1 ページ）を取得する。"""
+    page_size = max(1, min(100, int(per_page)))
+    url = (
+        f"{_GITHUB_API_BASE}/user/repos"
+        "?affiliation=owner,collaborator,organization_member"
+        f"&sort=updated&per_page={page_size}"
+    )
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, list):
+        return []
+    return [repo for repo in resp if isinstance(repo, dict)]
+
+
 def create_issue(
     title: str,
     body: str,
@@ -291,6 +324,25 @@ def post_comment(
     return True
 
 
+def list_issue_comments(
+    issue_num: int,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    per_page: int = 100,
+) -> list[dict]:
+    """Issue / PR コメント一覧（先頭 1 ページ）を取得する。"""
+    resolved_repo = _resolve_repo(repo)
+    page_size = max(1, min(100, int(per_page)))
+    url = (
+        f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues/"
+        f"{issue_num}/comments?per_page={page_size}"
+    )
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, list):
+        return []
+    return [comment for comment in resp if isinstance(comment, dict)]
+
+
 def create_pull_request(
     title: str,
     body: str,
@@ -298,10 +350,71 @@ def create_pull_request(
     base: str,
     repo: Optional[str] = None,
     token: Optional[str] = None,
+    draft: bool = False,
 ) -> int:
     """Pull Request を作成し PR 番号を返す。"""
     resolved_repo = _resolve_repo(repo)
     url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls"
     payload = {"title": title, "body": body, "head": head, "base": base}
+    if draft:
+        # draft は必要時のみ送信し、既存の PR 作成 payload を変えない。
+        payload["draft"] = True
     resp = api_call("POST", url, data=payload, token=token)
     return int(resp["number"])
+
+
+def get_pull_request(
+    pr_number: int,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> dict:
+    """PR の情報（``merged`` / ``state`` 等）を取得して dict で返す。
+
+    FR-CLI-34 のマージ完了検知に使用する。非 dict レスポンス時は空 dict を返す。
+    """
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls/{pr_number}"
+    resp = api_call("GET", url, token=token)
+    return resp if isinstance(resp, dict) else {}
+
+
+def list_check_runs_for_ref(
+    ref: str,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    per_page: int = 100,
+) -> list[dict]:
+    """commit ref に紐づく check-run 一覧を返す。"""
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/commits/{ref}/check-runs?per_page={per_page}"
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, dict):
+        return []
+    runs = resp.get("check_runs")
+    return runs if isinstance(runs, list) else []
+
+
+def list_branches(
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    per_page: int = 100,
+) -> list[str]:
+    """リポジトリのブランチ名一覧を取得する。
+
+    Args:
+        repo: "owner/repo" 形式。省略時は REPO 環境変数を使用。
+        token: GitHub トークン。省略時は GH_TOKEN / GITHUB_TOKEN を使用。
+        per_page: 1 ページの件数（最大 100）。ページネーションは行わず先頭 1 ページのみ。
+
+    Returns:
+        ブランチ名のリスト。
+
+    Raises:
+        GitHubAPIError: 認証失敗・リポジトリ不在（404）・ネットワークエラー等。
+    """
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/branches?per_page={per_page}"
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, list):
+        return []
+    return [b["name"] for b in resp if isinstance(b, dict) and "name" in b]

@@ -10,8 +10,10 @@ OrchestrateArgs / doc_convert / page_workflow_select._load_workflow_choices()
 
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 import unittest
+import warnings
 
 
 class TestGuiPackageImport(unittest.TestCase):
@@ -26,6 +28,26 @@ class TestGuiPackageImport(unittest.TestCase):
         from hve.gui import run_gui
 
         self.assertTrue(callable(run_gui))
+
+
+class TestGuiSourceWarnings(unittest.TestCase):
+    """GUI ソースがコンパイル時警告を出さないことを確認する。"""
+
+    def test_page_workbench_compiles_without_invalid_escape_warnings(self) -> None:
+        """Workbench 起動時 import で invalid escape warning が出ないこと。"""
+        source_path = Path(__file__).resolve().parents[1] / "gui" / "page_workbench.py"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", SyntaxWarning)
+            warnings.simplefilter("always", DeprecationWarning)
+            compile(source_path.read_text(encoding="utf-8"), str(source_path), "exec")
+
+        invalid_escape_messages = [
+            f"{warning.filename}:{warning.lineno}: {warning.message}"
+            for warning in caught
+            if issubclass(warning.category, (SyntaxWarning, DeprecationWarning))
+            and "invalid escape sequence" in str(warning.message)
+        ]
+        self.assertEqual([], invalid_escape_messages)
 
 
 class TestGuiModulesImport(unittest.TestCase):
@@ -53,10 +75,6 @@ class TestGuiModulesImport(unittest.TestCase):
     def test_state_bridge_importable(self) -> None:
         self._skip_if_no_pyside6()
         from hve.gui.state_bridge import SubprocessReader, launch_orchestrator  # noqa: F401
-
-    def test_header_bar_importable(self) -> None:
-        self._skip_if_no_pyside6()
-        from hve.gui.header_bar import HeaderBar, STEP_LABELS  # noqa: F401
 
     def test_page_workflow_select_importable(self) -> None:
         self._skip_if_no_pyside6()
@@ -140,6 +158,16 @@ class TestOrchestrateArgs(unittest.TestCase):
         self.assertIn("--auto-qa", argv)
         self.assertIn("--quiet", argv)
         self.assertIn("--self-improve", argv)
+
+    def test_enable_auto_merge_to_argv(self) -> None:
+        """enable_auto_merge=True で --enable-auto-merge が argv に含まれる（案 P 全自動）。"""
+        from hve.gui.orchestrate_args import OrchestrateArgs
+
+        on = OrchestrateArgs(workflow="asdw-web", enable_auto_merge=True)
+        self.assertIn("--enable-auto-merge", on.to_argv())
+
+        off = OrchestrateArgs(workflow="asdw-web", enable_auto_merge=False)
+        self.assertNotIn("--enable-auto-merge", off.to_argv())
 
     def test_workiq_options(self) -> None:
         """Work IQ オプション 11 個の argv 生成。"""

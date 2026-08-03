@@ -16,56 +16,6 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from prompts import AQOD_QA_PROMPT, QA_PROMPT_V2
-
-
-# ---------------------------------------------------------------------------
-# 1. AQOD_QA_PROMPT 内容テスト
-# ---------------------------------------------------------------------------
-
-class TestAqodQaPrompt(unittest.TestCase):
-    """AQOD_QA_PROMPT の内容検証。"""
-
-    def test_aqod_qa_prompt_exists(self) -> None:
-        self.assertIsInstance(AQOD_QA_PROMPT, str)
-        self.assertTrue(AQOD_QA_PROMPT.strip())
-
-    def test_aqod_qa_prompt_mentions_original_docs(self) -> None:
-        self.assertIn("original-docs/", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_mentions_target_document(self) -> None:
-        self.assertIn("対象ドキュメント", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_mentions_excerpt(self) -> None:
-        self.assertIn("該当箇所", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_mentions_issue_type(self) -> None:
-        self.assertIn("問題種別", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_mentions_severity(self) -> None:
-        self.assertIn("重大度", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_no_fabrication(self) -> None:
-        self.assertIn("捏造", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_prohibits_meta_questions(self) -> None:
-        """AQOD_QA_PROMPT がメタ質問を明示的に禁止している。"""
-        self.assertTrue(
-            "禁止" in AQOD_QA_PROMPT or "生成しないこと" in AQOD_QA_PROMPT,
-            "AQOD_QA_PROMPT should prohibit meta questions",
-        )
-
-    def test_aqod_qa_prompt_has_question_marker_format(self) -> None:
-        self.assertIn("[Q", AQOD_QA_PROMPT)
-
-    def test_aqod_qa_prompt_different_from_qa_prompt_v2(self) -> None:
-        self.assertNotEqual(AQOD_QA_PROMPT, QA_PROMPT_V2)
-
-    def test_aqod_qa_prompt_requires_body_output(self) -> None:
-        """AQOD_QA_PROMPT が成果物サマリーだけで終えないよう指示している。"""
-        self.assertIn("成果物サマリー", AQOD_QA_PROMPT)
-        self.assertIn("直接出力", AQOD_QA_PROMPT)
-
 
 # ---------------------------------------------------------------------------
 # 3. execution-qa-merged.md ファイル名テスト

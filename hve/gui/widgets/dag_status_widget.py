@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..copy_button import CopyButton
-from .dag_layout import compute_layout, grid_dimensions
+from .dag_layout import compute_layout, compute_row_y_offsets, grid_dimensions
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +68,9 @@ CHILD_NODE_W = NODE_W // 2
 CHILD_NODE_H = int(NODE_H * 0.7)
 CHILD_GAP = 6
 CHILD_ROW_GAP = 6
+# 親 Step ノード下端と子ブロック上端の余白 px
+# (compute_row_y_offsets に渡す child_heights にも含める)
+CHILD_BLOCK_PADDING_TOP = 4
 
 _STATUS_GLYPH = {
     "pending": "⚪",
@@ -75,6 +78,7 @@ _STATUS_GLYPH = {
     "done": "✅",
     "failed": "❌",
     "skipped": "⏭️",
+    "blocked": "⏸️",
 }
 
 _STATUS_COLOR_LIGHT = {
@@ -83,6 +87,7 @@ _STATUS_COLOR_LIGHT = {
     "done": QColor("#2ca02c"),
     "failed": QColor("#d62728"),
     "skipped": QColor("#17a2b8"),
+    "blocked": QColor("#9467bd"),
 }
 
 _STATUS_COLOR_DARK = {
@@ -91,6 +96,7 @@ _STATUS_COLOR_DARK = {
     "done": QColor("#7fdc7f"),
     "failed": QColor("#ff6f6f"),
     "skipped": QColor("#5ad6e8"),
+    "blocked": QColor("#b07ed5"),
 }
 
 _THEMES: Dict[str, Dict[str, Any]] = {
@@ -146,6 +152,8 @@ def _normalize_status(text: str) -> str:
         return "skipped"
     if text in ("pending", "保留"):
         return "pending"
+    if text in ("blocked", "ブロック"):
+        return "blocked"
     # "致命的 (...)" 等は failed 扱い
     if text.startswith("致命的"):
         return "failed"
@@ -217,6 +225,7 @@ class _StepNodeItem(QGraphicsRectItem):
         self._widget = widget
         self.started_at: Optional[float] = None
         self.finished_at: Optional[float] = None
+        self.current_activity: str = ""
         self._fanout_done: Optional[int] = None
         self._fanout_total: Optional[int] = None
         self._retry: int = 0
@@ -227,8 +236,10 @@ class _StepNodeItem(QGraphicsRectItem):
 
         # ラベル群（位置はパターン更新で調整）
         self._lbl_main = QGraphicsSimpleTextItem("", self)
+        self._lbl_activity = QGraphicsSimpleTextItem("", self)
         self._lbl_elapsed = QGraphicsSimpleTextItem("", self)
         self._lbl_main.setPos(8, 6)
+        self._lbl_activity.setPos(8, 22)
         self._lbl_elapsed.setPos(8, NODE_H - 18)
         self.refresh_theme()
         self.update_text()
@@ -250,6 +261,10 @@ class _StepNodeItem(QGraphicsRectItem):
         f_main.setBold(True)
         self._lbl_main.setFont(f_main)
         self._lbl_main.setBrush(QBrush(theme["node_text"]))
+        f_act = QFont()
+        f_act.setPointSize(8)
+        self._lbl_activity.setFont(f_act)
+        self._lbl_activity.setBrush(QBrush(theme["node_subtext"]))
         self._lbl_elapsed.setBrush(QBrush(theme["node_subtext"]))
 
     def update_text(self) -> None:
@@ -278,6 +293,17 @@ class _StepNodeItem(QGraphicsRectItem):
             elapsed_text = _fmt_elapsed(max(0.0, end - self.started_at))
         self._lbl_elapsed.setText(f"⏱ {elapsed_text}")
 
+        # 実行中のみ現在アクティビティを表示（tool/skill 名等）。
+        # 終了ステップでは表示しない（古いアクティビティの残留を避ける）。
+        if self.status == "running" and self.current_activity:
+            act = self.current_activity
+            max_act = 24
+            if len(act) > max_act:
+                act = act[: max_act - 1] + "…"
+            self._lbl_activity.setText(act)
+        else:
+            self._lbl_activity.setText("")
+
     # ---------------------------- イベント -------------------------------
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
@@ -288,8 +314,12 @@ class _StepNodeItem(QGraphicsRectItem):
     def mouseDoubleClickEvent(self, event) -> None:  # type: ignore[override]
         if self._fanout_total is not None:
             # ウィジェット層に展開状態を委譲（再レイアウト後も保持される）。
+            # _toggle_step_expand → _relayout → scene.clear() で self の C++
+            # オブジェクトが破棄されるため、以後 super() を呼んではならない
+            # (shiboken: Internal C++ object already deleted を回避)。
             self._widget._toggle_step_expand(self.instance_id, self.step_id)
-        # Fanout を持たない Step ノードのダブルクリックは無視。
+            return
+        # Fanout を持たない Step ノードでは展開処理はせず、既定のクリック処理に委ねる。
         super().mouseDoubleClickEvent(event)
 
 
@@ -444,8 +474,10 @@ class _WorkflowHeaderItem(QGraphicsRectItem):
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:  # type: ignore[override]
+        # _toggle_workflow → _relayout → scene.clear() で self の C++
+        # オブジェクトが破棄されるため、以後 super() を呼んではならない
+        # (shiboken: Internal C++ object already deleted を回避)。
         self._widget._toggle_workflow(self.instance_id)
-        super().mouseDoubleClickEvent(event)
 
 
 # ---------------------------------------------------------------------------
@@ -488,12 +520,17 @@ class DagStatusWidget(QWidget):
         # Step タイミング保持 (instance_id, step_id) -> started_at / finished_at
         self._step_started_at: Dict[Tuple[str, str], float] = {}
         self._step_finished_at: Dict[Tuple[str, str], float] = {}
+        # Step 現在アクティビティ (instance_id, step_id) -> tool/skill 名等。
+        # _relayout でノード再生成されるため dict で保持し、ノード生成時に反映する。
+        self._step_activity: Dict[Tuple[str, str], str] = {}
         # Workflow タイミング保持 instance_id -> started_at / finished_at
         self._wf_started_at: Dict[str, float] = {}
         self._wf_finished_at: Dict[str, float] = {}
         # 現在の選択ノード
         self._selected_node_item: Optional[QGraphicsItem] = None
         self._global_started_at: Optional[float] = None
+        # 作業状況サマリー全体の終了時刻。ジョブ終了後の経過時間を固定する。
+        self._global_finished_at: Optional[float] = None
 
         # --- UI ---
         self._title_label = QLabel(self.tr("作業状況"))
@@ -549,11 +586,13 @@ class DagStatusWidget(QWidget):
         self._wf_items.clear()
         self._step_started_at.clear()
         self._step_finished_at.clear()
+        self._step_activity.clear()
         self._wf_started_at.clear()
         self._wf_finished_at.clear()
         self._step_expanded.clear()
         self._selected_node_item = None
         self._global_started_at = None
+        self._global_finished_at = None
         self._scene.clear()
         self._summary_label.setText(
             self.tr("ワークフロー: 0/0   ステップ: 0/0   [--:--:--]")
@@ -561,6 +600,18 @@ class DagStatusWidget(QWidget):
 
     def stop(self) -> None:
         self._tick_timer.stop()
+
+    def freeze_elapsed(self) -> None:
+        """作業状況サマリーの経過時間を現在時刻で固定する。
+
+        ジョブが正常終了・エラー終了・ユーザー停止した時点で呼び出す。描画更新用の
+        ``QTimer`` 自体は継続するため、画面の再描画や次回実行への影響を与えずに
+        経過時間表示だけを停止できる。複数回呼んでも最初の終了時刻を保持する。
+        """
+        if self._global_started_at is None or self._global_finished_at is not None:
+            return
+        self._global_finished_at = time.monotonic()
+        self._update_summary_label()
 
     def set_theme(self, theme: str) -> None:
         if theme not in _THEMES or theme == self._theme:
@@ -571,6 +622,26 @@ class DagStatusWidget(QWidget):
         self._summary_label.setStyleSheet(self._theme_def["summary_label_css"])
         self._scene.setBackgroundBrush(QBrush(self._theme_def["bg"]))
         self._relayout()
+
+    def set_step_activity(self, instance_id: str, step_id: str, activity: str) -> None:
+        """指定ステップの現在アクティビティ（tool/skill 名等）を設定する。
+
+        値は (instance_id, step_id) 単位で保持し、``_relayout`` 時にノードへ
+        反映する。実行中ノードが存在すれば即時更新する。終了済みステップでは
+        ``update_text()`` 側で表示が抑止されるため、ここでは保持のみ行う。
+        """
+        if not instance_id or not step_id:
+            return
+        key = (instance_id, step_id)
+        self._step_activity[key] = activity or ""
+        node = self._step_items.get(key)
+        if node is not None:
+            node.current_activity = activity or ""
+            try:
+                node.update_text()
+            except RuntimeError:
+                # シーン再構築直後で C++ オブジェクトが破棄されている場合は無視
+                pass
 
     def set_plan(
         self,
@@ -594,7 +665,7 @@ class DagStatusWidget(QWidget):
             if wf_status == "running" and wf_id not in self._wf_started_at:
                 self._wf_started_at[wf_id] = time.monotonic()
             if (
-                wf_status in ("done", "failed", "skipped")
+                wf_status in ("done", "failed", "skipped", "blocked")
                 and wf_id not in self._wf_finished_at
             ):
                 if wf_id not in self._wf_started_at:
@@ -625,7 +696,7 @@ class DagStatusWidget(QWidget):
                     self._step_started_at[key] = time.monotonic()
                 # status が終了状態に達したら finished_at を確定（以後カウントアップ停止）
                 if (
-                    sstatus in ("done", "failed", "skipped")
+                    sstatus in ("done", "failed", "skipped", "blocked")
                     and key not in self._step_finished_at
                 ):
                     if key not in self._step_started_at:
@@ -680,7 +751,7 @@ class DagStatusWidget(QWidget):
             if wf_finished is not None:
                 self._wf_finished_at[iid] = wf_finished
             elif (
-                wf_status in ("done", "failed", "skipped")
+                wf_status in ("done", "failed", "skipped", "blocked")
                 and iid not in self._wf_finished_at
             ):
                 if iid not in self._wf_started_at:
@@ -730,7 +801,7 @@ class DagStatusWidget(QWidget):
                     # now を採用するため elapsed は実体より短くなり得るが、
                     # 少なくともカウントアップは停止する。
                     if (
-                        sstatus in ("done", "failed", "skipped")
+                        sstatus in ("done", "failed", "skipped", "blocked")
                         and key not in self._step_finished_at
                     ):
                         if key not in self._step_started_at:
@@ -850,17 +921,40 @@ class DagStatusWidget(QWidget):
 
             if self._is_workflow_expanded(entry.instance_id) and entry.steps:
                 stripe_top = y + STRIPE_PADDING_Y
+
+                # Fanout 子ブロック高を事前計算し、行レイアウトを純関数で求める。
+                # 同一行に複数の expansion がある場合は rank 順に縦積みされ、
+                # その行の高さも child_heights 合計分だけ増えるため、
+                # 次の行が下に押し下げられ垂直方向の重なりが解消される。
+                # cols_per_row は Step ごとの parent_x（rank 位置）で再計算する。
+                # 全 Step に parent_x=0 を使うと右端 Step で予約高が過小になり、
+                # 実描画 _draw_fanout_children と乖離して下行と重なる不具合になる。
+                child_heights: Dict[str, int] = {}
+                for s in entry.steps:
+                    sid = s["id"]
+                    subs = entry.subtasks.get(sid) or []
+                    if subs and self._is_step_expanded(entry.instance_id, sid):
+                        parent_x = LEFT_MARGIN + rank.get(sid, 0) * (NODE_W + COL_GAP)
+                        child_heights[sid] = self._compute_child_block_height(
+                            len(subs), self._compute_cols_per_row(parent_x)
+                        )
+
+                row_top_y, within_row_child_offset = compute_row_y_offsets(
+                    rank,
+                    order,
+                    child_heights,
+                    node_h=NODE_H,
+                    row_gap=ROW_GAP,
+                )
+
                 # 各 Step ノードを配置
                 step_to_pos: Dict[str, Tuple[float, float]] = {}
-                # subtask 行高（Fanout 展開時のみ）
-                row_extra: Dict[int, int] = {}  # row → 追加 px
                 for s in entry.steps:
                     sid = s["id"]
                     r = rank.get(sid, 0)
                     o = order.get(sid, 0)
                     x = LEFT_MARGIN + r * (NODE_W + COL_GAP)
-                    # row 高に Fanout 展開分を加算
-                    base_y = stripe_top + o * (NODE_H + ROW_GAP) + row_extra.get(o, 0)
+                    base_y = stripe_top + row_top_y.get(o, 0)
                     node = _StepNodeItem(
                         x,
                         base_y,
@@ -872,6 +966,9 @@ class DagStatusWidget(QWidget):
                     )
                     node.started_at = s.get("started_at")
                     node.finished_at = s.get("finished_at")
+                    node.current_activity = self._step_activity.get(
+                        (entry.instance_id, sid), ""
+                    )
                     # Fanout
                     subs = entry.subtasks.get(sid)
                     if subs:
@@ -890,13 +987,22 @@ class DagStatusWidget(QWidget):
                     self._step_items[(entry.instance_id, sid)] = node
                     step_to_pos[sid] = (x, base_y)
 
-                    # Fanout 展開時は小型子ノードを下に描画（Q1=A / Q4=B エッジも描画）
+                    # Fanout 展開時は小型子ノードを下に描画。子ブロック上端は
+                    # row_top_y + NODE_H + within_offset + CHILD_BLOCK_PADDING_TOP
+                    # に固定し、同一行で先に展開された兄弟の下に積み上げる。
                     if subs and node._fanout_expanded:
+                        child_block_top = (
+                            base_y
+                            + NODE_H
+                            + within_row_child_offset.get(sid, 0)
+                            + CHILD_BLOCK_PADDING_TOP
+                        )
                         self._draw_fanout_children(
                             x,
                             base_y,
                             entry.instance_id,
                             subs,
+                            block_top_override=child_block_top,
                         )
 
                 # エッジ
@@ -915,48 +1021,55 @@ class DagStatusWidget(QWidget):
                         parent_right = QPointF(px + NODE_W, py + NODE_H / 2)
                         self._draw_edge(parent_right, child_left, edge_pen)
 
-                # ストライプ高加算
-                stripe_h = STRIPE_PADDING_Y + rows * (NODE_H + ROW_GAP) - ROW_GAP
+                # ストライプ高は、row_top_y の最終行 + その行の高さ
+                # (NODE_H + その行の child_heights 合計) から逆算する。
+                # compute_row_y_offsets が行ごとに展開ぶんを積み上げ済みのため、
+                # 旧 child_block_total の別途加算は不要（二重加算を防ぐ）。
+                if row_top_y:
+                    last_order = max(row_top_y.keys())
+                    last_row_child_total = sum(
+                        child_heights.get(s["id"], 0)
+                        for s in entry.steps
+                        if order.get(s["id"]) == last_order
+                    )
+                    stripe_h = (
+                        STRIPE_PADDING_Y
+                        + row_top_y[last_order]
+                        + NODE_H
+                        + last_row_child_total
+                    )
+                else:
+                    stripe_h = STRIPE_PADDING_Y + NODE_H
                 y = stripe_top + max(stripe_h, NODE_H)
-                # Fanout 展開中の全親 Step の子描画高を加算する
-                # (複数の同時展開をサポートし、下の stripe と重ならないように)
-                # cols_per_row は _draw_fanout_children と同じ viewport ベースの計算を使う
-                try:
-                    _avail_w = max(
-                        NODE_W,
-                        self._view.viewport().width() - LEFT_MARGIN - RIGHT_MARGIN,
-                    )
-                except (AttributeError, RuntimeError):
-                    _avail_w = NODE_W
-                cols_per_row = max(1, (_avail_w + CHILD_GAP) // (CHILD_NODE_W + CHILD_GAP))
-                child_block_total = 0
-                for s in entry.steps:
-                    nd = self._step_items.get((entry.instance_id, s["id"]))
-                    if nd is None or not nd._fanout_expanded:
-                        continue
-                    subs = entry.subtasks.get(s["id"]) or []
-                    if not subs:
-                        continue
-                    rows_c = (len(subs) + cols_per_row - 1) // cols_per_row
-                    child_block_total += (
-                        4  # 親ノード下のスペース
-                        + rows_c * (CHILD_NODE_H + CHILD_ROW_GAP)
-                        - CHILD_ROW_GAP
-                    )
-                if child_block_total > 0:
-                    y += child_block_total
 
             y += STRIPE_GAP
 
         scene_h = max(y + BOTTOM_MARGIN, self._view.viewport().height())
         self._scene.setSceneRect(QRectF(0, 0, scene_w, scene_h))
 
-        # サマリ
-        elapsed = (
-            time.monotonic() - self._global_started_at
-            if self._global_started_at is not None
-            else 0.0
+        self._update_summary_label()
+
+    def _update_summary_label(self) -> None:
+        """作業状況サマリーを現在の状態と固定済み終了時刻から更新する。"""
+        done_wf = sum(
+            1 for entry in self._entries if entry.status in ("done", "skipped")
         )
+        total_steps = sum(len(entry.steps) for entry in self._entries)
+        done_steps = sum(
+            1
+            for entry in self._entries
+            for step in entry.steps
+            if step["status"] in ("done", "skipped")
+        )
+        if self._global_started_at is None:
+            elapsed = 0.0
+        else:
+            end = (
+                self._global_finished_at
+                if self._global_finished_at is not None
+                else time.monotonic()
+            )
+            elapsed = max(0.0, end - self._global_started_at)
         self._summary_label.setText(
             self.tr("ワークフロー: %d/%d   ステップ: %d/%d   [%s]")
             % (
@@ -968,32 +1081,65 @@ class DagStatusWidget(QWidget):
             )
         )
 
+    def _compute_cols_per_row(self, parent_x: float = 0.0) -> int:
+        """Fanout 子ノードの 1 行あたり列数を viewport 幅から算出する。
+
+        `_relayout` と `_draw_fanout_children` で同一ロジックを使うため共通化。
+        parent_x を渡すと、その x オフセット以降の可視幅を基準に計算する。
+        """
+        try:
+            avail_w = max(
+                NODE_W,
+                self._view.viewport().width()
+                - LEFT_MARGIN
+                - RIGHT_MARGIN
+                - int(parent_x),
+            )
+        except (AttributeError, RuntimeError):
+            avail_w = NODE_W
+        return max(1, (avail_w + CHILD_GAP) // (CHILD_NODE_W + CHILD_GAP))
+
+    def _compute_child_block_height(self, sub_count: int, cols_per_row: int) -> int:
+        """指定数の子ノードを cols_per_row 列で並べた時の合計ブロック高（px）。
+
+        compute_row_y_offsets に渡す child_heights 値はこのメソッド戻り値を使う。
+        値は親 Step 下端から最後の子ノード下端までの距離（CHILD_BLOCK_PADDING_TOP を含む）。
+        """
+        if sub_count <= 0:
+            return 0
+        rows_c = (sub_count + cols_per_row - 1) // cols_per_row
+        return (
+            CHILD_BLOCK_PADDING_TOP
+            + rows_c * (CHILD_NODE_H + CHILD_ROW_GAP)
+            - CHILD_ROW_GAP
+        )
+
     def _draw_fanout_children(
         self,
         parent_x: float,
         parent_y: float,
         instance_id: str,
         subs: List[tuple],
+        *,
+        block_top_override: Optional[float] = None,
     ) -> None:
         """Fanout 展開時の子ノード群を描画する。
 
         Q1=A / Q5=A: 親ノードの 1/2 幅小型ノード。
         Q6=A: viewport 幅に合わせて自動折り返しグリッド配置。
         Q4=B: 親ノード下辺中央 → 各子ノード上辺中央へ縦向路エッジ（矢印なし）。
+
+        block_top_override: 子ブロック先頭 y を呼び出し側で固定したい場合に渡す。
+        _relayout が同一行内の複数 expansion を縦積みするために使用する。
         """
         if not subs:
             return
-        # 折り返し幅: viewport の可視幅を使う（親 NODE_W に限定すると 1 列になるため）。
-        # Q6=A: ユーザーがウインドウを広げれば列数が増える。
-        try:
-            avail_w = max(
-                NODE_W,
-                self._view.viewport().width() - LEFT_MARGIN - RIGHT_MARGIN - int(parent_x),
-            )
-        except (AttributeError, RuntimeError):
-            avail_w = NODE_W
-        cols_per_row = max(1, (avail_w + CHILD_GAP) // (CHILD_NODE_W + CHILD_GAP))
-        block_top = parent_y + NODE_H + 4
+        cols_per_row = self._compute_cols_per_row(parent_x)
+        block_top = (
+            block_top_override
+            if block_top_override is not None
+            else (parent_y + NODE_H + CHILD_BLOCK_PADDING_TOP)
+        )
         edge_pen = QPen(self._theme_def["edge"])
         edge_pen.setWidthF(0.8)
         parent_anchor = QPointF(parent_x + NODE_W / 2, parent_y + NODE_H)
@@ -1112,28 +1258,7 @@ class DagStatusWidget(QWidget):
                 header.update_text(wf_done, len(entry.steps))
             except RuntimeError:
                 pass
-        if self._global_started_at is not None:
-            done_wf = sum(
-                1 for e in self._entries if e.status in ("done", "skipped")
-            )
-            total_steps = sum(len(e.steps) for e in self._entries)
-            done_steps = sum(
-                1
-                for e in self._entries
-                for s in e.steps
-                if s["status"] in ("done", "skipped")
-            )
-            elapsed = time.monotonic() - self._global_started_at
-            self._summary_label.setText(
-                self.tr("ワークフロー: %d/%d   ステップ: %d/%d   [%s]")
-                % (
-                    done_wf,
-                    len(self._entries),
-                    done_steps,
-                    total_steps,
-                    _fmt_elapsed(elapsed),
-                )
-            )
+        self._update_summary_label()
 
     # ----------------------------------------------------------
     # コピー

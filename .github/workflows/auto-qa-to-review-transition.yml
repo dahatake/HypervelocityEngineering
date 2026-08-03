@@ -1,14 +1,14 @@
-name: QA 完了 → auto-context-review 自動遷移
+name: QA 完了 → adversarial-review 自動遷移
 
 # auto-qa のラベルが付いた PR に対して、QA が完了したと判定した場合に
-# auto-context-review ラベルを自動で付与する。
-# これにより copilot-auto-review.yml がチェーン発火し、レビュー指示が自動投稿される。
+# adversarial-review ラベルを自動で付与する。
+# これにより copilot-auto-feedback.yml がチェーン発火し、レビュー指示が自動投稿される。
 #
 # QA 完了の判定条件:
 #   1. PR に auto-qa ラベルが付いている
-#   2. PR に auto-context-review ラベルがまだ付いていない
-#   3. 紐づく Issue の auto-context-review ラベルを確認し、後続ステップで分岐する
-#      - ラベルあり → auto-context-review ラベルを PR に付与してレビューへ遷移
+#   2. PR に adversarial-review ラベルがまだ付いていない
+#   3. 紐づく Issue の adversarial-review ラベルを確認し、後続ステップで分岐する
+#      - ラベルあり → adversarial-review ラベルを PR に付与してレビューへ遷移
 #      - ラベルなし → auto-approve-ready ラベルを PR に直接付与（レビューなしパス）
 #   4. <!-- copilot-auto-qa-posted --> マーカーが PR コメントに存在する（QA 指示済み）
 #   5. QA 指示後に以下いずれかの回答シグナルが存在する
@@ -40,9 +40,9 @@ name: QA 完了 → auto-context-review 自動遷移
 #     ↓ synchronize イベント（このワークフロー発火）
 #   [質問なしの場合] Bot が「質問なし」コメント投稿
 #     ↓ issue_comment イベント（このワークフロー発火 ← フォールバックパス）
-#   auto-qa-to-review-transition.yml → auto-context-review を PR に付与
+#   auto-qa-to-review-transition.yml → adversarial-review を PR に付与
 #     ↓ labeled イベント
-#   copilot-auto-review.yml → レビュー指示コメント投稿
+#   copilot-auto-feedback.yml → レビュー指示コメント投稿
 #
 # 注意:
 #   - pull_request_target を使用（Copilot が作成した PR のブランチには
@@ -81,7 +81,7 @@ jobs:
   transition:
     # 事前フィルタ（pull_request_target の場合）:
     #   - PR に auto-qa ラベルが付いている
-    #   - PR に auto-context-review ラベルがまだ付いていない
+    #   - PR に adversarial-review ラベルがまだ付いていない
     # 事前フィルタ（issue_comment の場合）:
     #   - PR へのコメントである（issue.pull_request が存在する）
     #   - Copilot Bot のコメント（copilot-swe-agent または Copilot）である
@@ -99,40 +99,48 @@ jobs:
       - name: リポジトリをチェックアウト（共通スクリプト読み込みのため）
         uses: actions/checkout@v4
 
-      - name: PR 情報を取得（issue_comment 対応）
+      - name: PR 情報を取得（常に最新状態を再取得）
         id: pr-info
         run: |
           set -euo pipefail
 
-          if [ "${EVENT_NAME}" = "issue_comment" ]; then
-            pr_api_err=$(mktemp)
-            pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
-              echo "PR #${PR_NUMBER} の情報取得に失敗しました。スキップします。エラー詳細:"
-              cat "${pr_api_err}" || true
-              rm -f "${pr_api_err}"
-              echo "skip=true" >> "${GITHUB_OUTPUT}"
-              exit 0
-            }
+          pr_api_err=$(mktemp)
+          pr_data=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" 2>"${pr_api_err}") || {
+            echo "PR #${PR_NUMBER} の情報取得に失敗しました。スキップします。エラー詳細:"
+            cat "${pr_api_err}" || true
             rm -f "${pr_api_err}"
-            has_auto_qa=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-qa"]) then "true" else "false" end')
-            has_auto_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-context-review"]) then "true" else "false" end')
-            if [ "${has_auto_qa}" != "true" ] || [ "${has_auto_review}" = "true" ]; then
-              echo "スキップ条件: auto-qa=${has_auto_qa}, auto-context-review=${has_auto_review}"
-              echo "skip=true" >> "${GITHUB_OUTPUT}"
-              exit 0
-            fi
-            # PR body を GITHUB_ENV に設定（find_issue_number Method 2 用）
-            pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
-            EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
-            {
-              echo "PR_BODY<<${EOF_MARKER}"
-              echo "${pr_body}"
-              echo "${EOF_MARKER}"
-            } >> "${GITHUB_ENV}"
-            echo "skip=false" >> "${GITHUB_OUTPUT}"
-          else
-            echo "skip=false" >> "${GITHUB_OUTPUT}"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          }
+          rm -f "${pr_api_err}"
+
+          has_auto_qa=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["auto-qa"]) then "true" else "false" end')
+          has_adversarial_review=$(echo "${pr_data}" | jq -r '[.labels[].name] | if contains(["adversarial-review"]) then "true" else "false" end')
+          pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+          pr_body_head=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
+          pr_review_opted_out="false"
+          if printf '%s' "${pr_body_head}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+            pr_review_opted_out="true"
+            has_adversarial_review="false"
+            gh pr edit "${PR_NUMBER}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "PR body の false marker を優先し、adversarial-review ラベルを除去しました。"
           fi
+          echo "review_opted_out=${pr_review_opted_out}" >> "${GITHUB_OUTPUT}"
+
+          if [ "${has_auto_qa}" != "true" ] || { [ "${has_adversarial_review}" = "true" ] && [ "${pr_review_opted_out}" != "true" ]; }; then
+            echo "スキップ条件: auto-qa=${has_auto_qa}, adversarial-review=${has_adversarial_review}, review-opted-out=${pr_review_opted_out}"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # PR body を GITHUB_ENV に設定（find_issue_number Method 2 用）
+          EOF_MARKER=$(uuidgen 2>/dev/null || printf '%s-%s' "$(date +%s)" "${RANDOM}")
+          {
+            echo "PR_BODY<<${EOF_MARKER}"
+            echo "${pr_body}"
+            echo "${EOF_MARKER}"
+          } >> "${GITHUB_ENV}"
+          echo "skip=false" >> "${GITHUB_OUTPUT}"
 
       - name: 紐づく Issue 番号を特定
         id: find-issue
@@ -151,6 +159,7 @@ jobs:
         if: steps.pr-info.outputs.skip != 'true'
         env:
           ISSUE_NUMBER: ${{ steps.find-issue.outputs.issue_number }}
+          PR_REVIEW_OPTED_OUT: ${{ steps.pr-info.outputs.review_opted_out }}
         run: |
           set -euo pipefail
 
@@ -180,8 +189,19 @@ jobs:
             fi
             issue_labels=$(echo "${current_issue_data}" | jq '[.labels[].name] // []' 2>/dev/null) || issue_labels="[]"
             has_issue_review_label=$(echo "${issue_labels}" \
-              | jq -r 'if contains(["auto-context-review"]) then "true" else "false" end')
+              | jq -r 'if contains(["adversarial-review"]) then "true" else "false" end')
             issue_body=$(echo "${current_issue_data}" | jq -r '.body // ""')
+            if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*false[[:space:]]*-->'; then
+              has_issue_review_label="false"
+              echo "false marker を優先し、Issue の adversarial-review 設定を false に上書きしました。"
+            elif printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*adversarial-review:[[:space:]]*true[[:space:]]*-->'; then
+              has_issue_review_label="true"
+              echo "Issue の true marker を敵対的レビュー有効として復元しました。"
+            fi
+            if [ "${PR_REVIEW_OPTED_OUT:-false}" = "true" ]; then
+              has_issue_review_label="false"
+              echo "PR body の false marker をRoot Issue設定より優先しました。"
+            fi
             has_issue_auto_merge="false"
             if printf '%s' "${issue_body}" | grep -Eq '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
               has_issue_auto_merge="true"
@@ -189,7 +209,7 @@ jobs:
             return 0
           }
 
-          # 条件 3: 紐づく Issue の auto-context-review ラベル有無と auto-merge タグを確認
+          # 条件 3: 紐づく Issue の adversarial-review ラベル有無と auto-merge タグを確認
           # （pull_request_target / issue_comment の両経路で共通して実施）
           # ※ レビューなしの場合でも QA 完了判定は続行し、後続で分岐する
           has_issue_review_label="false"
@@ -203,7 +223,7 @@ jobs:
               write_reason_output "${reason}"
               exit 0
             fi
-            echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
+            echo "Issue #${ISSUE_NUMBER} の adversarial-review ラベル: ${has_issue_review_label}"
             echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
           else
             # --- フォールバック: Issue 未特定時、sync-issue-labels コメントから復元 ---
@@ -232,7 +252,7 @@ jobs:
                 write_reason_output "${reason}"
                 exit 0
               fi
-              echo "Issue #${ISSUE_NUMBER} の auto-context-review ラベル: ${has_issue_review_label}"
+              echo "Issue #${ISSUE_NUMBER} の adversarial-review ラベル: ${has_issue_review_label}"
               echo "Issue #${ISSUE_NUMBER} の auto-merge タグ: ${has_issue_auto_merge}"
             else
               reason="Issue 番号が特定できませんでした。QA 完了判定をスキップします。（sync-issue-labels コメントも未検出）"
@@ -497,18 +517,18 @@ jobs:
           echo "has_issue_review_label=${has_issue_review_label}" >> "${GITHUB_OUTPUT}"
           echo "has_issue_auto_merge=${has_issue_auto_merge}" >> "${GITHUB_OUTPUT}"
 
-      - name: auto-context-review ラベルを PR に付与
+      - name: adversarial-review ラベルを PR に付与
         if: >
           steps.pr-info.outputs.skip != 'true'
           && steps.check-qa-complete.outputs.qa_complete == 'true'
           && steps.check-qa-complete.outputs.has_issue_review_label == 'true'
         run: |
           set -euo pipefail
-          echo "=== auto-context-review ラベルを PR #${PR_NUMBER} に付与します ==="
+          echo "=== adversarial-review ラベルを PR #${PR_NUMBER} に付与します ==="
           gh pr edit "${PR_NUMBER}" \
             --repo "${REPO}" \
-            --add-label "auto-context-review"
-          echo "✅ auto-context-review ラベルを付与しました。copilot-auto-review.yml が発火します。"
+            --add-label "adversarial-review"
+          echo "✅ adversarial-review ラベルを付与しました。copilot-auto-feedback.yml が発火します。"
 
       - name: サマリーコメントを PR に投稿（遷移完了）
         if: >
@@ -523,11 +543,11 @@ jobs:
 
           COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s' \
             '## 🔄 QA → レビュー 自動遷移' \
-            'QA 完了を検知しました。`auto-context-review` ラベルを PR に付与しました。' \
+            'QA 完了を検知しました。`adversarial-review` ラベルを PR に付与しました。' \
             "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
             "- 🔍 **判定理由**: ${REASON}" \
             '次のステップ:' \
-            '- `copilot-auto-review.yml` が自動発火し、レビュー指示コメントが投稿されます。' \
+            '- `copilot-auto-feedback.yml` が自動発火し、レビュー指示コメントが投稿されます。' \
             '> ℹ️ このコメントは `auto-qa-to-review-transition.yml` によって自動投稿されました。')
 
           gh pr comment "${PR_NUMBER}" \
@@ -580,7 +600,7 @@ jobs:
           COMMENT=$(printf '%s\n\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s' \
             "${MARKER}" \
             '## ✅ QA 完了（手動レビュー待ち）' \
-            'QA 完了を検知しました。Issue 設定により auto-context-review / auto-approve-ready は自動付与されません。' \
+            'QA 完了を検知しました。Issue 設定により adversarial-review / auto-approve-ready は自動付与されません。' \
             "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
             "- 🔍 **判定理由**: ${REASON}" \
             '- 🙋 **次のアクション**: レビュアーが手動でレビューと承認を進めてください。' \
@@ -612,12 +632,8 @@ jobs:
           fi
 
           # 検証マーカーチェック（auto-approve-ready 付与前）
-          # auto-approve-and-merge.yml の check-validation ステップと同じ判定パターンを使用
+          # 判定ロジックは hve/split_fork.py の単一実装（FR-MAINT-06）へ委譲する
           VALIDATION_MISSING_MARKER='<!-- auto-qa-to-review-validation-missing -->'
-          VALIDATION_CONFIRMED_MARKER='<!-- validation-confirmed -->'
-          HEADING_REGEX='^#{1,6}[[:space:]]+.*(検証|Validation|Verification)'
-          BULLET_REGEX='^[[:space:]*>-]*(\*\*|__)?(検証|Validation|Verification)(\*\*|__)?[[:space:]]*[:：]'
-          LEGACY_REGEX='(^#{1,6}[[:space:]]+|^)(Validation|検証)'
 
           # PR body を取得
           pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
@@ -632,30 +648,11 @@ jobs:
 
           has_validation="false"
           combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null || echo '')")
+          validation_subject="${RUNNER_TEMP}/validation-subject.md"
+          printf '%s' "${combined_text}" > "${validation_subject}"
 
-          # 1) HTML コメントマーカー方式（最優先）
-          if printf '%s' "${combined_text}" | grep -qiF "${VALIDATION_CONFIRMED_MARKER}"; then
-            has_validation="true"
-          # 2) 見出し方式（PR body）
-          elif printf '%s' "${pr_body}" | grep -qiE "${HEADING_REGEX}"; then
-            has_validation="true"
-          # 3) 箇条書き/強調方式（PR body）
-          elif printf '%s' "${pr_body}" | grep -qiE "${BULLET_REGEX}"; then
-            has_validation="true"
-          # 互換フォールバック: 旧判定（行頭 Validation/検証、PR body）
-          elif printf '%s' "${pr_body}" | grep -qiE "${LEGACY_REGEX}"; then
-            has_validation="true"
-          # 4) 見出し方式（PR コメント）
-          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${HEADING_REGEX}"; then
-            has_validation="true"
-          # 5) 箇条書き/強調方式（PR コメント）
-          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${BULLET_REGEX}"; then
-            has_validation="true"
-          # 互換フォールバック: 旧判定（行頭 Validation/検証、PR コメント）
-          elif echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${LEGACY_REGEX}"; then
+          if python3 "${GITHUB_WORKSPACE}/.github/scripts/check_validation_marker.py" \
+            --text-file "${validation_subject}"; then
             has_validation="true"
           fi
 
@@ -755,7 +752,9 @@ jobs:
             current_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
               --jq '.body // ""' 2>/dev/null || echo '')
 
-            if printf '%s' "${current_body}" | grep -qiE "${HEADING_REGEX}"; then
+            if printf '%s' "${current_body}" > "${RUNNER_TEMP}/current-pr-body.md" \
+              && python3 "${GITHUB_WORKSPACE}/.github/scripts/check_validation_marker.py" \
+                --text-file "${RUNNER_TEMP}/current-pr-body.md"; then
               echo "ℹ️ PR body に既に検証セクションが存在します。PR body 追記をスキップします。"
             else
               VALIDATION_APPEND="$(printf '\n---\n\n## 検証\n\n%s\n%s\n\n<!-- validation-confirmed -->\n<!-- validation-auto-appended-by: auto-qa-to-review-transition.yml -->\n' \
@@ -806,8 +805,8 @@ jobs:
 
           echo "✅ PR body/コメントに検証実施記録を確認しました。auto-approve-ready ラベルを付与します。"
 
-          # 紐づく Issue に auto-context-review ラベルがなく、auto-merge 有効の場合のみ直接遷移
-          echo "Issue に auto-context-review ラベルがなく、auto-merge が有効なため直接 auto-approve-ready に遷移します。"
+          # 紐づく Issue に adversarial-review ラベルがなく、auto-merge 有効の場合のみ直接遷移
+          echo "Issue に adversarial-review ラベルがなく、auto-merge が有効なため直接 auto-approve-ready に遷移します。"
 
           # draft → ready_for_review に遷移（auto-approve-and-merge.yml の !draft 条件を満たすため）
           IS_DRAFT=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.draft' 2>/dev/null || echo 'false')
@@ -832,7 +831,7 @@ jobs:
             '## 🔄 QA → Approve 直接遷移（レビューなしパス）' \
             'QA 完了を検知しました。Issue にレビュー設定がなく、`auto-merge: true` のため `auto-approve-ready` ラベルを直接 PR に付与しました。' \
             "- 📋 **紐づく Issue**: #${ISSUE_NUMBER}" \
-            "- 🔍 **判定理由**: Issue に auto-context-review ラベルなし + \`auto-merge: true\`${DRAFT_NOTE}" \
+            "- 🔍 **判定理由**: Issue に adversarial-review ラベルなし + \`auto-merge: true\`${DRAFT_NOTE}" \
             '> ℹ️ このコメントは `auto-qa-to-review-transition.yml` によって自動投稿されました。')
           gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${COMMENT}"
           echo "✅ auto-approve-ready ラベルを PR に付与しました（レビューなしパス）。"

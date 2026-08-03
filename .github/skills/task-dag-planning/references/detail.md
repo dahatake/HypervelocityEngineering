@@ -67,14 +67,14 @@ SPLIT_REQUIRED の場合は `subissues-template.md` を `read` してコピー�
 
 > ⚠️ task_scope=multi または context_size=large で「判定結果: PROCEED」と記載することは禁止。
 
-### Orchestrator 例外（HVE Cloud / CLI Orchestrator 配下のみ）
+### Orchestrator 例外（HVE Cloud Agent Orchestrator 配下）
 
-`task_scope=multi` または `context_size=large` の **どちらか** で SPLIT_REQUIRED になっても、Orchestrator 配下（HVE Cloud Agent Orchestrator / HVE CLI Orchestrator 実行配下）では Agent は `plan.md + subissues.md` 作成後に正常終了し、**実装の継続は Orchestrator が担う**:
+`task_scope=multi` または `context_size=large` の **どちらか** で SPLIT_REQUIRED になった場合、HVE Cloud Agent Orchestrator（Issue Template + GitHub Actions + Copilot Cloud Agent）では Agent は `plan.md + subissues.md` 作成後に正常終了し、**実装の継続は GitHub Actions が担う**:
 
 - **Cloud**: Orchestrator が Sub-issue を作成し Copilot をアサインする（既存 `assign-copilot.sh` 経由）
-- **CLI**: Orchestrator が `subissues.md` を読み込み、`depends_on` から計算した wave 単位でサブセッションを **並列実行**（hve/runner.py の `_maybe_run_split_fork`）し、全完了後に親 Step を完了扱いで後続 Step へ進む
+- **CLI / GUI**: GitHub Sub-Issue 作成は行わない。標準経路では workflow DAG / fan-out で分割・並列化する。`subissues.md` runtime fork は legacy / 実験用途の明示 opt-in のみ
 
-**判別方法（重要）**: Orchestrator/単独 の判別は **`OrchestratorContext` (`hve/orchestrator_context.py`) を Python 内部で明示的引数として伝播させる**方式。`HVE_ORCHESTRATOR_ACTIVE` 環境変数は **撤廃済み**（参照禁止）。
+**判別方法（重要）**: CLI / GUI の実行コンテキスト伝播は **`OrchestratorContext` (`hve/orchestrator_context.py`) を Python 内部で明示的引数として伝播させる**方式。`HVE_ORCHESTRATOR_ACTIVE` 環境変数は **撤廃済み**（参照禁止）。ただし `OrchestratorContext` が非 None でも runtime split-fork は既定無効。
 
 **適用条件と非対象**:
 
@@ -125,20 +125,20 @@ SPLIT_REQUIRED の場合は `subissues-template.md` を `read` してコピー�
 
 **例3（SPLIT_REQUIRED by context_size）**: `<!-- task_scope: single -->` `<!-- context_size: large -->` `<!-- split_decision: SPLIT_REQUIRED -->` → context_size=large に該当
 
-## Orchestrator による SPLIT-fork ランタイム実行（HVE CLI Orchestrator）
+## Legacy: SPLIT-fork ランタイム実行（HVE CLI / GUI 明示 opt-in）
 
-Orchestrator 配下では、Agent が `SPLIT_REQUIRED` を出力して plan.md + subissues.md を生成して終了した時点で、**Orchestrator (CLI) 側がそれらを実行時に検出し、サブタスクを並列 fork する**仕組みが用意されている（hve/runner.py の Phase 1.5 `_maybe_run_split_fork`）。
+CLI / GUI の標準経路では、Agent が `SPLIT_REQUIRED` を出力しても `subissues.md` を runtime fork しない。過去互換・実験用途として、`OrchestratorContext.split_fork_enabled=True` を明示した場合のみ、hve/runner.py の Phase 1.5 `_maybe_run_split_fork` が動作する。
 
-- **有効化条件**: `StepRunner` 生成時に `OrchestratorContext` インスタンスを渡すこと（HVE CLI Orchestrator (`hve orchestrate`) では自動。`HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み）。
+- **有効化条件**: `StepRunner` 生成時に `OrchestratorContext(split_fork_enabled=True)` を明示的に渡すこと。HVE CLI Orchestrator (`hve orchestrate`) の標準生成値は `False`。
 - **並列度**: `OrchestratorContext.max_parallel_subtasks`（既定 4）。同一 wave 内のサブタスクは `asyncio.gather` + `Semaphore` で並列実行。
 - **検出パス**:
-  - Custom Agent モード: `work/<Custom Agent>/Issue-<id>/subissues.md`
-  - 通常モード: `work/Issue-<id>/subissues.md`
+  - Custom Agent モード: `work/run/<run-id>/<Custom Agent>/Issue-<id>/subissues.md`
+  - 通常モード: `work/run/<run-id>/Issue-<id>/subissues.md`
 - **再帰深度ガード**: `OrchestratorContext.split_fork_depth` が `split_fork_max_depth`（既定 2）以上で fork 中止 → Step failed。
-- **完了判定**: サブタスクごとに `work/<Custom Agent>/Issue-<id>/sub-NNN/completion-report.md` に検証マーカー（§0）が存在することで判定。
+- **完了判定**: サブタスクごとに `work/run/<run-id>/<Custom Agent>/Issue-<id>/sub-NNN/completion-report.md` に検証マーカー（§0）が存在することで判定。
 - **失敗時ポリシー**: 同一 wave 内は全件実行 → 1 件以上失敗時は後続 wave をスキップして親 Step を failed 化。
 
-> Cloud (GitHub Issue) モードの Sub-issue 自動生成については、別途 `orchestrator.py` の Sub-issue 同期ロジック側で対応する。本ランタイム fork は CLI セッション起点モード専用。
+> Cloud (GitHub Issue) モードの Sub-issue 自動生成は `.github/workflows/create-subissues-from-pr.yml` / `.github/workflows/advance-subissues.yml` が担う。本ランタイム fork は Cloud 正式経路ではない。
 
 ## Related Skills
 

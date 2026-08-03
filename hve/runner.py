@@ -5,13 +5,66 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import ntpath
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from types import MappingProxyType
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+
+if __package__:
+    from .artifact_validation import (
+        _ASDW_AUDIT_MODE_ACL_DIRECT,
+        _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
+        _ASDW_DATA_DEPLOY_NETWORK_KEYS,
+    )
+    from .asdw_data_script_generator import (
+        AsdwDataScriptGenerationError,
+        ensure_asdw_data_producers,
+    )
+    from .asdw_data_script_launcher import (
+        ScriptLauncherError,
+        execute_pipeline,
+        resolve_azure_cli_executable,
+    )
+    from .asdw_data_runtime_context import (
+        AsdwDataDeployContextError,
+        build_asdw_data_deploy_bootstrap_context,
+    )
+    from .fanout_expander import resolve_output_path_prefix_gates
+    from .workflow_registry import (
+        ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
+    )
+else:  # pragma: no cover - top-level runner compatibility
+    from artifact_validation import (  # type: ignore[import-not-found,no-redef]
+        _ASDW_AUDIT_MODE_ACL_DIRECT,
+        _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
+        _ASDW_DATA_DEPLOY_NETWORK_KEYS,
+    )
+    from asdw_data_script_generator import (  # type: ignore[import-not-found,no-redef]
+        AsdwDataScriptGenerationError,
+        ensure_asdw_data_producers,
+    )
+    from asdw_data_script_launcher import (  # type: ignore[import-not-found,no-redef]
+        ScriptLauncherError,
+        execute_pipeline,
+        resolve_azure_cli_executable,
+    )
+    from asdw_data_runtime_context import (  # type: ignore[import-not-found,no-redef]
+        AsdwDataDeployContextError,
+        build_asdw_data_deploy_bootstrap_context,
+    )
+    from fanout_expander import (  # type: ignore[import-not-found,no-redef]
+        resolve_output_path_prefix_gates,
+    )
+    from workflow_registry import (  # type: ignore[import-not-found,no-redef]
+        ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
+    )
 
 # 同時 stdin アクセスを防止し、全ステップで共有される sys.stdin を順番に利用させる。
 # asyncio.Lock により同一イベントループ内の複数コルーチンからの同時入力を直列化する。
@@ -40,6 +93,78 @@ def _safe_run_id(run_id: str) -> str:
     return rid or generate_run_id()
 
 
+def _work_identifier_for_step(step_id: str, fanout_meta: Optional[Dict[str, Any]]) -> str:
+    """Agent Prompt の WORK `Issue-<識別子>` に使う識別子を返す。
+
+    非 fan-out Step は既存互換の `0` を維持する。fan-out 子だけ step_id 由来の
+    パス安全な識別子にして、並列子が同じ `Issue-0` を共有しないようにする。
+    """
+    if not fanout_meta or not fanout_meta.get("fanout_key"):
+        return "0"
+    token = str(step_id or "").strip()
+    if not token:
+        return "0"
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", token).strip("-")
+    return f"step-{safe}" if safe else "0"
+
+
+def _safe_work_path_component(value: str, label: str) -> str:
+    """Return one direct path component for a run-scoped work directory."""
+    component = str(value or "").strip()
+    if (
+        not component
+        or component in {".", ".."}
+        or "/" in component
+        or "\\" in component
+        or "\x00" in component
+        or Path(component).is_absolute()
+    ):
+        raise ValueError(f"unsafe {label} work path component: {value!r}")
+    return component
+
+
+def _step_work_dir(
+    custom_agent: Optional[str],
+    identifier: str,
+) -> Path:
+    """Return the run-scoped work directory for one Step without creating it."""
+    try:
+        from .split_fork import resolve_work_root
+    except ImportError:  # pragma: no cover
+        from split_fork import resolve_work_root  # type: ignore[no-redef]
+
+    safe_identifier = _safe_work_path_component(identifier, "identifier")
+    work_root = resolve_work_root().resolve()
+    issue_dir = f"Issue-{safe_identifier}"
+    target = (
+        work_root
+        / _safe_work_path_component(custom_agent, "custom_agent")
+        / issue_dir
+        if custom_agent
+        else work_root / issue_dir
+    )
+    resolved_target = target.resolve()
+    try:
+        resolved_target.relative_to(work_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"step work directory escapes HVE_WORK_ROOT: {resolved_target}"
+        ) from exc
+    return resolved_target
+
+
+def _ensure_step_work_dir(
+    custom_agent: Optional[str],
+    identifier: str,
+) -> Path:
+    """Create the exact run-scoped Step work directory before Agent startup."""
+    work_dir = _step_work_dir(custom_agent, identifier)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    if not work_dir.is_dir():
+        raise OSError(f"step work directory was not created: {work_dir}")
+    return work_dir
+
+
 def _combine_additional_prompt_with_mdq(base: Optional[str]) -> Optional[str]:
     """``base`` の additional_prompt に Markdown-Query 強制ブロックを前置する。
 
@@ -62,15 +187,744 @@ def _combine_additional_prompt_with_mdq(base: Optional[str]) -> Optional[str]:
         return block
     return block + "\n\n" + base
 
+
+def _repository_skill_directories(
+    skill_names: Optional[List[str]] = None,
+) -> List[str]:
+    """Return repository Skill discovery directories scoped to declared Skills.
+
+    FR-CLI-73: 公開するのは `.github/skills` root と、当該 active Step が宣言した
+    Skill（`required_skills` / インストール済み optional）のディレクトリだけ。
+    root 直下の全ディレクトリを無条件に公開してはならない。
+
+    CLI のスキル発見は深さ 1 (`<dir>/<name>/SKILL.md`) のみ走査するため、
+    `azure-skills/azure-cli-deploy-scripts` のようなネスト配置 Skill は
+    その親ディレクトリ (`<root>/azure-skills`) を公開して発見可能にする。
+    """
+    skills_dir = Path.cwd() / ".github" / "skills"
+    if not skills_dir.is_dir():
+        return []
+    directories = [str(skills_dir)]
+    if not skill_names:
+        return directories
+
+    try:
+        from .skill_resolver import discover_available_skills, resolve_skill_alias
+    except ImportError:  # pragma: no cover - top-level runner compatibility
+        from skill_resolver import (  # type: ignore[import-not-found,no-redef]
+            discover_available_skills,
+            resolve_skill_alias,
+        )
+
+    available = discover_available_skills()
+    seen: set[str] = {os.path.normcase(os.path.normpath(str(skills_dir)))}
+    for raw_name in skill_names:
+        subpath = available.get(resolve_skill_alias(str(raw_name)))
+        if not subpath:
+            # external Skill / 未知の Skill は本関数の対象外（別経路で公開される）
+            continue
+        parent = (skills_dir / subpath).parent
+        normalized = os.path.normcase(os.path.normpath(str(parent)))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        directories.append(str(parent))
+    return directories
+
+
+_ASDW_DATA_REGISTRATION_SCRIPT = "src/data/azure/data-registration-script.sh"
+_ASDW_DATA_PREP_SCRIPT = "src/infra/azure/create-azure-data-resources-prep.sh"
+_ASDW_DATA_CREATE_SCRIPT = "src/infra/azure/create-azure-data-resources.sh"
+_ASDW_DATA_DEPLOY_SUPPORTED_APP_ID = _ASDW_SUPPORTED_APP_ID
+
+
+def format_exception_for_log(exc: BaseException) -> str:
+    """例外を `型名: メッセージ` 形式へ整形する（NFR-OBS-08）。
+
+    `str(exc)` だけでは `KeyError('1.1')` が `'1.1'` としか出力されず、
+    同じ表示のまま原因不明の失敗が反復する。少なくとも例外型名を残す。
+    """
+    message = str(exc)
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+_ASDW_DATA_DEPLOY_COMMON_ENVIRONMENT_KEYS = (
+    "RESOURCE_GROUP",
+    "LOCATION",
+    "SUBSCRIPTION_ID",
+    *_ASDW_DATA_DEPLOY_NETWORK_KEYS,
+    "DATA_VERIFY_ACR_NAME",
+    "DATA_VERIFY_IMAGE_NAME",
+    "DATA_VERIFY_ACI_IMAGE",
+    "SQL_SERVER",
+    "SQL_HOST",
+    "SQL_DATABASE",
+    "SQL_DB_SVC01",
+    "SQL_DB_SVC02",
+    "SQL_DB_SVC03",
+    "SQL_DB_SVC07",
+    "SQL_DB_SVC09",
+    "COSMOS_ACCOUNT",
+    "COSMOS_ENDPOINT",
+    "COSMOS_DATABASE",
+    "COSMOS_CONTAINER_VOC",
+    "CONFIDENTIAL_LEDGER_NAME",
+    "CONFIDENTIAL_LEDGER_ENDPOINT",
+)
+_ASDW_DATA_DEPLOY_AUDIT_ENVIRONMENT_KEYS = {
+    _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST: (
+        "SQL_DB_SVC12",
+        "SQL_AUDIT_TABLE",
+    ),
+    _ASDW_AUDIT_MODE_ACL_DIRECT: ("CONFIDENTIAL_LEDGER_COLLECTION",),
+}
+# `DATA_VERIFY_ACR_NAME` / `DATA_VERIFY_ACI_IMAGE` は bootstrap context が
+# RESOURCE_GROUP と RESOURCE_SUFFIX から導出するため、ここでは写像しない。
+# Azure がマネージド ID の clientId を prep stage で採番するため、run 開始時点の
+# snapshot では解決できない唯一の宣言キーとして launcher が読み戻す。
+_ASDW_DATA_DEPLOY_READ_BACK_KEY = "DATA_DEPLOY_IDENTITY_CLIENT_ID"
+_ASDW_DATA_DEPLOY_BOOTSTRAP_PARAM_KEYS = {
+    "LOCATION": "data_location",
+    "RESOURCE_SUFFIX": "data_resource_suffix",
+    "DATA_VNET_CIDR": "data_vnet_cidr",
+    "DATA_PRIVATE_ENDPOINT_SUBNET_CIDR": "data_private_endpoint_subnet_cidr",
+    "DATA_ACI_SUBNET_CIDR": "data_aci_subnet_cidr",
+}
+_ASDW_DATA_DEPLOY_HVE_OWNED_ENVIRONMENT_KEYS = frozenset(
+    {
+        *_ASDW_DATA_DEPLOY_COMMON_ENVIRONMENT_KEYS,
+        *(
+            key
+            for keys in _ASDW_DATA_DEPLOY_AUDIT_ENVIRONMENT_KEYS.values()
+            for key in keys
+        ),
+        "DATA_CREATE_RUN_ID",
+        "DATA_REGISTER_RUN_ID",
+        "DATA_VERIFY_RUN_ID",
+        "AUDIT_RECORD_JSON",
+        "HVE_ASDW_SAMPLE_DATA_JSON",
+        "HVE_ASDW_SCRIPT_DIR",
+        "HVE_ASDW_SCRIPT_STAGE",
+        "DATA_DEPLOY_ENV",
+        "SAMPLE_DATA",
+        "WORK_DIR",
+    }
+)
+_ASDW_DATA_DEPLOY_PIPELINE_SEQUENCE = (
+    ("prep", 1),
+    ("create", 1),
+    ("registration", 1),
+    ("verify", 1),
+    ("create", 2),
+    ("registration", 2),
+    ("verify", 2),
+)
+_ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER = "microsoft-learn"
+_ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG = {
+    "type": "http",
+    "url": "https://learn.microsoft.com/api/mcp",
+    "tools": ["*"],
+}
+_FOUNDRY_REQUIRED_AZURE_MCP_SERVER = "azure"
+_FOUNDRY_REQUIRED_AZURE_MCP_CONFIG = {
+    "command": "npx",
+    "args": ["-y", "@azure/mcp@latest", "server", "start"],
+}
+_FOUNDRY_REQUIRED_MCP_SERVERS = {
+    _FOUNDRY_REQUIRED_AZURE_MCP_SERVER: _FOUNDRY_REQUIRED_AZURE_MCP_CONFIG,
+    _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG,
+}
+def _permission_path_has_reparse_point(path_stat: os.stat_result) -> bool:
+    reparse_flag = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400))
+    return bool(int(getattr(path_stat, "st_file_attributes", 0)) & reparse_flag)
+
+
+def _permission_path_has_windows_alias(raw_path: str) -> bool:
+    """Reject ADS, reserved devices, and Win32 trailing-dot/space aliases."""
+    drive, drive_tail = ntpath.splitdrive(raw_path)
+    if drive and not drive_tail.startswith(("\\", "/")):
+        return True
+    candidate = Path(raw_path)
+    reserved = re.compile(
+        r"^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|"
+        r"COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?$",
+        re.IGNORECASE,
+    )
+    for index, part in enumerate(candidate.parts):
+        if index == 0 and part == candidate.anchor:
+            continue
+        if not part or part.endswith((".", " ")):
+            return True
+        if (
+            ":" in part
+            or reserved.fullmatch(part)
+            or (
+                hasattr(ntpath, "isreserved")
+                and ntpath.isreserved(part)
+            )
+        ):
+            return True
+    return False
+
+
+def _permission_repo_relative_path(
+    path: Any,
+    *,
+    require_exists: bool = False,
+    require_regular_file: bool = False,
+) -> Optional[str]:
+    """Return a direct repository-relative path, rejecting aliases and escapes."""
+    raw_path = str(path or "")
+    if (
+        not raw_path
+        or raw_path != raw_path.strip()
+        or "\x00" in raw_path
+        or _permission_path_has_windows_alias(raw_path)
+        or any(
+            part in {".", ".."}
+            for part in raw_path.replace("\\", "/").split("/")
+        )
+    ):
+        return None
+    try:
+        repo_root = Path.cwd().resolve()
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = Path.cwd() / candidate
+        lexical = Path(os.path.abspath(candidate))
+        if require_exists and not lexical.exists():
+            return None
+        resolved = candidate.resolve(strict=False)
+        lexical_relative = lexical.relative_to(repo_root)
+        resolved_relative = resolved.relative_to(repo_root)
+        if os.path.normcase(os.path.normpath(lexical)) != os.path.normcase(
+            os.path.normpath(resolved)
+        ):
+            return None
+        if os.path.normcase(os.path.normpath(lexical_relative)) != os.path.normcase(
+            os.path.normpath(resolved_relative)
+        ):
+            return None
+
+        current = repo_root
+        for part in lexical_relative.parts:
+            current = current / part
+            if not current.exists():
+                break
+            current_stat = os.lstat(current)
+            if stat.S_ISLNK(current_stat.st_mode) or _permission_path_has_reparse_point(
+                current_stat
+            ):
+                return None
+        if lexical.exists():
+            final_stat = os.lstat(lexical)
+            if require_regular_file and not stat.S_ISREG(final_stat.st_mode):
+                return None
+            if stat.S_ISREG(final_stat.st_mode) and final_stat.st_nlink != 1:
+                return None
+        return resolved_relative.as_posix()
+    except (OSError, RuntimeError, ValueError):
+        return None
+
+
+def _load_repository_pinned_mcp_servers(
+    repo_root: Path,
+    expected_servers: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Load an exact named subset from the repository-pinned MCP config."""
+    if repo_root.resolve() != Path.cwd().resolve():
+        return {}
+    config_relative = _permission_repo_relative_path(
+        ".github/.mcp.json",
+        require_exists=True,
+        require_regular_file=True,
+    )
+    if config_relative is None:
+        return {}
+    try:
+        payload = json.loads((repo_root / config_relative).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return {}
+    servers = payload.get("mcpServers") if isinstance(payload, dict) else None
+    if not isinstance(servers, dict):
+        return {}
+    configured = {name: servers.get(name) for name in expected_servers}
+    if configured != expected_servers:
+        return {}
+    return copy.deepcopy(expected_servers)
+
+
+def _load_trusted_asdw_data_deploy_mcp_servers(
+    repo_root: Path,
+) -> Dict[str, Any]:
+    """Load only the repository-pinned official Microsoft Learn MCP endpoint."""
+    return _load_repository_pinned_mcp_servers(
+        repo_root,
+        {
+            _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: (
+                _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG
+            )
+        },
+    )
+
+
+def _load_trusted_foundry_mcp_servers(repo_root: Path) -> Dict[str, Any]:
+    """Load the exact Azure and Microsoft Learn MCP servers for Foundry Steps."""
+    return _load_repository_pinned_mcp_servers(
+        repo_root,
+        _FOUNDRY_REQUIRED_MCP_SERVERS,
+    )
+
+
+def _require_trusted_asdw_data_deploy_mcp_servers(
+    repo_root: Path,
+) -> Dict[str, Any]:
+    """Return the one pinned server or fail before a DataDeploy session starts."""
+    servers = _load_trusted_asdw_data_deploy_mcp_servers(repo_root)
+    expected = {
+        _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: dict(
+            _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG
+        )
+    }
+    if servers != expected:
+        raise RuntimeError(
+            "ASDW Step 1.3 requires the repository-pinned Microsoft Learn "
+            "MCP server before session creation."
+        )
+    return servers
+
+
+def _require_trusted_foundry_mcp_servers(repo_root: Path) -> Dict[str, Any]:
+    """Return the pinned Foundry MCP subset or fail before session creation."""
+    servers = _load_trusted_foundry_mcp_servers(repo_root)
+    if servers != _FOUNDRY_REQUIRED_MCP_SERVERS:
+        raise RuntimeError(
+            "Foundry-required Step requires repository-pinned Azure and "
+            "Microsoft Learn MCP servers before session creation."
+        )
+    return servers
+
+
+def _validate_asdw_data_deploy_runtime_context(
+    validated_run_id: str,
+    repo_root: Path,
+) -> List[str]:
+    """Validate the exact run root and pinned documentation server pre-session."""
+    errors: List[str] = []
+    resolved_repo_root = repo_root.resolve()
+    expected_work_root = (
+        resolved_repo_root / "work" / "run" / validated_run_id
+    ).resolve()
+    try:
+        from .split_fork import resolve_run_id, resolve_work_root
+    except ImportError:  # pragma: no cover
+        from split_fork import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
+
+    if (
+        not validated_run_id
+        or _safe_run_id(validated_run_id) != validated_run_id
+        or resolve_run_id() != validated_run_id
+    ):
+        errors.append(
+            "ASDW Step 1.3 requires one canonical run ID shared by config and environment."
+        )
+
+    raw_work_root = os.environ.get("HVE_WORK_ROOT", "")
+    if raw_work_root:
+        if (
+            raw_work_root != raw_work_root.strip()
+            or "\x00" in raw_work_root
+            or not Path(raw_work_root).is_absolute()
+            or any(
+                part in {".", ".."}
+                for part in raw_work_root.replace("\\", "/").split("/")
+            )
+        ):
+            errors.append(
+                "ASDW Step 1.3 HVE_WORK_ROOT must be one canonical absolute path."
+            )
+        else:
+            lexical_work_root = Path(os.path.abspath(raw_work_root))
+            if os.path.normcase(os.path.normpath(lexical_work_root)) != os.path.normcase(
+                os.path.normpath(expected_work_root)
+            ):
+                errors.append(
+                    "ASDW Step 1.3 HVE_WORK_ROOT must match the validated current run."
+                )
+    if resolve_work_root().resolve() != expected_work_root:
+        errors.append(
+            "ASDW Step 1.3 resolved work root must match work/run/<validated-run-id>."
+        )
+
+    try:
+        _require_trusted_asdw_data_deploy_mcp_servers(resolved_repo_root)
+    except RuntimeError as exc:
+        errors.append(str(exc))
+    return errors
+
+
+def _build_asdw_data_deploy_environment_snapshot(
+    workflow_params: Mapping[str, Any],
+    process_environment: Mapping[str, str],
+    audit_mode: object,
+    bootstrap_context: Optional[Mapping[str, str]] = None,
+) -> Mapping[str, str]:
+    """Freeze the complete non-secret Step 1.3 input contract.
+
+    ``RESOURCE_GROUP`` has one authoritative source: the workflow parameter.
+    The already-validated bootstrap context overrides matching process values;
+    remaining declared values are explicit process inputs. HVE-owned payloads
+    and stage run IDs are removed so the byte-pinned launcher can provision
+    them from stable files for each stage. ``audit_mode`` is accepted as an
+    untrusted object and validated here so an invalid generator result fails
+    closed. The returned mapping is immutable and is passed to the locally
+    spawned Copilot runtime before session start.
+    """
+    if not isinstance(audit_mode, str) or audit_mode not in (
+        _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
+        _ASDW_AUDIT_MODE_ACL_DIRECT,
+    ):
+        raise ValueError("ASDW Step 1.3 resolved an unsupported audit storage mode.")
+
+    resource_group = workflow_params.get("resource_group")
+    if type(resource_group) is not str:
+        raise ValueError(
+            "ASDW Step 1.3 requires the resource_group workflow parameter."
+        )
+    if (
+        bootstrap_context is not None
+        and bootstrap_context.get("RESOURCE_GROUP") != resource_group
+    ):
+        raise ValueError(
+            "ASDW Step 1.3 bootstrap context does not match the resource_group workflow parameter."
+        )
+    required_keys = (
+        *_ASDW_DATA_DEPLOY_COMMON_ENVIRONMENT_KEYS,
+        *_ASDW_DATA_DEPLOY_AUDIT_ENVIRONMENT_KEYS[audit_mode],
+    )
+    declared_values: Dict[str, str] = {
+        "RESOURCE_GROUP": (
+            bootstrap_context["RESOURCE_GROUP"]
+            if bootstrap_context is not None
+            else resource_group
+        )
+    }
+    for key in required_keys:
+        if key == "RESOURCE_GROUP":
+            continue
+        if key == _ASDW_DATA_DEPLOY_READ_BACK_KEY:
+            # Azure assigns this value when the prep stage creates the
+            # identity, so the launcher reads it back between stages.
+            continue
+        value = (
+            bootstrap_context.get(key)
+            if bootstrap_context is not None and key in bootstrap_context
+            else process_environment.get(key)
+        )
+        if type(value) is not str:
+            raise ValueError(
+                f"ASDW Step 1.3 requires explicit runtime input {key}."
+            )
+        declared_values[key] = value
+
+    for key, value in declared_values.items():
+        if (
+            not value
+            or value != value.strip()
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+        ):
+            raise ValueError(
+                f"ASDW Step 1.3 runtime input {key} must be a non-empty single-line value."
+            )
+    if declared_values["DATA_NETWORK_MODE"] != "private":
+        raise ValueError(
+            "ASDW Step 1.3 DATA_NETWORK_MODE must be private; other routes are blocked."
+        )
+
+    managed_casefold = {
+        key.casefold() for key in _ASDW_DATA_DEPLOY_HVE_OWNED_ENVIRONMENT_KEYS
+    }
+    frozen_environment = {
+        key: value
+        for key, value in process_environment.items()
+        if key.casefold() not in managed_casefold
+    }
+    if bootstrap_context is not None:
+        frozen_environment.update(bootstrap_context)
+    frozen_environment.update(declared_values)
+    return MappingProxyType(frozen_environment)
+
+
+def _build_asdw_data_deploy_bootstrap_inputs(
+    workflow_params: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Map only explicit workflow parameters into the Step 1.3 bootstrap API."""
+    return {
+        context_key: workflow_params.get(parameter_key)
+        for context_key, parameter_key in _ASDW_DATA_DEPLOY_BOOTSTRAP_PARAM_KEYS.items()
+    }
+
+
+def _resolve_asdw_data_deploy_subscription_id() -> str:
+    """Return the signed-in Azure subscription ID for Step 1.3.
+
+    The subscription ID is the one value the resource names cannot be derived
+    from, and asking the operator for it duplicates what `az login` already
+    knows. Resolving it here keeps the workflow to a single required input.
+    """
+    try:
+        completed = subprocess.run(
+            [
+                resolve_azure_cli_executable(),
+                "account",
+                "show",
+                "--query",
+                "id",
+                "--output",
+                "tsv",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ScriptLauncherError) as exc:
+        raise AsdwDataDeployContextError(
+            "ASDW Step 1.3 could not run the Azure CLI to resolve SUBSCRIPTION_ID."
+        ) from exc
+    if completed.returncode != 0:
+        raise AsdwDataDeployContextError(
+            "ASDW Step 1.3 could not resolve SUBSCRIPTION_ID; run `az login` first."
+        )
+    return completed.stdout.strip()
+
+
+def _asdw_data_deploy_evidence_paths(
+    repo_root: Path,
+    run_id: str,
+) -> tuple[Path, Path, Path]:
+    """Return the three HVE-owned evidence paths for native Step 1.3."""
+    work_dir = (
+        repo_root
+        / "work"
+        / "run"
+        / run_id
+        / "Dev-Microservice-Azure-DataDeploy"
+        / "Issue-step-1-3"
+    )
+    tdd_report = (
+        repo_root
+        / "tests"
+        / "run"
+        / run_id
+        / "asdw-web"
+        / "step-1-3"
+        / "APP-009"
+        / "GREEN"
+        / "tdd-test-report.md"
+    )
+    return (
+        work_dir / "work-status.md",
+        work_dir / "ac-verification.md",
+        tdd_report,
+    )
+
+
+def _write_asdw_data_deploy_evidence(
+    repo_root: Path,
+    run_id: str,
+    pipeline_results: object,
+) -> list[str]:
+    """Write bounded native-pipeline evidence without accepting Agent prose."""
+    if not isinstance(pipeline_results, tuple):
+        return ["ASDW native data pipeline evidence requires an immutable result tuple."]
+    rows: list[tuple[str, int, int, bool]] = []
+    for result in pipeline_results:
+        stage = getattr(result, "stage", None)
+        attempt = getattr(result, "attempt", None)
+        exit_code = getattr(result, "exit_code", None)
+        reached = getattr(result, "reached", None)
+        if (
+            type(stage) is not str
+            or type(attempt) is not int
+            or type(exit_code) is not int
+            or type(reached) is not bool
+        ):
+            return ["ASDW native data pipeline evidence received an invalid StageResult."]
+        rows.append((stage, attempt, exit_code, reached))
+
+    is_complete_success = (
+        tuple((stage, attempt) for stage, attempt, _exit, _reached in rows)
+        == _ASDW_DATA_DEPLOY_PIPELINE_SEQUENCE
+        and all(exit_code == 0 and reached for _stage, _attempt, exit_code, reached in rows)
+    )
+    status = "PASS" if is_complete_success else "BLOCKED"
+    outcomes = {
+        (stage, attempt): exit_code == 0 and reached
+        for stage, attempt, exit_code, reached in rows
+    }
+    ac1_status = "✅" if is_complete_success else "❌"
+    ac2_status = (
+        "✅"
+        if all(
+            outcomes.get((stage, attempt)) is True
+            for stage, attempt in (
+                ("create", 1),
+                ("registration", 1),
+                ("create", 2),
+                ("registration", 2),
+            )
+        )
+        else "❌"
+    )
+    ac3_status = (
+        "✅"
+        if all(
+            outcomes.get(("verify", attempt)) is True
+            for attempt in (1, 2)
+        )
+        else "❌"
+    )
+    tdd_judgement = "PASS" if is_complete_success else "BLOCKED"
+    stage_lines = "\n".join(
+        f"| {stage} | {attempt} | {exit_code} | {'reached' if reached else 'not-reached'} |"
+        for stage, attempt, exit_code, reached in rows
+    ) or "| none | 0 | 1 | not-reached |"
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    work_status_path, ac_report_path, tdd_report_path = _asdw_data_deploy_evidence_paths(
+        repo_root,
+        run_id,
+    )
+    contents = {
+        work_status_path: (
+            "# HVE-owned ASDW DataDeploy work status\n\n"
+            f"- status: {status}\n"
+            "- evidence_source: stage_results\n\n"
+            "| Stage | Attempt | Exit code | Reached |\n"
+            "| --- | ---: | ---: | --- |\n"
+            f"{stage_lines}\n"
+        ),
+        ac_report_path: (
+            "# HVE-owned ASDW DataDeploy AC verification\n\n"
+            "| AC-ID | Description | Status | StageResult evidence |\n"
+            "| --- | --- | --- | --- |\n"
+            f"| AC-1 | native pipeline completed | {ac1_status} | stage_results sequence |\n"
+            f"| AC-2 | create and registration second pass | {ac2_status} | create/registration attempts 1 and 2 |\n"
+            f"| AC-3 | verify completed for both passes | {ac3_status} | verify attempts 1 and 2 |\n"
+        ),
+        tdd_report_path: (
+            "# HVE-owned ASDW DataDeploy TDD report\n\n"
+            "<!-- validation-confirmed -->\n\n"
+            "- Schema-Version: 1.0\n"
+            "- Workflow: asdw-web\n"
+            "- Step: 1.3\n"
+            "- Agent: Dev-Microservice-Azure-DataDeploy\n"
+            "- Target-Key: APP-009\n"
+            "- Phase: GREEN\n"
+            "- Test-Code-Path: src/infra/azure\n"
+            f"- Timestamp-UTC: {timestamp}\n"
+            "- Evidence-Status: EXECUTED\n"
+            f"- TDD-Judgement: {tdd_judgement}\n"
+            "- Secret-Redaction: confirmed\n"
+            "- Test-Files-Changed: none\n\n"
+            "## Command\n\nHVE-owned native DataDeploy pipeline.\n\n"
+            "## Expected Outcome\n\nFixed two-pass pipeline reaches verify.\n\n"
+            f"## Actual Result\n\n{status}\n\n"
+            "## Evidence\n\nStageResult sequence recorded by HVE.\n\n"
+            "## Failure Analysis\n\nNo Agent-authored evidence is accepted.\n\n"
+            "## Test Protection\n\nThe pipeline result is immutable evidence.\n"
+        ),
+    }
+    originals: dict[Path, bytes | None] = {}
+    staged: dict[Path, Path] = {}
+    committed: list[Path] = []
+    try:
+        for path, content in contents.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            originals[path] = path.read_bytes() if path.exists() else None
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                dir=path.parent,
+            )
+            temporary_path = Path(temporary_name)
+            staged[path] = temporary_path
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+        for path in contents:
+            os.replace(staged[path], path)
+            committed.append(path)
+    except OSError:
+        for path in reversed(committed):
+            original = originals.get(path)
+            try:
+                if original is None:
+                    path.unlink(missing_ok=True)
+                    continue
+                descriptor, temporary_name = tempfile.mkstemp(
+                    prefix=f".{path.name}.restore.",
+                    suffix=".tmp",
+                    dir=path.parent,
+                )
+                temporary_path = Path(temporary_name)
+                with os.fdopen(descriptor, "wb") as stream:
+                    stream.write(original)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary_path, path)
+            except OSError:
+                pass
+        for temporary_path in staged.values():
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return ["ASDW native data pipeline evidence could not be written."]
+    return []
+
+
+def _is_asdw_data_deploy_step(
+    step_id: Optional[str],
+    custom_agent: Optional[str],
+) -> bool:
+    return bool(
+        custom_agent == "Dev-Microservice-Azure-DataDeploy"
+        and str(step_id or "").split("/", 1)[0] == "1.3"
+    )
+
+
+def _has_supported_asdw_data_deploy_app_scope(
+    step_id: str,
+    workflow_params: Mapping[str, Any],
+) -> bool:
+    """Require exactly the one APP coverage the fixed producer can render."""
+    selected = workflow_params.get("app_ids")
+    singular = workflow_params.get("app_id")
+    if (
+        type(selected) is not list
+        or len(selected) != 1
+        or type(selected[0]) is not str
+        or selected[0] != _ASDW_DATA_DEPLOY_SUPPORTED_APP_ID
+    ):
+        return False
+    if singular is not None and (
+        type(singular) is not str
+        or singular != _ASDW_DATA_DEPLOY_SUPPORTED_APP_ID
+    ):
+        return False
+    parts = step_id.split("/")
+    return len(parts) == 1 or (
+        len(parts) == 2
+        and parts[1] == _ASDW_DATA_DEPLOY_SUPPORTED_APP_ID
+    )
+
+
 try:
     from .config import (
-        DEFAULT_MODEL,
-        MODEL_AUTO_VALUE,
-        MODEL_AUTO_REASONING_EFFORT,
         SDKConfig,
         generate_run_id,
         SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
         DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+        to_wire_model,
     )
     from .console import Console, _ACTION_DISPLAY, timestamp_prefix
     from .prompts import (
@@ -80,7 +934,7 @@ try:
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from .qa_merger import QADocument, QAMerger
-    from .run_state import DEFAULT_SESSION_ID_PREFIX, RunState, make_session_id
+    from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .self_improve import (
         scan_codebase, record_learning, get_learning_summary,
         ImprovementRecord, VerificationResult,
@@ -96,15 +950,22 @@ try:
         extract_workiq_tool_name_from_event,
     )
     from .orchestrator_context import OrchestratorContext
+    from .cloud_session import (
+        acquire_cloud_session_slot,
+        attach_cloud_session_event_logger,
+        attach_cloud_session_limiter_release,
+        build_cloud_session_options,
+        is_policy_blocked_error,
+        resolve_cloud_repository,
+        should_use_cloud_session,
+    )
 except ImportError:
     from config import (  # type: ignore[no-redef]
-        DEFAULT_MODEL,
-        MODEL_AUTO_VALUE,
-        MODEL_AUTO_REASONING_EFFORT,
         SDKConfig,
         generate_run_id,
         SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
         DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
+        to_wire_model,
     )
     from console import Console, _ACTION_DISPLAY, timestamp_prefix  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
@@ -114,7 +975,7 @@ except ImportError:
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from qa_merger import QADocument, QAMerger  # type: ignore[no-redef]
-    from run_state import DEFAULT_SESSION_ID_PREFIX, RunState, make_session_id  # type: ignore[no-redef]
+    from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from self_improve import (  # type: ignore[no-redef]
         scan_codebase, record_learning, get_learning_summary,
         ImprovementRecord, VerificationResult,
@@ -130,6 +991,15 @@ except ImportError:
         extract_workiq_tool_name_from_event,
     )
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+    from cloud_session import (  # type: ignore[no-redef]
+        acquire_cloud_session_slot,
+        attach_cloud_session_event_logger,
+        attach_cloud_session_limiter_release,
+        build_cloud_session_options,
+        is_policy_blocked_error,
+        resolve_cloud_repository,
+        should_use_cloud_session,
+    )
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
 _MAX_SCAN_OUTPUT_LENGTH: int = 8000
@@ -137,10 +1007,38 @@ _MAX_PLAN_SCAN_LENGTH: int = 4000
 _MAX_LEARNING_SUMMARY_LENGTH: int = 2000
 _ACTION_DETAIL_MAX_LENGTH: int = 120
 _ACTION_RESULT_SINGLE_LINE_MAX_LENGTH: int = 100
+_MODEL_CALL_FAILURE_THRESHOLD: int = 3
 
 # Wave 2-6: Work IQ 優先度フィルタで優先扱いする重要度値
 # priority_filter=True 時は "最重要"/"高" を先頭に寄せ、不足分は残りで補填して max 件に収める
 _WORKIQ_HIGH_PRIORITY_VALUES: frozenset[str] = frozenset(["最重要", "高"])
+_WORKIQ_MCP_SERVER_ALIASES: frozenset[str] = frozenset(
+    [WORKIQ_MCP_SERVER_NAME.lower(), "workiq"]
+)
+
+
+def _is_workiq_mcp_server_name(name: Any) -> bool:
+    return str(name or "").strip().lower() in _WORKIQ_MCP_SERVER_ALIASES
+
+
+def _filter_mcp_servers_for_session(
+    mcp_servers: Optional[Dict[str, Any]],
+    *,
+    include_workiq: bool = False,
+) -> Dict[str, Any]:
+    """Return MCP servers for a session, excluding Work IQ aliases by default.
+
+    HVE uses `_hve_workiq` internally, while user-level MCP config can expose a
+    server named `workiq`. Main coding sessions should not connect either alias
+    unless a dedicated Work IQ phase explicitly opts in.
+    """
+    if not mcp_servers:
+        return {}
+    return {
+        _k: _v
+        for _k, _v in mcp_servers.items()
+        if include_workiq or not _is_workiq_mcp_server_name(_k)
+    }
 
 
 def _filter_workiq_questions(
@@ -188,6 +1086,75 @@ def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
         return []
     paths = getattr(step, "output_paths", None)
     return list(paths) if paths else []
+
+
+def _build_execution_mode_constraint_suffix(ctx: Any) -> str:
+    """CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。
+
+    `ctx` が `None`（単独実行モード）または `split_fork_enabled=True`（fleet mode）の
+    場合は空文字を返す。詳細は copilot-instructions.md §0。
+    """
+    if ctx is None or getattr(ctx, "split_fork_enabled", False):
+        return ""
+    return (
+        "\n\n## 実行モード制約\n\n"
+        "本実行は CLI / GUI Orchestrator 配下です。次のルールを厳守してください:\n\n"
+        "- `task_scope` / `context_size` による SPLIT_REQUIRED 判定は **行わない**。\n"
+        "- 宣言された `output_paths` の主成果物を **必ず生成してから終了** すること。\n"
+        "- `plan.md` / `subissues.md` のみを出力して終了することは **禁止**（後続 Step が成果物不在で skip / 失敗する）。\n"
+    )
+
+
+def _build_review_ownership_suffix(auto_contents_review: bool) -> str:
+    """メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。"""
+    if auto_contents_review:
+        return (
+            "\n\n## レビュー所有権\n\n"
+            "- メインタスク内ではReview Sub-agentを起動しない。\n"
+            "- 敵対的レビューはメインタスク完了後にHVE Phase 3が実施する。\n"
+        )
+    return (
+        "\n\n## レビュー所有権\n\n"
+        "- Prompt固有のレビュー観点は1回のインライン・セルフチェックにまとめる。\n"
+        "- Review Sub-agentを起動しない。\n"
+        "- 敵対的レビューを実施しない。\n"
+    )
+
+
+def _check_output_paths_gate(
+    ctx: Any, workflow: Any, step_id: str, repo_root: Path
+) -> List[str]:
+    """CLI/GUI Orchestrator 配下で `output_paths` の欠落を検出する。
+
+    FR-WF-OUT-01: 宣言された成果物が 1 件でも欠落した Step は `failed` とする。
+    FR-WF-OUT-10: fail-closed drop されたエントリのうち fan-out キーを含むものは、
+    キー出現位置までの接頭辞に前方一致する成果物の存在で検証する（欠落報告では
+    接頭辞であることを示すため末尾に `*` を付す）。
+
+    戻り値:
+      - 空リスト: ゲート pass（条件不該当、宣言なし、または全て存在）
+      - 非空リスト: 欠落した path 群（fail 用。存在する宣言 path は含めない）
+    """
+    if ctx is None or getattr(ctx, "split_fork_enabled", False):
+        return []
+    step = next(
+        (s for s in getattr(workflow, "steps", []) if getattr(s, "id", None) == step_id),
+        None,
+    )
+    declared = _resolve_step_output_paths(workflow, step_id)
+    prefix_gates = (
+        resolve_output_path_prefix_gates(step) if step is not None else []
+    )
+    if not declared and not prefix_gates:
+        return []
+    missing = [p for p in declared if not (repo_root / p).exists()]
+    for prefix in prefix_gates:
+        target = repo_root / prefix
+        parent = target.parent
+        if parent.is_dir() and any(parent.glob(f"{target.name}*")):
+            continue
+        missing.append(f"{prefix}*")
+    return missing
 
 # Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。AQOD 本体成果物 QA-DocConsistency-*.md とは別物）
 _EXECUTION_QA_MERGED_SUFFIX: str = "execution-qa-merged.md"
@@ -262,7 +1229,16 @@ def _parse_qa_content_with_artifact_fallback(
     return parsed, None
 
 
-async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts: Dict[str, Any]) -> Any:
+async def _create_session_with_auto_reasoning_fallback(
+    client: Any,
+    session_opts: Dict[str, Any],
+    *,
+    config: Optional[SDKConfig] = None,
+    step_id: Optional[str] = None,
+    subtask_kind: Optional[str] = None,
+    console: Optional[Any] = None,
+    requires_external_skill_directories: bool = False,
+) -> Any:
     """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
 
     SDK バージョン < 0.3.0 互換のための防御。reasoning_effort が opts に
@@ -277,33 +1253,135 @@ async def _create_session_with_auto_reasoning_fallback(client: Any, session_opts
 
     併せて、Skill レジストリへ `.github/skills` を登録する
     (`skill_directories` / `enable_config_discovery`) を呼び出し側で
-    未指定の場合のみ自動注入する。SDK が当該引数を未サポートの場合は
-    TypeError を契機に剥がして再試行する。
+    未指定の場合のみ自動注入する。CLI のスキル発見は深さ 1
+    (`<root>/<name>/SKILL.md`) のみ走査するため、`skill_directories`
+    には root に加えて各カテゴリ直下サブフォルダも列挙する。SDK が
+    当該引数を未サポートの場合は TypeError を契機に剥がして再試行する。
     """
-    from pathlib import Path as _Path
-
     _opts_with_skills = dict(session_opts)
+    # context_tier: ユーザー設定 (SDKConfig.context_tier) を create_session へ伝播する。
+    # truthy のときのみ注入し、呼び出し側が明示済みなら尊重する。
+    if config is not None and getattr(config, "context_tier", None) and "context_tier" not in _opts_with_skills:
+        _opts_with_skills["context_tier"] = config.context_tier
+    _cloud_injected = False
+    _had_streaming_before_cloud = "streaming" in _opts_with_skills
+    _streaming_before_cloud = _opts_with_skills.get("streaming")
+    if config is not None and "cloud" not in _opts_with_skills:
+        _cloud_opts = build_cloud_session_options(
+            config,
+            step_id=step_id,
+            subtask_kind=subtask_kind,
+        )
+        if _cloud_opts is not None:
+            _opts_with_skills["cloud"] = _cloud_opts
+            _cloud_injected = True
+            _opts_with_skills["streaming"] = True
+        elif should_use_cloud_session(config, step_id=step_id, subtask_kind=subtask_kind) and console is not None:
+            owner, name, _branch = resolve_cloud_repository(config)
+            try:
+                if not owner or not name:
+                    console.warning(
+                        "Cloud Session repository owner/name が解決できないため、ローカルセッションにフォールバックします。"
+                    )
+                else:
+                    console.warning(
+                        "Cloud Session 型が現在の Copilot SDK で利用できないため、ローカルセッションにフォールバックします。"
+                    )
+            except Exception:
+                pass
     if "skill_directories" not in _opts_with_skills:
-        _skills_dir = _Path.cwd() / ".github" / "skills"
-        if _skills_dir.is_dir():
-            _opts_with_skills["skill_directories"] = [str(_skills_dir)]
+        # CLI のスキル発見は深さ 1 (`<root>/<name>/SKILL.md`) のみ走査するため、
+        # root に加えて各カテゴリ直下サブフォルダも列挙し、ネスト配置スキル
+        # (`<root>/<category>/<name>/SKILL.md`) を発見可能にする。
+        # SKILL.md 不在のサブフォルダを渡しても無害（CLI 側で無視される）。
+        _repository_skill_dirs = _repository_skill_directories()
+        if _repository_skill_dirs:
+            _opts_with_skills["skill_directories"] = _repository_skill_dirs
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
 
     async def _attempt(opts: Dict[str, Any]) -> Any:
+        limiter = None
         try:
-            return await client.create_session(**opts)
+            if "cloud" in opts and config is not None:
+                limiter = await acquire_cloud_session_slot(config)
+            session = await client.create_session(**opts)
+            if "cloud" in opts:
+                attach_cloud_session_event_logger(
+                    session,
+                    step_id=step_id,
+                    subtask_kind=subtask_kind,
+                )
+                if limiter is not None:
+                    attach_cloud_session_limiter_release(session, limiter)
+                    limiter = None
+            return session
         except TypeError as exc:
+            if limiter is not None:
+                limiter.release_slot()
             msg = str(exc)
             if "unexpected keyword argument" not in msg:
                 raise
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier"):
                 if _kw in msg and _kw in opts:
+                    if (
+                        _kw == "skill_directories"
+                        and requires_external_skill_directories
+                    ):
+                        raise RuntimeError(
+                            "HVE required external Skill directories are not "
+                            "supported by the active Copilot SDK."
+                        ) from exc
+                    if (
+                        _kw == "enable_config_discovery"
+                        and opts.get(_kw) is False
+                    ):
+                        # ASDW Step 1.3 のMCP隔離境界。古いSDKへfallbackして
+                        # workspace/user MCP discoveryを再有効化してはならない。
+                        raise
+                    if _kw == "cloud" and console is not None:
+                        try:
+                            console.warning(
+                                "Cloud Session は現在の Copilot SDK で未サポートのため、ローカルセッションにフォールバックします。"
+                            )
+                        except Exception:
+                            pass
                     _stripped = {k: v for k, v in opts.items() if k != _kw}
+                    if _kw == "cloud" and _cloud_injected:
+                        if _had_streaming_before_cloud:
+                            _stripped["streaming"] = _streaming_before_cloud
+                        else:
+                            _stripped.pop("streaming", None)
                     return await _attempt(_stripped)
             if "reasoning_effort" in msg and "reasoning_effort" in opts:
                 _stripped = {k: v for k, v in opts.items() if k != "reasoning_effort"}
                 return await _attempt(_stripped)
+            raise
+        except Exception as exc:
+            if limiter is not None:
+                limiter.release_slot()
+            if is_policy_blocked_error(exc) and console is not None:
+                try:
+                    console.warning(
+                        "Cloud Session が組織ポリシーでブロックされました（policy_blocked）。リトライせず停止します。"
+                    )
+                except Exception:
+                    pass
+                raise
+            if "cloud" in opts and _cloud_injected:
+                if console is not None:
+                    try:
+                        console.warning(
+                            f"Cloud Session 作成に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
+                        )
+                    except Exception:
+                        pass
+                stripped = {k: v for k, v in opts.items() if k != "cloud"}
+                if _had_streaming_before_cloud:
+                    stripped["streaming"] = _streaming_before_cloud
+                else:
+                    stripped.pop("streaming", None)
+                return await _attempt(stripped)
             raise
 
     return await _attempt(_opts_with_skills)
@@ -767,12 +1845,14 @@ _WRITE_TOOLS: frozenset = frozenset({
     "write_file", "writeFile",
     "create_file", "createFile",
     "patch", "replace",
+    "create",  # Copilot SDK 短縮別名（新規作成 = write）
 })
 
 # read + write の両方を行うツール名（既存ファイルを読んでから書く）
 _READ_WRITE_TOOLS: frozenset = frozenset({
     "edit_file", "editFile",
     "patch",
+    "edit",  # Copilot SDK 短縮別名（既存編集 = read + write）
 })
 
 # ファイル追跡をスキップするツール名
@@ -829,7 +1909,7 @@ class StepRunner:
     │                                                    │
     │  [auto_contents_review=True の場合]                 │
     │  Phase 3: session.send_and_wait(REVIEW_PROMPT)     │
-    │    → 敵対的レビュー（5軸検証 + PASS/FAIL判定）       │
+    │    → 敵対的レビュー（6軸検証 + PASS/FAIL判定）       │
     │    → FAIL時: 再レビューサイクル（最大2回）            │
     │                                                    │
     │  [auto_self_improve=True の場合]                    │
@@ -850,22 +1930,20 @@ class StepRunner:
         config: SDKConfig,
         console: Console,
         *,
-        resume_state: Optional["RunState"] = None,
-        journal: Optional["RunJournal"] = None,
         orchestrator_ctx: Optional["OrchestratorContext"] = None,
+        workflow_params: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self.config = config
         self.console = console
-        # Phase 3 (Resume): 完了済みステップの skip / 失敗ステップの resume_session 分岐に使用する。
-        # None の場合は新規実行モード（resume 機能を使わない既存挙動と完全互換）。
-        self._resume_state = resume_state
-        # Phase 6 (Resume 2-layer txn): 任意の RunJournal。checkpoint 記録に使う。
-        # None なら journal 記録はスキップ（既存挙動と完全互換）。
-        self._journal = journal
         # Orchestrator 実行コンテキスト（`HVE_ORCHESTRATOR_ACTIVE` 環境変数の置換）。
         # None == 単独実行モード（Split fork 無効、Agent は plan.md/subissues.md 生成で停止）。
         # 非 None == Orchestrator 配下（Split 検出時に subissues.md からサブタスクを並列 fork）。
         self._orchestrator_ctx = orchestrator_ctx
+        # Prompt renderingとruntimeで同じeffective workflow parametersを使う。
+        # 呼出側の後続mutationがAzure実行境界へ影響しないようshallow copyを固定する。
+        self._workflow_params: Mapping[str, Any] = MappingProxyType(
+            dict(workflow_params or {})
+        )
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
@@ -888,46 +1966,26 @@ class StepRunner:
         # T4 (GUI 統計): Skill 名の重複発火抑制。step_id -> set[skill_name]。
         # SDK skill.invoked と SKILL.md パス検出フォールバックの両方から書き込まれる。
         self._skill_invoked_seen: Dict[str, set] = {}
-
-    def _record_checkpoint(self, step_id: str, marker: str) -> None:
-        """Phase 6 (Resume 2-layer txn): ステップ内 checkpoint を記録する。
-
-        - `self._resume_state.step_states[step_id].checkpoint_marker` を更新
-        - `self._journal` が非 None なら journal に `step.checkpoint` を追記
-        いずれも失敗は warn のみで実行を継続する（実行成功優先の原則）。
-
-        v1.0.3 (Major #11): `journal.record_event` による単発レコード化で
-        fsync 回数を半減。
-
-        Args:
-            step_id: 対象ステップ ID。
-            marker: checkpoint 識別子。例: `main-task-response-received`,
-                `qa-phase-done`, `review-phase-done`, `self-improve-iter-1-done`。
-        """
-        if self._resume_state is None and self._journal is None:
-            return
-        try:
-            seq = 0
-            if self._journal is not None:
-                try:
-                    from .run_journal import KIND_STEP_CHECKPOINT
-                except ImportError:
-                    from run_journal import KIND_STEP_CHECKPOINT  # type: ignore[no-redef]
-                # 単発イベントとして 1 レコードで記録（fsync 1 回）。
-                # pending_intents 判定は .begin/.end のみを見るため pending 化されない。
-                seq = self._journal.record_event(
-                    kind=KIND_STEP_CHECKPOINT,
-                    target=step_id,
-                    payload={"marker": marker},
-                )
-            if self._resume_state is not None:
-                self._resume_state.update_step(
-                    step_id, checkpoint_marker=marker, last_journal_seq=seq,
-                )
-        except Exception as exc:  # pragma: no cover - I/O 異常系
-            self.console.warning(
-                f"[checkpoint] step={step_id} marker={marker} の記録に失敗: {exc}"
-            )
+        # tool.execution_complete の failure だけで最低限の診断情報を出すため、
+        # ID欠落時の直近 tool.execution_start を step 単位で一時保持する。
+        self._last_tool_start_by_step: Dict[
+            str, Tuple[str, Dict[str, Any], int]
+        ] = {}
+        # 現行 SDK は start/complete の両方へ tool_call_id を付与するため、
+        # 並列呼び出しを step + call ID で相関する。値は失敗時に既存の
+        # 安全な path/range 要約へ渡すだけで、shell command/query は出力しない。
+        self._tool_start_by_call: Dict[
+            Tuple[str, str], Tuple[str, Dict[str, Any], int]
+        ] = {}
+        # SDK model.call_failure の連続発生検出。Phase 1 メインタスクだけを
+        # fail-fast 対象にし、2h step-timeout まで待ち続ける事態を防ぐ。
+        self._model_call_failure_counts: Dict[str, int] = {}
+        self._model_call_failure_events: Dict[str, asyncio.Event] = {}
+        self._asdw_data_deploy_environment_snapshots: Dict[
+            str, Mapping[str, str]
+        ] = {}
+        self._session_security_violation_events: Dict[str, asyncio.Event] = {}
+        self._session_security_violations: Dict[str, str] = {}
 
     def _session_id_prefix(self) -> str:
         """SDKConfig.session_id_prefix が空ならデフォルト ("hve") を返す。"""
@@ -1040,27 +2098,30 @@ class StepRunner:
         引数が指定された場合のみ ``opts["custom_agent"]`` に設定する。QA/Review
         の既存呼び出しは ``custom_agent=None`` (省略) で従来挙動を維持する。
         """
-        from copilot.session import PermissionHandler
         opts: Dict[str, Any] = {
-            "on_permission_request": PermissionHandler.approve_all,
+            "on_permission_request": self._build_step_permission_handler(
+                step_id,
+                custom_agent,
+            ),
             "streaming": True,
         }
         # Q1=C / Q3=a: SDK へ `custom_agent` / `custom_agents` キーは渡さない。
         # SPLIT-fork 用の Agent 識別子継承は呼び出し側で Prompt 前置として実現する。
-        # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
-        if model and model != MODEL_AUTO_VALUE:
-            opts["model"] = model
-        else:
-            opts["model"] = DEFAULT_MODEL
-            opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
-        _mcp = {
-            _k: _v
-            for _k, _v in (self.config.mcp_servers or {}).items()
-            if include_workiq or _k != WORKIQ_MCP_SERVER_NAME
-        }
+        # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+        _wire_model = to_wire_model(model)
+        if _wire_model:
+            opts["model"] = _wire_model
+        _mcp = _filter_mcp_servers_for_session(
+            self.config.mcp_servers,
+            include_workiq=include_workiq,
+        )
 
         # Work IQ MCP Server は QA フェーズ専用のサブセッションにだけ追加する。
-        if include_workiq and self.config.is_workiq_qa_enabled() and is_workiq_available():
+        if (
+            include_workiq
+            and self.config.is_workiq_qa_enabled()
+            and is_workiq_available()
+        ):
             _workiq_mcp = build_workiq_mcp_config(
                 tenant_id=self.config.workiq_tenant_id,
             )
@@ -1084,6 +2145,16 @@ class StepRunner:
 
         return opts
 
+    def _build_step_permission_handler(
+        self,
+        step_id: Optional[str],
+        custom_agent: Optional[str],
+    ) -> Callable[[Any, Dict[str, str]], Any]:
+        """Return the default SDK permission handler for an Agent session."""
+        from copilot.session import PermissionHandler
+
+        return PermissionHandler.approve_all
+
     # ------------------------------------------------------------------
     # Phase 6: サブセッション要否の判定ヘルパー（テスト容易性のために分離）
     # ------------------------------------------------------------------
@@ -1092,7 +2163,7 @@ class StepRunner:
         """事前 QA にサブセッションが必要かを判定する。
 
         以下のいずれかが True の場合にサブセッションを作成する:
-        - qa_model が main_model と異なる（MODEL_AUTO_VALUE 同士なら同一とみなす）
+        - qa_model が main_model と異なる（同じ "Auto" 同士なら同一とみなす）
         - WorkIQ MCP が利用可能（QA 専用セッションに WorkIQ を含める必要があるため）
         """
         return (qa_model != self.config.model) or workiq_available
@@ -1153,121 +2224,209 @@ class StepRunner:
         )
 
     # ------------------------------------------------------------------
-    # Phase 3 (Resume): メインセッションの resume / create フォールバック
+    # メインセッション生成
     # ------------------------------------------------------------------
 
-    # `resume_session()` が受け付けるオプションのキー（SDK 仕様）。
-    # `agent` / `model` / `mcp_servers` / `custom_agents` / `streaming` /
-    # `on_permission_request` のみが伝搬可能で、`session_id` は位置引数で渡す。
-    #
-    # 注: `reasoning_effort` は意図的にここに含めない。Resume 経路では
-    # サーバ側がセッション継続情報を保持する想定で、Auto モデル選択時の
-    # reasoning_effort 制約 (claude-opus-4.7-high 等) は新規 create_session
-    # 経路でのみ付与する設計（hve/config.py MODEL_AUTO_REASONING_EFFORT 参照）。
-    # Resume 経由で 400 エラーが再発する場合は本セット見直しを検討する。
-    _RESUME_SESSION_KEYS: frozenset[str] = frozenset({
-        "on_permission_request",
-        "model",
-        "mcp_servers",
-        "custom_agents",
-        "agent",
-        "streaming",
-        "available_tools",
-        "excluded_tools",
-    })
-
-    def _should_resume_main_session(self, step_id: str, session_id: str) -> bool:
-        """resume_state に同 step が running/failed として記録されているか判定する。
-
-        - resume_state が None（新規実行）の場合は常に False。
-        - 該当 step が completed / skipped / blocked の場合は False（再実行不要）。
-        - session_id が一致しない場合は False（前回と SDK 側の紐付けが切れているため
-          新規 create のほうが安全）。
-        """
-        if self._resume_state is None:
-            return False
-        st = self._resume_state.step_states.get(step_id)
-        if st is None:
-            return False
-        if st.status not in ("running", "failed"):
-            return False
-        if not st.session_id or st.session_id != session_id:
-            return False
-        return True
-
-    async def _create_or_resume_main_session(
+    async def _create_main_session(
         self,
         *,
         client: Any,
         session_opts: Dict[str, Any],
         step_id: str,
+        requires_external_skill_directories: bool = False,
     ) -> Any:
-        """メインセッションを resume_session または create_session で構築する。
+        """メインセッションを create_session で構築する。"""
+        return await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=self.config,
+            step_id=step_id,
+            subtask_kind="main",
+            console=self.console,
+            requires_external_skill_directories=requires_external_skill_directories,
+        )
 
-        Phase 3 (Resume): 完了/スキップ済みのステップは Resume 経路で
-        ここに到達せず、ここに来るのは「未着手 / running 中で中断 / 失敗」のいずれか。
-        前者は `create_session`、後二者は `resume_session` で再開を試みる。
-
-        フォールバック: `resume_session` が SDK 側の理由（セッション削除、
-        バージョン不整合など）で失敗した場合は新規 `create_session` に切り替える。
-
-        副作用: resume_state がある場合、ステップを `running` 状態に更新し、
-        `session_id` と `started_at` を記録する（後続のクラッシュ時に
-        次回 resume の判定材料となる）。
-        """
-        session_id = session_opts.get("session_id", "")
-        # Phase 3 (Resume): resume するか否かを判定 → その後 state を更新する。
-        # 判定より先に _mark_step_running で status を上書きすると、
-        # `_should_resume_main_session` の status 判定が常に "running" になってしまうバグになる。
-        should_resume = self._should_resume_main_session(step_id, session_id)
-
-        # state.json を "running" 状態にマーク（resume_state があるときのみ）。
-        # 判定の後に呼ぶことで、resume 判定の入力（保存時 status / session_id）が壊れない。
-        self._mark_step_running(step_id, session_id)
-
-        if not should_resume:
-            return await _create_session_with_auto_reasoning_fallback(client, session_opts)
-
-        # Resume 経路: resume_session に渡せるキーだけ抽出する
-        resume_opts = {
-            k: v for k, v in session_opts.items()
-            if k in self._RESUME_SESSION_KEYS
-        }
+    @staticmethod
+    def _get_required_skills_for_step(
+        workflow_id: Optional[str],
+        step_id: str,
+        workflow: Optional[Any],
+    ) -> List[str]:
+        """Resolve one Step's required Skills without changing resolver policy."""
+        if not workflow_id:
+            return []
         try:
-            session = await client.resume_session(session_id, **resume_opts)
-            self.console.event(
-                f"  ↻ Step.{step_id} を session_id={session_id} から再開しました"
-            )
-            return session
+            from .workflow_registry import get_step
+            from .skill_resolver import get_required_skills_for_step
+        except ImportError:  # pragma: no cover
+            from workflow_registry import get_step  # type: ignore[import-not-found,no-redef]
+            from skill_resolver import get_required_skills_for_step  # type: ignore[import-not-found,no-redef]
+
+        resolved_workflow_id = getattr(workflow, "id", None) or workflow_id
+        base_step_id = str(step_id).split("/", 1)[0]
+        step = get_step(resolved_workflow_id, base_step_id)
+        if step is None:
+            return []
+        return get_required_skills_for_step(
+            workflow_id=resolved_workflow_id,
+            step_id=base_step_id,
+            step_declared_required=list(
+                getattr(step, "required_skills", []) or []
+            ),
+        )
+
+    @staticmethod
+    def _add_required_external_skill_directories(
+        session_opts: Dict[str, Any],
+        required_skills: List[str],
+    ) -> bool:
+        """Attach only declared external required Skills to one session."""
+        if not required_skills:
+            return False
+        try:
+            try:
+                from .skill_resolver import (
+                    get_external_skill_directory,
+                    get_skill_directory,
+                )
+            except ImportError:  # pragma: no cover
+                from skill_resolver import (  # type: ignore[import-not-found,no-redef]
+                    get_external_skill_directory,
+                    get_skill_directory,
+                )
         except Exception as exc:
-            self.console.warning(
-                f"resume_session 失敗 ({type(exc).__name__}): {exc}"
-                f" → 新規 create_session にフォールバックします (step={step_id})"
+            raise RuntimeError(
+                "HVE required Skill resolver is unavailable before session creation."
+            ) from exc
+
+        external_directories: List[str] = []
+        missing: List[str] = []
+        for skill in required_skills:
+            resolved_directory = get_skill_directory(skill)
+            if resolved_directory is None:
+                missing.append(skill)
+                continue
+            external_directory = get_external_skill_directory(skill)
+            if external_directory is not None and resolved_directory == external_directory:
+                external_directories.append(str(external_directory))
+
+        if missing:
+            raise RuntimeError(
+                "HVE required Skill directory is unavailable before session creation: "
+                + ", ".join(sorted(set(missing)))
             )
-            # 注: session_opts には Auto モデル時 reasoning_effort='high' が含まれるため、
-            # SDK バージョン < 0.3.0 環境では _create_session_with_auto_reasoning_fallback
-            # の内部リトライが追加で発生し SDK 呼び出しが最大 4 回（resume 1 + create 2 + 内部 retry 1）になる。
-            return await _create_session_with_auto_reasoning_fallback(client, session_opts)
 
-    def _mark_step_running(self, step_id: str, session_id: str) -> None:
-        """resume_state に step を `running` として記録する（resume_state なしなら no-op）。
+        directories = list(session_opts.get("skill_directories") or [])
+        if not directories:
+            directories = _repository_skill_directories(required_skills)
+        seen: set[str] = {
+            os.path.normcase(os.path.normpath(directory))
+            for directory in directories
+        }
+        for directory in external_directories:
+            normalized = os.path.normcase(os.path.normpath(directory))
+            if normalized not in seen:
+                directories.append(directory)
+                seen.add(normalized)
+        if directories:
+            # FR-CLI-73: repository Skill の公開範囲は required 宣言で決まるため、
+            # external Skill が無い Step でも解決済みディレクトリを確定させる。
+            session_opts["skill_directories"] = directories
+        return bool(external_directories)
 
-        失敗しても実行を止めない（warn のみ）。state.json への書き込みエラーで
-        ステップ実行をブロックすることは避ける（実行成功優先）。
-        """
-        if self._resume_state is None:
-            return
+    @staticmethod
+    def _get_optional_skills_for_step(
+        workflow_id: Optional[str],
+        step_id: str,
+    ) -> List[str]:
+        """Resolve optional candidates without making them a session precondition."""
+        if not workflow_id:
+            return []
         try:
-            from datetime import datetime, timezone
-            self._resume_state.update_step(
-                step_id,
-                status="running",
-                session_id=session_id,
-                started_at=datetime.now(timezone.utc).isoformat(),
-            )
-        except Exception as exc:  # pragma: no cover - I/O 例外パスは E2E で確認
-            self.console.warning(
-                f"state.json への running 状態更新に失敗しました (step={step_id}): {exc}"
+            try:
+                from .skill_resolver import get_optional_skills_for_step
+            except ImportError:  # pragma: no cover
+                from skill_resolver import get_optional_skills_for_step  # type: ignore[import-not-found,no-redef]
+            return get_optional_skills_for_step(workflow_id, step_id)
+        except Exception:
+            return []
+
+    @staticmethod
+    def _add_available_optional_external_skill_directories(
+        session_opts: Dict[str, Any],
+        optional_skills: List[str],
+    ) -> List[str]:
+        """Attach installed optional external candidates without making them required."""
+        if not optional_skills:
+            return []
+        try:
+            try:
+                from .skill_resolver import get_external_skill_directory
+            except ImportError:  # pragma: no cover
+                from skill_resolver import get_external_skill_directory  # type: ignore[import-not-found,no-redef]
+        except Exception:
+            return []
+
+        resolved: List[Tuple[str, str]] = []
+        for skill in optional_skills:
+            external_skill_directory = get_external_skill_directory(skill)
+            if external_skill_directory is not None:
+                resolved.append((skill, str(external_skill_directory)))
+        if not resolved:
+            return []
+
+        directories = list(session_opts.get("skill_directories") or [])
+        if not directories:
+            directories = _repository_skill_directories(optional_skills)
+        seen: set[str] = {
+            os.path.normcase(os.path.normpath(directory))
+            for directory in directories
+        }
+        available_names: List[str] = []
+        for skill, directory_text in resolved:
+            normalized = os.path.normcase(os.path.normpath(directory_text))
+            if normalized not in seen:
+                directories.append(directory_text)
+                seen.add(normalized)
+            available_names.append(skill)
+        session_opts["skill_directories"] = directories
+        return available_names
+
+    @staticmethod
+    def _is_foundry_required_step(required_skills: List[str]) -> bool:
+        """Return whether this Step requires the external Foundry meta Skill."""
+        return "microsoft-foundry" in required_skills
+
+    async def _verify_foundry_required_session_mcp_servers(
+        self,
+        session: Any,
+    ) -> None:
+        """Require Azure and Microsoft Learn MCP servers to be connected.
+
+        Unlike ASDW Step 1.3, this is a subset check: normal config discovery
+        can load additional non-Foundry MCP servers without weakening the two
+        required Foundry capabilities.
+        """
+        try:
+            mcp_list = await session.rpc.mcp.list()
+        except Exception as exc:
+            raise RuntimeError(
+                "Foundry-required MCP server list is unavailable after session creation."
+            ) from exc
+
+        connected: set[str] = set()
+        for server in getattr(mcp_list, "servers", []) or []:
+            name = str(getattr(server, "name", "") or "")
+            status = getattr(server, "status", None)
+            status_value = getattr(status, "value", status)
+            if str(status_value or "").casefold() == "connected":
+                connected.add(name)
+
+        missing = set(_FOUNDRY_REQUIRED_MCP_SERVERS) - connected
+        if missing:
+            raise RuntimeError(
+                "Foundry-required MCP servers are unavailable or disconnected: "
+                + ", ".join(sorted(missing))
             )
 
     # ------------------------------------------------------------------
@@ -1399,6 +2558,10 @@ class StepRunner:
         if tool_name in _SKIP_TOOLS:
             return
 
+        if tool_name in ("apply_patch", "applyPatch"):
+            self._track_apply_patch_files(step_id, args)
+            return
+
         # シェル系ツール: command キーからファイル操作を簡易抽出
         if tool_name == "bash":
             command = args.get("command", "")
@@ -1429,6 +2592,30 @@ class StepRunner:
                     self.console.track_file(step_id, normalized, "read")
                     self.console.file_io(step_id, normalized, "read")
                 break
+
+    def _track_apply_patch_files(self, step_id: str, args: dict) -> None:
+        """apply_patch の V4A patch header から更新対象ファイルだけを追跡する。"""
+        import os
+        import re
+
+        patch_text = args.get("input") or args.get("patch") or args.get("content") or ""
+        if not isinstance(patch_text, str) or not patch_text:
+            return
+
+        seen: set[str] = set()
+        for line in patch_text.splitlines():
+            match = re.match(r"^\*\*\*\s+(?:Add|Update|Delete)\s+File:\s+(?P<path>.+?)\s*$", line)
+            if not match:
+                continue
+            path = match.group("path").strip()
+            if " -> " in path:
+                path = path.split(" -> ", 1)[0].strip()
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            normalized = os.path.normpath(path)
+            self.console.track_file(step_id, normalized, "write")
+            self.console.file_io(step_id, normalized, "write")
 
     def _track_bash_files(self, step_id: str, command: str) -> None:
         """bash コマンド文字列からファイル操作を簡易抽出する。"""
@@ -1645,6 +2832,70 @@ class StepRunner:
             return f"{len(lines)} lines"
         return ""
 
+    @staticmethod
+    def _build_failed_tool_args_summary(tool_name: str, args: Any) -> str:
+        """失敗 tool ログへ付ける安全な引数サマリーを生成する。
+
+        調査不能だった view_range 系の失敗に限定して有用な情報を残す。
+        shell command や任意 query は秘密情報・ログ肥大化リスクがあるため含めない。
+        """
+        if not isinstance(args, dict):
+            return ""
+        if tool_name not in ("view", "read_file", "readFile", "cat", "head", "tail"):
+            return ""
+
+        parts: List[str] = []
+        for key in (
+            "path",
+            "filePath",
+            "file_path",
+            "view_range",
+            "viewRange",
+            "startLine",
+            "endLine",
+            "start_line",
+            "end_line",
+        ):
+            if key not in args:
+                continue
+            value = args.get(key)
+            if value is None or value == "":
+                continue
+            value_text = str(value)
+            if len(value_text) > _ACTION_DETAIL_MAX_LENGTH:
+                value_text = value_text[:_ACTION_DETAIL_MAX_LENGTH] + "..."
+            parts.append(f"{key}={value_text}")
+        return ", ".join(parts)
+
+    @staticmethod
+    def _safe_failed_tool_args(tool_name: str, args: Any) -> Dict[str, Any]:
+        """相関中に保持してよい read/view 系の path/range 引数だけを返す。"""
+        if not isinstance(args, dict):
+            return {}
+        if tool_name not in ("view", "read_file", "readFile", "cat", "head", "tail"):
+            return {}
+        safe_keys = (
+            "path",
+            "filePath",
+            "file_path",
+            "view_range",
+            "viewRange",
+            "startLine",
+            "endLine",
+            "start_line",
+            "end_line",
+        )
+        return {key: args[key] for key in safe_keys if key in args}
+
+    def _clear_tool_start_state(self, step_id: str) -> None:
+        """1 Step の未完了 tool start 相関情報だけを破棄する。"""
+        normalized_step_id = str(step_id)
+        self._last_tool_start_by_step.pop(normalized_step_id, None)
+        for key in [
+            key for key in self._tool_start_by_call if key[0] == normalized_step_id
+        ]:
+            self._tool_start_by_call.pop(key, None)
+
     # ------------------------------------------------------------------
     # 公開 API
     # ------------------------------------------------------------------
@@ -1673,8 +2924,14 @@ class StepRunner:
         phase0_start = time.time()
 
         _qa_model = self.config.get_qa_model()
-        _qa_workiq_requested = self.config.is_workiq_qa_enabled()
-        _qa_workiq_configured = WORKIQ_MCP_SERVER_NAME in (self.config.mcp_servers or {})
+        _qa_workiq_requested = (
+            self.config.is_workiq_qa_enabled()
+            and not _is_asdw_data_deploy_step(step_id, custom_agent)
+        )
+        _qa_workiq_configured = any(
+            _is_workiq_mcp_server_name(_name)
+            for _name in (self.config.mcp_servers or {})
+        )
         _qa_workiq_available = (
             _qa_workiq_requested
             and (_qa_workiq_configured or is_workiq_available())
@@ -1710,16 +2967,38 @@ class StepRunner:
                     qa_model=_qa_model,
                     workiq_available=_qa_workiq_available,
                 )
+                _pre_qa_session_opts = self._build_sub_session_opts(
+                    _qa_model,
+                    include_workiq=_qa_workiq_available,
+                    step_id=step_id,
+                    suffix="pre-qa",
+                    custom_agent=custom_agent,
+                )
+                _pre_qa_required_skills = self._get_required_skills_for_step(
+                    workflow_id,
+                    step_id,
+                    None,
+                )
+                _pre_qa_requires_external_skills = (
+                    self._add_required_external_skill_directories(
+                        _pre_qa_session_opts,
+                        _pre_qa_required_skills,
+                    )
+                )
                 _pre_qa_session = await _create_session_with_auto_reasoning_fallback(
                     client,
-                    self._build_sub_session_opts(
-                        _qa_model,
-                        include_workiq=_qa_workiq_available,
-                        step_id=step_id,
-                        suffix="pre-qa",
-                    ),
+                    _pre_qa_session_opts,
+                    config=self.config,
+                    step_id=step_id,
+                    subtask_kind="pre_qa",
+                    console=self.console,
+                    requires_external_skill_directories=
+                    _pre_qa_requires_external_skills,
                 )
-                _pre_qa_session.on(self._handle_session_event)
+                _pre_qa_session.on(
+                    lambda event, sid=step_id:
+                    self._handle_session_event_for_step(event, sid)
+                )
                 _effective_pre_qa_session = _pre_qa_session
                 self._sub_sessions_created += 1
                 _qa_workiq_mcp_enabled = False  # デフォルト False: loop で server が見つかれば True に更新
@@ -1742,15 +3021,6 @@ class StepRunner:
             )
             pre_qa_raw = _extract_text(pre_qa_response)
 
-            # フォールバック: LLM が質問票を qa/ ファイルに保存した場合の再取得
-            if not pre_qa_raw or len(pre_qa_raw.strip()) < 50:
-                for _artifact_path in _extract_safe_qa_artifact_paths(pre_qa_raw or "", base_dir="."):
-                    try:
-                        pre_qa_raw = _artifact_path.read_text(encoding="utf-8")
-                        break
-                    except Exception:
-                        pass
-
             # QAMerger でパース
             # 例外/0件のいずれも単一の skip_reason に集約し、後段で 1 度だけ通知する
             # （Phase 0b/0c で同じ条件を再評価するため、対称性も担保）。
@@ -1763,7 +3033,10 @@ class StepRunner:
                 _pre_qa_skip_reason = "LLM 応答が空のため事前 QA をスキップします。"
             else:
                 try:
-                    parsed_pre_qa = QAMerger.parse_qa_content(pre_qa_raw)
+                    parsed_pre_qa, _ = _parse_qa_content_with_artifact_fallback(
+                        pre_qa_raw,
+                        base_dir=".",
+                    )
                     _parse_succeeded = bool(parsed_pre_qa.questions)
                     if not _parse_succeeded:
                         _pre_qa_skip_reason = (
@@ -1933,32 +3206,38 @@ class StepRunner:
         return pre_qa_context
 
     # ------------------------------------------------------------------
-    # Phase 1.5: SPLIT_REQUIRED サブタスク fork
+    # Phase 1.5: legacy SPLIT_REQUIRED runtime fork
     # ------------------------------------------------------------------
 
     async def _maybe_run_split_fork(
         self,
         *,
-        client: Any,
+        session: Any,
         step_id: str,
         custom_agent: Optional[str],
     ) -> bool:
-        """Agent が SPLIT_REQUIRED で出力した subissues.md を検出し、サブタスクを fork する。
+        """Legacy opt-in: SPLIT_REQUIRED の subissues.md を検出し、Fleet mode を起動する。
 
-        Orchestrator 配下 (`self._orchestrator_ctx is not None`) のときのみ動作。
-        単独実行モードでは常に True を返して素通しする（Agent が plan.md+subissues.md
-        で停止する従来挙動を維持）。
+        CLI / GUI 標準経路では `OrchestratorContext.split_fork_enabled=False` のため
+        動作しない。Cloud 版の正式な SPLIT_REQUIRED 処理は GitHub Actions の
+        `create-subissues-from-pr.yml` / `advance-subissues.yml` による Sub-Issue
+        作成・Copilot Cloud Agent アサインで行う。
 
-        サブタスクは `depends_on` から計算した topological wave 単位で並列実行する
-        （同一 wave 内は `asyncio.gather` + `Semaphore(max_parallel_subtasks)`）。
+        本メソッドは legacy / 実験用途として、明示的に
+        `split_fork_enabled=True` を渡した場合のみ動作する。単独実行モードでは
+        常に True を返して素通しする。
+
+        サブタスクは `depends_on` と出力先を Fleet prompt に明記し、Copilot SDK
+        の parent session 内 fleet mode へ委譲する。
 
         Args:
-            client: 親 Step のメイン CopilotClient
+            session: 親 Step のメイン CopilotSession
             step_id: 親 Step ID
             custom_agent: 親 Step の Custom Agent 名
 
         Returns:
-            True: 全サブタスク成功 / SPLIT 未発生 / Orchestrator 未配下
+            True: 全サブタスク成功 / SPLIT 未発生 / Orchestrator 未配下 /
+                legacy split-fork 無効のため標準経路へ継続可能
             False: 1 件以上のサブタスクが失敗、または再帰深度上限到達
         """
         ctx = self._orchestrator_ctx
@@ -1968,31 +3247,17 @@ class StepRunner:
             self.console.event(
                 f"  ⏭ [{step_id}] split-fork: 単独実行モード (orchestrator_ctx=None) — fork スキップ"
             )
-            self._record_checkpoint(step_id, "split-fork-skipped-no-orchestrator")
             return True
         if not ctx.split_fork_enabled:
+            # CLI / GUI 標準経路では split_fork_enabled=False が正常値のため、WARN ではなく
+            # event（低重大度・GUI「実行中の課題」非対象）で記録する。上の ctx is None 分岐と同じ扱い。
             self.console.event(
-                f"  ⏭ [{step_id}] split-fork: 機能無効 (split_fork_enabled=False) — fork スキップ"
+                f"  ⏭ [{step_id}] legacy split-fork は無効です "
+                f"(split_fork_enabled=False)。subissues.md を GitHub Sub-Issue として"
+                f"実行する場合は Cloud Agent Orchestrator の create-subissues 経路を使い、"
+                f"CLI / GUI では workflow DAG / fan-out として分割してください。"
             )
-            self._record_checkpoint(step_id, "split-fork-skipped-disabled")
             return True
-
-        # F2-4: Resume 高速化 — 前回実行で split-fork-all-done 済みなら即 True 返却。
-        # 再 fork に伴うサブセッション再生成と API 呼び出しコストを節約する。
-        try:
-            prev_marker: Optional[str] = None
-            if self._resume_state is not None:
-                state = self._resume_state.step_states.get(step_id)
-                if state is not None:
-                    prev_marker = getattr(state, "checkpoint_marker", None)
-            if prev_marker == "split-fork-all-done":
-                self.console.event(
-                    f"  ⏭ [{step_id}] split-fork: 前回完了済み (checkpoint=split-fork-all-done) — 再 fork スキップ"
-                )
-                self._record_checkpoint(step_id, "split-fork-resume-shortcut")
-                return True
-        except Exception:  # pragma: no cover - 防御的: resume 短絡で例外を起こさない
-            pass
 
         try:
             from .split_fork import (
@@ -2016,6 +3281,10 @@ class StepRunner:
                 parse_subissues_md,
                 resolve_work_root,
             )
+        try:
+            from .fleet_mode import FleetEventCollector, build_split_fleet_prompt, start_fleet
+        except ImportError:  # pragma: no cover
+            from fleet_mode import FleetEventCollector, build_split_fleet_prompt, start_fleet  # type: ignore[no-redef]
 
         # custom_agent 欠落は致命ではないが SPLIT_REQUIRED 検出精度を下げるため警告。
         if not custom_agent:
@@ -2023,7 +3292,6 @@ class StepRunner:
                 f"  ⚠ [{step_id}] split-fork: custom_agent 未指定 — "
                 f"agent-scoped 探索をスキップし fallback-glob に依存します"
             )
-            self._record_checkpoint(step_id, "split-fork-warn-no-agent")
 
         work_root = resolve_work_root()
         # GUI セッション隔離 (Issue-gui-session-workdir-isolation T1):
@@ -2052,27 +3320,59 @@ class StepRunner:
             # Issue-gui-session-workdir-isolation Critical#1:
             # 過去 run の plan.md が残存しているとここで誤検出されるため、
             # discover_subissues_md_verbose と同じ run_id スコープでフィルタする。
+            # T-C1.2: 同 run 内の別 Agent の plan.md による誤検出を防ぐため、
+            # custom_agent 指定時は当該 Agent ディレクトリ配下のみに限定する。
+            # work_root 自体が run-id を含む場合、parent.name の run スコープ
+            # フィルタは過剰（Issue-0 形式で常に弾かれる）なので skip する。
             try:
-                from .split_fork import matches_run_scope as _matches_run_scope
+                from .split_fork import (
+                    is_failed_dir,
+                    matches_run_scope as _matches_run_scope,
+                    matches_step_scope as _matches_step_scope,
+                    work_root_contains_run_id as _work_root_contains_run_id,
+                )
             except ImportError:  # pragma: no cover
-                from split_fork import matches_run_scope as _matches_run_scope  # type: ignore[no-redef]
+                from split_fork import (  # type: ignore[no-redef]
+                    is_failed_dir,
+                    matches_run_scope as _matches_run_scope,
+                    matches_step_scope as _matches_step_scope,
+                    work_root_contains_run_id as _work_root_contains_run_id,
+                )
+            _skip_run_scope_filter = _work_root_contains_run_id(
+                work_root, _scope_run_id
+            )
             inconsistent_plans: List[Path] = []
             try:
                 if work_root.is_dir():
-                    plan_globs = [
-                        work_root.glob("Issue-*/plan.md"),
-                        work_root.glob("*/Issue-*/plan.md"),
-                    ]
+                    if custom_agent:
+                        plan_globs = [
+                            (work_root / custom_agent).glob("Issue-*/plan.md"),
+                        ]
+                    else:
+                        plan_globs = [
+                            work_root.glob("Issue-*/plan.md"),
+                            work_root.glob("*/Issue-*/plan.md"),
+                        ]
                     seen_plans: set = set()
                     for g in plan_globs:
                         for plan_path in g:
                             if plan_path in seen_plans:
                                 continue
                             seen_plans.add(plan_path)
+                            # `.failed-*` 退避済みディレクトリ配下の plan.md は除外。
+                            # discover_subissues_md_verbose と同じルールに揃える。
+                            if is_failed_dir(plan_path.parent.name):
+                                continue
                             # run_id スコープに合致しない過去 run の plan.md は除外
-                            if not _matches_run_scope(
-                                plan_path.parent.name, _scope_run_id
-                            ):
+                            # （work_root が run_id を含む場合は work_root スコープで成立済み）
+                            if not _skip_run_scope_filter:
+                                if not _matches_run_scope(
+                                    plan_path.parent.name, _scope_run_id
+                                ):
+                                    continue
+                            # step_id スコープ: Issue-0 形式では常に True、
+                            # Issue-<run_id>-step-<id> 形式では絞り込みが効く
+                            if not _matches_step_scope(plan_path.parent.name, step_id):
                                 continue
                             try:
                                 head = plan_path.read_text(
@@ -2092,7 +3392,6 @@ class StepRunner:
                     f"(plans={[str(p) for p in inconsistent_plans]}, "
                     f"work_root={work_root}, custom_agent={custom_agent!r})"
                 )
-                self._record_checkpoint(step_id, "split-fork-failed-inconsistent")
                 return False
 
             self.console.event(
@@ -2100,7 +3399,6 @@ class StepRunner:
                 f"(work_root={work_root}, custom_agent={custom_agent!r}, "
                 f"work_root_exists={work_root.is_dir()}, cwd={_cwd})"
             )
-            self._record_checkpoint(step_id, "split-fork-skipped-no-subissues")
             return True
 
         # 観測性: どの glob パターンでヒットしたかを残す（fallback-glob 経由なら要注意）
@@ -2117,7 +3415,6 @@ class StepRunner:
                 f"  ✗ [{step_id}] SPLIT fork 深度上限到達 (depth={depth}, max={max_depth}) "
                 f"— subissues.md 発見も実行をスキップして Step failed 化"
             )
-            self._record_checkpoint(step_id, "split-fork-failed-max-depth")
             return False
 
         try:
@@ -2126,7 +3423,18 @@ class StepRunner:
             self.console.error(
                 f"  ✗ [{step_id}] subissues.md パース失敗: {exc}"
             )
-            self._record_checkpoint(step_id, "split-fork-failed-parse")
+            try:
+                failed_dir = subissues_path.parent.with_name(
+                    f"{subissues_path.parent.name}.failed-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+                )
+                subissues_path.parent.rename(failed_dir)
+                self.console.event(
+                    f"  ↪ [{step_id}] 失敗した split-fork work dir を退避: {failed_dir}"
+                )
+            except Exception as rename_exc:
+                self.console.warning(
+                    f"split-fork parse failure work dir の退避に失敗しました: {rename_exc}"
+                )
             return False
 
         try:
@@ -2135,7 +3443,6 @@ class StepRunner:
             self.console.error(
                 f"  ✗ [{step_id}] subissues.md depends_on 解決失敗: {exc}"
             )
-            self._record_checkpoint(step_id, "split-fork-failed-deps")
             return False
 
         self.console.event(
@@ -2143,7 +3450,6 @@ class StepRunner:
             f"— {len(subissues)} サブタスクを {len(waves)} wave で並列 fork "
             f"(depth={depth}/{max_depth}, max_parallel={ctx.max_parallel_subtasks})"
         )
-        self._record_checkpoint(step_id, "split-fork-detected")
 
         # parent_work_identifier を subissues.md のパスから推定する
         # 例: work/Arch-UI-Detail/Issue-screen-detail/subissues.md
@@ -2154,120 +3460,100 @@ class StepRunner:
         else:
             parent_identifier = parent_dir_name
 
-        # 子セッションへ深度を +1 した ctx を伝播（現状は同一プロセス内で完結するが、
-        # 将来のサブセッション内 fork 連鎖に備える）
-        child_ctx = ctx.with_increased_depth()  # noqa: F841 — observability/future use
-        del child_ctx  # 今は使用しない（保留）
-
-        semaphore = asyncio.Semaphore(max(1, ctx.max_parallel_subtasks))
-
-        async def _run_one(sub: Any) -> bool:
-            """1 サブタスク分のセッション生成・実行・完了判定。成功なら True。"""
-            async with semaphore:
-                work_subdir = make_subtask_work_subdir(
-                    parent_custom_agent=custom_agent,
-                    parent_work_identifier=parent_identifier,
-                    subissue_index=sub.index,
-                )
-                sub_prompt = build_subtask_prompt(
-                    subissue=sub,
-                    parent_step_id=step_id,
-                    parent_custom_agent=custom_agent,
-                    work_subdir=work_subdir,
-                    repo_root=Path.cwd(),
-                )
-
-                sub_opts = self._build_sub_session_opts(
-                    self.config.model,
-                    include_workiq=False,
-                    step_id=step_id,
-                    suffix=f"split-{sub.index:03d}",
-                    custom_agent=sub.custom_agent or custom_agent,
-                )
-
-                # Workbench tasks ペインに並列子セッションを登録する。
-                # name に sub.index を含めるため (step_id, name) キーで一意。
-                # 注: 入れ子再帰 fork（runner 1786 行の child_ctx）が将来有効化
-                # された際は depth プレフィックスを name に追加すること。
-                agent_label = sub.custom_agent or custom_agent or ""
-                sub_name = (
-                    f"split-{sub.index:03d} ({agent_label})"
-                    if agent_label
-                    else f"split-{sub.index:03d}"
-                )
-                self.console.subagent_started(step_id, sub_name)
-
-                sub_session = None
-                success = False
-                error_text = ""
-                try:
-                    sub_session = await _create_session_with_auto_reasoning_fallback(
-                        client, sub_opts,
-                    )
-                    sub_session.on(self._handle_session_event)
-                    self._sub_sessions_created += 1
-
-                    sub_response = await sub_session.send_and_wait(
-                        sub_prompt, timeout=self.config.timeout_seconds,
-                    )
-                    _ = _extract_text(sub_response)
-
-                    ok, reason = check_subtask_completion(work_root, work_subdir)
-                    if ok:
-                        success = True
-                        self.console.event(
-                            f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功"
-                        )
-                        self._record_checkpoint(
-                            step_id, f"split-fork-{sub.index:03d}-done",
-                        )
-                    else:
-                        error_text = reason
-                        self.console.error(
-                            f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
-                        )
-                except Exception as exc:
-                    error_text = str(exc)
-                    self.console.error(
-                        f"  ✗ [{step_id}/sub-{sub.index:03d}] 実行中にエラー: {exc}"
-                    )
-                finally:
-                    if sub_session is not None:
-                        try:
-                            await sub_session.disconnect()
-                        except Exception as cleanup_exc:
-                            self.console.warning(
-                                f"[cleanup] sub_session.disconnect() failed: {cleanup_exc}"
-                            )
-                    # Workbench tasks への完了/失敗通知（disconnect 失敗時も必ず発火）
-                    if success:
-                        self.console.subagent_completed(step_id, sub_name)
-                    else:
-                        self.console.subagent_failed(step_id, sub_name, error=error_text)
-
-                return success
-
-        # Wave 単位で並列実行。失敗 wave があっても wave 内は全件実行し、
-        # 後続 wave へは進まない（依存先が未完了のため、空振りを避ける）。
-        all_success = True
-        for wave_idx, wave in enumerate(waves, start=1):
+        if len(subissues) == 1:
+            sub = subissues[0]
             self.console.event(
-                f"  ⏵ [{step_id}] wave {wave_idx}/{len(waves)} 並列実行: "
-                f"{[f'sub-{s.index:03d}' for s in wave]}"
+                f"  ▶ [{step_id}/sub-{sub.index:03d}] 単一サブタスクのため Fleet mode を使わず parent session で実行"
             )
-            results = await asyncio.gather(
-                *(_run_one(s) for s in wave),
-                return_exceptions=False,
+            work_subdir = make_subtask_work_subdir(
+                parent_custom_agent=custom_agent,
+                parent_work_identifier=parent_identifier,
+                subissue_index=sub.index,
             )
-            if not all(results):
-                all_success = False
-                self.console.error(
-                    f"  ✗ [{step_id}] wave {wave_idx} に失敗あり — 後続 wave をスキップ"
+            sub_prompt = build_subtask_prompt(
+                subissue=sub,
+                parent_step_id=step_id,
+                parent_custom_agent=custom_agent,
+                work_subdir=work_subdir,
+                repo_root=Path.cwd(),
+                work_root=work_root,
+            )
+            try:
+                sub_response = await session.send_and_wait(
+                    sub_prompt,
+                    timeout=self.config.timeout_seconds,
                 )
-                break
+                _ = _extract_text(sub_response)
+            except Exception as exc:
+                self.console.error(
+                    f"  ✗ [{step_id}/sub-{sub.index:03d}] parent session 実行中にエラー: {exc}"
+                )
+                return False
 
-        if all_success:
-            self._record_checkpoint(step_id, "split-fork-all-done")
+            ok, reason = check_subtask_completion(work_root, work_subdir)
+            if ok:
+                self.console.event(f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功")
+                return True
+            self.console.error(
+                f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
+            )
+            return False
+
+        fleet_plan = build_split_fleet_prompt(
+            subissues=subissues,
+            parent_step_id=step_id,
+            parent_custom_agent=custom_agent,
+            parent_identifier=parent_identifier,
+            repo_root=Path.cwd(),
+            work_root=work_root,
+        )
+        collector = FleetEventCollector()
+        unsubscribe = session.on(collector.handle_event)
+        try:
+            outcome = await start_fleet(session, fleet_plan.prompt)
+        finally:
+            if callable(unsubscribe):
+                try:
+                    unsubscribe()
+                except Exception:
+                    pass
+
+        if not outcome.started:
+            self.console.error(
+                f"  ✗ [{step_id}] fleet mode 起動失敗: {outcome.reason}"
+            )
+            return False
+
+        deadline = time.monotonic() + max(1.0, float(self.config.timeout_seconds or 1))
+        poll_interval = 0.5
+        completion_state: Dict[int, tuple[bool, str]] = {}
+        while True:
+            completion_state = {
+                sub.index: check_subtask_completion(work_root, fleet_plan.work_subdirs[sub.index])
+                for sub in subissues
+            }
+            if all(ok for ok, _reason in completion_state.values()):
+                break
+            if collector.has_failed:
+                break
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(poll_interval)
+
+        all_success = all(ok for ok, _reason in completion_state.values())
+        for sub in subissues:
+            ok, reason = completion_state[sub.index]
+            if ok:
+                self.console.event(f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功")
+            else:
+                self.console.error(
+                    f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
+                )
+
+        if collector.has_failed:
+            all_success = False
+            self.console.error(f"  ✗ [{step_id}] fleet sub-agent 失敗: {collector.failed}")
+
         return all_success
 
     async def run_step(
@@ -2297,6 +3583,7 @@ class StepRunner:
             True: 成功, False: 失敗
         """
         start = time.time()
+        self._clear_tool_start_state(step_id)
         # markdown-query Skill 利用ログ (.mdq/usage.jsonl) と Step 紐付けのため
         # 環境変数を伝播する。子プロセス（Copilot SDK 経由含む）が継承し、
         # mdq CLI から mdq.usage_log が読み取る。
@@ -2311,6 +3598,15 @@ class StepRunner:
                 os.environ.pop("HVE_AGENT_ID", None)
         except Exception:
             pass
+
+        # workflow オブジェクトを 1 回だけ resolve（Phase 4 自己改善ループ内および
+        # run_step 終端の output_paths gate で共有する）。StepRunner.__init__ には
+        # workflow が注入されていないため registry 経由で都度引く（O(1) dict lookup）。
+        try:
+            from .workflow_registry import get_workflow as _get_workflow
+        except ImportError:
+            from workflow_registry import get_workflow as _get_workflow  # type: ignore[no-redef]
+        _resolved_workflow = _get_workflow(workflow_id) if workflow_id else None
 
         # ADR-0002: fan-out per-key プロンプト注入 (T3B) と per-key MCP 上書き (T3A)
         if fanout_meta:
@@ -2338,8 +3634,82 @@ class StepRunner:
         # Phase 6: サブセッション作成回数カウンターをリセット
         self._sub_sessions_created = 0
 
-        # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）
-        self.config.run_id = _safe_run_id(self.config.run_id)
+        # run_id を1回だけ正規化して書き戻す（Phase 2/4 で別々に生成されるのを防ぐ）。
+        # Azure writeを行うStep 1.3では黙示的な文字除去を許さず、envとconfigを
+        # 同じ検証済みrun contextへ固定する。
+        _is_data_deploy = _is_asdw_data_deploy_step(step_id, custom_agent)
+        _raw_run_id = self.config.run_id
+        _env_run_id = os.environ.get("HVE_RUN_ID", "")
+        if _is_data_deploy and not _raw_run_id and _env_run_id:
+            self.config.run_id = _env_run_id
+        else:
+            self.config.run_id = _safe_run_id(self.config.run_id)
+        if _is_data_deploy:
+            if not _has_supported_asdw_data_deploy_app_scope(
+                str(step_id),
+                self._workflow_params
+            ):
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW Step 1.3 supports exactly one "
+                    "selected APP-009 before producer generation"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            try:
+                _bootstrap_context = build_asdw_data_deploy_bootstrap_context(
+                    workflow_params=self._workflow_params,
+                    bootstrap_inputs=_build_asdw_data_deploy_bootstrap_inputs(
+                        self._workflow_params
+                    ),
+                    subscription_id=_resolve_asdw_data_deploy_subscription_id(),
+                )
+            except AsdwDataDeployContextError as _bootstrap_error:
+                self.console.error(f"  ❌ [{step_id}] {_bootstrap_error}")
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            if (
+                self.config.run_id != _safe_run_id(self.config.run_id)
+                or (_raw_run_id and _raw_run_id != self.config.run_id)
+                or (_env_run_id and _env_run_id != _env_run_id.strip())
+                or (
+                    _env_run_id
+                    and _env_run_id != self.config.run_id
+                )
+                or (
+                    _env_run_id
+                    and _safe_run_id(_env_run_id) != _env_run_id
+                )
+            ):
+                self.console.error(
+                    f"  ❌ [{step_id}] invalid or inconsistent HVE run ID; "
+                    "Step 1.3 stopped before Azure execution"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            if self.config.cli_url:
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW Step 1.3 requires a local Copilot "
+                    "runtime so HVE can inject one frozen execution environment"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            if not _env_run_id:
+                os.environ["HVE_RUN_ID"] = self.config.run_id
+            _runtime_context_errors = _validate_asdw_data_deploy_runtime_context(
+                self.config.run_id,
+                Path.cwd(),
+            )
+            if _runtime_context_errors:
+                for _runtime_error in _runtime_context_errors:
+                    self.console.error(f"  ❌ [{step_id}] {_runtime_error}")
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+        _work_identifier = _work_identifier_for_step(step_id, fanout_meta)
 
         # --- dry_run ---
         if self.config.dry_run:
@@ -2349,10 +3719,190 @@ class StepRunner:
             self.console.step_end(step_id, "success", elapsed=elapsed)
             return True
 
+        self.console.step_start(step_id, title, agent=custom_agent)
+        self._current_step_id = step_id
+
+        pre_verify_contract_errors = []
+        # Step.1.2 (DataTestCoding) は verify-data-resources.sh の producer であり、
+        # stale な既存ファイルを再生成・修復する責務を持つ。生成前に同ファイルを
+        # fail-fast すると producer 自身が起動できないため、pre-run gate は
+        # Step.1.3 (DataDeploy) の入力検査に限定する。Step.1.2 の生成結果は
+        # セッション完了後の post-run gate で検査する。
+        if (
+            custom_agent == "Dev-Microservice-Azure-DataDeploy"
+            and str(step_id).split("/", 1)[0] == "1.3"
+        ):
+            pre_verify_contract_errors = self._run_asdw_data_verify_contract_gate(
+                step_id, custom_agent, include_registration=False
+            )
+        if pre_verify_contract_errors:
+            for _msg in pre_verify_contract_errors:
+                self.console.error(_msg)
+            elapsed = time.time() - start
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        # Agent Prompt に注入する WORK path を、Agent/SDK 起動前に実在させる。
+        # Prompt 任せの mkdir では、最初の read/search が Issue-* 不在で失敗するため、
+        # Runner が同じ識別子を使って idempotent に作成する。
+        try:
+            _step_work_dir_path = _ensure_step_work_dir(
+                custom_agent,
+                _work_identifier,
+            )
+            self.console.event(
+                f"  📁 [{step_id}] work directory ready: {_step_work_dir_path}"
+            )
+        except (OSError, ValueError) as _work_dir_exc:
+            self.console.error(
+                f"  ❌ [{step_id}] step work directory creation failed: "
+                f"{_work_dir_exc}"
+            )
+            elapsed = time.time() - start
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        if (
+            workflow_id == "asdw-web"
+            and _is_asdw_data_deploy_step(step_id, custom_agent)
+        ):
+            try:
+                _generation_result = ensure_asdw_data_producers(Path.cwd())
+            except AsdwDataScriptGenerationError:
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW data producer generation failed "
+                    "before Agent startup"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            _generation_status = getattr(_generation_result, "status", None)
+            if type(_generation_status) is not str:
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW data producer generation returned "
+                    "an invalid status before Agent startup"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            if _generation_status == "reused":
+                _generation_status_literal = "reused"
+            elif _generation_status == "regenerated":
+                _generation_status_literal = "regenerated"
+            else:
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW data producer generation returned "
+                    "an invalid status before Agent startup"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            _generation_audit_mode = getattr(
+                _generation_result,
+                "audit_mode",
+                None,
+            )
+            try:
+                _environment_snapshot = (
+                    _build_asdw_data_deploy_environment_snapshot(
+                        self._workflow_params,
+                        os.environ,
+                        _generation_audit_mode,
+                        _bootstrap_context,
+                    )
+                )
+            except ValueError as _environment_error:
+                self.console.error(
+                    f"  ❌ [{step_id}] {_environment_error}"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            self._asdw_data_deploy_environment_snapshots[
+                str(step_id)
+            ] = _environment_snapshot
+            self.console.event(
+                f"  🧱 [{step_id}] ASDW data producers: "
+                f"{_generation_status_literal}"
+            )
+            _pipeline_work_root = os.environ.get("HVE_WORK_ROOT")
+            if type(_pipeline_work_root) is not str or not _pipeline_work_root:
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW native data pipeline is missing its HVE work root"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            _pipeline_environment = dict(_environment_snapshot)
+            _pipeline_environment["HVE_RUN_ID"] = self.config.run_id
+            _pipeline_environment["HVE_WORK_ROOT"] = _pipeline_work_root
+            try:
+                _pipeline_results = execute_pipeline(
+                    repo_root=Path.cwd(),
+                    environment=_pipeline_environment,
+                )
+            except Exception:
+                _evidence_errors = _write_asdw_data_deploy_evidence(
+                    Path.cwd(),
+                    self.config.run_id,
+                    (),
+                )
+                for _evidence_error in _evidence_errors:
+                    self.console.error(f"  ❌ [{step_id}] {_evidence_error}")
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW native data pipeline failed before SDK startup"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            _evidence_errors = _write_asdw_data_deploy_evidence(
+                Path.cwd(),
+                self.config.run_id,
+                _pipeline_results,
+            )
+            if _evidence_errors:
+                for _evidence_error in _evidence_errors:
+                    self.console.error(f"  ❌ [{step_id}] {_evidence_error}")
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            if (
+                not _pipeline_results
+                or any(
+                    type(getattr(_result, "exit_code", None)) is not int
+                    or _result.exit_code != 0
+                    for _result in _pipeline_results
+                )
+            ):
+                self.console.error(
+                    f"  ❌ [{step_id}] ASDW native data pipeline returned a failed stage"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            _native_evidence_gate_errors = (
+                self._run_tdd_report_gate(step_id, custom_agent, workflow_id)
+                + self._run_deploy_ac_gate(
+                    step_id,
+                    custom_agent,
+                    _resolved_workflow,
+                )
+            )
+            if _native_evidence_gate_errors:
+                for _gate_error in _native_evidence_gate_errors:
+                    self.console.error(f"  ❌ [{step_id}] {_gate_error}")
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+            self.console.event(
+                f"  ✓ [{step_id}] ASDW native data pipeline completed"
+            )
+            elapsed = time.time() - start
+            self.console.step_end(step_id, "success", elapsed=elapsed)
+            return True
+
         # --- SDK インポート確認 ---
         try:
-            from copilot import CopilotClient  # type: ignore[import]
-            from copilot import SubprocessConfig, ExternalServerConfig  # type: ignore[import]
             from copilot.session import PermissionHandler  # type: ignore[import]
         except ImportError:
             self.console.error(
@@ -2361,63 +3911,125 @@ class StepRunner:
             )
             return False
 
-        self.console.step_start(step_id, title, agent=custom_agent)
-        self._current_step_id = step_id
-
         session = None
         client = None
         try:
-            # SDK v0.2.2: CopilotClient(config=SubprocessConfig|ExternalServerConfig)
-            if self.config.cli_url:
-                sdk_config = ExternalServerConfig(url=self.config.cli_url)
-            else:
-                # verbosity >= 3 (verbose) かつデフォルトの log_level ("error") の場合のみ debug に昇格。
-                # ユーザーが明示的に log_level を指定している場合はそれを尊重する。
-                _effective_log_level = (
-                    "debug"
-                    if self.config.verbosity >= 3 and self.config.log_level == "error"
-                    else self.config.log_level
-                )
-                sdk_config = SubprocessConfig(
-                    cli_path=self.config.cli_path,
-                    github_token=self.config.resolve_token() or None,
-                    log_level=_effective_log_level,
-                    cli_args=self.config.cli_args,
-                )
-            client = CopilotClient(config=sdk_config)
+            # SDK 1.0.0: CopilotClient(connection=RuntimeConnection.*)
+            # verbosity >= 3 (verbose) かつデフォルトの log_level ("error") の場合のみ debug に昇格。
+            # ユーザーが明示的に log_level を指定している場合はそれを尊重する。
+            _effective_log_level = (
+                "debug"
+                if self.config.verbosity >= 3 and self.config.log_level == "error"
+                else self.config.log_level
+            )
+            try:
+                from .copilot_client_factory import create_copilot_client
+            except ImportError:  # pragma: no cover
+                from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+            client = create_copilot_client(
+                cli_path=self.config.cli_path,
+                cli_url=self.config.cli_url,
+                github_token=self.config.resolve_token() or None,
+                log_level=_effective_log_level,
+                cli_args=self.config.cli_args,
+                env=(
+                    self._asdw_data_deploy_environment_snapshots.get(str(step_id))
+                    if _is_data_deploy
+                    else None
+                ),
+            )
             await _start_client_with_retry(client, console=self.console)
 
             # セッション構築オプション
             session_opts: Dict[str, Any] = {
-                "on_permission_request": PermissionHandler.approve_all,
+                "on_permission_request": self._build_step_permission_handler(
+                    step_id,
+                    custom_agent,
+                ),
                 "streaming": True,
             }
-            # Auto 経路では DEFAULT_MODEL を明示して CLI ユーザー設定の -high バリアント上書きを回避する。
-            if self.config.model and self.config.model != MODEL_AUTO_VALUE:
-                session_opts["model"] = self.config.model
-            else:
-                session_opts["model"] = DEFAULT_MODEL
-                session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+            _required_skills_for_step = self._get_required_skills_for_step(
+                workflow_id,
+                step_id,
+                _resolved_workflow,
+            )
+            _is_foundry_required = self._is_foundry_required_step(
+                _required_skills_for_step
+            )
+            _requires_external_skill_directories = (
+                self._add_required_external_skill_directories(
+                session_opts,
+                _required_skills_for_step,
+                )
+            )
+            _optional_skills_for_step = self._get_optional_skills_for_step(
+                workflow_id,
+                step_id,
+            )
+            self._add_available_optional_external_skill_directories(
+                session_opts,
+                _optional_skills_for_step,
+            )
+            if _is_data_deploy:
+                session_opts["enable_config_discovery"] = False
+                session_opts["on_event"] = (
+                    lambda event, sid=str(step_id):
+                    self._handle_session_event_for_step(event, sid)
+                )
+            # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+            _wire_model = to_wire_model(self.config.model)
+            if _wire_model:
+                session_opts["model"] = _wire_model
 
-            # MCP Servers
-            if self.config.mcp_servers:
+            # Step 1.3 は repository-pinned Microsoft Learn MCP だけを使用し、
+            # user-supplied server の同名偽装や Azure write tool を接続しない。
+            if _is_asdw_data_deploy_step(step_id, custom_agent):
+                _main_mcp_servers = _require_trusted_asdw_data_deploy_mcp_servers(
+                    Path.cwd()
+                )
+                if _main_mcp_servers:
+                    session_opts["mcp_servers"] = copy.deepcopy(
+                        _main_mcp_servers
+                    )
+            elif _is_foundry_required:
+                _foundry_mcp_servers = _require_trusted_foundry_mcp_servers(
+                    Path.cwd()
+                )
                 _main_mcp_servers = {
                     _k: copy.deepcopy(_v)
-                    for _k, _v in self.config.mcp_servers.items()
-                    if _k != WORKIQ_MCP_SERVER_NAME
+                    for _k, _v in _filter_mcp_servers_for_session(
+                        self.config.mcp_servers,
+                        include_workiq=False,
+                    ).items()
+                }
+                _main_mcp_servers.update(copy.deepcopy(_foundry_mcp_servers))
+                session_opts["mcp_servers"] = _main_mcp_servers
+            elif self.config.mcp_servers:
+                _main_mcp_servers = {
+                    _k: copy.deepcopy(_v)
+                    for _k, _v in _filter_mcp_servers_for_session(
+                        self.config.mcp_servers,
+                        include_workiq=False,
+                    ).items()
                 }
                 if _main_mcp_servers:
                     session_opts["mcp_servers"] = _main_mcp_servers
 
             # ADR-0002 (T3A/E-4): fan-out 子ステップでは per-key MCP を上書きマージ
             _fmeta = getattr(self, "_current_fanout_meta", None)
-            if _fmeta:
+            if _fmeta and not _is_asdw_data_deploy_step(step_id, custom_agent):
                 _per_key = _fmeta.get("per_key_mcp_servers") or {}
                 _key_servers = _per_key.get(_fmeta.get("fanout_key", "")) or {}
                 if _key_servers:
                     _merged = dict(session_opts.get("mcp_servers") or {})
                     for _k, _v in _key_servers.items():
                         _merged[_k] = copy.deepcopy(_v)
+                    if _is_foundry_required:
+                        _merged.update(
+                            copy.deepcopy(
+                                _require_trusted_foundry_mcp_servers(Path.cwd())
+                            )
+                        )
                     session_opts["mcp_servers"] = _merged
                     try:
                         self.console.event(
@@ -2433,68 +4045,82 @@ class StepRunner:
             if self.config.excluded_tools:
                 session_opts["excluded_tools"] = list(self.config.excluded_tools)
 
+            # Auto Compaction: True 時に SDK 側の infinite_sessions（自動コンテキスト圧縮）を有効化。
+            if self.config.auto_compaction:
+                session_opts["infinite_sessions"] = {"enabled": True}
+
             # Custom Agent 廃止後 (Q1=C / Q3=a):
             # `custom_agents` / `agent` キーは SDK に渡さない。
             # 代わりに `.github/prompts/<custom_agent>.prompt.md` を読み込み、
             # メインタスク Prompt の先頭に前置する。
             try:
-                from .prompt_loader import load_prompt
+                from .prompt_loader import load_prompt, substitute_work_placeholders
             except ImportError:  # pragma: no cover
-                from prompt_loader import load_prompt  # type: ignore[no-redef]
+                from prompt_loader import (  # type: ignore[no-redef]
+                    load_prompt,
+                    substitute_work_placeholders,
+                )
 
             _agent_prompt_body = load_prompt(custom_agent) if custom_agent else ""
-            _additional_suffix = _combine_additional_prompt_with_mdq(self.config.additional_prompt)
+            # WORK プレースホルダ (<run-id> / <識別子>) を実値へ置換し、Agent が
+            # work/run/<run-id>/ の外に作業ディレクトリを作るのを防ぐ。run_id は
+            # resolve_work_root() の <run-id> と一致させるため resolve_run_id() を使う。
+            if _agent_prompt_body:
+                try:
+                    from .split_fork import resolve_run_id
+                except ImportError:  # pragma: no cover
+                    from split_fork import resolve_run_id  # type: ignore[no-redef]
+                _agent_prompt_body = substitute_work_placeholders(
+                    _agent_prompt_body,
+                    run_id=resolve_run_id(),
+                    identifier=_work_identifier,
+                )
+            _additional_suffix = (
+                self.config.additional_prompt
+                if _is_data_deploy
+                else _combine_additional_prompt_with_mdq(self.config.additional_prompt)
+            )
 
             # Skill 利用ガード（Prompt 末尾に付加）
             _skill_guard_text = ""
             if custom_agent:
-                _required_skills_for_step: List[str] = []
-                _base_step_id = str(step_id).split("/", 1)[0]
-                if workflow_id:
-                    try:
-                        try:
-                            from .workflow_registry import get_step
-                            from .skill_resolver import get_required_skills_for_step
-                        except ImportError:  # pragma: no cover
-                            from workflow_registry import get_step  # type: ignore[no-redef]
-                            from skill_resolver import get_required_skills_for_step  # type: ignore[no-redef]
-
-                        _step_def = get_step(workflow_id, _base_step_id)
-                        _declared = list(getattr(_step_def, "required_skills", []) or [])
-                        _required_skills_for_step = get_required_skills_for_step(
-                            workflow_id=workflow_id,
-                            step_id=_base_step_id,
-                            step_declared_required=_declared,
-                        )
-                    except Exception:
-                        _required_skills_for_step = []
                 _guard = [
                     "## Skill 利用ガード",
                     "- `skill(...)` ツールには Custom Agent 名ではなく、skill 名のみを指定すること。",
                 ]
                 if _required_skills_for_step:
                     _guard.append(
-                        "- このステップで使用可能な skill 名: "
+                        "- このステップで必須の skill 名: "
                         + ", ".join(f"`{s}`" for s in _required_skills_for_step)
+                    )
+                if _optional_skills_for_step:
+                    _guard.append(
+                        "- 条件付き候補 skill 名（対象Azureサービスまたは操作と一致する場合だけ使用し、一致しない候補は読まない）: "
+                        + ", ".join(
+                            f"`{s}`" for s in _optional_skills_for_step
+                        )
                     )
                 _skill_guard_text = "\n".join(_guard)
 
-            # Phase 2 (Resume): メインセッションに決定論的 session_id を付与する。
+            # メインセッションに決定論的 session_id を付与する。
             # 既存値（呼び出し元が明示指定したケース）は尊重する。
             if not session_opts.get("session_id"):
                 session_opts["session_id"] = self._make_step_session_id(step_id)
 
-            # Phase 3 (Resume): resume_state に同 step が running/failed として残っている場合、
-            # 同じ session_id で resume_session() を試みる。失敗時は新規 create_session に
-            # フォールバックする（セッション形式の不整合や SDK 側削除に耐えるため）。
-            session = await self._create_or_resume_main_session(
+            session = await self._create_main_session(
                 client=client,
                 session_opts=session_opts,
                 step_id=step_id,
+                requires_external_skill_directories=
+                _requires_external_skill_directories,
             )
 
-            # イベント購読 (常に購読 — Console 側で出力レベルを制御)
-            session.on(self._handle_session_event)
+            if _is_foundry_required:
+                await self._verify_foundry_required_session_mcp_servers(session)
+            session.on(
+                lambda event, sid=step_id:
+                self._handle_session_event_for_step(event, sid)
+            )
 
             # ストリーム表示の開始マーカー
             if self.console.show_stream:
@@ -2551,8 +4177,6 @@ class StepRunner:
                     current_phase=current_phase,
                     total_phases=total_phases,
                 )
-                # Phase 6 (Resume 2-layer txn): checkpoint 記録
-                self._record_checkpoint(step_id, "qa-phase-done")
 
             # Phase 1: メインタスク
             current_phase += 1
@@ -2583,7 +4207,25 @@ class StepRunner:
                 _injected_prompt = f"{_agent_prefix}\n\n{_body}"
             else:
                 _injected_prompt = _body
-            main_response = await session.send_and_wait(_injected_prompt, timeout=self.config.timeout_seconds)
+            # CLI/GUI Orchestrator 配下 (fleet mode 以外) では SPLIT_REQUIRED 判定を行わず、
+            # 宣言された output_paths を必ず生成させる。詳細は copilot-instructions.md §0。
+            _injected_prompt = _injected_prompt + _build_execution_mode_constraint_suffix(
+                self._orchestrator_ctx
+            )
+            _injected_prompt = _injected_prompt + self._build_tdd_report_instruction_suffix(
+                step_id=step_id,
+                custom_agent=custom_agent,
+                workflow_id=workflow_id,
+            )
+            _injected_prompt = _injected_prompt + _build_review_ownership_suffix(
+                self.config.auto_contents_review
+            )
+            main_response = await self._send_and_wait_with_model_call_failure_guard(
+                session,
+                _injected_prompt,
+                timeout=self.config.timeout_seconds,
+                step_id=step_id,
+            )
             main_output = _extract_text(main_response)
             if main_output and main_output.strip():
                 final_response_text = main_output
@@ -2591,18 +4233,65 @@ class StepRunner:
                 step_id, current_phase, total_phases, "メインタスク",
                 elapsed=time.time() - phase1_start,
             )
-            # Phase 6 (Resume 2-layer txn): メインタスクの応答受信完了を checkpoint として記録。
-            # これ以降のクラッシュでも SDK セッションが生きていれば Resume 時に
-            # メインタスクを再送せず QA/Review フェーズから再開できる（将来 TBD）。
-            self._record_checkpoint(step_id, "main-task-response-received")
 
-            # Phase 1.5 (SPLIT-fork): Agent が SPLIT_REQUIRED 判定で
-            # subissues.md を出力した場合、サブタスクとしてサブセッション fork する。
-            # 既定 OFF（フィーチャフラグ HVE_SPLIT_FORK_ENABLED=1 で有効化）。
+            preflight_failure_errors = (
+                self._run_asdw_data_deploy_preflight_failure_gate(
+                    step_id,
+                    custom_agent,
+                )
+            )
+            if preflight_failure_errors:
+                for _msg in preflight_failure_errors:
+                    self.console.error(_msg)
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+
+            # Step.1.3 の registration script はこのメインタスク自身が producer
+            # である。後続の split-fork / review が早期終了しても未検証の登録
+            # スクリプトを通過させないよう、生成直後に registration 込みで検査する。
+            # session_start を渡し、当 step で再生成された producer script のみ検査
+            # する（stale な commit 済みスクリプトで真因をマスクしない。memo §20）。
+            post_main_contract_errors = (
+                self._run_asdw_data_producer_contract_gate(
+                    step_id,
+                    custom_agent,
+                    session_start=start,
+                )
+                + self._run_asdw_data_verify_contract_gate(
+                    step_id,
+                    custom_agent,
+                    include_registration=False,
+                )
+            )
+            if post_main_contract_errors:
+                for _msg in post_main_contract_errors:
+                    self.console.error(_msg)
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+
+            # Phase 1.5 (legacy SPLIT-fork): Agent が SPLIT_REQUIRED 判定で
+            # subissues.md を出力した場合の runtime fork は CLI / GUI 標準経路では
+            # 無効。Cloud 版は GitHub Actions 側で Sub-Issue を生成する。
+            # 明示 opt-in (split_fork_enabled=True) 時のみ legacy 経路として動く。
+            # T-C1.2: stats_event は always=True で stdout 確定出力されるため
+            # verbosity=0 でも観測可能 (Console.event は verbosity=0 で抑制)。
+            self.console.event(f"  🔀 [{step_id}] split-fork 判定開始")
+            self.console.stats_event(
+                "split_fork_phase", step_id=step_id, phase="enter"
+            )
             _split_fork_ok = await self._maybe_run_split_fork(
-                client=client,
+                session=session,
                 step_id=step_id,
                 custom_agent=custom_agent,
+            )
+            self.console.event(
+                f"  🔀 [{step_id}] split-fork 判定完了 (ok={_split_fork_ok})"
+            )
+            self.console.stats_event(
+                "split_fork_phase", step_id=step_id, phase="exit",
+                ok=_split_fork_ok,
             )
             if not _split_fork_ok:
                 # サブタスクのいずれかが失敗 → Step failed として早期 return
@@ -2630,15 +4319,37 @@ class StepRunner:
                             step_id, "Review",
                             qa_model=_review_model,
                         )
+                        _review_session_opts = self._build_sub_session_opts(
+                            _review_model,
+                            step_id=step_id,
+                            suffix="review",
+                            custom_agent=custom_agent,
+                        )
+                        _review_required_skills = self._get_required_skills_for_step(
+                            workflow_id,
+                            step_id,
+                            _resolved_workflow,
+                        )
+                        _review_requires_external_skills = (
+                            self._add_required_external_skill_directories(
+                                _review_session_opts,
+                                _review_required_skills,
+                            )
+                        )
                         _review_session = await _create_session_with_auto_reasoning_fallback(
                             client,
-                            self._build_sub_session_opts(
-                                _review_model,
-                                step_id=step_id,
-                                suffix="review",
-                            ),
+                            _review_session_opts,
+                            config=self.config,
+                            step_id=step_id,
+                            subtask_kind="review",
+                            console=self.console,
+                            requires_external_skill_directories=
+                            _review_requires_external_skills,
                         )
-                        _review_session.on(self._handle_session_event)
+                        _review_session.on(
+                            lambda event, sid=step_id:
+                            self._handle_session_event_for_step(event, sid)
+                        )
                         self._sub_sessions_created += 1
                         _max_context_chars = self._get_context_injection_max_chars()
                         _review_context = _truncate_context_with_warn(
@@ -2732,9 +4443,6 @@ class StepRunner:
                 finally:
                     if _review_session is not None:
                         await _review_session.disconnect()
-                # Phase 6 (Resume 2-layer txn): Review フェーズ完了 checkpoint。
-                # Critical 残存で RuntimeError が投げられた場合はここには到達しない。
-                self._record_checkpoint(step_id, "review-phase-done")
 
             # Phase 4: 自己改善ループ（auto_self_improve=True かつ skip でない場合）
             # scope が "" または "step" の場合のみ実行。"workflow" / "disabled" の場合はスキップ。
@@ -2750,9 +4458,10 @@ class StepRunner:
                 phase4_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "自己改善ループ")
 
-                # _work_dir は run_id + ステップ ID で分離されたパスを使用する（並列安全性）
-                # run_id は run_step() 冒頭で正規化済みのため _safe_run_id() の再呼び出しは不要。
-                _work_dir = Path(f"work/self-improve/run-{self.config.run_id}/step-{step_id}")
+                # _work_dir は ステップ ID で分離されたパスを使用する（並列安全性）
+                # `work/run/<run-id>/self-improve/step-<step_id>/`
+                from .split_fork import resolve_work_root as _rwr
+                _work_dir = _rwr() / "self-improve" / f"step-{step_id}"
                 _max_iter = self.config.self_improve_max_iterations
 
                 for _iteration in range(1, _max_iter + 1):
@@ -2762,8 +4471,8 @@ class StepRunner:
                     self.console.event(
                         f"  🔍 [{step_id}] 自己改善 {_iteration}/{_max_iter}: コードベーススキャン中..."
                     )
-                    _step_outputs = _resolve_step_output_paths(self.workflow, step_id)
-                    _workflow_default = _SI_SCOPE_DEFAULTS.get(self.workflow.id, "")
+                    _step_outputs = _resolve_step_output_paths(_resolved_workflow, step_id)
+                    _workflow_default = _SI_SCOPE_DEFAULTS.get(_resolved_workflow.id, "") if _resolved_workflow is not None else ""
                     _scan = scan_codebase(
                         target_scope=self.config.self_improve_target_scope,
                         step_output_paths=_step_outputs,
@@ -2927,10 +4636,6 @@ class StepRunner:
                         f"({'⚠️ デグレード' if _degraded else '✅ 改善'})"
                     )
 
-                    # Phase 6 (Resume 2-layer txn): 自己改善イテレーション完了を checkpoint として記録。
-                    # デグレード検知で break される場合も、そのイテレーション自体は完走しているため marker を記録する。
-                    self._record_checkpoint(step_id, f"self-improve-iter-{_iteration}-done")
-
                     # Phase 4f: デグレード検知 → 即時停止
                     if _degraded:
                         self.console.status(
@@ -2944,28 +4649,1038 @@ class StepRunner:
                 )
 
         except Exception as exc:
-            self.console.error(f"Step.{step_id} 実行中にエラーが発生しました: {exc}")
+            self.console.error(
+                f"Step.{step_id} 実行中にエラーが発生しました: {format_exception_for_log(exc)}"
+            )
             self.console.step_io_summary(step_id)
             elapsed = time.time() - start
             self.console.step_end(step_id, "failed", elapsed=elapsed)
             return False
         finally:
-            if session is not None:
+            self._clear_tool_start_state(step_id)
+            try:
                 try:
-                    await session.disconnect()
+                    if session is not None:
+                        await session.disconnect()
                 except Exception as cleanup_exc:
                     self.console.warning(f"[cleanup] session.disconnect() failed: {cleanup_exc}")
-            if client is not None:
-                try:
-                    await client.stop()
-                except Exception as cleanup_exc:
-                    self.console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
+                finally:
+                    if client is not None:
+                        try:
+                            await client.stop()
+                        except Exception as cleanup_exc:
+                            self.console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
+            finally:
+                self._clear_tool_start_state(step_id)
 
         elapsed = time.time() - start
         self.console.step_io_summary(step_id)
         self.console.final_message(step_id, final_response_text or main_output or "")
+
+        verify_contract_errors = (
+            self._run_asdw_data_producer_contract_gate(
+                step_id, custom_agent, session_start=start
+            )
+            + self._run_asdw_data_verify_contract_gate(
+                step_id,
+                custom_agent,
+                include_registration=False,
+            )
+        )
+        if verify_contract_errors:
+            for _msg in verify_contract_errors:
+                self.console.error(_msg)
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        capability_gate_errors = self._run_ai_agent_capability_gate(
+            step_id,
+            custom_agent,
+            workflow_id,
+        )
+        if capability_gate_errors:
+            for _msg in capability_gate_errors:
+                self.console.error(_msg)
+            try:
+                import json as _json_capability_gate
+                import sys as _sys_capability_gate
+                _capability_payload = _json_capability_gate.dumps(
+                    {
+                        "kind": "ai_agent_capability_gate_failed",
+                        "step_id": step_id,
+                        "agent": custom_agent or "",
+                        "errors": capability_gate_errors,
+                    },
+                    ensure_ascii=True,
+                )
+                print(
+                    f"[hve:fatal] {_capability_payload}",
+                    file=_sys_capability_gate.stdout,
+                    flush=True,
+                )
+            except Exception:
+                pass
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        tdd_report_errors = self._run_tdd_report_gate(step_id, custom_agent, workflow_id)
+        if tdd_report_errors:
+            for _msg in tdd_report_errors:
+                self.console.error(_msg)
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        ui_red_contract_errors = self._run_asdw_ui_red_unresolved_contract_gate(step_id, custom_agent, workflow_id)
+        if ui_red_contract_errors:
+            for _msg in ui_red_contract_errors:
+                self.console.error(_msg)
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        # Deploy 系 Agent: ac-verification.md の実在系 AC が GREEN かを検証し、
+        # 未達なら Step を fail に降格する (T5)。
+        # 既存 stop_on_fatal 経路を再利用するため、未達時は [hve:fatal] マーカーも出力。
+        # 並列実行中の同 wave Step は中断しない（既存挙動踏襲）。
+        gate_errors = self._run_deploy_ac_gate(step_id, custom_agent, _resolved_workflow)
+        if gate_errors:
+            for _msg in gate_errors:
+                self.console.error(_msg)
+            try:
+                import json as _json_gate
+                import sys as _sys_gate
+                _gate_payload = _json_gate.dumps(
+                    {
+                        "kind": "deploy_ac_gate_failed",
+                        "step_id": step_id,
+                        "agent": custom_agent or "",
+                        "errors": gate_errors,
+                    },
+                    ensure_ascii=True,
+                )
+                print(f"[hve:fatal] {_gate_payload}", file=_sys_gate.stdout, flush=True)
+            except Exception:
+                pass
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        # CLI/GUI Orchestrator 配下 (fleet mode 以外) では、宣言された output_paths が
+        # 1 件でも未生成の場合に Step を fail 化する (FR-WF-OUT-01)。Deploy 系では実在系
+        # AC の失敗を先に報告し、service catalog 等の output 不足で根本原因を覆い隠さない。
+        # NOTE: workflow オブジェクトは StepRunner.__init__ に注入されていないため、
+        # workflow_id から workflow_registry.get_workflow() で都度解決する（O(1) lookup）。
+        _missing_outputs = _check_output_paths_gate(
+            self._orchestrator_ctx, _resolved_workflow, step_id, Path.cwd()
+        )
+        if _missing_outputs:
+            self.console.error(
+                f"  ❌ [{step_id}] output-missing: 宣言された主成果物が未生成です — "
+                f"{', '.join(_missing_outputs)}"
+            )
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
         self.console.step_end(step_id, "success", elapsed=elapsed)
         return True
+
+    def _run_asdw_data_verify_contract_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        *,
+        include_registration: bool = True,
+    ) -> List[str]:
+        """ASDW-WEB data verify スクリプト契約を検査する。
+
+        Step.1.2 (DataTestCoding) の生成直後だけでなく、Step.1.3
+        (DataDeploy) が既存成果物を入力として再利用する場合も同じ契約を検査する。
+        これにより stale な `verify-data-resources.sh` を Azure 操作前に fail-fast する。
+        """
+        base_step_id = str(step_id).split("/", 1)[0]
+        is_data_testcoding = (
+            custom_agent == "Dev-Microservice-Azure-DataTestCoding"
+            and base_step_id == "1.2"
+        )
+        is_data_deploy = (
+            custom_agent == "Dev-Microservice-Azure-DataDeploy"
+            and base_step_id == "1.3"
+        )
+        if not (is_data_testcoding or is_data_deploy):
+            return []
+        try:
+            from hve.artifact_validation import (
+                validate_asdw_data_registration_script,
+                validate_asdw_data_verify_script,
+            )
+        except Exception as _import_exc:
+            return [
+                f"[{custom_agent}] "
+                f"verify-data-resources.sh contract gate import failed: {_import_exc}"
+            ]
+
+        worktree = Path.cwd()
+        sample_data_path = worktree / "src" / "data" / "sample-data.json"
+        design_doc_path = worktree / "docs" / "azure" / "azure-services-data.md"
+        # Step.1.2 では sample-data は任意。Step.1.3 は期待件数の正本として
+        # 必須なので、一般入力gateのwarning設定に依存せずRunner自身がfail-closedにする。
+        if is_data_deploy and not sample_data_path.is_file():
+            return [
+                f"[{custom_agent}] required input src/data/sample-data.json not found: "
+                f"{sample_data_path}"
+            ]
+        errors = validate_asdw_data_verify_script(
+            worktree / "src" / "infra" / "azure" / "verify-data-resources.sh",
+            design_doc_path=design_doc_path,
+            private_capability_required=True,
+            sample_data_path=(
+                sample_data_path
+                if is_data_deploy or sample_data_path.is_file()
+                else None
+            ),
+        )
+        noun = "generated" if is_data_testcoding else "input"
+        gate_errors = [
+            f"[{custom_agent}] {noun} verify-data-resources.sh contract failed: {err}"
+            for err in errors
+        ]
+        if is_data_deploy and include_registration:
+            registration_errors = validate_asdw_data_registration_script(
+                worktree / "src" / "data" / "azure" / "data-registration-script.sh",
+                design_doc_path=design_doc_path,
+            )
+            gate_errors.extend(
+                f"[{custom_agent}] generated data-registration-script.sh contract failed: {err}"
+                for err in registration_errors
+            )
+        return gate_errors
+
+    def _run_asdw_data_deploy_preflight_failure_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+    ) -> List[str]:
+        """Return a recorded Step 1.3 pre-flight failure before stale artifact gates."""
+        if not _is_asdw_data_deploy_step(step_id, custom_agent):
+            return []
+        try:
+            identifier = _work_identifier_for_step(
+                step_id,
+                self._current_fanout_meta,
+            )
+            report_path = (
+                _step_work_dir(custom_agent, identifier) / "completion-report.md"
+            )
+            report_text = report_path.read_text(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            return []
+        match = re.search(
+            r"<!--\s*fatal:\s*pre-flight-failed:?\s*(?P<reason>.*?)\s*-->",
+            report_text,
+        )
+        if match is None:
+            return []
+        reason = match.group("reason").strip()
+        if reason == "{理由}":
+            return []
+        return [
+            f"[{custom_agent}] pre-flight failed: "
+            f"{reason or '(理由未記載)'} (from completion-report.md)"
+        ]
+
+    def _run_asdw_data_create_contract_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+    ) -> List[str]:
+        """Validate the Step 1.3 prep/create pair before launcher execution."""
+        if not _is_asdw_data_deploy_step(step_id, custom_agent):
+            return []
+        try:
+            from hve.artifact_validation import validate_asdw_data_create_scripts
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] prep/create contract gate import failed: "
+                f"{type(exc).__name__}"
+            ]
+        root = Path.cwd()
+        errors = validate_asdw_data_create_scripts(
+            root / _ASDW_DATA_PREP_SCRIPT,
+            root / _ASDW_DATA_CREATE_SCRIPT,
+            design_doc_path=root / "docs" / "azure" / "azure-services-data.md",
+            sample_data_path=root / "src" / "data" / "sample-data.json",
+        )
+        return [
+            f"[{custom_agent}] generated prep/create contract failed: {error}"
+            for error in errors
+        ]
+
+    def _asdw_producer_script_is_session_output(
+        self,
+        rel_path: str,
+        session_start: Optional[float],
+    ) -> bool:
+        """Return True when a Step 1.3 producer script must be validated.
+
+        ``session_start is None`` denotes the pre-execution security gate: the
+        launcher is about to run against Azure, so the script is validated
+        unconditionally. When a step start time is supplied (post-main / final
+        quality gates), only scripts written during this step (mtime >= start)
+        are validated. A stale committed script that the agent never
+        regenerated this session is skipped so that its errors do not mask the
+        true failure cause (memo §20).
+        """
+        if session_start is None:
+            return True
+        try:
+            mtime = (Path.cwd() / rel_path).stat().st_mtime
+        except OSError:
+            return False
+        return mtime >= session_start
+
+    def _run_asdw_data_producer_contract_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        *,
+        session_start: Optional[float] = None,
+    ) -> List[str]:
+        """Validate all three Step 1.3-owned producer scripts before Azure.
+
+        At the pre-execution permission gate (``session_start is None``) every
+        producer script is validated. At the post-main / final quality gates a
+        ``session_start`` is supplied and only scripts regenerated during this
+        step are validated. The prep/create validator requires both scripts,
+        so it runs in freshness mode only when both are regenerated; a stale
+        sibling must not mask the current session's output (memo §20).
+        """
+        if not _is_asdw_data_deploy_step(step_id, custom_agent):
+            return []
+        gate_errors: List[str] = []
+        prep_is_session_output = self._asdw_producer_script_is_session_output(
+            _ASDW_DATA_PREP_SCRIPT,
+            session_start,
+        )
+        create_is_session_output = self._asdw_producer_script_is_session_output(
+            _ASDW_DATA_CREATE_SCRIPT,
+            session_start,
+        )
+        if prep_is_session_output and create_is_session_output:
+            gate_errors = self._run_asdw_data_create_contract_gate(
+                step_id,
+                custom_agent,
+            )
+        if not self._asdw_producer_script_is_session_output(
+            _ASDW_DATA_REGISTRATION_SCRIPT, session_start
+        ):
+            return gate_errors
+        try:
+            from hve.artifact_validation import validate_asdw_data_registration_script
+        except Exception as exc:
+            return gate_errors + [
+                f"[{custom_agent}] registration contract gate import failed: "
+                f"{type(exc).__name__}"
+            ]
+        root = Path.cwd()
+        registration_errors = validate_asdw_data_registration_script(
+            root / _ASDW_DATA_REGISTRATION_SCRIPT,
+            design_doc_path=root / "docs" / "azure" / "azure-services-data.md",
+        )
+        return gate_errors + [
+            f"[{custom_agent}] generated data-registration-script.sh contract failed: "
+            f"{error}"
+            for error in registration_errors
+        ]
+
+    # ------------------------------------------------------------------
+    # AAG/AAGD AI Agent capability artifact gate
+    # ------------------------------------------------------------------
+    _AI_AGENT_CAPABILITY_GATE_TARGETS: Dict[Tuple[str, str, str], str] = {
+        ("aag", "3", "Arch-AIAgentDesign-Step3"): "design",
+        ("aagd", "2.3", "Dev-Microservice-Azure-AgentCoding"): "implementation",
+    }
+
+    def _run_ai_agent_capability_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> List[str]:
+        """AAG Step 3/AAGD Step 2.3のfan-out成果物だけを検証する。"""
+        if not custom_agent or not workflow_id:
+            return []
+        workflow = str(workflow_id).strip().casefold()
+        step_parts = str(step_id).split("/", 1)
+        base_step_id = step_parts[0]
+        mode = self._AI_AGENT_CAPABILITY_GATE_TARGETS.get(
+            (workflow, base_step_id, custom_agent)
+        )
+        if mode is None:
+            return []
+
+        target_key = step_parts[1].strip() if len(step_parts) > 1 else ""
+        if not target_key:
+            return [
+                f"[{custom_agent}] AI Agent capability gate requires a fan-out target key"
+            ]
+        if len(target_key) > 128 or not re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9_-]*",
+            target_key,
+        ):
+            return [
+                f"[{custom_agent}] unsafe AI Agent fan-out target key: {target_key!r}"
+            ]
+
+        try:
+            from hve.artifact_validation import (
+                validate_ai_agent_capability_artifacts,
+            )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] AI Agent capability gate import failed: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+
+        repo_root = Path.cwd()
+        design_path = (
+            repo_root
+            / "docs"
+            / "agent"
+            / f"agent-detail-{target_key}.md"
+        )
+        try:
+            if mode == "design":
+                validation_errors = validate_ai_agent_capability_artifacts(
+                    workflow,
+                    design_path,
+                )
+            else:
+                validation_errors = validate_ai_agent_capability_artifacts(
+                    workflow,
+                    design_path,
+                    agent_dir=repo_root / "src" / "agent" / target_key,
+                    test_spec_path=(
+                        repo_root
+                        / "docs"
+                        / "test-specs"
+                        / f"{target_key}-test-spec.md"
+                    ),
+                )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] AI Agent capability validator raised: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+        return [
+            f"[{custom_agent}] AI Agent capability contract failed: {error}"
+            for error in validation_errors
+        ]
+
+    # ------------------------------------------------------------------
+    # TDD RED/GREEN test report gate
+    # ------------------------------------------------------------------
+    _TDD_REPORT_PHASES: Dict[Tuple[str, str, str], str] = {
+        ("asdw-web", "1.2", "Dev-Microservice-Azure-DataTestCoding"): "RED",
+        ("asdw-web", "1.3", "Dev-Microservice-Azure-DataDeploy"): "GREEN",
+        ("asdw-web", "2.3", "Dev-Microservice-Azure-AddServiceTestCoding"): "RED",
+        ("asdw-web", "2.4", "Dev-Microservice-Azure-AddServiceTesting"): "GREEN",
+        ("asdw-web", "3.2", "Dev-Microservice-Azure-ServiceTestCoding"): "RED",
+        ("asdw-web", "3.3", "Dev-Microservice-Azure-ServiceCoding-AzureFunctions"): "GREEN",
+        ("asdw-web", "4.1", "Dev-Microservice-Azure-UITestCoding"): "RED",
+        ("asdw-web", "4.2", "Dev-Microservice-Azure-UICoding"): "GREEN",
+        ("adfdv", "2.1", "Dev-Dataflow-TestCoding"): "RED",
+        ("adfdv", "2.2", "Dev-Dataflow-ServiceCoding"): "GREEN",
+        ("aagd", "2.2", "Dev-Microservice-Azure-AgentTestCoding"): "RED",
+        ("aagd", "2.3", "Dev-Microservice-Azure-AgentCoding"): "GREEN",
+    }
+
+    @staticmethod
+    def _safe_tdd_step_dir(step_id: str) -> str:
+        base_step_id = str(step_id).split("/", 1)[0]
+        safe = re.sub(r"[^A-Za-z0-9_-]+", "-", base_step_id).strip("-")
+        return f"step-{safe or 'default'}"
+
+    @staticmethod
+    def _read_asdw_stable_repo_file(
+        path: Path,
+        repo_root: Path,
+        artifact_name: str,
+    ) -> Tuple[Optional[str], List[str]]:
+        """Read one stable regular UTF-8 file under the repository root."""
+        resolved_repo_root = repo_root.resolve()
+        try:
+            path.relative_to(resolved_repo_root)
+        except ValueError:
+            return None, [f"{artifact_name} path must stay under the repository root."]
+
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = -1
+        try:
+            descriptor = os.open(path, flags)
+        except (FileNotFoundError, NotADirectoryError):
+            return None, [f"{artifact_name} not found: {path.as_posix()}"]
+        except OSError as exc:
+            return None, [f"{artifact_name} is unreadable: {exc}"]
+        try:
+            opened_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_stat.st_mode):
+                return None, [
+                    f"{artifact_name} is not a regular file: {path.as_posix()}"
+                ]
+
+            path_stat = os.lstat(path)
+            reparse_flag = int(
+                getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
+            )
+            path_attributes = int(
+                getattr(path_stat, "st_file_attributes", 0)
+            )
+            if (
+                stat.S_ISLNK(path_stat.st_mode)
+                or path_attributes & reparse_flag
+                or not stat.S_ISREG(path_stat.st_mode)
+            ):
+                return None, [
+                    f"{artifact_name} must not be a symlink or reparse point."
+                ]
+            if not os.path.samestat(opened_stat, path_stat):
+                return None, [f"{artifact_name} changed while it was opened."]
+
+            resolved_path = path.resolve(strict=True)
+            try:
+                resolved_path.relative_to(resolved_repo_root)
+            except ValueError:
+                return None, [
+                    f"{artifact_name} resolves outside the repository root."
+                ]
+            lexical_path = Path(os.path.abspath(path))
+            if os.path.normcase(os.path.normpath(resolved_path)) != os.path.normcase(
+                os.path.normpath(lexical_path)
+            ):
+                return None, [
+                    f"{artifact_name} path must not contain a symlink, junction, "
+                    "or reparse point."
+                ]
+            resolved_stat = os.stat(resolved_path, follow_symlinks=False)
+            if not os.path.samestat(opened_stat, resolved_stat):
+                return None, [f"{artifact_name} changed during path validation."]
+
+            with os.fdopen(os.dup(descriptor), "r", encoding="utf-8") as stream:
+                text = stream.read()
+            final_stat = os.fstat(descriptor)
+            if (
+                not os.path.samestat(opened_stat, final_stat)
+                or opened_stat.st_size != final_stat.st_size
+                or opened_stat.st_mtime_ns != final_stat.st_mtime_ns
+            ):
+                return None, [f"{artifact_name} changed while it was read."]
+            final_path_stat = os.lstat(path)
+            if (
+                stat.S_ISLNK(final_path_stat.st_mode)
+                or int(getattr(final_path_stat, "st_file_attributes", 0))
+                & reparse_flag
+                or not os.path.samestat(opened_stat, final_path_stat)
+            ):
+                return None, [f"{artifact_name} path changed while it was read."]
+            final_resolved_path = path.resolve(strict=True)
+            try:
+                final_resolved_path.relative_to(resolved_repo_root)
+            except ValueError:
+                return None, [
+                    f"{artifact_name} resolves outside the repository root after "
+                    "it was read."
+                ]
+            if os.path.normcase(
+                os.path.normpath(final_resolved_path)
+            ) != os.path.normcase(os.path.normpath(lexical_path)):
+                return None, [
+                    f"{artifact_name} path gained a symlink, junction, or reparse "
+                    "point while it was read."
+                ]
+            final_resolved_stat = os.stat(
+                final_resolved_path,
+                follow_symlinks=False,
+            )
+            if not os.path.samestat(opened_stat, final_resolved_stat):
+                return None, [
+                    f"{artifact_name} changed during final path validation."
+                ]
+            return text, []
+        except (OSError, UnicodeError) as exc:
+            return None, [f"{artifact_name} is unreadable: {exc}"]
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
+    def _validate_asdw_data_static_verification_log(
+        report_path: Path,
+        repo_root: Path,
+        report_text: str,
+    ) -> List[str]:
+        """Require the Step 1.2 report's exact, local, non-empty raw log."""
+        try:
+            from hve.artifact_validation import _visible_asdw_design_lines
+        except Exception as exc:
+            return [f"ASDW data RED report visibility parser import failed: {exc}"]
+
+        visible_lines, visibility_error = _visible_asdw_design_lines(report_text)
+        if visibility_error:
+            return [
+                "ASDW data RED report visibility boundary is invalid: "
+                f"{visibility_error}"
+            ]
+        container_prefix = re.compile(
+            r"^(?: {0,3}>[ \t]*| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+)"
+        )
+        container_hidden_opener = re.compile(
+            r"^(?:(?:`{3,}|~{3,})|<(?:/?[A-Za-z][A-Za-z0-9-]*"
+            r"(?=[\s/>]|$)|![A-Z]|!\[CDATA\[|!--|\?))",
+            re.IGNORECASE,
+        )
+        for line in visible_lines:
+            remainder = line
+            has_container = False
+            while prefix_match := container_prefix.match(remainder):
+                has_container = True
+                remainder = remainder[prefix_match.end() :]
+            if has_container and container_hidden_opener.match(remainder):
+                return [
+                    "ASDW data RED report must not place fenced code or raw HTML "
+                    "inside a list/blockquote container."
+                ]
+        raw_log_values = [
+            match.group("value")
+            for line in visible_lines
+            if (
+                match := re.fullmatch(
+                    r" {0,3}-[ \t]+Raw-Log-Path[ \t]*:[ \t]*"
+                    r"(?P<value>[^\r\n]*?)[ \t]*",
+                    line,
+                )
+            )
+        ]
+        if len(raw_log_values) != 1:
+            return [
+                "ASDW data RED report requires exactly one visible, single-line "
+                "Raw-Log-Path label."
+            ]
+
+        expected_path = report_path.with_name("static-verification.log")
+        try:
+            expected_label = expected_path.relative_to(repo_root).as_posix()
+        except ValueError:
+            return ["ASDW data RED report path must stay under the repository root."]
+        raw_log_value = raw_log_values[0]
+        if (
+            len(raw_log_value) >= 2
+            and raw_log_value.startswith("`")
+            and raw_log_value.endswith("`")
+            and not raw_log_value.startswith("``")
+            and not raw_log_value.endswith("``")
+        ):
+            raw_log_value = raw_log_value[1:-1]
+        expected_windows_label = expected_label.replace("/", "\\")
+        if raw_log_value not in (expected_label, expected_windows_label):
+            return [
+                "ASDW data RED report Raw-Log-Path must exactly match either "
+                f"`{expected_label}` or `{expected_windows_label}`."
+            ]
+
+        raw_log_text, raw_log_errors = StepRunner._read_asdw_stable_repo_file(
+            expected_path,
+            repo_root,
+            "ASDW data static-verification.log",
+        )
+        if raw_log_errors:
+            return raw_log_errors
+        if raw_log_text is None or not raw_log_text.strip():
+            return ["ASDW data static-verification.log must not be empty."]
+        return []
+
+    def _run_asdw_step12_evidence_check(
+        self,
+        report_path: Path,
+        repo_root: Path,
+        report_text: str,
+    ) -> List[str]:
+        """Validate the Step 1.2 report against an HVE-owned machine log.
+
+        HVE runs the fixed local verifier to produce the authoritative
+        three-state machine log, writes it beside the report for audit, and
+        checks that the Agent-visible report labels match it. This keeps a
+        static contract PASS from being presented as a live RED execution and a
+        nonzero focused pytest from being folded into a single PASS.
+        """
+        try:
+            from hve.asdw_step12_verification import (
+                run_asdw_step12_local_verification,
+            )
+            from hve.artifact_validation import (
+                validate_asdw_step12_evidence_report,
+            )
+        except Exception as exc:
+            return [f"ASDW Step 1.2 evidence check import failed: {exc}"]
+
+        try:
+            machine_log = run_asdw_step12_local_verification(repo_root)
+        except Exception as exc:
+            return [
+                "ASDW Step 1.2 local verification failed: "
+                f"{type(exc).__name__}"
+            ]
+
+        machine_log_path = report_path.with_name("machine-verification.log")
+        try:
+            machine_log_path.write_text(
+                machine_log, encoding="utf-8", newline="\n"
+            )
+        except OSError:
+            pass
+
+        return validate_asdw_step12_evidence_report(report_text, machine_log)
+
+    def _build_tdd_report_instruction_suffix(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> str:
+        """Return exact TDD report path instructions for fan-out TDD steps."""
+        if not custom_agent or not workflow_id:
+            return ""
+        workflow_key = str(workflow_id).strip().lower()
+        step_parts = str(step_id).split("/", 1)
+        base_step_id = step_parts[0]
+        target_key = step_parts[1].strip() if len(step_parts) > 1 else ""
+        if not target_key:
+            return ""
+        phase = self._TDD_REPORT_PHASES.get((workflow_key, base_step_id, custom_agent))
+        if not phase:
+            return ""
+
+        try:
+            from hve.split_fork import resolve_run_id
+        except ImportError:  # pragma: no cover - script execution path
+            from split_fork import resolve_run_id  # type: ignore[no-redef]
+
+        run_id = resolve_run_id()
+        step_dir = self._safe_tdd_step_dir(base_step_id)
+        report_path = (
+            Path("tests")
+            / "run"
+            / run_id
+            / workflow_key
+            / step_dir
+            / target_key
+            / phase
+            / "tdd-test-report.md"
+        ).as_posix()
+        return (
+            "\n\n## TDD report 出力先（HVE gate 必須）\n\n"
+            "この Step は HVE の TDD report gate 対象です。以下を厳守してください:\n\n"
+            f"- `tdd-test-report.md` は必ず `{report_path}` に作成する。\n"
+            f"- `Workflow` ラベルは `- Workflow: {workflow_key}` とする。"
+            f" `{custom_agent}` は Agent 名であり workflow id ではない。\n"
+            f"- `Step` ラベルは `- Step: {base_step_id}` とする。\n"
+            f"- `Target-Key` ラベルは `- Target-Key: {target_key}` とする。\n"
+            f"- `Phase` ラベルは `- Phase: {phase}` とする。\n"
+            "- Custom Agent 名のディレクトリを workflow id として使わない。\n"
+        )
+
+    def _run_tdd_report_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> List[str]:
+        """Validate run-scoped TDD RED/GREEN report existence and schema.
+
+        This gate is intentionally allowlist-based and checks only the minimal
+        Markdown contract. ASDW data Step 1.2 additionally requires the exact
+        non-empty static-verification.log promised by its generation contract;
+        the gate does not parse runner-specific log contents.
+        """
+        if not custom_agent or not workflow_id:
+            return []
+        workflow_key = str(workflow_id).strip().lower()
+        step_parts = str(step_id).split("/", 1)
+        base_step_id = step_parts[0]
+        target_key = step_parts[1].strip() if len(step_parts) > 1 else ""
+        phase = self._TDD_REPORT_PHASES.get((workflow_key, base_step_id, custom_agent))
+        if not phase:
+            return []
+
+        try:
+            from hve.split_fork import resolve_run_id
+            from hve.artifact_validation import (
+                _extract_markdown_label,
+                validate_tdd_test_report,
+            )
+        except Exception as exc:
+            return [f"[{custom_agent}] TDD report gate import failed: {exc}"]
+
+        run_id = resolve_run_id()
+        step_dir = self._safe_tdd_step_dir(base_step_id)
+        repo_root = Path.cwd().resolve()
+        report_root = repo_root / "tests" / "run" / run_id / workflow_key / step_dir
+        if target_key:
+            candidates = [report_root / target_key / phase / "tdd-test-report.md"]
+        else:
+            candidates = sorted(report_root.glob(f"*/{phase}/tdd-test-report.md"))
+        if not candidates:
+            action_hint = (
+                "Agent が必須成果物を生成しないままターンを終えた可能性が高い"
+                "（ツール不安定による無出力・捏造・非対話での確認質問終了・"
+                "推論ループへの脱線が無いか console-log を確認）。"
+            )
+            return [
+                f"[{custom_agent}] tdd-test-report.md not found "
+                f"(searched {report_root.as_posix()}/*/{phase}/tdd-test-report.md)"
+                f"; {action_hint}"
+            ]
+
+        errors: List[str] = []
+        require_asdw_data_raw_log = (
+            workflow_key == "asdw-web"
+            and base_step_id == "1.2"
+            and custom_agent == "Dev-Microservice-Azure-DataTestCoding"
+        )
+        for report_path in candidates:
+            stable_report_text: Optional[str] = None
+            stable_report_errors: List[str] = []
+            if require_asdw_data_raw_log:
+                stable_report_text, stable_report_errors = (
+                    self._read_asdw_stable_repo_file(
+                        report_path,
+                        repo_root,
+                        "ASDW data RED report",
+                    )
+                )
+            if stable_report_errors:
+                report_errors = stable_report_errors
+            else:
+                report_errors = validate_tdd_test_report(
+                    report_path,
+                    expected_phase=phase,
+                    expected_workflow=workflow_key,
+                    expected_target_key=target_key or None,
+                    report_text=stable_report_text,
+                )
+            if require_asdw_data_raw_log and stable_report_text is not None:
+                report_errors.extend(
+                    self._validate_asdw_data_static_verification_log(
+                        report_path,
+                        repo_root,
+                        stable_report_text,
+                    )
+                )
+                report_errors.extend(
+                    self._run_asdw_step12_evidence_check(
+                        report_path,
+                        repo_root,
+                        stable_report_text,
+                    )
+                )
+            for err in report_errors:
+                errors.append(f"[{custom_agent}] {report_path.as_posix()}: {err}")
+            # GREEN の BLOCKED（テスト側/共有設定ブロッカーの正直な記録）は失敗にしないが、
+            # 見落とし防止のため警告として可視化する。
+            if phase == "GREEN" and not report_errors:
+                try:
+                    _text = report_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    _text = ""
+                if _extract_markdown_label(_text, "TDD-Judgement").upper() == "BLOCKED":
+                    self.console.warning(
+                        f"[{custom_agent}] {report_path.as_posix()}: "
+                        "TDD-Judgement=BLOCKED（テスト側/共有設定ブロッカーを記録）。"
+                        "ステップは成功扱いだが要フォロー。"
+                    )
+        return errors
+
+    def _run_asdw_ui_red_unresolved_contract_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> List[str]:
+        """Fail ASDW-WEB UI RED tests that embed unresolved TBD contracts."""
+        workflow_key = str(workflow_id or "").strip().lower()
+        step_parts = str(step_id).split("/", 1)
+        base_step_id = step_parts[0]
+        target_key = step_parts[1].strip() if len(step_parts) > 1 else ""
+        if not (
+            workflow_key == "asdw-web"
+            and base_step_id == "4.1"
+            and custom_agent == "Dev-Microservice-Azure-UITestCoding"
+            and target_key
+        ):
+            return []
+
+        try:
+            from hve.artifact_validation import validate_asdw_ui_red_tests_no_unresolved_contracts
+        except Exception as exc:
+            return [f"[{custom_agent}] UI RED unresolved contract gate import failed: {exc}"]
+
+        test_root = Path.cwd() / "src" / "test" / "ui" / target_key
+        return [
+            f"[{custom_agent}] generated UI RED test contract failed: {err}"
+            for err in validate_asdw_ui_red_tests_no_unresolved_contracts(test_root)
+        ]
+
+    # ------------------------------------------------------------------
+    # Deploy 系 Agent 向け AC 検証 gate (T5)
+    # ------------------------------------------------------------------
+    def _run_deploy_ac_gate(
+        self, step_id: str, custom_agent: Optional[str], workflow: Optional[Any] = None
+    ) -> List[str]:
+        """Deploy 系 Agent の ac-verification.md を検査する。
+
+        completion-report.md に pre-flight 失敗マーカー
+        （`<!-- fatal: pre-flight-failed: {理由} -->`）があれば、ac-verification.md
+        検査より先に明確な理由で fail させる。allowlist 外 Agent や report 不在
+        パターンの判定は `validate_deploy_ac_verification` に委譲。
+
+        実在系 AC は registry の `StepDef.reality_gate_acs`（宣言があれば優先）から
+        解決し、無ければ後方互換で Agent 名ハードコード辞書
+        `_DEPLOY_AGENT_REALITY_AC` にフォールバックする。どちらでも AC が
+        解決できない場合は gate を発火しない（空 list 返却）。
+        """
+        if not custom_agent:
+            return []
+        try:
+            from hve.artifact_validation import (
+                is_deploy_step,
+                validate_asdw_foundry_deploy_artifacts,
+                validate_deploy_ac_verification,
+            )
+        except Exception as _import_exc:
+            self.console.warning(
+                f"  ⚠️ Deploy AC gate: artifact_validation import failed ({_import_exc}); skipping"
+            )
+            return []
+        # registry 宣言の reality_gate_acs を解決（fan-out 子 step "1.2/D01" は基底 ID で照合）。
+        registry_acs: List[str] = []
+        if workflow is not None:
+            try:
+                base_step_id = str(step_id).split("/", 1)[0]
+                _step_def = workflow.get_step(base_step_id)
+                if _step_def is not None:
+                    registry_acs = list(getattr(_step_def, "reality_gate_acs", []) or [])
+            except Exception:
+                registry_acs = []
+        # allowlist 判定: registry 宣言があるか、後方互換 dict のメンバーなら発火。
+        if not is_deploy_step(custom_agent, registry_acs):
+            return []
+        # 規約: <work-root>/{custom_agent}/Issue-step-{step_id をハイフン化}/ac-verification.md
+        # <work-root> は resolve_work_root()（HVE_WORK_ROOT または work/run/<run-id>/）。
+        # run スコープ外の legacy `work/` は探索しない。
+        identifier = "step-" + str(step_id).replace(".", "-")
+        try:
+            from hve.split_fork import resolve_work_root
+            work_root = resolve_work_root()
+        except Exception as _rwr_exc:
+            self.console.warning(
+                f"  ⚠️ Deploy AC gate: resolve_work_root unavailable ({_rwr_exc}); "
+                "skipping"
+            )
+            return []
+        base = work_root / custom_agent
+        report_path = base / f"Issue-{identifier}" / "ac-verification.md"
+        # Pre-flight 失敗マーカー検出: deploy prompt は pre-flight 失敗時に
+        # completion-report.md へ `<!-- fatal: pre-flight-failed: {理由} -->` を記載する。
+        # ac-verification.md 不在判定より先に検出し、明確な理由で fail させる
+        # （未検出時は従来どおり ac-verification.md を検査）。
+        _preflight_reports = [base / f"Issue-{identifier}" / "completion-report.md"]
+        if base.exists():
+            _preflight_reports += sorted(base.glob("Issue-*/completion-report.md"))
+        _seen_cr: set[str] = set()
+        for _cr in _preflight_reports:
+            if str(_cr) in _seen_cr or not _cr.is_file():
+                continue
+            _seen_cr.add(str(_cr))
+            try:
+                _cr_text = _cr.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            _m = re.search(
+                r"<!--\s*fatal:\s*pre-flight-failed:?\s*(?P<reason>.*?)\s*-->", _cr_text
+            )
+            if _m:
+                _reason = _m.group("reason").strip()
+                # 未置換のプレースホルダ（雛形の引用）は実失敗ではないため無視する。
+                if _reason == "{理由}":
+                    continue
+                return [
+                    f"[{custom_agent}] pre-flight failed: "
+                    f"{_reason or '(理由未記載)'} (from {_cr.name})"
+                ]
+        if not report_path.exists():
+            # フォールバック: Issue-* を glob（識別子が step-<id> 以外の場合に対応）
+            cands = sorted(base.glob("Issue-*/ac-verification.md")) if base.exists() else []
+            if cands:
+                report_path = cands[-1]
+            else:
+                # 規約パス・glob フォールバックの双方で未発見。
+                # 「Agent が規約パス Issue-step-<id> に書いた」という誤解を避けるため、
+                # 探索した両経路と既存の Issue-* ディレクトリ（あれば）を診断に含める。
+                existing = (
+                    sorted(p.name for p in base.glob("Issue-*") if p.is_dir())
+                    if base.exists()
+                    else []
+                )
+                if not base.exists():
+                    hint = f"agent work root does not exist: {base}"
+                elif existing:
+                    hint = f"existing Issue-* dirs: {', '.join(existing[:5])}"
+                else:
+                    hint = "agent work root exists but no Issue-* dirs under it"
+                # 成果物が丸ごと未生成のときは、Agent が必須成果物を作らずにターンを
+                # 終えた可能性が高い（git/PR 操作や推論ループへの脱線を含む）。原因調査の
+                # 起点を示すため、actionable な一文を診断に付す。
+                action_hint = (
+                    "Agent が ac-verification.md を生成しないままターンを終えた可能性。"
+                    "GREEN 未達時も AC-1 を ❌ で記録した ac-verification.md を作成して終了する必要あり。"
+                    "git/PR 操作、docs 整理、Word/docx/chart 作成、TODO/SQL query、推論ループへの脱線が無いか console-log を確認。"
+                    "step_io_summary の write 先が $null の場合は実成果物未生成を疑う"
+                    if not existing
+                    else "Issue-* は存在するが ac-verification.md が無い。"
+                    "GREEN 未達時も AC-1 を ❌ で記録した ac-verification.md を作成して終了する必要あり。"
+                    "出力先パスのドリフトが無いか確認"
+                )
+                return [
+                    f"[{custom_agent}] ac-verification.md not found "
+                    f"(searched canonical path {report_path} and glob "
+                    f"'Issue-*/ac-verification.md' under {base}); {hint}; {action_hint}"
+                ]
+        errors = validate_deploy_ac_verification(report_path, custom_agent, registry_acs)
+        base_step_id = str(step_id).split("/", 1)[0]
+        workflow_id = getattr(workflow, "id", "") if workflow is not None else ""
+        if (
+            workflow_id == "asdw-web"
+            and base_step_id == "2.2"
+            and custom_agent == "Dev-Microservice-Azure-AddServiceDeploy"
+        ):
+            repo_root = Path.cwd()
+            artifact_errors = validate_asdw_foundry_deploy_artifacts(
+                repo_root / "docs" / "azure" / "azure-services-additional.md",
+                repo_root
+                / "src"
+                / "infra"
+                / "azure"
+                / "create-azure-additional-resources"
+                / "services",
+                repo_root
+                / "src"
+                / "infra"
+                / "azure"
+                / "create-azure-additional-resources"
+                / "verify-additional-resources.sh",
+            )
+            errors.extend(
+                f"[{custom_agent}] Foundry deploy artifact contract failed: {error}"
+                for error in artifact_errors
+            )
+        return errors
 
     # ------------------------------------------------------------------
     # 内部ヘルパー — SDK data 属性の安全取得
@@ -2986,11 +5701,156 @@ class StepRunner:
                 return val
         return default
 
+    async def _poll_steering_ipc(self, session: Any, step_id: str) -> None:
+        """GUI からの Steering（実行中ワークフローへの割り込み送信）IPC を監視する。
+
+        `config.steering_ipc_dir` が未設定の場合は即座に終了する（機能無効）。
+        設定されている場合は `<ipc_dir>/steering-<safe_step_id>-<epoch_ms>.request.json`
+        を 1 秒間隔で polling し、検出したファイルを epoch_ms 昇順（作成順）で処理する:
+        読み込み → `session.send(text, mode="immediate")` → ファイル削除。
+
+        呼び出し元（`_send_and_wait_with_model_call_failure_guard`）が
+        `asyncio.create_task` でタスク化し、メインタスク完了時に `cancel()` する前提の
+        無限ループ。`asyncio.CancelledError` はそのまま伝播させる。
+        """
+        ipc_dir_raw = getattr(self.config, "steering_ipc_dir", None)
+        if not ipc_dir_raw:
+            return
+        ipc_dir = Path(ipc_dir_raw)
+        safe_step_id = re.sub(r"[^A-Za-z0-9_.-]", "-", str(step_id))
+        poll_interval = 1.0
+
+        def _epoch_ms_key(p: Path) -> int:
+            m = re.search(r"-(\d+)\.request\.json$", p.name)
+            return int(m.group(1)) if m else 0
+
+        while True:
+            try:
+                if ipc_dir.is_dir():
+                    files = sorted(
+                        ipc_dir.glob(f"steering-{safe_step_id}-*.request.json"),
+                        key=_epoch_ms_key,
+                    )
+                    for f in files:
+                        text = ""
+                        try:
+                            payload = json.loads(f.read_text(encoding="utf-8"))
+                            text = str(payload.get("text", "")).strip()
+                        except (OSError, ValueError, TypeError):
+                            text = ""
+                        if text:
+                            try:
+                                await session.send(text, mode="immediate")
+                                self.console.event(
+                                    f"  ⚡ [{step_id}] Steering 割り込みメッセージを送信しました"
+                                )
+                            except Exception as exc:
+                                self.console.warning(
+                                    f"  ⚠️ [{step_id}] Steering 送信に失敗しました: {exc}"
+                                )
+                        try:
+                            f.unlink()
+                        except OSError:
+                            pass
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # Steering はベストエフォート機能のため、想定外の例外（OSError 以外を含む）で
+                # polling ループ自体が停止しないようにする。
+                pass
+            await asyncio.sleep(poll_interval)
+
+    async def _send_and_wait_with_model_call_failure_guard(
+        self,
+        session: Any,
+        prompt: str,
+        *,
+        timeout: float,
+        step_id: str,
+    ) -> Any:
+        """Phase 1 の send_and_wait を model.call_failure 連続発生で早期失敗させる。
+
+        GUI からの Steering IPC（`_poll_steering_ipc`）も並行タスクとして起動し、
+        メインタスク完了時に確実にキャンセルする。
+        """
+        self._model_call_failure_counts[step_id] = 0
+        failure_event = asyncio.Event()
+        self._model_call_failure_events[step_id] = failure_event
+        security_event = self._session_security_violation_events.get(step_id)
+        send_task = asyncio.create_task(session.send_and_wait(prompt, timeout=timeout))
+        failure_task = asyncio.create_task(failure_event.wait())
+        security_task = (
+            asyncio.create_task(security_event.wait())
+            if security_event is not None
+            else None
+        )
+        steering_task = asyncio.create_task(self._poll_steering_ipc(session, step_id))
+        try:
+            wait_tasks = {send_task, failure_task}
+            if security_task is not None:
+                wait_tasks.add(security_task)
+            done, _pending = await asyncio.wait(
+                wait_tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if (
+                security_task is not None
+                and security_task in done
+            ):
+                if not send_task.done():
+                    send_task.cancel()
+                    try:
+                        await send_task
+                    except asyncio.CancelledError:
+                        pass
+                raise RuntimeError(
+                    self._session_security_violations.get(
+                        step_id,
+                        f"session security violation for step {step_id}",
+                    )
+                )
+            if failure_task in done and not send_task.done():
+                send_task.cancel()
+                try:
+                    await send_task
+                except asyncio.CancelledError:
+                    pass
+                count = self._model_call_failure_counts.get(step_id, 0)
+                raise RuntimeError(
+                    f"model.call_failure repeated {count} times for step {step_id}"
+                )
+            return await send_task
+        finally:
+            if not failure_task.done():
+                failure_task.cancel()
+                try:
+                    await failure_task
+                except asyncio.CancelledError:
+                    pass
+            if security_task is not None and not security_task.done():
+                security_task.cancel()
+                try:
+                    await security_task
+                except asyncio.CancelledError:
+                    pass
+            if not steering_task.done():
+                steering_task.cancel()
+                try:
+                    await steering_task
+                except asyncio.CancelledError:
+                    pass
+            self._model_call_failure_events.pop(step_id, None)
+            self._model_call_failure_counts.pop(step_id, None)
+
     # ------------------------------------------------------------------
     # 内部イベントハンドラー
     # ------------------------------------------------------------------
 
-    def _handle_session_event(self, event: Any) -> None:
+    def _handle_session_event_for_step(self, event: Any, step_id: str) -> None:
+        """特定 Step に束縛して CopilotSession イベントを処理する。"""
+        self._handle_session_event(event, step_id_override=step_id)
+
+    def _handle_session_event(self, event: Any, *, step_id_override: Optional[str] = None) -> None:
         """CopilotSession のイベントを受け取り Console に出力する。
 
         SDK v0.2.2 のイベントタイプ一覧:
@@ -2999,11 +5859,36 @@ class StepRunner:
         # SDK v0.2.2: event.type は SessionEventType enum、.value で文字列取得
         etype = getattr(getattr(event, "type", None), "value", "") or ""
         data = getattr(event, "data", None)
-        step_id = getattr(self, "_current_step_id", "")
+        step_id = step_id_override if step_id_override is not None else getattr(self, "_current_step_id", "")
         _get = self._get
 
         # ディスパッチテーブルを使わず if-elif で処理する。
         # etype の出現頻度が高いものを上に配置。
+
+        if etype == "model.call_failure":
+            count = self._model_call_failure_counts.get(step_id, 0) + 1
+            self._model_call_failure_counts[step_id] = count
+            detail = _get(data, "reason", "code", "error_code", "errorCode", "status", default="")
+            detail_text = str(detail)[:120] if detail else ""
+            suffix = f": {detail_text}" if detail_text else ""
+            self.console.warning(
+                f"⚠️ [{step_id}] model.call_failure ({count}/{_MODEL_CALL_FAILURE_THRESHOLD}){suffix}"
+            )
+            try:
+                self.console.stats_event(
+                    "model_call_failure",
+                    step_id=step_id,
+                    count=count,
+                    threshold=_MODEL_CALL_FAILURE_THRESHOLD,
+                    detail=detail_text or None,
+                )
+            except Exception:
+                pass
+            if count >= _MODEL_CALL_FAILURE_THRESHOLD:
+                failure_event = self._model_call_failure_events.get(step_id)
+                if failure_event is not None:
+                    failure_event.set()
+            return
 
         # --- ストリーム系 (高頻度、show_stream ガード) ---
         if etype == "assistant.message_delta":
@@ -3038,6 +5923,43 @@ class StepRunner:
         if etype == "tool.execution_start":
             tool_name = extract_tool_name_from_event(event) or _get(data, "tool_name", "toolName", "name", default="unknown")
             args = _get(data, "arguments", default=None)
+            tool_call_id = str(
+                _get(data, "tool_call_id", "toolCallId", default="") or ""
+            )
+            start_info = (
+                str(tool_name or ""),
+                self._safe_failed_tool_args(str(tool_name or ""), args),
+            )
+            if tool_call_id:
+                correlation_key = (step_id or "", tool_call_id)
+                existing = self._tool_start_by_call.get(correlation_key)
+                if existing is not None:
+                    self._tool_start_by_call[correlation_key] = (
+                        "",
+                        {},
+                        existing[2] + 1,
+                    )
+                else:
+                    self._tool_start_by_call[correlation_key] = (
+                        start_info[0],
+                        start_info[1],
+                        1,
+                    )
+            else:
+                legacy_key = step_id or ""
+                existing = self._last_tool_start_by_step.get(legacy_key)
+                if existing is not None:
+                    self._last_tool_start_by_step[legacy_key] = (
+                        "",
+                        {},
+                        existing[2] + 1,
+                    )
+                else:
+                    self._last_tool_start_by_step[legacy_key] = (
+                        start_info[0],
+                        start_info[1],
+                        1,
+                    )
 
             # report_intent ツールは Thinking として表示する（通常のアクション表示をスキップ）
             if tool_name == "report_intent":
@@ -3120,14 +6042,84 @@ class StepRunner:
         if etype == "tool.execution_complete":
             success = _get(data, "success", default=False)
             error = _get(data, "error", default=None)
+            tool_call_id = str(
+                _get(data, "tool_call_id", "toolCallId", default="") or ""
+            )
+            last_tool_name: str
+            last_args: Dict[str, Any]
+            if tool_call_id:
+                correlation_key = (step_id or "", tool_call_id)
+                correlated = self._tool_start_by_call.get(correlation_key)
+                if correlated is None:
+                    last_tool_name, last_args = "", {}
+                else:
+                    last_tool_name, last_args, pending_count = correlated
+                    if pending_count <= 1:
+                        self._tool_start_by_call.pop(correlation_key, None)
+                    else:
+                        self._tool_start_by_call[correlation_key] = (
+                            last_tool_name,
+                            last_args,
+                            pending_count - 1,
+                        )
+            else:
+                legacy_key = step_id or ""
+                correlated = self._last_tool_start_by_step.get(legacy_key)
+                if correlated is None:
+                    last_tool_name, last_args = "", {}
+                else:
+                    last_tool_name, last_args, pending_count = correlated
+                    if pending_count <= 1:
+                        self._last_tool_start_by_step.pop(legacy_key, None)
+                    else:
+                        self._last_tool_start_by_step[legacy_key] = (
+                            last_tool_name,
+                            last_args,
+                            pending_count - 1,
+                        )
             if success:
                 result_text = self._build_tool_result_text(data)
-                if result_text:
-                    self.console.action_result(step_id, result_text)
+                # NFR-OBS-07: 回復済みツール失敗を GUI が降格できるよう、
+                # 同じ (step, tool) での成功を構造化イベントとして発火する。
+                if last_tool_name:
+                    try:
+                        self.console.stats_event(
+                            "tool_result",
+                            step_id=step_id or "",
+                            tool_name=str(last_tool_name),
+                            success=True,
+                        )
+                    except Exception:
+                        pass
+                # result_text が空でも action_result を呼ぶ。console 側で実行中アクション
+                # 追跡（step_elapsed のハートビート表示）をクリアするため。空文字時は
+                # 表示されずクリアのみ行われる（成功・結果テキスト無しのツールで追跡が
+                # 残留し、誤った「実行中」表示が次のツール開始まで続くのを防ぐ）。
+                self.console.action_result(step_id, result_text)
             else:
                 error_msg = ""
                 if error:
                     error_msg = _get(error, "message", default=str(error))
+                # T-M5: ツール失敗ログにツール名を前置（特に timeout のような汎用エラーの真因特定支援）
+                # extract_tool_name_from_event は tool.execution_start 専用のため、
+                # tool.execution_complete.data から直接 tool_name を抽出する。
+                # workiq.py:689 と同じく MCP 系を legacy より優先する。
+                mcp_tool_name = _get(data, "mcp_tool_name", "mcpToolName", default="")
+                legacy_tool_name = _get(data, "tool_name", "toolName", "name", default="")
+                failed_tool_name = mcp_tool_name or legacy_tool_name
+                if failed_tool_name:
+                    error_msg = f"{failed_tool_name}: {error_msg}" if error_msg else str(failed_tool_name)
+                effective_tool_name = str(failed_tool_name or last_tool_name or "")
+                if not failed_tool_name and last_tool_name:
+                    error_msg = (
+                        f"{last_tool_name}: {error_msg}"
+                        if error_msg
+                        else str(last_tool_name)
+                    )
+                args_tool_name = effective_tool_name
+                args_summary = self._build_failed_tool_args_summary(args_tool_name, last_args)
+                if args_summary:
+                    error_msg = f"{error_msg} ({args_summary})" if error_msg else args_summary
                 self.console.tool_result(step_id, False, error_msg=error_msg)
             return
 
@@ -3328,34 +6320,117 @@ class StepRunner:
             return
 
         if etype == "assistant.usage":
+            # T1.5: 初回 assistant.usage 受信時に 1 回だけ env を dump
+            # (P1: env 伝播 / P2: 文字化け・空白混入 / P4: モジュールキャッシュ
+            # の切り分け用)。ハンドラに到達した時点で「assistant.usage 経路
+            # 自体は OK」と判明するため、後の env チェックの真偽を裏取りできる。
+            if not getattr(self, "_debug_env_dumped", False):
+                self._debug_env_dumped = True
+                try:
+                    raw_env = os.environ.get(
+                        "HVE_DEBUG_ASSISTANT_USAGE", "<unset>"
+                    )
+                    # stats_event 経路 (構造化 / GUI state 反映用)。
+                    self.console.stats_event(
+                        "debug_env",
+                        step_id=step_id,
+                        HVE_DEBUG_ASSISTANT_USAGE_raw=raw_env,
+                        HVE_DEBUG_ASSISTANT_USAGE_repr=repr(raw_env),
+                        HVE_DEBUG_ASSISTANT_USAGE_len=(
+                            len(raw_env) if isinstance(raw_env, str) else -1
+                        ),
+                        pid=os.getpid(),
+                    )
+                    # 通常ログ経路 (UI _log_pane へ確実に表示するため。
+                    # `[hve:stats]` 行は is_stats_line で _log_pane から除外
+                    # されるため、診断目的では通常行として別途出力する)。
+                    # 通常運用時のログノイズを避けるため env gate を適用。
+                    if isinstance(raw_env, str) and raw_env.strip() in (
+                        "1", "true", "True"
+                    ):
+                        self.console.diag(
+                            f"[debug_env step={step_id}] "
+                            f"HVE_DEBUG_ASSISTANT_USAGE={raw_env!r} "
+                            f"(len={len(raw_env)}) "
+                            f"pid={os.getpid()}"
+                        )
+                except Exception:
+                    pass
             model = _get(data, "model") or "?"
             inp = _get(data, "input_tokens", "inputTokens", default=0) or 0
             out = _get(data, "output_tokens", "outputTokens", default=0) or 0
             dur = _get(data, "duration", default=None)
+            # SDK の AssistantUsageData.duration は timedelta | None。
+            # int(timedelta) は TypeError になるためミリ秒へ変換する。
+            dur_ms = int(dur.total_seconds() * 1000) if dur else None
             self.console.usage(step_id, model, int(inp), int(out),
-                               duration_ms=int(dur) if dur else None)
+                               duration_ms=dur_ms)
             # デバッグ採取: HVE_DEBUG_ASSISTANT_USAGE=1 で生 SDK ペイロードを
             # 1 行 JSON として stats_event 経由で出力する（フィールド名特定用、
             # 出力量が増えるため通常は無効）。
             if os.environ.get("HVE_DEBUG_ASSISTANT_USAGE", "").strip() in ("1", "true", "True"):
                 try:
                     import json as _json
+                    payload_json = _json.dumps(data, ensure_ascii=False, default=str)
                     self.console.stats_event(
                         "assistant_usage_raw",
                         step_id=step_id,
-                        payload_json=_json.dumps(data, ensure_ascii=False, default=str),
+                        payload_json=payload_json,
                     )
+                    # UI _log_pane へ確実に表示するため通常ログ経路でも出力。
+                    # 長過ぎる場合は truncate（GUI 応答性 / ログメモリ保護）。
+                    _MAX = 20000
+                    shown = (
+                        payload_json
+                        if len(payload_json) <= _MAX
+                        else payload_json[:_MAX] + "... [truncated]"
+                    )
+                    self.console.diag(
+                        f"[assistant_usage_raw SENSITIVE_DEBUG step={step_id}] {shown}"
+                    )
+                except Exception as _raw_err:
+                    # T1.5 (P3 切り分け): payload シリアライズ等で失敗した場合に
+                    # 原因を表面化させる。silent fail だと「raw が出ない =
+                    # env 伝播の問題」と誤判定されるため、err を構造化ログで出す。
+                    try:
+                        self.console.stats_event(
+                            "assistant_usage_raw_err",
+                            step_id=step_id,
+                            err=str(_raw_err),
+                            err_type=type(_raw_err).__name__,
+                        )
+                        self.console.diag(
+                            f"[assistant_usage_raw_err step={step_id}] "
+                            f"{type(_raw_err).__name__}: {_raw_err}"
+                        )
+                    except Exception:
+                        pass
+            # SDK 1.0.x で AssistantUsageData.copilot_usage / quota_snapshots は
+            # Internal 属性 (_copilot_usage / _quota_snapshots) へ改名され、
+            # getattr 経由 (_get) では取得できない。公開シリアライズ契約
+            # data.to_dict() で camelCase キーの dict へ正規化してから読む
+            # (copilotUsage.totalNanoAiu / tokenDetails / quotaSnapshots)。
+            # cost / model / apiCallId 等は公開属性のままのため data から直接読む。
+            usage_dict: dict = {}
+            _to_dict = getattr(data, "to_dict", None)
+            if callable(_to_dict):
+                try:
+                    _d = _to_dict()
+                    if isinstance(_d, dict):
+                        usage_dict = _d
                 except Exception:
-                    pass
+                    usage_dict = {}
+            copilot_usage = usage_dict.get("copilotUsage")
+            if not isinstance(copilot_usage, dict):
+                copilot_usage = None
             # 詳細 (キャッシュ / reasoning / inter_token_latency / billing)を GUI へ
             try:
                 cache_read = _get(data, "cache_read_tokens", "cacheReadTokens", default=None)
                 cache_write = _get(data, "cache_write_tokens", "cacheWriteTokens", default=None)
                 reasoning = _get(data, "reasoning_tokens", "reasoningTokens", default=None)
                 itl = _get(data, "inter_token_latency_ms", "interTokenLatencyMs", default=None)
-                copilot_usage = _get(data, "copilot_usage", "copilotUsage", default=None)
                 token_details_raw = (
-                    _get(copilot_usage, "token_details", "tokenDetails", default=None)
+                    copilot_usage.get("tokenDetails")
                     if copilot_usage is not None
                     else None
                 )
@@ -3363,12 +6438,15 @@ class StepRunner:
                 if token_details_raw:
                     for td in token_details_raw:
                         try:
+                            td_d = td if isinstance(td, dict) else {}
                             token_details.append(
                                 {
-                                    "type": _get(td, "token_type", "tokenType", default="") or "",
-                                    "count": int(
-                                        _get(td, "token_count", "tokenCount", default=0) or 0
-                                    ),
+                                    "type": td_d.get("tokenType", "") or "",
+                                    "count": int(td_d.get("tokenCount", 0) or 0),
+                                    # cost_per_batch / batch_size は表示用補足情報。
+                                    # 単位は AIU。単純加算しない（単価のため）。
+                                    "cost_per_batch": td_d.get("costPerBatch"),
+                                    "batch_size": td_d.get("batchSize"),
                                 }
                             )
                         except Exception:
@@ -3387,6 +6465,100 @@ class StepRunner:
                     ),
                     token_details=token_details or None,
                 )
+            except Exception:
+                pass
+            # --- AI Credit / 課金関連の抽出 (Phase A) ---
+            # SDK の AssistantUsageData から以下を抽出して GUI へ流す:
+            # - api_call_id: 重複排除キー
+            # - cost (Model multiplier cost): 補助情報
+            # - copilotUsage.totalNanoAiu: AI Credit (Nano AIU) の直接値
+            # - quotaSnapshots[*]: 各 quota の最新スナップショット (datetime は ISO 化)
+            # session.disconnect が即時ハンドラクリアするため session.shutdown
+            # 経由の totalPremiumRequests は届かない。assistant.usage 経由で
+            # リアルタイムに料金/Reqs を把握する経路を新設する (捏造禁止)。
+            try:
+                api_call_id = _get(data, "api_call_id", "apiCallId", default=None)
+                multiplier_cost = _get(data, "cost", default=None)
+                nano_aiu = None
+                if copilot_usage is not None:
+                    nano_aiu = copilot_usage.get("totalNanoAiu")
+                # 値が一切無ければ stats_event を発火しない（無意味な log を避ける）
+                # SDK が copilotUsage を返さなかった場合は UI 表示を「N/A」に
+                # 切り替えるため理由を併送する。totalNanoAiu が付与されない
+                # ケース (プラン依存等) でハイフン表示を避け取得不能事実を
+                # 明示する。捏造禁止。
+                unavailable_reason = None
+                if copilot_usage is None:
+                    unavailable_reason = (
+                        "SDK assistant.usage provided no copilotUsage "
+                        "(totalNanoAiu unavailable)"
+                    )
+                # 発火条件に unavailable_reason も含める。これにより
+                # api_call_id / multiplier_cost / nano_aiu が全て None でも
+                # copilotUsage 欠落の事実だけは UI に伝達される。
+                if (
+                    (api_call_id is not None)
+                    or (multiplier_cost is not None)
+                    or (nano_aiu is not None)
+                    or (unavailable_reason is not None)
+                ):
+                    self.console.stats_event(
+                        "usage_credit",
+                        step_id=step_id,
+                        model=str(model),
+                        api_call_id=str(api_call_id) if api_call_id is not None else None,
+                        multiplier_cost=(
+                            float(multiplier_cost) if multiplier_cost is not None else None
+                        ),
+                        nano_aiu=(float(nano_aiu) if nano_aiu is not None else None),
+                        unavailable_reason=unavailable_reason,
+                    )
+            except Exception:
+                pass
+            try:
+                quota_snapshots = usage_dict.get("quotaSnapshots")
+                if isinstance(quota_snapshots, dict) and quota_snapshots:
+                    for qid, snap in quota_snapshots.items():
+                        if not isinstance(snap, dict):
+                            continue
+                        try:
+                            reset_date = snap.get("resetDate")
+                            reset_date_iso: Optional[str] = None
+                            if reset_date is not None:
+                                # to_dict() は ISO 文字列化済み。念のため
+                                # datetime / date も許容する。
+                                if hasattr(reset_date, "isoformat"):
+                                    reset_date_iso = reset_date.isoformat()
+                                else:
+                                    reset_date_iso = str(reset_date)
+                            self.console.stats_event(
+                                "quota_snapshot",
+                                step_id=step_id,
+                                model=str(model),
+                                quota_id=str(qid),
+                                used_requests=float(
+                                    snap.get("usedRequests", 0) or 0
+                                ),
+                                entitlement_requests=float(
+                                    snap.get("entitlementRequests", 0) or 0
+                                ),
+                                remaining_percentage=float(
+                                    snap.get("remainingPercentage", 0) or 0
+                                ),
+                                overage=float(snap.get("overage", 0) or 0),
+                                is_unlimited_entitlement=bool(
+                                    snap.get("isUnlimitedEntitlement", False)
+                                ),
+                                overage_allowed_with_exhausted_quota=bool(
+                                    snap.get("overageAllowedWithExhaustedQuota", False)
+                                ),
+                                usage_allowed_with_exhausted_quota=bool(
+                                    snap.get("usageAllowedWithExhaustedQuota", False)
+                                ),
+                                reset_date_iso=reset_date_iso,
+                            )
+                        except Exception:
+                            continue
             except Exception:
                 pass
             # TTFT 計測終了タイミング（turn 完了）フラグをリセット
@@ -3619,49 +6791,6 @@ def _blocking_stdin_read() -> str:
         return sys.stdin.readline().rstrip("\n")
     except (EOFError, OSError):
         return ""
-
-
-async def _read_stdin_async(
-    prompt_msg: str,
-    console: Any,
-    timeout: float = 300.0,
-) -> str:
-    """asyncio イベントループをブロックせずに stdin から1行読み取る。
-
-    - 並列ステップ間の競合を asyncio.Lock で排他制御
-    - stdin が非対話的（パイプ等）の場合はスキップしてデフォルト値を返す
-    - タイムアウト付きで無限ブロックを防止
-    - ブロッキング I/O は run_in_executor でスレッドプールに委譲
-    """
-    # stdin が非対話的（パイプ、リダイレクト等）の場合はスキップ
-    if not sys.stdin.isatty():
-        console.warning(
-            f"{prompt_msg}\n"
-            "  → stdin が非対話モードのため、デフォルト回答を自動適用します。"
-        )
-        return ""
-
-    async with _get_stdin_lock():
-        # 他のステップのストリーム出力と視覚的に分離
-        _separator = "─" * 50
-        print(flush=True)
-        print(f"{timestamp_prefix()} {_separator}", flush=True)
-        console.warning(prompt_msg)
-        print(f"{timestamp_prefix()} {_separator}", flush=True)
-
-        loop = asyncio.get_running_loop()
-        try:
-            result = await asyncio.wait_for(
-                loop.run_in_executor(None, _blocking_stdin_read),
-                timeout=timeout,
-            )
-        except asyncio.TimeoutError:
-            console.warning(
-                f"入力タイムアウト ({timeout:.0f}s)。デフォルト回答を自動適用します。"
-            )
-            result = ""
-
-        return result
 
 
 async def _read_stdin_multiline(

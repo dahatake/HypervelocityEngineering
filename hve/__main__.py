@@ -74,8 +74,9 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
+import subprocess
 import sys
-import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
@@ -109,10 +110,84 @@ def _configure_stdio_encoding() -> None:
 _configure_stdio_encoding()
 
 
+def _reexec_in_venv_if_needed() -> None:
+    """``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、
+    同梱 ``.venv`` の Python へ自動的に再 exec する。
+
+    セットアップ (``hve/setup-hve.*``) は全依存を ``<repo>/.venv`` に導入する。
+    しかし activate 漏れや、システム Python から ``python -m hve gui`` を直接実行
+    した場合は ``ModuleNotFoundError: No module named 'PySide6'`` 等で起動に失敗する。
+    本関数はこれを吸収し、セットアップ直後でも ``python -m hve gui`` / ``cli`` が
+    そのまま動作するようにする。
+
+    挙動:
+      - 既に ``.venv`` の Python で動作している場合は何もしない（冪等）。
+      - ``.venv`` が存在しない場合は何もしない（現在の Python で続行）。
+      - ``HVE_NO_VENV_REEXEC=1`` でオプトアウト（再帰防止にも使用）。
+      - 検出・再 exec に失敗した場合は現在の Python で続行（フォールバック）。
+
+    ``if __name__ == "__main__":`` ブロックからのみ呼び出すこと。
+    ``import hve.__main__`` 等のライブラリ利用時には発火させない。
+    """
+    if os.environ.get("HVE_NO_VENV_REEXEC", "").strip().lower() in {"1", "true", "yes"}:
+        return
+
+    try:
+        repo_root = Path(__file__).resolve().parent.parent
+        venv_py = (
+            repo_root / ".venv" / "Scripts" / "python.exe"
+            if os.name == "nt"
+            else repo_root / ".venv" / "bin" / "python"
+        )
+        if not venv_py.exists():
+            return
+        # 既に .venv の Python で動作しているなら再 exec は不要。
+        try:
+            already_in_venv = os.path.samefile(sys.executable, str(venv_py))
+        except OSError:
+            already_in_venv = Path(sys.executable).resolve() == venv_py.resolve()
+        if already_in_venv:
+            return
+        new_argv = [str(venv_py), "-m", "hve", *sys.argv[1:]]
+        new_env = dict(os.environ)
+        new_env["HVE_NO_VENV_REEXEC"] = "1"  # 再帰防止フラグ
+    except Exception:  # pragma: no cover - 検出失敗時は従来挙動へフォールバック
+        return
+
+    print(
+        # NOTE: この通知は環境正規化前（.venv 外の Python・cp932 等のコンソール）に
+        # 出力される可能性があるため、文字化けを避けて ASCII のみで記述する。
+        f"[hve] Detected non-.venv Python; re-executing with .venv: {venv_py}",
+        file=sys.stderr,
+    )
+
+    if os.name == "nt":
+        # Windows では os.execv の挙動が不安定なため subprocess + 終了コード継承を用いる。
+        import subprocess
+
+        try:
+            completed = subprocess.run(new_argv, env=new_env)
+        except Exception:  # pragma: no cover - 起動失敗時は現在の Python で続行
+            return
+        sys.exit(completed.returncode)
+    else:
+        try:
+            os.execve(str(venv_py), new_argv, new_env)
+        except Exception:  # pragma: no cover - exec 失敗時は現在の Python で続行
+            return
+
+
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
+    from .workflow_registry import canonicalize_workflow_id, get_workflow
 except ImportError:
     from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
+    _workflow_registry_module = __import__("workflow_" + "registry")
+    canonicalize_workflow_id = getattr(
+        _workflow_registry_module,
+        "canonicalize_workflow_id",
+    )
+    get_workflow = getattr(_workflow_registry_module, "get_workflow")
 
 
 def _ts() -> str:
@@ -320,11 +395,11 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
         (params, selected_steps) のタプル。
         - selected_steps: ウィザードでユーザーが選択したグループ ID 一覧（"1" / "2" / "3" / "4"）。
           Enter 時の初期値は ["2", "3", "4"]。
-          グループ ID は orchestrator 側の `_ARD_GROUP_MAP` で実 Step ID に展開される:
+          グループ ID は registry 侧の `_WORKFLOW_GROUP_MAPS["ard"]` で実 Step ID に展開される:
             "1" → ["1", "1.1", "1.2"]（企業の事業分析）
             "2" → ["2"]（要求定義書作成）
-            "3" → ["3"]（KPI/OKR 定義・任意）
-            "4" → ["4.1", "4.2", "4.3"]（ユースケース作成）
+            "3" → ["2.1"]（KPI/OKR 定義・任意）
+            "4" → ["3.1", "3.2", "3.3"]（ユースケース作成）
     """
     from datetime import date
 
@@ -425,20 +500,88 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
         else:
             params["include_kpi_okr"] = False
 
-    # グループ ID ("1"/"2"/"3"/"4") は orchestrator 側の _ARD_GROUP_MAP で実 Step ID に展開される。
+    # グループ ID ("1"/"2"/"3"/"4") は registry 侧の _WORKFLOW_GROUP_MAPS で実 Step ID に展開される。
     # （旧仕様の "1.1 選択時に Step '1' を自動前提" は撤廃。グループ "1" 自体が 1,1.1,1.2 を包含する。）
 
     return params, selected_steps
 
 
-def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
+def _asdw_data_deploy_is_selected(selected_step_ids: list[str]) -> bool:
+    """Return whether an ASDW selection can reach Step 1.3."""
+    return not selected_step_ids or any(
+        step_id in {"1", "1.3"} or step_id.startswith("1.3/")
+        for step_id in selected_step_ids
+    )
+
+
+# ASDW-WEB Step 1.3 の必須パラメータの表示ラベル（FR-CLI-14）。
+# キー集合の正本は workflow_registry の StepDef.required_params（FR-DAG-07）。
+_ASDW_DATA_DEPLOY_PARAM_LABELS = {
+    "resource_group": "Azure リソースグループ名",
+    "data_location": "DataDeploy location",
+    "data_resource_suffix": "DataDeploy resource suffix",
+    "data_vnet_cidr": "DataDeploy VNet CIDR",
+    "data_private_endpoint_subnet_cidr": "DataDeploy private endpoint subnet CIDR",
+    "data_aci_subnet_cidr": "DataDeploy ACI subnet CIDR",
+}
+
+
+def _asdw_data_deploy_param_keys() -> frozenset:
+    """ASDW-WEB Step 1.3 が宣言する必須パラメータ名を返す（FR-DAG-07）。"""
+    wf = get_workflow("asdw-web")
+    step = wf.get_step("1.3") if wf is not None else None
+    return frozenset(step.required_params) if step is not None else frozenset()
+
+
+def _prompt_asdw_data_deploy_params(con, collected: dict) -> dict:
+    """ASDW-WEB Step 1.3 の必須パラメータを宣言（FR-DAG-07）から収集する。
+
+    既定値があるキーは既定値を提示し、Enter のみで採用できる。
+    先行の汎用ループで非空値を収集済みのキーは再質問しない。
+    """
+    wf = get_workflow("asdw-web")
+    step = wf.get_step("1.3") if wf is not None else None
+    if step is None:
+        return {}
+    values: dict = {}
+    for key in step.required_params:
+        existing = collected.get(key)
+        if isinstance(existing, str) and existing.strip():
+            continue
+        values[key] = con.prompt_input(
+            _ASDW_DATA_DEPLOY_PARAM_LABELS.get(key, key),
+            default=step.default_params.get(key, ""),
+            required=True,
+        )
+    return values
+
+
+def _collect_generic_workflow_params(
+    con,
+    wf,
+    *,
+    is_quick_auto: bool,
+    selected_step_ids: Optional[list[str]] = None,
+) -> dict:
     """AKM/AQOD 以外のワークフロー固有パラメータを収集する。"""
     params: dict = {}
+    # FR-CLI-14: Step 1.3 の required_params は DataDeploy ブロックが宣言由来の
+    # ラベル・既定値で尋ねるため、汎用ループ側では尋ねない（二重質問防止）。
+    asdw_data_param_keys: frozenset = frozenset()
+    collect_asdw_data_params = (
+        wf.id == "asdw-web"
+        and not is_quick_auto
+        and _asdw_data_deploy_is_selected(selected_step_ids or [])
+    )
+    if collect_asdw_data_params:
+        asdw_data_param_keys = _asdw_data_deploy_param_keys()
     if "app_ids" in wf.params or "app_id" in wf.params:
         if not is_quick_auto:
             params.update(_prompt_app_ids(con, wf.id))
     for param_name in wf.params:
         if param_name in ("app_ids", "app_id"):
+            continue
+        if param_name in asdw_data_param_keys:
             continue
         if is_quick_auto:
             params[param_name] = _default_param_value(param_name)
@@ -453,6 +596,8 @@ def _collect_generic_workflow_params(con, wf, *, is_quick_auto: bool) -> dict:
             )
         else:
             params[param_name] = _prompt_param_input(con, param_name)
+    if collect_asdw_data_params:
+        params.update(_prompt_asdw_data_deploy_params(con, params))
     return params
 
 
@@ -531,8 +676,7 @@ def _collect_agentic_retrieval_wizard_answers(con, wf_id: str, *, is_quick_auto:
     except ImportError:
         from template_engine import _AGENTIC_RETRIEVAL_QUESTIONS, _AGENTIC_RETRIEVAL_KEYS_FOR  # type: ignore[no-redef]
 
-    # 後方互換エイリアス解決
-    _wf_id = {"aad": "aad-web", "asdw": "asdw-web"}.get(wf_id, wf_id)
+    _wf_id = canonicalize_workflow_id(wf_id)
     keys = _AGENTIC_RETRIEVAL_KEYS_FOR.get(_wf_id, [])
     if not keys:
         return {}
@@ -815,6 +959,16 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="EFFORT",
         help="QA 用モデルの reasoning effort（省略時は --reasoning-effort を継承）",
     )
+    orch.add_argument(
+        "--context-tier",
+        default=None,
+        choices=["default", "long_context"],
+        help=(
+            "SDK の create_session(context_tier=...) へ渡すコンテキスト階層。"
+            "long_context は対応モデルでロングコンテキストを有効化する。"
+            "省略時は SDK/サーバ既定。"
+        ),
+    )
 
     # 並列実行
     orch.add_argument(
@@ -862,6 +1016,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     orch.add_argument(
+        "--steering-ipc-dir",
+        default=None,
+        metavar="PATH",
+        help=(
+            "実行中ワークフローへの割り込み送信（Steering）用 IPC ディレクトリパス（GUI からの利用想定）。"
+            " CLI は steering-<step_id>-<epoch_ms>.request.json を polling し、検出時に"
+            " session.send(mode=\"immediate\") でメインタスクへ割り込みメッセージを注入する。"
+        ),
+    )
+    orch.add_argument(
         "--auto-contents-review",
         action="store_true",
         default=False,
@@ -898,6 +1062,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="AKM 実行後レビューで Work IQ 検証を有効/無効化する（未指定時は --workiq / WORKIQ_ENABLED を継承）",
+    )
+    orch.add_argument(
+        "--auto-compaction",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="auto_compaction",
+        help=(
+            "サブステップ実行で SDK の自動コンテキスト圧縮（infinite_sessions）を有効化する "
+            "(--auto-compaction: 有効, --no-auto-compaction: 無効, 省略時: HVEConfig.auto_compaction を継承)"
+        ),
     )
     orch.add_argument(
         "--workiq-akm-ingest",
@@ -1080,6 +1254,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="DAG 完了時のサマリと各ステップの最終応答のみを出力する（CI/スクリプト連携用）",
     )
 
+    # Fleet mode
+    orch.add_argument(
+        "--fleet-mode",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="fleet_mode_enabled",
+        help="複数 Step の DAG wave を Copilot SDK Fleet mode に委譲する（既定: 無効、未指定時は環境変数/設定を継承）",
+    )
+
     # MCP Server
     orch.add_argument(
         "--mcp-config",
@@ -1100,6 +1283,64 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="URL",
         help="外部 CLI サーバー URL (例: localhost:4321)",
+    )
+
+    # Cloud Sessions (GitHub Copilot SDK 1.0.0+)
+    orch.add_argument(
+        "--cloud-session",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="cloud_session_enabled",
+        help="Cloud Session を有効/無効化する（既定: 無効、未指定時は環境変数/設定を継承）",
+    )
+    orch.add_argument(
+        "--cloud-session-owner",
+        default=None,
+        metavar="OWNER",
+        help="Cloud Session の repository.owner 明示値（未指定時は --repo / REPO から補完）",
+    )
+    orch.add_argument(
+        "--cloud-session-repository-name",
+        default=None,
+        metavar="NAME",
+        help="Cloud Session の repository.name 明示値（未指定時は --repo / REPO から補完）",
+    )
+    orch.add_argument(
+        "--cloud-session-branch",
+        default=None,
+        metavar="BRANCH",
+        help="Cloud Session の repository.branch 明示値（未指定時は --branch / base_branch を使用）",
+    )
+    orch.add_argument(
+        "--cloud-session-max-concurrency",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Cloud Session の同時実行上限（未指定時: 5）",
+    )
+    orch.add_argument(
+        "--cloud-session-integration-id",
+        default=None,
+        metavar="ID",
+        help="GITHUB_COPILOT_INTEGRATION_ID に渡す Cloud Session integration ID",
+    )
+    orch.add_argument(
+        "--cloud-session-mc-base-url",
+        default=None,
+        metavar="URL",
+        help="COPILOT_MC_BASE_URL に渡す Mission Control base URL（GHES 用）",
+    )
+    orch.add_argument(
+        "--cloud-session-step-overrides",
+        default=None,
+        metavar="JSON",
+        help="Step 単位 Cloud Session 上書き JSON（例: '{\"1\": true, \"2\": false}'）",
+    )
+    orch.add_argument(
+        "--cloud-session-subtask-overrides",
+        default=None,
+        metavar="JSON",
+        help="サブタスク単位 Cloud Session 上書き JSON（例: '{\"pre_qa\": true}'）",
     )
 
     # タイムアウト
@@ -1158,6 +1399,13 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="RG",
         help="Azure リソースグループ名",
     )
+    orch.add_argument("--data-location", default=None, metavar="LOCATION")
+    orch.add_argument("--data-resource-suffix", default=None, metavar="SUFFIX")
+    orch.add_argument("--data-vnet-cidr", default=None, metavar="CIDR")
+    orch.add_argument(
+        "--data-private-endpoint-subnet-cidr", default=None, metavar="CIDR"
+    )
+    orch.add_argument("--data-aci-subnet-cidr", default=None, metavar="CIDR")
     orch.add_argument(
         "--usecase-id",
         default=None,
@@ -1200,6 +1448,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="AKM: PR の自動 Approve & Auto-merge を有効にする (デフォルト: 無効)",
+    )
+    orch.add_argument(
+        "--delete-local-merged-branch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "FR-CLI-34: enable_auto_merge による auto-approve-and-merge 完了（PR が merged）を"
+            " 検知後、今回作成した作業ブランチをローカルのみ削除する"
+            " (デフォルト: 有効、--no-delete-local-merged-branch で無効化)"
+        ),
     )
     orch.add_argument(
         "--target-scope",
@@ -1424,6 +1682,36 @@ def _build_parser() -> argparse.ArgumentParser:
         help="mdq watcher のデバウンス間隔（ms、既定 500）。環境変数 HVE_MDQ_WATCH_DEBOUNCE_MS でも指定可。",
     )
 
+    # cq リアルタイム索引更新（HVE CLI Orchestrator 限定機能）
+    orch.add_argument(
+        "--cq-watch",
+        dest="cq_watch",
+        action="store_true",
+        default=None,
+        help=(
+            "ソースファイルの追加/更新/削除を OS イベントで検知し .cq/index-<profile>.sqlite を逐次更新する。"
+            " 監視対象は cq 設定ファイルで最初に宣言された profile 。"
+            " 既定 ON。watchdog 未導入時や cq 設定不在時は自動で無効化（警告ログのみ）。"
+            " 環境変数 HVE_CQ_WATCH=0 または --no-cq-watch で無効化できる。"
+            " 既存の `python -m cq index` による手動索引更新は維持される。"
+        ),
+    )
+    orch.add_argument(
+        "--no-cq-watch",
+        dest="no_cq_watch",
+        action="store_true",
+        default=False,
+        help="cq リアルタイム索引更新を無効化する（--cq-watch および HVE_CQ_WATCH=true より優先）。",
+    )
+    orch.add_argument(
+        "--cq-watch-debounce-ms",
+        dest="cq_watch_debounce_ms",
+        type=int,
+        default=None,
+        metavar="MS",
+        help="cq watcher のデバウンス間隔（ms）。環境変数 HVE_CQ_WATCH_DEBOUNCE_MS でも指定可。省略時は cq の既定値。",
+    )
+
     # --- Workbench UI（4 ペイン固定レイアウトのターミナル表示）---
     orch.add_argument(
         "--workbench",
@@ -1591,14 +1879,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Issue/PR コメント投稿用の前置き込みで出力する",
     )
 
-    # --- resume サブコマンド (Phase 5) ---
-    # `resume {list|show|rename|delete|continue}` を hve/resume_cli.py が定義する。
-    try:
-        from .resume_cli import add_resume_parser
-    except ImportError:
-        from resume_cli import add_resume_parser  # type: ignore[no-redef]
-    add_resume_parser(sub)
-
     # --- gui サブコマンド ---
     gui_parser = sub.add_parser(
         "gui",
@@ -1715,7 +1995,17 @@ def _load_mcp_config(mcp_config_path: Optional[str]) -> Optional[dict]:
 
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        if not isinstance(data, dict):
+            print(f"{_ts()} ❌ MCP 設定ファイルの形式が不正です: JSON object を指定してください。", file=sys.stderr)
+            return None
+        if "mcpServers" in data:
+            servers = data.get("mcpServers")
+            if not isinstance(servers, dict):
+                print(f"{_ts()} ❌ MCP 設定ファイルの形式が不正です: mcpServers は JSON object である必要があります。", file=sys.stderr)
+                return None
+            return servers
+        return data
     except (json.JSONDecodeError, OSError) as exc:
         print(f"{_ts()} ❌ MCP 設定ファイルの読み込みに失敗しました: {exc}", file=sys.stderr)
         return None
@@ -1733,9 +2023,9 @@ def _build_config(args: argparse.Namespace):
         sys.path.insert(0, str(_sdk_dir))
 
     try:
-        from .config import DEFAULT_MODEL, SDKConfig, normalize_model
+        from .config import DEFAULT_MODEL, SDKConfig, normalize_model, _parse_bool_mapping
     except ImportError:
-        from config import DEFAULT_MODEL, SDKConfig, normalize_model  # type: ignore[no-redef]
+        from config import DEFAULT_MODEL, SDKConfig, normalize_model, _parse_bool_mapping  # type: ignore[no-redef]
 
     def _normalize_model_with_warning(model_name: Optional[str]) -> Optional[str]:
         if model_name is None:
@@ -1780,16 +2070,21 @@ def _build_config(args: argparse.Namespace):
     cfg.reasoning_effort = getattr(args, "reasoning_effort", None) or None
     cfg.review_reasoning_effort = getattr(args, "review_reasoning_effort", None) or None
     cfg.qa_reasoning_effort = getattr(args, "qa_reasoning_effort", None) or None
+    # context_tier (ユーザー明示指定を SDKConfig に転送)
+    cfg.context_tier = getattr(args, "context_tier", None) or None
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
     cfg.force_interactive = getattr(args, "force_interactive", False)
     cfg.qa_answer_mode = getattr(args, "qa_answer_mode", None)
     cfg.qa_ipc_dir = getattr(args, "qa_ipc_dir", None)
+    cfg.steering_ipc_dir = getattr(args, "steering_ipc_dir", None)
     cfg.auto_contents_review = args.auto_contents_review
     cfg.auto_coding_agent_review = args.auto_coding_agent_review
     cfg.auto_coding_agent_review_auto_approval = args.auto_coding_agent_review_auto_approval
     cfg.create_issues = args.create_issues
     cfg.create_pr = args.create_pr
+    cfg.enable_auto_merge = getattr(args, "enable_auto_merge", False)
+    cfg.delete_local_merged_branch = getattr(args, "delete_local_merged_branch", True)
     cfg.verbose = args.verbose or not args.quiet  # verbose はデフォルト True; --quiet で抑制
     cfg.quiet = args.quiet
     cfg.show_stream = args.show_stream
@@ -1877,10 +2172,46 @@ def _build_config(args: argparse.Namespace):
     if _mdq_debounce is not None:
         cfg.mdq_watch_debounce_ms = int(_mdq_debounce)
 
+    # cq リアルタイム索引更新: 優先順位 --no-cq-watch > --cq-watch > HVE_CQ_WATCH > デフォルト True
+    if getattr(args, "no_cq_watch", False):
+        cfg.cq_watch = False
+    elif getattr(args, "cq_watch", None) is True:
+        cfg.cq_watch = True
+    _cq_debounce = getattr(args, "cq_watch_debounce_ms", None)
+    if _cq_debounce is not None:
+        cfg.cq_watch_debounce_ms = int(_cq_debounce)
+
+    if getattr(args, "fleet_mode_enabled", None) is not None:
+        cfg.fleet_mode_enabled = bool(args.fleet_mode_enabled)
+
     if args.cli_path:
         cfg.cli_path = args.cli_path
     if args.cli_url:
         cfg.cli_url = args.cli_url
+
+    # Cloud Sessions（CLI 明示値 > 環境変数 / SDKConfig.from_env）
+    if getattr(args, "cloud_session_enabled", None) is not None:
+        cfg.cloud_session_enabled = bool(args.cloud_session_enabled)
+    if getattr(args, "cloud_session_owner", None):
+        cfg.cloud_session_repository_owner = args.cloud_session_owner.strip() or None
+    if getattr(args, "cloud_session_repository_name", None):
+        cfg.cloud_session_repository_name = args.cloud_session_repository_name.strip() or None
+    if getattr(args, "cloud_session_branch", None):
+        cfg.cloud_session_repository_branch = args.cloud_session_branch.strip() or None
+    if getattr(args, "cloud_session_max_concurrency", None) is not None:
+        cfg.cloud_session_max_concurrency = max(1, int(args.cloud_session_max_concurrency))
+    if getattr(args, "cloud_session_integration_id", None):
+        cfg.cloud_session_integration_id = args.cloud_session_integration_id.strip() or None
+        if cfg.cloud_session_integration_id:
+            os.environ["GITHUB_COPILOT_INTEGRATION_ID"] = cfg.cloud_session_integration_id
+    if getattr(args, "cloud_session_mc_base_url", None):
+        cfg.cloud_session_mc_base_url = args.cloud_session_mc_base_url.strip() or None
+        if cfg.cloud_session_mc_base_url:
+            os.environ["COPILOT_MC_BASE_URL"] = cfg.cloud_session_mc_base_url
+    if getattr(args, "cloud_session_step_overrides", None) is not None:
+        cfg.cloud_session_step_overrides = _parse_bool_mapping(args.cloud_session_step_overrides)
+    if getattr(args, "cloud_session_subtask_overrides", None) is not None:
+        cfg.cloud_session_subtask_overrides = _parse_bool_mapping(args.cloud_session_subtask_overrides)
 
     # リポジトリ（CLI 引数 > 環境変数）
     if args.repo:
@@ -1906,6 +2237,8 @@ def _build_config(args: argparse.Namespace):
             cfg.workiq_qa_enabled = False
         cfg.workiq_akm_review_enabled = args.workiq_akm_review
         cfg.workiq_enabled = cfg.is_workiq_qa_enabled() or cfg.is_workiq_akm_review_enabled()
+    if getattr(args, "auto_compaction", None) is not None:
+        cfg.auto_compaction = bool(args.auto_compaction)
     # AKM 入力ソースとしての Work IQ（独立フラグ）。
     # 明示指定（--workiq-akm-ingest / --no-workiq-akm-ingest）優先。
     # 未指定時は --sources に 'workiq' が含まれているかで自動判定する。
@@ -1956,6 +2289,19 @@ def _build_config(args: argparse.Namespace):
 # params dict 構築
 # -----------------------------------------------------------------------
 
+def _validate_app_id_args(args: argparse.Namespace) -> Optional[str]:
+    """Return a deterministic error for conflicting legacy and plural APP IDs."""
+    raw_app_ids = getattr(args, "app_ids", None)
+    legacy_app_id = getattr(args, "app_id", None)
+    if not raw_app_ids or not legacy_app_id:
+        return None
+    selected = [item.strip() for item in raw_app_ids.split(",") if item.strip()]
+    legacy = legacy_app_id.strip()
+    if len(selected) != 1 or selected[0] != legacy:
+        return "--app-id must match the one value specified by --app-ids."
+    return None
+
+
 def _build_params(args: argparse.Namespace) -> dict:
     """CLI 引数からワークフローパラメータ dict を構築する。"""
     params: dict = {
@@ -1973,7 +2319,14 @@ def _build_params(args: argparse.Namespace) -> dict:
 
     # ワークフロー固有
     if getattr(args, "app_ids", None):
-        params["app_ids"] = [s.strip() for s in args.app_ids.split(",") if s.strip()]
+        selected_app_ids = [
+            s.strip() for s in args.app_ids.split(",") if s.strip()
+        ]
+        legacy_app_id = args.app_id.strip() if args.app_id else ""
+        app_id_error = _validate_app_id_args(args)
+        if app_id_error:
+            raise ValueError(app_id_error)
+        params["app_ids"] = selected_app_ids
         if len(params["app_ids"]) == 1:
             params["app_id"] = params["app_ids"][0]
     elif args.app_id:
@@ -1981,8 +2334,16 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["app_id"] = args.app_id  # 後方互換
     if args.resource_group:
         params["resource_group"] = args.resource_group
-    if args.app_id:
-        params["app_id"] = args.app_id
+    for key in (
+        "data_location",
+        "data_resource_suffix",
+        "data_vnet_cidr",
+        "data_private_endpoint_subnet_cidr",
+        "data_aci_subnet_cidr",
+    ):
+        value = getattr(args, key, None)
+        if value is not None:
+            params[key] = value
     if args.usecase_id:
         params["usecase_id"] = args.usecase_id
 
@@ -2012,16 +2373,16 @@ def _build_params(args: argparse.Namespace) -> dict:
         target_business = getattr(args, "target_business", None) or ""
         requested_steps = list(params.get("steps") or [])
         # 4 グループ体系 ("1"/"2"/"3"/"4") を主とし、実 Step ID も許容する。
-        # グループ ID は orchestrator の _ARD_GROUP_MAP で実 Step ID に展開される:
-        #   "1" → [1, 1.1, 1.2]、"2" → [2]、"3" → [3]、"4" → [4.1, 4.2, 4.3]
-        _valid_step_ids = {"1", "2", "3", "4", "1.1", "1.2", "4.1", "4.2", "4.3"}
+        # グループ ID は registry 侧の _WORKFLOW_GROUP_MAPS で実 Step ID に展開される:
+        #   "1" → [1, 1.1, 1.2]、"2" → [2]、"3" → [2.1]、"4" → [3.1, 3.2, 3.3]
+        _valid_step_ids = {"1", "2", "3", "4", "1.1", "1.2", "2.1", "3.1", "3.2", "3.3"}
         normalized_steps = requested_steps
         if requested_steps:
             invalid_steps = [sid for sid in requested_steps if sid not in _valid_step_ids]
             if invalid_steps:
                 raise SystemExit(
                     f"ERROR: ARD の無効な --steps が指定されました: {', '.join(invalid_steps)} "
-                    "(有効値: 1, 2, 3, 4 / 実 Step ID: 1.1, 1.2, 4.1, 4.2, 4.3)"
+                    "(有効値: 1, 2, 3, 4 / 実 Step ID: 1.1, 1.2, 2.1, 3.1, 3.2, 3.3)"
                 )
             normalized_steps = list(requested_steps)
             # 旧 実 Step ID '1.1' 指定時は Step '1' を自動前提として付与
@@ -2093,99 +2454,24 @@ def _build_params(args: argparse.Namespace) -> dict:
 # メイン
 # -----------------------------------------------------------------------
 
-def _run_startup_recovery() -> None:
-    """Phase 4 (Resume 2-layer txn): 起動時 recovery を実行する。
+def _ensure_run_workdir_env() -> None:
+    """orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。
 
-    `work/journal-archive/` 配下の未完了 delete-hard を補償する。SDK が
-    インストールされていれば SDK 削除も含めて完遂し、未インストール時は
-    ディレクトリ削除のみ行う（残り SDK セッションは次回起動時 or
-    `resume gc-orphans` で処理される）。
-
-    Major #7 (v1.0.2): pending journal が無ければ SDK client は構築しない
-    （起動コストを抑制）。
+    既設定の ``HVE_WORK_ROOT`` は尊重する（GUI から子プロセスとして
+    起動された場合や、テストでの override 用途）。``HVE_WORK_ROOT`` が
+    既設定の場合、``HVE_RUN_ID`` の整合性は呼び出し側 (GUI / テスト) の責任。
     """
-    try:
-        from .recovery import recover_pending_on_startup
-        from .run_journal import scan_archive_for_pending, DEFAULT_ARCHIVE_DIRNAME
-        from .run_state import DEFAULT_RUNS_DIR
-    except ImportError:
-        from recovery import recover_pending_on_startup  # type: ignore[no-redef]
-        from run_journal import scan_archive_for_pending, DEFAULT_ARCHIVE_DIRNAME  # type: ignore[no-redef]
-        from run_state import DEFAULT_RUNS_DIR  # type: ignore[no-redef]
-
-    # 先に archive スキャンして、pending が無ければ SDK 構築をスキップ
-    archive_dir = DEFAULT_RUNS_DIR.parent / DEFAULT_ARCHIVE_DIRNAME
-    if not scan_archive_for_pending(archive_dir):
+    if os.environ.get("HVE_WORK_ROOT"):
         return
-
-    # SDK が import 可能なら delete_session / get_session_metadata を提供
-    sdk_delete = None
-    sdk_exists = None
-    client_handle = None
-    started_flag = {"v": False}  # nonlocal 用のミュータブルコンテナ
     try:
-        from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
-        try:
-            from .config import SDKConfig
-        except ImportError:
-            from config import SDKConfig  # type: ignore[no-redef]
-        cfg = SDKConfig.from_env()
-        sdk_config = SubprocessConfig(
-            cli_path=cfg.cli_path,
-            github_token=cfg.resolve_token() or None,
-            log_level="error",
-        )
-        client_handle = CopilotClient(config=sdk_config)
-
-        async def _ensure_started():
-            # Minor #30: SDK の private 属性を立てる代わりに closure 変数を使う
-            if not started_flag["v"]:
-                await client_handle.start()
-                started_flag["v"] = True
-
-        async def _del(sid: str) -> None:
-            await _ensure_started()
-            await client_handle.delete_session(sid)
-
-        async def _exists(sid: str) -> bool:
-            await _ensure_started()
-            meta = await client_handle.get_session_metadata(sid)
-            return meta is not None
-
-        sdk_delete = _del
-        sdk_exists = _exists
-    except ImportError:
-        # SDK 未インストール → SDK 操作スキップ
-        pass
-
-    async def _main():
-        try:
-            results = await recover_pending_on_startup(
-                sdk_delete_session=sdk_delete,
-                sdk_session_exists=sdk_exists,
-            )
-        finally:
-            if client_handle is not None and started_flag["v"]:
-                try:
-                    await client_handle.stop()
-                except Exception:  # pragma: no cover
-                    pass
-        for r in results:
-            if r.get("recovered_seqs"):
-                print(f"[recovery] {r['archive']}: seqs={r['recovered_seqs']}",
-                      file=sys.stderr)
-            for err in r.get("errors", []):
-                print(f"[recovery] WARN: {err}", file=sys.stderr)
-
-    try:
-        asyncio.run(_main())
-    except RuntimeError:
-        # event loop 既存環境では新規 loop で実行
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(_main())
-        finally:
-            loop.close()
+        from .split_fork import resolve_run_id, resolve_work_root
+    except ImportError:  # pragma: no cover - script execution path
+        from split_fork import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
+    run_id = resolve_run_id()
+    os.environ.setdefault("HVE_RUN_ID", run_id)
+    work_root = resolve_work_root()
+    os.environ["HVE_WORK_ROOT"] = str(work_root)
+    work_root.mkdir(parents=True, exist_ok=True)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -2197,17 +2483,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Phase 4 (Resume 2-layer txn): 起動時 recovery
-    # work/journal-archive/ 配下の未完了 delete-hard 等を補償する。
-    # 失敗は warn のみで進行を止めない（実害は次回 hve resume gc-orphans 等で吸収可能）。
-    # `--no-recovery` 相当のオプトアウト環境変数: HVE_DISABLE_STARTUP_RECOVERY=1
-    if os.environ.get("HVE_DISABLE_STARTUP_RECOVERY", "").strip().lower() not in {"1", "true", "yes"}:
-        try:
-            _run_startup_recovery()
-        except Exception as exc:  # pragma: no cover - top-level guard
-            print(f"WARN: startup recovery で例外（処理は続行）: {exc}", file=sys.stderr)
-
     if args.command == "orchestrate":
+        _ensure_run_workdir_env()
         return _cmd_orchestrate(args)
 
     if args.command == "qa-merge":
@@ -2218,14 +2495,6 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "emit-prompt":
         return _cmd_emit_prompt(args)
-
-    if args.command == "resume":
-        # Phase 5 (Resume): セッション管理 CLI ディスパッチャ
-        try:
-            from .resume_cli import dispatch as _resume_dispatch
-        except ImportError:
-            from resume_cli import dispatch as _resume_dispatch  # type: ignore[no-redef]
-        return _resume_dispatch(args)
 
     if args.command == "gui":
         from .gui import run_gui
@@ -2292,383 +2561,187 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
     return True
 
 
+def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -> bool:
+    """orchestrate 実行前に GitHub Copilot 認証状態を確認する。
+
+    ``--dry-run`` は SDK セッションを作らないため認証確認をスキップする。
+    未認証かつ対話可能な場合だけ、ユーザー確認後に ``copilot login`` を実行する。
+    """
+    if getattr(config, "dry_run", False):
+        return True
+
+    try:
+        from . import auth as _auth
+    except ImportError:
+        import auth as _auth  # type: ignore[no-redef]
+
+    try:
+        info = _auth.ensure_authenticated(interactive=False)
+    except _auth.AuthError as exc:
+        print(f"{_ts()} ❌ Copilot 認証状態を確認できません: {exc}", file=sys.stderr)
+        return False
+
+    if info.is_authenticated:
+        return True
+
+    if info.status_message:
+        print(f"{_ts()} ⚠️  GitHub Copilot は未ログインです: {info.status_message}", file=sys.stderr)
+    else:
+        print(f"{_ts()} ⚠️  GitHub Copilot は未ログインです。", file=sys.stderr)
+
+    interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
+    if not interactive:
+        print(f"{_ts()}    先に `hve login` を実行してから再試行してください。", file=sys.stderr)
+        return False
+
+    try:
+        answer = input("今すぐ `copilot login` を実行しますか？ [Y/n]: ").strip().lower()
+    except EOFError:
+        print(f"{_ts()}    入力を取得できませんでした。先に `hve login` を実行してください。", file=sys.stderr)
+        return False
+    if answer not in ("", "y", "yes"):
+        print(f"{_ts()}    ログインをキャンセルしました。", file=sys.stderr)
+        return False
+
+    try:
+        info = _auth.ensure_authenticated(interactive=True)
+    except _auth.AuthError as exc:
+        print(f"{_ts()} ❌ Copilot ログインを開始できません: {exc}", file=sys.stderr)
+        return False
+    if info.is_authenticated:
+        return True
+    detail = f": {info.status_message}" if info.status_message else ""
+    print(f"{_ts()} ❌ Copilot ログインが完了していません{detail}", file=sys.stderr)
+    return False
+
+
+def _is_workiq_requested(config: "SDKConfig") -> bool:
+    """Work IQ を使う設定かを返す。"""
+    return bool(
+        getattr(config, "workiq_enabled", False)
+        or getattr(config, "workiq_draft_mode", False)
+        or config.is_workiq_qa_enabled()
+        or config.is_workiq_akm_review_enabled()
+        or config.is_workiq_akm_ingest_enabled()
+    )
+
+
+def _disable_workiq(config: "SDKConfig", params: Optional[dict] = None) -> None:
+    """Work IQ 関連フラグを実行単位で無効化する。"""
+    config.workiq_enabled = False
+    config.workiq_qa_enabled = False
+    config.workiq_akm_review_enabled = False
+    config.workiq_akm_ingest_enabled = False
+    config.workiq_draft_mode = False
+    if params is not None:
+        sources = str(params.get("sources") or "")
+        if sources:
+            kept = [part for part in sources.split(",") if part.strip().lower() != "workiq"]
+            params["sources"] = ",".join(kept)
+        params["workiq_akm_ingest_dxx"] = []
+        params["ard_workiq_enabled"] = False
+
+
+def _run_workiq_auth_preflight(
+    args: argparse.Namespace,
+    config: "SDKConfig",
+    params: Optional[dict] = None,
+) -> bool:
+    """Work IQ 使用時に EULA / M365 認証を本処理前に確認する。"""
+    if getattr(config, "dry_run", False) or not _is_workiq_requested(config):
+        return True
+
+    try:
+        from .workiq import workiq_login
+    except ImportError:
+        from workiq import workiq_login  # type: ignore[no-redef]
+
+    class _Console:
+        @staticmethod
+        def warning(message: str) -> None:
+            print(f"{_ts()} ⚠️  {message}", file=sys.stderr)
+
+    if workiq_login(_Console()):  # type: ignore[arg-type]
+        return True
+
+    interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
+    if not interactive:
+        print(f"{_ts()} ❌ Work IQ 認証確認に失敗しました。", file=sys.stderr)
+        print(f"{_ts()}    先に `python -m hve workiq-doctor` で診断してください。", file=sys.stderr)
+        return False
+
+    try:
+        answer = input("Work IQ を無効化して続行しますか？ [y/N]: ").strip().lower()
+    except EOFError:
+        return False
+    if answer in ("y", "yes"):
+        _disable_workiq(config, params)
+        return True
+    return False
+
+
+def _is_azure_auth_requested(config: "SDKConfig", params: dict) -> bool:
+    """Azure CLI 認証を必要とする可能性がある設定かを返す。"""
+    if str(params.get("resource_group") or "").strip():
+        return True
+    return any("azure" in str(name).lower() for name in (config.mcp_servers or {}).keys())
+
+
+def _azure_account_available() -> bool:
+    """Azure CLI がログイン済みかを確認する。"""
+    az = shutil.which("az")
+    if not az:
+        return False
+    try:
+        proc = subprocess.run(
+            [az, "account", "show", "--output", "none"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0
+
+
+def _run_azure_auth_preflight(args: argparse.Namespace, config: "SDKConfig", params: dict) -> bool:
+    """Azure 利用時に Azure CLI 認証を本処理前に確認する。"""
+    if getattr(config, "dry_run", False) or not _is_azure_auth_requested(config, params):
+        return True
+    if _azure_account_available():
+        return True
+
+    az = shutil.which("az")
+    if not az:
+        print(f"{_ts()} ❌ `az` が見つかりません。Azure CLI をインストールしてください。", file=sys.stderr)
+        return False
+
+    print(f"{_ts()} ⚠️  Azure CLI が未ログインです。", file=sys.stderr)
+    interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
+    if not interactive:
+        print(f"{_ts()}    先に `az login` を実行してから再試行してください。", file=sys.stderr)
+        return False
+    try:
+        answer = input("今すぐ `az login` を実行しますか？ [Y/n]: ").strip().lower()
+    except EOFError:
+        return False
+    if answer not in ("", "y", "yes"):
+        return False
+    try:
+        rc = subprocess.run([az, "login"], check=False).returncode
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"{_ts()} ❌ `az login` の実行に失敗しました: {exc}", file=sys.stderr)
+        return False
+    if rc != 0:
+        print(f"{_ts()} ❌ `az login` が異常終了しました (exit={rc})", file=sys.stderr)
+        return False
+    return _azure_account_available()
+
+
 # -----------------------------------------------------------------------
-# Phase 4 (Resume): Wizard Resume プロンプト用ヘルパー
+# pricing
 # -----------------------------------------------------------------------
-
-def _resume_selected_run(con: Any, state: Any) -> int:
-    """選択された RunState を Resume 実行する。
-
-    Phase 4 (Resume): Wizard で「再開」を選ばれた場合に呼ばれる。
-    詳細を panel 表示 → 確認 → SDK バージョン警告 → 環境変数チェック → resume 実行。
-
-    Args:
-        con: Console インスタンス。
-        state: RunState インスタンス。
-
-    Returns:
-        終了コード。0=成功 / 1=失敗（環境変数不足、resume 失敗、ユーザーキャンセル等）。
-    """
-    try:
-        from .config import SDKConfig
-        from .orchestrator import run_workflow
-        from .run_state import (
-            get_current_sdk_version,
-            to_local_time_str,
-        )
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES
-    except ImportError:
-        from config import SDKConfig  # type: ignore[no-redef]
-        from orchestrator import run_workflow  # type: ignore[no-redef]
-        from run_state import (  # type: ignore[no-redef]
-            get_current_sdk_version,
-            to_local_time_str,
-        )
-        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
-
-    s = con.s
-    wf_disp = _WORKFLOW_DISPLAY_NAMES.get(state.workflow_id, state.workflow_id)
-    progress = f"{state.completed_count}/{state.total_count or len(state.step_states)}"
-    summary_lines = [
-        f"セッション名 : {s.CYAN}{state.session_name or '(無名)'}{s.RESET}",
-        f"Run ID       : {state.run_id}",
-        f"ワークフロー : {wf_disp} ({state.workflow_id})",
-        f"進捗         : {progress} ステップ完了",
-        f"作成日時     : {to_local_time_str(state.created_at)}",
-        f"最終更新     : {to_local_time_str(state.last_updated_at)}",
-        f"ステータス   : {state.status}",
-        f"中断理由     : {state.pause_reason or '(不明)'}",
-        f"モデル       : {state.config_snapshot.get('model', '(snapshot に無し)')}",
-    ]
-    con.panel("再開するセッションの詳細", summary_lines)
-
-    # SDK バージョン警告
-    current_sdk = get_current_sdk_version()
-    saved_sdk = state.host.copilot_sdk_version or "(不明)"
-    if current_sdk != saved_sdk and saved_sdk != "(不明)":
-        con.warning(
-            f"SDK バージョン差異を検出: 保存時 {saved_sdk} → 現在 {current_sdk}\n"
-            "   セッション形式の互換性が保証されない可能性があります。"
-        )
-        if not con.prompt_yes_no("それでも再開しますか？", default=False):
-            con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
-            return 0
-
-    if not con.prompt_yes_no("このセッションを再開しますか？", default=True):
-        con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
-        return 0
-
-    # 環境変数の必須チェック（PR/Issue 作成が有効だった場合）
-    snap = state.config_snapshot or {}
-    if snap.get("create_pr") or snap.get("create_issues"):
-        if not os.environ.get("REPO"):
-            con.error("REPO 環境変数が設定されていません。Resume できません。")
-            return 1
-        if not (os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")):
-            con.error("GH_TOKEN（または GITHUB_TOKEN）環境変数が設定されていません。Resume できません。")
-            return 1
-
-    # SDKConfig を環境から構築（_restore_config_from_state が snapshot を上書きする）
-    cfg = SDKConfig.from_env()
-
-    # ── 実行 ──────────────────────────────────────────────
-    con._print("", ts=False)
-    con._print(f"  {s.CYAN}↻ Resume mode: Run ID {state.run_id} を再開します...{s.RESET}", ts=False)
-    try:
-        result = asyncio.run(
-            run_workflow(
-                workflow_id=state.workflow_id,
-                params=None,  # snapshot から復元される
-                config=cfg,
-                resume_state=state,
-            )
-        )
-    except KeyboardInterrupt:
-        con._print(
-            f"\n  {s.YELLOW}中断されました（再度 hve を起動すると続きから再開できます）。{s.RESET}",
-            ts=False,
-        )
-        return 1
-
-    # ── 結果表示 ──────────────────────────────────────────
-    if result.get("error"):
-        con.error(str(result["error"]))
-        return 1
-    if result.get("code_review_error"):
-        con.error(f"Code Review Agent エラー: {result['code_review_error']}")
-        return 1
-    if result.get("paused"):
-        # Phase 6 (Resume): Ctrl+R による graceful pause
-        con._print(
-            f"\n  {s.YELLOW}⏸ セッションを一時停止しました。{s.RESET}\n"
-            f"  Run ID: {result.get('run_id', '(不明)')}\n"
-            f"  続きから再開するには `python -m hve` 起動時の Resume プロンプトを利用してください。\n",
-            ts=False,
-        )
-        return 0
-    if result.get("failed"):
-        return 1
-    con._print(f"\n  {s.GREEN}✓{s.RESET} Resume 完了\n")
-    return 0
-
-
-def _delete_run_interactive(con: Any, state: Any) -> bool:
-    """選択された RunState を対話的に削除する（セッション管理メニュー用ヘルパー）。
-
-    実体は `resume_cli._safe_remove_run_dir` / `_hard_delete_sdk_sessions` を再利用する。
-    SDK セッション ID が含まれる場合のみ「--hard 相当」削除の有無を確認する。
-
-    Returns:
-        True: 削除成功 / False: キャンセルまたは失敗
-    """
-    try:
-        from .resume_cli import _hard_delete_sdk_sessions, _safe_remove_run_dir
-        from .run_state import DEFAULT_RUNS_DIR, DEFAULT_SESSION_ID_PREFIX
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES
-    except ImportError:
-        from resume_cli import _hard_delete_sdk_sessions, _safe_remove_run_dir  # type: ignore[no-redef]
-        from run_state import DEFAULT_RUNS_DIR, DEFAULT_SESSION_ID_PREFIX  # type: ignore[no-redef]
-        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
-
-    s = con.s
-    wf_disp = _WORKFLOW_DISPLAY_NAMES.get(state.workflow_id, state.workflow_id)
-    con.panel("削除対象", [
-        f"セッション名 : {state.session_name or '(無名)'}",
-        f"Run ID       : {state.run_id}",
-        f"ワークフロー : {wf_disp} ({state.workflow_id})",
-        f"ステータス   : {state.status}",
-    ])
-
-    if not con.prompt_yes_no("本当に削除しますか？", default=False):
-        con._print(f"  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
-        return False
-
-    sdk_count = sum(
-        1 for st in state.step_states.values()
-        if st.session_id and st.session_id.startswith(DEFAULT_SESSION_ID_PREFIX)
-    )
-    hard = False
-    if sdk_count > 0:
-        hard = con.prompt_yes_no(
-            f"SDK 側セッション {sdk_count} 件も削除しますか？（--hard 相当）",
-            default=False,
-        )
-
-    if hard:
-        sdk_failed_unexpectedly = False
-        try:
-            failed = asyncio.run(_hard_delete_sdk_sessions(state))
-        except Exception as exc:  # pragma: no cover - asyncio 異常系
-            con.warning(f"SDK 側セッション削除中に例外: {exc}")
-            failed = []
-            sdk_failed_unexpectedly = True
-        for line in failed:
-            con.warning(f"SDK 削除失敗: {line}")
-        # SDK 側削除が完全に失敗した場合、<session-state-dir>/runs/ を消すと
-        # SDK 側の orphan を追跡できなくなるため、ディスク削除を抓潰す。
-        if sdk_failed_unexpectedly:
-            if not con.prompt_yes_no(
-                "SDK 側削除が失敗しました。<session-state-dir>/runs/ をそれでも削除しますか？",
-                default=False,
-            ):
-            
-                con._print(
-                    f"  {s.YELLOW}<session-state-dir>/runs/ の削除を中止しました。{s.RESET}",
-                    ts=False,
-                )
-                return False
-
-    try:
-        _safe_remove_run_dir(state, DEFAULT_RUNS_DIR)
-    except RuntimeError as exc:
-        con.error(str(exc))
-        return False
-    except OSError as exc:
-        con.error(f"ディレクトリ削除に失敗: {exc}")
-        return False
-
-    con._print(
-        f"  {s.GREEN}✓{s.RESET} 削除しました (run_id={state.run_id})",
-        ts=False,
-    )
-    return True
-
-
-def _session_management_menu(con: Any) -> int:
-    """セッション管理メニュー（実行/削除）。
-
-    `is_resumable()` で絞込まれた Run（paused / running / failed）の一覧を表示し、
-    選択されたセッションに対して以下のいずれかを実行する:
-
-    - 実行（再開）: `_resume_selected_run` を呼ぶ。実行後の状態（完了 / 失敗 /
-      pause）に関わらず本メニューに戻る。pause された場合は一覧に同じ Run が
-      再表示される。
-    - 削除: `_delete_run_interactive` を呼ぶ。SDK セッション ID が含まれていれば
-      `--hard 相当` の追加削除を確認する。
-    - メニューを抜ける: トップメニューの「メニューを抜ける」で return 0。
-
-    一覧が空になった、もしくは「メニューを抜ける」が選ばれた時点で 0 を返す。
-    """
-    try:
-        from .run_state import is_resumable, list_resumable_runs, to_local_time_str
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES
-    except ImportError:
-        from run_state import is_resumable, list_resumable_runs, to_local_time_str  # type: ignore[no-redef]
-        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
-
-    s = con.s
-    while True:
-        all_runs = list_resumable_runs()
-        runs = [r for r in all_runs if is_resumable(r)]
-        if not runs:
-            if all_runs:
-                con._print(
-                    "  再開可能なセッションはありません（完了済みは表示しません）。",
-                    ts=False,
-                )
-            else:
-                con._print("  保存されているセッションはありません。", ts=False)
-            return 0
-
-        options: List[str] = []
-        for r in runs:
-            wf_disp = _WORKFLOW_DISPLAY_NAMES.get(r.workflow_id, r.workflow_id)
-            progress = f"{r.completed_count}/{r.total_count or len(r.step_states)}"
-            last_local = to_local_time_str(r.last_updated_at)
-            options.append(
-                f"{r.session_name or '(無名)'}  "
-                f"{s.DIM}({wf_disp} / status={r.status} / 進捗 {progress} / "
-                f"最終更新 {last_local}){s.RESET}"
-            )
-        back_idx = len(options)
-        options.append("↩️  メニューを抜ける")
-
-        idx = con.menu_select(
-            "管理するセッションを選択してください",
-            options,
-            default_index=back_idx,
-        )
-        if idx == back_idx or idx < 0 or idx >= len(runs):
-            return 0
-
-        state = runs[idx]
-        sub_options = [
-            "▶ このセッションを実行（再開）",
-            "🗑️  削除",
-            "↩️  セッション一覧へ戻る",
-        ]
-        sub_idx = con.menu_select(
-            f"'{state.session_name or state.run_id}' に対する操作",
-            sub_options,
-            default_index=2,
-        )
-        if sub_idx == 0:
-            _resume_selected_run(con, state)
-        elif sub_idx == 1:
-            _delete_run_interactive(con, state)
-        # sub_idx == 2 または想定外 → 一覧へ戻る（ループ継続）
-
-
-def _show_resume_menu(con: Any, runs: list, *, allow_cancel: bool = False) -> Optional[int]:
-    """再開可能 Run の一覧メニューを表示し、ユーザー選択をディスパッチする。"""
-    try:
-        from .run_state import to_local_time_str
-        from .template_engine import _WORKFLOW_DISPLAY_NAMES
-    except ImportError:
-        from run_state import to_local_time_str  # type: ignore[no-redef]
-        from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
-
-    s = con.s
-    options: List[str] = []
-    for r in runs:
-        wf_disp = _WORKFLOW_DISPLAY_NAMES.get(r.workflow_id, r.workflow_id)
-        progress = f"{r.completed_count}/{r.total_count or len(r.step_states)}"
-        last_local = to_local_time_str(r.last_updated_at)
-        options.append(
-            f"{r.session_name or '(無名)'}  "
-            f"{s.DIM}({wf_disp} / 進捗 {progress} / 最終更新 {last_local}){s.RESET}"
-        )
-
-    if allow_cancel:
-        cancel_idx = len(options)
-        options.append("↩️  キャンセル（元の画面へ戻る）")
-        idx = con.menu_select(
-            "再開可能なセッションがあります。選択してください",
-            options,
-            default_index=0,
-        )
-        if 0 <= idx < len(runs):
-            return _resume_selected_run(con, runs[idx])
-        if idx == cancel_idx:
-            return None
-        return None
-
-    new_run_idx = len(options)
-    mgmt_menu_idx = new_run_idx + 1
-    options.append("➕ 新規実行を開始する")
-    options.append("⚙️  セッション管理（実行/削除）")
-
-    idx = con.menu_select(
-        "再開可能なセッションがあります。選択してください",
-        options,
-        default_index=0,
-    )
-
-    if 0 <= idx < len(runs):
-        return _resume_selected_run(con, runs[idx])
-    if idx == new_run_idx:
-        return None
-    if idx == mgmt_menu_idx:
-        return _session_management_menu(con)
-    return None
-
-
-def _show_resume_menu_on_demand(con: Any) -> Optional[int]:
-    """Ctrl+R 押下時に呼ばれる、wizard 中盤以降からの再開メニュー呼び出し。"""
-    try:
-        from .run_state import list_resumable_runs
-    except ImportError:
-        from run_state import list_resumable_runs  # type: ignore[no-redef]
-
-    try:
-        runs = list_resumable_runs()
-    except Exception as exc:  # pragma: no cover - I/O 異常系
-        con.warning(f"再開可能セッションの一覧取得に失敗しました: {exc}")
-        return None
-    runs = [r for r in runs if r.status in {"paused", "running", "failed"}]
-    if not runs:
-        con._print("\n  再開可能なセッションはありません。\n", ts=False)
-        return None
-    return _show_resume_menu(con, runs, allow_cancel=True)
-
-
-def _maybe_show_resume_prompt(con: Any) -> Optional[int]:
-    """Wizard 起動時に Resume プロンプトを表示する。
-
-    Phase 4 (Resume): `<session-state-dir>/runs/` に再開可能な Run があれば、最初に
-    「再開する／新規実行／管理画面」を選択させる。
-
-    Returns:
-        - None : 「新規実行」が選ばれた場合（呼び出し元は通常フローへフォールスルー）
-        - int  : 「再開」または「管理画面」が選ばれた場合（呼び出し元は即座に return する）
-    """
-    try:
-        from .run_state import is_resumable, list_resumable_runs
-    except ImportError:
-        from run_state import is_resumable, list_resumable_runs  # type: ignore[no-redef]
-
-    try:
-        all_runs = list_resumable_runs()
-    except Exception as exc:  # pragma: no cover - I/O 異常系
-        con.warning(f"再開可能セッションの一覧取得に失敗しました: {exc}")
-        return None
-
-    resumable = [r for r in all_runs if is_resumable(r)]
-    if not resumable:
-        return None
-
-    return _show_resume_menu(con, resumable, allow_cancel=False)
-
 
 def _cmd_pricing(args: argparse.Namespace) -> int:
     """`hve pricing {show|refresh}` ハンドラー。
@@ -2856,7 +2929,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         from .workflow_registry import list_workflows, get_workflow
         from .template_engine import _WORKFLOW_DISPLAY_NAMES
         from .orchestrator import run_workflow
-        from .keybind import KEY_CTRL_R, KeybindMonitor
         from .workiq import (
             get_workiq_prompt_template,
             is_workiq_available,
@@ -2868,7 +2940,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
         from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
-        from keybind import KEY_CTRL_R, KeybindMonitor  # type: ignore[no-redef]
         from workiq import (  # type: ignore[no-redef]
             get_workiq_prompt_template,
             is_workiq_available,
@@ -2884,119 +2955,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             "ワークフローをインタラクティブに実行します",
         )
 
-    # ── Phase 4 (Resume): 再開プロンプト ─────────────────
-    # <session-state-dir>/runs/ に再開可能な Run があれば、最初に「再開／新規／管理」を選択させる。
-    # 「新規実行」が選ばれた場合のみ None が返り、通常フローへフォールスルーする。
-    _resume_result = _maybe_show_resume_prompt(con)
-    if _resume_result is not None:
-        return _resume_result
-
-    # ── Phase 8 (Resume): ウィザード中 Ctrl+R でオンデマンド再開メニュー ──
-    resume_invoked: dict = {"rc": None}
-    _resume_requested = threading.Event()
-    _monitor_probe = KeybindMonitor()
-    monitor = _monitor_probe
-    wizard_loop: Optional[asyncio.AbstractEventLoop] = None
-    wizard_loop_thread: Optional[threading.Thread] = None
-    _orig_console_methods: dict[str, Any] = {}
-    _keybind_cleaned_up = False
-
-    async def _on_ctrl_r_in_wizard() -> None:
-        _resume_requested.set()
-
-    def _cleanup_wizard_keybind() -> None:
-        nonlocal _keybind_cleaned_up
-        if _keybind_cleaned_up:
-            return
-        _keybind_cleaned_up = True
-        monitor.stop()
-        for name, fn in _orig_console_methods.items():
-            setattr(con, name, fn)
-        if wizard_loop is not None:
-            try:
-                wizard_loop.call_soon_threadsafe(wizard_loop.stop)
-            except RuntimeError:
-                # loop が既に停止/close 済みの場合があるため cleanup では握り潰す
-                pass
-        if wizard_loop_thread is not None and wizard_loop_thread.is_alive():
-            wizard_loop_thread.join(timeout=1.0)
-        if wizard_loop is not None:
-            try:
-                wizard_loop.close()
-            except RuntimeError:
-                # 既に close 済み、または別スレッド終了直後の競合時は no-op
-                pass
-
-    def _short_circuit_input_result(method_name: str, kwargs: dict[str, Any]) -> Any:
-        if method_name == "menu_select":
-            default_index = kwargs.get("default_index")
-            return 0 if default_index is None else default_index
-        if method_name == "prompt_yes_no":
-            return kwargs.get("default", False)
-        if method_name == "prompt_multi_select":
-            return []
-        return kwargs.get("default", "")
-
-    def _maybe_handle_resume_request() -> None:
-        if not _resume_requested.is_set():
-            return
-        _resume_requested.clear()
-        rc = _show_resume_menu_on_demand(con)
-        if rc is not None:
-            resume_invoked["rc"] = int(rc)
-
-    def _get_default_if_resumed(method_name: str, kwargs: dict[str, Any]) -> Optional[Any]:
-        if resume_invoked["rc"] is None:
-            return None
-        return _short_circuit_input_result(method_name, kwargs)
-
-    def _wrap_console_input_method(name: str) -> None:
-        fn = getattr(con, name, None)
-        if not callable(fn):
-            return
-        _orig_console_methods[name] = fn
-        method_name = name
-
-        def _wrapped(*args, **kwargs):
-            _short = _get_default_if_resumed(method_name, kwargs)
-            if _short is not None:
-                return _short
-            _maybe_handle_resume_request()
-            _short = _get_default_if_resumed(method_name, kwargs)
-            if _short is not None:
-                return _short
-            try:
-                result = fn(*args, **kwargs)
-            except Exception as exc:
-                con.warning(f"ウィザード入力中にエラーが発生しました ({method_name}): {exc}")
-                _cleanup_wizard_keybind()
-                raise
-            _maybe_handle_resume_request()
-            _short = _get_default_if_resumed(method_name, kwargs)
-            if _short is not None:
-                return _short
-            return result
-
-        setattr(con, name, _wrapped)
-
-    if _monitor_probe.enabled:
-        wizard_loop = asyncio.new_event_loop()
-        wizard_loop_thread = threading.Thread(
-            target=wizard_loop.run_forever,
-            name="hve-wizard-keybind-loop",
-            daemon=True,
-        )
-        wizard_loop_thread.start()
-        monitor = KeybindMonitor(wizard_loop)
-        monitor.register(KEY_CTRL_R, _on_ctrl_r_in_wizard)
-        monitor.start()
-        for _method_name in ("menu_select", "prompt_yes_no", "prompt_input", "prompt_multi_select", "input"):
-            _wrap_console_input_method(_method_name)
-        con._print(
-            "  💡 ウィザード中も Ctrl+R で保存済みセッションから再開できます",
-            ts=False,
-        )
-
     # ── ワークフロー選択 ──────────────────────────────────
     workflows = list_workflows()
     wf_options = [
@@ -3009,6 +2967,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     is_akm = (wf.id == "akm")
     is_aqod = (wf.id == "aqod")
     is_ard = (wf.id == "ard")
+    is_agent_self_improve_default = wf.id in {"aag", "aagd"}
     is_single_step_workflow = is_akm or is_aqod
 
     # ── ステップ選択 ──────────────────────────────────────
@@ -3121,14 +3080,22 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             workiq_enabled = ard_workiq_enabled
             workiq_qa_enabled = ard_workiq_enabled
         elif wf.params:
-            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=True))
+            params_extra.update(
+                _collect_generic_workflow_params(
+                    con,
+                    wf,
+                    is_quick_auto=True,
+                    selected_step_ids=selected_step_ids,
+                )
+            )
         # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
         _agentic_answers: dict = {}
         if wf.id in ("aad-web", "asdw-web"):
             _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=True)
         additional_prompt = None
-        # クイック全自動: 自己改善はデフォルト OFF
-        auto_self_improve = False
+        # AAG/AAGDはPost-DAG Self-Improve既定ON。他workflowは従来どおりOFF。
+        auto_self_improve = is_agent_self_improve_default
+        self_improve_explicit_opt_out = False
         self_improve_max_iterations = 3
         self_improve_target_scope = ""
         self_improve_goal = ""
@@ -3167,7 +3134,14 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             params_extra.update(_ard_wf_params)
             selected_step_ids = _ard_steps
         else:
-            params_extra.update(_collect_generic_workflow_params(con, wf, is_quick_auto=False))
+            params_extra.update(
+                _collect_generic_workflow_params(
+                    con,
+                    wf,
+                    is_quick_auto=False,
+                    selected_step_ids=selected_step_ids,
+                )
+            )
         # Agentic Retrieval 設定（AAD-WEB / ASDW-WEB）
         _agentic_answers: dict = {}
         if wf.id in ("aad-web", "asdw-web"):
@@ -3416,7 +3390,19 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     review_model_display = None
 
         # ── 自己改善ループ ────────────────────────────────────
-        auto_self_improve = con.prompt_yes_no("自己改善ループを有効にする？", default=False)
+        if is_agent_self_improve_default:
+            self_improve_explicit_opt_out = con.prompt_yes_no(
+                "AAG/AAGD 既定の自己改善ループを無効化する？（緊急opt-out）",
+                default=False,
+            )
+            auto_self_improve = not self_improve_explicit_opt_out
+        else:
+            auto_self_improve = con.prompt_yes_no(
+                "自己改善ループを有効にする？",
+                default=False,
+            )
+            # 対話でNoを選んだ場合は環境変数より強い明示OFFとして扱う。
+            self_improve_explicit_opt_out = not auto_self_improve
         self_improve_max_iterations = 3
         self_improve_target_scope = ""
         self_improve_goal = ""
@@ -3627,34 +3613,11 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     if additional_prompt:
         summary_lines.append(f"追加プロンプト（全Step）: {additional_prompt[:50]}{'...' if len(additional_prompt) > 50 else ''}")
 
-    # Phase 4 (Resume): セッション名入力（Resume 一覧に表示する識別名）。
-    # クイック全自動では既定（後で run_workflow が default_session_name で自動生成）。
-    # カスタム全自動 / 手動では Enter で既定使用、入力で上書き。
-    session_name_input: str = ""
-    if not is_quick_auto:
-        try:
-            from .run_state import default_session_name
-        except ImportError:
-            from run_state import default_session_name  # type: ignore[no-redef]
-        _wf_disp = _WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)
-        _suggested = default_session_name(
-            workflow_id=wf.id,
-            params=params_extra,
-            workflow_display_name=_wf_disp,
-        )
-        session_name_input = con.prompt_input(
-            "セッション名（Resume 一覧の表示名）",
-            default=_suggested,
-        )
-    if session_name_input:
-        summary_lines.append(f"セッション名 : {session_name_input}")
-
     con.panel("実行設定", summary_lines)
 
     # ── 実行確認 ──────────────────────────────────────────
     if not con.prompt_yes_no("この設定で実行しますか？", default=True):
         con._print(f"\n  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
-        _cleanup_wizard_keybind()
         return 0
 
     if is_any_auto:
@@ -3718,8 +3681,12 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         cfg.repo = os.environ.get("REPO", "")
 
     # ── 自己改善ループ設定 ─────────────────────────────────
-    if auto_self_improve:
+    if self_improve_explicit_opt_out:
+        cfg.auto_self_improve = False
+        cfg.self_improve_skip = True
+    elif auto_self_improve:
         cfg.auto_self_improve = True
+        cfg.self_improve_skip = False
         cfg.self_improve_max_iterations = self_improve_max_iterations
         if self_improve_target_scope:
             cfg.self_improve_target_scope = self_improve_target_scope
@@ -3799,15 +3766,18 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         if errors:
             for e in errors:
                 con.error(e)
-            _cleanup_wizard_keybind()
             return 1
 
-    if resume_invoked["rc"] is not None:
-        _cleanup_wizard_keybind()
-        return int(resume_invoked["rc"])
+    if not _run_copilot_auth_preflight(args or argparse.Namespace(command="cli"), cfg):
+        return 1
+
+    if not _run_workiq_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):
+        return 1
+
+    if not _run_azure_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):
+        return 1
 
     # ── 実行 ──────────────────────────────────────────────
-    _cleanup_wizard_keybind()
     con._print("", ts=False)
     try:
         result = asyncio.run(
@@ -3815,7 +3785,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 workflow_id=wf.id,
                 params=params,
                 config=cfg,
-                session_name=session_name_input or None,
             )
         )
     except KeyboardInterrupt:
@@ -3823,21 +3792,29 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         return 1
 
     # ── 結果表示 ──────────────────────────────────────────
+    # T-H1H2b: strict 停止 (status=blocked) を error より先に判定し、
+    # failed と区別された「停止」として表示する。
+    if result.get("blocked"):
+        blocked_items = [str(item) for item in result.get("blocked", [])]
+        blocked_label = (
+            "Post-DAG Self-Improve が成功条件を満たさなかったため停止しました"
+            if "self-improve" in blocked_items
+            else "ワークフローは必須条件を満たさなかったため停止しました"
+        )
+        con._print(
+            f"\n  {s.YELLOW}⏸ {blocked_label}"
+            f"（status=blocked）。{s.RESET}",
+            ts=False,
+        )
+        if result.get("error"):
+            con._print(f"  {result['error']}", ts=False)
+        return 1
     if result.get("error"):
         con.error(str(result["error"]))
         return 1
     if result.get("code_review_error"):
         con.error(f"Code Review Agent エラー: {result['code_review_error']}")
         return 1
-    if result.get("paused"):
-        # Phase 6 (Resume): Ctrl+R による graceful pause
-        con._print(
-            f"\n  {s.YELLOW}⏸ セッションを一時停止しました。{s.RESET}\n"
-            f"  Run ID: {result.get('run_id', '(不明)')}\n"
-            f"  続きから再開するには `python -m hve` 起動時の Resume プロンプトを利用してください。\n",
-            ts=False,
-        )
-        return 0
     if result.get("failed"):
         return 1
     con._print(f"\n  {s.GREEN}✓{s.RESET} ワークフロー完了\n")
@@ -3937,20 +3914,14 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
 
     try:
         try:
-            from copilot import CopilotClient, SubprocessConfig  # type: ignore[import]
-            from copilot.session import CopilotSession  # type: ignore[import]
+            import copilot  # noqa: F401  # type: ignore[import]
         except ImportError:
-            # github_copilot_sdk パッケージ名でのフォールバック
-            try:
-                from github_copilot_sdk import CopilotClient, SubprocessConfig  # type: ignore[import]
-                from github_copilot_sdk.session import CopilotSession  # type: ignore[import]
-            except ImportError:
-                print(
-                    f"{_ts()} ⚠️  GitHub Copilot SDK が見つかりません。"
-                    " 統合ドキュメント生成をスキップします。",
-                    file=sys.stderr,
-                )
-                return 0
+            print(
+                f"{_ts()} ⚠️  GitHub Copilot SDK が見つかりません。"
+                " 統合ドキュメント生成をスキップします。",
+                file=sys.stderr,
+            )
+            return 0
 
         model, _ = _resolve_model(args.model)  # _ = display name (unused here)
         if model != MODEL_AUTO_VALUE:
@@ -3963,12 +3934,15 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
         cfg = SDKConfig.from_env()
         cfg.model = model
 
-        sdk_cfg = SubprocessConfig(
+        try:
+            from .copilot_client_factory import create_copilot_client
+        except ImportError:
+            from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+        client = create_copilot_client(
             cli_path=cfg.cli_path,
             github_token=cfg.resolve_token() or None,
             log_level="error",
         )
-        client = CopilotClient(config=sdk_cfg)
 
         async def _generate_consolidated() -> int:
             await client.start()
@@ -4242,6 +4216,10 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    _app_id_error = _validate_app_id_args(args)
+    if _app_id_error:
+        print(f"{_ts()} ❌ {_app_id_error}", file=sys.stderr)
+        return 1
     if _autopilot_chain_raw:
         return _cmd_orchestrate_autopilot_chain(args)
     if not args.workflow:
@@ -4281,7 +4259,11 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
 
     config = _build_config(args)
-    params = _build_params(args)
+    try:
+        params = _build_params(args)
+    except ValueError as exc:
+        print(f"{_ts()} ❌ {exc}", file=sys.stderr)
+        return 1
 
     # バリデーション: --create-issues または --create-pr には GH_TOKEN と --repo が必要
     if config.create_issues or config.create_pr:
@@ -4301,12 +4283,25 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if not _validate_auto_coding_agent_review(args, config):
         return 1
 
+    if not _run_copilot_auth_preflight(args, config):
+        return 1
+
+    if not _run_workiq_auth_preflight(args, config, params):
+        return 1
+
+    if not _run_azure_auth_preflight(args, config, params):
+        return 1
+
     # HVE CLI Orchestrator 配下シグナル: OrchestratorContext を生成して伝播。
     # `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
     # local 実行モード既定で continue_on_error=True、`--strict` でオプトアウト。
+    # SPLIT_REQUIRED の subissues.md → Sub-Issue 作成は Cloud Agent Orchestrator
+    # (Issue Template + GitHub Actions) の責務。CLI / GUI 標準経路では legacy
+    # runtime split-fork を明示的に無効化し、DAG/fan-out 実行に集約する。
     _strict = bool(getattr(args, "strict", False))
     orchestrator_ctx = OrchestratorContext(
         run_id=config.run_id or "",
+        split_fork_enabled=False,
         continue_on_error=not _strict,
     )
 
@@ -4320,6 +4315,22 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     )
 
     # 終了コード判定
+    # T-H1H2b: blocked は failed と区別された「停止」として優先判定する。
+    # stderr に明示ログを出して subprocess 経由の上位レイヤーが識別できるようにする。
+    if result.get("blocked"):
+        blocked_items = [str(item) for item in result.get("blocked", [])]
+        blocked_label = (
+            "Post-DAG Self-Improve が成功条件を満たさなかったため停止しました"
+            if "self-improve" in blocked_items
+            else "ワークフローは必須条件を満たさなかったため停止しました"
+        )
+        print(
+            f"{_ts()} ⏸  {blocked_label}（status=blocked）。",
+            file=sys.stderr,
+        )
+        if result.get("error"):
+            print(f"{_ts()}    {result['error']}", file=sys.stderr)
+        return 1
     if result.get("error"):
         return 1
     if result.get("failed"):
@@ -4343,4 +4354,5 @@ def _cmd_emit_prompt(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":
+    _reexec_in_venv_if_needed()
     sys.exit(main())

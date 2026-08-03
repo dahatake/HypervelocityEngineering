@@ -172,11 +172,12 @@ HVE CLI Orchestrator または HVE GUI Orchestrator を **Windows で初めて�
 
 1. エクスプローラーで **`hve\setup-hve.cmd`** をダブルクリック
 2. 既定で次が一括導入されます:
-   - Python 3.11+ の検出（`py -3.11` → `python` → `python3` の順）
-   - `.venv` 作成
-   - `github-copilot-sdk`
-   - mdq extras（`[mdq-watch,mdq-ja]`）
-   - **GUI extras（`[gui,gui-docconvert]`、PySide6 + markitdown）** — `.cmd` は既定で GUI extras を含めます
+    - Python 3.11+ の検出（`py -3.11` → `python` → `python3` の順）
+    - `.venv` 作成
+    - `github-copilot-sdk`
+    - test extra（`[test]`、pytest）
+    - mdq extras（`[mdq-watch,mdq-ja]`）
+    - **GUI extras（`[gui,gui-docconvert]`、PySide6 + markitdown）** — `.cmd` は既定で GUI extras を含めます
 3. 完了後の動線:
    - GUI を使う場合 → `hve-gui.bat` をダブルクリック（[hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)）
    - CLI を使う場合 → `python -m hve --help`（[hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)）
@@ -185,7 +186,7 @@ HVE CLI Orchestrator または HVE GUI Orchestrator を **Windows で初めて�
 
 | 引数 | 動作 |
 |---|---|
-| なし（既定） | venv 作成 + SDK + 全 extras（mdq-watch / mdq-ja / semantic / gui / gui-pty / gui-docconvert）を導入 |
+| なし（既定） | venv 作成 + SDK + 全 extras（test / mdq-watch / mdq-ja / semantic / gui / gui-pty / gui-docconvert）を導入 |
 | `-CheckOnly` | 状態確認のみ（変更なし） |
 | `-NoGui` | GUI extras をスキップ（CLI のみ） |
 | `-Minimal` | base のみインストール（extras 全スキップ） |
@@ -194,7 +195,7 @@ HVE CLI Orchestrator または HVE GUI Orchestrator を **Windows で初めて�
 | `-WithSkills` | `microsoft/skills` を npx で導入（Node.js 20+ 必須） |
 | `-Help` | 使い方表示 |
 
-> **`.cmd` は `.ps1` を呼び出す薄ラッパ**です（v0.1.x 以降）。Windows PowerShell 5.1 と PowerShell 7+ のどちらでも動作します。
+> **`.cmd` は `.ps1` を呼び出す薄ラッパ**です（v0.1.x 以降）。`.ps1` の実行には PowerShell 7+（`pwsh.exe`）が必要で、`.cmd` は未導入時にwingetによる導入を案内または試行します。
 
 ---
 
@@ -278,7 +279,7 @@ Node.js 20+（`npx` 利用可能）が PATH 上にあれば、`hve/setup-hve.*` 
 
 ```powershell
 # Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1 -WithSkills
+pwsh -NoProfile -File hve\setup-hve.ps1 -WithSkills
 ```
 
 ```cmd
@@ -294,7 +295,7 @@ hve\setup-hve.cmd --with-skills
 GUI extras は既定で同時にインストールされます。`--with-skills` とは独立して使えます。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1 -WithSkills
+pwsh -NoProfile -File hve\setup-hve.ps1 -WithSkills
 ```
 
 > **注意**: `npx` が見つからない場合はインストールはスキップされ、警告が出力されます。Node.js を後からインストールした場合は下記の手動コマンドで導入してください。
@@ -350,7 +351,7 @@ Copilot / Prompt が `docs/` `knowledge/` `qa/` `original-docs/` `work/` 等の 
 
 - Skill 本体: `.github/skills/markdown-query/SKILL.md`
 - 実装: `mdq`（SQLite + BM25）
-- 索引対象（既定 11 フォルダ）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `session-state/`, `hve-dev/`
+- 索引対象（既定 10 フォルダ）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`
 
 #### 任意依存の導入（推奨）
 
@@ -368,7 +369,7 @@ HVE GUI Orchestrator の ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / 
 
 ```powershell
 # Windows
-powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
+pwsh -NoProfile -File hve\setup-hve.ps1
 ```
 
 ```bash
@@ -390,7 +391,7 @@ python -m mdq search --q "業務要件" --top-k 3 --format compact
 
 #### HVE Cloud Agent Orchestrator での挙動
 
-- Skill 発見は `.github/skills/_routing/SKILL.md` の planning 共通テーブル経由で行われます（登録済）。
+- Skill 発見は `.github/skills/_routing/README.md` の planning 共通テーブル経由で行われます（登録済）。
 - Cloud runner 上では作業ツリーが揮発するため、索引は **その実行内で都度 `python -m mdq index` を実行** する必要があります。CLI Orchestrator 側のオペレーション詳細は [HVE CLI Orchestrator ガイド 付録F](./hve-cli-orchestrator-guide.md#付録f-markdown-横断クエリmarkdown-query-skill) を参照してください。
 - 効果計測（撤去判断用）の手順は [HVE CLI Orchestrator ガイド 付録F.7](./hve-cli-orchestrator-guide.md#f7-パフォーマンス確認手順撤去判断用) を参照してください。
 
@@ -603,14 +604,16 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 
 **ワークフロートリガー系（13 個）**
 
+> **FR-CLOUD-06**: `auto-app-dev-microservice` / `auto-app-dev-microservice-web`（ASDW / ASDW-WEB）は、reusable workflow が `hve/workflow_registry.py` の Step 体系と非同期のため Cloud 起動を停止しています。ラベル自体は作成されますが、付与しても Sub-Issue は生成されず、dispatcher が CLI / GUI への誘導コメントを投稿します。ASDW-WEB は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) / [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) の経路が supported です。
+
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
 | `auto-app-detail-design` | `#0E8A16` | AAD ワークフロートリガー |
 | `auto-app-detail-design-web` | `#1D76DB` | AAD-WEB ワークフロートリガー |
 | `auto-ai-agent-design` | `#7B68EE` | AAG ワークフロートリガー |
-| `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー |
-| `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー |
+| `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー（**Cloud 起動停止中 / FR-CLOUD-06**）|
+| `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー（**Cloud 起動停止中 / FR-CLOUD-06**）|
 | `auto-ai-agent-dev` | `#6A5ACD` | AAGD ワークフロートリガー |
 | `auto-dataflow-design` | `#0E8A16` | ADFD ワークフロートリガー |
 | `auto-dataflow-dev` | `#0E8A16` | ADFDV ワークフロートリガー |

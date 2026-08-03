@@ -108,12 +108,40 @@ _AUTOPILOT_CATALOG_REQUIRING_WORKFLOWS: Tuple[str, ...] = (
 # 改訂により ``app_id`` / ``usecase_id`` は必須情報から除外。
 # --------------------------------------------------------------------------
 
-INPUT_FIELD_KEYS: Tuple[str, ...] = (
+INPUT_FIELD_KEYS_STATIC: Tuple[str, ...] = (
     "company_name",     # ARD Step 1 (Untargeted) 必須
     "target_business",  # ARD Step 2 (Targeted) 必須
     "resource_group",   # asdw-web / adfdv / aagd 必須
     "target_dirs",      # adoc 必須
 )
+
+
+def registry_required_param_keys() -> Tuple[str, ...]:
+    """全 Workflow の `StepDef.required_params` を重複除去して返す（FR-GUI-02）。
+
+    必須キーの正本は `hve/workflow_registry.py` の宣言（FR-DAG-07）であり、
+    GUI 側で二重管理しない。
+    """
+    from hve.workflow_registry import list_workflows
+
+    keys: List[str] = []
+    for wf in list_workflows():
+        for step in wf.steps:
+            for key in step.required_params:
+                if key not in keys:
+                    keys.append(key)
+    return tuple(keys)
+
+
+def _build_input_field_keys() -> Tuple[str, ...]:
+    keys = list(INPUT_FIELD_KEYS_STATIC)
+    for key in registry_required_param_keys():
+        if key not in keys:
+            keys.append(key)
+    return tuple(keys)
+
+
+INPUT_FIELD_KEYS: Tuple[str, ...] = _build_input_field_keys()
 
 
 # --------------------------------------------------------------------------
@@ -247,12 +275,22 @@ _add(StepRequirement(
 
 # ---- ADFD ----
 _add(StepRequirement(
-    workflow_id="adfd", step_id="1.1",
+    workflow_id="adfd", step_id="6.1",
     required_info_keys=(),
     required_info_logic="none",
-    required_file_kind="use_case_catalog",
+    required_file_kind="app_catalog",
     guidance_text=(
-        "データフロー設計は docs/catalog/use-case-catalog.md を入力とします。"
+        "データフロー設計は docs/catalog/app-catalog.md を入力とします（AAS の共通カタログを SoT として参照）。"
+        "対象 APP-ID は任意指定（省略時はカタログ内全 APP が対象）。"
+    ),
+))
+_add(StepRequirement(
+    workflow_id="adfd", step_id="6.2",
+    required_info_keys=(),
+    required_info_logic="none",
+    required_file_kind="app_catalog",
+    guidance_text=(
+        "監視・運用設計は docs/catalog/app-catalog.md と docs/catalog/service-catalog-matrix.md を入力とします。"
         "対象 APP-ID は任意指定（省略時はカタログ内全 APP が対象）。"
     ),
 ))
@@ -362,11 +400,6 @@ def get_requirement(workflow_id: str, step_id: str) -> Optional[StepRequirement]
     return REQUIREMENT_TABLE.get((workflow_id, step_id))
 
 
-def all_defined_keys() -> List[Tuple[str, str]]:
-    """REQUIREMENT_TABLE に登録されたすべての (workflow_id, step_id) を返す。"""
-    return sorted(REQUIREMENT_TABLE.keys())
-
-
 def get_file_kind_spec(kind: str) -> Optional[FileKindSpec]:
     """必須ファイル種別から FileKindSpec を取得。未定義なら None。"""
     return FILE_KIND_TO_SPEC.get(kind)
@@ -407,7 +440,7 @@ class RequirementsSummary:
 def _natural_step_key(step_id: str) -> Tuple[int, ...]:
     """ステップ ID を自然順比較用タプルに変換する。
 
-    例: "1" → (1,), "1.1" → (1, 1), "2.3T" → (2, 3, 9999)
+    例: "1" → (1,), "1.1" → (1, 1), "2.3TC" → (2, 3, 9999)
     数値変換できない要素は 9999 として末尾扱い（決定論的）。
     """
     parts = step_id.split(".")
@@ -696,4 +729,123 @@ def summarize_requirements_for_selection(
         origin_chosen=origin_chosen,
     )
     return [s] if s is not None else []
+
+
+# --------------------------------------------------------------------------
+# FR-GUI-01: 全 active step を評価する Precheck 入口
+# --------------------------------------------------------------------------
+
+
+def _summarize_step_required_params(
+    workflow_id: str,
+    step_id: str,
+    input_values: Dict[str, str],
+) -> Optional[RequirementsSummary]:
+    """`StepDef.required_params` 由来の必須入力サマリーを生成する（FR-GUI-02）。
+
+    `default_params` を持つキーは実行時に `apply_step_default_params`（FR-DAG-07）
+    が補完するため、GUI 未入力でも不足としない。
+    """
+    from hve.workflow_registry import get_workflow
+
+    wf = get_workflow(workflow_id)
+    step = wf.get_step(step_id) if wf is not None else None
+    if step is None or not step.required_params:
+        return None
+
+    items: List[RequirementItem] = []
+    for key in step.required_params:
+        if key in step.default_params:
+            continue
+        value = (input_values.get(key) or "").strip()
+        items.append(RequirementItem(
+            label=key,
+            status="ok" if value else "warn",
+            detail="入力済み" if value else "未入力",
+        ))
+    if not items:
+        return None
+
+    overall = "warn" if any(i.status == "warn" for i in items) else "ok"
+    return RequirementsSummary(
+        workflow_id=workflow_id,
+        step_id=step_id,
+        section=WORKFLOW_TO_SECTION.get(workflow_id, "OPTIONS_TOP"),
+        overall_status=overall,
+        guidance_text=(
+            f"Step {step_id}（{step.title}）の実行には上記の入力が必須です。"
+            "既定値を持たない項目のため、未入力のまま実行すると起動直後に停止します。"
+        ),
+        items=tuple(items),
+    )
+
+
+def summarize_all_requirements_for_selection(
+    selected: Sequence[Tuple[str, Sequence[str]]],
+    *,
+    input_values: Optional[Dict[str, str]] = None,
+    file_exists: Optional[Callable[[str], bool]] = None,
+    attached_count: int = 0,
+    origin_chosen: bool = False,
+    autopilot_mode: bool = False,
+    autopilot_catalog_path: Optional[str] = None,
+) -> List[RequirementsSummary]:
+    """選択中の active step の必須入力を評価する（FR-GUI-01）。
+
+    従来の `summarize_requirements_for_selection` はバナー表示用に常に 0〜1 件しか
+    返さない。本関数はその代表 1 件に加えて次の 2 系統を評価する。
+
+    - **ファイル要件**（`REQUIREMENT_TABLE` 由来）: **最優先ワークフローの全選択 Step**
+      のみ。下流ワークフロー（例: ARD+AAS 同時選択時の AAS）の入力は上流が
+      同一セッション内で生成するため検査しない（バナーと同一の判断）。
+    - **パラメータ要件**（`StepDef.required_params` 由来）: **全選択ワークフローの
+      全選択 Step**。パラメータはどの上流ワークフローも生成しないため、
+      判定を実行時まで遅らせても解消されない。
+    """
+    iv = dict(input_values or {})
+    summaries: List[RequirementsSummary] = summarize_requirements_for_selection(
+        selected,
+        input_values=iv,
+        file_exists=file_exists,
+        attached_count=attached_count,
+        origin_chosen=origin_chosen,
+        autopilot_mode=autopilot_mode,
+        autopilot_catalog_path=autopilot_catalog_path,
+    )
+    seen = {(s.workflow_id, s.step_id) for s in summaries}
+    target = pick_target_step(selected)
+    priority_workflow_id = target[0] if target is not None else None
+
+    for workflow_id, step_ids in selected:
+        base_ids: List[str] = []
+        for raw_step_id in step_ids or ():
+            base_id = str(raw_step_id).split("/", 1)[0]
+            if base_id not in base_ids:
+                base_ids.append(base_id)
+        for step_id in base_ids:
+            key = (workflow_id, step_id)
+            if key in seen:
+                continue
+            # autopilot モードでは個別 Step のファイル要件を意図的に拑えて
+            # app-arch-catalog の存在チェックへ置き換えているため復活させない。
+            if (
+                not autopilot_mode
+                and workflow_id == priority_workflow_id
+                and key in REQUIREMENT_TABLE
+            ):
+                table_summary = summarize_requirements(
+                    workflow_id, step_id,
+                    input_values=iv,
+                    file_exists=file_exists,
+                    attached_count=attached_count,
+                    origin_chosen=origin_chosen,
+                )
+                if table_summary is not None:
+                    summaries.append(table_summary)
+                    seen.add(key)
+            param_summary = _summarize_step_required_params(workflow_id, step_id, iv)
+            if param_summary is not None:
+                summaries.append(param_summary)
+                seen.add(key)
+    return summaries
 

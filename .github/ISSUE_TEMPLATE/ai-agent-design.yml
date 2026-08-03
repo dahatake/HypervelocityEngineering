@@ -16,6 +16,8 @@ body:
         | **Step.2** | AI Agent 粒度設計 |
         | **Step.3** | AI Agent 詳細設計 |
 
+        全設計ステップ完了後、AAG成果物を対象とする Post-DAG Self-Improve が必ず実行されます。
+
         ⚠️ **前提条件**:
         - Architecture Design (AAS) が完了していること
         - Web App Design (AAD-WEB) が完了していること
@@ -113,7 +115,7 @@ body:
     attributes:
       label: "レビュー用モデル（任意）"
       description: |
-        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        敵対的レビュー（adversarial-review）で使用するモデル（hve CLI `--review-model` 相当）。このモデル選択だけではレビューを発動しません。発動は「敵対的レビューを有効にする」の指定が必要です。一般 Code Review Agent の設定とは別です。
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
@@ -147,10 +149,10 @@ body:
     attributes:
       label: "レビュー設定"
       description: |
-        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
-        デフォルト（チェックなし）ではセルフレビューは実行されません。
+        チェックを入れると、Copilot が PR を完成させた際に敵対的レビュー（adversarial-review）を自動実行します。
+        デフォルト（チェックなし）では敵対的レビューは実行されません。
       options:
-        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+        - label: "敵対的レビューを有効にする（チェックすると adversarial-review ラベルが付与されます）"
 
   - type: checkboxes
     id: enable_qa
@@ -163,23 +165,11 @@ body:
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
 
-  - type: checkboxes
-    id: enable_self_improve
-    attributes:
-      label: "自己改善ループ設定"
-      description: |
-        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
-        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
-        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
-        デフォルト（チェックなし）では自己改善は実行されません。
-      options:
-        - label: "自己改善ループを有効にする"
-
   - type: dropdown
     id: self_improve_max_iterations
     attributes:
       label: "自己改善 最大イテレーション数"
-      description: "自己改善ループを有効にした場合の最大繰り返し回数"
+      description: "全設計ステップ完了後に必ず実行されるPost-DAG Self-Improveの最大繰り返し回数"
       options:
         - "1"
         - "2"
@@ -192,7 +182,7 @@ body:
     id: self_improve_quality_threshold
     attributes:
       label: "自己改善 品質スコア目標値"
-      description: "この値に達した時点で改善完了とみなします"
+      description: "required criterionと検証が全てPASSしたうえで、この値に達した時点で改善完了とみなします"
       options:
         - "70（最低基準）"
         - "80（標準）"
@@ -201,16 +191,20 @@ body:
     validations:
       required: false
 
-  - type: checkboxes
+  - type: dropdown
     id: enable_auto_merge
     attributes:
       label: "PR完全自動化設定"
       description: |
-        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
         ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
         本番ブランチへの直接マージには十分ご注意ください。
       options:
-        - label: "PR の自動 Approve & Auto-merge を有効にする"
+        - "有効にする"
+        - "無効にする"
+      default: 0
+    validations:
+      required: false
 
   - type: textarea
     id: additional_comment

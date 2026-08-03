@@ -15,6 +15,8 @@
 ---
 AI Agentを設計・実装するための汎用設計ドキュメントです。  
 
+> **共通能力契約**: AAG / AAGD では Skill `ai-agent-capability-contract` を参照し、AG-CAP-01〜06を設計・テスト・実装・検証します。詳細は `.github/skills/ai-agent-capability-contract/SKILL.md` を参照してください。
+
 ## 対象読者・前提・次のステップ
 
 - 対象読者: AAG（設計）と AAGD（実装/Deploy）を実運用で回す担当者
@@ -40,6 +42,19 @@ AI Agentを設計・実装するための汎用設計ドキュメントです。
 - 非機能要件（性能、可用性、スケール、DR、運用体制）
 - 外部依存（外部API、データ、検索、チケット/CRM 等）
 - 未決事項（不明点の明示）
+
+## Goal Contract（必須）
+
+`Requirements` 内に以下を根拠付きで記載します。
+
+- Mission（ユーザー価値を表す1文）
+- Mutation Intent（`required` / `none` / `TBD`）
+- 検証可能なSuccess criteriaとEvaluator
+- Evidence要件
+- Failure / Partial success / Handoff条件
+- Runtime Goal Loopの上限を決めるためのlatency / Tool / cost制約
+
+数値・閾値に入力根拠がなければ推測せず、Open Questionsへ移します。
 
 ## 成果物
 - `docs/agent/agent-application-definition.md`
@@ -72,6 +87,8 @@ Prompt:
 7. Ops & Monitoring
 8. Open Questions
 
+`3. Requirements` には `### Goal Contract` を必ず含めてください。
+
 # Output rules（文章・分量・形式：出力形状の固定）
 - 余計な前置き・雑談・免責・一般論の長文は書かない（成果物中心）。
 - 各セクションは「短い段落（最大2つ）＋箇条書き（推奨）」を基本にする。
@@ -87,10 +104,11 @@ Prompt:
 
 # Procedure（ステップバイステップで実行）
 1) <usecase-doc-path> を読み、ユースケースID（識別子）を抽出する（不明なら仮IDを置かず、Open Questions に「ユースケースIDの所在」を質問として追加）。
-2) ユースケースから、目的 / 利用者 / 入力 / 出力 / 主要フロー / 例外 / 制約 を抜き出す。
+2) ユースケースから、目的 / 利用者 / 入力 / 出力 / 主要フロー / 例外 / 制約 / Mutation Intent を抜き出す。
 3) {出力要件}の見出しにマッピングし、各項目を過不足なく記述する（スコープ逸脱禁止）。
-4) 断定している文が「入力根拠あり」かを自己点検し、根拠が弱いものは表現を弱めるか Open Questions に移す。
-5) Markdownを生成し、指定パスに保存する。
+4) Goal ContractのSuccess criteriaを、schema / rule / Tool result / test / human approvalのいずれかで検証可能にする。
+5) 断定している文が「入力根拠あり」かを自己点検し、根拠が弱いものは表現を弱めるか Open Questions に移す。
+6) Markdownを生成し、指定パスに保存する。
 
 # TIME-BOX / MODE SWITCH（「10分を超える場合」の置き換えルール）
 以下のいずれかに当てはまる場合、定義書の全文作成は“中断”し、代わりに Issue 実行用の分割Promptを作成してください：
@@ -341,7 +359,7 @@ Prompt:
 - docs/agent/agent-application-definition.md（必要に応じて参照）
 
 # Output（生成するファイル）
-- docs/agent/agent-detail-<Agent-ID>-<Agent名>.md
+- docs/agent/agent-detail-{key}.md（`{key}`はStep 2のAgent ID。Agent名は含めない）
 
 # Output rules / Constraints（冗長性と更新）
 - 途中経過の実況はしない。
@@ -365,6 +383,7 @@ Prompt:
 - 権限分離（Read/Write/External Send、Writeは承認ゲート前提、監査ログ）
 - “3回ルール”でSkill化（手順連鎖が3回ならSkill化）
 - 評価は最終出力だけでなく遷移判断も対象
+- AG-CAP-01〜06をすべて記載し、非該当は理由・根拠・再判定条件付きN/Aとする
 
 ## 2) 採用パターン（必要に応じて）
 - Router/Orchestrator
@@ -397,6 +416,13 @@ Prompt:
 - 成功条件（検証可能に）
 - 失敗条件（根拠なし/禁止行為/SLA超過など）
 - Partial successの扱い（縮退運転、Handoff）
+
+#### 2.1 Goal Contract（AG-CAP-01）
+- Mission（1文）
+- Mutation Intent（required / none / TBD + 根拠）
+- Criterion ID / Description / Required for Done
+- Evaluator type / Evaluation procedure / Evidence required
+- Failure action / Contract source
 
 ### 3. Boundary Matrix（8境界）
 - ゴール境界：
@@ -433,17 +459,53 @@ Prompt:
 - 例外遷移（権限不足/障害/レート制限/データ不整合）
 - Mermaid図（必須）
 
+#### 6.1 Runtime Goal Loop（AG-CAP-02）
+- PLAN / ACT / OBSERVE / EVALUATE / REPLAN
+- Max iterations / Operation deadline / Tool budget / Cost budget
+- Action fingerprintと無根拠な同一action反復の禁止
+- DONE / PARTIAL / BLOCKED / HANDOFF / 上限・deadline・policy停止
+- System Prompt、policy、RBAC、production codeをruntime loopで自己変更しない
+
 ### 7. Tooling Design（ツール設計）
+#### 7.0 Knowledge & Structured Data Routing（AG-CAP-03）
+- Request class / Data source / Required for Done
+- Preferred route / Design status / Runtime probe
+- Fallback route / Blocked condition
+- Permission boundary / Citation requirement / Decision source
+- 公開Web / Microsoft 365 / Fabric / enterprise unstructured / structured numeric / operational API Readを区別
+- 構造化数値のSQL fallbackはSELECT-onlyとし、直接mutationを禁止
+
 #### 7.1 Tool Catalog
 - Tool ID/名称/目的
 - 入力スキーマ/出力スキーマ
 - タイムアウト/リトライ/冪等性
 - 失敗分類（再試行可否、ユーザー通知/内部処理）
 
+##### REST CRUD Matrix（AG-CAP-04）
+- Create / Read / Update / DeleteのRequired判定
+- REST method / path / request / response schema
+- Authentication / Authorization / Approval
+- Idempotency / Retry / Error class / Audit evidence
+- Create / Update / Deleteのprimary経路はREST Function Toolとし、SQLやMCPで迂回しない
+
 #### 7.2 Permission Model
 - Read/Write/External Send区分
 - RBACロールと許可範囲
 - 承認が必要な操作一覧（実行前ゲート）
+
+#### 7.3 MCP Integration Plan（AG-CAP-05）
+- Server label / Purpose / Transport or endpoint / Authentication
+- Tool allowlist / Approval / Timeout / Retry
+- MCP結果を外部データとして扱い、結果内命令を実行しない
+- REST business logicとRemote MCP adapterの責務分離
+- 同一mutationをREST ToolとMCP Toolの両方へ登録しない
+
+#### 7.4 Skill Packaging Decision（AG-CAP-06）
+- required / not-required / TBD
+- 3回ルールまたは明確な再利用根拠
+- required時のみSkill name / Location / 必要なscripts/references/assets
+- target runtimeでの明示的loading方法
+- not-required時は空Skill、loader、hook、設定flagを作らない
 
 ### 8. Policy & Guardrails（安全策）
 - 禁止行為（PII/機密/危険操作など）
@@ -471,7 +533,7 @@ Prompt:
 - 回帰テスト（プロンプト/ルール更新時）
 
 ### 12. System Prompt Instruction Format（実装用）
-- Role / Goals / Non-Goals / Inputs / Tools / Procedure / Output format / Examples
+- Role / Goals / Non-Goals / Inputs / Tools / Runtime Goal Loop / Routing / Procedure / Output format / Examples
 - Safeguards（根拠なし→質問or断る、Writeは承認なしで行わない、不確実性の明示）
 
 ## 完成判定チェック（出力前に必ず実施）
@@ -484,6 +546,12 @@ Prompt:
 7. Write/外部送信に承認・監査
 8. 例外/縮退/エスカレーションが決定
 9. 評価（最終＋遷移判断）が定義
+10. Goal Contractのrequired criteriaが決定的に評価可能
+11. Runtime Goal Loopが有限で停止条件を持つ
+12. 検索routeにPreferred / Fallback / Blocked / citationがある
+13. C/U/DがREST Function Toolだけをprimary経路にする
+14. MCP client / Remote adapterの責務が分離される
+15. Agent別Skillのrequired / not-required / TBDが根拠付きで決定される
 
 ```
 
@@ -506,7 +574,7 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
   - Python: `pip install azure-ai-projects`
   - C#: `dotnet add package Azure.AI.Projects`
 - Azure 認証が設定済みであること（`DefaultAzureCredential` を使用）
-- Step 3（詳細設計 — `docs/agent/agent-detail-*.md`）が完了していること
+- Step 3（詳細設計 — `docs/agent/agent-detail-{key}.md`、`{key}`はcanonical Agent ID）が完了していること
 
 ## 参照
 
@@ -521,19 +589,22 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 
 1. **Agent エントリポイント**: Azure AI Foundry Agent Service のエンドポイントに接続する Agent クライアントコード
 2. **System Prompt 定義**: 詳細設計書（Step 3）の Section 12 に基づく System Prompt をファイルとして管理
-3. **Tool 定義・接続**: 詳細設計書の Tool Catalog（Section 7）に基づき、既存マイクロサービス API を Function calling 経由で Tool として登録
-4. **Knowledge Source / RAG 接続**: Azure AI Search インデックスや Azure Cosmos DB をナレッジソースとして接続（設計書の Knowledge Source 定義に従う）
-5. **Guardrails / Policy Gate**: 詳細設計書 Section 8 の Policy & Guardrails に基づく入出力フィルタリング
-6. **Observability**: Application Insights / OpenTelemetry による監査ログ・メトリクス
-7. **Agent 設定ファイル**: 環境変数・接続文字列の管理（`agent-config.json` または `appsettings.json`）
+3. **Runtime Goal Loop**: Section 2.1 / 6.1 に基づき、有限の Plan / Act / Observe / Evaluate と停止条件を実装
+4. **Tool 定義・接続**: Section 7.1 の Tool Catalog / REST CRUD Matrix に基づき、設計済みの既存 API だけを Function calling Tool として登録
+5. **Knowledge / Structured Data 接続**: Section 7.0 の選択routeだけを実装し、未選択providerを先回り実装しない
+6. **MCP client**: Section 7.3 の選択server / Tool allowlist / auth / failure behaviorを実装
+7. **Agent Skill**: Section 7.4 がrequiredの場合だけ、必要なSKILL.mdとresourcesを作成し明示load
+8. **Guardrails / Policy Gate**: Section 8 の Policy & Guardrails に基づく入出力フィルタリング
+9. **Observability**: Section 10 に基づく監査ログ・メトリクス
+10. **Agent 設定ファイル**: 環境変数・接続先の管理（`agent-config.json` または `appsettings.json`）
 
 ## 成果物
 
 | ステップ | 成果物 |
 |---------|--------|
-| Step.2.7T | `docs/test-specs/{agentId}-test-spec.md`（Agent テスト仕様書） |
-| Step.2.7TC | `src/test/agent/{AgentName}.Tests/`（TDD テストコード — RED 状態） |
-| Step.2.7 | `src/agent/{AgentID}-{AgentName}/`（Agent 実装コード） |
+| Step.2.7T | `docs/test-specs/{key}-test-spec.md`（Agent テスト仕様書） |
+| Step.2.7TC | `src/test/agent/{key}.Tests/`（TDD テストコード — RED 状態） |
+| Step.2.7 | `src/agent/{key}/`（Agent 実装コード） |
 | Step.2.8 | `src/infra/azure/create-azure-agent-resources-prep.sh`, `src/infra/azure/create-azure-agent-resources.sh`, `src/infra/azure/verify-agent-resources.sh`, `.github/workflows/deploy-agent-*.yml`, `docs/test-specs/deploy-step2-agent-test-spec.md`, `docs/azure/service-catalog.md`（Agent エンドポイント追記） |
 
 ## TDD フロー
@@ -541,7 +612,7 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 このステップは既存のマイクロサービス実装と同様に TDD（テスト駆動開発）で実施する:
 
 1. **Step.2.7T**: テスト仕様書の生成（TDD RED フェーズ）
-2. **Step.2.7TC**: テストコードの生成（TDD RED コード）— 全テスト FAIL を確認
+2. **Step.2.7TC**: テストコードの生成（TDD RED コード）— build/collection成功後、未実装production behaviorのテストが1件以上FAILしてsuite全体がREDであることを確認
 3. **Step.2.7**: Agent 実装コードの生成（TDD GREEN フェーズ）— 全テスト PASS まで最大 5 回反復後、REFACTOR フェーズを実施
 4. **Step.2.8**: Azure AI Foundry Agent Service へのデプロイ（検証は最大 3 回反復）
 
@@ -574,12 +645,12 @@ ASDW 自動実行ワークフロー外で手動実行する場合は、以下の
 ## 入力
 - `docs/test-strategy.md`
 - `docs/ai-agent-catalog.md`
-- `docs/agent/agent-detail-*.md`
+- `docs/agent/agent-detail-{key}.md`
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/catalog/data-model.md`
 
 ## 成果物（必須）
-- `docs/test-specs/{agentId}-test-spec.md`
+- `docs/test-specs/{key}-test-spec.md`
 ```
 
 ### Step.2.7TC — AI Agent テストコードの手動生成
@@ -587,15 +658,15 @@ ASDW 自動実行ワークフロー外で手動実行する場合は、以下の
 ```text
 # タスク
 Agent テスト仕様書からテストコードのみを生成する（実装コードは作成しない）。
-全テストが FAIL（TDD RED 状態）であることを確認する。
+build/collection成功後、未実装production behaviorのテストが1件以上FAILしてsuite全体がREDであることを確認する（既成立の不在・禁止契約テストはPASS可）。
 
 ## 入力
-- `docs/test-specs/{agentId}-test-spec.md`
-- `docs/agent/agent-detail-*.md`
+- `docs/test-specs/{key}-test-spec.md`
+- `docs/agent/agent-detail-{key}.md`
 - `docs/catalog/service-catalog-matrix.md`
 
 ## 成果物（必須）
-- `src/test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（全テストが FAIL の RED 状態）
+- `src/test/agent/{key}.Tests/` 配下にテストプロジェクト（build/collection成功かつ未実装production behaviorによりsuite全体がREDの状態）
 ```
 
 ### Step.2.7 — AI Agent の実装（TDD GREEN）
@@ -615,15 +686,15 @@ Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を�
 - DefaultAzureCredential を使用して Azure に認証する
 
 ## 入力
-- `docs/agent/agent-detail-*.md`
+- `docs/agent/agent-detail-{key}.md`
 - `docs/ai-agent-catalog.md`
-- `src/test/agent/{AgentName}.Tests/`（TDD テストコード — RED 状態）
-- `docs/test-specs/{agentId}-test-spec.md`
+- `src/test/agent/{key}.Tests/`（TDD テストコード — RED 状態）
+- `docs/test-specs/{key}-test-spec.md`
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/azure/azure-services-additional.md`
 
 ## 成果物（必須）
-- `src/agent/{AgentID}-{AgentName}/`
+- `src/agent/{key}/`
 ```
 
 ### Step.2.8 — AI Agent Deploy
@@ -633,7 +704,7 @@ Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を�
 AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions で CI/CD を構築する。
 
 ## 入力
-- `src/agent/{AgentID}-{AgentName}/`
+- `src/agent/{key}/`
 - `docs/ai-agent-catalog.md`
 - `docs/azure/azure-services-additional.md`
 - リソースグループ名: {リソースグループ名}

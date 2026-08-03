@@ -21,16 +21,32 @@ schema_version: "1.0"
 # 以下はインフラ設定・出力制御・実行時内部フラグであり Issue Form に露出しない。
 sdkconfig_internal_fields:
   - additional_prompt               # CLI 経由のみ (--additional-prompt)
+  - auto_compaction                 # SDK context compaction（CLI/GUI実行基盤）
   - auto_coding_agent_review_auto_approval  # hve 内部の自動承認フラグ
   - available_tools                 # SDK ツール許可リスト（内部、CLI/環境変数経由）
   - cli_args                        # SDK 追加 CLI 引数（内部）
   - cli_path                        # Copilot CLI パス（インフラ）
   - cli_url                         # 外部 CLI サーバー URL（インフラ）
+  - cloud_session_enabled           # Copilot Cloud Session 実行基盤
+  - cloud_session_integration_id    # Cloud Session integration識別子
+  - cloud_session_max_concurrency   # Cloud Session同時実行上限
+  - cloud_session_mc_base_url       # Cloud Session管理API基点
+  - cloud_session_repository_branch # Cloud Session repository branch
+  - cloud_session_repository_name   # Cloud Session repository name
+  - cloud_session_repository_owner  # Cloud Session repository owner
+  - cloud_session_runtime_step_overrides # runtimeで解決済みのStep override
+  - cloud_session_step_overrides    # Cloud Session Step override
+  - cloud_session_subtask_overrides # Cloud Session subtask override
+  - context_tier                    # SDK context tier（実行基盤）
   - context_injection_max_chars     # 各フェーズの注入文字数上限（チューニング、HVE_CONTEXT_INJECTION_MAX_CHARS）
+  - cq_watch                        # Source index watcher（実行基盤）
+  - cq_watch_debounce_ms            # Source index watcher debounce
   - create_issues                   # GitHub Issue 作成（hve 固有インフラ）
   - create_pr                       # GitHub PR 作成（hve 固有インフラ）
+  - delete_local_merged_branch      # merge後ローカルbranch cleanup
   - dry_run                         # ドライランモード（テスト用）
   - final_only                      # 最終出力のみ表示（出力制御）
+  - fleet_mode_enabled              # Copilot SDK fleet mode（実験/実行基盤）
   - force_interactive               # TTY 判定バイパス（QA 内部）
   - fork_on_retry                   # Sub-11: Fork-integration の失敗時自動フォーク（内部、HVE_FORK_ON_RETRY）
   - excluded_tools                  # SDK ツール除外リスト（内部、CLI/環境変数経由）
@@ -39,16 +55,28 @@ sdkconfig_internal_fields:
   - log_level                       # CLI ログレベル（出力制御）
   - max_diff_chars                  # git diff 最大文字数（チューニング）
   - max_parallel                    # 並列実行上限（チューニング）
+  - mdq_watch                       # Markdown index watcher（実行基盤）
+  - mdq_watch_debounce_ms           # Markdown index watcher debounce
   - mcp_servers                     # MCP Server 設定（SDK 内部）
   - model_override                  # 緊急回避用モデル上書き
   - no_color                        # ANSI カラー無効化（出力制御）
+  - pricing_auto_refresh            # pricing cache更新制御
+  - pricing_currency                # pricing表示通貨
+  - pricing_plan_id                 # pricing plan識別子
+  - pricing_statusline_enabled      # pricing statusline表示
+  - pricing_usd_jpy_rate            # pricing換算設定
   - qa_answer_mode                  # QA 回答モード（QA 内部）
   - qa_auto_defaults                # QA 全問デフォルト採用（QA 内部）
   - qa_input_timeout_seconds        # QA 回答タイムアウト（タイムアウト）
+  - qa_gui_input_timeout_seconds    # GUI QA回答タイムアウト
+  - qa_ipc_dir                      # GUI QA IPC directory
+  - qa_reasoning_effort             # QA sub-session reasoning設定
   - quiet                           # 出力抑制（レガシー互換）
   - repo                            # リポジトリ指定（インフラ）
   - require_input_artifacts         # strict モード（実行時内部）
   - review_base_ref                 # git diff 基点（レビュー内部）
+  - reasoning_effort                # main session reasoning設定
+  - review_reasoning_effort         # review sub-session reasoning設定
   - review_timeout_seconds          # レビュータイムアウト（タイムアウト）
   - run_id                          # 実行 ID（内部トラッキング）
   - screen_reader                   # スクリーンリーダーモード（アクセシビリティ）
@@ -63,6 +91,8 @@ sdkconfig_internal_fields:
   - show_banner                     # バナー表示制御（出力制御）
   - show_reasoning                  # 推論表示（出力制御）
   - show_stream                     # トークンストリーム表示（出力制御）
+  - steering_ipc_dir                # GUI steering IPC directory
+  - step_timeout_seconds            # Step全体timeout（実行基盤）
   - timeout_seconds                 # idle タイムアウト（タイムアウト）
   - timestamp_style                 # タイムスタンプ表示位置（出力制御）
   - unattended                      # 全自動モード（自動化用）
@@ -74,6 +104,7 @@ sdkconfig_internal_fields:
   - workbench_history               # Workbench RingBuffer 容量（出力制御）
   - workiq_akm_ingest_dxx           # AKM Work IQ 取り込み Dxx フィルタ（内部、HVE_WORKIQ_AKM_INGEST_DXX）
   - workiq_akm_ingest_enabled       # AKM Work IQ 取り込み有効フラグ（内部、HVE_WORKIQ_AKM_INGEST_ENABLED）
+  - workiq_request_timeout          # Work IQ MCP request timeout
 
 # Issue Form フィールド ID のカバレッジチェック除外リスト。
 # 以下はワークフロー固有パラメータ・UI 入力ゲート・テキスト入力で選択式オプションではない。
@@ -81,7 +112,7 @@ issue_form_internal_fields:
   - additional_comment      # ユーザー向けテキスト補足（UI 用、web-app-dev.yml 等）
   - additional_context      # self-improve.yml 専用テキスト補足
   - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
-  - app_ids           # ワークフロー固有パラメータ（batch-dev.yml 専用）
+  - job_ids                 # dataflow-dev.yml 固有パラメータ（BJ-* ジョブ ID 指定）
   - confirmation            # self-improve.yml UI 確認ゲート
   - depth                   # AQOD 専用パラメータ（original-docs-review.yml）
   - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）
@@ -148,12 +179,26 @@ options:
     applies_to: common
     notes: "レビュー自動投入。enable_review → auto_contents_review。config.py:129, __main__.py:637"
 
+  - option_key: enable_auto_merge
+    issue_form_field_id: enable_auto_merge
+    hve_config_attr: enable_auto_merge
+    hve_cli_flag: "--enable-auto-merge"
+    applies_to: common
+    notes: >
+      PR 完全自動化（Approve & Auto-merge）。Issue Form、SDKConfig、CLI
+      `--enable-auto-merge` の共通オプションとして扱う。Cloud Issue Formは
+      dropdown index 0（有効）を既定とし、CLI/SDKConfigはFalseを既定として
+      明示flagで有効化する意図的なroute差がある。
+
   - option_key: enable_self_improve
     issue_form_field_id: enable_self_improve
     hve_config_attr: auto_self_improve
     hve_cli_flag: "--self-improve"
     applies_to: common
-    notes: "自己改善ループ。enable_self_improve → auto_self_improve。CLI は --self-improve。config.py:241, __main__.py:1091"
+    notes: >
+      自己改善ループ。一般Cloud workflowではenable_self_improve → auto_self_improve。
+      AAG/AAGD Cloudだけはcheckboxを持たずmandatory。CLI/SDKConfigではAAG/AAGDを
+      Orchestratorが既定ONにし、--no-self-improve / disabled scopeを緊急安全弁として維持する。
 
   - option_key: tdd_max_retries
     issue_form_field_id: tdd_max_retries
@@ -221,17 +266,6 @@ options:
   # ============================================================
   # issue_form_only: Issue Form にのみ存在し hve SDKConfig には対応フィールドがない
   # ============================================================
-
-  - option_key: enable_auto_merge
-    issue_form_field_id: enable_auto_merge
-    hve_config_attr: null
-    hve_cli_flag: "--enable-auto-merge"
-    applies_to: issue_form_only
-    notes: >
-      PR 完全自動化（Approve & Auto-merge）。SDKConfig フィールドなし。
-      CLI フラグ --enable-auto-merge は AKM 専用ワークフローパラメータとして存在するが
-      SDKConfig には反映されない。hve への大規模 auto merge 実装は Phase 6 スコープ外。
-      diff-spec: docs/design-discussions/orchestration-route-diff-spec.md §3.2
 
   - option_key: runner_type
     issue_form_field_id: runner_type

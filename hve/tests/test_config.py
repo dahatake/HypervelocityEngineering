@@ -12,9 +12,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import (
     DEFAULT_MODEL,
     MODEL_AUTO_VALUE,
+    MODEL_AUTO_WIRE_VALUE,
     MODEL_CHOICES,
     SDKConfig,
     normalize_model,
+    to_wire_model,
 )
 
 
@@ -52,6 +54,26 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_timeout_default(self) -> None:
         self.assertEqual(self.cfg.timeout_seconds, 21600.0)
+
+    def test_step_timeout_default(self) -> None:
+        """per-step wall-clock タイムアウトの既定は 7200 秒（2h）。"""
+        self.assertEqual(self.cfg.step_timeout_seconds, 7200.0)
+
+    def test_step_timeout_zero_normalized_to_none(self) -> None:
+        """0 は無効化（None）に正規化される。"""
+        self.assertIsNone(SDKConfig(step_timeout_seconds=0).step_timeout_seconds)
+
+    def test_step_timeout_negative_normalized_to_none(self) -> None:
+        """負値は無効化（None）に正規化される。"""
+        self.assertIsNone(SDKConfig(step_timeout_seconds=-5).step_timeout_seconds)
+
+    def test_step_timeout_none_stays_none(self) -> None:
+        """None は None のまま（無効）。"""
+        self.assertIsNone(SDKConfig(step_timeout_seconds=None).step_timeout_seconds)
+
+    def test_step_timeout_valid_value_passthrough(self) -> None:
+        """正の値は float として保持される。"""
+        self.assertEqual(SDKConfig(step_timeout_seconds=120).step_timeout_seconds, 120.0)
 
     def test_review_timeout_default(self) -> None:
         self.assertEqual(self.cfg.review_timeout_seconds, 7200.0)
@@ -91,6 +113,10 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_create_pr_default(self) -> None:
         self.assertFalse(self.cfg.create_pr)
+
+    def test_delete_local_merged_branch_default(self) -> None:
+        """FR-CLI-34: マージ済みローカル作業ブランチ削除は既定で有効。"""
+        self.assertTrue(self.cfg.delete_local_merged_branch)
 
     def test_verbose_default(self) -> None:
         self.assertTrue(self.cfg.verbose)
@@ -134,9 +160,6 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
         self.assertEqual(self.cfg.workiq_per_question_timeout, 1200.0)
         self.assertEqual(self.cfg.workiq_max_draft_questions, 10)  # Wave 2: 30→10 に削減
-
-    def test_auto_self_improve_default_false(self) -> None:
-        self.assertFalse(self.cfg.auto_self_improve)
 
     def test_max_diff_chars_default(self) -> None:
         self.assertEqual(self.cfg.max_diff_chars, 80_000)
@@ -190,6 +213,16 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["COPILOT_CLI_PATH"] = "/usr/local/bin/copilot"
             cfg = SDKConfig.from_env()
             self.assertEqual(cfg.cli_path, "/usr/local/bin/copilot")
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_from_env_uses_hve_run_id(self) -> None:
+        env_backup = os.environ.copy()
+        try:
+            os.environ["HVE_RUN_ID"] = "20260605T123456-abcdef"
+            cfg = SDKConfig.from_env()
+            self.assertEqual(cfg.run_id, "20260605T123456-abcdef")
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -654,6 +687,39 @@ class TestNormalizeModelWithWarning(unittest.TestCase):
             cfg = SDKConfig(model="claude-sonnet-4.6")
         self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
         self.assertTrue(any("claude-sonnet-4.6" in str(warning.message) for warning in w))
+
+
+# ---------------------------------------------------------------------------
+# to_wire_model: hve 内部センチネル "Auto" → SDK wire 値 "auto" の変換
+# ---------------------------------------------------------------------------
+
+class TestToWireModel(unittest.TestCase):
+    """to_wire_model の挙動を検証する。"""
+
+    def test_auto_sentinel_converted_to_wire_value(self) -> None:
+        """MODEL_AUTO_VALUE ("Auto") → MODEL_AUTO_WIRE_VALUE ("auto")。"""
+        self.assertEqual(to_wire_model(MODEL_AUTO_VALUE), MODEL_AUTO_WIRE_VALUE)
+
+    def test_explicit_model_passthrough(self) -> None:
+        """明示モデル ID はそのまま返す。"""
+        self.assertEqual(to_wire_model("claude-opus-4.7"), "claude-opus-4.7")
+        self.assertEqual(to_wire_model("gpt-5.4"), "gpt-5.4")
+
+    def test_none_returns_none(self) -> None:
+        """None → None（呼び出し側で model キーを payload から省略）。"""
+        self.assertIsNone(to_wire_model(None))
+
+    def test_empty_string_returns_none(self) -> None:
+        """空文字 → None（呼び出し側で model キーを payload から省略）。"""
+        self.assertIsNone(to_wire_model(""))
+
+    def test_wire_value_constant_is_auto(self) -> None:
+        """MODEL_AUTO_WIRE_VALUE は SDK list_models() が返す正規 ID "auto"。"""
+        self.assertEqual(MODEL_AUTO_WIRE_VALUE, "auto")
+
+    def test_internal_sentinel_constant_is_capitalized_auto(self) -> None:
+        """MODEL_AUTO_VALUE は UI / 既存 Issue 等で使われる大文字 "Auto"。"""
+        self.assertEqual(MODEL_AUTO_VALUE, "Auto")
 
 
 # ---------------------------------------------------------------------------

@@ -4,11 +4,18 @@ hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過�
 
 > **重要 (捏造禁止)**: 料金表が未取得 / 不明モデルの場合、コストは **`-`** と表示されます。推定値で埋めることはしません。
 
+> **未実装の範囲 (2026-07-28 実測)**: 以下の 2 機能は **モジュールは存在するがアプリ本体から呼ばれておらず、利用できません**。
+>
+> - **§4.2 GUI 設定タブ** — [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) は [hve/gui/settings_window.py](../hve/gui/settings_window.py) から import されておらず、設定画面にタブが追加されません。
+> - **§6 CUI StatusLine** — [hve/statusline.py](../hve/statusline.py) はどこからも import されておらず、`hve` 実行中に StatusLine は表示されません（`CHANGELOG.md` に「orchestrator / console への実呼び出し統合は未実施」と記録されたままです）。
+>
+> GUI Footer / 統計ポップアップ・`hve pricing` CLI・環境変数による料金計算は配線済みです。
+
 ---
 
 ## 1. 概要
 
-| 表示項目 | GUI Footer | GUI 統計ポップアップ | CUI StatusLine |
+| 表示項目 | GUI Footer | GUI 統計ポップアップ | CUI StatusLine（**未実装**） |
 |---|---|---|---|
 | Context Window 使用率 | ✅ | ✅ | ✅ |
 | Workflow / Step 経過時間 | ✅ | ✅ | ✅ |
@@ -42,7 +49,7 @@ $Env:HVE_PRICING_CACHE_PATH = "C:\path\to\custom\copilot-pricing.json"
 ### 2.3 自動更新ポリシー
 
 - **月初** (取得日時の月が変わったとき) に自動取得
-- **手動**: `hve pricing refresh` または GUI 設定タブの「🔄 料金表を今すぐ更新」
+- **手動**: `hve pricing refresh`（※ GUI 設定タブの「🔄 料金表を今すぐ更新」ボタンは **未実装**。本頁冗頭参照）
 - **失敗時**: 両ソース失敗 → エラー。片方のみ成功 → `status="partial"` で記録 (利用可)
 
 ---
@@ -77,8 +84,8 @@ GitHub Docs / Pricing ページから最新を取得しキャッシュを上書�
 | `HVE_PRICING_CURRENCY` | `auto` | 表示通貨。`auto` / `usd` / `jpy` / `both` |
 | `HVE_PRICING_AUTO_REFRESH` | `1` | 月初自動取得 (`0` で無効) |
 | `HVE_PRICING_CACHE_PATH` | `~/.hve/pricing/copilot-pricing.json` | キャッシュファイルパス |
-| `HVE_PRICING_STATUSLINE_ENABLED` | `1` | CUI StatusLine 有効化 (`0` で無効) |
-| `HVE_NO_STATUSLINE` | (未設定) | 設定時は StatusLine を常に抑止 |
+| `HVE_PRICING_STATUSLINE_ENABLED` | `1` | CUI StatusLine 有効化 (`0` で無効)。**※ 現在この値を読む実装はなく、効果を持ちません** |
+| `HVE_NO_STATUSLINE` | (未設定) | 設定時は StatusLine を常に抑止。**※ 同上（StatusLine 自体が未配線）** |
 
 #### 通貨表示モード
 
@@ -89,9 +96,11 @@ GitHub Docs / Pricing ページから最新を取得しキャッシュを上書�
 | `usd` | `$0.4000` | グローバル / Copilot 請求基準 |
 | `jpy` | `¥60` | 簡易見積もり |
 
-### 4.2 GUI 設定タブ
+### 4.2 GUI 設定タブ（**未実装**）
 
-`設定` → `料金 / 統計` タブで以下を編集できます (Wave 4 で追加):
+> [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) にウィジェット実装は存在しますが、[hve/gui/settings_window.py](../hve/gui/settings_window.py) から import されておらず設定画面にタブが出ません。下記は配線時の仕様予定です。現時点では §4.1 の環境変数で設定してください。
+
+`設定` → `料金 / 統計` タブで以下を編集できる想定です:
 
 - USD/JPY レート
 - 通貨表示モード
@@ -128,7 +137,9 @@ Footer の **「📊 統計情報」** ボタンで表示。タブ:
 
 ---
 
-## 6. CUI StatusLine
+## 6. CUI StatusLine（**未実装**）
+
+> [hve/statusline.py](../hve/statusline.py) に `StatusLine` / `format_status_line()` の実装は存在しますが、`hve` 本体（orchestrator / console）から呼ばれていないため、通常の `hve` 実行中に StatusLine は表示されません。以下はモジュール単体の仕様です（§6.3 の直接呼び出しは動作します）。
 
 ### 6.1 表示例
 
@@ -182,9 +193,7 @@ with StatusLine(interval=1.0) as sl:
 
 ### Q2. StatusLine が出ない
 
-1. ターミナルが TTY か確認 (`python -c "import sys; print(sys.stderr.isatty())"`)
-2. `HVE_NO_STATUSLINE` が未設定か確認
-3. `HVE_PRICING_STATUSLINE_ENABLED=1` か確認
+**現在は仕様です**。§6 のとおり [hve/statusline.py](../hve/statusline.py) は本体から呼ばれておらず、`hve` 実行中に StatusLine は表示されません。環境変数（`HVE_NO_STATUSLINE` / `HVE_PRICING_STATUSLINE_ENABLED`）をどう設定しても変わりません。モジュールを直接使う場合の抑止条件は §6.2 を参照してください。
 
 ### Q3. 料金表取得が失敗する
 
@@ -194,7 +203,7 @@ with StatusLine(interval=1.0) as sl:
 
 ### Q4. JPY 換算値が実勢レートと違う
 
-固定レートのため正確性は保証しません。`HVE_PRICING_USD_JPY_RATE` または GUI 設定タブで調整してください。リアルタイム為替 API 連携は将来検討。
+固定レートのため正確性は保証しません。`HVE_PRICING_USD_JPY_RATE` で調整してください（GUI 設定タブは **未実装**。§4.2 参照）。リアルタイム為替 API 連携は将来検討。
 
 ---
 
@@ -204,8 +213,8 @@ with StatusLine(interval=1.0) as sl:
 - `hve/gui/text_kinsoku.py` — フォーマット共通ヘルパ (Qt 非依存)
 - `hve/gui/workbench_widgets.py` `FooterWidget` — GUI Footer
 - `hve/gui/stats_detail_popup.py` — 統計ポップアップ
-- `hve/gui/settings_pricing_tab.py` — GUI 設定タブ
-- `hve/statusline.py` — CUI StatusLine
+- `hve/gui/settings_pricing_tab.py` — GUI 設定タブ（**未配線**：settings_window から import されていない）
+- `hve/statusline.py` — CUI StatusLine（**未配線**：本体から呼ばれていない）
 - `hve/tests/pricing/` — 全 67 件のテスト
 
 ---

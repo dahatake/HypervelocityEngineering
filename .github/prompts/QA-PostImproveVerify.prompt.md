@@ -1,6 +1,6 @@
 ﻿> 自己改善後に harness-verification-loop（Build/Lint/Test/Security/Diff）を実行しデグレード検知・スコア比較を行う。Self-Improve Phase 4d として使用される。
 
-> **WORK**: `/work/QA-PostImproveVerify/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/QA-PostImproveVerify/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -24,7 +24,7 @@
 - `harness-verification-loop`: Self-Improve Phase 4d の Build/Lint/Test/Security/Diff 検証本体
 - `harness-error-recovery`: 検証エラー時のリカバリ判断
 - `harness-safety-guard`: 改善後コードに破壊的操作が混入していないかチェック
-- `work-artifacts-layout`: スコア比較結果を `work/QA-PostImproveVerify/.../verification-report.md` に保存
+- `work-artifacts-layout`: スコア比較結果を `work/run/<run-id>/QA-PostImproveVerify/.../verification-report.md` に保存
 ## 2) 入力（必ず参照）
 > `{...}` が残っている場合は実行しない。
 
@@ -54,7 +54,7 @@
 Fork-integration (T3.2): `HVE_FORK_ON_RETRY=true` で改善前後のフォーク KPI ログが存在する場合、
 以下の **3 指標** を比較する。既存スコア計算とは独立に扱い、本セクション結果のみで `degraded` を立てない。
 
-- 入力: `work/kpi/fork-kpi-<run_id>.jsonl`（改善前後）
+- 入力: `work/run/<run-id>/kpi/fork-kpi.jsonl`（改善前後）
 - 比較指標:
   1. **トークン量合計**: 増加が大幅な場合は notes に記載
   2. **再実行率**（`retry_count > 0` 件数 ÷ 全レコード数）: 悪化（増加）した場合は notes に記載

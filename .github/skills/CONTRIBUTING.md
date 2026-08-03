@@ -33,7 +33,7 @@
   - `WHEN:` 日本語での発動条件
 - [ ] **`## Non-goals（このスキルの範囲外）` セクション** を SKILL.md に記載する
 - [ ] **詳細手順が多い場合は `references/` への分離を推奨する**（SKILL.md は概要・ルーティング・入出力例を中心に簡潔に保つ）
-- [ ] **`.github/skills/_routing/SKILL.md` のルーティングテーブルに追加する**（既存カテゴリへの追加の場合は該当カテゴリテーブルを更新する）
+- [ ] **`.github/skills/_routing/README.md` のルーティングテーブルに追加する**（既存カテゴリへの追加の場合は該当カテゴリテーブルを更新する）
 - [ ] **変更後に `python3 .github/scripts/validate-skill-routing.py` を実行する**（ルーティング整合・重複・frontmatter 必須項目の自動検証）
 
 ### 推奨項目
@@ -109,12 +109,12 @@
 | `testing/` | テスト戦略・テンプレート | `test-strategy-template` |
 
 > 既存カテゴリに当てはまらない場合は、新カテゴリを作成して
-> `.github/skills/_routing/SKILL.md` のルーティングテーブルに追加する。
+> `.github/skills/_routing/README.md` のルーティングテーブルに追加する。
 
 ### カテゴリ外ディレクトリ（特別用途）
 
 - `_routing/`: **カテゴリ外（ルーティング定義専用）**。
-  `SKILL.md` でカテゴリ横断の参照先表を管理する。
+  `README.md` でカテゴリ横断の参照先表を管理する。
 - `_evals/`: **カテゴリ外（評価専用）**。
   Eval ケース格納用で、`SKILL.md` は不要。
 - `karpathy-guidelines/`: **カテゴリ外（単独 Skill）**。
@@ -350,7 +350,7 @@ Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 ### 10.2 agent-common-preamble のデフォルト継承モデル
 
 - 全 Custom Agent は作業開始時に `agent-common-preamble` Skill を参照する
-- 新規 Skill が全 Agent に適用される共通ルールを含む場合は、`agent-common-preamble` または `.github/skills/_routing/SKILL.md` への追加を検討する
+- 新規 Skill が全 Agent に適用される共通ルールを含む場合は、`agent-common-preamble` または `.github/skills/_routing/README.md` への追加を検討する
 - `agent-common-preamble` を更新する場合は、全 Agent の挙動に影響することを考慮して慎重に変更する
 
 ### 10.3 work/ および qa/ 配下への書き込みルール
@@ -359,7 +359,7 @@ Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 
 ### 10.4 ルーティングテーブルへの追加
 
-新規 Skill を追加したら、必ず `.github/skills/_routing/SKILL.md` のルーティングテーブルに追記する。
+新規 Skill を追加したら、必ず `.github/skills/_routing/README.md` のルーティングテーブルに追記する。
 
 ```markdown
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |

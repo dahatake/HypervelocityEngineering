@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Mapping, Optional
 
 
 # `argparse.BooleanOptionalAction` 系オプションの 3 状態を表すリテラル
@@ -53,6 +53,10 @@ class OrchestrateArgs:
     review_reasoning_effort: Optional[str] = None
     qa_reasoning_effort: Optional[str] = None
 
+    # context_tier: SDK の create_session(context_tier=...) へ渡す値。
+    # "default" | "long_context"。GUI 既定は long_context（設定画面の既定要件）。
+    context_tier: Optional[str] = "long_context"
+
     # ------------------------------------------------------------------
     # C2: 並列実行 (L702-L708)
     # ------------------------------------------------------------------
@@ -71,6 +75,7 @@ class OrchestrateArgs:
     #  - "gui-file"   : IPC ファイル経由で GUI から回答取得
     qa_answer_mode: Optional[str] = None
     qa_ipc_dir: Optional[str] = None  # qa_answer_mode="gui-file" 時の IPC ディレクトリパス
+    steering_ipc_dir: Optional[str] = None  # Steering（実行中ワークフローへの割り込み送信）用 IPC ディレクトリパス
 
     # ------------------------------------------------------------------
     # C4: Work IQ — GUI / CLI 両対応 (L748-L824)
@@ -125,6 +130,20 @@ class OrchestrateArgs:
     cli_url: Optional[str] = None
 
     # ------------------------------------------------------------------
+    # Cloud Sessions (GitHub Copilot SDK 1.0.0+)
+    # ------------------------------------------------------------------
+    cloud_session_enabled: TriState = None
+    cloud_session_owner: Optional[str] = None
+    cloud_session_repository_name: Optional[str] = None
+    cloud_session_branch: Optional[str] = None
+    cloud_session_max_concurrency: Optional[int] = None
+    cloud_session_integration_id: Optional[str] = None
+    cloud_session_mc_base_url: Optional[str] = None
+    cloud_session_step_overrides: Optional[str] = None
+    cloud_session_subtask_overrides: Optional[str] = None
+    fleet_mode_enabled: TriState = None
+
+    # ------------------------------------------------------------------
     # C8: タイムアウト (L951-L964)
     # ------------------------------------------------------------------
     timeout: float = 21600.0
@@ -145,7 +164,11 @@ class OrchestrateArgs:
     app_id: Optional[str] = None
     app_ids: Optional[str] = None
     resource_group: Optional[str] = None
-    app_id: Optional[str] = None
+    data_location: Optional[str] = None
+    data_resource_suffix: Optional[str] = None
+    data_vnet_cidr: Optional[str] = None
+    data_private_endpoint_subnet_cidr: Optional[str] = None
+    data_aci_subnet_cidr: Optional[str] = None
     usecase_id: Optional[str] = None
 
     # ------------------------------------------------------------------
@@ -155,7 +178,13 @@ class OrchestrateArgs:
     target_files: List[str] = field(default_factory=list)
     force_refresh: TriState = None  # BooleanOptionalAction
     custom_source_dir: List[str] = field(default_factory=list)
+    # enable_auto_merge は元 AKM 用だが、案 P で github.com CI/CD の全自動化
+    # マスタースイッチに転用（GUI では C5「GitHub」セクションで設定）。
+    # to_argv() で --enable-auto-merge として subprocess へ伝搬する。
     enable_auto_merge: bool = False
+    # FR-CLI-34: マージ済みローカル作業ブランチ削除（既定有効）。
+    # to_argv() で off 時のみ --no-delete-local-merged-branch を出力する。
+    delete_local_merged_branch: bool = True
 
     # ------------------------------------------------------------------
     # C12: AQOD 固有 (L1058-L1075)
@@ -201,6 +230,9 @@ class OrchestrateArgs:
     self_improve_goal: Optional[str] = None
     mdq_watch: TriState = None  # BooleanOptionalAction (--mdq-watch / --no-mdq-watch)
     mdq_watch_debounce_ms: Optional[int] = None
+    cq_watch: TriState = None  # BooleanOptionalAction (--cq-watch / --no-cq-watch)
+    cq_watch_debounce_ms: Optional[int] = None
+    auto_compaction: TriState = None  # BooleanOptionalAction (--auto-compaction / --no-auto-compaction)
 
     # ------------------------------------------------------------------
     # GUI 内部利用（CLI には渡らない）
@@ -241,6 +273,8 @@ class OrchestrateArgs:
             argv += ["--review-reasoning-effort", self.review_reasoning_effort]
         if self.qa_reasoning_effort:
             argv += ["--qa-reasoning-effort", self.qa_reasoning_effort]
+        if self.context_tier:
+            argv += ["--context-tier", self.context_tier]
 
         # --- C2 ---
         if self.max_parallel != 15:
@@ -259,6 +293,8 @@ class OrchestrateArgs:
             argv += ["--qa-answer-mode", self.qa_answer_mode]
         if self.qa_ipc_dir:
             argv += ["--qa-ipc-dir", self.qa_ipc_dir]
+        if self.steering_ipc_dir:
+            argv += ["--steering-ipc-dir", self.steering_ipc_dir]
 
         # --- C4: Work IQ ---
         if self.workiq:
@@ -301,8 +337,15 @@ class OrchestrateArgs:
             argv.append("--verbose")
         if self.quiet:
             argv.append("--quiet")
-        if self.verbosity:
-            argv += ["--verbosity", self.verbosity]
+        # GUI 既定の verbosity は normal。compact (CLI 既定) のままだと、GUI は
+        # 非 TTY パイプでサブプロセスを起動するため、ステップ実行中の進捗
+        # (action/intent/thinking 等) が spinner 経路へ振られて GUI ログに
+        # 出力されない。明示指定 (verbosity/quiet/verbose) があればそれを優先する。
+        effective_verbosity = self.verbosity
+        if effective_verbosity is None and not self.quiet and not self.verbose:
+            effective_verbosity = "normal"
+        if effective_verbosity:
+            argv += ["--verbosity", effective_verbosity]
         if self.show_stream:
             argv.append("--show-stream")
         if self.log_level != "error":
@@ -325,6 +368,26 @@ class OrchestrateArgs:
         if self.cli_url:
             argv += ["--cli-url", self.cli_url]
 
+        # --- Cloud Sessions ---
+        _append_tristate(argv, "--cloud-session", "--no-cloud-session", self.cloud_session_enabled)
+        if self.cloud_session_owner:
+            argv += ["--cloud-session-owner", self.cloud_session_owner]
+        if self.cloud_session_repository_name:
+            argv += ["--cloud-session-repository-name", self.cloud_session_repository_name]
+        if self.cloud_session_branch:
+            argv += ["--cloud-session-branch", self.cloud_session_branch]
+        if self.cloud_session_max_concurrency is not None:
+            argv += ["--cloud-session-max-concurrency", str(self.cloud_session_max_concurrency)]
+        if self.cloud_session_integration_id:
+            argv += ["--cloud-session-integration-id", self.cloud_session_integration_id]
+        if self.cloud_session_mc_base_url:
+            argv += ["--cloud-session-mc-base-url", self.cloud_session_mc_base_url]
+        if self.cloud_session_step_overrides:
+            argv += ["--cloud-session-step-overrides", self.cloud_session_step_overrides]
+        if self.cloud_session_subtask_overrides:
+            argv += ["--cloud-session-subtask-overrides", self.cloud_session_subtask_overrides]
+        _append_tristate(argv, "--fleet-mode", "--no-fleet-mode", self.fleet_mode_enabled)
+
         # --- C8 ---
         if self.timeout != 21600.0:
             argv += ["--timeout", str(self.timeout)]
@@ -344,8 +407,18 @@ class OrchestrateArgs:
             argv += ["--app-ids", self.app_ids]
         if self.resource_group:
             argv += ["--resource-group", self.resource_group]
-        if self.app_id:
-            argv += ["--app-id", self.app_id]
+        for flag, value in (
+            ("--data-location", self.data_location),
+            ("--data-resource-suffix", self.data_resource_suffix),
+            ("--data-vnet-cidr", self.data_vnet_cidr),
+            (
+                "--data-private-endpoint-subnet-cidr",
+                self.data_private_endpoint_subnet_cidr,
+            ),
+            ("--data-aci-subnet-cidr", self.data_aci_subnet_cidr),
+        ):
+            if value:
+                argv += [flag, value]
         if self.usecase_id:
             argv += ["--usecase-id", self.usecase_id]
 
@@ -357,8 +430,12 @@ class OrchestrateArgs:
         _append_tristate(argv, "--force-refresh", "--no-force-refresh", self.force_refresh)
         if self.custom_source_dir:
             argv += ["--custom-source-dir", *self.custom_source_dir]
+        # enable_auto_merge は AKM / 案 P（github.com CI/CD 全自動化）共用。
         if self.enable_auto_merge:
             argv.append("--enable-auto-merge")
+        # FR-CLI-34: 既定有効のため off 時のみ --no-... を出力（CLI 既定 True と一致）。
+        if not self.delete_local_merged_branch:
+            argv.append("--no-delete-local-merged-branch")
 
         # --- C12: AQOD ---
         if self.target_scope:
@@ -418,6 +495,10 @@ class OrchestrateArgs:
         _append_tristate(argv, "--mdq-watch", "--no-mdq-watch", self.mdq_watch)
         if self.mdq_watch_debounce_ms is not None:
             argv += ["--mdq-watch-debounce-ms", str(self.mdq_watch_debounce_ms)]
+        _append_tristate(argv, "--cq-watch", "--no-cq-watch", self.cq_watch)
+        if self.cq_watch_debounce_ms is not None:
+            argv += ["--cq-watch-debounce-ms", str(self.cq_watch_debounce_ms)]
+        _append_tristate(argv, "--auto-compaction", "--no-auto-compaction", self.auto_compaction)
 
         # --- GUI 強制 (設計書 §8.3) ---
         # GUI モードでは Rich Live のターミナル Workbench を無効化する。
@@ -455,6 +536,36 @@ class OrchestrateArgs:
 # --------------------------------------------------------------------------
 # ヘルパー
 # --------------------------------------------------------------------------
+
+
+def _coerce_tristate(value: Any) -> TriState:
+    """設定ストアの 3 状態値（``""`` / ``"on"`` / ``"off"``）を bool へ正規化する。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return {"on": True, "off": False}.get(value.strip().lower())
+    return None
+
+
+def apply_watch_settings(args: "OrchestrateArgs", options: Mapping[str, Any]) -> None:
+    """設定ストアの ``[options]`` から watch 系の値を ``OrchestrateArgs`` へ反映する。
+
+    mdq / cq のリアルタイム索引更新は同じ 3 状態 + debounce の構造を持つため、
+    ブリッジは 1 実装に集約する（FR-MAINT-07）。設定ストアは 3 状態を文字列で
+    保持するため、`_append_tristate` が解釈できる bool / None へ正規化する。
+    """
+    for prefix in ("mdq", "cq"):
+        watch_key = f"{prefix}_watch"
+        debounce_key = f"{prefix}_watch_debounce_ms"
+        if watch_key in options:
+            setattr(args, watch_key, _coerce_tristate(options[watch_key]))
+        if debounce_key in options:
+            raw = options[debounce_key]
+            setattr(
+                args, debounce_key,
+                raw if isinstance(raw, int) and not isinstance(raw, bool) and raw > 0
+                else None,
+            )
 
 
 def _append_tristate(

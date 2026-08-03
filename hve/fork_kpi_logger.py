@@ -4,7 +4,8 @@ Fork-integration (T2.4): `DAGExecutor` がステップ完了時に KPI 3 指標
 （トークン量 / 再実行率 / 所要時間）を JSONL で記録するためのロガー。
 
 設計:
-  - 1 run_id = 1 ファイル: `work/kpi/fork-kpi-<run_id>.jsonl`
+    - 1 run = 1 ファイル: `work/run/<run-id>/kpi/fork-kpi.jsonl`
+    (dir 名に run-id が入るためファイル名は run_id を含めない)
   - 1 ステップ完了 = 1 行追記
   - `enabled=False` の場合は完全 no-op（フィーチャフラグ off 時の旧挙動互換）
   - I/O 失敗時は warn のみで DAG 実行を止めない
@@ -23,8 +24,18 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 
-# KPI ログの既定ディレクトリ（リポジトリルート相対）
-DEFAULT_KPI_DIR: Path = Path("work") / "kpi"
+# KPI ログの既定ディレクトリー名（`work_root` 相対）
+KPI_DIRNAME: str = "kpi"
+KPI_FILENAME: str = "fork-kpi.jsonl"
+
+
+def _default_kpi_dir() -> Path:
+    """起動時の ``work/run/<run-id>/kpi/`` を返す。遅延解決。"""
+    try:
+        from hve.split_fork import resolve_work_root
+    except ImportError:  # pragma: no cover - script execution path
+        from split_fork import resolve_work_root  # type: ignore[no-redef]
+    return resolve_work_root() / KPI_DIRNAME
 
 
 def _sanitize_run_id(run_id: str) -> str:
@@ -65,7 +76,7 @@ class ForkKPILogger:
     ) -> None:
         self._enabled = bool(enabled)
         self._run_id = _sanitize_run_id(run_id)
-        self._kpi_dir = Path(kpi_dir) if kpi_dir is not None else DEFAULT_KPI_DIR
+        self._kpi_dir = Path(kpi_dir) if kpi_dir is not None else _default_kpi_dir()
 
     @property
     def enabled(self) -> bool:
@@ -73,8 +84,8 @@ class ForkKPILogger:
 
     @property
     def log_path(self) -> Path:
-        """`work/kpi/fork-kpi-<run_id>.jsonl` への Path。"""
-        return self._kpi_dir / f"fork-kpi-{self._run_id}.jsonl"
+        """`work/run/<run-id>/kpi/fork-kpi.jsonl` への Path。"""
+        return self._kpi_dir / KPI_FILENAME
 
     def log_step(
         self,

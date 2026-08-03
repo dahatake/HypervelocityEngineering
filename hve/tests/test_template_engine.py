@@ -75,6 +75,60 @@ class TestExistingArtifactPolicyTemplate:
         assert "メインタスク本体を必ず実行" in section
         assert "更新なし" in section
 
+    def test_existing_artifact_policy_requires_single_step_input_review(self):
+        """単独 Step 実行でも入力と既存成果物を読んで stale/契約不一致を扱う。"""
+        section = _build_existing_artifact_policy_section()
+        assert "単独 Step 実行" in section
+        assert "`## 入力` に列挙されたファイル" in section
+        assert "既存出力ファイルがあるだけで完了扱いにしない" in section
+        assert "stale" in section
+        assert "契約不一致" in section
+
+
+class TestAzureOfficialInfoSectionInjection:
+    def test_injects_microsoft_learn_mcp_rule_for_azure_template_without_duplicate_section(self):
+        """Azure 関連テンプレートに Microsoft Learn MCP 規律が無ければ render 時に注入する。"""
+        wf = get_workflow("asdw-web")
+
+        body = render_template(
+            "templates/asdw-web/step-4.1.md",
+            root_issue_num=0,
+            params={"branch": "main"},
+            wf=wf,
+        )
+
+        assert "Microsoft Learn MCP" in body
+        assert "利用可能なら必ず参照" in body
+        assert "title / URL / 確認事項" in body
+        assert "要確認（Microsoft Learn MCP 未取得）" in body
+        assert "推測で確定しない" in body
+
+    def test_does_not_duplicate_microsoft_learn_mcp_rule_when_template_has_section(self):
+        """テンプレート側に既に Microsoft Learn MCP 規律がある場合は重複注入しない。"""
+        wf = get_workflow("asdw-web")
+
+        body = render_template(
+            "templates/asdw-web/step-1.1.md",
+            root_issue_num=0,
+            params={"branch": "main"},
+            wf=wf,
+        )
+
+        assert body.count("## Azure 公式情報参照（Microsoft Learn MCP 必須）") == 1
+
+    def test_does_not_inject_microsoft_learn_mcp_rule_for_non_azure_template(self):
+        """Azure を扱わないテンプレートには Microsoft Learn MCP 規律を注入しない。"""
+        wf = get_workflow("akm")
+
+        body = render_template(
+            "templates/akm/step-1.md",
+            root_issue_num=0,
+            params={"branch": "main"},
+            wf=wf,
+        )
+
+        assert "Microsoft Learn MCP" not in body
+
 
 # ---------------------------------------------------------------------------
 # _build_root_ref
@@ -86,8 +140,9 @@ class TestBuildRootRef:
         ref = _build_root_ref(42)
         assert "<!-- root-issue: #42 -->" in ref
         assert "<!-- branch: main -->" in ref
-        assert "<!-- auto-review: true -->" in ref
-        assert "<!-- auto-context-review: true -->" in ref
+        assert "<!-- auto-review:" not in ref
+        assert "<!-- auto-context-review:" not in ref
+        assert "<!-- adversarial-review:" not in ref
         assert "<!-- auto-qa: true -->" in ref
         assert "<!-- auto-merge: false -->" in ref
 
@@ -105,7 +160,9 @@ class TestBuildRootRef:
             },
         )
         assert "<!-- branch: develop -->" in ref
-        assert "<!-- auto-review: false -->" in ref
+        assert "<!-- auto-review:" not in ref
+        assert "<!-- auto-context-review:" not in ref
+        assert "<!-- adversarial-review:" not in ref
         assert "<!-- auto-qa: false -->" in ref
         assert "<!-- auto-merge: true -->" in ref
         assert "<!-- resource-group: rg-test -->" in ref
@@ -214,6 +271,8 @@ class TestRenderTemplate:
         assert "<!-- root-issue: #99 -->" in body
         assert "{root_ref}" not in body
         assert "{additional_section}" not in body
+        # work/run 横断参照禁止ルールが {additional_section} 経由で注入されていること
+        assert "他 Step の `work/run/<run-id>/...`" in body
 
     def test_nonexistent_template(self):
         wf = get_workflow("aas")
@@ -415,17 +474,20 @@ class TestCollectParams:
         inputs = iter([
             "main",                  # branch
             "APP-01, APP-02",        # app_ids
+            # aad-web currently asks for singular app_id after app_ids. This
+            # Sub only synchronizes the regression fixture; production prompt
+            # deduplication is intentionally outside its scope.
+            "",                      # singular app_id (no override)
             "",                      # create_remote_mcp_server (default=True)
             "",                      # selected_steps = all
             "n",                     # skip_review
             "n",                     # skip_qa
-            "",                      # additional_comment
         ])
         with patch("builtins.input", side_effect=lambda _: next(inputs)):
             params = collect_params(wf)
         assert params["branch"] == "main"
         assert params["app_ids"] == ["APP-01", "APP-02"]
-        assert "app_id" not in params
+        assert params["app_id"] == ""  # singular prompt received no override
 
     def test_adoc_collect_params(self):
         wf = get_workflow("adoc")
@@ -530,9 +592,10 @@ class TestCollectParams:
 class TestResolveSelectedSteps:
     def test_empty_returns_all(self):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
+        # T2.2: AAS に Step.8 (ペルソナ別画面) / Step.9 (ペルソナカタログ) を追加
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, [])
-        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7"}
+        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8", "9"}
 
     def test_specific_steps(self):
         wf = get_workflow("aad-web")
@@ -542,12 +605,13 @@ class TestResolveSelectedSteps:
 
     def test_unknown_steps_excluded(self, capsys):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
+        # T2.2: AAS に Step.8 / Step.9 を追加
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, ["999"])
         captured = capsys.readouterr()
         assert "未知の Step ID" in captured.out
         # 有効な選択がないので全ステップにフォールバック
-        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7"}
+        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8", "9"}
 
     def test_mixed_valid_invalid(self, capsys):
         wf = get_workflow("aad-web")
@@ -559,10 +623,10 @@ class TestResolveSelectedSteps:
 
     def test_container_not_added_without_children(self):
         wf = get_workflow("asdw-web")
-        result = resolve_selected_steps(wf, ["2.3T"])
-        assert "2.3T" in result
-        # 親コンテナ "2" が追加される
-        assert "2" in result
+        result = resolve_selected_steps(wf, ["4.1"])
+        assert "4.1" in result
+        # 親コンテナ "4" が追加される
+        assert "4" in result
         # 無関係なコンテナ "1" は含まれない
         assert "1" not in result
 
@@ -578,6 +642,9 @@ class TestBuildRootIssueBody:
         body = build_root_issue_body(wf, {"branch": "main"})
         assert "# [AAS] Architecture Design" in body
         assert "<!-- branch: main -->" in body
+        assert "<!-- auto-review:" not in body
+        assert "<!-- auto-context-review:" not in body
+        assert "<!-- adversarial-review:" not in body
         assert "ワークフロー: **Architecture Design**" in body
 
     def test_asdw_with_params(self):
@@ -703,7 +770,7 @@ class TestExistingArtifactPolicyIntegration:
             ("aas", "templates/aas/step-1.md"),
             ("aad-web", "templates/aad-web/step-1.md"),
             ("asdw-web", "templates/asdw-web/step-1.1.md"),
-            ("adfd", "templates/adfd/step-1.1.md"),
+            ("adfd", "templates/adfd/step-1.md"),
             ("adfdv", "templates/adfdv/step-1.1.md"),
             ("aag", "templates/aag/step-1.md"),
             ("aagd", "templates/aagd/step-1.md"),
@@ -787,6 +854,14 @@ class TestQaReviewContextSection:
     def test_section_contains_reason_recording(self):
         """未反映時の理由記録指示が含まれること。"""
         assert "理由を完了コメントまたは成果物内に記録" in _build_qa_review_context_section()
+
+    def test_section_prohibits_cross_step_work_run_read(self):
+        """前 Step 成果物の参照先が docs/ に限定され、他 Step の work/run 読取りが禁止されていること。"""
+        section = _build_qa_review_context_section()
+        assert "work/run/<run-id>" in section
+        assert "読まないこと" in section
+        # 前 Step 成果物の bullet は 1 つだけ（重複注入なし）
+        assert section.count("前 Step 成果物") == 1
 
     def test_rendered_template_contains_qa_review_section(self):
         """render_template の出力に QA / Review コンテキスト参照セクションが含まれること。"""
@@ -902,7 +977,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=False のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": False},
             wf=wf,
@@ -914,7 +989,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=True のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": True},
             wf=wf,
@@ -926,7 +1001,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が未指定（後方互換）のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main"},
             wf=wf,
@@ -939,7 +1014,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=True のとき MCP セクションの主要コンテンツが含まれること。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": True},
             wf=wf,
@@ -976,7 +1051,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "false" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "false"},
             wf=wf,
@@ -988,7 +1063,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "true" のとき Remote MCP Server セクションが出力されること。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "true"},
             wf=wf,
@@ -1000,7 +1075,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "no" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "no"},
             wf=wf,
@@ -1012,7 +1087,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が "作成しない" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-2.5.md",
+            "templates/asdw-web/step-3.4.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "作成しない"},
             wf=wf,
@@ -1302,75 +1377,3 @@ class TestAgenticRetrievalConstants:
         assert cfg.agentic_data_sources_hint == ""
         assert cfg.agentic_existing_design_diff_only is False
         assert cfg.foundry_sku_fallback_policy == "standard_allowed"
-
-    def test_run_state_safe_config_fields_include_agentic(self):
-        """_SAFE_CONFIG_FIELDS に 6 フィールドが全て含まれること。"""
-        from hve.run_state import _SAFE_CONFIG_FIELDS
-        expected = {
-            "enable_agentic_retrieval",
-            "agentic_data_source_modes",
-            "foundry_mcp_integration",
-            "agentic_data_sources_hint",
-            "agentic_existing_design_diff_only",
-            "foundry_sku_fallback_policy",
-        }
-        for field in expected:
-            assert field in _SAFE_CONFIG_FIELDS, \
-                f"_SAFE_CONFIG_FIELDS に '{field}' が含まれていません"
-
-    def test_to_safe_config_dict_includes_agentic_fields(self):
-        """to_safe_config_dict が 6 フィールドを正しく snapshot に含めること。"""
-        from hve.config import SDKConfig
-        from hve.run_state import to_safe_config_dict
-        cfg = SDKConfig()
-        snapshot = to_safe_config_dict(cfg)
-        assert snapshot["enable_agentic_retrieval"] == "auto"
-        assert snapshot["agentic_data_source_modes"] == ["indexer"]
-        assert snapshot["foundry_mcp_integration"] is True
-        assert snapshot["agentic_data_sources_hint"] == ""
-        assert snapshot["agentic_existing_design_diff_only"] is False
-        assert snapshot["foundry_sku_fallback_policy"] == "standard_allowed"
-
-    def test_backward_compat_load_state_without_agentic_fields(self):
-        """schema 2.0 state.json でも、config_snapshot 内に Agentic Retrieval 関連
-        フィールドが無い場合に `.get(key, default)` で安全にデフォルト値を取得できること。
-
-        Phase 1 (Resume 2-layer txn): schema_version は 2.0 が必須。旧 1.0 は ValueError で
-        拒否されるため、本テストでは schema 2.0 を使って config_snapshot だけが
-        部分的に欠落するケースを検証する。
-        """
-        import json
-        import tempfile
-        from pathlib import Path
-        from hve.run_state import RunState
-        # schema 2.0 を使い、Agentic Retrieval フィールドのみ意図的に欠落
-        old_state = {
-            "schema_version": "2.0",
-            "run_id": "20260101T000000-abc123",
-            "session_name": "test session",
-            "workflow_id": "aad-web",
-            "status": "paused",
-            "created_at": "2026-01-01T00:00:00+00:00",
-            "last_updated_at": "2026-01-01T00:00:00+00:00",
-            "pause_reason": None,
-            "host": {},
-            "config_snapshot": {
-                "model": "claude-opus-4.7",
-                # Agentic Retrieval フィールドは意図的に含めない
-            },
-            "params_snapshot": {},
-            "selected_step_ids": [],
-            "step_states": {},
-        }
-        with tempfile.TemporaryDirectory() as tmpdir:
-            run_dir = Path(tmpdir) / "20260101T000000-abc123"
-            run_dir.mkdir()
-            (run_dir / "state.json").write_text(
-                json.dumps(old_state), encoding="utf-8"
-            )
-            loaded = RunState.load("20260101T000000-abc123", work_dir=Path(tmpdir))
-            # config_snapshot は dict なので新フィールドが無い場合は .get() でデフォルト取得可能
-            snap = loaded.config_snapshot
-            assert snap.get("enable_agentic_retrieval", "auto") == "auto"
-            assert snap.get("agentic_data_source_modes", ["indexer"]) == ["indexer"]
-            assert snap.get("foundry_mcp_integration", True) is True

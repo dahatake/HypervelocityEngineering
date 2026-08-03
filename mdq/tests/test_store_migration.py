@@ -1,4 +1,4 @@
-"""Tests for store schema migration (v3 -> v6)."""
+"""Tests for store schema migration (v3 -> v7)."""
 from __future__ import annotations
 
 import sqlite3
@@ -12,6 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from mdq import store
 
 
+def _fts_ddl(conn: sqlite3.Connection) -> str:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+    ).fetchone()
+    return (row[0] if row else "") or ""
+
+
 def test_open_store_creates_v5_schema(tmp_path: Path) -> None:
     db = tmp_path / "fresh.sqlite"
     conn = store.open_store(db, lang="ja-jp")
@@ -23,7 +30,7 @@ def test_open_store_creates_v5_schema(tmp_path: Path) -> None:
         assert "chunk_embedding" in cols, "v5 chunk_embedding column missing on fresh DB"
         assert "summary" in cols, "v6 summary column missing on fresh DB"
         v = conn.execute("PRAGMA user_version").fetchone()[0]
-        assert v == 6
+        assert v == 7
     finally:
         conn.close()
 
@@ -76,7 +83,7 @@ def test_open_store_migrates_legacy_v3_db(tmp_path: Path) -> None:
         ).fetchone()
         assert row[0] == "cid"
         assert row[1] is None
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
     finally:
         conn.close()
 
@@ -113,5 +120,120 @@ def test_insert_chunks_accepts_legacy_tuples(tmp_path: Path) -> None:
         assert rows[1] == ("c2", None, None, None)
         assert rows[2] == ("c3", "c2", None, None)
         assert rows[3] == ("c4", None, "D", b"\x00\x01\x02\x03")
+    finally:
+        conn.close()
+
+
+def test_ja_jp_fts5_mirror_uses_detail_none(tmp_path: Path) -> None:
+    """trigram ミラーは detail=none で作る（索引サイズ削減）。"""
+    conn = store.open_store(tmp_path / "ja.sqlite", lang="ja-jp")
+    try:
+        if not store.has_fts5(conn):
+            pytest.skip("SQLite build lacks FTS5")
+        ddl = _fts_ddl(conn)
+        assert "tokenize='trigram'" in ddl
+        assert "detail=none" in ddl, f"detail=none missing from trigram mirror: {ddl}"
+    finally:
+        conn.close()
+
+
+def test_en_us_fts5_mirror_keeps_positional_detail(tmp_path: Path) -> None:
+    """unicode61 側には肥大の実測が無いので detail は既定のまま据え置く。"""
+    conn = store.open_store(tmp_path / "en.sqlite", lang="en-us")
+    try:
+        if not store.has_fts5(conn):
+            pytest.skip("SQLite build lacks FTS5")
+        ddl = _fts_ddl(conn)
+        assert "tokenize='unicode61'" in ddl
+        assert "detail=" not in ddl, f"unexpected detail option on unicode61 mirror: {ddl}"
+    finally:
+        conn.close()
+
+
+def test_legacy_trigram_mirror_without_detail_none_is_rebuilt(tmp_path: Path) -> None:
+    """detail 指定だけが変わった旧 DB も作り直され、再び検索できること。
+
+    ``_migrate`` はトークナイザ名だけを比較していたため、``detail`` の変更を
+    検知できず旧ミラーが無言で残る。残ると FTS5 検索が 0 件のままになる。
+    """
+    db = tmp_path / "legacy-detail.sqlite"
+    conn = store.open_store(db, lang="ja-jp")
+    if not store.has_fts5(conn):
+        conn.close()
+        pytest.skip("SQLite build lacks FTS5")
+    store.upsert_file(conn, "a.md", "sha", 1.0, 10, None)
+    store.insert_chunks(conn, [
+        ("cid", "a.md", "# A", 1, 1, 1, 1, "PR body に検証マーカーを記載", None),
+    ])
+    conn.commit()
+    # 旧 DDL（detail 未指定 = full）へ差し戻し、v6 の状態を再現する。
+    for stmt in ("DROP TRIGGER IF EXISTS chunks_ai",
+                 "DROP TRIGGER IF EXISTS chunks_ad",
+                 "DROP TRIGGER IF EXISTS chunks_au",
+                 "DROP TABLE IF EXISTS chunks_fts"):
+        conn.execute(stmt)
+    conn.executescript(
+        "CREATE VIRTUAL TABLE chunks_fts USING fts5("
+        "  text, content='chunks', content_rowid='rowid', tokenize='trigram'"
+        ");"
+        "INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild');"
+        "PRAGMA user_version = 6;"
+    )
+    conn.commit()
+    conn.close()
+
+    conn = store.open_store(db, lang="ja-jp")
+    try:
+        ddl = _fts_ddl(conn)
+        assert "detail=none" in ddl, f"legacy mirror was not rebuilt: {ddl}"
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 7
+        hits = conn.execute(
+            "SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH ?",
+            ('"検証マ"',),
+        ).fetchone()[0]
+        assert hits == 1, "rebuilt mirror lost its content"
+    finally:
+        conn.close()
+
+
+def test_detail_mismatch_is_detected_without_a_version_bump(tmp_path: Path) -> None:
+    """user_version が最新でも detail 不一致だけでミラーを作り直せること。
+
+    バージョン差で救われるとスキーマ比較の欠陥が隠れる。``_migrate`` の
+    DDL 比較そのものを固定するために version は据え置いて検査する。
+    """
+    db = tmp_path / "detail-only.sqlite"
+    conn = store.open_store(db, lang="ja-jp")
+    if not store.has_fts5(conn):
+        conn.close()
+        pytest.skip("SQLite build lacks FTS5")
+    store.upsert_file(conn, "a.md", "sha", 1.0, 10, None)
+    store.insert_chunks(conn, [
+        ("cid", "a.md", "# A", 1, 1, 1, 1, "PR body に検証マーカーを記載", None),
+    ])
+    conn.commit()
+    for stmt in ("DROP TRIGGER IF EXISTS chunks_ai",
+                 "DROP TRIGGER IF EXISTS chunks_ad",
+                 "DROP TRIGGER IF EXISTS chunks_au",
+                 "DROP TABLE IF EXISTS chunks_fts"):
+        conn.execute(stmt)
+    conn.executescript(
+        "CREATE VIRTUAL TABLE chunks_fts USING fts5("
+        "  text, content='chunks', content_rowid='rowid', tokenize='trigram'"
+        ");"
+        "INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild');"
+        f"PRAGMA user_version = {store.SCHEMA_VERSION};"
+    )
+    conn.commit()
+    conn.close()
+
+    conn = store.open_store(db, lang="ja-jp")
+    try:
+        assert "detail=none" in _fts_ddl(conn), "detail mismatch went undetected"
+        hits = conn.execute(
+            "SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH ?",
+            ('"検証マ"',),
+        ).fetchone()[0]
+        assert hits == 1, "rebuilt mirror lost its content"
     finally:
         conn.close()

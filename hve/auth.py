@@ -31,6 +31,7 @@ __all__ = [
     "resolve_token_env",
     "get_auth_status",
     "is_authenticated",
+    "ensure_authenticated",
     "run_login",
     "find_copilot_binary",
 ]
@@ -156,6 +157,39 @@ def get_auth_status(timeout: float = 30.0) -> AuthInfo:
 def is_authenticated(timeout: float = 30.0) -> bool:
     """認証済みかどうかの便利関数。"""
     return get_auth_status(timeout=timeout).is_authenticated
+
+
+def ensure_authenticated(
+    *,
+    interactive: bool = False,
+    host: str = "https://github.com",
+    status_timeout: float = 30.0,
+    login_timeout: Optional[float] = None,
+) -> AuthInfo:
+    """GitHub Copilot 認証状態を確認し、必要ならログインを実行する。
+
+    Args:
+        interactive: True のとき、未認証なら ``copilot login`` を実行する。
+            False のときは状態確認のみ行う。
+        host: ``copilot login`` に渡す GitHub ホスト URL。
+        status_timeout: 認証状態確認のタイムアウト秒。
+        login_timeout: ``copilot login`` のタイムアウト秒。None で無制限。
+
+    Returns:
+        最終的な AuthInfo。ログインコマンドが非 0 で終了した場合は
+        ``is_authenticated=False`` とし、``status_message`` に終了コードを入れる。
+    """
+    info = get_auth_status(timeout=status_timeout)
+    if info.is_authenticated or not interactive:
+        return info
+
+    rc = run_login(host=host, timeout=login_timeout)
+    if rc != 0:
+        return AuthInfo(
+            is_authenticated=False,
+            status_message=f"copilot login exited with {rc}",
+        )
+    return get_auth_status(timeout=status_timeout)
 
 
 # ---------------------------------------------------------------------------

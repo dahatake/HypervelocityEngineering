@@ -1,0 +1,23 @@
+inputs:
+- path: docs/catalog/test-strategy.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-TDD-TestStrategy--aas--7
+- path: docs/catalog/service-catalog-matrix.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--6
+- path: docs/dataflow/apps/{key}-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-AppSpec--adfd--1
+- path: docs/dataflow/dataflow-monitoring-design.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-MonitoringDesign--adfd--2
+outputs:
+# fan-out キーは `dataflow_catalog` parser が返す ``APP-NN``。下流 (adfdv) の
+# producer 解決は完全一致のみのため ``{key}`` に一本化する。
+- path: docs/test-specs/{key}-test-spec.md
+  required: true
+  mode: create

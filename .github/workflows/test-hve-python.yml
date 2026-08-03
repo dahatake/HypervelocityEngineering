@@ -5,11 +5,19 @@ on:
     branches: [main]
     paths:
       - 'hve/**'
+      - 'hve-dev/**'
+      - 'cq/**'
+      - 'pyproject.toml'
+      - '.github/scripts/**'
       - '.github/workflows/test-hve-python.yml'
   pull_request:
     branches: [main]
     paths:
       - 'hve/**'
+      - 'hve-dev/**'
+      - 'cq/**'
+      - 'pyproject.toml'
+      - '.github/scripts/**'
       - '.github/scripts/bash/lib/workflow-registry.sh'
       - '.github/workflows/**'
       - '.github/workflows/test-hve-python.yml'
@@ -22,6 +30,8 @@ jobs:
     name: HVE Python Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: offscreen
 
     steps:
       - uses: actions/checkout@v4
@@ -31,16 +41,70 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Qt system libraries
+        run: |
+          set -euo pipefail
+          audio_pkg="libasound2"
+          if apt-cache policy libasound2 | grep -q 'Candidate: (none)'; then
+            audio_pkg="libasound2t64"
+          fi
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-cursor0 \
+            libnss3 \
+            libxkbcommon-x11-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxrandr2 \
+            libgbm1 \
+            "${audio_pkg}" \
+            libegl1 \
+            libgl1
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install -e .
+          pip install pytest "PySide6>=6.11,<7"
 
       - name: Run DAG parity tests
         run: pytest hve/tests/test_dag_parity.py -v
 
       - name: Run all HVE tests
         run: pytest hve/tests/ -v --ignore=hve/tests/test_dag_parity.py
+
+  cq-python-tests:
+    name: cq Python Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package with [code] extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[code,code-sql]"
+          pip install pytest
+
+      # tree-sitter が無いと言語契約テストは黙って skip されるため、ここで fail-closed にする。
+      - name: Verify optional grammars are importable
+        run: |
+          python -c "import tree_sitter, tree_sitter_java, tree_sitter_go, tree_sitter_rust, tree_sitter_c, tree_sitter_cpp"
+          python -c "import tree_sitter_bash, tree_sitter_powershell, tree_sitter_batch, tree_sitter_scala"
+          python -c "import sqlglot, sqlfluff, tree_sitter_sql"
+
+      # PowerShell の回復ノードを公式パーサで補正する経路が silent skip しないようにする。
+      - name: Verify pwsh is available
+        run: pwsh -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: Run all cq tests
+        run: pytest cq/tests/ -v
 
   mdq-smoke:
     name: mdq index smoke test

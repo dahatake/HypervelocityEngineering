@@ -1,5 +1,5 @@
 name: "Web App Dev & Deploy"
-description: "Issue から Web アプリ開発・デプロイワークフロー (Step.1〜4) を自動起動します"
+description: "Issue から Web アプリ開発・デプロイワークフロー (Step.1〜5) を自動起動します"
 title: "[Web App Dev] "
 labels:
   - "auto-app-dev-microservice-web"
@@ -16,31 +16,32 @@ body:
         ### 前提条件
         - アプリケーション設計ワークフロー（Web App Design / AAD-WEB）が完了し、以下のドキュメントが存在していること:
           - `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`
-          - `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`
+          - `docs/catalog/screen-catalog-APP-*.md`（全 APP 集約 glob）, `docs/catalog/service-catalog-matrix.md`
           - `docs/catalog/use-case-catalog.md`
           - `docs/screen/`, `docs/services/` 配下の定義書
           - `src/data/sample-data.json`
           - `docs/catalog/test-strategy.md`（設計ワークフローの TDD テスト戦略書生成ステップで作成済み）
           - `docs/test-specs/{serviceId}-test-spec.md`（設計ワークフロー Step.2.3 の成果物。サービス別テスト仕様書）
-          - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー Step.2.3 の成果物。画面別テスト仕様書）
+          - `docs/test-specs/{screenId}-test-spec.md`（設計ワークフロー Step.2.4 の成果物。画面別テスト仕様書）
           - `docs/catalog/app-catalog.md`（アプリケーション一覧。Architecture Design の成果物。存在しない場合はアプリケーション名を直接入力可）
         - リポジトリに以下のシークレットが設定されていること:
           - `COPILOT_PAT`（HVE Cloud Agent Orchestrator の Copilot 自動アサイン用）
           - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`（SWA/Azure deploy の OIDC 用）
           - `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（ユーザーによる Secret 作成は不要）
           - HVE CLI Orchestrator 用の `GH_TOKEN` はこの Cloud 実行では必須ではありません
-          - Step.3.2 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` の手動設定は不要
+          - Step.4.3 の SWA デプロイは OIDC + `az staticwebapp secrets list` による deploy token の動的取得を前提とするため、通常 `AZURE_STATIC_WEB_APPS_API_TOKEN` / `GITHUB_PAT` の手動設定は不要
           - 詳細方針: `users-guide/hve-cloud-getting-started.md`（認証・認可 / Azure OIDC Secrets）, `users-guide/web-ui-guide.md`
 
-        ### 実行されるステップ（Step.4 のみ並列、それ以外は順次実行）
+        ### 実行されるステップ（Step.5 のみ並列、それ以外は順次実行）
         | ステップ | 内容 | サブステップ |
         |---------|------|------------|
-        | **Step.1** | データ | 1.1 Azure データストア選定 → 1.2 Azure データサービス Deploy |
-        | **Step.2** | マイクロサービス作成 | 2.1 コンピュート選定 → 2.2 追加サービス選定 → 2.3 追加サービス Deploy → **2.3T テスト仕様書 (TDD RED)** → **2.3TC テストコード生成 (TDD RED)** → 2.4 サービスコード実装 (TDD GREEN) → 2.5 Azure Compute Deploy |
-        | **Step.3** | UI 作成 | **3.0T UI テスト仕様書 (TDD RED)** → **3.0TC UI テストコード生成 (TDD RED)** → 3.1 UI 実装 (TDD GREEN) → 3.2 Web アプリ Deploy (Azure Static Web Apps) → 3.3 E2E テスト (Playwright) |
-        | **Step.4** | アーキテクチャレビュー | 4.1 WAF アーキテクチャレビュー ‖ 4.2 整合性チェック（Step.3.3 PASS 後に並列実行） |
+        | **Step.1** | データ | 1.1 Azure データストア選定 → **1.2 データストア検証テスト生成 (TDD RED)** → 1.3 Azure データサービス Deploy (TDD GREEN) |
+        | **Step.2** | 追加サービス | 2.1 追加 Azure サービス選定 → 2.2 追加 Azure サービス Deploy → **2.3 追加サービステストコード生成 (TDD RED)** → 2.4 追加サービステスト実施 (TDD GREEN) |
+        | **Step.3** | Compute | 3.1 Azure コンピュート選定 → **3.2 サービステストコード生成 (TDD RED)** → 3.3 サービスコード実装 (TDD GREEN) → 3.4 Azure Compute Deploy → 3.5 Deploy 後 再テスト |
+        | **Step.4** | UI 作成 | **4.1 UI テストコード生成 (TDD RED)** → 4.2 UI 実装 (TDD GREEN) → 4.3 Web アプリ Deploy (Azure Static Web Apps) → 4.4 E2E テスト (Playwright) |
+        | **Step.5** | アーキテクチャレビュー | 5.1 WAF アーキテクチャレビュー ‖ 5.2 整合性チェック（Step.4.4 PASS 後に並列実行）|
 
-        ℹ️ Step.2 のサブステップである Step.2.3T / Step.2.3TC は Dev フェーズで追加生成する TDD RED 成果物です。設計フェーズ（Web App Design Step.2.3）で作成したテスト仕様書を入力として利用します。
+        ℹ️ Step.2.3 / Step.3.2 / Step.4.1 の TDD RED テストコード生成は、設計フェーズ（Web App Design Step.2.3 / Step.2.4）で作成した test-spec を入力として利用します。なお Step.1.2 のデータストア検証テスト (TDD RED) は test-spec を介さず `docs/azure/azure-services-data.md` から直接導出し、`src/infra/azure/verify-data-resources.sh` を生成します（Step.1.3 がこれを実行して GREEN 化）。
 
         📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図、スコープ、業務プロセス、ユースケース、データモデル、セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に `knowledge-management` ワークフローを実行して `knowledge/` を充実させることを推奨します。
 
@@ -100,15 +101,17 @@ body:
         **未選択の場合は全ステップを実行します。**
         **注意**: 依存関係があるため、後段のステップには前段の成果物が必要です。
         前段をスキップする場合は、対応するドキュメント／リソースが既に存在していることを確認してください。
-        ⚠️ **TDD 警告**: Step.2 をスキップすると、TDD RED フェーズ（テスト仕様書・テストコード生成）が未実施のままサービス実装（Step.2.4）が開始されます。
-        テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（Web App Design Step.2.3）で生成済みであることを前提とします。Step.2 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
-        Step.3 をスキップすると、UI テスト仕様書・テストコード生成（Step.3.0T / Step.3.0TC）が未実施のまま UI 実装をスキップすることになります。
-        Step.3 をスキップする場合は、`docs/test-specs/` と `src/test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
+        ⚠️ **TDD 警告**: Step.2 をスキップすると、追加サービスの TDD RED/GREEN（Step.2.3/2.4）が未実施のままになります。
+        ⚠️ **TDD 警告**: Step.3 をスキップすると、TDD RED フェーズ（サービス test-spec / テストコード生成）が未実施のままサービス実装（Step.3.3）が開始されます。
+        テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）は設計フェーズ（Web App Design Step.2.3）で生成済みであることを前提とします。Step.3 をスキップする場合は `docs/test-specs/` 配下に対応するテスト仕様書とテストコードが存在していることを確認してください。
+        Step.4 をスキップすると、UI テストコード生成（Step.4.1）が未実施のまま UI 実装をスキップすることになります。
+        Step.4 をスキップする場合は、`docs/test-specs/` と `src/test/` 配下に対応するテスト仕様書・テストコードが既に存在していることを確認してください。
       options:
-        - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 Azure データサービス Deploy)"
-        - label: "Step.2 — マイクロサービス作成 (Step.2.1〜2.5 + Step.2.3T, Step.2.3TC)"
-        - label: "Step.3 — UI 作成 (Step.3.0T, Step.3.0TC, Step.3.1 UI 実装 / Step.3.2 Web アプリ Deploy / Step.3.3 E2E)"
-        - label: "Step.4 — アーキテクチャレビュー (Step.4.1 WAF レビュー / Step.4.2 整合性チェック)"
+        - label: "Step.1 — データ (Step.1.1 Azure データストア選定 / Step.1.2 TDD RED 検証テスト生成 / Step.1.3 Azure データサービス Deploy TDD GREEN)"
+        - label: "Step.2 — 追加サービス (Step.2.1 選定 / Step.2.2 Deploy / Step.2.3 TDD RED / Step.2.4 TDD GREEN)"
+        - label: "Step.3 — Compute (Step.3.1 選定 / Step.3.2 TDD RED / Step.3.3 TDD GREEN / Step.3.4 Deploy / Step.3.5 再テスト)"
+        - label: "Step.4 — UI 作成 (Step.4.1 TDD RED / Step.4.2 UI 実装 / Step.4.3 SWA Deploy / Step.4.4 E2E)"
+        - label: "Step.5 — アーキテクチャレビュー (Step.5.1 WAF レビュー / Step.5.2 整合性チェック)"
 
   - type: dropdown
     id: model
@@ -133,7 +136,7 @@ body:
     attributes:
       label: "レビュー用モデル（任意）"
       description: |
-        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        敵対的レビュー（adversarial-review）で使用するモデル（hve CLI `--review-model` 相当）。このモデル選択だけではレビューを発動しません。発動は「敵対的レビューを有効にする」の指定が必要です。一般 Code Review Agent の設定とは別です。
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
@@ -167,10 +170,10 @@ body:
     attributes:
       label: "レビュー設定"
       description: |
-        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
-        デフォルト（チェックなし）ではセルフレビューは実行されません。
+        チェックを入れると、Copilot が PR を完成させた際に敵対的レビュー（adversarial-review）を自動実行します。
+        デフォルト（チェックなし）では敵対的レビューは実行されません。
       options:
-        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+        - label: "敵対的レビューを有効にする（チェックすると adversarial-review ラベルが付与されます）"
 
   - type: checkboxes
     id: enable_qa
@@ -332,16 +335,20 @@ body:
     validations:
       required: false
 
-  - type: checkboxes
+  - type: dropdown
     id: enable_auto_merge
     attributes:
       label: "PR完全自動化設定"
       description: |
-        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
         ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
         本番ブランチへの直接マージには十分ご注意ください。
       options:
-        - label: "PR の自動 Approve & Auto-merge を有効にする"
+        - "有効にする"
+        - "無効にする"
+      default: 0
+    validations:
+      required: false
 
   - type: textarea
     id: additional_comment

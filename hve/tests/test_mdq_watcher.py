@@ -126,7 +126,43 @@ def test_build_index_uses_per_file_helper_no_regression(tmp_path: Path):
 # MdqWatcher 統合（watchdog 未導入なら skip）
 # ─────────────────────────────────────────────────────────
 
-watchdog = pytest.importorskip("watchdog", reason="watchdog 未導入: watcher テストは skip")
+def test_watcher_resolves_relative_db_path_against_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Process CWD変更後もwatcher DBは起動元repoの外へ漂流しない。"""
+    from mdq import watcher as watcher_mod
+
+    repo = tmp_path / "repo"
+    other_cwd = tmp_path / "other"
+    repo.mkdir()
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    watcher = watcher_mod.MdqWatcher(
+        repo_root=repo,
+        roots=["docs"],
+        db_path=Path(".mdq/index.sqlite"),
+    )
+
+    assert watcher.db_path == (repo / ".mdq" / "index.sqlite").resolve()
+
+
+def test_watcher_preserves_absolute_db_path(tmp_path: Path) -> None:
+    """Absolute DB pathはrepo_rootとの再結合で変更されない。"""
+    from mdq import watcher as watcher_mod
+
+    repo = tmp_path / "repo"
+    external_db = (tmp_path / "external" / "index.sqlite").resolve()
+    repo.mkdir()
+
+    watcher = watcher_mod.MdqWatcher(
+        repo_root=repo,
+        roots=["docs"],
+        db_path=external_db,
+    )
+
+    assert watcher.db_path == external_db
 
 
 def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.1) -> bool:
@@ -140,6 +176,7 @@ def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.1) -> bool:
 
 
 def test_watcher_detects_create_modify_delete(tmp_path: Path):
+    pytest.importorskip("watchdog", reason="watchdog 未導入: watcher 統合テストは skip")
     from mdq import watcher as watcher_mod
 
     repo = tmp_path
@@ -193,6 +230,7 @@ def test_watcher_detects_create_modify_delete(tmp_path: Path):
 
 
 def test_watcher_ignores_out_of_scope(tmp_path: Path):
+    pytest.importorskip("watchdog", reason="watchdog 未導入: watcher 統合テストは skip")
     from mdq import watcher as watcher_mod
 
     repo = tmp_path

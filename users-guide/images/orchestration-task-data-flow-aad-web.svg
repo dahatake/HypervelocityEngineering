@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="system-ui, -apple-system, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="system-ui, -apple-system, sans-serif">
   <title>AAD-WEB: Web Application 設計 データフロー</title>
   <defs>
     <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -8,7 +8,7 @@
   </defs>
 
   <!-- Background -->
-  <rect width="1200" height="700" fill="#f6f8fa" rx="12"/>
+  <rect width="1200" height="820" fill="#f6f8fa" rx="12"/>
 
   <!-- Title -->
   <text x="600" y="32" text-anchor="middle" font-size="17" font-weight="bold" fill="#24292e">AAD-WEB: Web Application 設計 データフロー</text>
@@ -92,45 +92,68 @@
   <line x1="980" y1="359" x2="960" y2="359" stroke="#586069" stroke-width="1"/>
 
   <!-- Join label -->
-  <text x="600" y="418" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">Join ↓</text>
+  <text x="600" y="418" text-anchor="middle" font-size="10" fill="#e36209" font-weight="bold">並列実行 ↓ (Step.2.3 ← Step.2.2 / Step.2.4 ← Step.2.1)</text>
 
-  <!-- Join arrows from 2.1 output and 2.2 output to 2.3 -->
-  <path d="M 600 313 L 600 435 L 440 435 L 440 463" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <!-- Join arrows: 2.2 output → 2.3 (service), 2.1 output → 2.4 (screen) -->
+  <path d="M 600 313 L 600 435 L 440 435 L 440 590" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
   <path d="M 870 378 L 870 435 L 720 435 L 720 463" stroke="#586069" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
 
-  <!-- ========== Step 2.3 (bottom) ========== -->
-  <text x="600" y="458" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.3</text>
+  <!-- ========== Step 2.3 (service test-spec) ========== -->
+  <text x="600" y="458" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.3（サービス）</text>
 
   <!-- Input (step 2.3) -->
   <rect x="20" y="465" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="175" y="484" text-anchor="middle" font-size="10" fill="#24292e">docs/test-strategy.md</text>
-  <text x="175" y="500" text-anchor="middle" font-size="10" fill="#24292e">docs/services/*-description.md</text>
-  <text x="175" y="516" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/*-description.md</text>
+  <text x="175" y="488" text-anchor="middle" font-size="10" fill="#24292e">docs/test-strategy.md</text>
+  <text x="175" y="504" text-anchor="middle" font-size="10" fill="#24292e">docs/services/*-description.md</text>
+  <text x="175" y="520" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
 
   <!-- Agent (step 2.3) -->
   <rect x="430" y="465" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
   <text x="565" y="488" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Arch-TDD-TestSpec</text>
-  <text x="565" y="504" text-anchor="middle" font-size="10" fill="#586069">TDDテスト仕様書生成</text>
-  <text x="565" y="520" text-anchor="middle" font-size="9" fill="#959da5">API・UI テスト仕様</text>
+  <text x="565" y="504" text-anchor="middle" font-size="10" fill="#586069">サービス TDDテスト仕様書生成</text>
+  <text x="565" y="520" text-anchor="middle" font-size="9" fill="#959da5">API テスト仕様</text>
 
   <!-- Output (step 2.3) -->
   <rect x="800" y="465" width="360" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="980" y="488" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/</text>
-  <text x="980" y="504" text-anchor="middle" font-size="10" fill="#24292e">{serviceId}-test-spec.md</text>
-  <text x="980" y="520" text-anchor="middle" font-size="10" fill="#24292e">{screenId}-test-spec.md</text>
+  <text x="980" y="513" text-anchor="middle" font-size="10" fill="#24292e">{serviceId}-test-spec.md</text>
 
   <!-- Arrows step 2.3 -->
   <line x1="330" y1="497" x2="430" y2="497" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
   <line x1="700" y1="497" x2="800" y2="497" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
 
+  <!-- ========== Step 2.4 (screen test-spec) ========== -->
+  <text x="600" y="583" text-anchor="middle" font-size="10" font-weight="bold" fill="#959da5">Step 2.4（画面）</text>
+
+  <!-- Input (step 2.4) -->
+  <rect x="20" y="590" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="175" y="613" text-anchor="middle" font-size="10" fill="#24292e">docs/test-strategy.md</text>
+  <text x="175" y="629" text-anchor="middle" font-size="10" fill="#24292e">docs/screen/*-description.md</text>
+  <text x="175" y="645" text-anchor="middle" font-size="10" fill="#24292e">service-catalog-matrix.md</text>
+
+  <!-- Agent (step 2.4) -->
+  <rect x="430" y="590" width="270" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
+  <text x="565" y="613" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Arch-TDD-TestSpec</text>
+  <text x="565" y="629" text-anchor="middle" font-size="10" fill="#586069">画面 TDDテスト仕様書生成</text>
+  <text x="565" y="645" text-anchor="middle" font-size="9" fill="#959da5">UI テスト仕様</text>
+
+  <!-- Output (step 2.4) -->
+  <rect x="800" y="590" width="360" height="65" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="980" y="613" text-anchor="middle" font-size="10" fill="#24292e">docs/test-specs/</text>
+  <text x="980" y="638" text-anchor="middle" font-size="10" fill="#24292e">{screenId}-test-spec.md</text>
+
+  <!-- Arrows step 2.4 -->
+  <line x1="330" y1="622" x2="430" y2="622" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="700" y1="622" x2="800" y2="622" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
+
   <!-- Legend -->
-  <rect x="20" y="565" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
-  <text x="260" y="582" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
-  <rect x="35" y="590" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
-  <text x="52" y="600" font-size="10" fill="#24292e">入力ファイル</text>
-  <rect x="145" y="590" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
-  <text x="162" y="600" font-size="10" fill="#24292e">Prompt</text>
-  <rect x="270" y="590" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
-  <text x="287" y="600" font-size="10" fill="#24292e">成果物</text>
-  <text x="390" y="600" font-size="10" fill="#e36209" font-weight="bold">並列実行: 2.1 と 2.2 は同時実行可</text>
+  <rect x="20" y="685" width="500" height="50" rx="8" fill="white" stroke="#d1d5da" stroke-width="1"/>
+  <text x="260" y="702" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">凡例</text>
+  <rect x="35" y="710" width="12" height="12" rx="2" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
+  <text x="52" y="720" font-size="10" fill="#24292e">入力ファイル</text>
+  <rect x="145" y="710" width="12" height="12" rx="2" fill="#e8d5f5" stroke="#6f42c1" stroke-width="1.5"/>
+  <text x="162" y="720" font-size="10" fill="#24292e">Prompt</text>
+  <rect x="270" y="710" width="12" height="12" rx="2" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
+  <text x="287" y="720" font-size="10" fill="#24292e">成果物</text>
+  <text x="390" y="720" font-size="10" fill="#e36209" font-weight="bold">並列実行: 2.1/2.2、2.3/2.4 各組で並列</text>
 </svg>

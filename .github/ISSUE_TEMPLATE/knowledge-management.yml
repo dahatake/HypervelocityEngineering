@@ -67,10 +67,10 @@ body:
     attributes:
       label: "レビュー設定"
       description: |
-        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
-        デフォルト（チェックなし）ではセルフレビューは実行されません。
+        チェックを入れると、Copilot が PR を完成させた際に敵対的レビュー（adversarial-review）を自動実行します。
+        デフォルト（チェックなし）では敵対的レビューは実行されません。
       options:
-        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+        - label: "敵対的レビューを有効にする（チェックすると adversarial-review ラベルが付与されます）"
 
   - type: checkboxes
     id: enable_qa
@@ -120,12 +120,20 @@ body:
     validations:
       required: false
 
-  - type: checkboxes
+  - type: dropdown
     id: enable_auto_merge
     attributes:
       label: "PR完全自動化設定"
+      description: |
+        QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
+        本番ブランチへの直接マージには十分ご注意ください。
       options:
-        - label: "PR の自動 Approve & Auto-merge を有効にする"
+        - "有効にする"
+        - "無効にする"
+      default: 0
+    validations:
+      required: false
 
   - type: textarea
     id: additional_comment
@@ -161,7 +169,7 @@ body:
     attributes:
       label: "レビュー用モデル（任意）"
       description: |
-        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        敵対的レビュー（adversarial-review）で使用するモデル（hve CLI `--review-model` 相当）。このモデル選択だけではレビューを発動しません。発動は「敵対的レビューを有効にする」の指定が必要です。一般 Code Review Agent の設定とは別です。
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"

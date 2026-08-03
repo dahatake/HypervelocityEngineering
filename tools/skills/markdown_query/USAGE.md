@@ -49,17 +49,17 @@ bash tools/skills/markdown_query/launch-gui.sh /path/to/repo
 - 起動時、最新レポートが 24 時間以上前なら自動再生成。
 - 手動再生成ボタンあり。
 
-レポートは
-`tools/skills/markdown_query/usage-report/YYYY-MM-DD.{json,md}` および
+レポートは対象リポジトリ配下の
+`.mdq/usage-report/YYYY-MM-DD.{json,md}` および
 `latest.{json,md}` に保存されます。
 
 ## 内部で何が起きているか
 
 1. ランチャーが `vendor/` を `sys.path` に追加し `mdq` 同梱版を解決。
-2. `python -m tools.skills.markdown_query.gui` でエントリ。
-3. [`gui/standalone_window.py`](./gui/standalone_window.py) が
-   [`gui/settings_section.py`](./gui/settings_section.py) の
+2. `launch.py` が `mdq.gui.__main__` をエントリとして呼び出す。
+3. `vendor/mdq/gui/standalone_window.py` が
+   `vendor/mdq/gui/settings_section.py` の
    `MdqIndexSection` を `QMainWindow` 中央に配置して表示。
-4. 設定保存は [`gui/settings_store.py`](./gui/settings_store.py) が担当
+4. 設定保存は `vendor/mdq/gui/settings_store.py` が担当
    （HVE ソースツリー内であれば `hve/.settings.txt` を共有、それ以外は
    `<repo>/.mdq-gui-settings.txt` に独立保存）。

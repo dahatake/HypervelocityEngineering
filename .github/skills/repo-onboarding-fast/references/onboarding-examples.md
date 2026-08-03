@@ -14,7 +14,7 @@
 - 新しい Custom Agent（例: Dev-Microservice-Azure-ServiceCoding-AzureFunctions）が本リポジトリに初めてアサインされた
 - 作業ディレクトリ: Issue #101
 
-**出力（`work/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-101/onboarding.md`）:**
+**出力（`work/run/<run-id>/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-101/onboarding.md`）:**
 
 ```markdown
 # onboarding: RoyaltyService2ndGen リポジトリ
@@ -72,7 +72,7 @@ dotnet test src/test/api/AICSSupportService.Tests/
 
 **出力（更新ルール）:**
 
-1. `work/<AgentName>/Issue-<N>/onboarding.md` が既に存在することを確認
+1. `work/run/<run-id>/<AgentName>/Issue-<N>/onboarding.md` が既に存在することを確認
 2. copilot-instructions.md §0（work/ 書き込みルール）に従い **既存ファイルを削除**
 3. 最新の調査結果を含む内容で **新規作成**
 4. 削除→作成後にファイルが空でないことを `read` で確認

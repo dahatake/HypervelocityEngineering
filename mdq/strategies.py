@@ -24,6 +24,13 @@ Available strategies (see ``users-guide/skills-markdown-query.md``):
   plus a per-chunk ``summary`` field computed from the chunk body
   (head N chars or first paragraph). LLM-free; stored in ``chunks.summary``
   (SCHEMA v6). Designed for PageIndex-style table-of-contents navigation.
+- ``graphrag``: GraphRAG (knowledge graph + entity/relation extraction) via
+  the optional ``[graphrag]`` extra (lightrag-hku + local Ollama). Persists
+  outside the SQLite store as ``.mdq/graphrag-<lang>/`` (NetworkX + JSON,
+  managed by LightRAG). Requires a running local Ollama server (loopback
+  only); falls back to ``heading_recursive`` when unavailable. Auto-router
+  does not select this strategy; must be explicitly requested with
+  ``--strategy graphrag``.
 
 Future: ``sentence`` (proposition-level) is reserved for Phase 3.
 """
@@ -34,7 +41,7 @@ from typing import Literal
 
 Strategy = Literal[
     "heading", "heading_recursive", "fixed_window",
-    "semantic_paragraph", "pageindex",
+    "semantic_paragraph", "pageindex", "graphrag",
 ]
 
 ALL_STRATEGIES: tuple[Strategy, ...] = (
@@ -43,6 +50,7 @@ ALL_STRATEGIES: tuple[Strategy, ...] = (
     "fixed_window",
     "semantic_paragraph",
     "pageindex",
+    "graphrag",
 )
 DEFAULT_STRATEGY: Strategy = "heading"
 
@@ -113,7 +121,28 @@ def scan_file_for_strategy(
     if strategy == "pageindex":
         from . import strategies_pageindex as _pi
         return _pi.scan_file_pageindex(repo_root, file_path)
+    if strategy == "graphrag":
+        # graphrag does not produce chunk rows for the SQLite store; the
+        # entire pipeline is owned by LightRAG and persists under
+        # .mdq/graphrag-<lang>/ via mdq.strategies_graphrag.build_graphrag_index.
+        # Callers must dispatch graphrag at the indexer level (see
+        # mdq/indexer.py) and never reach this branch in normal flow; the
+        # safe fallback below ensures back-compatibility if it does.
+        return fm_empty_fallback(repo_root, file_path)
     return _indexer.scan_file(repo_root, file_path, max_chunk_chars=0)
+
+
+def fm_empty_fallback(repo_root: Path, file_path: Path):
+    """Return an empty (frontmatter, chunks) tuple.
+
+    Used by ``graphrag`` strategy as a defensive no-op when the caller
+    inadvertently reaches the per-file chunking branch. The actual
+    GraphRAG index is built outside the chunk-row pipeline.
+    """
+    from . import indexer as _indexer
+    text = file_path.read_text(encoding="utf-8", errors="replace")
+    fm, _ = _indexer._parse_frontmatter(text)
+    return fm, []
 
 
 def _scan_fixed_window(repo_root: Path, file_path: Path):

@@ -7,9 +7,11 @@
 
 設定変更は自動保存（VS Code 流）。既存の `page_options._C1..._C16` ウィジェットを
 再利用し、設定パネル内で同じ入力体験を提供する。
-Markdown-Query セクションの実体は
-``tools/skills/markdown_query/gui/settings_section.py`` (`MdqIndexSection`) へ移設済み。
-本ファイルは import 経由でそれを参照し、skill_sections レジストリに登録するのみ。
+Markdown-Query セクションの実体は ``mdq/gui/settings_section.py`` にあり、
+``hve/gui/mdq_settings_section.py`` は HVE 設定ストア用の薄いアダプターである。
+Code-Query セクションの実体は ``cq/gui/settings_section.py`` にあり、
+``hve/gui/cq_settings_section.py`` は HVE 設定ストア用の薄いアダプターである。
+本ファイルは import 経由でそれらを参照し、skill_sections レジストリに登録するのみ。
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from . import settings_store, skill_sections
+from .cq_settings_section import CqIndexSection
 from .i18n import available_languages
 from .page_options import (
     _C1Basic,
@@ -61,14 +64,10 @@ from .page_options import (
 # ---------------------------------------------------------------------------
 # Markdown-Query セクション
 # ---------------------------------------------------------------------------
-# 実体は tools/skills/markdown_query/gui/settings_section.py へ移設済み。
-# HVE GUI 側はその ``MdqIndexSection`` を import し、``_MdqIndexSection``
-# エイリアスとして公開する（settings_apply 側で属性名 ``mdq_watch`` /
-# ``mdq_watch_debounce_ms`` を参照するため、クラス名は維持しなくて良いが
-# 参照しやすさのため別名を残す）。
-from tools.skills.markdown_query.gui.settings_section import (
-    MdqIndexSection as _MdqIndexSection,
-)
+# 実体は mdq/gui/settings_section.py（共有実装）へ移設済み。HVE GUI 側は
+# ``hve.gui.mdq_settings_section`` の adapter を import し、HVE の設定ストアを
+# 注入した状態で ``_MdqIndexSection`` エイリアスとして公開する。
+from .mdq_settings_section import MdqIndexSection as _MdqIndexSection
 # ---------------------------------------------------------------------------
 # Language セクション
 # ---------------------------------------------------------------------------
@@ -164,6 +163,20 @@ class _CAutopilotSection(QWidget):
                 " Autopilot ON/OFF のいずれでも適用されます。"
             ),
             input_widget=self.step1_show_plan_review_always,
+        ))
+
+        # SDK 自動コンテキスト圧縮（infinite_sessions）
+        self.auto_compaction = QCheckBox(
+            self.tr("SDK 自動コンテキスト圧縮を有効にする")
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("自動コンテキスト圧縮 (auto_compaction)"),
+            description=self.tr(
+                "ON にすると、サブステップ実行時に Copilot SDK の infinite_sessions"
+                " （バックグラウンド compaction）を有効化し、Context Window 使用量を"
+                " SDK 側で自動圧縮します。OFF（既定）は SDK 既定挙動。"
+            ),
+            input_widget=self.auto_compaction,
         ))
 
         # APP-ID 選択ダイアログ ON/OFF（AAS 完了後・downstream 起動前）
@@ -348,7 +361,7 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
     (
         "連携",
         [
-            ("Git", "C5"),
+            ("GitHub", "C5"),
             ("Azure", "AZURE"),
             ("MCP / CLI 接続", "C7"),
             ("Work IQ", "C4"),
@@ -389,6 +402,9 @@ class SettingsWindow(QMainWindow):
     """VS Code 風の設定ウィンドウ（非モーダル）。"""
 
     settings_changed = Signal(dict)  # 保存後の設定 dict を通知
+    # C1「基本設定」の「利用できるモデルの取得」ボタン押下を中継する通知シグナル。
+    # 実際のフェッチ処理は MainWindow 側の既存 `_on_login_clicked()` に一本化する。
+    fetch_models_requested = Signal()
 
     def __init__(
         self,
@@ -441,6 +457,8 @@ class SettingsWindow(QMainWindow):
 
                 widget = self._build_section_widget(key)
                 self._sections[key] = widget
+                if key == "C1" and hasattr(widget, "fetch_models_requested"):
+                    widget.fetch_models_requested.connect(self.fetch_models_requested)
                 scroll = QScrollArea()
                 scroll.setWidgetResizable(True)
                 # 設定画面では水平スクロールを抑止する（page_options.py の
@@ -573,6 +591,12 @@ class SettingsWindow(QMainWindow):
                 "settings auto-save failed", exc_info=True
             )
             self._status_label.setText(f"⚠ 保存失敗: {e}")
+        # `<run-id>` タイムゾーンを current process env に反映（後続の
+        # generate_run_id() / 子プロセス launch で即反映するため）。
+        _tz = (self._settings.get("options", {}).get("run_id_timezone") or "").strip()
+        if _tz:
+            import os as _os
+            _os.environ["HVE_RUN_ID_TZ"] = str(_tz)
         self.settings_changed.emit(self._settings)
 
     # ----------------------------------------------------------
@@ -618,7 +642,7 @@ class SettingsWindow(QMainWindow):
 
 
 # ---------------------------------------------------------------------------
-# 組み込み Skill (Markdown-Query) を skill_sections レジストリへ登録
+# 組み込み Skill (Markdown-Query / Code-Query) を skill_sections レジストリへ登録
 # ---------------------------------------------------------------------------
 # _MdqIndexSection クラス定義より後に呼ぶ必要があるためモジュール末尾で実行する。
 # 重複登録は SkillSectionRegistry.register が上書きするため安全。
@@ -626,6 +650,13 @@ skill_sections.register_skill_section(
     key="MDQ",
     label="Markdown-Query",
     section_factory=lambda repo_root, parent: _MdqIndexSection(
+        repo_root=repo_root, parent=parent
+    ),
+)
+skill_sections.register_skill_section(
+    key="CQ",
+    label="Code-Query",
+    section_factory=lambda repo_root, parent: CqIndexSection(
         repo_root=repo_root, parent=parent
     ),
 )

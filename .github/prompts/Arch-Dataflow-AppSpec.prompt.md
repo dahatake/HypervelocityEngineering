@@ -1,6 +1,6 @@
-﻿> データフローアプリ詳細仕様書を docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md に作成
+> データフローアプリ詳細仕様書を docs/dataflow/apps/{appId}-spec.md に作成
 
-> **WORK**: `/work/Arch-Dataflow-AppSpec/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-Dataflow-AppSpec/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -36,15 +36,14 @@
 
 ### 2.1 入力（必須）
 
-- `docs/dataflow/dataflow-service-catalog.md`（Arch-Dataflow-ServiceCatalog の出力）
-- `docs/dataflow/dataflow-app-catalog.md`（Arch-Dataflow-AppCatalog の出力）
-- `docs/dataflow/dataflow-data-model.md`（Arch-Dataflow-DataModel の出力）
+- `docs/catalog/app-catalog.md`（AAS の SoT — APP-ID 一覧・主責務・所有 SoR）
+- `docs/catalog/service-catalog-matrix.md`（AAS の SoT — サービス × ジョブ DAG / スケジュール / リトライ戦略）
+- `docs/catalog/data-model.md`（AAS の SoT — データソース/デスティネーション統合データモデル）
 
 ### 2.2 出力（必須）
 
-- `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`（ジョブ毎に1ファイル）
-  - `{jobId}`: `batch-job-catalog.md` の Job-ID（例：`JOB-001`）
-  - `{jobNameSlug}`: ジョブ名をケバブケースに変換した文字列（ファイル名不適文字は `-` へ置換）
+- `docs/dataflow/apps/{appId}-spec.md`（APP-ID 毎に1ファイル）
+  - `{appId}`: `docs/catalog/app-catalog.md` の APP-ID（例：`APP-15`）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -63,20 +62,20 @@
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と出力して **即座に停止** する。
   - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）。
 - 「見出し構造が不完全」の判定基準：
-  - `batch-service-catalog.md`：「2. ジョブ → Azure サービスマッピング表」の見出しが存在しない
-  - `batch-job-catalog.md`：「1. ジョブ一覧表」「2. ジョブ依存 DAG」の見出しが存在しない
-  - `batch-data-model.md`：`## 2.` 系（4層データモデル）、`## 3.` 系（エンティティ定義）が存在しない
+  - `docs/catalog/app-catalog.md`：APP-ID 一覧の表が存在しない
+  - `docs/catalog/service-catalog-matrix.md`：サービス × ジョブ DAG / スケジュール / リトライ戦略の表が存在しない
+  - `docs/catalog/data-model.md`：エンティティ定義（`## 2.` 系または `## 3.` 系）が存在しない
 
 ### 3.1 Discovery（根拠の回収）
 
 - 入力3ファイルから以下を抽出し、根拠（ファイルパス + 見出し/節）を控える：
-  - `batch-job-catalog.md` から：Job-ID 一覧・ジョブ名・処理パターン・依存ジョブ・スケジュール・リトライ戦略・エラーハンドリング方針・並列処理戦略
-  - `batch-service-catalog.md` から：Azure サービスマッピング・トリガー API 定義・依存関係マトリクス
-  - `batch-data-model.md` から：エンティティ定義・スキーマ・バリデーションルール・冪等性キー・4層データモデル
+  - `docs/catalog/service-catalog-matrix.md` から：Job-ID 一覧・ジョブ名・処理パターン・依存ジョブ・スケジュール・リトライ戦略・エラーハンドリング方針・並列処理戦略
+  - `docs/catalog/service-catalog-matrix.md` から：Azure サービスマッピング・トリガー API 定義・依存関係マトリクス
+  - `docs/catalog/data-model.md` から：エンティティ定義・スキーマ・バリデーションルール・冪等性キー・4層データモデル
 
 ### 3.2 計画・分割
 
-- `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
+- `docs/catalog/service-catalog-matrix.md` から Job-ID 一覧を抽出し、ジョブ数を確定する。
 - ジョブ数 × 概算（1ジョブあたり 3〜5分）で合計見積を算出する。
 - Skill task-dag-planning に従い分割要否を判定する。
 - **plan.md 作成時の必須手順（省略禁止）**:
@@ -99,27 +98,27 @@
 
 1. 入力3ファイルを `read` する。
 2. 出力ディレクトリ `docs/dataflow/apps/` が存在しない場合は作成する。
-3. `batch-job-catalog.md` から Job-ID 一覧を抽出し、ジョブ毎に以下の手順で仕様書を作成する：
-   - **ステップ1**: `{jobId}-{jobNameSlug}-spec.md` を新規作成（「1. 概要」「2. 入力定義」を含むチャンク1） → `read` で空でないことを確認
+3. `docs/catalog/service-catalog-matrix.md` から Job-ID 一覧を抽出し、ジョブ毎に以下の手順で仕様書を作成する：
+   - **ステップ1**: `{appId}-spec.md` を新規作成（「1. 概要」「2. 入力定義」を含むチャンク1） → `read` で空でないことを確認
    - **ステップ2**: 「3. 出力定義」「4. 変換ルール詳細」を `edit` で追記 → `read` 確認
    - **ステップ3**: 「5. バリデーションルール」「6. エラーハンドリング詳細」を `edit` で追記 → `read` 確認
    - **ステップ4**: 「7. パフォーマンス要件」「8. 設定値一覧」「9. 参照」を `edit` で追記 → `read` 確認
    - 失敗/空になった場合：さらに小さいチャンクで再試行（最大3回）
 4. 各ジョブ完了後、既存の `{WORK}work-status.md` があれば必ず削除してから、新しい内容で `{WORK}work-status.md` を新規作成し、Done リストを反映する（追記/patch/edit は禁止。必ず Skill work-artifacts-layout §4.1 の delete→create で扱う）。
-5. べき等性（再実行耐性）：既存の `{jobId}-*-spec.md` は上書き更新（重複作成しない）。
+5. べき等性（再実行耐性）：既存の `{appId}-spec.md` は上書き更新（重複作成しない）。
 
 ## 4) ジョブ仕様書の作り方（ルール）
 
-- **入力定義**：`batch-job-catalog.md` のソース情報と `batch-data-model.md` のスキーマを根拠に、フィールド名・型・必須/任意・バリデーションルールを表形式で定義する。
-- **出力定義**：デスティネーション名・スキーマ・保持期間・べき等性保証方針を記述する。保持期間は `batch-service-catalog.md` か `batch-data-model.md` を根拠にし、不明は `TBD` とする。
+- **入力定義**：`docs/catalog/service-catalog-matrix.md` のソース情報と `docs/catalog/data-model.md` のスキーマを根拠に、フィールド名・型・必須/任意・バリデーションルールを表形式で定義する。
+- **出力定義**：デスティネーション名・スキーマ・保持期間・べき等性保証方針を記述する。保持期間は `docs/catalog/service-catalog-matrix.md` か `docs/catalog/data-model.md` を根拠にし、不明は `TBD` とする。
 - **変換ルール詳細**：入力フィールド → 出力フィールドのマッピングを1行1フィールドの表で定義する。変換ロジック（文字列加工・型変換・集計・条件分岐）はロジック列に記述する。
 - **バリデーションルール**：データ品質チェック観点（NULL チェック・型チェック・範囲チェック・一意性チェック）ごとに対象フィールド・閾値・エラーアクション（Skip/Fail-Fast/Compensate）を定義する。
-- **エラーハンドリング詳細**：エラー種別（入力エラー/変換エラー/出力エラー/システムエラー）ごとに対応アクション・DLQ（Dead Letter Queue）配置先・リトライ方針を定義する。`batch-job-catalog.md` のリトライ戦略と整合させること。
-- **パフォーマンス要件**：処理時間上限・スループット目標（レコード数/秒）・リソース上限（メモリ/CPU/同時実行数）を定義する。根拠は `batch-job-catalog.md` の並列処理戦略と `batch-service-catalog.md` のコスト見積を参照する。
+- **エラーハンドリング詳細**：エラー種別（入力エラー/変換エラー/出力エラー/システムエラー）ごとに対応アクション・DLQ（Dead Letter Queue）配置先・リトライ方針を定義する。`docs/catalog/service-catalog-matrix.md` のリトライ戦略と整合させること。
+- **パフォーマンス要件**：処理時間上限・スループット目標（レコード数/秒）・リソース上限（メモリ/CPU/同時実行数）を定義する。根拠は `docs/catalog/service-catalog-matrix.md` の並列処理戦略と `docs/catalog/service-catalog-matrix.md` のコスト見積を参照する。
 - **設定値一覧**：環境変数・設定キー・デフォルト値・必須/任意を表形式で列挙する。シークレット（接続文字列・APIキー）は値の代わりに Key Vault 参照形式（例：`@Microsoft.KeyVault(SecretUri=...)`）を記載する。
 - すべての定義は入力ファイルを根拠にする。根拠がない場合は `TBD` と明記する。
 
-## 5) {jobId}-{jobNameSlug}-spec.md の出力契約（章立て固定・順序固定）
+## 5) {appId}-spec.md の出力契約（章立て固定・順序固定）
 
 以下の見出しをこの順序で含める（`docs-output-format` Skill §1 参照）。
 
@@ -142,7 +141,7 @@
 8. 設定値一覧
    - 表：設定キー/環境変数名 / 説明 / デフォルト値 / 必須/任意 / シークレット要否
 9. 参照（必須）
-   - 読んだファイルのパス一覧（例：`docs/dataflow/dataflow-app-catalog.md`）
+   - 読んだファイルのパス一覧（例：`docs/catalog/app-catalog.md`）
 
 ## 6) 書き込み安全策 & 進捗ファイル（空ファイル/欠落対策）
 
@@ -171,13 +170,17 @@
 * <最大3項目、無ければ None>
 ```
 
-## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 7) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 7.2 3つの異なる観点（このエージェント固有）
+### 7.1 セルフチェック契約
 
-- **1回目：網羅性・要件達成度**：全 Job-ID に対して仕様書が作成され、§5 の全見出しが埋まっているか。変換ルール・バリデーションルール・エラーハンドリングが `batch-job-catalog.md` および `batch-data-model.md` と整合しているか。
-- **2回目：実装可能性・具体性**：各仕様書が「Copilot が TDD の Green フェーズで実装できるレベルの具体性」を持つか。入出力スキーマが型定義まで含まれているか。設定値一覧が環境変数名・デフォルト値まで揃っているか。
-- **3回目：保守性・安全性・整合性**：DLQ 配置先が `batch-service-catalog.md` と整合しているか。シークレット参照が Key Vault 形式になっているか。TBD の運用が妥当か。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 7.2 ドメイン固有観点
+
+- **網羅性・要件達成度**：全 Job-ID に対して仕様書が作成され、§5 の全見出しが埋まっているか。変換ルール・バリデーションルール・エラーハンドリングが `docs/catalog/service-catalog-matrix.md` および `docs/catalog/data-model.md` と整合しているか。
+- **実装可能性・具体性**：各仕様書が「Copilot が TDD の Green フェーズで実装できるレベルの具体性」を持つか。入出力スキーマが型定義まで含まれているか。設定値一覧が環境変数名・デフォルト値まで揃っているか。
+- **保守性・安全性・整合性**：DLQ 配置先が `docs/catalog/service-catalog-matrix.md` と整合しているか。シークレット参照が Key Vault 形式になっているか。TBD の運用が妥当か。
+
+### 7.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。

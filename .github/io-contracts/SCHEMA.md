@@ -31,6 +31,9 @@ outputs:
 | `outputs[].path` | string | ✅ | 出力ファイル/ディレクトリのパス |
 | `outputs[].required` | bool | ✅ | `true` = 必須出力 |
 | `outputs[].mode` | enum | ✅ | `create`（新規） / `append`（追記） / `overwrite`（上書き） / `upsert`（新規 or 更新） |
+| `outputs[].owner` | enum | 任意 | `agent` / `hve`。HVE runtimeが生成する証跡は `hve` を指定 |
+| `outputs[].evidence_source` | enum | 任意 | `stage_results`。指定時は `owner: hve` が必須 |
+| `outputs[].acceptance_criteria` | string list | 任意 | 当該HVE-owned証跡が根拠とするAC ID。空でない文字列配列 |
 
 ## 命名規約
 
@@ -42,7 +45,7 @@ outputs:
   - `<run_id>`（HVE オーケストレーター ID）
   - その他、`{WORK}` 配下のパスに含まれる規約由来の山括弧
 - **画面パス**: `docs/screen/{screenId}-{screenNameSlug}-description.md`
-- **テストディレクトリ**: `test/`（単数）統一
+- **テストレポートディレクトリ**: TDD ランタイムレポートは `tests/run/`（複数形 `tests`）。テストコードは `src/test/`
 - **azure-service-catalog**: `docs/azure/azure-service-catalog.md`（`docs/catalog/service-catalog.md` との命名衝突回避）
 
 詳細は `knowledge/D19-ソフトウェアアーキテクチャ-ADRパック.md` の ADR-001 を参照。

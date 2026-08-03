@@ -12,7 +12,9 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TEMPLATE_DIR = _REPO_ROOT / ".github" / "ISSUE_TEMPLATE"
 _WORKFLOW_DIR = _REPO_ROOT / ".github" / "workflows"
-_DIFF_SPEC = _REPO_ROOT / "docs" / "design-discussions" / "orchestration-route-diff-spec.md"
+_OPTION_PARITY_FIXTURE = (
+    _REPO_ROOT / "hve" / "tests" / "fixtures" / "option_parity_matrix.yaml"
+)
 
 # Issue Template のうち enable_review を持つべきファイル
 _TEMPLATES_WITH_REVIEW = [
@@ -21,8 +23,8 @@ _TEMPLATES_WITH_REVIEW = [
     "web-app-dev.yml",
     "ai-agent-design.yml",
     "ai-agent-dev.yml",
-    "batch-design.yml",
-    "batch-dev.yml",
+    "dataflow-design.yml",
+    "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
@@ -35,8 +37,8 @@ _TEMPLATES_WITH_MODEL = [
     "web-app-dev.yml",
     "ai-agent-design.yml",
     "ai-agent-dev.yml",
-    "batch-design.yml",
-    "batch-dev.yml",
+    "dataflow-design.yml",
+    "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
@@ -49,8 +51,8 @@ _TEMPLATES_WITH_AUTO_MERGE = [
     "web-app-dev.yml",
     "ai-agent-design.yml",
     "ai-agent-dev.yml",
-    "batch-design.yml",
-    "batch-dev.yml",
+    "dataflow-design.yml",
+    "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
@@ -62,8 +64,8 @@ _TEMPLATES_WITH_RUNNER_TYPE = [
     "web-app-dev.yml",
     "ai-agent-design.yml",
     "ai-agent-dev.yml",
-    "batch-design.yml",
-    "batch-dev.yml",
+    "dataflow-design.yml",
+    "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
     "original-docs-review.yml",
@@ -133,13 +135,13 @@ class TestAkmAqodEnableReview(unittest.TestCase):
         """AKM テンプレートの enable_review ラベルが正しいこと。"""
         content = self._read_template("knowledge-management.yml")
         self.assertIn("レビュー設定", content)
-        self.assertIn("auto-context-review", content)
+        self.assertIn("adversarial-review", content)
 
     def test_aqod_review_label_text(self) -> None:
         """AQOD テンプレートの enable_review ラベルが正しいこと。"""
         content = self._read_template("original-docs-review.yml")
         self.assertIn("レビュー設定", content)
-        self.assertIn("auto-context-review", content)
+        self.assertIn("adversarial-review", content)
 
 
 class TestAkmWorkflowEnableReview(unittest.TestCase):
@@ -152,39 +154,39 @@ class TestAkmWorkflowEnableReview(unittest.TestCase):
         """AKM ワークフローが ### レビュー設定 セクションをパースすること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
         self.assertIn("レビュー設定", content)
-        self.assertIn("auto_context_review", content)
+        self.assertIn("adversarial_review", content)
 
-    def test_akm_workflow_has_auto_context_review_variable(self) -> None:
-        """AKM ワークフローが AUTO_CONTEXT_REVIEW bash 変数を持つこと。"""
+    def test_akm_workflow_has_adversarial_review_variable(self) -> None:
+        """AKM ワークフローが ADVERSARIAL_REVIEW bash 変数を持つこと。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn("AUTO_CONTEXT_REVIEW", content)
+        self.assertIn("ADVERSARIAL_REVIEW", content)
 
-    def test_akm_workflow_embeds_auto_context_review_tag(self) -> None:
-        """AKM ワークフローが Root Issue body に auto-context-review タグを埋め込むこと。"""
+    def test_akm_workflow_embeds_adversarial_review_tag(self) -> None:
+        """AKM ワークフローが Root Issue body に専用レビュータグを埋め込むこと。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn('("auto-context-review", auto_context_review)', content)
+        self.assertIn('("adversarial-review", adversarial_review)', content)
 
-    def test_akm_workflow_adds_auto_context_review_label_conditionally(self) -> None:
-        """AKM ワークフローが AUTO_CONTEXT_REVIEW 条件付きでラベルを付与すること。"""
+    def test_akm_workflow_adds_adversarial_review_label_conditionally(self) -> None:
+        """AKM ワークフローが ADVERSARIAL_REVIEW 条件付きでラベルを付与すること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn('add_label "${ROOT_ISSUE}" "auto-context-review"', content)
-        # 条件付き（if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]）であること
-        self.assertIn('AUTO_CONTEXT_REVIEW}" == "true"', content)
+        self.assertIn('add_label "${ROOT_ISSUE}" "adversarial-review"', content)
+        # 条件付き（if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]）であること
+        self.assertIn('ADVERSARIAL_REVIEW}" == "true"', content)
 
-    def test_akm_workflow_includes_auto_context_review_in_root_ref(self) -> None:
-        """AKM ワークフローの ROOT_REF に auto-context-review が含まれること。"""
+    def test_akm_workflow_includes_adversarial_review_in_root_ref(self) -> None:
+        """AKM ワークフローの ROOT_REF に専用レビュータグが含まれること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn("auto-context-review: %s", content)
+        self.assertIn("adversarial-review: %s", content)
 
-    def test_akm_workflow_creates_auto_context_review_label(self) -> None:
-        """AKM ワークフローのラベル bootstrap で auto-context-review が作成されること。"""
+    def test_akm_workflow_creates_adversarial_review_label(self) -> None:
+        """AKM ワークフローのラベル bootstrap で専用レビューラベルが作成されること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn('create_label "auto-context-review"', content)
+        self.assertIn('create_label "adversarial-review"', content)
 
-    def test_akm_step_labels_include_auto_context_review_conditionally(self) -> None:
-        """AKM ワークフローの Step Issue ラベルに auto-context-review が条件付きで含まれること。"""
+    def test_akm_step_labels_include_adversarial_review_conditionally(self) -> None:
+        """AKM ワークフローの Step Issue に専用レビューラベルが条件付きで含まれること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
-        self.assertIn('"auto-context-review"', content)
+        self.assertIn('"adversarial-review"', content)
 
 
 class TestAqodWorkflowEnableReview(unittest.TestCase):
@@ -197,41 +199,42 @@ class TestAqodWorkflowEnableReview(unittest.TestCase):
         """AQOD ワークフローが ### レビュー設定 セクションをパースすること。"""
         content = self._read_workflow("auto-aqod.yml")
         self.assertIn("レビュー設定", content)
-        self.assertIn("auto_context_review", content)
+        self.assertIn("adversarial_review", content)
 
-    def test_aqod_workflow_has_auto_context_review_variable(self) -> None:
-        """AQOD ワークフローが AUTO_CONTEXT_REVIEW bash 変数を持つこと。"""
+    def test_aqod_workflow_has_adversarial_review_variable(self) -> None:
+        """AQOD ワークフローが ADVERSARIAL_REVIEW bash 変数を持つこと。"""
         content = self._read_workflow("auto-aqod.yml")
-        self.assertIn("AUTO_CONTEXT_REVIEW", content)
+        self.assertIn("ADVERSARIAL_REVIEW", content)
 
-    def test_aqod_workflow_step_issue_uses_dynamic_context_review(self) -> None:
-        """AQOD ワークフローの Step Issue の auto-context-review がハードコード true でないこと。"""
+    def test_aqod_workflow_step_issue_uses_dynamic_adversarial_review(self) -> None:
+        """AQOD Step Issue の専用レビュー指定がハードコード true でないこと。"""
         content = self._read_workflow("auto-aqod.yml")
-        # ハードコード "<!-- auto-context-review: true -->" が除去されていること
-        self.assertNotIn('"<!-- auto-context-review: true -->"', content)
+        self.assertNotIn('"<!-- adversarial-review: true -->"', content)
         # 動的値が使われていること
-        self.assertIn("auto_context_review", content)
+        self.assertIn("adversarial_review", content)
 
-    def test_aqod_workflow_labels_not_hardcoded_with_auto_context_review(self) -> None:
-        """AQOD ワークフローの LABELS が auto-context-review を常に含まないこと。"""
+    def test_aqod_workflow_labels_not_hardcoded_with_adversarial_review(self) -> None:
+        """AQOD ワークフローの LABELS が専用レビューを常時含まないこと。"""
         content = self._read_workflow("auto-aqod.yml")
-        # 以前のハードコード: LABELS='["aqod:ready","auto-context-review"]'
-        self.assertNotIn('\'["aqod:ready","auto-context-review"]\'', content)
+        self.assertNotIn('\'["aqod:ready","adversarial-review"]\'', content)
 
-    def test_aqod_workflow_adds_auto_context_review_label_conditionally(self) -> None:
-        """AQOD ワークフローが AUTO_CONTEXT_REVIEW 条件付きでラベルを付与すること。"""
+    def test_aqod_workflow_adds_adversarial_review_label_conditionally(self) -> None:
+        """AQOD ワークフローが ADVERSARIAL_REVIEW 条件付きでラベルを付与すること。"""
         content = self._read_workflow("auto-aqod.yml")
-        self.assertIn('AUTO_CONTEXT_REVIEW}" == "true"', content)
+        self.assertIn('ADVERSARIAL_REVIEW}" == "true"', content)
 
 
 class TestEnableAutoMerge(unittest.TestCase):
-    """enable_auto_merge が Issue Template 専用として明記されていることを検証する（Phase 6 確認）。"""
+    """enable_auto_merge のIssue Form / SDKConfig / CLI対応を検証する。"""
 
     def _read_template(self, filename: str) -> str:
         return (_TEMPLATE_DIR / filename).read_text(encoding="utf-8")
 
-    def _read_diff_spec(self) -> str:
-        return _DIFF_SPEC.read_text(encoding="utf-8")
+    @staticmethod
+    def _load_fixture() -> dict:
+        import yaml  # type: ignore[import-untyped]
+
+        return yaml.safe_load(_OPTION_PARITY_FIXTURE.read_text(encoding="utf-8"))
 
     def test_all_target_templates_have_enable_auto_merge(self) -> None:
         """全対象 Issue Template が enable_auto_merge を持つこと。"""
@@ -240,17 +243,35 @@ class TestEnableAutoMerge(unittest.TestCase):
                 content = self._read_template(template)
                 self.assertIn("id: enable_auto_merge", content)
 
-    def test_diff_spec_documents_enable_auto_merge_as_issue_template_only(self) -> None:
-        """差分仕様ドキュメントに enable_auto_merge が Issue Template 専用として明記されていること。"""
-        content = self._read_diff_spec()
-        self.assertIn("enable_auto_merge", content)
-        self.assertIn("Issue Template 専用", content)
+    def test_fixture_documents_enable_auto_merge_as_common(self) -> None:
+        fixture = self._load_fixture()
+        entry = next(
+            item for item in fixture["options"]
+            if item["option_key"] == "enable_auto_merge"
+        )
+        self.assertEqual(entry["applies_to"], "common")
+        self.assertEqual(entry["issue_form_field_id"], "enable_auto_merge")
+        self.assertEqual(entry["hve_config_attr"], "enable_auto_merge")
+        self.assertEqual(entry["hve_cli_flag"], "--enable-auto-merge")
+        self.assertIn("意図的なroute差", entry["notes"])
 
-    def test_diff_spec_documents_hve_non_support_reason(self) -> None:
-        """差分仕様ドキュメントに hve 非対応の理由が記載されていること。"""
-        content = self._read_diff_spec()
-        # Phase 6 のセクションで hve 非対応が明記されていること
-        self.assertIn("hve への大規模 auto merge 実装は Phase 6 スコープ外", content)
+    def test_enable_auto_merge_preserves_intentional_cloud_cli_default_difference(self) -> None:
+        from hve.config import SDKConfig
+
+        for template in _TEMPLATES_WITH_AUTO_MERGE:
+            field = next(
+                item for item in self._load_fixture_document(template)["body"]
+                if item.get("id") == "enable_auto_merge"
+            )
+            self.assertEqual(field["attributes"]["options"][field["attributes"]["default"]], "有効にする")
+        self.assertFalse(SDKConfig().enable_auto_merge)
+        self.assertIn("--enable-auto-merge", TestOptionParityMatrix._cli_option_strings())
+
+    @staticmethod
+    def _load_fixture_document(filename: str) -> dict:
+        import yaml  # type: ignore[import-untyped]
+
+        return yaml.safe_load((_TEMPLATE_DIR / filename).read_text(encoding="utf-8"))
 
 
 class TestModelDropdown(unittest.TestCase):
@@ -261,8 +282,9 @@ class TestModelDropdown(unittest.TestCase):
     def _read_template(self, filename: str) -> str:
         return (_TEMPLATE_DIR / filename).read_text(encoding="utf-8")
 
-    def _read_diff_spec(self) -> str:
-        return _DIFF_SPEC.read_text(encoding="utf-8")
+    @staticmethod
+    def _read_fixture() -> str:
+        return _OPTION_PARITY_FIXTURE.read_text(encoding="utf-8")
 
     def test_all_templates_have_model_dropdown_with_5_options(self) -> None:
         """全対象テンプレートの model ドロップダウンが5種選択肢を持つこと。"""
@@ -302,43 +324,143 @@ class TestModelDropdown(unittest.TestCase):
         template_options_without_auto = [o for o in self._EXPECTED_OPTIONS if o != "Auto"]
         self.assertEqual(list(MODEL_CHOICES), template_options_without_auto)
 
-    def test_diff_spec_documents_model_auto_only_policy(self) -> None:
-        """差分仕様ドキュメントに model 関連の記載があること（HVE_MODEL_OVERRIDE 優先順位を含む）。"""
-        content = self._read_diff_spec()
+    def test_fixture_documents_model_auto_and_override_policy(self) -> None:
+        content = self._read_fixture()
         self.assertIn("Auto", content)
-        self.assertIn("HVE_MODEL_OVERRIDE", content)
+        self.assertIn("model_override", content)
 
 
-class TestDiffSpecCompleteness(unittest.TestCase):
-    """差分仕様ドキュメントに必要な Phase 6 情報が記載されていることを検証する。"""
+class TestOptionParityFixtureCompleteness(unittest.TestCase):
+    """現行option parity SSoT fixtureの分類を検証する。"""
 
-    def _read_diff_spec(self) -> str:
-        return _DIFF_SPEC.read_text(encoding="utf-8")
+    def _load_fixture(self) -> dict:
+        import yaml  # type: ignore[import-untyped]
 
-    def test_diff_spec_has_phase6_section(self) -> None:
-        """差分仕様ドキュメントに Phase 6 セクションが存在すること。"""
-        content = self._read_diff_spec()
-        self.assertIn("Phase 6", content)
+        return yaml.safe_load(_OPTION_PARITY_FIXTURE.read_text(encoding="utf-8"))
 
-    def test_diff_spec_has_hve_only_options(self) -> None:
-        """差分仕様ドキュメントに hve のみのオプション一覧が記載されていること。"""
-        content = self._read_diff_spec()
-        self.assertIn("apply_qa_improvements_to_main", content)
-        self.assertIn("apply_review_improvements_to_main", content)
-        self.assertIn("apply_self_improve_to_main", content)
-        self.assertIn("reuse_context_filtering", content)
-        self.assertIn("auto_coding_agent_review", content)
+    def test_fixture_has_supported_schema_version(self) -> None:
+        self.assertEqual(self._load_fixture()["schema_version"], "1.0")
 
-    def test_diff_spec_has_issue_template_only_options(self) -> None:
-        """差分仕様ドキュメントに Issue Template のみのオプション一覧が記載されていること。"""
-        content = self._read_diff_spec()
-        self.assertIn("enable_auto_merge", content)
+    def test_fixture_has_hve_only_options(self) -> None:
+        fixture = self._load_fixture()
+        hve_only = {
+            item["option_key"] for item in fixture["options"]
+            if item["applies_to"] == "hve_only"
+        }
+        self.assertTrue({
+            "apply_qa_improvements_to_main",
+            "apply_review_improvements_to_main",
+            "apply_self_improve_to_main",
+            "reuse_context_filtering",
+            "auto_coding_agent_review",
+        } <= hve_only)
 
-    def test_diff_spec_work_iq_is_hve_only(self) -> None:
-        """差分仕様ドキュメントに Work IQ が hve 専用として記載されていること。"""
-        content = self._read_diff_spec()
-        self.assertIn("Work IQ", content)
-        self.assertIn("hve 経路専用", content)
+    def test_fixture_classifies_enable_auto_merge_as_common(self) -> None:
+        fixture = self._load_fixture()
+        entry = next(
+            item for item in fixture["options"]
+            if item["option_key"] == "enable_auto_merge"
+        )
+        self.assertEqual(entry["applies_to"], "common")
+
+    def test_issue_form_internal_fields_are_unique(self) -> None:
+        fields = self._load_fixture()["issue_form_internal_fields"]
+        self.assertEqual(len(fields), len(set(fields)))
+
+    def test_fixture_work_iq_is_hve_only(self) -> None:
+        fixture = self._load_fixture()
+        workiq_entries = [
+            item for item in fixture["options"]
+            if item["option_key"].startswith("workiq_")
+        ]
+        self.assertTrue(workiq_entries)
+        self.assertTrue(all(item["applies_to"] == "hve_only" for item in workiq_entries))
+
+
+class TestAgentSelfImproveRouteParity(unittest.TestCase):
+    """AAG/AAGD Cloud必須とCLI緊急opt-outの意図的な差分を固定する。"""
+
+    @staticmethod
+    def _load_template(filename: str) -> dict:
+        import yaml  # type: ignore[import-untyped]
+
+        return yaml.safe_load((_TEMPLATE_DIR / filename).read_text(encoding="utf-8"))
+
+    @classmethod
+    def _field(cls, filename: str, field_id: str) -> dict:
+        document = cls._load_template(filename)
+        return next(item for item in document["body"] if item.get("id") == field_id)
+
+    def test_agent_cloud_forms_are_mandatory_with_only_tuning_controls(self) -> None:
+        for filename in ("ai-agent-design.yml", "ai-agent-dev.yml"):
+            with self.subTest(filename=filename):
+                document = self._load_template(filename)
+                ids = {item.get("id") for item in document["body"]}
+                self.assertNotIn("enable_self_improve", ids)
+                self.assertIn("self_improve_max_iterations", ids)
+                self.assertIn("self_improve_quality_threshold", ids)
+
+                iterations = self._field(filename, "self_improve_max_iterations")
+                threshold = self._field(filename, "self_improve_quality_threshold")
+                self.assertEqual(
+                    iterations["attributes"]["options"][iterations["attributes"]["default"]],
+                    "3 (デフォルト)",
+                )
+                self.assertEqual(
+                    threshold["attributes"]["options"][threshold["attributes"]["default"]],
+                    "80（標準）",
+                )
+
+    def test_aagd_tdd_retry_is_distinct_from_self_improve_iteration(self) -> None:
+        tdd = self._field("ai-agent-dev.yml", "tdd_max_retries")
+        self_improve = self._field("ai-agent-dev.yml", "self_improve_max_iterations")
+        self.assertEqual(
+            tdd["attributes"]["options"][tdd["attributes"]["default"]],
+            "5 (デフォルト)",
+        )
+        self.assertEqual(
+            self_improve["attributes"]["options"][self_improve["attributes"]["default"]],
+            "3 (デフォルト)",
+        )
+        self.assertIn("TDD GREENリトライとは別", self_improve["attributes"]["description"])
+
+    def test_agent_self_improve_defaults_match_sdk_and_workflow_fallbacks(self) -> None:
+        from hve.config import SDKConfig
+
+        config = SDKConfig()
+        self.assertEqual(config.self_improve_max_iterations, 3)
+        self.assertEqual(config.self_improve_quality_threshold, 80)
+        for filename in (
+            "auto-ai-agent-design-reusable.yml",
+            "auto-ai-agent-dev-reusable.yml",
+        ):
+            content = (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
+            self.assertIn('self_improve_max_iterations = "3"', content)
+            self.assertIn('self_improve_quality_threshold = "80"', content)
+
+    def test_cloud_workflows_are_mandatory_without_enable_parser(self) -> None:
+        expectations = {
+            "auto-ai-agent-design-reusable.yml": "Run mandatory AAG Post-DAG Self-Improve",
+            "auto-ai-agent-dev-reusable.yml": "Run mandatory AAGD Post-DAG Self-Improve",
+        }
+        for filename, marker in expectations.items():
+            with self.subTest(filename=filename):
+                content = (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
+                self.assertIn(marker, content)
+                self.assertNotIn("enable-self-improve", content)
+                self.assertNotIn("outputs.enable", content)
+
+    def test_cli_keeps_explicit_emergency_opt_out(self) -> None:
+        flags = TestOptionParityMatrix._cli_option_strings()
+        self.assertIn("--self-improve", flags)
+        self.assertIn("--no-self-improve", flags)
+
+        orchestrator = (_REPO_ROOT / "hve" / "orchestrator.py").read_text(encoding="utf-8")
+        self.assertIn('workflow_id in {"aag", "aagd"}', orchestrator)
+        self.assertIn("and not config.self_improve_skip", orchestrator)
+        self.assertIn('config.self_improve_scope != "disabled"', orchestrator)
+        self.assertIn("config = copy.copy(config)", orchestrator)
+        self.assertIn("config.auto_self_improve = True", orchestrator)
 
 
 class TestRunnerTypeOptionParity(unittest.TestCase):
@@ -375,10 +497,11 @@ class TestRunnerTypeOptionParity(unittest.TestCase):
         self.assertIn("runner_type = 'self-hosted'", content)
         self.assertIn("f.write(f'runner_type={runner_type}", content)
 
-    def test_dispatcher_forwards_runner_type_for_10_targets_only(self) -> None:
+    def test_dispatcher_forwards_runner_type_for_nine_targets_only(self) -> None:
+        """FR-CLOUD-06 により ASDW-WEB ジョブを削除したため runner_type 伝搬先は 9 ターゲット。"""
         content = self._read_workflow("auto-orchestrator-dispatcher.yml")
         marker = "runner_type: ${{ needs.detect.outputs.runner_type }}"
-        self.assertEqual(content.count(marker), 10)
+        self.assertEqual(content.count(marker), 9)
         self.assertIn("setup_labels:", content)
         self.assertIn("aqod:", content)
         setup_labels_block = content.split("setup_labels:", 1)[1].split("aqod:", 1)[0]
@@ -416,14 +539,14 @@ class TestAgenticRetrievalWorkflowWiring(unittest.TestCase):
         self.assertIn("foundry_mcp_integration = 'false'", content)
         self.assertIn("foundry_sku_fallback_policy = 'standard_allowed'", content)
 
-    def test_dispatcher_passes_agentic_inputs_to_aad_and_asdw(self) -> None:
+    def test_dispatcher_passes_agentic_inputs_to_aad(self) -> None:
+        """FR-CLOUD-06: ASDW-WEB の Cloud 起動は停止済みのため AAD-WEB への伝搬のみ検証する。"""
         content = self._read_workflow("auto-orchestrator-dispatcher.yml")
         self.assertIn("uses: ./.github/workflows/auto-app-detail-design-web-reusable.yml", content)
-        self.assertIn("uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml", content)
+        self.assertNotIn("uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml", content)
         self.assertIn("enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}", content)
         self.assertIn("agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}", content)
         self.assertIn("foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}", content)
-        self.assertIn("agentic_data_sources_hint: ${{ needs.detect.outputs.agentic_data_sources_hint }}", content)
 
     def test_aad_reusable_declares_and_embeds_three_agentic_inputs(self) -> None:
         content = self._read_workflow("auto-app-detail-design-web-reusable.yml")
@@ -508,7 +631,7 @@ class TestOptionParityMatrix(unittest.TestCase):
         from hve.__main__ import _build_parser  # type: ignore[import]
         parser = _build_parser()
         flags: set[str] = set()
-        for action in parser._subparsers._actions:  # type: ignore[attr-defined]
+        for action in parser._actions:
             if hasattr(action, "_name_parser_map"):
                 orch = action._name_parser_map.get("orchestrate")
                 if orch:
@@ -671,6 +794,34 @@ class TestOptionParityMatrix(unittest.TestCase):
             f"fixture に未登録の Issue Form フィールド ID があります: {sorted(unregistered)}\n"
             "option_parity_matrix.yaml の options または issue_form_internal_fields に追加してください。",
         )
+
+    def test_each_issue_form_has_unique_field_ids(self) -> None:
+        for template in self._TEMPLATE_DIR.glob("*.yml"):
+            if template.name in self._EXCLUDED_TEMPLATES:
+                continue
+            ids = re.findall(
+                r"^\s+id:\s+(\w+)",
+                template.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+            with self.subTest(template=template.name):
+                duplicates = {field_id for field_id in ids if ids.count(field_id) > 1}
+                self.assertEqual(duplicates, set())
+
+    def test_dataflow_dev_keeps_app_and_job_ids_distinct(self) -> None:
+        template = (
+            self._TEMPLATE_DIR / "dataflow-dev.yml"
+        ).read_text(encoding="utf-8")
+        workflow = (
+            _WORKFLOW_DIR / "auto-dataflow-dev-reusable.yml"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(template.count("id: app_ids"), 1)
+        self.assertEqual(template.count("id: job_ids"), 1)
+        self.assertIn('"job_ids": job_ids', workflow)
+        self.assertEqual(workflow.count('"app_ids": app_ids_list'), 1)
+        self.assertIn("JOB_IDS=$(echo", workflow)
+        self.assertIn('JOB_SECTION=$(printf', workflow)
+        self.assertIn('"${JOB_IDS}")', workflow)
 
     def test_coverage_all_sdkconfig_fields_registered(self) -> None:
         """SDKConfig の全フィールド（内部フィールド除く）が fixture に登録されていること。

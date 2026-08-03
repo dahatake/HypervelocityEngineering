@@ -1,7 +1,7 @@
-"""test_orchestrator_effort.py — `_apply_reasoning_effort` の優先順位検証。
+"""test_orchestrator_effort.py — `_apply_reasoning_effort` の挙動検証。
 
-ユーザー指定 reasoning_effort が SDKConfig に設定されている場合は、
-Auto/明示モデルを問わず session_opts に伝播することを検証する。
+ユーザー指定 reasoning_effort のみを session_opts に伝播し、未指定時は
+何もセットしないことを検証する（Auto モデル時もサーバ側に委譲）。
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Optional
 import pytest
 
 from hve.orchestrator import _apply_reasoning_effort
-from hve.config import MODEL_AUTO_VALUE, MODEL_AUTO_REASONING_EFFORT
+from hve.config import MODEL_AUTO_VALUE
 
 
 @dataclass
@@ -24,28 +24,28 @@ class _FakeCfg:
 
 
 class TestApplyReasoningEffortMain:
-    def test_user_specified_wins_over_auto_fallback(self):
-        """ユーザー指定が最優先（Auto モデルでもユーザー値を使う）。"""
+    def test_user_specified_value_is_applied(self):
+        """ユーザー指定値が session_opts に伝播する（Auto モデルでも明示モデルでも）。"""
         cfg = _FakeCfg(model=MODEL_AUTO_VALUE, reasoning_effort="low")
         opts: dict = {}
         _apply_reasoning_effort(opts, cfg, kind="main")
         assert opts["reasoning_effort"] == "low"
 
-    def test_user_specified_wins_with_explicit_model(self):
+    def test_user_specified_with_explicit_model(self):
         cfg = _FakeCfg(model="claude-opus-4.7", reasoning_effort="high")
         opts: dict = {}
         _apply_reasoning_effort(opts, cfg, kind="main")
         assert opts["reasoning_effort"] == "high"
 
-    def test_no_user_value_auto_model_uses_fallback(self):
-        """ユーザー未指定 + Auto モデル → MODEL_AUTO_REASONING_EFFORT。"""
+    def test_no_user_value_auto_model_leaves_unset(self):
+        """ユーザー未指定 + Auto モデル → 何もセットしない（サーバ側 Auto Model Selection に委譲）。"""
         cfg = _FakeCfg(model=MODEL_AUTO_VALUE, reasoning_effort=None)
         opts: dict = {}
         _apply_reasoning_effort(opts, cfg, kind="main")
-        assert opts["reasoning_effort"] == MODEL_AUTO_REASONING_EFFORT
+        assert "reasoning_effort" not in opts
 
     def test_no_user_value_explicit_model_leaves_unset(self):
-        """ユーザー未指定 + 明示モデル → 何もセットしない（SDK 既定）。"""
+        """ユーザー未指定 + 明示モデル → 何もセットしない（SDK 既定動作）。"""
         cfg = _FakeCfg(model="claude-opus-4.7", reasoning_effort=None)
         opts: dict = {}
         _apply_reasoning_effort(opts, cfg, kind="main")
@@ -70,11 +70,12 @@ class TestApplyReasoningEffortReview:
         _apply_reasoning_effort(opts, cfg, kind="review", model_value="custom-model")
         assert "reasoning_effort" not in opts
 
-    def test_review_auto_model_fallback(self):
+    def test_review_auto_model_leaves_unset(self):
+        """review_reasoning_effort 未指定 + Auto モデル → 何もセットしない。"""
         cfg = _FakeCfg(model=MODEL_AUTO_VALUE, review_reasoning_effort=None)
         opts: dict = {}
         _apply_reasoning_effort(opts, cfg, kind="review", model_value=MODEL_AUTO_VALUE)
-        assert opts["reasoning_effort"] == MODEL_AUTO_REASONING_EFFORT
+        assert "reasoning_effort" not in opts
 
 
 class TestApplyReasoningEffortQa:

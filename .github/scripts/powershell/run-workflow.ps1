@@ -43,6 +43,7 @@ param(
     [string]$Workflow = '',
     [string]$Branch = 'main',
     [string]$Steps = '',
+    [switch]$SkipReview,
 
     # Advance parameters
     [string]$Issue = '',
@@ -125,6 +126,7 @@ Orchestrate Parameters (default action):
   -Workflow, -w <id>    Workflow ID (aas|adfd|adfdv)
   -Branch <name>        Target branch (default: main)
   -Steps <csv>          Comma-separated step IDs
+    -SkipReview           Disable adversarial-review for manual Cloud Issues
 
 Advance Parameters:
   -Issue <number>       Completed issue number
@@ -252,6 +254,7 @@ switch ($Action) {
         $orchArgs = @{ Workflow = $Workflow }
         if ($Branch -ne 'main') { $orchArgs['Branch'] = $Branch }
         if ($Steps) { $orchArgs['Steps'] = $Steps }
+        if ($SkipReview) { $orchArgs['SkipReview'] = $true }
         $orchArgs += $commonArgs
         & "$ScriptDir/orchestrate.ps1" @orchArgs
     }

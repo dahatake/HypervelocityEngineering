@@ -76,7 +76,9 @@ _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
     {"id":"4.2","title":"サンプルデータ生成","custom_agent":"Arch-DataModeling","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-4.2.md"},
     {"id":"5","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":["4.1"],"block_unless":[],"body_template_path":"templates/aas/step-5.md"},
     {"id":"6","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["5"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aas/step-6.md"},
-    {"id":"7","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["6"],"is_container":false,"skip_fallback_deps":["6"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"}
+    {"id":"7","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["6"],"is_container":false,"skip_fallback_deps":["6"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"},
+    {"id":"9","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["7"],"is_container":false,"skip_fallback_deps":["7"],"block_unless":[],"body_template_path":"templates/aas/step-9.md"},
+    {"id":"8","title":"ペルソナ別共通画面カタログ","custom_agent":"Arch-UI-PersonaScreenList","depends_on":["9"],"is_container":false,"skip_fallback_deps":["9"],"block_unless":[],"body_template_path":"templates/aas/step-8.md"}
   ]
 }
 JSONEOF
@@ -98,15 +100,9 @@ _WORKFLOW_REGISTRY[adfd]=$(cat <<'JSONEOF'
   },
   "params": [],
   "steps": [
-    {"id":"1.1","title":"バッチドメイン分析","custom_agent":"Arch-Dataflow-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-1.1.md"},
-    {"id":"1.2","title":"データソース/デスティネーション分析","custom_agent":"Arch-Dataflow-DataSourceAnalysis","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-1.2.md"},
-    {"id":"2","title":"バッチデータモデル","custom_agent":"Arch-Dataflow-DataModel","depends_on":["1.1","1.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-2.md"},
-    {"id":"3","title":"ジョブ設計書","custom_agent":"Arch-Dataflow-AppCatalog","depends_on":["2"],"is_container":false,"skip_fallback_deps":["2"],"block_unless":[],"body_template_path":"templates/adfd/step-3.md"},
-    {"id":"4","title":"サービスカタログ","custom_agent":"Arch-Dataflow-ServiceCatalog","depends_on":["3"],"is_container":false,"skip_fallback_deps":["3"],"block_unless":[],"body_template_path":"templates/adfd/step-4.md"},
-    {"id":"5","title":"テスト戦略書","custom_agent":"Arch-Dataflow-TestStrategy","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-5.md"},
-    {"id":"6.1","title":"ジョブ詳細仕様書","custom_agent":"Arch-Dataflow-AppSpec","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-6.1.md"},
-    {"id":"6.2","title":"監視・運用設計書","custom_agent":"Arch-Dataflow-MonitoringDesign","depends_on":["5"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/adfd/step-6.2.md"},
-    {"id":"6.3","title":"TDDテスト仕様書","custom_agent":"Arch-Dataflow-TDD-TestSpec","depends_on":["6.1","6.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-6.3.md"}
+    {"id":"1","title":"ジョブ詳細仕様書","custom_agent":"Arch-Dataflow-AppSpec","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-1.md"},
+    {"id":"2","title":"監視・運用設計書","custom_agent":"Arch-Dataflow-MonitoringDesign","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-2.md"},
+    {"id":"3","title":"TDDテスト仕様書","custom_agent":"Arch-Dataflow-TDD-TestSpec","depends_on":["1","2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfd/step-3.md"}
   ]
 }
 JSONEOF

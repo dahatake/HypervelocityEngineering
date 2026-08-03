@@ -1,6 +1,6 @@
 > AI Agent 粒度設計とアーキテクチャ骨格（Step 2）を実施し、docs/agent/agent-architecture.md を作成する。
 
-> **WORK**: `/work/Arch-AIAgentDesign-Step2/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-AIAgentDesign-Step2/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -25,6 +25,7 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 - `task-questionnaire` — Agent 粒度・境界判断時の不明点確認
+- `ai-agent-capability-contract` — AG-CAP-03〜06 の data / REST Tool / MCP / Agent Skill 境界
 
 ## 1) 目的と非目的
 - 対象：指定されたユースケースに対する **AI Agent の設計 Step 2（粒度設計とアーキテクチャ骨格）** を実施する。
@@ -54,7 +55,7 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog.md` | 画面一覧。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
 | 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
 | 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
 | 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
@@ -77,6 +78,43 @@
 ## 3) 出力フォーマット（Markdown固定スキーマ）
 1) Agent アーキテクチャ設計書（作成/更新）
    - `docs/agent/agent-architecture.md`
+   - Agent Inventory に加えて、以下の `Capability Boundary Matrix` を含める
+  - Structured Intermediate Output の `RetrievalPlan` を上記routeと一致させる
+
+### Capability Boundary Matrix（必須カラム）
+
+| Agent ID | Request class | Preferred route class | Candidate provider | Fallback route class | Mutation operations | REST owner service | MCP client | MCP adapter owner | Skill candidate | Decision source |
+|---|---|---|---|---|---|---|---|---|---|---|
+
+- Request class: `public-web | microsoft-365 | fabric-business-data | enterprise-unstructured | structured-numeric | operational-api-read | none | TBD`
+- Preferred / Fallback はStep 2ではroute classと候補providerまでとし、接続・認証等の詳細provider設定はStep 3で確定する
+- Mutation operations: 必要な`C / U / D`、不要なら`none`、不明なら`TBD`
+- REST owner service: `service-catalog.md`の既存Service ID、不要なら`none`、不明なら`TBD`
+- MCP client: `yes | no | TBD`
+- MCP adapter owner: Remote MCP adapterを所有する既存Service ID、不要なら`none`、不明なら`TBD`。Agent自身を既定ownerにしない
+- Skill candidate: `candidate | not-required | TBD`と短い根拠（例: `repeat-count:3; procedure:<name>`）
+- Decision source: Step 1 Goal Contract、catalog、service detail等の安定した参照（例: `Goal:GC-001`、`Catalog:docs/catalog/service-catalog.md#SVC-01`）。可変な行番号だけに依存しない
+
+### RetrievalPlan JSON（必須・追加field禁止）
+
+```json
+{
+  "routes": [
+    {
+      "request_class": "public-web | microsoft-365 | fabric-business-data | enterprise-unstructured | structured-numeric | operational-api-read | none | TBD",
+      "source": null,
+      "preferred_route_class": null,
+      "candidate_providers": [],
+      "fallback_route_class": null,
+      "blocked_condition": null,
+      "citation_required": null,
+      "decision_source": null
+    }
+  ]
+}
+```
+
+値に根拠がなければnullまたはTBDを使い、provider名を捏造しない。Matrixの各Request class行と`routes`要素を1対1で対応させる。
 
 2) 進捗ログ（追記専用）
    - `{WORK}ai-agent-design-work-status.md`
@@ -95,9 +133,16 @@
   - Step 1 の成果物を入力として、Agent の粒度を設計する
   - Single/Multi の判断を Decision Rules に従って実施する
   - Agent Catalog（一覧）と AGC（コンポーネント）分解を行う
+  - 各Agentが扱うRequest classを `public-web | microsoft-365 | fabric-business-data | enterprise-unstructured | structured-numeric | operational-api-read | none | TBD` から根拠付きで分類する
+  - Request classごとにPreferred / Fallback / Blockedのroute classと候補providerを記載し、詳細provider設定はStep 3へ委譲する
+  - Step 1のMutation Intentが`none`なら全AgentのMutation operationsを`none`にする。`required`なら少なくとも1 AgentにC/U/Dと既存REST owner serviceを割り当てる。`TBD`ならStep 1のQ-GC参照を保持し、Step 3までの解決事項にする
+  - C/U/Dを必要とするAgentは、primary経路を既存REST API Function Tool、そのdomain ownerを既存serviceとしてMatrixに記載する。AgentやMCPが直接DB mutationを所有しない
+  - MCP client利用有無とRemote MCP adapter所有serviceを別々に記載し、Agent自身がMCP Serverを所有する設計を既定にしない
+  - 3回ルールまたは同一procedureの再利用根拠からAgent Skill candidateを `candidate | not-required | TBD` で記載し、根拠IDを付ける。Step 2ではSkillファイルを生成しない
+  - 必須JSON `RetrievalPlan` を固定schemaで作り、Capability Boundary MatrixのRequest class行と1対1で一致させる
   - Mermaid 図（関係図 + 代表シーケンス図）を作成する
   - `docs/agent/agent-architecture.md` を作成する
-- **完了判定**: Agent 一覧表がある / AGC 分解表がある / Mermaid 図が2つ以上ある / 必須 JSON サンプル 8 種が掲載されている
+- **完了判定**: Agent 一覧表がある / AGC 分解表がある / Mermaid 図が2つ以上ある / 必須 JSON サンプル 8 種が掲載されている / 各AgentのCapability Boundary Matrixが全必須カラムと最小Decision sourceを持つ / Matrixと固定schemaの`RetrievalPlan`が1対1で一致する / Step 1 Mutation Intentとの矛盾がない
 
 ### 5.2 進捗ログ追記（必須）
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：

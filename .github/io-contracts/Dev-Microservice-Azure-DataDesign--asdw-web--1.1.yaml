@@ -34,9 +34,3 @@ outputs:
 - path: docs/azure/azure-services-data.md
   required: true
   mode: create
-- path: plan.md
-  required: true
-  mode: create
-- path: README.md
-  required: true
-  mode: create

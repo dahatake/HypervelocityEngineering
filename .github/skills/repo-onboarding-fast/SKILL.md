@@ -16,13 +16,13 @@ metadata:
 
 - **全ファイルの詳細読解** — 最小限の読解（入口/境界/標準コマンド）で作業開始に必要な情報を確定する
 - **アーキテクチャ設計・分析** — Arch-* 系 Agent が担当する
-- **onboarding.md 以外の成果物作成** — plan.md / subissues.md は Skill `task-dag-planning`、`work/<task>/README.md` は Skill `work-artifacts-layout` が担当する
+- **onboarding.md 以外の成果物作成** — plan.md / subissues.md は Skill `task-dag-planning`、`work/run/<run-id>/<task>/README.md` は Skill `work-artifacts-layout` が担当する
 
 ## 手順（読む順）
 1) 入口：README / docs / CI（.github/workflows）から標準コマンドを拾う
 2) 境界：公開I/F（API/スキーマ/型）とデータ境界（DB/移行）を特定
 3) 既存の類似実装を1つ見つけて踏襲点（命名/例外/ログ/テスト）を抽出
-4) `work/<task>/onboarding.md` に固定（後続Subが再利用できる形）
+4) `work/run/<run-id>/<task>/onboarding.md` に固定（後続Subが再利用できる形）
 
 ## onboarding.md 最小フォーマット
 - 入口（主要パス）

@@ -260,7 +260,7 @@ function script:FindStepIssueNumber {
 }
 
 # ---------------------------------------------------------------------------
-# Propagate PR labels (auto-context-review / auto-qa)
+# Propagate PR labels (adversarial-review / auto-qa)
 # ---------------------------------------------------------------------------
 
 function script:PropagatePrLabels {
@@ -284,12 +284,15 @@ function script:PropagatePrLabels {
     }
     $prNumbers = $prNumbers | Select-Object -Unique
 
-    $autoReview = Get-IssueMetadatum -Body $Body -Key 'auto-context-review'
+    $adversarialReview = Get-IssueMetadatum -Body $Body -Key 'adversarial-review'
     $autoQa = Get-IssueMetadatum -Body $Body -Key 'auto-qa'
 
     foreach ($prNum in $prNumbers) {
-        if ($autoReview -eq 'true') {
-            try { Add-IssueLabel -IssueNum "$prNum" -Label 'auto-context-review' -Repo $IssueRepo } catch { Write-Debug "Suppressed: $_" }
+        if ($adversarialReview -eq 'true') {
+            try { Add-IssueLabel -IssueNum "$prNum" -Label 'adversarial-review' -Repo $IssueRepo } catch { Write-Debug "Suppressed: $_" }
+        }
+        elseif ($adversarialReview -eq 'false') {
+            try { $null = gh issue edit $prNum --repo $IssueRepo --remove-label 'adversarial-review' 2>&1 } catch { Write-Debug "Suppressed: $_" }
         }
         if ($autoQa -eq 'true') {
             try { Add-IssueLabel -IssueNum "$prNum" -Label 'auto-qa' -Repo $IssueRepo } catch { Write-Debug "Suppressed: $_" }

@@ -31,8 +31,8 @@ HVE CLI Orchestrator（`hve orchestrate`）実行中は、バックグラウン�
 - `.mdq/usage.jsonl`: `mdq` CLI が自動追記する利用ログ（gitignore 済）
 - `run_journal` 側の参照定数: `hve.run_journal.MDQ_USAGE_LOG_RELATIVE`
 - 集計モジュール: `mdq.usage_stats`
-- レポート生成: `tools/skills/markdown_query/generate_usage_report.py`
-- レポート保存先: `tools/skills/markdown_query/usage-report/`
+- レポート生成: `python -m mdq.usage_report`（または `python tools/skills/markdown_query/generate_usage_report.py`）
+- レポート保存先: `<repo>/.mdq/usage-report/`（集計元の `.mdq/usage.jsonl` と同じリポジトリ配下）
 - レポート定義・指標説明: [users-guide/skills-markdown-query.md](../../../../../users-guide/skills-markdown-query.md)
 
 ## 5. ベンチマーク（撤去判断用）

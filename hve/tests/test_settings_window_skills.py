@@ -146,13 +146,11 @@ class TestMdqIndexSectionLangStrategy(_GuiBase):
     def test_markdown_table_renders_in_text_browser(self) -> None:
         """レポートに Markdown テーブル区切りが含まれることを確認。"""
         from hve.gui.settings_window import _MdqIndexSection
+        from mdq import usage_report
         with tempfile.TemporaryDirectory() as d, \
                 patch.object(_MdqIndexSection, "_start_regen"):
             root = Path(d)
-            report = (
-                root / "tools" / "skills" / "markdown_query"
-                / "usage-report" / "latest.md"
-            )
+            report = usage_report.default_output_dir(root) / "latest.md"
             report.parent.mkdir(parents=True, exist_ok=True)
             report.write_text(
                 "# title\n\n| 項目 | データ |\n|:---|---:|\n| a | 1 |\n",

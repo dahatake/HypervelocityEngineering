@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util as _ilu
 import os
 import sys
@@ -46,7 +47,8 @@ class TestParser(unittest.TestCase):
 
 class TestMainDispatch(unittest.TestCase):
     def _patch_startup_recovery(self):
-        return mock.patch.object(hve_main, "_run_startup_recovery", lambda: None)
+        # 起動時 recovery（Resume 機能）は廃止済みのため no-op context を返す。
+        return contextlib.nullcontext()
 
     def test_no_args_launches_gui(self) -> None:
         """引数なし → GUI を起動する。"""

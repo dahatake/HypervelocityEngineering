@@ -2,11 +2,11 @@ inputs:
 - path: docs/catalog/use-case-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ARD-UseCaseCatalog--ard--4.3
+  producer: Arch-ARD-UseCaseCatalog--ard--3.3
 - path: docs/recommended-kpi-okr.md
   required: false
   kind: agent_artifact
-  producer: Arch-ARD-KPIOKRDefinition--ard--3
+  producer: Arch-ARD-KPIOKRDefinition--ard--2.1
 - path: docs/catalog/app-catalog.md
   required: false
   kind: agent_artifact

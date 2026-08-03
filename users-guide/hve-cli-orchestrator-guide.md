@@ -12,7 +12,7 @@
 
 - [はじめに](#はじめに)
 - [クイックスタート](#クイックスタート)
-- [中断と再開（Resume）](#中断と再開resume)
+- [中断と再開（Resume）— 廃止（v1.1）](#中断と再開resume-廃止v11)
 - [必須 / 任意ツール早見表](#必須--任意ツール早見表)
 - [セットアップスクリプトを使った環境構築](#セットアップスクリプトを使った環境構築windows--macos--linux)
 - [環境設定（ゼロからのセットアップ）](#環境設定ゼロからのセットアップ)
@@ -84,7 +84,10 @@ pip install github-copilot-sdk
 # 2. GitHub CLI で認証（初回のみ）
 gh auth login
 
-# 3. インタラクティブモードで実行
+# 3. GitHub Copilot SDK で認証（初回のみ）
+python -m hve login
+
+# 4. インタラクティブモードで実行
 python -m hve cli
 ```
 
@@ -137,119 +140,26 @@ python3 -m hve emit-prompt pre-qa --comment-body
 
 ## HVE GUI Orchestrator モード（PySide6）
 
-ターミナル UI の代わりに、スクロール・コピーが快適な **GUI ウィンドウ** で Orchestrator を操作したい場合は、専用ガイド [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) を参照してください。GUI Orchestrator は本ガイドと同じ `hve orchestrate` エンジン・同じ DAG 定義を共有しており、Workflow ID／オプション仕様／Resume／Work IQ／MCP Server 認証等の **詳細仕様は本 CLI ガイドが正典** です。
+ターミナル UI の代わりに、スクロール・コピーが快適な **GUI ウィンドウ** で Orchestrator を操作したい場合は、専用ガイド [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) を参照してください。GUI Orchestrator は本ガイドと同じ `hve orchestrate` エンジン・同じ DAG 定義を共有しており、Workflow ID／オプション仕様／Work IQ／MCP Server 認証等の **詳細仕様は本 CLI ガイドが正典** です。
 
 ---
 
-## 中断と再開（Resume）
+## 中断と再開（Resume）— 廃止（v1.1）
 
-### 概要
+GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、CLI / GUI の Session State（Resume）機能は **v1.1 で全廃** しました。以下の機能はすべて削除されています:
 
-`hve` の実行中、ターミナルで `Ctrl+R` を押すと、ワークフローを **graceful pause**（保存付き中断）できます。中断したワークフローは、次回 `python -m hve cli` を起動した際の再開候補一覧から、または `python -m hve resume continue <run_id>` で残りのステップから続行できます。
+- `Ctrl+R` による中断（graceful pause）
+- `session-state/` への永続化（`state.json` / `journal.jsonl` / `.lock` / `journal-archive/`）
+- `python -m hve resume` サブコマンド（`list` / `show` / `rename` / `delete` / `continue` / `reconcile` / `gc-orphans`）
+- 起動時 recovery（`HVE_DISABLE_STARTUP_RECOVERY`）
 
-### Ctrl+R が「行うこと」
-
-1. **実行中の DAG executor をキャンセルする**  
-   現在実行中のステップを `asyncio` の cancellation 機構で打ち切ります。実行中ステップが完了するまで待つわけではありません。
-2. **`work/runs/<run_id>/state.json` に最終状態を保存する**  
-   `status = "paused"` / `pause_reason = "ctrl+r"` を書き込み、tempfile + `os.fsync` + `os.replace` によるアトミック書き換えで保存します。書き換えは Windows でも `os.replace` のリトライで保護されます。
-3. **既に完了済みのステップ状態を保持する**  
-   各ステップは「開始時（`running` 遷移時）」と「完了時（`completed` / `failed` / `skipped` / `blocked`）」の 2 点で `state.json` に自動 save されており、中断時点で既に完了していたステップの状態はそのまま残ります。
-4. **次回 Resume の起点を残す**  
-   中断中だったステップは `running` のまま `state.json` に記録され、保存済みの `session_id` を介して次回 `client.resume_session(session_id)` の再開対象になります。
-
-### Ctrl+R が「行わないこと」
-
-- **実行中ステップの完了を待たない。**  
-  LLM 応答受信中・ツール実行中・ファイル書き込み中であっても、その時点で cancel が発火します。
-- **実行中ステップが出力途中だったファイルの整合性は保証しない。**  
-  `docs/` / `src/` / `work/` 等に書き込み中だったファイルが中途半端な内容のまま残る可能性があります（hve 側でロールバックは行いません）。
-- **Copilot SDK 側のセッション（`~/.copilot/session-state/<session_id>/`）の flush を強制しない。**  
-  SDK が会話履歴をいつディスクに書き出すかは SDK 実装に依存し、hve からは制御していません。Ctrl+R 押下時点で SDK が最新の応答をディスクに書ききっている保証はありません。
-- **実行中ステップの「途中までの会話内容」を hve 側 `state.json` には記録しない。**  
-  `state.json` の粒度は **ステップ単位**です。ステップ実行中に蓄積された LLM の応答テキスト・ツール呼び出し履歴・中間トークンは `state.json` に入りません（これらは SDK 側に残っていれば次回 `resume_session` で復元される、という間接的な経路に依存します）。
-- **Ctrl+C と同じ即時停止ではない。**  
-  `Ctrl+C`（SIGINT）は従来どおり機能し、graceful pause は実行されません。
-
-### Ctrl+R が動作しない環境
-
-以下のいずれかに該当する環境では、`Ctrl+R` 監視は**自動的に無効化されます**（押しても反応しません）。これは raw mode の stdin 操作が安全に行えない、または意図しない副作用を起こす可能性があるためです。
-
-- 環境変数 `HVE_DISABLE_KEYBIND` が `1` / `true` / `yes` / `on` のいずれかに設定されている
-- 環境変数 `PYTEST_CURRENT_TEST` が設定されている（pytest 実行中）
-- 標準入力が TTY ではない（パイプ、リダイレクト、`< file` 入力、CI など）
-- VS Code 統合ターミナル等で標準入力が直接読めない場合
-
-明示的に無効化したい場合は `HVE_DISABLE_KEYBIND=1` を設定してください。
-
-### 再開（Resume）の方法
-
-- **wizard 経由**: 次回 `python -m hve cli` を起動すると、未完了セッション（`paused` / `running` / `failed`）が再開候補として表示されます。
-- **CLI 経由**: `python -m hve resume continue <run_id>` で非対話的に再開します。
-- **管理コマンド**: `python -m hve resume {list|show|rename|delete|reconcile|gc-orphans}` でセッションを管理します。
-
-主なオプション:
-
-| コマンド | 主なオプション | 用途 |
-|---|---|---|
-| `resume list` | `--json`、`--work-dir <PATH>` | 未完了セッション一覧。JSON 出力可。 |
-| `resume show <run_id>` | `--json` | 1 セッションの詳細（ステップごとの状態・`session_id`・エラー要約）。 |
-| `resume rename <run_id> <new_name>` | — | セッション名変更。 |
-| `resume delete <run_id>` | `--hard`、`--yes` | `work/runs/<run_id>/` を削除。`--hard` で SDK 側 `~/.copilot/session-state/<session_id>/` も削除（`hve` で始まる session_id のみ対象）。`--yes` で確認スキップ。**v1.0 以降は Write-Ahead Journal で crash-safe 化**、削除途中で中断しても次回起動時の自動 recovery で完遂される。 |
-| `resume continue <run_id>` | `--abort-on-sdk-mismatch` | 非対話再開。Copilot SDK のメジャーバージョン不一致時に中断したい場合に指定（既定は警告のみで続行）。 |
-| **`resume reconcile`** | `[run_id]` / `--all` / `--auto-fix` / `--json` | **state.json と SDK セッション実体の整合性チェック**（v1.0 新規）。SDK 側で消失したセッションを参照する step を `pending` に戻す（`--auto-fix` で実行、既定は dry-run）。 |
-| **`resume gc-orphans`** | `--yes` / `--json` | **SDK 側に残った `hve-*` 接頭辞の孤児セッションを削除**（v1.0 新規）。`state.json` で参照中の sid は絶対に削除しない安全ガード付き。既定は dry-run、`--yes` で実削除。 |
-
-### v1.0 アップグレード時の注意（破壊的変更）
-
-v1.0 で導入された Resume 2 層トランザクション保護機能により、`work/runs/<run_id>/state.json` の `schema_version` が **1.0 → 2.0** へ非互換変更されました。旧バージョンで生成された state.json は **読み込み不可** となります。
-
-**対処**:
-
-- 旧バージョンで実行中だったセッションを再開したい場合は、v1.0 へのアップグレード前に完了させてください。
-- アップグレード後は `work/runs/` を手動削除すると、`resume list` 起動時の warn ログが消えます: `rm -rf work/runs/` （PowerShell: `Remove-Item -Recurse -Force work\runs\`）。
-- 旧 state.json は v1.0 の `RunState.load` で `ValueError` を投げるため、誤った再開は発生しません（`list` では warn + skip）。
-
-**v1.0 以降の Resume の堅牢化**:
-
-- 同一 `run_id` への並行 hve 実行は `work/runs/<run_id>/.lock` ファイルで排他制御されます（OS レベルロック）。
-- `resume delete --hard` は Write-Ahead Journal により crash-safe 化。途中で SDK 削除失敗 / 中断しても次回起動時に自動 recovery で完遂。
-- Resume 開始時に SDK セッション実体との整合性チェックが自動実行され、消失セッションを参照する step は自動で `pending` に戻されます。
-
-### Resume 時の挙動
-
-`python -m hve resume continue <run_id>`（または wizard の再開候補選択）で再開すると、次の処理が行われます。
-
-- 完了済みステップ（`completed` / `skipped`）は再実行されず、DAG 上「依存解決済み」として扱われます。
-- 中断時に `running` だったステップは、保存された `session_id` で `client.resume_session()` を試行し、SDK 側にセッションが残っていれば会話の続きから再開します。
-- SDK 側セッションが失われている、または SDK 例外で `resume_session` が失敗した場合は、warn ログを出した上で**新規 `create_session` にフォールバック**します。この場合、そのステップは事実上 **最初から実行し直し** になります。
-- 保存時と現環境で **Copilot SDK のメジャーバージョンが一致しない** 場合は警告が表示されます。`--abort-on-sdk-mismatch` を付けると、不一致時に再開を中止します（既定は警告のみで続行）。
-- `--create-issues` / `--create-pr` が保存時に有効だった場合、再開時にも `REPO` および `GH_TOKEN`（または `GITHUB_TOKEN`）環境変数が必須です。未設定の場合は再開が中止されます。
-
-### リスクと注意点
-
-| リスク | 説明 | 緩和策 |
-|---|---|---|
-| **実行中ステップの作業ロス** | Ctrl+R は実行中ステップを cancel するため、長時間 LLM 応答を生成中だったステップの応答・ツール出力・書き込み中ファイルが失われる可能性がある。 | 重要な単一ステップが完了するまで Ctrl+R を待つ。次のステップ境界まで進んでから押す。 |
-| **中途半端なファイル書き込み** | エディタ系ツールがファイル書き込み中に cancel された場合、ファイルが破損・部分書き込み状態になる可能性がある。 | 再開後にファイルの整合性を `git status` / `git diff` で確認する。問題があれば `git checkout -- <path>` で巻き戻す。 |
-| **Resume 時に最初からやり直しになるステップ** | SDK 側セッションが消失していた場合、`create_session` フォールバックでそのステップは 0 から再実行される（前回までのトークン消費は無駄になる）。 | 中断後はできるだけ早く再開する。SDK アップデートをまたいでの長期 pause は避ける。 |
-| **SDK バージョン不一致** | hve のメジャーバージョンや Copilot SDK のメジャーバージョンが保存時と現在で異なると、再開はブロックされる（`is_resumable` が False）か、警告付きで続行となる。 | `--abort-on-sdk-mismatch` で安全側に倒すか、再開前に SDK のバージョンを確認する。 |
-| **無効化環境で「押しても効かない」** | 非 TTY / CI / pytest / VS Code 統合ターミナル等では Ctrl+R 監視自体が起動していない。 | 環境を確認する。CI で実行する場合は中断ではなく事前にステップ範囲を `--steps` で絞る運用にする。 |
-| **state.json の保存粒度はステップ単位** | 1 ステップ内部の進捗（応答途中、ツール途中）は `state.json` には記録されない。 | 1 ステップが長くなる構成では、ワークフローのステップ粒度を細かくする、または並列度（`--max-parallel`）を上げて全体時間を短くする。 |
-| **`state.json` 自体は Git にコミットされない** | `work/runs/` 配下は実行時メタデータであり、共有・引き継ぎには手動コピーが必要。 | 別 PC への引き継ぎが必要な場合は `work/runs/<run_id>/` ディレクトリをまとめて転送する。`config_snapshot` から機密（`github_token`・`repo`・`mcp_servers`）は除外されているため、テナント情報は環境変数で再注入する必要がある。 |
-| **`Ctrl+C` との誤操作** | Ctrl+C は SIGINT として従来どおり即時終了する（pause 保存は行われない）。 | 保存付き中断は必ず `Ctrl+R`、即時終了は `Ctrl+C`、と意識的に使い分ける。 |
-
-### 推奨運用
-
-- **長時間ステップの途中で押さない**: 可能であれば、コンソール上に「ステップ完了」のログが流れた直後など、ステップ境界で押す。
-- **押した後は再開まで時間を空けない**: SDK セッションの保持期間や互換性のリスクを最小化するため、なるべく早く `resume continue` する。
-- **CI / スクリプト実行では使わない**: 自動化環境では Ctrl+R 監視が自動無効化されており、そもそも機能しない。CI では `--steps` でスコープを分割するなど、別のアプローチを取る。
+ワークフローを分割実行したい場合は、`--steps` でステップ範囲を絞る運用を利用してください。
 
 ---
 
 ## セットアップスクリプトを使った環境構築（Windows / macOS / Linux）
 
-HVE の基本実行環境は、`hve/` 直下のセットアップスクリプトで構築できます。どちらのスクリプトも既定では Work IQ と外部 Copilot CLI を導入せず、Python 3.11+ の確認、`.venv` 作成、`github-copilot-sdk` のインストール、`python -m hve --help` の確認、および `markdown-query` 用任意依存（`[mdq-watch,mdq-ja,semantic]` = `rank_bm25` + `tiktoken` + `watchdog` + `fastembed` + `nltk` + `numpy`）と GUI 用任意依存（`[gui,gui-pty,gui-docconvert]` = `PySide6` + `pywinpty`/`ptyprocess` + `markitdown`）の導入、`python -m mdq --help` の確認までを行います。`--no-gui` 指定で GUI 系を、`--minimal` 指定で全 extras をスキップできます。
+HVE の基本実行環境は、`hve/` 直下のセットアップスクリプトで構築できます。どちらのスクリプトも既定では Work IQ と外部 Copilot CLI を導入せず、Python 3.11+ の確認、`.venv` 作成、`github-copilot-sdk` のインストール、`python -m hve --help` の確認、および repository検証用`[test]`（pytest）、`markdown-query` 用任意依存（`[mdq-watch,mdq-ja,semantic]` = `rank_bm25` + `tiktoken` + `watchdog` + `fastembed` + `nltk` + `numpy`）と GUI 用任意依存（`[gui,gui-pty,gui-docconvert]` = `PySide6` + `pywinpty`/`ptyprocess` + `markitdown`）の導入、`python -m mdq --help` の確認までを行います。`--no-gui` 指定で GUI 系を、`--minimal` 指定で全 extras（pytestを含む）をスキップできます。
 
 ### Windows 初心者向け（`.cmd` ダブルクリック）
 
@@ -259,27 +169,27 @@ HVE の基本実行環境は、`hve/` 直下のセットアップスクリプト
 
 | 引数 | 動作 |
 |---|---|
-| なし（既定） | venv 作成 + `github-copilot-sdk` + 全 extras（`mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を導入 |
+| なし（既定） | venv 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を導入 |
 | `-CheckOnly` | 環境状態のみ表示（変更なし） |
 | `-NoGui` | GUI 関連 extras（gui / gui-pty / gui-docconvert）をスキップ（CLI 専用） |
-| `-Minimal` | base のみインストール（検証/開発用の最小構成） |
+| `-Minimal` | runtime base のみインストール（extras / pytest なし） |
 | `-Force` | 既存 `.venv` を削除して再作成 |
 | `-SkipNltkDownload` | `nltk punkt_tab` の事前 DL をスキップ |
 | `-WithSkills` | `microsoft/skills` を npx で `.github/skills/azure-skills/` に導入（Node.js 20+ 必須） |
 | `-Help` | 使い方表示 |
 
-### Windows PowerShell
+### PowerShell 7+
 
 リポジトリルートで実行します。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File hve/setup-hve.ps1
+pwsh -NoProfile -File hve/setup-hve.ps1
 ```
 
 状態確認だけを行う場合:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File hve/setup-hve.ps1 -CheckOnly
+pwsh -NoProfile -File hve/setup-hve.ps1 -CheckOnly
 ```
 
 ### macOS
@@ -339,6 +249,7 @@ chmod +x hve/setup-hve.sh
 - 基本実行では外部 `copilot` コマンドは不要です。`COPILOT_CLI_PATH` や `--cli-path` で外部 CLI を明示指定したい場合だけ、OS 標準のパッケージマネージャ（winget / brew / apt-get / dnf）から個別に導入してください。
 - Node.js / npm / npx は任意です。Work IQ や Node ベース MCP、`-WithSkills` / `--with-skills` を使う場合のみ必要です。
 - Work IQ は Public Preview の機能です。セットアップスクリプトでは導入まで行わず、Microsoft 365 / Entra ID の認証、EULA、管理者同意は手動で対応してください。
+- `--resource-group` を指定する実行、または Azure MCP Server を `--mcp-config` に含める実行では、本処理前に `az account show` 相当の確認を行います。未ログイン時、対話可能な端末では `az login` 実行確認を表示し、非対話環境では停止します。
 - `markdown-query` Skill 用の任意依存（`mdq-watch` extras = `rank_bm25` + `tiktoken` + `watchdog`、および `semantic` extras = `fastembed` + `nltk` + `numpy`）は既定で導入されます。インストールに失敗した場合でもスクリプトは警告のみで継続し、Skill は内蔵 MiniBM25 / `heading_recursive` フォールバックで動作します。`-Minimal` / `--minimal` を指定すると base のみとなり、これら extras は導入されません。詳細は [付録F. Markdown 横断クエリ（markdown-query Skill）](#付録f-markdown-横断クエリmarkdown-query-skill) を参照。
 
 ---
@@ -758,10 +669,27 @@ python -m hve --help
 #### HVE CLI Orchestrator の認証ポリシー（先に確認）
 
 - 基本実行は `gh auth login` を実施し、`gh auth status` で状態確認
+- Copilot SDK 実行前に `hve orchestrate` / `hve cli` が GitHub Copilot 認証状態を確認します。未ログインの場合、対話可能な端末では `copilot login` 実行確認を表示し、非対話環境では停止します。事前に `python -m hve login` を実行しておくと操作回数を減らせます。
 - `--create-issues` / `--create-pr` などの Issue / PR 作成系オプションを使う場合は `GH_TOKEN` と `REPO`（または `--repo`）が必要
 - `GH_TOKEN` は HVE CLI Orchestrator で Issue / PR を作成するためのトークンです
 - `COPILOT_PAT` は HVE Cloud Agent Orchestrator で Copilot 自動アサインに使うシークレットであり、HVE CLI Orchestrator の Issue / PR 作成用途ではありません
 - `python -m hve` 実行には GitHub Copilot SDK と Copilot ライセンスが必要です
+
+#### 認証手段0: `python -m hve login`（Copilot SDK）
+
+HVE の各 Step は GitHub Copilot SDK 経由で Copilot セッションを作成します。初回または認証切れ時は次を実行してください。
+
+```bash
+python -m hve login
+```
+
+現在の状態だけ確認する場合:
+
+```bash
+python -m hve login --status
+```
+
+`--dry-run` は SDK セッションを作らないため、この Copilot 認証確認をスキップします。
 
 #### 認証手段A: `gh auth login`（推奨）
 
@@ -859,6 +787,8 @@ python -m hve orchestrate --workflow aas --branch main --dry-run       # hve dry
 
 MCP Server を使用する場合は JSON 設定ファイルを作成し、`--mcp-config` で指定します。詳細は [付録A: MCP Server 設定ガイド](#付録a-mcp-server-設定ガイド) を参照してください。
 
+`--mcp-config` は、SDK に渡す直接 map 形式と、Copilot CLI / `.github/.mcp.json` で使われる `mcpServers` wrapper 形式の両方を受け付けます。`mcpServers` wrapper がある場合は HVE が内側の map に変換します。
+
 > HVE Cloud Agent Orchestrator 側の MCP 設定（GitHub UI / リポジトリ運用設定）とは別です。ここでは HVE CLI Orchestrator 実行時に `--mcp-config` で渡す設定のみを扱います。
 
 ```json
@@ -916,6 +846,8 @@ Phase 6 の棚卸結果（リポジトリ内の確認済みファイル）:
 
 Work IQ（`@microsoft/workiq`）をインストールして `--auto-qa --workiq` を有効化すると、QA フェーズの補助情報として M365 データを読み取り専用で参照します。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。  
 QA では `--workiq-draft` を指定すると、質問ごとの Work IQ 回答ドラフトを `qa/`（または指定ディレクトリ）へ出力できます。Work IQ の補助レポートは通常モード・ドラフトモードともに同じ出力先ディレクトリへ保存されます。
+
+Work IQ を使う設定が有効な場合、HVE は本処理前に `accept-eula` と `ask -q ping` 相当の確認を行います。失敗時、対話可能な端末では Work IQ を無効化して続行するかを選べます。非対話環境では停止し、`python -m hve workiq-doctor` での診断を案内します。
 
 #### Work IQ 接続状態の段階
 
@@ -1308,6 +1240,28 @@ python -m hve orchestrate --workflow akm --sources workiq --workiq-dxx D01,D04
 > では Work IQ 入力は使用できません。Work IQ 連携が必要な場合はローカル CLI を使用してください。
 
 > **注意**: Web 実行環境（ブラウザ UI だけでの実行）では Work IQ 連携は利用できません。`python -m hve` のローカル CLI 実行で利用してください。
+
+---
+
+## 自動コンテキスト圧縮（Auto Compaction）
+
+サブステップ実行時に Copilot SDK の `infinite_sessions`（バックグラウンド compaction）を有効化し、
+Context Window 使用量を SDK 側で自動的に圧縮させるオプションです。長時間/長文の workflow で
+Context 上限に達して打ち切られるのを防ぎたい場合に ON にします。
+
+| 項目 | 値 |
+|---|---|
+| CLI フラグ | `--auto-compaction` / `--no-auto-compaction` |
+| GUI 設定 | 設定画面 → Autopilot → 「自動コンテキスト圧縮 (auto_compaction)」 |
+| 既定 | OFF（SDK 既定挙動） |
+
+```bash
+# 自動コンテキスト圧縮を有効化して実行
+python -m hve orchestrate --workflow aas --auto-compaction
+```
+
+> 実際の圧縮しきい値（既定 background=0.80 / buffer=0.95）は SDK 側で管理され、HVE からは変更しません。
+> 圧縮は SDK の責務であり、HVE は `infinite_sessions={"enabled": True}` を `create_session` に渡すのみです。
 
 ---
 
@@ -2045,7 +1999,7 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | `--target-files` | AKM の対象ファイル（省略時は選択ソース配下の全件） | `akm` |
 | `--force-refresh` / `--no-force-refresh` | AKM の status 再生成制御 | `akm` |
 | `--custom-source-dir` | AKM の追加ソースディレクトリ | `akm` |
-| `--enable-auto-merge` | AKM の PR 自動 Approve & Auto-merge | `akm` |
+| `--enable-auto-merge` | PR 自動 Approve & Auto-merge。有効時は ASDW-WEB / ADFDV で Deploy 成果物の push / PR / merge 待機にも使用 | `asdw-web`, `adfdv`, `akm` |
 | `--target-scope` | AQOD の確認対象スコープ | `aqod` |
 | `--depth` | AQOD の分析深さ（`standard` / `lightweight`） | `aqod` |
 | `--focus-areas` | AQOD の重点観点 | `aqod` |
@@ -2276,6 +2230,16 @@ WORKFLOW_REGISTRY = {
 
 > メモリ不足が発生する場合は `--max-parallel` を小さくしてください（例: `--max-parallel 3`）。
 
+### SPLIT_REQUIRED と Cloud Sub-Issue 経路
+
+CLI / GUI 標準経路では、各 Step の実行後に Agent が `plan.md` で `split_decision: SPLIT_REQUIRED` を宣言しても、`subissues.md` をローカルで runtime fork しません。
+
+- `SPLIT_REQUIRED` / `subissues.md` は、Cloud Agent Orchestrator（Issue Template + GitHub Actions + Copilot Cloud Agent）で PR に `create-subissues` ラベルを付与し、`.github/workflows/create-subissues-from-pr.yml` が GitHub Sub-Issue を作成するための入力です。
+- CLI / GUI で分割・並列化したい場合は、workflow 定義の DAG / fan-out（例: `Step.1/D01` のような展開済み Step）として表現してください。
+- 過去互換・実験用途として `OrchestratorContext.split_fork_enabled=True` を明示した場合のみ、legacy runtime split-fork が動作します。標準 CLI / GUI 実行では無効です。
+
+Fleet mode を CLI / GUI で使う場合は、`SPLIT_REQUIRED` ではなく workflow-level fan-out / DAG wave の実行 backend として扱います。CLI では `--fleet-mode`、明示的に無効化する場合は `--no-fleet-mode` を指定します。Fleet mode は opt-in で、単一 Step の wave は従来どおり通常実行されます。
+
 ### Post-step 自動プロンプト（QA / Review）
 
 | フラグ | 動作 |
@@ -2360,7 +2324,7 @@ Copilot / Prompt が大量の Markdown を参照する際の **Context Window �
 
 - Skill: `.github/skills/markdown-query/SKILL.md`
 - 実装: `mdq/`（SQLite + BM25、見出し境界・コードフェンス対応）
-- 索引対象（既定）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `session-state/`, `hve-dev/`
+- 索引対象（既定）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`
 - 索引ファイル: `.mdq/index.sqlite`（gitignore 済、リポジトリにコミットしないこと）
 
 ### F.1 環境構築
@@ -2420,7 +2384,7 @@ pytest 結果: `python -m pytest hve/tests/test_mdq.py -q` → 6 passed in 3.09s
 - Cloud runner でも同じ CLI が動作します（Python が利用可能なため）。
 - Cloud runner の作業ツリーは揮発し、索引ファイル `.mdq/index.sqlite` は gitignore 済でセッション間で共有されません。**Cloud Agent セッション側で毎回 `python -m mdq index` を自身で実行**してから `search` / `get` を使う運用です（増分キャッシュは効きません）。
 - 現行の `auto-*-reusable.yml` 群は GitHub Actions runner 上で Issue 作成と Copilot アサインを行うだけで、Prompt 本体は Copilot Cloud の独立セッションで動作します。そのため reusable workflow から runner 上で `mdq index` を事前実行しても **Cloud Agent セッションには出現しません**。付属の `.github/workflows/mdq-index-reusable.yml` は主に **CI スモークテスト** と **手動検証ヘルパー** として提供しています（`test-hve-python.yml` の `mdq-smoke` job で使用）。
-- Skill 発見は `.github/skills/_routing/SKILL.md` の planning 共通テーブル経由（CLI / Cloud 共通）。Cloud Agent 側への「必ず 1 回 `mdq index` を実行」説明は `markdown-query` Skill 本体に記載済です。
+- Skill 発見は `.github/skills/_routing/README.md` の planning 共通テーブル経由（CLI / Cloud 共通）。Cloud Agent 側への「必ず 1 回 `mdq index` を実行」説明は `markdown-query` Skill 本体に記載済です。
 
 ### F.6 注意点
 

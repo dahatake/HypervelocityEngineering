@@ -238,7 +238,7 @@ jobs:
           create_label "akm:done"         "0E8A16" ""
           create_label "akm:blocked"      "D73A4A" ""
           create_label "auto-qa"          "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
-          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
       # ----------------------------------------------------------------
@@ -354,12 +354,12 @@ jobs:
               section_text = m.group(1)
               force_refresh = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
-          # レビュー設定: チェック [x] → auto-context-review 有効
-          auto_context_review = False
+          # レビュー設定: チェック [x] → adversarial-review 有効
+          adversarial_review = False
           m = re.search(r"###\s*レビュー設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               section_text = m.group(1)
-              auto_context_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
+              adversarial_review = bool(re.search(r"-\s*\[[xX]\]", section_text))
 
           # 質問票設定: チェック [x] → auto-qa 有効
           auto_qa = False
@@ -373,7 +373,7 @@ jobs:
           m = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
           if m:
               section_text = m.group(1)
-              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text))
+              auto_merge = bool(re.search(r"-\s*\[[xX]\]", section_text) or re.search(r"^\s*有効にする\s*$", section_text, re.MULTILINE))
 
           # 追加コメント抽出
           additional_comment = ""
@@ -416,7 +416,7 @@ jobs:
               "target_files": target_files,
               "custom_source_dir": " ".join(custom_source_dir),
               "force_refresh": force_refresh,
-              "auto_context_review": auto_context_review,
+              "adversarial_review": adversarial_review,
               "auto_qa": auto_qa,
               "auto_merge": auto_merge,
               "additional_comment": additional_comment,
@@ -438,7 +438,7 @@ jobs:
             echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
             AUTO_QA="false"
           fi
-          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          ADVERSARIAL_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('adversarial_review') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('enable_self_improve') else 'false')")
@@ -456,17 +456,17 @@ jobs:
           echo "対象ファイル: ${TARGET_FILES}"
           echo "custom_source_dir: ${CUSTOM_SOURCE_DIR}"
           echo "force_refresh: ${FORCE_REFRESH}"
-          echo "セルフレビュー (auto-context-review): ${AUTO_CONTEXT_REVIEW}"
+          echo "敵対的レビュー (adversarial-review): ${ADVERSARIAL_REVIEW}"
           echo "質問票 (auto-qa): ${AUTO_QA}"
           echo "PR完全自動化 (auto-merge): ${AUTO_MERGE}"
 
-          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
+          # ---- Root Issue body に adversarial-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
           MERGE_TAG_FILE=$(mktemp)
-          python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${MERGE_TAG_FILE}" <<'PYMERGE'
+          python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${BRANCH}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${MERGE_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
-          auto_context_review = sys.argv[1]
+          adversarial_review = sys.argv[1]
           auto_qa = sys.argv[2]
           auto_merge = sys.argv[3]
           branch = sys.argv[4]
@@ -476,7 +476,7 @@ jobs:
           output_file = sys.argv[8]
 
           tags = [
-              ("auto-context-review", auto_context_review),
+              ("adversarial-review", adversarial_review),
               ("auto-qa", auto_qa),
               ("auto-merge", auto_merge),
               ("branch", branch),
@@ -500,7 +500,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${MERGE_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に adversarial-review / auto-qa / auto-merge / branch / self-improve タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${MERGE_TAG_FILE}"
@@ -509,9 +509,12 @@ jobs:
           add_label "${ROOT_ISSUE}" "akm:initialized"
           echo "akm:initialized を付与しました。"
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            add_label "${ROOT_ISSUE}" "auto-context-review"
-            echo "Root Issue #${ROOT_ISSUE} に auto-context-review ラベルを付与しました。"
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "adversarial-review"
+            echo "Root Issue #${ROOT_ISSUE} に adversarial-review ラベルを付与しました。"
+          else
+            gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、Root Issue #${ROOT_ISSUE} の adversarial-review ラベルを除去しました。"
           fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then
@@ -534,10 +537,10 @@ jobs:
           fi
 
           # ---- Step Issue の body に埋め込む共通メタ情報 ----
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- adversarial-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
@@ -547,8 +550,8 @@ jobs:
           # Step Issue に付与するラベルセット
           STEP_LABELS='["knowledge-management"]'
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["auto-context-review"]')
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["adversarial-review"]')
           fi
 
           if [[ "${AUTO_QA}" == "true" ]]; then

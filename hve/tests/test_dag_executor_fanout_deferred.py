@@ -159,3 +159,54 @@ def test_deferred_fanout_skipped_when_input_remains_empty(tmp_path: Path) -> Non
     assert executor._results["F"].reason == "fanout-empty"
     # C (depends_on=["F"]) は F が skipped なので effective_done に含まれ実行される
     assert "C" in call_order
+
+
+def test_deferred_fanout_propagates_base_prompt_to_children(tmp_path: Path) -> None:
+    """fanout-fix: deferred 展開された動的子に base prompt が伝播されることを検証。
+
+    回帰テスト: 以前は `_try_dynamic_expand` で生成された子 ID が `_step_prompts`
+    に追加されず、`_run_with_semaphore` で `self._step_prompts.get(step.id, "")` が
+    空文字列を返し、子ステップが空 prompt で起動していた。
+    """
+    wf = _build_deferred_test_workflow()
+    expanded_wf, expanded_active, info = _expand_workflow_for_dag(
+        wf, {"P", "F", "C"}, tmp_path
+    )
+    assert "F" in info.deferred_fanout_ids
+
+    skeleton_path = tmp_path / "docs" / "catalog" / "use-case-skeleton.md"
+    captured_prompts: Dict[str, str] = {}
+
+    async def run_fn(**kwargs: Any) -> bool:
+        sid = kwargs["step_id"]
+        captured_prompts[sid] = kwargs.get("prompt", "<MISSING>")
+        if sid == "P":
+            skeleton_path.parent.mkdir(parents=True, exist_ok=True)
+            skeleton_path.write_text(
+                "# Skeleton\n\n## UC-01\n本文\n## UC-02\n本文\n",
+                encoding="utf-8",
+            )
+        return True
+
+    # base "F" には明示的に prompt を渡す（fanout base の典型ケース）
+    base_prompt = "BASE_PROMPT_FOR_F"
+    executor = DAGExecutor(
+        workflow=expanded_wf,
+        run_step_fn=run_fn,
+        active_step_ids=expanded_active,
+        repo_root=tmp_path,
+        step_prompts={"P": "P_PROMPT", "F": base_prompt, "C": "C_PROMPT"},
+        deferred_fanout_ids=info.deferred_fanout_ids,
+        workflow_id="t_defer",
+        enable_fanout=False,
+    )
+    asyncio.run(executor.execute())
+
+    # 動的展開された子に base prompt がコピーされていること
+    children = [s for s in captured_prompts if s.startswith("F/")]
+    assert sorted(children) == ["F/UC-01", "F/UC-02"]
+    for child in children:
+        assert captured_prompts[child] == base_prompt, (
+            f"deferred 動的子 {child} が空または異なる prompt で起動された: "
+            f"got={captured_prompts[child]!r}"
+        )

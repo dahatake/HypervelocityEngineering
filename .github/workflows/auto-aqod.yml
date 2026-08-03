@@ -121,7 +121,7 @@ jobs:
           create_label "aqod:running" "E4E669" ""
           create_label "aqod:done" "0E8A16" ""
           create_label "aqod:blocked" "D73A4A" ""
-          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-qa" "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
@@ -186,9 +186,9 @@ jobs:
           qa_section = section("質問票設定")
           auto_qa = bool(qa_section and re.search(r"-\s*\[[xX]\]", qa_section))
           review_section = section("レビュー設定")
-          auto_context_review = bool(review_section and re.search(r"-\s*\[[xX]\]", review_section))
+          adversarial_review = bool(review_section and re.search(r"-\s*\[[xX]\]", review_section))
           sec = section("PR完全自動化設定")
-          auto_merge = bool(re.search(r"-\s*\[[xX]\]", sec))
+          auto_merge = bool(re.search(r"-\s*\[[xX]\]", sec) or re.search(r"^\s*有効にする\s*$", sec or "", re.MULTILINE))
 
           # 自己改善設定
           si_section = section("自己改善ループ設定")
@@ -207,7 +207,7 @@ jobs:
               "model": model or "Auto",
               "branch": branch,
               "auto_qa": auto_qa,
-              "auto_context_review": auto_context_review,
+              "adversarial_review": adversarial_review,
               "auto_merge": auto_merge,
               "enable_self_improve": enable_self_improve,
               "self_improve_max_iterations": self_improve_max_iterations,
@@ -222,7 +222,7 @@ jobs:
           MODEL=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['model'])")
           BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['branch'])")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_qa'] else 'false')")
-          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('auto_context_review') else 'false')")
+          ADVERSARIAL_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin).get('adversarial_review') else 'false')")
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['auto_merge'] else 'false')")
           ENABLE_SELF_IMPROVE=$(echo "${PARSED}" | python3 -c "import sys,json; print('true' if json.load(sys.stdin)['enable_self_improve'] else 'false')")
           SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['self_improve_max_iterations'])")
@@ -233,16 +233,16 @@ jobs:
           SELECTED_REVIEW_MODEL=$(resolve_model "${REVIEW_MODEL_RAW}")
           QA_MODEL_RAW=$(extract_qa_model "${ISSUE_BODY}")
           SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
-          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL BRANCH AUTO_QA AUTO_CONTEXT_REVIEW AUTO_MERGE ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
+          export TARGET_SCOPE DEPTH FOCUS_AREAS MODEL BRANCH AUTO_QA ADVERSARIAL_REVIEW AUTO_MERGE ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
 
           # ---- Root Issue body に branch / auto-qa / auto-merge / self-improve タグを埋め込み ----
           _ROOT_TAG_FILE=$(mktemp)
-          python3 - "${BRANCH}" "${AUTO_QA}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_MERGE}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${_ROOT_TAG_FILE}" <<'PYTAGS'
+          python3 - "${BRANCH}" "${AUTO_QA}" "${ADVERSARIAL_REVIEW}" "${AUTO_MERGE}" "${ENABLE_SELF_IMPROVE}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${_ROOT_TAG_FILE}" <<'PYTAGS'
           import sys, os, re, json
           body = os.environ.get("ISSUE_BODY", "")
           branch = sys.argv[1]
           auto_qa = sys.argv[2]
-          auto_context_review = sys.argv[3]
+          adversarial_review = sys.argv[3]
           auto_merge = sys.argv[4]
           enable_si = sys.argv[5]
           si_max_iter = sys.argv[6]
@@ -251,7 +251,7 @@ jobs:
           tags = [
               ("branch", branch),
               ("auto-qa", auto_qa),
-              ("auto-context-review", auto_context_review),
+              ("adversarial-review", adversarial_review),
               ("auto-merge", auto_merge),
               ("enable-self-improve", enable_si),
               ("self-improve-max-iterations", si_max_iter),
@@ -283,9 +283,12 @@ jobs:
             echo "Root Issue #${ISSUE_NUMBER} に auto-qa ラベルを付与しました。"
           fi
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            add_label "${ISSUE_NUMBER}" "auto-context-review"
-            echo "Root Issue #${ISSUE_NUMBER} に auto-context-review ラベルを付与しました。"
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            add_label "${ISSUE_NUMBER}" "adversarial-review"
+            echo "Root Issue #${ISSUE_NUMBER} に adversarial-review ラベルを付与しました。"
+          else
+            gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、Root Issue #${ISSUE_NUMBER} の adversarial-review ラベルを除去しました。"
           fi
           if [[ -n "${SELECTED_MODEL}" ]]; then
             add_label "${ISSUE_NUMBER}" "model/${SELECTED_MODEL}" || true
@@ -307,13 +310,12 @@ jobs:
           focus_areas = os.environ["FOCUS_AREAS"]
           model = os.environ["MODEL"]
           auto_merge = os.environ["AUTO_MERGE"]
-          auto_context_review = os.environ.get("AUTO_CONTEXT_REVIEW", "false")
+          adversarial_review = os.environ.get("ADVERSARIAL_REVIEW", "false")
           template = Path(".github/scripts/templates/aqod/step-1.md").read_text(encoding="utf-8")
           root_ref = "\n".join([
               f"<!-- root-issue: #{issue_num} -->",
               f"<!-- branch: {os.environ.get('BRANCH', 'main')} -->",
-              "<!-- auto-review: true -->",
-              f"<!-- auto-context-review: {auto_context_review} -->",
+              f"<!-- adversarial-review: {adversarial_review} -->",
               f"<!-- auto-qa: {os.environ.get('AUTO_QA', 'false')} -->",
               "<!-- mode: original-docs-questionnaire -->",
           ])
@@ -323,7 +325,7 @@ jobs:
               "- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n"
               "- この PR または関連 Issue のレビュー指摘\n"
               "- Self-Improve 結果または改善計画（存在する場合のみ）\n"
-              "- `## 入力` に記載された前 Step 成果物\n"
+              "- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n"
               "- 追加で注入された既存成果物・reuse context\n\n"
               "参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。"
               f"\n\n## 追加コメント\n- model: {model}\n- auto-merge: {auto_merge}"
@@ -340,8 +342,8 @@ jobs:
           )
 
           LABELS='["aqod:ready"]'
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-context-review"]')
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            LABELS=$(echo "${LABELS}" | jq -c '. + ["adversarial-review"]')
           fi
           if [[ "${AUTO_QA}" == "true" ]]; then
             LABELS=$(echo "${LABELS}" | jq -c '. + ["auto-qa"]')

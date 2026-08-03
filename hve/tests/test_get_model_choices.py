@@ -9,6 +9,11 @@ import pytest
 
 from hve import config as hve_config
 from hve import models_cache
+from hve.models_api import ModelEntry
+
+
+def _entries(*model_ids: str) -> list[ModelEntry]:
+    return [ModelEntry(id=model_id, name=model_id) for model_id in model_ids]
 
 
 @pytest.fixture
@@ -23,7 +28,7 @@ class TestGetModelChoicesFresh:
     def test_uses_fresh_cache(self, isolated_cache):
         models_cache.save(["cached-a", "cached-b"], path=isolated_cache, now=time.time())
         # SDK 呼び出しは行われないはず
-        with patch("hve.models_api.fetch_models") as mock_fetch:
+        with patch("hve.models_api.fetch_model_entries") as mock_fetch:
             result = hve_config.get_model_choices()
         mock_fetch.assert_not_called()
         assert result == ["cached-a", "cached-b"]
@@ -31,7 +36,10 @@ class TestGetModelChoicesFresh:
 
 class TestGetModelChoicesAPISuccess:
     def test_fetches_when_no_cache(self, isolated_cache):
-        with patch("hve.models_api.fetch_models", return_value=["api-1", "api-2"]):
+        with patch(
+            "hve.models_api.fetch_model_entries",
+            return_value=_entries("api-1", "api-2"),
+        ):
             result = hve_config.get_model_choices()
         assert result == ["api-1", "api-2"]
         # キャッシュに書き込まれている
@@ -41,7 +49,10 @@ class TestGetModelChoicesAPISuccess:
 
     def test_force_refresh_bypasses_cache(self, isolated_cache):
         models_cache.save(["old-1"], path=isolated_cache, now=time.time())
-        with patch("hve.models_api.fetch_models", return_value=["new-1", "new-2"]):
+        with patch(
+            "hve.models_api.fetch_model_entries",
+            return_value=_entries("new-1", "new-2"),
+        ):
             result = hve_config.get_model_choices(force_refresh=True)
         assert result == ["new-1", "new-2"]
 
@@ -54,7 +65,7 @@ class TestGetModelChoicesStaleFallback:
         old_time = time.time() - 30 * 3600
         models_cache.save(["stale-1", "stale-2"], path=isolated_cache, now=old_time)
         with patch(
-            "hve.models_api.fetch_models", side_effect=ModelsAPIError("no auth")
+            "hve.models_api.fetch_model_entries", side_effect=ModelsAPIError("no auth")
         ):
             result = hve_config.get_model_choices()
         assert result == ["stale-1", "stale-2"]
@@ -66,7 +77,7 @@ class TestGetModelChoicesFinalFallback:
 
         # キャッシュなし、API も失敗
         with patch(
-            "hve.models_api.fetch_models", side_effect=ModelsAPIError("offline")
+            "hve.models_api.fetch_model_entries", side_effect=ModelsAPIError("offline")
         ):
             result = hve_config.get_model_choices()
         assert result == list(hve_config.FALLBACK_MODEL_CHOICES)
@@ -83,7 +94,7 @@ class TestIncludeAuto:
         from hve.models_api import ModelsAPIError
 
         with patch(
-            "hve.models_api.fetch_models", side_effect=ModelsAPIError("x")
+            "hve.models_api.fetch_model_entries", side_effect=ModelsAPIError("x")
         ):
             result = hve_config.get_model_choices(include_auto=True)
         assert result[0] == hve_config.MODEL_AUTO_VALUE
@@ -98,6 +109,6 @@ class TestFallbackAlias:
 class TestEmptyAPIResult:
     def test_empty_api_result_uses_fallback(self, isolated_cache):
         # 空リスト返却時はフォールバックへ
-        with patch("hve.models_api.fetch_models", return_value=[]):
+        with patch("hve.models_api.fetch_model_entries", return_value=[]):
             result = hve_config.get_model_choices()
         assert result == list(hve_config.FALLBACK_MODEL_CHOICES)

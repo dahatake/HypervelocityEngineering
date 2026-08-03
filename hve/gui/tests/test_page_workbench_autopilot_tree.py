@@ -42,18 +42,18 @@ def test_update_timer_reflects_autopilot_logs_into_tree(page):
     assert page._workflow_plan == []
     # タイマー Slot を手動 invoke
     page._on_update_timer()
-    tree = page._progress_widget._tree
-    assert tree.topLevelItemCount() == 2
-    labels = [tree.topLevelItem(i).text(0) for i in range(2)]
+    # DagStatusWidget は _entries (List[_WorkflowEntry]) を単一 source とする。
+    entries = page._progress_widget._entries
+    assert len(entries) == 2
+    labels = [e.label for e in entries]
     assert any("wf-a#APP-01" in t for t in labels)
     assert any("wf-b#APP-02" in t for t in labels)
-    assert page._progress_widget._instances_mode is True
 
 
 def test_update_timer_skips_when_no_workflows(page):
     """workflows 空かつ plan 空 → 何も描画されない（旧来の初期状態維持）。"""
     page._on_update_timer()
-    assert page._progress_widget._tree.topLevelItemCount() == 0
+    assert len(page._progress_widget._entries) == 0
 
 
 def test_plan_mode_takes_precedence_over_instances(page):
@@ -75,8 +75,8 @@ def test_plan_mode_takes_precedence_over_instances(page):
     # state.workflows に同時混入する別 instance
     page.append_log("wf-other#APP-01", "step1", "x")
     page._on_update_timer()
-    tree = page._progress_widget._tree
-    labels = [tree.topLevelItem(i).text(0) for i in range(tree.topLevelItemCount())]
+    entries = page._progress_widget._entries
+    labels = [e.label for e in entries]
     # Plan モード由来の "WF-X" (format_workflow_label の大文字化) が含まれる
     assert any("WF-X" in t for t in labels)
     # state.workflows 側 (wf-other#APP-01) も同時表示される（統合 source の挙動）
@@ -97,7 +97,7 @@ def test_reset_for_autopilot_clears_plan_state(page):
         page._workflow_step_status,
         page._workflow_subtask_status,
     )
-    assert page._progress_widget._tree.topLevelItemCount() == 1
+    assert len(page._progress_widget._entries) == 1
 
     page.reset_for_autopilot()
 
@@ -105,8 +105,7 @@ def test_reset_for_autopilot_clears_plan_state(page):
     assert page._workflow_status == {}
     assert page._workflow_step_status == {}
     assert page._workflow_subtask_status == {}
-    assert page._progress_widget._tree.topLevelItemCount() == 0
-    assert page._progress_widget._instances_mode is False
+    assert len(page._progress_widget._entries) == 0
 
 
 def test_reset_for_autopilot_clears_state_workflows(page):
@@ -120,6 +119,6 @@ def test_reset_for_autopilot_clears_state_workflows(page):
     # 新規 Autopilot のログのみが反映される
     page.append_log("wf-new#APP-01", "step1", "new")
     page._on_update_timer()
-    tree = page._progress_widget._tree
-    assert tree.topLevelItemCount() == 1
-    assert "wf-new#APP-01" in tree.topLevelItem(0).text(0)
+    entries = page._progress_widget._entries
+    assert len(entries) == 1
+    assert "wf-new#APP-01" in entries[0].label

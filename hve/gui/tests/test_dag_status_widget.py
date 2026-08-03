@@ -4,6 +4,8 @@ PySide6 が未導入の環境ではスキップする。
 """
 from __future__ import annotations
 
+import time
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -99,6 +101,29 @@ def test_reset_clears_entries(qapp):
     assert w._entries == []
     assert w._step_items == {}
     assert w._wf_items == {}
+    w.deleteLater()
+
+
+def test_freeze_elapsed_keeps_summary_at_job_end_time(qapp, monkeypatch):
+    """ジョブ終了後は作業状況サマリーの経過時間が増え続けない。"""
+    now = 100.0
+    monkeypatch.setattr(time, "monotonic", lambda: now)
+    w = DagStatusWidget()
+    steps = [{"id": "1", "title": "T1", "depends_on": []}]
+    w.set_plan(
+        _plan("wf-a", steps),
+        {"wf-a": "実行中"},
+        {"wf-a": {"1": "実行中"}},
+    )
+
+    now = 112.0
+    w.freeze_elapsed()
+    assert "[00:00:12]" in w._summary_label.text()
+
+    # 完了後にサマリーを再計算しても、終了時刻で固定される。
+    now = 3600.0
+    w._update_summary_label()
+    assert "[00:00:12]" in w._summary_label.text()
     w.deleteLater()
 
 
@@ -264,4 +289,300 @@ def test_fanout_children_wrap_into_multiple_rows(qapp):
         f"狭い viewport で折り返しが発生しなかった: ys={ys}"
     )
     w.deleteLater()
+
+
+# ---------------------------------------------------------------------------
+# T4: サブプロセス箱が他 Step 矩形と垂直方向で重ならないことの保証
+# ---------------------------------------------------------------------------
+
+
+def _rect_of(item) -> tuple[float, float, float, float]:
+    """item の scene 座標における (x1, y1, x2, y2) を返す。
+
+    pen 幅や transform を考慮した正確な scene AABB を得るため、
+    `sceneBoundingRect()` で計算する。
+    """
+    scene_rect = item.sceneBoundingRect()
+    return (
+        scene_rect.left(),
+        scene_rect.top(),
+        scene_rect.right(),
+        scene_rect.bottom(),
+    )
+
+
+def _rects_overlap_vertically(a, b) -> bool:
+    """2 つの矩形が垂直方向 (y 区間) で交差し、かつ水平にも重なるか。
+
+    完全に y 区間が分離 (`a.y2 <= b.y1` または `b.y2 <= a.y1`) なら False。
+    水平にも分離していれば視覚的には重ならないため False。
+    """
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    if ax2 <= bx1 or bx2 <= ax1:
+        return False
+    if ay2 <= by1 or by2 <= ay1:
+        return False
+    return True
+
+
+def _assert_no_overlapping_rects(w) -> None:
+    """全 step ノード ↔ 全 child ノード ↔ child 同士の矩形非重複を assert。"""
+    step_rects = {key: _rect_of(item) for key, item in w._step_items.items()}
+    child_rects = {key: _rect_of(item) for key, item in w._child_items.items()}
+    # step ↔ child の重なり禁止 (本不具合の主要対象)
+    for s_key, s_rect in step_rects.items():
+        for c_key, c_rect in child_rects.items():
+            assert not _rects_overlap_vertically(s_rect, c_rect), (
+                f"Step {s_key} と child {c_key} の矩形が重複: "
+                f"step={s_rect}, child={c_rect}"
+            )
+    # step 同士の重なり禁止 (二重加算リグレッション検出用)
+    step_keys = list(step_rects.keys())
+    for i in range(len(step_keys)):
+        for j in range(i + 1, len(step_keys)):
+            assert not _rects_overlap_vertically(
+                step_rects[step_keys[i]], step_rects[step_keys[j]]
+            ), (
+                f"Step {step_keys[i]} と Step {step_keys[j]} の矩形が重複: "
+                f"{step_rects[step_keys[i]]} vs {step_rects[step_keys[j]]}"
+            )
+    # child 同士の重なり禁止 (within_row_child_offset の積み上げ regression 検出用)
+    child_keys = list(child_rects.keys())
+    for i in range(len(child_keys)):
+        for j in range(i + 1, len(child_keys)):
+            assert not _rects_overlap_vertically(
+                child_rects[child_keys[i]], child_rects[child_keys[j]]
+            ), (
+                f"Child {child_keys[i]} と Child {child_keys[j]} の矩形が重複: "
+                f"{child_rects[child_keys[i]]} vs {child_rects[child_keys[j]]}"
+            )
+
+
+def test_no_overlap_single_step_expanded_in_multi_row_workflow(qapp):
+    """独立 2 root の上行 (order=0) を展開しても下行 (order=1) Step と重ならない。
+
+    `compute_layout` は直列チェーンでは全 Step を order=0 に配置するため、
+    「下行」を作るには同 rank に複数独立 root を置く必要がある。
+    """
+    w = DagStatusWidget()
+    w._view.viewport().setFixedWidth(800)
+    # 同じ rank=0 に独立 root を 2 つ置き、order=0/1 を作る
+    steps = [
+        {"id": "S1", "title": "S1", "depends_on": []},
+        {"id": "S2", "title": "S2", "depends_on": []},
+    ]
+    subs1 = [(f"S1/UC-{i:02d}", f"U{i}", "実行中") for i in range(1, 5)]
+    statuses = {"wf-a": "実行中"}
+    step_statuses = {"wf-a": {"S1": "実行中", "S2": "待機"}}
+    subtask_statuses = {"wf-a": {"S1": subs1}}
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    w._toggle_step_expand("wf-a", "S1")
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    _assert_no_overlapping_rects(w)
+    w.deleteLater()
+
+
+def test_no_overlap_high_rank_step_expanded_pushes_next_row(qapp):
+    """T3 review carry-over: 高 rank Step を展開した時、parent_x で計算した
+    cols_per_row が小さくなっても child_heights が一致し、次行 Step と重ならない。
+
+    検出力を確保するため、次行 Step (D) を C と同じ rank=2 に配置し、
+    C の child 群と D の Step 矩形が水平方向で重なるよう構成する。
+    `parent_x=0` ベース予約 (T3 review 前の不具合) では予約高が過小になり、
+    実描画の child 群が D を侵食して fail するはず。
+    """
+    w = DagStatusWidget()
+    w._view.setFixedWidth(500)
+    w._view.viewport().setFixedWidth(500 - 24)
+    # A -> B -> { C, D } で C/D を同 rank=2 に並べる
+    steps = [
+        {"id": "A", "title": "A", "depends_on": []},
+        {"id": "B", "title": "B", "depends_on": ["A"]},
+        {"id": "C", "title": "C", "depends_on": ["B"]},
+        {"id": "D", "title": "D", "depends_on": ["B"]},
+    ]
+    subs_c = [(f"C/UC-{i:02d}", f"U{i}", "実行中") for i in range(1, 7)]  # 6 子
+    statuses = {"wf-a": "実行中"}
+    step_statuses = {
+        "wf-a": {"A": "完了", "B": "完了", "C": "実行中", "D": "待機"}
+    }
+    subtask_statuses = {"wf-a": {"C": subs_c}}
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    w._toggle_step_expand("wf-a", "C")
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    _assert_no_overlapping_rects(w)
+    w.deleteLater()
+
+
+def test_no_overlap_multiple_steps_expanded_same_workflow(qapp):
+    """複数 Step を同時展開しても全 Step ↔ child 矩形が重ならない (本不具合の主目的)。
+
+    同 rank に独立 root を 2 つ置き、両方展開する。
+    更にもう 1 つ下行に rank=0/order=2 の Step を置いて、
+    上行の child ブロックが下行を押し下げるパスを検証する。
+    """
+    w = DagStatusWidget()
+    w._view.viewport().setFixedWidth(800)
+    steps = [
+        {"id": "S1", "title": "S1", "depends_on": []},
+        {"id": "S2", "title": "S2", "depends_on": []},
+        {"id": "S3", "title": "S3", "depends_on": []},
+    ]
+    subs1 = [(f"S1/UC-{i:02d}", f"U{i}", "実行中") for i in range(1, 4)]
+    subs2 = [(f"S2/UC-{i:02d}", f"U{i}", "実行中") for i in range(1, 5)]
+    statuses = {"wf-a": "実行中"}
+    step_statuses = {"wf-a": {"S1": "実行中", "S2": "実行中", "S3": "待機"}}
+    subtask_statuses = {"wf-a": {"S1": subs1, "S2": subs2}}
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    w._toggle_step_expand("wf-a", "S1")
+    w._toggle_step_expand("wf-a", "S2")
+    w.set_plan(_plan("wf-a", steps), statuses, step_statuses,
+               subtask_status=subtask_statuses)
+    _assert_no_overlapping_rects(w)
+    w.deleteLater()
+
+
+def test_no_overlap_expansion_in_first_of_two_workflows(qapp):
+    """先頭ワークフローの Step 展開が後続ワークフローの Step と重ならない。"""
+    w = DagStatusWidget()
+    w._view.viewport().setFixedWidth(800)
+    plan = [
+        {
+            "workflow_id": "wf-a",
+            "workflow_name": "WF-a",
+            "steps": [{"id": "1", "title": "A1", "depends_on": []}],
+        },
+        {
+            "workflow_id": "wf-b",
+            "workflow_name": "WF-b",
+            "steps": [{"id": "1", "title": "B1", "depends_on": []}],
+        },
+    ]
+    subs_a = [(f"1/UC-{i:02d}", f"U{i}", "実行中") for i in range(1, 5)]
+    statuses = {"wf-a": "実行中", "wf-b": "待機"}
+    step_statuses = {"wf-a": {"1": "実行中"}, "wf-b": {"1": "待機"}}
+    subtask_statuses = {"wf-a": {"1": subs_a}}
+    w.set_plan(plan, statuses, step_statuses, subtask_status=subtask_statuses)
+    w._toggle_step_expand("wf-a", "1")
+    w.set_plan(plan, statuses, step_statuses, subtask_status=subtask_statuses)
+    _assert_no_overlapping_rects(w)
+    w.deleteLater()
+
+
+# ---------------------------------------------------------------------------
+# 回帰: ダブルクリックハンドラの super() 呼び出しによる shiboken
+# "Internal C++ object already deleted" RuntimeError 防止
+# ---------------------------------------------------------------------------
+
+
+def _make_double_click_event():
+    """``QGraphicsSceneMouseEvent`` のダブルクリック型を最小構成で生成する。"""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QGraphicsSceneMouseEvent
+
+    return QGraphicsSceneMouseEvent(QEvent.Type.GraphicsSceneMouseDoubleClick)
+
+
+def test_step_node_double_click_with_fanout_does_not_raise_runtime_error(qapp):
+    """Fanout を持つ Step ノードのダブルクリック → ``_relayout`` → ``scene.clear()``
+    で self の C++ オブジェクトが破棄された後に super を呼ぶと shiboken の
+    RuntimeError が stderr へ出ていた回帰の防止。
+    """
+    w = DagStatusWidget()
+    steps = [{"id": "1", "title": "T1", "depends_on": []}]
+    w.set_plan(
+        _plan("wf-a", steps),
+        {"wf-a": "実行中"},
+        {"wf-a": {"1": "実行中"}},
+        subtask_status={"wf-a": {"1": [("sub-1", "Subtask 1", "実行中")]}},
+    )
+    node = w._step_items[("wf-a", "1")]
+    # 前提: Fanout として認識されている
+    assert node._fanout_total is not None
+    # 初期は折りたたみ
+    assert w._is_step_expanded("wf-a", "1") is False
+    event = _make_double_click_event()
+    # RuntimeError("Internal C++ object ... already deleted") が出ないこと
+    node.mouseDoubleClickEvent(event)
+    # トグルされていること（_toggle_step_expand 経路を通った証跡）
+    assert w._is_step_expanded("wf-a", "1") is True
+    w.deleteLater()
+
+
+def test_step_node_double_click_without_fanout_does_not_raise_runtime_error(qapp):
+    """Fanout を持たない Step ノードのダブルクリックでは super() が呼ばれる経路の回帰確認。
+    こちらは ``_relayout`` を経由しないため self は破棄されず、従来通り例外なしで完了する。
+    """
+    w = DagStatusWidget()
+    steps = [{"id": "1", "title": "T1", "depends_on": []}]
+    w.set_plan(_plan("wf-a", steps), {"wf-a": "実行中"}, {"wf-a": {"1": "実行中"}})
+    node = w._step_items[("wf-a", "1")]
+    # 前提: Fanout 扱いではない
+    assert node._fanout_total is None
+    event = _make_double_click_event()
+    # super() に委譲されても例外なし
+    node.mouseDoubleClickEvent(event)
+    w.deleteLater()
+
+
+def test_workflow_header_double_click_does_not_raise_runtime_error(qapp):
+    """Workflow ヘッダのダブルクリック → ``_toggle_workflow`` → ``_relayout`` →
+    ``scene.clear()`` で self の C++ オブジェクトが破棄された後に super を呼ぶと
+    shiboken の RuntimeError が出ていた回帰の防止。
+    """
+    w = DagStatusWidget()
+    steps = [{"id": "1", "title": "T1", "depends_on": []}]
+    w.set_plan(_plan("wf-a", steps), {"wf-a": "実行中"}, {"wf-a": {"1": "実行中"}})
+    header = w._wf_items["wf-a"]
+    # 初期は展開
+    assert w._is_workflow_expanded("wf-a") is True
+    event = _make_double_click_event()
+    # RuntimeError("Internal C++ object ... already deleted") が出ないこと
+    header.mouseDoubleClickEvent(event)
+    # トグルされていること（_toggle_workflow 経路を通った証跡）
+    assert w._is_workflow_expanded("wf-a") is False
+    w.deleteLater()
+
+
+@pytest.mark.parametrize(
+    "input_value,expected",
+    [
+        ("blocked", "blocked"),
+        ("ブロック", "blocked"),
+    ],
+)
+def test_normalize_status_accepts_blocked(input_value, expected):
+    """``_normalize_status`` が blocked 表記 (英語/日本語) を blocked に正規化することを検証する。
+
+    state_text が "ブロック" のときに pending に丸められて消失する回帰を防ぐ。
+    """
+    from hve.gui.widgets.dag_status_widget import _normalize_status
+
+    assert _normalize_status(input_value) == expected
+
+
+def test_blocked_status_has_glyph_and_color():
+    """blocked status が絵文字・色 (light/dark) を持つことを検証する。
+
+    DAG widget で blocked 状態のノードが未定義キーで KeyError を起こさないことを保証する。
+    """
+    from hve.gui.widgets.dag_status_widget import (
+        _STATUS_GLYPH,
+        _STATUS_COLOR_LIGHT,
+        _STATUS_COLOR_DARK,
+    )
+
+    assert "blocked" in _STATUS_GLYPH
+    assert "blocked" in _STATUS_COLOR_LIGHT
+    assert "blocked" in _STATUS_COLOR_DARK
+    # 空文字でないこと（実色が割り当てられていること）
+    assert _STATUS_GLYPH["blocked"]
+    assert _STATUS_COLOR_LIGHT["blocked"]
+    assert _STATUS_COLOR_DARK["blocked"]
 

@@ -7,6 +7,3 @@ outputs:
 - path: docs-generated/files/{relative-path}.md
   required: true
   mode: create
-- path: '| インポート先 | 種別(内部/外部) | 用途 |'
-  required: true
-  mode: create

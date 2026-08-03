@@ -57,7 +57,7 @@ _issue_parser_resolve_token() {
 #
 # Args:
 #   BODY — Issue body text (positional argument)
-#   KEY  — Metadata key name (e.g. "root-issue", "branch", "auto-review")
+#   KEY  — Metadata key name (e.g. "root-issue", "branch", "adversarial-review")
 #
 # Output:
 #   Value string on stdout, or empty string if not found.

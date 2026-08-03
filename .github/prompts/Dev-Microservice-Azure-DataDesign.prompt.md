@@ -1,6 +1,6 @@
 > Polyglot Persistence に基づき、指定ユースケースの全エンティティに対する最適 Azure データストア選定と根拠、整合性/運用方針を docs/azure/azure-services-data.md に文書化する。
 
-> **WORK**: `/work/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-DataDesign/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -13,6 +13,8 @@
 - **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **`report_progress` 必須**: `report_progress.prDescription` に検証記録を必ず含める。推奨形式は `- [x] <!-- validation-confirmed --> 検証・セキュリティ確認を実施する`。
+- **最終回答のみ記載は不可**: 最終 assistant message だけに `<!-- validation-confirmed -->` を書いても不十分。PR body 反映対象の `report_progress.prDescription` に含めること。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
 - **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
@@ -60,6 +62,11 @@
 - 公式根拠を優先（Microsoft Learn / 公式ドキュメントが取得できる場合はリンクを残す）。取得できない場合は「確認できていない」旨を明記してTBDにする。
 - ツールは **必要なときだけ**使う（無目的な全探索は禁止）。
 
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+
 ## 4) 実行手順（順序固定）
 ### 5.1 まずスコープ固定（AC/非対象）
 - `azure-services-data.md` の「0. 概要」に入れる粒度で、ユースケース要約と評価軸を確定する。
@@ -80,6 +87,11 @@
 - Rationale（3〜6行：なぜ最適か）
 - Alternatives（最大2つ：短く）
 - Evidence（根拠リンク：取れない場合は `TBD (need official link)`）
+
+`AuditRecord`で次の方式を選ぶ場合、後続Stepが同じmodeを決定的に解決できるよう、`Chosen Azure service（正式名称）`には次のcanonical値を使用する。末尾句点は任意。Markdown装飾を付ける場合はbalancedな`**...**` / `` `...` `` / `*...*`の3形式だけを使用し、`_..._` / `~~...~~`等は使用しない。
+
+- SQL ledger + digest: `Azure SQL Database の append-only ledger table（SVC-12 の監査証拠 SoT）+ Azure confidential ledger（信頼済み database digest 保管先、条件付き）`
+- ACL direct: `Azure confidential ledger（AuditRecord を直接格納）`
 
 ### 5.4 ストア間の整合性/同期戦略
 - “単一ストアで完結しない” 前提の整合性方針を決める。
@@ -128,7 +140,7 @@
 - まず `large-output-chunking` スキルのルールに従う。
 - それでも書き込みが失敗する場合のみ、見出し境界で **小さめのチャンク（例：1〜2千文字）**にして追記で復旧する（全置換を避ける）。
 
-## 6) セルフチェック（出力前に必ず確認）
+## 8) 最終品質レビュー（単回インライン・セルフチェック）
 
 ### 8.1 事前チェック（実装後の簡潔検証）
 成果物をレビューに入れる前に、以下が満たされているか確認する：
@@ -137,27 +149,27 @@
 - 整合性/同期戦略がユースケースの要件に矛盾していない
 - 質問が3つ以内、かつ本当にブロッカーのみ
 
-### 8.2 品質レビュー（異なる観点で3度のレビュー）
-- Skill adversarial-review に従う。
+### 8.2 ドメイン固有観点
 
-#### 3つの異なる観点（Azure データストア選定設計の場合）
-- **1回目：技術妥当性・要件達成度**
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+- **技術妥当性・要件達成度**
   - Polyglot Persistence の選定根拠が正しいか
   - 各エンティティの特性と Access patterns から最適なストアが選ばれているか
   - AC がすべて満たされているか
   - 根拠リンクは十分か
 
-- **2回目：ユーザー/運用視点**
+- **ユーザー/運用視点**
   - ドキュメントがわかりやすいか
   - 開発チーム/運用チームが実装・運用できるレベルの詳細度か
   - ストア間整合性戦略は明確か
   - 障害時の回復方法まで記述されているか
 
-- **3回目：保守性・拡張性・スケーラビリティ**
+- **保守性・拡張性・スケーラビリティ**
   - エンティティ追加時の変更容易性
   - ストア間同期の堅牢性とリカバリ戦略
   - 新たな Azure データサービス（オプション）への対応余地
   - ドキュメント保守性と見直し周期の妥当性
 
-### 8.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 8.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。

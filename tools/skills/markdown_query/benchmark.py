@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import hashlib
 import json
 import platform
 import statistics
@@ -62,7 +63,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from mdq import indexer, search as searcher, store  # noqa: E402
+from mdq import golden_eval, indexer, search as searcher, store  # noqa: E402
 
 try:
     from mdq.cli import DEFAULT_ROOTS  # type: ignore[attr-defined]  # noqa: E402
@@ -76,7 +77,7 @@ except ImportError:
 try:
     import tiktoken  # type: ignore
 
-    _ENC = tiktoken.get_encoding("cl100k_base")
+    _ENC: Any = tiktoken.get_encoding("cl100k_base")
     TOKENIZER = "tiktoken/cl100k_base"
 
     def count_tokens(text: str) -> int:
@@ -145,9 +146,33 @@ def baseline_full(repo_root: Path, roots: list[str],
 # ---------------------------------------------------------------------------
 # Query loading
 # ---------------------------------------------------------------------------
+def _resolve_repo_input(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else REPO_ROOT / path
+
+
 def load_queries(args: argparse.Namespace) -> list[dict[str, Any]]:
-    """Returns [{q: str, expected_paths: list[str] | None}, ...]."""
+    """Returns [{q: str, expected_paths: list[str] | None}, ...].
+
+    ``--golden`` を渡した場合は ``expected_hits`` (list[ExpectedHit]) と
+    per-query ``paths`` を追加し、FR-MDQ-01 の top-1 / top-k 採点を有効にする。
+    """
     out: list[dict[str, Any]] = []
+    if getattr(args, "golden", None):
+        golden_path = _resolve_repo_input(args.golden)
+        try:
+            gqs = golden_eval.load_golden(golden_path, REPO_ROOT)
+        except golden_eval.GoldenSetError as exc:
+            raise SystemExit(f"ERROR: {exc}")
+        for gq in gqs:
+            out.append({
+                "id": gq.id,
+                "q": gq.q,
+                "group": gq.group,
+                "expected_paths": [e.path for e in gq.expected],
+                "expected_hits": list(gq.expected),
+                "paths": list(gq.paths) or None,
+            })
     if args.queries_json:
         data = json.loads(Path(args.queries_json).read_text(encoding="utf-8"))
         if not isinstance(data, list):
@@ -200,12 +225,33 @@ def _stats_ms(samples: list[float]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Golden scoring (FR-MDQ-01; judgement itself lives in mdq.golden_eval)
+# ---------------------------------------------------------------------------
+def _golden_summary(per_query: list[dict[str, Any]],
+                    top_k: int) -> dict[str, Any] | None:
+    """Aggregate golden scores overall and per group. None when not scored."""
+    scored = [r for r in per_query if "top1" in r]
+    if not scored:
+        return None
+    out: dict[str, Any] = {"overall": golden_eval.aggregate(scored, top_k)}
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for r in scored:
+        groups.setdefault(r.get("group") or "(none)", []).append(r)
+    out["per_group"] = {
+        name: golden_eval.aggregate(rows, top_k)
+        for name, rows in sorted(groups.items())
+    }
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Search scenario runner
 # ---------------------------------------------------------------------------
 def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
                         top_k: int, max_tokens: int, repeat: int,
                         path_globs: list[str] | None,
-                        baseline_tokens_total: int) -> dict[str, Any]:
+                        baseline_tokens_total: int,
+                        ignore_golden_paths: bool = False) -> dict[str, Any]:
     """Run one search scenario (bm25 or grep) for all queries."""
     per_query: list[dict[str, Any]] = []
     all_latencies_ms: list[float] = []
@@ -215,10 +261,14 @@ def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
     for entry in queries:
         q = entry["q"]
         expected = entry.get("expected_paths") or []
+        expected_hits = entry.get("expected_hits") or []
+        entry_paths = path_globs if ignore_golden_paths else (
+            entry.get("paths") or path_globs
+        )
 
         # Warmup
         searcher.search(conn, q, mode=mode, top_k=top_k,
-                        max_tokens=max_tokens, path_globs=path_globs)
+                        max_tokens=max_tokens, path_globs=entry_paths)
 
         latencies: list[float] = []
         last_hits = []
@@ -226,7 +276,7 @@ def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
             t0 = time.perf_counter()
             last_hits = searcher.search(
                 conn, q, mode=mode, top_k=top_k,
-                max_tokens=max_tokens, path_globs=path_globs,
+                max_tokens=max_tokens, path_globs=entry_paths,
             )
             t1 = time.perf_counter()
             latencies.append((t1 - t0) * 1000.0)
@@ -251,7 +301,7 @@ def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
                 (1 - resp_tokens / baseline_tokens_total) * 100, 4
             )
 
-        per_query.append({
+        row: dict[str, Any] = {
             "query": q,
             "hits": len(last_hits),
             "hit_paths": hit_paths,
@@ -261,7 +311,12 @@ def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
             "latency_ms": _stats_ms(latencies),
             "coverage_proxy": coverage,
             "expected_paths": expected or None,
-        })
+        }
+        if expected_hits:
+            row["id"] = entry.get("id")
+            row["group"] = entry.get("group")
+            row.update(golden_eval.score_query(last_hits, expected_hits, top_k))
+        per_query.append(row)
 
     avg_tokens: float | None = None
     avg_savings: float | None = None
@@ -279,6 +334,7 @@ def run_search_scenario(conn, mode: str, queries: list[dict[str, Any]], *,
         "avg_response_tokens": avg_tokens,
         "avg_vs_baseline_savings_pct": avg_savings,
         "latency_ms_all": _stats_ms(all_latencies_ms),
+        "golden": _golden_summary(per_query, top_k),
         "per_query": per_query,
     }
 
@@ -299,11 +355,71 @@ def _git_commit() -> str | None:
     return None
 
 
+def _sha256_file(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _sha256_tree(paths: list[Path]) -> str:
+    """Hash relative names and bytes so equal trees have one audit value."""
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda item: item.as_posix()):
+        relative = path.relative_to(REPO_ROOT).as_posix().encode("utf-8")
+        digest.update(relative + b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _dependency_sha256() -> str | None:
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "freeze", "--all"],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    normalized = "\n".join(sorted(line.strip() for line in result.stdout.splitlines()
+                                    if line.strip())) + "\n"
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _build_provenance(args: argparse.Namespace) -> dict[str, Any]:
+    golden_path = (_resolve_repo_input(args.golden).resolve()
+                   if getattr(args, "golden", None) else None)
+    engine_paths = [
+        path for path in (REPO_ROOT / "mdq").rglob("*.py")
+        if path.is_file() and "__pycache__" not in path.parts
+    ]
+    return {
+        "engine_sha256": _sha256_tree(engine_paths),
+        "config_sha256": _sha256_file(REPO_ROOT / "mdq.toml"),
+        "golden_sha256": _sha256_file(golden_path) if golden_path else None,
+        "dependency_sha256": _dependency_sha256(),
+    }
+
+
+def _report_path_for_summary(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
 def build_report(args: argparse.Namespace, queries: list[dict[str, Any]],
                  baseline: dict[str, Any] | None,
                  scenario_results: dict[str, dict[str, Any]],
                  index_summary: dict[str, Any] | None,
-                 started_at: str, finished_at: str) -> dict[str, Any]:
+                 started_at: str, finished_at: str,
+                 database_paths: dict[str, str]) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "started_at": started_at,
@@ -323,8 +439,13 @@ def build_report(args: argparse.Namespace, queries: list[dict[str, Any]],
             "path_globs": args.paths,
             "queries_file": args.queries_file,
             "queries_json": args.queries_json,
+            "golden": getattr(args, "golden", None),
+            "ignore_golden_paths": bool(getattr(args, "ignore_golden_paths", False)),
+            "db": args.db,
             "queries_count": len(queries),
         },
+        "database_paths": dict(sorted(database_paths.items())),
+        "provenance": _build_provenance(args),
         "index": index_summary,
         "baseline_full": baseline,
         "scenarios": scenario_results,
@@ -406,7 +527,7 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
 
     base_tokens = base["tokens"] if base else 0
 
-    if report["scenarios"]:
+    if report["scenarios"] and base_tokens:
         lines.append("## Skillなし vs Skillあり 直接比較")
         lines.append("")
         lines.append("各 Prompt について、")
@@ -421,9 +542,9 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             lines.append("|---:|---|---:|---:|---:|---:|---:|")
             for i, q in enumerate(s["per_query"], 1):
                 skill_tok = q["response_tokens"]
-                reduced = base_tokens - skill_tok if base_tokens else None
+                reduced = base_tokens - skill_tok
                 sv = (f"{q['vs_baseline_savings_pct']:.2f}%"
-                      if q["vs_baseline_savings_pct"] is not None else "n/a")
+                      if q.get("vs_baseline_savings_pct") is not None else "n/a")
                 lines.append(
                     f"| {i} | `{q['query']}` | {base_tokens:,} | {skill_tok:,} | "
                     f"{reduced:,} | {sv} | {q['latency_ms']['mean']} |"
@@ -431,7 +552,7 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             # Summary row for the scenario.
             if s["avg_response_tokens"] is not None:
                 avg_tok = s["avg_response_tokens"]
-                avg_reduced = (base_tokens - avg_tok) if base_tokens else None
+                avg_reduced = base_tokens - avg_tok
                 avg_sv = (f"{s['avg_vs_baseline_savings_pct']:.2f}%"
                           if s["avg_vs_baseline_savings_pct"] is not None else "n/a")
                 lines.append(
@@ -439,6 +560,35 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
                     f"**{avg_reduced:,.0f}** | **{avg_sv}** | "
                     f"**{s['latency_ms_all']['mean']}** |"
                 )
+            lines.append("")
+
+    if report["scenarios"]:
+        golden_scenarios = {n: s for n, s in report["scenarios"].items()
+                            if s.get("golden")}
+        if golden_scenarios:
+            lines.append("## Golden query 正解率（FR-MDQ-01）")
+            lines.append("")
+            lines.append("正解判定は「ヒットの path が期待 path と一致し、かつヒットの行範囲が"
+                         "期待行番号を含む」ことをもって行います（パス一致のみは不正解）。"
+                         "判定実装は `mdq/golden_eval.py` の単一実装です。"
+                         "MRR@k は先頭 k 件のうち最初の正解の順位の逆数の平均で、"
+                         "k 件内に正解が無いクエリの寄与は 0 です。")
+            lines.append("")
+            lines.append("| scenario | group | queries | top-1 正解率 | top-k 正解率 | MRR@k |")
+            lines.append("|---|---|---:|---:|---:|---:|")
+            for name, s in golden_scenarios.items():
+                g = s["golden"]
+                for label, agg in [("(overall)", g["overall"])] + \
+                        sorted(g.get("per_group", {}).items()):
+                    t1 = ("n/a" if agg["top1_accuracy"] is None
+                          else f"{agg['top1_accuracy'] * 100:.1f}%")
+                    tk = ("n/a" if agg["topk_accuracy"] is None
+                          else f"{agg['topk_accuracy'] * 100:.1f}%")
+                    mrr = ("n/a" if agg["mrr_at_k"] is None
+                           else f"{agg['mrr_at_k']:.4f}")
+                    lines.append(
+                        f"| {name} | {label} | {agg['queries']} | {t1} | {tk} | {mrr} |"
+                    )
             lines.append("")
 
         lines.append("## Scenario summary（シナリオ集計）")
@@ -456,7 +606,8 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
             savings = (f"{s['avg_vs_baseline_savings_pct']:.4f}%"
                        if s["avg_vs_baseline_savings_pct"] is not None else "n/a")
             lines.append(
-                f"| {name} | {s['queries']} | {s['avg_response_tokens']} | "
+                f"| {name} | {s.get('queries', len(s['per_query']))} | "
+                f"{s['avg_response_tokens']} | "
                 f"{savings} | "
                 f"{lat['mean']} / {lat['p50']} / {lat['p95']} |"
             )
@@ -470,21 +621,23 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
         lines.append("- **savings %**: baseline_full の全文トークン数に対する削減率（= 1 − tokens / baseline_tokens）")
         lines.append("- **mean ms / p95 ms**: 検索処理だけの所要時間。`--repeat` 回の計測値から算出（p95 は n≥5 のときのみ）")
         lines.append("- **coverage**: `queries.json` で `expected_paths` を指定したときのみ算出される、期待パスがヒットに含まれた割合")
+        lines.append("- **rank**: `--golden` 指定時のみ。期待行を含むチャンクが何位に現れたか（`-` = top-k 内になし）")
         lines.append("")
         for name, s in report["scenarios"].items():
             lines.append(f"### {name} — per query")
             lines.append("")
-            lines.append("| query | hits | tokens | savings % | mean ms | p95 ms | coverage |")
-            lines.append("|---|---:|---:|---:|---:|---:|---:|")
+            lines.append("| query | hits | tokens | savings % | mean ms | p95 ms | coverage | rank |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
             for q in s["per_query"]:
                 cov = (f"{q['coverage_proxy']:.4f}"
-                       if q["coverage_proxy"] is not None else "n/a")
+                       if q.get("coverage_proxy") is not None else "n/a")
                 sv = (f"{q['vs_baseline_savings_pct']:.4f}"
-                      if q["vs_baseline_savings_pct"] is not None else "n/a")
+                      if q.get("vs_baseline_savings_pct") is not None else "n/a")
                 lines.append(
                     f"| `{q['query']}` | {q['hits']} | {q['response_tokens']} "
                     f"| {sv} | {q['latency_ms']['mean']} "
-                    f"| {q['latency_ms']['p95']} | {cov} |"
+                    f"| {q['latency_ms'].get('p95')} | {cov} "
+                    f"| {q.get('rank') if q.get('rank') is not None else '-'} |"
                 )
             lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -504,6 +657,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
                     help="File with one query per line (# comments allowed)")
     ap.add_argument("--queries-json",
                     help='JSON array of {"q": "...", "expected_paths": [...]}')
+    ap.add_argument("--golden",
+                    help="Golden query set JSON (FR-MDQ-01). Enables top-1 / "
+                         "top-k accuracy scoring via mdq.golden_eval")
+    ap.add_argument("--ignore-golden-paths", action="store_true",
+                    help="Ignore the per-query 'paths' filter declared by the "
+                         "golden set and search the whole repository "
+                         "(FR-MDQ-04 broad condition)")
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--max-tokens", type=int, default=800)
     ap.add_argument("--repeat", type=int, default=3,
@@ -551,6 +711,7 @@ def main(argv: list[str] | None = None) -> int:
 
     roots = args.root or DEFAULT_ROOTS
     conn = store.open_store(args.db)
+    database_paths: dict[str, str] = {"primary": str(Path(args.db).resolve())}
 
     index_summary: dict[str, Any] | None = None
     if args.ensure_index:
@@ -570,9 +731,11 @@ def main(argv: list[str] | None = None) -> int:
                 print("ERROR: no chunks in index. Pass --ensure-index or run "
                       "`mdq index` (or `python -m mdq index`) first.",
                       file=sys.stderr)
+                conn.close()
                 return 2
         except Exception as exc:
             print(f"ERROR: index check failed: {exc}", file=sys.stderr)
+            conn.close()
             return 2
 
     started_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -594,7 +757,9 @@ def main(argv: list[str] | None = None) -> int:
             return _strategy_conns[strategy]
         db_p = REPO_ROOT / store.db_path_for(lang="ja-jp", strategy=strategy)
         if not db_p.exists():
+            database_paths[f"strategy:{strategy}:fallback"] = database_paths["primary"]
             return None
+        database_paths[f"strategy:{strategy}"] = str(db_p.resolve())
         c = store.open_store(db_p, lang="ja-jp")
         _strategy_conns[strategy] = c
         return c
@@ -619,6 +784,9 @@ def main(argv: list[str] | None = None) -> int:
             total_hits_n = 0
             for entry in queries:
                 q = entry["q"]
+                entry_paths = args.paths if args.ignore_golden_paths else (
+                    entry.get("paths") or args.paths
+                )
                 decision = _qr.classify_query(
                     q,
                     available_strategies=available if available else None,
@@ -628,14 +796,14 @@ def main(argv: list[str] | None = None) -> int:
                 # warmup
                 searcher.search(c, q, mode="bm25", top_k=args.top_k,
                                 max_tokens=args.max_tokens,
-                                path_globs=args.paths)
+                                path_globs=entry_paths)
                 lats: list[float] = []
                 hits = []
                 for _ in range(args.repeat):
                     t0 = time.perf_counter()
                     hits = searcher.search(
                         c, q, mode="bm25", top_k=args.top_k,
-                        max_tokens=args.max_tokens, path_globs=args.paths,
+                        max_tokens=args.max_tokens, path_globs=entry_paths,
                     )
                     t1 = time.perf_counter()
                     lats.append((t1 - t0) * 1000.0)
@@ -646,13 +814,18 @@ def main(argv: list[str] | None = None) -> int:
                 total_tokens += resp_tokens
                 total_hits_n += len(hits)
                 all_lat.extend(lats)
-                auto_per_query.append({
+                auto_row: dict[str, Any] = {
                     "query": q,
                     "hits": len(hits),
                     "response_tokens": resp_tokens,
                     "router_strategy": decision.strategy,
                     "router_reason": decision.reason,
                     "router_fallback_used": decision.fallback_used,
+                    "database_path": next(
+                        (str(Path(row[2]).resolve()) for row in c.execute(
+                            "PRAGMA database_list").fetchall() if row[1] == "main"),
+                        database_paths["primary"],
+                    ),
                     "latency_ms": {
                         "mean": round(statistics.mean(lats), 3),
                         "p50": round(statistics.median(lats), 3),
@@ -660,7 +833,14 @@ def main(argv: list[str] | None = None) -> int:
                             statistics.quantiles(lats, n=20)[18]
                             if len(lats) >= 2 else lats[0], 3),
                     },
-                })
+                }
+                expected_hits = entry.get("expected_hits") or []
+                if expected_hits:
+                    auto_row["id"] = entry.get("id")
+                    auto_row["group"] = entry.get("group")
+                    auto_row.update(golden_eval.score_query(
+                        hits, expected_hits, args.top_k))
+                auto_per_query.append(auto_row)
             avg_tokens = total_tokens / max(1, len(queries))
             savings_pct = (
                 round((1.0 - avg_tokens / (baseline_tokens_total / max(1, len(queries)))) * 100.0, 2)
@@ -679,6 +859,7 @@ def main(argv: list[str] | None = None) -> int:
                 },
                 "total_hits": total_hits_n,
                 "scenarios_used": sorted(_strategy_conns.keys()),
+                "golden": _golden_summary(auto_per_query, args.top_k),
             }
             scenario_results[scenario] = r
             print(json.dumps({
@@ -695,6 +876,7 @@ def main(argv: list[str] | None = None) -> int:
             top_k=args.top_k, max_tokens=args.max_tokens,
             repeat=args.repeat, path_globs=args.paths,
             baseline_tokens_total=baseline_tokens_total,
+            ignore_golden_paths=args.ignore_golden_paths,
         )
         scenario_results[scenario] = r
         print(json.dumps({
@@ -707,7 +889,8 @@ def main(argv: list[str] | None = None) -> int:
 
     finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     report = build_report(args, queries, baseline, scenario_results,
-                          index_summary, started_at, finished_at)
+                          index_summary, started_at, finished_at,
+                          database_paths)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -723,14 +906,17 @@ def main(argv: list[str] | None = None) -> int:
 
     summary_line = {
         "event": "summary",
-        "json_report": str(json_path.relative_to(REPO_ROOT).as_posix()),
-        "markdown_report": (str(md_path.relative_to(REPO_ROOT).as_posix())
+        "json_report": _report_path_for_summary(json_path),
+        "markdown_report": (_report_path_for_summary(md_path)
                             if md_path else None),
         "tokenizer": TOKENIZER,
         "queries": len(queries),
         "scenarios": list(scenario_results.keys()),
     }
     print(json.dumps(summary_line, ensure_ascii=False))
+    for strategy_conn in _strategy_conns.values():
+        strategy_conn.close()
+    conn.close()
     return 0
 
 

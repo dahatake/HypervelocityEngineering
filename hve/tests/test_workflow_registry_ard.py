@@ -56,21 +56,21 @@ class TestARDWorkflowRegistration(unittest.TestCase):
         ])
 
     def test_steps_ids(self):
-        # Sub-10 (ADR-0003): ARD は 7 step + Step 3 (任意・KPI/OKR 定義) に拡張
+        # Sub-10 (ADR-0003) + step renumber: ARD は 8 step (Step 2.1 = KPI/OKR 任意, 3.1/3.2/3.3 = UC ケース生成)
         wf = get_workflow("ard")
         ids = [s.id for s in wf.steps]
-        self.assertEqual(ids, ["1", "1.1", "1.2", "2", "3", "4.1", "4.2", "4.3"])
+        self.assertEqual(ids, ["1", "1.1", "1.2", "2", "2.1", "3.1", "3.2", "3.3"])
 
-    def test_step_3_kpi_okr_definition(self):
-        """Step 3 (KPI/OKR 定義) が正しく登録されていること。"""
+    def test_step_2_1_kpi_okr_definition(self):
+        """Step 2.1 (KPI/OKR 定義) が正しく登録されていること。"""
         wf = get_workflow("ard")
-        s = wf.get_step("3")
+        s = wf.get_step("2.1")
         self.assertIsNotNone(s)
         self.assertEqual(s.custom_agent, "Arch-ARD-KPIOKRDefinition")
         self.assertEqual(s.depends_on, ["2"])
         self.assertEqual(s.skip_fallback_deps, ["1.2"])
         self.assertEqual(s.output_paths, ["docs/recommended-kpi-okr.md"])
-        self.assertEqual(s.body_template_path, "templates/ard/step-3.md")
+        self.assertEqual(s.body_template_path, "templates/ard/step-2.1.md")
 
     def test_step_1_definition(self):
         # Sub-10: Step 1 は「事業分野候補列挙」
@@ -111,34 +111,32 @@ class TestARDWorkflowRegistration(unittest.TestCase):
         self.assertEqual(s.skip_fallback_deps, ["1.2"])
         self.assertEqual(s.output_paths, ["docs/business-requirement.md"])
 
-    def test_step_4_1_skeleton_extraction(self):
-        # Sub-10: Step 4.1 はユースケース骨格抽出
+    def test_step_3_1_skeleton_extraction(self):
+        # Step 3.1 (旧 4.1) はユースケース骨格抽出
         wf = get_workflow("ard")
-        s = wf.get_step("4.1")
+        s = wf.get_step("3.1")
         self.assertIsNotNone(s)
         self.assertEqual(s.custom_agent, "Arch-ARD-UseCaseCatalog")
         self.assertEqual(s.depends_on, ["2"])
         self.assertEqual(s.skip_fallback_deps, ["1.2"])
         self.assertEqual(s.output_paths, ["docs/catalog/use-case-skeleton.md"])
-        # required_input_paths は空（business-requirement.md / company-business-requirement.md は
-        # いずれも skip_fallback により片方しか生成されない経路があるため、consumed_artifacts 経由）。
         self.assertEqual(s.required_input_paths, [])
 
-    def test_step_4_2_is_fanout(self):
-        # Sub-10: Step 4.2 はユースケース詳細生成の fan-out
+    def test_step_3_2_is_fanout(self):
+        # Step 3.2 (旧 4.2) はユースケース詳細生成の fan-out
         wf = get_workflow("ard")
-        s = wf.get_step("4.2")
+        s = wf.get_step("3.2")
         self.assertIsNotNone(s)
-        self.assertEqual(s.depends_on, ["4.1"])
+        self.assertEqual(s.depends_on, ["3.1"])
         self.assertEqual(s.fanout_parser, "use_case_skeleton")
         self.assertEqual(s.output_paths_template, ["docs/usecase/{key}-detail.md"])
 
-    def test_step_4_3_is_join(self):
-        # Sub-10: Step 4.3 はカタログ統合 (join)
+    def test_step_3_3_is_join(self):
+        # Step 3.3 (旧 4.3) はカタログ統合 (join)
         wf = get_workflow("ard")
-        s = wf.get_step("4.3")
+        s = wf.get_step("3.3")
         self.assertIsNotNone(s)
-        self.assertEqual(s.depends_on, ["4.2"])
+        self.assertEqual(s.depends_on, ["3.2"])
         self.assertEqual(s.output_paths, ["docs/catalog/use-case-catalog.md"])
         self.assertIsNone(s.fanout_parser)
 
@@ -154,24 +152,24 @@ class TestARDWorkflowRegistration(unittest.TestCase):
         self.assertEqual(wf.max_parallel, 15)
 
     def test_next_steps_after_completing_1_2(self):
-        """1.2 完了 → 2 が skipped 扱いなら Step 4.1 が起動可能になること（事業未定経路）。"""
+        """1.2 完了 → 2 が skipped 扱いなら Step 3.1 が起動可能になること（事業未定経路）。"""
         nexts = get_next_steps(
             "ard",
             completed_step_ids=["1", "1.1", "1.2"],
             skipped_step_ids=["2"],
         )
         ids = [s.id for s in nexts]
-        self.assertIn("4.1", ids)
+        self.assertIn("3.1", ids)
 
     def test_next_steps_after_completing_2(self):
-        """2 完了 → 1/1.1/1.2 が skip 扱いなら Step 4.1 が起動可能になること（target_business 指定経路）。"""
+        """2 完了 → 1/1.1/1.2 が skip 扱いなら Step 3.1 が起動可能になること（target_business 指定経路）。"""
         nexts = get_next_steps(
             "ard",
             completed_step_ids=["2"],
             skipped_step_ids=["1", "1.1", "1.2"],
         )
         ids = [s.id for s in nexts]
-        self.assertIn("4.1", ids)
+        self.assertIn("3.1", ids)
 
 
 class TestARDWizardOrder(unittest.TestCase):

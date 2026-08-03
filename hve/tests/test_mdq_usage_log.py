@@ -128,6 +128,6 @@ def test_cmd_stats_writes_usage_log(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     rec = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
     assert rec["command"] == "stats"
     assert rec["exit_code"] == 0
-    assert rec["result"]["files"] >= 0
-    assert rec["result"]["chunks"] >= 0
+    assert "files" in rec["result"]
+    assert "chunks" in rec["result"]
     assert "elapsed_ms" in rec

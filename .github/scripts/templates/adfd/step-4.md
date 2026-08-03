@@ -2,12 +2,11 @@
 
 {app_arch_scope_section}
 ## 目的
-ジョブ設計書・データモデル・ドメイン分析を統合してデータフローアプリ版サービスカタログを作成する。
+データフローアプリカタログに基づき、各ジョブの実行に必要な Azure サービスマッピング・DLQ 設定・依存関係マトリクスを作成する。
 
 ## 入力
 - `docs/dataflow/dataflow-app-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
-- `docs/dataflow/dataflow-domain-analytics.md`
+- `docs/catalog/service-catalog-matrix.md`
 
 ## 出力
 - `docs/dataflow/dataflow-service-catalog.md`
@@ -18,8 +17,8 @@
 `Arch-Dataflow-ServiceCatalog` を使用
 
 ## 依存
-- Step.3（ジョブ設計書）が `adfd:done` であること
+- Step.0.2（データフローアプリカタログ）が `adfd:done` であること
 
 ## 完了条件
-- `docs/dataflow/dataflow-service-catalog.md` が作成されている
+- `docs/dataflow/dataflow-service-catalog.md` が作成され、`## 2. ジョブ → Azure サービスマッピング表` を含んでいる
 {completion_instruction}{additional_section}

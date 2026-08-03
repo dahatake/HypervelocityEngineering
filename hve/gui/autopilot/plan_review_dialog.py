@@ -118,12 +118,9 @@ class Step1PlanReviewDialog(QDialog):
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         self._ok_button.setText(self.tr("このプランで実行"))
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(self.tr("キャンセル"))
-        # ギャップが残っている場合は OK を無効化（誤実行防止、Critical #2）
-        if review.has_blocking_gaps:
-            self._ok_button.setEnabled(False)
-            self._ok_button.setToolTip(self.tr(
-                "ギャップ提案を [適用] するか、不足ファイルを手動配置してから実行してください。"
-            ))
+        # ブロッキング判定は Phase A Precheck (`run_step1_precheck`) に統一済み。
+        # 本 Dialog の `gaps` は補完サジェスト表示のみで OK ボタンを無効化しない
+        # （`AutopilotPlanReview.has_blocking_gaps` は常に False を返す）。
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         outer.addWidget(buttons)

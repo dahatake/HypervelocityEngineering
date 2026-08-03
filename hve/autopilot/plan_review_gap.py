@@ -33,7 +33,7 @@ from .plan_review_model import (
 # canonical order (hve/gui/page_options.py:_WORKFLOW_CANONICAL_ORDER と同期必須)
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "akm", "aqod", "adoc",
+    "aag", "aagd", "akm", "aqod", "adoc",
 ]
 
 # ARD: 実 Step ID → グループ ID 逆マップ。
@@ -49,6 +49,21 @@ def _build_ard_step_to_group() -> Dict[str, str]:
 
 
 _ARD_STEP_TO_GROUP: Dict[str, str] = _build_ard_step_to_group()
+
+
+def _has_unexpanded_placeholder(path: str) -> bool:
+    """fanout 未展開プレースホルダ（``{key}``, ``{jobId}`` 等）を含むか。
+
+    fanout 親ステップ未実行段階では個別ファイルは存在しないため、
+    未展開のままギャップ判定対象にすると常に「不足」と誤検知される。
+
+    現 registry に登場するプレースホルダ: ``{key}`` / ``{jobId}`` /
+    ``{serviceId}`` / ``{screenId}`` / ``{agentId}`` / ``{AgentName}`` / ``{AgentID}`` /
+    ``{*NameSlug}``。将来 ``{`` ``}`` を含む正当なファイルパスが追加された
+    場合は本ヘルパを見直すこと。
+    """
+    return "{" in path and "}" in path
+
 
 # Autopilot 固有の暗黙依存（StepDef.required_input_paths に未宣言だが実質必須）。
 # 旧 dependency_resolver._AUTOPILOT_IMPLICIT_REQUIRED_PATHS を移植。
@@ -204,6 +219,12 @@ def compute_gaps_and_resolve_inputs(
 
     for inp in extended:
         if inp.status == FileStatus.EXISTING_REUSABLE:
+            resolved.append(inp)
+            continue
+
+        # fanout 未展開プレースホルダは判定対象から除外（False positive 防止）。
+        # 入力一覧には残すが、status は MISSING_GAP のまま gap 提案は作らない。
+        if _has_unexpanded_placeholder(inp.path):
             resolved.append(inp)
             continue
 

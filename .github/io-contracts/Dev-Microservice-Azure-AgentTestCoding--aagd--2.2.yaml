@@ -1,5 +1,5 @@
 inputs:
-- path: docs/test-specs/{agentId}-test-spec.md
+- path: docs/test-specs/{key}-test-spec.md
   required: true
   kind: agent_artifact
   producer: Arch-TDD-TestSpec--aagd--2.1
@@ -15,7 +15,7 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-ApplicationAnalytics--aas--1
-- path: docs/agent/agent-detail-{agentId}-*.md
+- path: docs/agent/agent-detail-{key}.md
   required: true
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step3--aag--3
@@ -30,23 +30,28 @@ inputs:
 - path: src/test/api/
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-ServiceCoding-AzureFunctions--asdw-web--2.4
-outputs:
-- path: src/test/agent/{AgentName}.Tests/
-  required: true
-  mode: create
-- path: src/test/agent/{AgentName}.Tests/README.md
-  required: true
-  mode: create
+  producer: Dev-Microservice-Azure-ServiceCoding-AzureFunctions--asdw-web--3.3
+# Dev-Microservice-Azure-AgentTestCoding.prompt.md 「knowledge/ 参照（任意・存在する場合のみ）」
+# — 生成物ではなく参照入力。
 - path: knowledge/
   required: false
-  mode: create
+  kind: static
 - path: knowledge/D06-業務ルール-判定表仕様書.md
-  required: true
-  mode: create
+  required: false
+  kind: static
 - path: knowledge/D17-品質保証-UAT-受入パッケージ.md
+  required: false
+  kind: static
+- path: knowledge/D18-Prompt-ガバナンス-入力統制パック.md
+  required: false
+  kind: static
+outputs:
+- path: src/test/agent/{key}.Tests/
   required: true
   mode: create
-- path: knowledge/D18-Prompt-ガバナンス-入力統制パック.md
+- path: src/test/agent/{key}.Tests/README.md
+  required: true
+  mode: create
+- path: tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md
   required: true
   mode: create

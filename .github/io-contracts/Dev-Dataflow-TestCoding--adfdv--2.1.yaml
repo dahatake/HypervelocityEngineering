@@ -1,20 +1,20 @@
 inputs:
-- path: docs/test-specs/{jobId}-test-spec.md
+- path: docs/test-specs/{key}-test-spec.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-TDD-TestSpec--adfd--6.3
+  producer: Arch-Dataflow-TDD-TestSpec--adfd--3
 - path: docs/dataflow/dataflow-test-strategy.md
   required: true
   kind: agent_artifact
   producer: Arch-Dataflow-TestStrategy--adfd--5
-- path: docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md
+- path: docs/dataflow/apps/{key}-spec.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-AppSpec--adfd--6.1
+  producer: Arch-Dataflow-AppSpec--adfd--1
 - path: docs/dataflow/dataflow-data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-Dataflow-DataModel--adfd--2
+  producer: Arch-Dataflow-DataModel--adfd--0.1
 - path: docs/dataflow/dataflow-service-catalog.md
   required: true
   kind: agent_artifact
@@ -23,6 +23,17 @@ inputs:
   required: false
   kind: agent_artifact
   producer: Dev-Dataflow-ServiceCoding--adfdv--2.2
+# Dev-Dataflow-TestCoding.prompt.md 「knowledge/ 参照（任意・存在する場合のみ）」
+# — 生成物ではなく参照入力。
+- path: knowledge/
+  required: false
+  kind: static
+- path: knowledge/D06-業務ルール-判定表仕様書.md
+  required: false
+  kind: static
+- path: knowledge/D17-品質保証-UAT-受入パッケージ.md
+  required: false
+  kind: static
 outputs:
 - path: src/test/dataflow/{jobId}-{jobNameSlug}.Tests/
   required: false
@@ -30,12 +41,6 @@ outputs:
 - path: src/test/dataflow/{jobId}-{jobNameSlug}.Tests/README.md
   required: true
   mode: create
-- path: knowledge/
-  required: false
-  mode: create
-- path: knowledge/D06-業務ルール-判定表仕様書.md
-  required: true
-  mode: create
-- path: knowledge/D17-品質保証-UAT-受入パッケージ.md
+- path: tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md
   required: true
   mode: create

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hve.gui.autopilot.plan_model import AutopilotSelection
-from hve.gui.autopilot.planner import build_plan
+from hve.autopilot.plan_model import AutopilotSelection
+from hve.autopilot.planner import build_plan
 
 
 def _write_catalog(path: Path, rows: list[tuple[str, str]]) -> None:
@@ -505,3 +505,47 @@ def test_build_plan_requested_app_ids_case_insensitive(tmp_path: Path) -> None:
     assert [c.app_id for c in plan.app_chains] == ["APP-01"]
     # unknown としても扱われないことを確認
     assert not any(s.reason.startswith("unknown") for s in plan.skipped)
+
+
+def test_build_plan_routes_noncanonical_architectures(tmp_path: Path) -> None:
+    """非canonicalの非空推薦も二分類し、Autopilot chain から脱落させない。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(
+        p,
+        [
+            ("APP-01", "BFF + 会員管理マイクロサービス"),
+            ("APP-02", "クラウドDWH + BI/Analytics Platform"),
+        ],
+    )
+    plan = build_plan(p, selection=_selection_all_downstream())
+
+    chains = {chain.app_id: chain.workflows for chain in plan.app_chains}
+    assert chains == {
+        "APP-01": ["aad-web", "asdw-web"],
+        "APP-02": ["adfd", "adfdv"],
+    }
+    assert plan.skipped == []
+
+
+def test_build_plan_filters_noncanonical_architecture_by_selection(tmp_path: Path) -> None:
+    """二分類後も未選択workflowのchainは従来どおり除外する。"""
+    p = tmp_path / "catalog.md"
+    _write_catalog(
+        p,
+        [
+            ("APP-01", "BFF + 会員管理マイクロサービス"),
+            ("APP-02", "クラウドDWH + BI/Analytics Platform"),
+        ],
+    )
+    web_only = AutopilotSelection(
+        run_ard=False,
+        run_aas=False,
+        run_aad_web=True,
+        run_asdw_web=True,
+        run_abd=False,
+        run_abdv=False,
+    )
+    plan = build_plan(p, selection=web_only)
+
+    assert [chain.app_id for chain in plan.app_chains] == ["APP-01"]
+    assert [skipped.app_id for skipped in plan.skipped] == ["APP-02"]

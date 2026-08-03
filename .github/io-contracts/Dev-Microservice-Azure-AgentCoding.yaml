@@ -1,5 +1,5 @@
 inputs:
-- path: docs/agent/agent-detail-{agentId}-*.md
+- path: docs/agent/agent-detail-{key}.md
   required: true
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step3
@@ -7,11 +7,11 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step3
-- path: src/test/agent/{AgentName}.Tests/
+- path: src/test/agent/{key}.Tests/
   required: true
   kind: agent_artifact
   producer: Dev-Microservice-Azure-AgentTestCoding
-- path: docs/test-specs/{agentId}-test-spec.md
+- path: docs/test-specs/{key}-test-spec.md
   required: true
   kind: agent_artifact
   producer: Arch-TDD-TestSpec
@@ -22,7 +22,7 @@ inputs:
 - path: docs/azure/azure-services-additional.md
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-AddServiceDesign
+  producer: Dev-Microservice-Azure-AddServiceDesign--asdw-web--2.1
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact
@@ -30,17 +30,17 @@ inputs:
 - path: docs/azure/azure-services-data.md
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-DataDesign
+  producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
 - path: src/agent/
   required: false
   kind: agent_artifact
   producer: Dev-Microservice-Azure-AgentCoding
 outputs:
-- path: src/agent/{AgentID}-{AgentName}/
+- path: src/agent/{key}/
   required: true
   mode: create
 - path: agent-config.json
@@ -49,7 +49,7 @@ outputs:
 - path: appsettings.json
   required: true
   mode: create
-- path: src/agent/{AgentID}-{AgentName}/README.md
+- path: src/agent/{key}/README.md
   required: true
   mode: create
 - path: '{WORK}'

@@ -21,6 +21,14 @@ except Exception:
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3040-\u30ff\u4e00-\u9fff]")
 
+# SQLite の trigram トークナイザは 3 文字未満の語を索引しない。
+_MIN_TRIGRAM_CHARS = 3
+
+# FR-MDQ-06: BM25 の文書長正規化係数。両実装へ同じ値を適用する。
+# 0.2 は、開発用とホールドアウトの 2 つのゴールデン集で filtered / broad の
+# いずれも従来値 0.75 を下回らなかった唯一の候補（FR-MDQ-04 の計測による）。
+LENGTH_NORM_B = 0.2
+
 
 def tokenize(text: str) -> list[str]:
     return [t.lower() for t in _TOKEN_RE.findall(text)]
@@ -113,6 +121,14 @@ def _make_snippet(text: str, query_tokens: list[str], radius: int = 2,
     return snippet
 
 
+def _excerpt(text: str, query_tokens: list[str], radius: int,
+             return_unit: str) -> str:
+    """Return the hit excerpt at the requested granularity (FR-MDQ-03)."""
+    if return_unit == "chunk":
+        return text
+    return _make_snippet(text, query_tokens, radius=radius)
+
+
 def _path_matches(path: str, globs: list[str]) -> bool:
     if not globs:
         return True
@@ -132,6 +148,52 @@ def _tag_matches(tags_json: str | None, wanted: list[str]) -> bool:
         return False
     tagset = {str(t).lower() for t in tags}
     return all(w.lower() in tagset for w in wanted)
+
+
+def _exact_identifier_tag_priority(tags_json: str | None, query: str) -> int:
+    """Prefer rows whose machine tag value is an exact identifier in query.
+
+    Tabular chunks expose the first three columns as ``key=value`` tags.  An
+    exact primary ID such as ``FR-MDQ-01`` must outrank rows that merely refer
+    to that ID repeatedly in free text.  Generic values (``FR``, ``active``)
+    are deliberately excluded: a prioritised value must contain letters,
+    digits, and an identifier separator.
+    """
+    if not tags_json:
+        return 0
+    try:
+        tags = json.loads(tags_json)
+    except Exception:
+        return 0
+    if not isinstance(tags, list):
+        return 0
+    for raw in tags:
+        text = str(raw)
+        if "=" not in text:
+            continue
+        value = text.split("=", 1)[1].strip()
+        if (
+            len(value) < 4
+            or not any(char.isalpha() for char in value)
+            or not any(char.isdigit() for char in value)
+            or not any(char in "-_/.:" for char in value)
+        ):
+            continue
+        pattern = rf"(?<![A-Za-z0-9_]){re.escape(value)}(?![A-Za-z0-9_])"
+        if re.search(pattern, query, re.IGNORECASE):
+            return 1
+    return 0
+
+
+def _sort_scored(scored, query: str) -> None:
+    """Sort by exact machine-tag ID, then score, then stable location."""
+    scored.sort(key=lambda item: (
+        -_exact_identifier_tag_priority(_row_get(item[1], "tags"), query),
+        -float(item[0]),
+        str(_row_get(item[1], "path") or ""),
+        int(_row_get(item[1], "start_line") or 0),
+        str(_row_get(item[1], "chunk_id") or ""),
+    ))
 
 
 def _maybe_apply_fusion(rows, bm25_scores, query: str,
@@ -205,6 +267,28 @@ def _row_get(row, key: str):
         return None
 
 
+def _scoring_text(row) -> str:
+    """Text used for ranking only (FR-MDQ-05).
+
+    The heading path carries the terms that identify a section, so matching it
+    is what lets a heading-only term reach its chunk. It must never reach the
+    excerpt, which stays anchored to the body and its line range.
+    """
+    heading = row["heading_path"] or ""
+    return f"{heading}\n{row['text']}" if heading else row["text"]
+
+
+def _budget_cost(hit: Hit) -> int:
+    """Budget charged for one hit (FR-MDQ-07).
+
+    Measured on the machine-readable line the caller actually receives, so the
+    metadata that travels with every hit is paid for rather than ignored.
+    """
+    from . import tokens as _tokens
+
+    return max(1, _tokens.count_tokens(json.dumps(hit.to_dict(), ensure_ascii=False)))
+
+
 def search(conn, query: str, *, mode: str = "bm25",
            top_k: int = 5, max_tokens: int = 800,
            path_globs: list[str] | None = None,
@@ -216,6 +300,7 @@ def search(conn, query: str, *, mode: str = "bm25",
            merge_parts: bool = False,
            engine: str = "auto",
            fusion_alpha: float | None = None,
+           return_unit: str = "line",
            pageindex_tree_depth: int = 0) -> list[Hit]:
     """Run a search against the indexed chunks.
 
@@ -223,7 +308,9 @@ def search(conn, query: str, *, mode: str = "bm25",
     engine: 'auto' | 'bm25' | 'fts5'. 'auto' picks 'fts5' when the env var
         MDQ_FTS5 (or the deprecated alias HVE_MDQ_FTS5) is set to a truthy
         value and FTS5 is available on this DB; otherwise it uses the
-        in-memory BM25 path.
+        in-memory BM25 path. A requested FTS5 search also falls back to the
+        in-memory path when the query cannot be expressed against the index
+        (a trigram index cannot represent terms shorter than 3 characters).
     include_parent: legacy boolean. When True and ``parent_depth`` <= 0, a
         single ancestor is fetched (back-compat).
     parent_depth: when >0, fetch up to N ancestor heading chunks. Each hit's
@@ -234,6 +321,11 @@ def search(conn, query: str, *, mode: str = "bm25",
         ``final = alpha * bm25_norm + (1 - alpha) * cosine_sim``. Set to
         ``1.0`` to disable blending (BM25 only); ``0.0`` for cosine only.
         Ignored entirely when no rows have a non-NULL chunk_embedding.
+    return_unit: 'line' (default) centres a ``snippet_radius`` window on the
+        strongest matching line; 'chunk' returns the matching chunk body in
+        full. The unit only widens the excerpt: ranking and the set of
+        matching chunks are unchanged, though a fixed ``max_tokens`` budget
+        admits fewer hits when excerpts are longer.
     pageindex_tree_depth: when >0 and the DB has any non-NULL ``summary``
         column (pageindex strategy), attach
         ``expansion['tree_path']`` to each hit: the ordered chain from up
@@ -281,10 +373,14 @@ def search(conn, query: str, *, mode: str = "bm25",
             parent_depth=parent_depth,
             expand_neighbors=expand_neighbors,
             merge_parts=merge_parts,
+            return_unit=return_unit,
         )
-        if pageindex_tree_depth > 0:
-            _apply_tree_path(conn, hits_fts, pageindex_tree_depth)
-        return hits_fts
+        if hits_fts is not None:
+            if pageindex_tree_depth > 0:
+                _apply_tree_path(conn, hits_fts, pageindex_tree_depth)
+            return hits_fts
+        # The query cannot be expressed against this FTS5 index (e.g. shorter
+        # than a trigram); fall through to the in-memory path.
 
     rows = _store.all_chunks(conn)
     if path_globs:
@@ -304,14 +400,14 @@ def search(conn, query: str, *, mode: str = "bm25",
             n = len(pat.findall(r["text"]))
             if n > 0:
                 scored.append((float(n), r))
-        scored.sort(key=lambda x: -x[0])
+        _sort_scored(scored, query)
     else:
-        corpus = [tokenize(r["text"]) for r in rows]
+        corpus = [tokenize(_scoring_text(r)) for r in rows]
         if HAS_RANK_BM25:
-            bm25 = BM25Okapi(corpus)
+            bm25 = BM25Okapi(corpus, b=LENGTH_NORM_B)
             scores = bm25.get_scores(q_tokens)
         else:
-            bm25 = _MiniBM25(corpus)
+            bm25 = _MiniBM25(corpus, b=LENGTH_NORM_B)
             scores = bm25.get_scores(q_tokens)
         # Late-chunking fusion (Q9=B). Applies only when:
         #   1. The caller provided fusion_alpha (not None).
@@ -320,7 +416,7 @@ def search(conn, query: str, *, mode: str = "bm25",
         # normalised BM25.
         scores = _maybe_apply_fusion(rows, scores, query, fusion_alpha)
         scored = [(float(s), r) for s, r in zip(scores, rows) if s > 0]
-        scored.sort(key=lambda x: -x[0])
+        _sort_scored(scored, query)
 
     hits: list[Hit] = []
     spent = 0
@@ -330,12 +426,8 @@ def search(conn, query: str, *, mode: str = "bm25",
         if key in seen_ranges:
             continue
         seen_ranges.add(key)
-        snippet = _make_snippet(r["text"], q_tokens, radius=snippet_radius)
-        est = max(1, len(snippet) // 4)
-        if spent + est > max_tokens and hits:
-            break
-        spent += est
-        hits.append(Hit(
+        snippet = _excerpt(r["text"], q_tokens, snippet_radius, return_unit)
+        candidate = Hit(
             chunk_id=r["chunk_id"],
             path=r["path"],
             heading_path=r["heading_path"],
@@ -343,7 +435,12 @@ def search(conn, query: str, *, mode: str = "bm25",
             end_line=r["end_line"],
             score=score,
             snippet=snippet,
-        ))
+        )
+        est = _budget_cost(candidate)
+        if spent + est > max_tokens and hits:
+            break
+        spent += est
+        hits.append(candidate)
         if len(hits) >= top_k:
             break
 
@@ -397,6 +494,57 @@ def _build_fts5_query(q_tokens: list[str]) -> str:
     return " OR ".join(safe)
 
 
+def _fts5_tokenizer(conn) -> str:
+    """Return the tokenizer declared on ``chunks_fts`` (empty when absent)."""
+    import sqlite3 as _sql
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
+        ).fetchone()
+    except _sql.OperationalError:
+        return ""
+    m = re.search(r"tokenize='([^']+)'", (row[0] if row else "") or "")
+    return m.group(1) if m else ""
+
+
+def _build_trigram_query(query: str) -> tuple[str, list[str]]:
+    """Return an FTS5 MATCH expression for a trigram index and its segments.
+
+    ``detail=none`` rejects phrase queries, so each whitespace-delimited
+    segment becomes the logical AND of its trigrams and segments are ORed.
+    That admits documents holding the trigrams non-contiguously, so callers
+    must confirm each segment with LIKE. Segments below the trigram minimum
+    cannot be expressed at all and are dropped.
+    """
+    clauses: list[str] = []
+    used: list[str] = []
+    for seg in query.split():
+        if len(seg) < _MIN_TRIGRAM_CHARS:
+            continue
+        grams = sorted({
+            seg[i:i + _MIN_TRIGRAM_CHARS]
+            for i in range(len(seg) - _MIN_TRIGRAM_CHARS + 1)
+        })
+        joined = " AND ".join('"' + g.replace('"', '""') + '"' for g in grams)
+        clauses.append(f"({joined})")
+        used.append(seg)
+    return " OR ".join(clauses), used
+
+
+def _like_pattern(segment: str) -> str:
+    """Wrap a segment for LIKE, escaping the wildcards so it stays literal.
+
+    Without this, ``_`` and ``%`` in the query widen the check that is meant
+    to confirm the trigram candidates actually contain the segment.
+    """
+    escaped = (
+        segment.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+    return f"%{escaped}%"
+
+
 def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
                  path_globs: list[str] | None,
                  tags: list[str] | None,
@@ -404,22 +552,37 @@ def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
                  include_parent: bool,
                  parent_depth: int,
                  expand_neighbors: int,
-                 merge_parts: bool) -> list[Hit]:
+                 merge_parts: bool,
+                 return_unit: str = "line") -> list[Hit] | None:
+    """Run the FTS5 query, or return None when this index cannot serve it."""
     import sqlite3 as _sql
     conn.row_factory = _sql.Row
     q_tokens = tokenize(query)
     if not q_tokens:
         return []
-    fts_q = _build_fts5_query(q_tokens)
+    verify_sql = ""
+    verify_params: list[str] = []
+    if _fts5_tokenizer(conn) == "trigram":
+        fts_q, segments = _build_trigram_query(query)
+        if not fts_q:
+            return None  # too short for the trigram index; caller falls back
+        verify_sql = (
+            " AND ("
+            + " OR ".join(["c.text LIKE ? ESCAPE '\\'"] * len(segments))
+            + ")"
+        )
+        verify_params = [_like_pattern(s) for s in segments]
+    else:
+        fts_q = _build_fts5_query(q_tokens)
     try:
         rows = list(conn.execute(
             "SELECT c.chunk_id, c.path, c.heading_path, c.level, "
             "c.start_line, c.end_line, c.token_est, c.text, c.tags, "
             "c.part_index, c.part_total, bm25(chunks_fts) AS bm "
             "FROM chunks c JOIN chunks_fts f ON f.rowid = c.rowid "
-            "WHERE chunks_fts MATCH ? "
+            "WHERE chunks_fts MATCH ?" + verify_sql + " "
             "ORDER BY bm ASC",
-            (fts_q,),
+            (fts_q, *verify_params),
         ))
     except _sql.OperationalError:
         return []
@@ -428,6 +591,13 @@ def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
         rows = [r for r in rows if _path_matches(r["path"], path_globs)]
     if tags:
         rows = [r for r in rows if _tag_matches(r["tags"], tags)]
+    rows.sort(key=lambda row: (
+        -_exact_identifier_tag_priority(row["tags"], query),
+        float(row["bm"]),
+        str(row["path"]),
+        int(row["start_line"]),
+        str(row["chunk_id"]),
+    ))
 
     hits: list[Hit] = []
     spent = 0
@@ -437,14 +607,10 @@ def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
         if key in seen_ranges:
             continue
         seen_ranges.add(key)
-        snippet = _make_snippet(r["text"], q_tokens, radius=snippet_radius)
-        est = max(1, len(snippet) // 4)
-        if spent + est > max_tokens and hits:
-            break
-        spent += est
+        snippet = _excerpt(r["text"], q_tokens, snippet_radius, return_unit)
         # FTS5 bm25() returns negative values; smaller = better. Surface a
         # positive monotonic score for consumers (negate).
-        hits.append(Hit(
+        candidate = Hit(
             chunk_id=r["chunk_id"],
             path=r["path"],
             heading_path=r["heading_path"],
@@ -452,7 +618,12 @@ def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
             end_line=r["end_line"],
             score=-float(r["bm"]),
             snippet=snippet,
-        ))
+        )
+        est = _budget_cost(candidate)
+        if spent + est > max_tokens and hits:
+            break
+        spent += est
+        hits.append(candidate)
         if len(hits) >= top_k:
             break
     _apply_expansion(conn, hits, include_parent, parent_depth,

@@ -56,7 +56,11 @@ def db_path_for(lang: str = "ja-jp", strategy: str = "heading") -> Path:
 #     strategy. NULL for chunks produced by other strategies; populated
 #     with a deterministic head/first_paragraph extract by
 #     :mod:`mdq.strategies_pageindex`. ADD COLUMN migration; no data loss.
-SCHEMA_VERSION = 6
+# v7: the `trigram` FTS5 mirror is created with detail=none to cut index
+#     size. Positional data is dropped, so phrase queries are unavailable
+#     and :mod:`mdq.search` decomposes terms into ANDed trigrams instead.
+#     Existing mirrors are dropped and rebuilt on upgrade.
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -107,6 +111,20 @@ def has_fts5(conn: sqlite3.Connection) -> bool:
         return False
 
 
+def _fts_table_args(tokenizer: str) -> str:
+    """Return the argument list of the ``chunks_fts`` virtual table.
+
+    ``trigram`` mirrors use ``detail=none``: without positional data the
+    index is far smaller (SQLite FTS5 §4.3.4 / §4.6). The trade-off is that
+    phrase queries raise, so :mod:`mdq.search` ANDs individual trigrams.
+    """
+    detail = ", detail=none" if tokenizer == "trigram" else ""
+    return (
+        f"text, content='chunks', content_rowid='rowid', "
+        f"tokenize='{tokenizer}'{detail}"
+    )
+
+
 def _fts_schema(tokenizer: str = "unicode61") -> str:
     """Return the FTS5 mirror schema using the requested tokenizer.
 
@@ -116,7 +134,7 @@ def _fts_schema(tokenizer: str = "unicode61") -> str:
     """
     return f"""
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-  text, content='chunks', content_rowid='rowid', tokenize='{tokenizer}'
+  {_fts_table_args(tokenizer)}
 );
 CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
   INSERT INTO chunks_fts(rowid, text) VALUES (new.rowid, new.text);
@@ -186,14 +204,14 @@ def _migrate(conn: sqlite3.Connection, fts_tokenizer: str = "unicode61") -> None
     # v* -> v3: install FTS5 mirror (best effort; SQLite without FTS5 simply
     # continues to use the BM25 fallback path).
     if has_fts5(conn):
-        # If the existing FTS5 mirror was created with a different tokenizer,
-        # we need to drop and recreate it. Detect by inspecting the stored
-        # CREATE TABLE statement.
+        # If the existing FTS5 mirror was created with different arguments
+        # (tokenizer or detail level), we need to drop and recreate it.
+        # Detect by inspecting the stored CREATE TABLE statement.
         row = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='chunks_fts'"
         ).fetchone()
         existing_sql = (row[0] if row else "") or ""
-        wanted_marker = f"tokenize='{fts_tokenizer}'"
+        wanted_marker = _fts_table_args(fts_tokenizer)
         if row and wanted_marker not in existing_sql:
             # Tokenizer mismatch detected — recreating the FTS5 mirror is
             # expensive on large DBs. Emit a logger warning so users invoking
@@ -201,7 +219,7 @@ def _migrate(conn: sqlite3.Connection, fts_tokenizer: str = "unicode61") -> None
             # language are not silently surprised by a long migration.
             import logging as _lg
             _lg.getLogger(__name__).warning(
-                "FTS5 tokenizer mismatch in %s (existing has %r, want %r); "
+                "FTS5 schema mismatch in %s (existing has %r, want %r); "
                 "rebuilding chunks_fts. This can take a while on large DBs.",
                 getattr(conn, "filename", "<unknown>"),
                 existing_sql,

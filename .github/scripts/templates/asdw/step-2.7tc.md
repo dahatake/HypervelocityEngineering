@@ -11,7 +11,7 @@ TDD RED フェーズ: Agent テスト仕様書（`docs/test-specs/{agentId}-test
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 ## 出力
-- `test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（テストコードのみ）
+- `src/test/agent/{AgentName}.Tests/` 配下にテストプロジェクト（テストコードのみ）
 
 ## Custom Agent
 `Dev-Microservice-Azure-AgentTestCoding` を使用
@@ -24,6 +24,6 @@ TDD RED フェーズ: Agent テスト仕様書（`docs/test-specs/{agentId}-test
 - Step.2.7T（AI Agent テスト仕様書）が `asdw:done` であること
 
 ## 完了条件
-- `test/agent/{AgentName}.Tests/` 配下にテストコードが生成されている
+- `src/test/agent/{AgentName}.Tests/` 配下にテストコードが生成されている
 - テストで全テストが FAIL（RED 状態）であることが確認されている
 {completion_instruction}{app_id_section}{additional_section}

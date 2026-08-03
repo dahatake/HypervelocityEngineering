@@ -237,6 +237,13 @@ class Console:
         self._start_time = time.time()
         self._is_tty = sys.stdout.isatty()
 
+        # PySide GUI からサブプロセス起動された場合の検出（env 経由）。
+        # GUI は stdout をパイプ受信し、行頭 ``[hve:ctx:<step_id>]`` マーカーで
+        # 並列ステップのログ帰属を行うため、_emit はマーカー付きで出力する。
+        # また非 TTY のためスピナーが起動せず、compact/normal で spinner 経路へ
+        # 振られる進捗を確定行へフォールバックさせる必要がある。
+        self._gui_subprocess = bool(os.environ.get("HVE_GUI_SESSION_ID", "").strip())
+
         # F5: final_only モード
         self.final_only = final_only
         if final_only:
@@ -256,6 +263,10 @@ class Console:
 
         self._step_start_times: Dict[str, float] = {}
         self._reasoning_buffer: Dict[str, str] = {}
+        # 実行中ツール/アクションの追跡（step_elapsed のハートビート表示に使用）。
+        # action_start でセットし、action_result / tool_result / step_end でクリアする。
+        self._step_current_action: Dict[str, str] = {}
+        self._step_action_start_times: Dict[str, float] = {}
 
         # --- Verbosity レベル解決 (後方互換) ---
         if final_only:
@@ -288,6 +299,9 @@ class Console:
         self._spinner_msg: str = ""
         self._spinner_base_msg: str = ""
         self._last_spinner_update: float = 0.0
+        # 非 TTY (GUI/パイプ) フォールバック時の直近確定出力メッセージ。
+        # 同一メッセージの連続出力を抑止して重複行を防ぐ。
+        self._last_spinner_fallback_msg: str = ""
 
         # --- 出力排他制御 ---
         # 並列ステップが同時に _emit() を呼んでも出力が混在しないよう RLock で保護する。
@@ -418,8 +432,14 @@ class Console:
                         # Workbench 側で例外が出ても本流を止めない（CLI 経路にフォールバック）
                         print(formatted, flush=True)
                 else:
-                    # CLI 単体時はマーカー非表示（Q4=x）
-                    print(formatted, flush=True)
+                    # CLI 単体時はマーカー非表示（Q4=x）。ただし PySide GUI から
+                    # サブプロセス起動された場合は、GUI が stdout をパイプ受信し
+                    # 行頭 [hve:ctx:<step_id>] マーカーで並列ステップのログ帰属を
+                    # 行うため、マーカー付きで出力する（GUI 側で表示時に strip）。
+                    if self._gui_subprocess and ctx_step_id and not skip_ctx_marker:
+                        print(formatted_with_ctx, flush=True)
+                    else:
+                        print(formatted, flush=True)
             finally:
                 self._resume_spinner()
 
@@ -428,8 +448,25 @@ class Console:
         self._emit(msg, always=always, ts=ts)
 
     def _update_spinner_msg(self, msg: str) -> None:
-        """スピナー行のテキスト部分を更新する（新規行を追加しない）。"""
+        """スピナー行のテキスト部分を更新する（新規行を追加しない）。
+
+        スピナースレッドが無い場合の扱い:
+          - TTY: 何もしない（従来通り）。
+          - 非 TTY かつ GUI サブプロセス: スピナーが起動しないため、進捗を
+            確定行へフォールバック出力する（compact/normal で spinner 経路へ
+            振られる tool/skill/usage 等を GUI ログへ届ける）。直前と同一
+            メッセージは抑止して重複を防ぐ。quiet/final_only 時は出力しない。
+        """
         if self._spinner_thread is None:
+            if (
+                self._gui_subprocess
+                and not self._is_tty
+                and not self.quiet
+                and not self.final_only
+            ):
+                if msg != self._last_spinner_fallback_msg:
+                    self._last_spinner_fallback_msg = msg
+                    self._print(f"  {msg}")
             return
         now = time.monotonic()
         with self._spinner_msg_lock:
@@ -934,6 +971,13 @@ class Console:
                 pass
         if self._current_step_id == step_id:
             self._current_step_id = None
+        # NFR-OBS-05: Step 完了後の行を完了済み Step へ帰属させない。
+        # 他 Step の完了で現在の帰属を壊さないよう、同一 step_id のときだけ解除する。
+        try:
+            if _CURRENT_EMIT_STEP_ID.get() == step_id:
+                _CURRENT_EMIT_STEP_ID.set(None)
+        except Exception:
+            pass
         # stderr JSON 機械可読出力（verbose レベルのみ。_emit_structured 側でゲート）
         self._emit_structured(
             event="step_end",
@@ -957,6 +1001,8 @@ class Console:
         self._step_usage.pop(step_id, None)
         self._step_tool_count.pop(step_id, None)
         self._step_files.pop(step_id, None)
+        self._step_current_action.pop(step_id, None)
+        self._step_action_start_times.pop(step_id, None)
 
     # ------------------------------------------------------------------
     # stderr JSON 機械可読出力（最詳細レベル verbose のみで出力）
@@ -1102,6 +1148,18 @@ class Console:
         else:
             self._update_spinner_msg(msg)
 
+    def diag(self, msg: str) -> None:
+        """診断専用ログ。verbosity / quiet に依らず常に確定行として出力する。
+
+        AI Credit / Reqs 不取得の真因切り分け等、構造化 `stats_event` では
+        UI ログペインに表示されない (is_stats_line で除外される) 経路向け。
+        通常ログとして流れるため _log_pane に通常行で表示される。
+        `stats_event` と同じく final_only のみ抑止する。
+        """
+        if self.final_only:
+            return
+        self._emit(msg, always=True)
+
     def workiq_prompt(self, prompt: str, label: str = "Work IQ プロンプト") -> None:
         """Work IQ に投入するプロンプトをターミナルへ出力する。
 
@@ -1206,6 +1264,13 @@ class Console:
             return
         if step_id:
             self.increment_tool_count(step_id)
+            # 実行中アクションを記録（step_elapsed のハートビート表示に付加するため）。
+            # detail が長い場合は切り詰めてログ 1 行を圧迫しないようにする。
+            label = f"{action_name}: {detail}" if detail else action_name
+            if len(label) > 80:
+                label = label[:77] + "..."
+            self._step_current_action[step_id] = label
+            self._step_action_start_times[step_id] = time.time()
         s = self.s
         prefix = f"[{step_id}] " if step_id else ""
         action_line = f"{s.GREEN}●{s.RESET} {prefix}{s.BOLD}{action_name}{s.RESET}"
@@ -1219,6 +1284,10 @@ class Console:
 
     def action_result(self, step_id: str, result_text: str) -> None:
         """Copilot CLI スタイルのアクション結果表示。"""
+        # アクション完了 → 実行中アクション追跡をクリア（result_text が空でも実施）。
+        if step_id:
+            self._step_current_action.pop(step_id, None)
+            self._step_action_start_times.pop(step_id, None)
         if self._verbosity == 0 or not result_text:
             return
         s = self.s
@@ -1261,6 +1330,10 @@ class Console:
 
     def tool_result(self, step_id: str, success: bool, error_msg: str = "") -> None:
         """ツール実行完了。Level 3 で成功・失敗ともに確定行、Level 1-2 で失敗のみ確定行。"""
+        # ツール完了 → 実行中アクション追跡をクリア。
+        if step_id:
+            self._step_current_action.pop(step_id, None)
+            self._step_action_start_times.pop(step_id, None)
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1616,6 +1689,32 @@ class Console:
             self._print(f"  {msg}")
         else:
             self._update_spinner_msg(msg)
+
+    def permission_reject_event(
+        self,
+        *,
+        origin: str,
+        decision: str,
+        reason: str,
+        tool_call_id: str | None = None,
+    ) -> None:
+        """権限拒否の provenance を sanitized な固定スキーマで記録する。
+
+        反復停止 (recurring stop) の真因追跡のため、拒否の起点・決定・
+        固定理由コードを常時確定行として残す。呼び出し側が origin / decision /
+        reason / tool_call_id を固定・sanitize 済みで渡す前提であり、本メソッドは
+        生の command / path / URL / secret を組み立てない。final_only のみ抑止する。
+        """
+        if self.final_only:
+            return
+        parts = [
+            f"origin={origin}",
+            f"decision={decision}",
+            f"reason={reason}",
+        ]
+        if tool_call_id:
+            parts.append(f"tool_call_id={tool_call_id}")
+        self._emit("🔒 permission-reject " + " ".join(parts), always=True)
 
     # ------------------------------------------------------------------
     # 公開メソッド — CLI プロセスログ
@@ -2333,7 +2432,12 @@ class Console:
         self.panel("実行計画 (DAG)", lines)
 
     def step_elapsed(self, step_id: str) -> None:
-        """実行中ステップの経過時間を表示する。Level 2+ で確定行、Level 1 でスピナー更新。"""
+        """実行中ステップの経過時間を表示する。Level 2+ で確定行、Level 1 でスピナー更新。
+
+        実行中のツール/アクションがある場合は、その名称と実行経過時間を付加する。
+        これにより、長時間ブロックするツール（バックグラウンド待機・外部コマンド等）が
+        どれかを、デフォルトのログレベルでも判別できるようにする。
+        """
         if self._verbosity == 0:
             return
         start = self._step_start_times.get(step_id)
@@ -2343,6 +2447,17 @@ class Console:
         minutes = int(elapsed) // 60
         seconds = int(elapsed) % 60
         msg = f"⏱ [Step.{step_id}] {minutes}m {seconds}s 経過..."
+        # 実行中のツール/アクションを付加（何を待っているか分かるようにする）。
+        action = self._step_current_action.get(step_id)
+        if action:
+            action_started_at = self._step_action_start_times.get(step_id)
+            if action_started_at is not None:
+                a_elapsed = time.time() - action_started_at
+                a_min = int(a_elapsed) // 60
+                a_sec = int(a_elapsed) % 60
+                msg += f" ▶ {action} ({a_min}m {a_sec}s 実行中)"
+            else:
+                msg += f" ▶ {action}"
         if self._verbosity >= 2:
             self._print(f"  {self.s.DIM}{msg}{self.s.RESET}")
         else:
@@ -2371,13 +2486,30 @@ class Console:
         suffix = f" {msg}" if msg else ""
         self._print(f"  [{current}/{total}]{suffix}")
 
+    def _diagnostic_prefix(self) -> str:
+        """ERROR / WARN 行に付与するインライン ctx マーカーを返す（NFR-OBS-05）。
+
+        `error()` / `warning()` は stderr へ直接書くため `_emit()` のマーカー付与を
+        通らない。マーカーが無いと GUI は直前の実行中 Step へフォールバックし、
+        実際には別 Step で発生したエラーを誤帰属する。GUI サブプロセス実行時だけ
+        付与し、CLI 単体実行の表示は変えない。
+        """
+        if not self._gui_subprocess:
+            return ""
+        ctx_step_id = _CURRENT_EMIT_STEP_ID.get()
+        return f"[hve:ctx:{ctx_step_id}] " if ctx_step_id else ""
+
     def warning(self, msg: str) -> None:
         """警告表示。quiet 以外で表示。stderr に出力。
 
-        Workbench 起動中は UserActions ペインにも WARN 通知を投入する。
+        Workbench 起動中は UserActions ペインへも WARN 通知を投入する。
         """
         if not self.quiet:
-            print(f"{timestamp_prefix()} ⚠️  {msg}", file=sys.stderr, flush=True)
+            print(
+                f"{self._diagnostic_prefix()}{timestamp_prefix()} ⚠️  {msg}",
+                file=sys.stderr,
+                flush=True,
+            )
         wb = self._workbench
         if wb is not None:
             try:
@@ -2388,9 +2520,13 @@ class Console:
     def error(self, msg: str) -> None:
         """エラー表示。常に表示（quiet でも表示）。
 
-        Workbench 起動中は UserActions ペインにも ERROR 通知を投入する。
+        Workbench 起動中は UserActions ペインへも ERROR 通知を投入する。
         """
-        print(f"{timestamp_prefix()} ❌ ERROR: {msg}", file=sys.stderr, flush=True)
+        print(
+            f"{self._diagnostic_prefix()}{timestamp_prefix()} ❌ ERROR: {msg}",
+            file=sys.stderr,
+            flush=True,
+        )
         wb = self._workbench
         if wb is not None:
             try:

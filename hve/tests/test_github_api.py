@@ -23,7 +23,13 @@ from hve.github_api import (
     api_call,
     create_issue,
     create_pull_request,
+    get_pull_request,
+    get_repository_metadata,
     link_sub_issue,
+    list_check_runs_for_ref,
+    list_issue_comments,
+    list_viewer_repositories,
+    list_branches,
     post_comment,
 )
 
@@ -384,6 +390,34 @@ class TestPostComment:
 
 
 # =====================================================================
+# list_issue_comments
+# =====================================================================
+
+
+class TestListIssueComments:
+    @patch("hve.github_api.api_call")
+    def test_success_filters_dict_items(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = [{"body": "a"}, "bad", {"body": "b"}]
+
+        result = list_issue_comments(42)
+
+        assert result == [{"body": "a"}, {"body": "b"}]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/issues/42/comments?per_page=100",
+            token=None,
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_non_list_response_returns_empty(self, mock_api):
+        mock_api.return_value = {"message": "unexpected"}
+
+        assert list_issue_comments(42, repo="o/r", token="tok") == []
+
+
+# =====================================================================
 # create_pull_request
 # =====================================================================
 
@@ -422,3 +456,187 @@ class TestCreatePullRequest:
         assert pr_num == 99
         url_called = mock_api.call_args[0][1]
         assert "x/y" in url_called
+
+
+# =====================================================================
+# get_pull_request
+# =====================================================================
+
+
+class TestGetPullRequest:
+    @patch("hve.github_api.api_call")
+    def test_returns_merged_state(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = {"number": 7, "merged": True, "state": "closed"}
+        result = get_pull_request(7)
+        assert result["merged"] is True
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/pulls/7",
+            token=None,
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_returns_unmerged(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = {"number": 7, "merged": False, "state": "open"}
+        assert get_pull_request(7)["merged"] is False
+
+    @patch("hve.github_api.api_call")
+    def test_explicit_repo_and_token(self, mock_api):
+        mock_api.return_value = {"number": 99, "merged": True}
+        result = get_pull_request(99, repo="x/y", token="tok")
+        assert result["merged"] is True
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/x/y/pulls/99",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_404_propagates(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.side_effect = GitHubAPIError("not found", status=404)
+        with pytest.raises(GitHubAPIError, match="not found"):
+            get_pull_request(7)
+
+    @patch("hve.github_api.api_call")
+    def test_non_dict_response_returns_empty(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = []
+        assert get_pull_request(7) == {}
+
+
+# =====================================================================
+# list_check_runs_for_ref
+# =====================================================================
+
+
+class TestListCheckRunsForRef:
+    @patch("hve.github_api.api_call")
+    def test_returns_check_runs(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = {
+            "total_count": 1,
+            "check_runs": [
+                {"name": "build", "status": "completed", "conclusion": "success"}
+            ],
+        }
+
+        result = list_check_runs_for_ref("abc123")
+
+        assert result == [{"name": "build", "status": "completed", "conclusion": "success"}]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/commits/abc123/check-runs?per_page=100",
+            token=None,
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_non_dict_response_returns_empty(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = []
+
+        assert list_check_runs_for_ref("abc123") == []
+
+
+# =====================================================================
+# list_branches
+# =====================================================================
+
+
+class TestListBranches:
+    @patch("hve.github_api.api_call")
+    def test_returns_branch_names(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = [{"name": "main"}, {"name": "dev"}]
+        result = list_branches()
+        assert result == ["main", "dev"]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/branches?per_page=100",
+            token=None,
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_empty_list(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = []
+        assert list_branches() == []
+
+    @patch("hve.github_api.api_call")
+    def test_explicit_repo_and_token(self, mock_api):
+        mock_api.return_value = [{"name": "feature"}]
+        result = list_branches(repo="x/y", token="tok")
+        assert result == ["feature"]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/x/y/branches?per_page=100",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_404_propagates(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.side_effect = GitHubAPIError("not found", status=404)
+        with pytest.raises(GitHubAPIError, match="not found"):
+            list_branches()
+
+    @patch("hve.github_api.api_call")
+    def test_non_list_response_returns_empty(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        # api_call は空ボディ時 {} (dict) を返す。list 以外は [] へフォールバック。
+        mock_api.return_value = {}
+        assert list_branches() == []
+
+    @patch("hve.github_api.api_call")
+    def test_skips_entries_without_name(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = [{"name": "main"}, {"protected": True}, {"name": "dev"}]
+        assert list_branches() == ["main", "dev"]
+
+
+# =====================================================================
+# repository metadata helpers
+# =====================================================================
+
+
+class TestGitHubMetadataHelpers:
+    @patch("hve.github_api.api_call")
+    def test_get_repository_metadata(self, mock_api):
+        mock_api.return_value = {"full_name": "owner/repo", "has_issues": True}
+        assert get_repository_metadata("owner/repo", token="tok") == {
+            "full_name": "owner/repo",
+            "has_issues": True,
+        }
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/owner/repo",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_list_viewer_repositories(self, mock_api):
+        mock_api.return_value = [{"full_name": "owner/repo"}]
+        assert list_viewer_repositories(token="tok") == [{"full_name": "owner/repo"}]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/user/repos?affiliation=owner,collaborator,organization_member&sort=updated&per_page=100",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_list_viewer_repositories_non_list_response_returns_empty(self, mock_api):
+        mock_api.return_value = {}
+        assert list_viewer_repositories(token="tok") == []

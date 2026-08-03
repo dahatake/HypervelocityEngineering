@@ -1,0 +1,30 @@
+name: HVE Requirement Traceability
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: HVE Requirement Traceability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate HVE requirement traceability
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          pr_body_file="$RUNNER_TEMP/pr-body.md"
+          changed_files_file="$RUNNER_TEMP/changed-files.txt"
+          printf '%s' "$PR_BODY" > "$pr_body_file"
+          git diff --name-status "$BASE_SHA" "$HEAD_SHA" > "$changed_files_file"
+          python .github/scripts/validate-hve-requirement-traceability.py --root "$GITHUB_WORKSPACE" --pr-body-file "$pr_body_file" --changed-files-file "$changed_files_file"

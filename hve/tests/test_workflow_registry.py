@@ -1,6 +1,10 @@
 """test_workflow_registry.py — hve/workflow_registry.py のテスト"""
 
+import re
+from pathlib import Path
+
 import pytest
+import yaml
 
 from hve.workflow_registry import (
     MetaWorkflowDef,
@@ -22,10 +26,12 @@ from hve.workflow_registry import (
 
 EXPECTED_STEP_COUNTS = {
     "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
-    "aas": 9,
-    "aad-web": 5,
-    "asdw-web": 20,  # 4 containers + 16 real steps
-    "adfd": 9,
+    "aas": 11,  # AAS に Step 8 (ペルソナ別共通画面カタログ) と Step 9 (ペルソナカタログ) 追加で 9 → 11
+    "aad-web": 7,  # Step 2.5 (追加 Azure サービス選定) 追加で 6 → 7
+    "asdw-web": 23,  # 5 containers + 18 real steps (コンテナ再編 + 追加 Step 2.3/2.4/3.5 + データコンテナ Step 1.2 TDD RED で 18→23)
+    # ADFDV が required_input_paths として要求していた 4 ドキュメントの producer Step
+    # (0.1 / 0.2 / 4 / 5) を追加して 3 → 7。
+    "adfd": 7,
     "adfdv": 7,
     "aag": 3,
     "aagd": 5,
@@ -36,10 +42,10 @@ EXPECTED_STEP_COUNTS = {
 
 EXPECTED_NON_CONTAINER_COUNTS = {
     "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
-    "aas": 9,
-    "aad-web": 5,
-    "asdw-web": 16,
-    "adfd": 9,
+    "aas": 11,  # 同上
+    "aad-web": 7,  # Step 2.5 (追加 Azure サービス選定) 追加で 6 → 7
+    "asdw-web": 18,  # 追加 Step 2.3/2.4/3.5 で 14 → 17、データコンテナ Step 1.2 (DataTestCoding TDD RED) 追加で 17 → 18
+    "adfd": 7,  # 同上（ADFD はコンテナ Step を持たないため総数と一致）
     "adfdv": 7,
     "aag": 3,
     "aagd": 5,
@@ -140,6 +146,29 @@ class TestWorkflowDef:
         wf = get_workflow("asdw-web")
         assert "create_remote_mcp_server" in wf.params
 
+    def test_asdw_web_remote_cicd_steps_are_limited_to_compute_and_ui_deploy(self):
+        """ASDW-WEB の Step 単位 remote CI/CD 対象は GitHub Actions --ref が必要な 2 Step のみ。"""
+        wf = get_workflow("asdw-web")
+        assert wf is not None
+        remote_cicd_steps = {
+            s.id for s in wf.steps
+            if not s.is_container and s.requires_remote_cicd
+        }
+        assert remote_cicd_steps == {"3.4", "4.3"}
+        assert not get_step("asdw-web", "1.3").requires_remote_cicd
+        assert not get_step("asdw-web", "2.2").requires_remote_cicd
+
+    def test_asdw_addservice_deploy_declares_foundry_skills_and_reality_acs(self):
+        """Step.2.2 は実在する Azure Skills と Project/Model AC を宣言する。"""
+        step = get_step("asdw-web", "2.2")
+        assert step is not None
+        assert step.required_skills == [
+            "azure-cli-deploy-scripts",
+            "azure-ac-verification",
+            "azure-region-policy",
+        ]
+        assert step.reality_gate_acs == ["AC-1", "AC-13", "AC-14"]
+
     def test_params_aad_web(self):
         wf = get_workflow("aad-web")
         assert wf.params == ["app_ids", "app_id", "create_remote_mcp_server"]
@@ -167,7 +196,7 @@ class TestWorkflowDef:
     def test_ard_steps_require_knowledge_management(self):
         wf = get_workflow("ard")
         assert wf is not None
-        for step_id in ["1", "1.1", "1.2", "2", "3", "4.1", "4.2", "4.3"]:
+        for step_id in ["1", "1.1", "1.2", "2", "2.1", "3.1", "3.2", "3.3"]:
             step = wf.get_step(step_id)
             assert step is not None
             assert "knowledge-management" in step.required_skills
@@ -195,7 +224,10 @@ class TestGetRootSteps:
     def test_abd_roots(self):
         roots = get_root_steps("adfd")
         root_ids = sorted(s.id for s in roots)
-        assert root_ids == ["1.1", "1.2"]
+        # ADFD は ADFDV が要求する 4 ドキュメントの producer Step (0.1 / 0.2 / 4 / 5) を
+        # 既存 Step 1/2/3 の上流に追加した。起点は Step 0.1（データフローデータモデル）のみで、
+        # 旧 root だった Step 1 / 2 は Step 5 完了後に起動する。
+        assert root_ids == ["0.1"]
 
     def test_unknown_workflow(self):
         assert get_root_steps("nonexistent") == []
@@ -223,6 +255,14 @@ class TestGetNextSteps:
         assert [s.id for s in get_next_steps(
             "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6"]
         )] == ["7"]
+        # Step 7 完了後は Step 9 (ペルソナカタログ) が起動
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7"]
+        )] == ["9"]
+        # Step 9 完了後は Step 8 (ペルソナ別共通画面カタログ) が起動
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "9"]
+        )] == ["8"]
 
     def test_aas_step42_and_step5_are_parallel(self):
         """Sub-5 (C-1 部分): Step 4.2 (サンプルデータ) と Step 5 (データカタログ) が
@@ -244,27 +284,31 @@ class TestGetNextSteps:
         assert "4.2" in nexts and "5" in nexts
 
     def test_abd_step61_and_step62_are_parallel(self):
-        """Sub-6 (C-3 確認): ADFD の Step 6.1 (ジョブ詳細仕様) と Step 6.2 (監視・運用設計) が
-        Step 5 完了後に並列起動可能であることを保証する（既存挙動の回帰防止）。
+        """Sub-6 (C-3 確認): ADFD の Step 1 (ジョブ詳細仕様) と Step 2 (監視・運用設計) が
+        同一 wave で並列起動可能であることを保証する。
 
-        Sub-6 当初プランでは Step 6.3 も並列化する案だったが、Step 6.3 は consumed_artifacts に
-        ``dataflow_specs`` (= Step 6.1 fan-out 子の出力) を含むため、現状の AND 結合
-        (depends_on=["6.1", "6.2"]) を維持する。
+        producer Step (0.1 / 0.2 / 4 / 5) 追加後は「ワークフロー起動直後」ではなく
+        「共通の上流 Step 5 完了直後」が並列点になる。守るべき意図（1 と 2 が互いに
+        依存せず同 wave で起動できること）は不変。
+
+        Step 3 は consumed_artifacts に ``dataflow_specs`` (= Step 1 fan-out 子の出力) を含むため、
+        現状の AND 結合 (depends_on=["1", "2"]) を維持する。
         """
-        step_61 = get_step("adfd", "6.1")
-        step_62 = get_step("adfd", "6.2")
-        step_63 = get_step("adfd", "6.3")
-        assert step_61.depends_on == ["5"]
-        assert step_62.depends_on == ["5"]
-        # 6.3 は 6.1 と 6.2 の両方に依存（dataflow_specs が必須）
-        assert sorted(step_63.depends_on) == ["6.1", "6.2"]
-        # 6.1 / 6.2 は同 wave で並列起動可能
+        step_1 = get_step("adfd", "1")
+        step_2 = get_step("adfd", "2")
+        step_3 = get_step("adfd", "3")
+        # 1 / 2 は同一の上流 Step にのみ依存し、互いには依存しない
+        assert step_1.depends_on == ["5"]
+        assert step_2.depends_on == ["5"]
+        # 3 は 1 と 2 の両方に依存（dataflow_specs が必須）
+        assert sorted(step_3.depends_on) == ["1", "2"]
+        # 1 / 2 は共通上流の完了時点で同 wave に並ぶ
         nexts = sorted(
             s.id for s in get_next_steps(
-                "adfd", completed_step_ids=["1.1", "1.2", "2", "3", "4", "5"]
+                "adfd", completed_step_ids=["0.1", "0.2", "4", "5"]
             )
         )
-        assert "6.1" in nexts and "6.2" in nexts
+        assert "1" in nexts and "2" in nexts
 
     def test_aad_web_dag_walk(self):
         assert [s.id for s in get_next_steps("aad-web", completed_step_ids=[])] == ["1"]
@@ -273,14 +317,16 @@ class TestGetNextSteps:
         assert sorted(s.id for s in nexts) == ["2.1", "2.2"]
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1"])
-        assert [s.id for s in nexts] == ["2.2"]
+        assert sorted(s.id for s in nexts) == ["2.2", "2.4"]
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2"])
-        assert [s.id for s in nexts] == ["2.3"]
+        assert sorted(s.id for s in nexts) == ["2.3", "2.4", "2.5"]
 
-        # Sub-7 (C-4): 2.1/2.2/2.3 完了後に Step 3（整合性レビュー join）が起動可能
-        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2", "2.3"])
-        assert [s.id for s in nexts] == ["3"]
+        # Sub-7 (C-4): 2.1/2.2/2.3/2.4 完了後に Step 3（整合性レビュー join）が起動可能。
+        # Step 2.5 (追加 Azure サービス選定) は depends_on=["2.2"] のため 2.3/2.4 と並列で
+        # 2.2 完了後にも起動可能であり、この段階では未完了として並ぶ。
+        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2", "2.3", "2.4"])
+        assert sorted(s.id for s in nexts) == ["2.5", "3"]
 
     def test_aad_web_step3_is_consistency_review_join(self):
         """Sub-7 (C-4): AAD-WEB Step 3 が screen ↔ service 整合性レビュー join step として
@@ -288,39 +334,65 @@ class TestGetNextSteps:
         step = get_step("aad-web", "3")
         assert step is not None
         assert step.custom_agent == "QA-DocConsistency"
-        # AND join: 2.1, 2.2, 2.3 が全て完了して初めて起動
-        assert sorted(step.depends_on) == ["2.1", "2.2", "2.3"]
+        # AND join: 2.1, 2.2, 2.3, 2.4 が全て完了して初めて起動 (Step 2.4 = 画面別 TDD テスト仕様書)
+        assert sorted(step.depends_on) == ["2.1", "2.2", "2.3", "2.4"]
         assert step.output_paths == ["docs/catalog/screen-service-consistency-report.md"]
         # 整合性レビューは fan-out しない（join step）
         assert step.fanout_static_keys is None
         assert step.fanout_parser is None
 
     def test_asdw_web_dag_walk_and_bypass_agent_chain(self):
-        step_30t = get_step("asdw-web", "3.0T")
-        assert step_30t is not None
-        assert step_30t.depends_on == ["2.5"]
-        assert step_30t.skip_fallback_deps == ["2.5"]
-        step_33 = get_step("asdw-web", "3.3")
-        assert step_33 is not None
-        assert step_33.depends_on == ["3.2"]
-        assert get_step("asdw-web", "4.1").depends_on == ["3.3"]
-        assert get_step("asdw-web", "4.2").depends_on == ["3.3"]
+        # local-first / live-last: local 生成を完了させてから live deploy へ進む
+        step_41 = get_step("asdw-web", "4.1")
+        assert step_41 is not None
+        assert step_41.depends_on == ["3.3"]
+        assert step_41.skip_fallback_deps == []
+        step_44 = get_step("asdw-web", "4.4")
+        assert step_44 is not None
+        assert step_44.depends_on == ["4.3"]
+        assert get_step("asdw-web", "5.1").depends_on == ["4.4"]
+        assert get_step("asdw-web", "5.2").depends_on == ["4.4"]
 
+        # AI Agent step は registry 未採用（reusable YAML 側にのみ存在）
         assert get_step("asdw-web", "2.6") is None
         assert get_step("asdw-web", "2.7") is None
         assert get_step("asdw-web", "2.8") is None
+        # 旧 step ID も未採用であること
+        assert get_step("asdw-web", "2.3TC") is None
+        assert get_step("asdw-web", "3.0TC") is None
 
-        completed = ["1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5"]
-        nexts = get_next_steps("asdw-web", completed_step_ids=completed)
-        assert [s.id for s in nexts] == ["3.0T"]
+        # データコンテナ: 1.1 → 1.2 (DataTestCoding TDD RED) → … → 1.3 (DataDeploy TDD GREEN)
+        assert get_step("asdw-web", "1.2").custom_agent == "Dev-Microservice-Azure-DataTestCoding"
+        assert get_step("asdw-web", "1.3").custom_agent == "Dev-Microservice-Azure-DataDeploy"
 
-        completed_ui = completed + ["3.0T", "3.0TC", "3.1", "3.2"]
+        # local フェーズ: 1.1 後にデータ検証テストと追加サービス設計が ready になる
+        assert [s.id for s in get_next_steps("asdw-web", completed_step_ids=[])] == ["1.1"]
+        assert sorted(
+            s.id for s in get_next_steps("asdw-web", completed_step_ids=["1.1"])
+        ) == ["1.2", "2.1"]
+        assert [
+            s.id for s in get_next_steps("asdw-web", completed_step_ids=["1.1", "1.2", "2.1"])
+        ] == ["2.3"]
+
+        local_completed = ["1.1", "1.2", "2.1", "2.3", "3.1", "3.2", "3.3", "4.1"]
+        assert [
+            s.id for s in get_next_steps("asdw-web", completed_step_ids=local_completed)
+        ] == ["4.2"]
+
+        # local generation checkpoint 後に初めて live deploy へ進む
+        after_checkpoint = local_completed + ["4.2"]
+        assert [
+            s.id for s in get_next_steps("asdw-web", completed_step_ids=after_checkpoint)
+        ] == ["1.3"]
+
+        live_completed = after_checkpoint + ["1.3", "2.2", "2.4", "3.3"]
+        assert [
+            s.id for s in get_next_steps("asdw-web", completed_step_ids=live_completed)
+        ] == ["3.4"]
+
+        completed_ui = live_completed + ["3.4", "3.5", "4.3", "4.4"]
         nexts = get_next_steps("asdw-web", completed_step_ids=completed_ui)
-        assert [s.id for s in nexts] == ["3.3"]
-
-        completed_e2e = completed_ui + ["3.3"]
-        nexts = get_next_steps("asdw-web", completed_step_ids=completed_e2e)
-        assert sorted(s.id for s in nexts) == ["4.1", "4.2"]
+        assert sorted(s.id for s in nexts) == ["5.1", "5.2"]
 
     def test_aag_dag_walk(self):
         assert [s.id for s in get_next_steps("aag", completed_step_ids=[])] == ["1"]
@@ -340,23 +412,27 @@ class TestGetNextSteps:
         assert get_step("aagd", "3").custom_agent == "Dev-Microservice-Azure-AgentDeploy"
 
     def test_and_join(self):
-        nexts = get_next_steps("adfd", completed_step_ids=["1.1"])
+        # ADFD Step 3 は Step 1 AND Step 2 の両方完了で起動する AND join。
+        # producer Step 追加後は上流 0.1/0.2/4/5 の完了が前提になる。
+        upstream = ["0.1", "0.2", "4", "5"]
+        nexts = get_next_steps("adfd", completed_step_ids=upstream + ["1"])
         next_ids = [s.id for s in nexts]
-        assert "2" not in next_ids
-        assert "1.2" in next_ids
-
-        nexts = get_next_steps("adfd", completed_step_ids=["1.1", "1.2"])
-        next_ids = [s.id for s in nexts]
+        assert "3" not in next_ids
         assert "2" in next_ids
+
+        nexts = get_next_steps("adfd", completed_step_ids=upstream + ["1", "2"])
+        next_ids = [s.id for s in nexts]
+        assert "3" in next_ids
 
     def test_skipped_resolves_dependency(self):
+        # Step 2 を skip すると、Step 1 完了のみで Step 3 が起動可能。
         nexts = get_next_steps(
             "adfd",
-            completed_step_ids=["1.1"],
-            skipped_step_ids=["1.2"],
+            completed_step_ids=["0.1", "0.2", "4", "5", "1"],
+            skipped_step_ids=["2"],
         )
         next_ids = [s.id for s in nexts]
-        assert "2" in next_ids
+        assert "3" in next_ids
 
     def test_nonexistent_dep_auto_resolves(self):
         wf = WorkflowDef(
@@ -388,7 +464,7 @@ class TestGetStep:
     """モジュールレベル get_step() のテスト。"""
 
     def test_existing(self):
-        step = get_step("asdw-web", "2.3T")
+        step = get_step("aad-web", "2.3")
         assert step is not None
         assert step.custom_agent == "Arch-TDD-TestSpec"
 
@@ -548,26 +624,40 @@ class TestABDVAgentNames:
 # Sub-3 (Q3=b): output_paths / output_paths_template CI assertion
 # ---------------------------------------------------------------------------
 
-# Sub-3 時点で output_paths も output_paths_template も未設定の Step を allowlist 管理。
+# output_paths も output_paths_template も未設定の Step を allowlist 管理。
 # 移行期間中の暫定措置。後続 Sub で 1 件ずつ allowlist から外す方針。
 # キー = workflow id、値 = step id のリスト。
+#
+# E-01 / E-08 で解消済み（allowlist から除外）:
+#   asdw-web: 1.1 / 2.1 / 2.2 / 3.1 / 3.4 / 4.3 / 5.1 / 5.2
+#   aagd:     3
+#   adoc:     1 / 3.2 / 3.3 / 3.4 / 3.5 / 4 / 5.1〜5.4 / 6.1〜6.3（宣言済みだった分の棚卸し）
+#
+# E-07 で解消済み（allowlist から除外）:
+#   akm:      1 / 2（templates/akm/step-1.md・step-2.md の `## 出力` を registry へ宣言）
+#   adfdv:    4.1 / 4.2（templates/adfdv/step-4.1.md・step-4.2.md の `## 出力` と
+#             QA-AzureArchitectureReview / QA-AzureDependencyReview prompt の Step 別出力表を registry へ宣言）
+#
+# E-09 で解消済み（allowlist から除外）:
+#   `output_paths_template` が「fan-out キーの別名プレースホルダ / glob / ディレクトリ参照」を
+#   fail-closed で落とすようになった（FR-FANOUT-OUT-01）ため、確定ファイルパスへ解決できない
+#   成果物も runner の output_paths ゲートを誤 fail させずに契約として宣言できる。
+#   これにより次の Step を io-contract の宣言どおり registry へ反映し、allowlist から外した:
+#     aad-web:  1 / 2.1 / 2.2 / 2.3（2.1 / 2.2 は `{screenNameSlug}` / `{serviceNameSlug}` を含み展開されない）
+#     asdw-web: 2.3 / 2.4 / 3.2 / 3.3 / 3.5 / 4.1 / 4.2 / 4.4
+#     adfd:     1 / 2 / 3（もとから宣言済みで allowlist が陳腐化していた）
+#     adfdv:    1.1 / 2.1 / 2.2 / 3
+#     aag:      1 / 2 / 3（もとから宣言済みで allowlist が陳腐化していた）
+#     aagd:     2.2 / 2.3 / 3
+#     akm:      1 / 2
+#     aqod:     1 / 2（もとから宣言済みで allowlist が陳腐化していた）
+#     adoc:     2.1〜2.5 / 3.1（TBD-14 の動的パスを `output_paths_template` で宣言）
+#
+# 残置理由:
+#   adfdv 1.2 : templates/adfdv/step-1.2.md `## 出力` は「Azure リソースの作成・検証完了」と
+#               `{WORK}` 配下の実行ログのみで、リポジトリ内の成果物パスが契約上存在しない。
 ALLOWED_EMPTY_OUTPUT_PATHS_STEPS: dict[str, list[str]] = {
-    "aad-web": ["1", "2.1", "2.2", "2.3"],
-    "asdw-web": [
-        "1.1", "1.2", "2.1", "2.2", "2.3", "2.3T", "2.3TC", "2.4", "2.5",
-        "3.0T", "3.0TC", "3.1", "3.2", "3.3", "4.1", "4.2",
-    ],
-    "adfd": ["1.1", "1.2", "2", "3", "4", "5", "6.1", "6.2", "6.3"],
-    "adfdv": ["1.1", "1.2", "2.1", "2.2", "3", "4.1", "4.2"],
-    "aag": ["1", "2", "3"],
-    "aagd": ["1", "2.1", "2.2", "2.3", "3"],
-    "akm": ["1", "2"],
-    "aqod": ["1", "2"],
-    "adoc": [
-        "1", "2.1", "2.2", "2.3", "2.4", "2.5",
-        "3.1", "3.2", "3.3", "3.4", "3.5",
-        "4", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3",
-    ],
+    "adfdv": ["1.2"],
 }
 
 
@@ -600,6 +690,76 @@ class TestOutputPathsExplicit:
         assert hasattr(step, "output_paths_template")
         assert step.output_paths_template is None
 
+    def test_allowlist_has_no_stale_entries(self):
+        """allowlist が陳腐化していないこと。
+
+        宣言済みになった Step が allowlist に残ると、以後その Step の宣言漏れを
+        検出できなくなる。allowlist は「実際に宣言が空の Step」だけを含む。
+        """
+        workflows = {wf.id: wf for wf in list_workflows()}
+        stale: list[str] = []
+        for workflow_id, step_ids in ALLOWED_EMPTY_OUTPUT_PATHS_STEPS.items():
+            workflow = workflows.get(workflow_id)
+            assert workflow is not None, f"allowlist が実在しない workflow を参照: {workflow_id}"
+            for step_id in step_ids:
+                step = next((s for s in workflow.steps if s.id == step_id), None)
+                assert step is not None, (
+                    f"allowlist が実在しない Step を参照: {workflow_id} {step_id}"
+                )
+                if step.output_paths or step.output_paths_template:
+                    stale.append(f"{workflow_id} {step_id}")
+        assert stale == [], (
+            f"宣言済みになった Step が allowlist に残っている: {stale}. "
+            f"ALLOWED_EMPTY_OUTPUT_PATHS_STEPS から削除してください。"
+        )
+
+    @pytest.mark.parametrize(
+        ("workflow_id", "step_id"),
+        [
+            (workflow_id, step_id)
+            for workflow_id, step_ids in ALLOWED_EMPTY_OUTPUT_PATHS_STEPS.items()
+            for step_id in step_ids
+        ],
+    )
+    def test_allowlisted_step_template_declares_no_repository_artifact(
+        self, workflow_id: str, step_id: str
+    ):
+        """allowlist の残置理由をコメントではなく検証で担保する。
+
+        allowlist を許すのは「template の `## 出力` にリポジトリ内成果物パスが
+        契約上存在しない」Step だけである。template に成果物パスが追加されたら
+        allowlist を外して宣言すべきなので、その時点で本テストが落ちる。
+        """
+        template = (
+            Path(__file__).resolve().parents[2]
+            / ".github"
+            / "scripts"
+            / "templates"
+            / workflow_id
+            / f"step-{step_id}.md"
+        )
+        assert template.is_file(), f"template が見つからない: {template}"
+
+        text = template.read_text(encoding="utf-8")
+        match = re.search(r"^##\s*出力\s*$(.*?)^##\s", text, re.M | re.S)
+        assert match is not None, f"{template} に `## 出力` 節が無い"
+
+        repository_paths = [
+            line.strip()
+            for line in match.group(1).splitlines()
+            if re.search(r"`(?!\{)[\w./-]+/[\w./-]+`", line)
+        ]
+        assert repository_paths == [], (
+            f"{workflow_id} {step_id} の template がリポジトリ内成果物を宣言している: "
+            f"{repository_paths}. ALLOWED_EMPTY_OUTPUT_PATHS_STEPS から外し、"
+            f"output_paths に宣言してください。"
+        )
+
+    def test_step_def_remote_cicd_default_false(self):
+        """StepDef の requires_remote_cicd は明示しない限り False。"""
+        step = StepDef(id="x", title="t", custom_agent=None, consumed_artifacts=[])
+        assert step.requires_remote_cicd is False
+
     def test_output_paths_template_default_factory_safe(self):
         """output_paths_template を指定して StepDef を作成できること。"""
         step = StepDef(
@@ -608,3 +768,172 @@ class TestOutputPathsExplicit:
             output_paths_template=["docs/{key}.md"],
         )
         assert step.output_paths_template == ["docs/{key}.md"]
+
+
+# ---------------------------------------------------------------------------
+# P12: ASDW-WEB local-first / live-last DAG
+# ---------------------------------------------------------------------------
+
+# local generation checkpoint より前に完了する Step（Azure live 操作を伴わない）。
+ASDW_WEB_LOCAL_STEP_IDS = ["1.1", "1.2", "2.1", "2.3", "3.1", "3.2", "3.3", "4.1", "4.2"]
+
+# local generation checkpoint より後に実行する Step（Azure live 操作またはその結果に依存）。
+ASDW_WEB_LIVE_STEP_IDS = ["1.3", "2.2", "2.4", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2"]
+
+ASDW_WEB_EXPECTED_DEPENDS_ON = {
+    # --- local ---
+    "1.1": [],
+    "1.2": ["1.1"],
+    "2.1": ["1.1"],
+    "2.3": ["2.1"],
+    "3.1": ["2.3"],
+    "3.2": ["3.1"],
+    "3.3": ["3.2"],
+    "4.1": ["3.3"],
+    "4.2": ["1.2", "4.1"],
+    # --- local generation checkpoint ---
+    # --- live ---
+    "1.3": ["1.2", "4.2"],
+    "2.2": ["1.3", "2.1"],
+    "2.4": ["2.2", "2.3"],
+    "3.4": ["2.4", "3.3"],
+    "3.5": ["3.4"],
+    "4.3": ["3.5", "4.2"],
+    "4.4": ["4.3"],
+    "5.1": ["4.4"],
+    "5.2": ["4.4"],
+}
+
+
+def _asdw_web_transitive_deps(step_id: str) -> set[str]:
+    """step_id が推移的に依存する Step ID 集合を返す。"""
+    seen: set[str] = set()
+    pending = [step_id]
+    while pending:
+        current = pending.pop()
+        step = get_step("asdw-web", current)
+        assert step is not None, current
+        for dep in step.depends_on:
+            if dep not in seen:
+                seen.add(dep)
+                pending.append(dep)
+    return seen
+
+
+_IO_CONTRACT_DIR = Path(__file__).resolve().parents[2] / ".github" / "io-contracts"
+_TEMPLATES_DIR = (
+    Path(__file__).resolve().parents[2] / ".github" / "scripts" / "templates" / "asdw-web"
+)
+
+
+def _asdw_web_scoped_io_contract(step_id: str) -> dict:
+    """ASDW-WEB Step の scoped I/O contract を読み込む。"""
+    matches = sorted(_IO_CONTRACT_DIR.glob(f"*--asdw-web--{step_id}.yaml"))
+    assert len(matches) == 1, f"step {step_id} の scoped io-contract が 1 件でない: {matches}"
+    return yaml.safe_load(matches[0].read_text(encoding="utf-8")) or {}
+
+
+class TestAsdwWebLocalFirstDag:
+    """ASDW-WEB が local 生成を完了してから live deploy を行う DAG であること。"""
+
+    def test_local_and_live_step_ids_cover_all_non_container_steps(self):
+        """local / live の分類が非コンテナ Step を過不足なく覆うこと。"""
+        wf = get_workflow("asdw-web")
+        actual = sorted(s.id for s in wf.steps if not s.is_container)
+        assert sorted(ASDW_WEB_LOCAL_STEP_IDS + ASDW_WEB_LIVE_STEP_IDS) == actual
+        assert not set(ASDW_WEB_LOCAL_STEP_IDS) & set(ASDW_WEB_LIVE_STEP_IDS)
+
+    @pytest.mark.parametrize("step_id", list(ASDW_WEB_EXPECTED_DEPENDS_ON))
+    def test_step_declares_local_first_dependencies(self, step_id):
+        """各 Step の depends_on が local-first / live-last DAG と一致すること。"""
+        step = get_step("asdw-web", step_id)
+        assert step is not None, step_id
+        assert sorted(step.depends_on) == ASDW_WEB_EXPECTED_DEPENDS_ON[step_id], step_id
+
+    @pytest.mark.parametrize("live_step_id", ASDW_WEB_LIVE_STEP_IDS)
+    def test_every_live_step_follows_all_local_steps(self, live_step_id):
+        """live Step は全 local Step の完了後にしか到達できないこと。"""
+        reachable = _asdw_web_transitive_deps(live_step_id) | {live_step_id}
+        missing = [s for s in ASDW_WEB_LOCAL_STEP_IDS if s not in reachable]
+        assert missing == [], f"{live_step_id} が local Step {missing} より先に実行され得る"
+
+    @pytest.mark.parametrize("local_step_id", ASDW_WEB_LOCAL_STEP_IDS)
+    def test_local_step_never_depends_on_live_step(self, local_step_id):
+        """local Step が live Step へ依存しないこと。"""
+        deps = _asdw_web_transitive_deps(local_step_id)
+        assert not deps & set(ASDW_WEB_LIVE_STEP_IDS), local_step_id
+
+    def test_local_steps_do_not_require_live_only_artifacts(self):
+        """local Step が live Step の出力を required_input_paths に要求しないこと。"""
+        live_outputs: set[str] = set()
+        for live_step_id in ASDW_WEB_LIVE_STEP_IDS:
+            step = get_step("asdw-web", live_step_id)
+            assert step is not None, live_step_id
+            live_outputs.update(step.output_paths or [])
+        violations = []
+        for local_step_id in ASDW_WEB_LOCAL_STEP_IDS:
+            step = get_step("asdw-web", local_step_id)
+            assert step is not None, local_step_id
+            for required in step.required_input_paths or []:
+                if required in live_outputs:
+                    violations.append((local_step_id, required))
+        assert violations == [], f"local Step が live 出力を要求している: {violations}"
+
+    def test_local_step_io_contract_inputs_are_not_produced_by_live_steps(self):
+        """local Step の I/O contract 入力が live Step を producer として宣言しないこと。
+
+        registry の `output_paths` は ASDW-WEB ではほぼ未宣言のため、
+        成果物の生成元の正本である scoped I/O contract を根拠に検査する。
+        """
+        live_producer_suffixes = tuple(f"--asdw-web--{sid}" for sid in ASDW_WEB_LIVE_STEP_IDS)
+        violations = []
+        for local_step_id in ASDW_WEB_LOCAL_STEP_IDS:
+            contract = _asdw_web_scoped_io_contract(local_step_id)
+            for entry in contract.get("inputs") or []:
+                producer = entry.get("producer") or ""
+                if producer.endswith(live_producer_suffixes):
+                    violations.append((local_step_id, entry.get("path"), producer))
+        assert violations == [], f"local Step が live Step の成果物を入力にしている: {violations}"
+
+    def test_dag_walk_reaches_local_checkpoint_before_data_deploy(self):
+        """get_next_steps の走査が local 群を先に消化し、最後に live 群へ進むこと。"""
+        completed: list[str] = []
+        local_remaining = set(ASDW_WEB_LOCAL_STEP_IDS)
+        while local_remaining:
+            nexts = [s.id for s in get_next_steps("asdw-web", completed_step_ids=completed)]
+            assert nexts, f"local 走査が停止した: completed={completed}"
+            assert not set(nexts) & set(ASDW_WEB_LIVE_STEP_IDS), (
+                f"local 未完了のまま live Step {nexts} が起動可能: completed={completed}"
+            )
+            completed.extend(nexts)
+            local_remaining -= set(nexts)
+        assert [s.id for s in get_next_steps("asdw-web", completed_step_ids=completed)] == ["1.3"]
+
+    def test_workflow_limits_parallelism_to_one(self):
+        """初期版は同一 worktree の true parallel を避けるため max_parallel=1 とすること。"""
+        assert get_workflow("asdw-web").max_parallel == 1
+
+    @pytest.mark.parametrize("step_id", list(ASDW_WEB_EXPECTED_DEPENDS_ON))
+    def test_step_template_dependency_section_matches_registry(self, step_id):
+        """template の `## 依存` が registry の depends_on を漏れなく宣言すること。
+
+        DAG 変更時に template の記述だけが旧依存のまま残ると、Agent が誤った
+        前提で実行するため、両者の drift を機械的に検出する。
+        """
+        step = get_step("asdw-web", step_id)
+        assert step is not None, step_id
+        template = _TEMPLATES_DIR / f"step-{step_id}.md"
+        assert template.exists(), template
+        text = template.read_text(encoding="utf-8")
+        if "## 依存" not in text:
+            pytest.skip(f"step-{step_id}.md は依存セクションを持たない")
+        section = text.split("## 依存", 1)[1].split("\n## ", 1)[0]
+        # `Step.X ... asdw-web:done` 形式の前提条件宣言だけを依存記述として扱う
+        # （「Step.5.2 と並列実行可能」等の補足記述を誤検出しないため）。
+        declared = set(re.findall(r"Step\.(\d+\.\d+)[^\n]*asdw-web:done", section))
+        stale = sorted(declared - set(step.depends_on))
+        assert stale == [], f"step-{step_id}.md の `## 依存` に旧依存 {stale} が残っている"
+        if declared:
+            missing = sorted(set(step.depends_on) - declared)
+            assert missing == [], f"step-{step_id}.md の `## 依存` に {missing} が無い"
+

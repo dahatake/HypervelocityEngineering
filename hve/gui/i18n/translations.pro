@@ -13,8 +13,8 @@ SOURCES = ../app.py \
           ../app_catalog_loader.py \
           ../copilot_chat_panel.py \
           ../copy_button.py \
+          ../../../cq/gui/settings_section.py \
           ../doc_convert.py \
-          ../header_bar.py \
           ../help_content.py \
           ../help_popup.py \
           ../main_window.py \
@@ -28,14 +28,12 @@ SOURCES = ../app.py \
           ../settings_apply.py \
           ../settings_window.py \
           ../stats_detail_popup.py \
-          ../tasktre_widget.py \
           ../wizard.py \
           ../workbench_logger.py \
           ../workbench_state.py \
           ../workbench_widgets.py \
           ../workbench_window.py \
           ../widgets/app_id_checklist.py \
-          ../activity_bar.py \
           ../file_explorer/file_tree_panel.py \
           ../markdown_preview/preview_panel.py
 

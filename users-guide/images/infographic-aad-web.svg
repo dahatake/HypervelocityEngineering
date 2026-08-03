@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" role="img" aria-label="AAD-WEB インフォグラフィック">
-  <desc>AAD-WEB（Web App Design）4ステップのデータフロー: service-catalog-matrix.md入力 → Step.1/2.1/2.2/2.3 → 各成果物</desc>
+  <desc>AAD-WEB（Web App Design）5ステップのデータフロー: service-catalog-matrix.md入力 → Step.1/2.1/2.2/2.3/2.4 → 各成果物</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
@@ -46,13 +46,19 @@
   <line x1="580" y1="257" x2="610" y2="257" class="ln"/>
   <rect x="610" y="243" width="140" height="28" rx="4" class="out"/>
   <text x="680" y="261" text-anchor="middle" class="bt">docs/services/*.md</text>
-  <!-- Join to Step 2.3 -->
+  <!-- Join: 2.1 → 2.4 (画面 test-spec), 2.2 → 2.3 (サービス test-spec) -->
   <polyline points="520,219 520,310 460,310 460,330" class="ln"/>
   <polyline points="520,279 520,310" style="stroke:#555;stroke-width:1.2;fill:none;"/>
-  <!-- Step 2.3 -->
-  <rect x="360" y="330" width="120" height="44" rx="5" class="agt"/>
-  <text x="420" y="348" text-anchor="middle" class="bt">Step.2.3</text>
-  <text x="420" y="362" text-anchor="middle" class="bs">Arch-TDD-TestSpec</text>
+  <!-- Step 2.4 (画面 test-spec, 並列) -->
+  <rect x="200" y="330" width="120" height="44" rx="5" class="par"/>
+  <text x="260" y="348" text-anchor="middle" class="bt">Step.2.4（並列）</text>
+  <text x="260" y="362" text-anchor="middle" class="bs">Arch-TDD-TestSpec（画面）</text>
+  <!-- Step 2.3 (サービス test-spec, 並列) -->
+  <rect x="360" y="330" width="120" height="44" rx="5" class="par"/>
+  <text x="420" y="348" text-anchor="middle" class="bt">Step.2.3（並列）</text>
+  <text x="420" y="362" text-anchor="middle" class="bs">Arch-TDD-TestSpec（サービス）</text>
+  <!-- Outputs (merged) -->
+  <line x1="320" y1="352" x2="360" y2="352" style="stroke:#555;stroke-width:1.2;fill:none;"/>
   <line x1="480" y1="352" x2="510" y2="352" class="ln"/>
   <rect x="510" y="338" width="155" height="28" rx="4" class="out"/>
   <text x="587" y="356" text-anchor="middle" class="bt">docs/test-specs/*.md</text>

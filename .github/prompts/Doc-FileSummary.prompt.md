@@ -1,6 +1,6 @@
 ﻿> プロダクションコード1ファイルの責務・公開API・依存・技術的負債を要約する。
 
-> **WORK**: `/work/Doc-FileSummary/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-FileSummary/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

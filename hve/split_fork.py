@@ -28,15 +28,85 @@ import os
 
 
 # ---------------------------------------------------------------------------
-# work_root 解決
+# run-id / work_root 解決
 # ---------------------------------------------------------------------------
 
-def resolve_work_root() -> Path:
-    """`work/` ディレクトリの絶対 Path を返す。
+WORK_DIRNAME = "work"
+WORK_RUN_DIRNAME = "run"
+
+# プロセス内で 1 度だけ採番した run-id をキャッシュする。
+# env / Cloud 検出が無いときに `resolve_run_id()` を複数回呼んでも
+# 同じ ID を返すことを保証する。
+_RESOLVED_RUN_ID: Optional[str] = None
+
+
+def _detect_cloud_run_id() -> Optional[str]:
+    """GitHub Issue 起動時に ``"issue-<N>"`` を返す。それ以外は None。
+
+    検出順:
+      1. 環境変数 ``GITHUB_ISSUE_NUMBER``
+      2. ``GITHUB_EVENT_PATH`` JSON 内の ``issue.number``
+    """
+    issue_num = os.environ.get("GITHUB_ISSUE_NUMBER", "").strip()
+    if issue_num.isdigit():
+        return f"issue-{issue_num}"
+    event_path = os.environ.get("GITHUB_EVENT_PATH", "").strip()
+    if event_path and os.path.isfile(event_path):
+        try:
+            import json
+            with open(event_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            issue = data.get("issue") or {}
+            num = issue.get("number")
+            if isinstance(num, int) and num > 0:
+                return f"issue-{num}"
+        except (OSError, ValueError, TypeError):
+            return None
+    return None
+
+
+def resolve_run_id() -> str:
+    """`work/run/<run-id>/` の ``<run-id>`` を解決する。
 
     解決順序（先勝ち）:
-      1. 環境変数 `HVE_WORK_ROOT` が設定されていればその値（テスト用上書き）
-      2. `<repo_root>/work`（`<repo_root>` = `Path(__file__).resolve().parents[1]`）
+      1. 環境変数 ``HVE_RUN_ID``（明示指定）
+      2. GitHub Issue 起動検出 → ``"issue-<N>"``
+      3. ``generate_run_id()`` で新規採番（プロセス内キャッシュ）
+
+    プロセス内では 1 度だけ採番し、以降は同じ ID を返す。
+    """
+    global _RESOLVED_RUN_ID
+    env_id = os.environ.get("HVE_RUN_ID", "").strip()
+    if env_id:
+        return env_id
+    cloud_id = _detect_cloud_run_id()
+    if cloud_id:
+        return cloud_id
+    if _RESOLVED_RUN_ID is None:
+        try:
+            from hve.config import generate_run_id
+        except ImportError:  # pragma: no cover - script execution path
+            from config import generate_run_id  # type: ignore[no-redef]
+        _RESOLVED_RUN_ID = generate_run_id()
+    return _RESOLVED_RUN_ID
+
+
+def _reset_run_id_cache() -> None:
+    """テスト専用: ``_RESOLVED_RUN_ID`` キャッシュをクリアする。"""
+    global _RESOLVED_RUN_ID
+    _RESOLVED_RUN_ID = None
+
+
+def resolve_work_root() -> Path:
+    """`work/run/<run-id>/` ディレクトリの絶対 Path を返す。
+
+    解決順序（先勝ち）:
+      1. 環境変数 ``HVE_WORK_ROOT`` が設定されていればその値
+         （GUI/CLI 起動時に親プロセスが設定した値を子プロセスが継承、
+          テストでの override 用途も兼ねる）
+    2. ``<repo_root>/work/run/<run-id>/``
+         （``<repo_root>`` = ``Path(__file__).resolve().parents[1]``、
+          ``<run-id>`` は ``resolve_run_id()`` の結果）
 
     cwd 依存を排除するための関数。存在しないディレクトリでも Path は返す
     （呼び出し側で `is_dir()` を判定すること）。
@@ -44,7 +114,12 @@ def resolve_work_root() -> Path:
     override = os.environ.get("HVE_WORK_ROOT")
     if override:
         return Path(override).resolve()
-    return (Path(__file__).resolve().parents[1] / "work").resolve()
+    return (
+        Path(__file__).resolve().parents[1]
+        / WORK_DIRNAME
+        / WORK_RUN_DIRNAME
+        / resolve_run_id()
+    ).resolve()
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +159,19 @@ _VALIDATION_MARKER_PATTERNS: List[re.Pattern[str]] = [
     re.compile(r"^#+\s*(検証|検証結果|Validation)\b", re.MULTILINE),
     re.compile(r"^\s*[-*]\s*\*?\*?(検証|Validation)\*?\*?\s*[:：]", re.MULTILINE),
 ]
+
+
+def has_validation_marker(text: str, *, html_comment_only: bool = False) -> bool:
+    """完了報告の検証マーカー判定の単一実装（FR-MAINT-06）。
+
+    Args:
+        text: 検査対象の本文。
+        html_comment_only: True のとき HTML コメント形式だけを受理する。
+            TDD レポートは template が `<!-- validation-confirmed -->` を出力するため
+            厳格化し、PR body / completion-report は 3 形式を許容する。
+    """
+    patterns = _VALIDATION_MARKER_PATTERNS[:1] if html_comment_only else _VALIDATION_MARKER_PATTERNS
+    return any(pattern.search(text) for pattern in patterns)
 
 _PLACEHOLDER_PATTERN = re.compile(r"REPLACE_ME", re.IGNORECASE)
 
@@ -196,6 +284,36 @@ def is_failed_dir(parent_dir_name: str) -> bool:
     return FAILED_DIR_MARKER in parent_dir_name
 
 
+def work_root_contains_run_id(work_root: Path, run_id: Optional[str]) -> bool:
+    """work_root のパスセグメントに `run_id` が完全一致で含まれるかを判定する。
+
+    `work/run/<run-id>/` 形式の run-scoped work_root では、ディレクトリ構造
+    自体で run-id 隔離が成立しているため、追加の `parent.name` フィルタ
+    （`_passes_run_scope`）は過剰となり、`Issue-0` 形式の正当な subissues.md
+    を誤除外する原因になる。本ヘルパは「フィルタ skip 可否」の判定に使う。
+
+    - `str(work_root)` の単純な部分一致では `<run-id>-old` のような紛らわしい
+      祖先名や、偶然 run_id 文字列を含む親パスでも True を返してしまうため、
+      必ず `Path.parts` でセグメント完全一致を取る。
+    - symlink / junction で `.../work/run/<run-id>` を指している場合に resolve
+      後の実体パスから run_id セグメントが消えるケースがあるため、lexical /
+      resolved の両方を見る。
+    """
+    if not run_id:
+        return False
+    try:
+        lexical_parts = Path(work_root).parts
+    except (OSError, ValueError):
+        lexical_parts = ()
+    if run_id in lexical_parts:
+        return True
+    try:
+        resolved_parts = Path(work_root).resolve().parts
+    except (OSError, ValueError):
+        return False
+    return run_id in resolved_parts
+
+
 def discover_subissues_md_verbose(
     work_root: Path,
     custom_agent: Optional[str],
@@ -256,7 +374,12 @@ def discover_subissues_md_verbose(
     ]
 
     # `run_id` 指定時は親ディレクトリ名のスコープでさらに絞り込む。
-    if run_id:
+    # ただし `work_root` 自体のパスセグメントに `run_id` が完全一致で含まれる
+    # （= `work/run/<run-id>/` 形式の run-scoped work_root）場合は、
+    # work_root スコープだけで run-id 隔離が既に成立している。この場合の
+    # 追加 parent.name フィルタは過剰となり、`Issue-0` 形式の正当な
+    # subissues.md を誤除外するため、フィルタを skip する。
+    if run_id and not work_root_contains_run_id(work_root, run_id):
         existing = [
             (p, tag) for (p, tag) in existing
             if _passes_run_scope(p.parent.name, run_id)
@@ -581,10 +704,10 @@ _SUBTASK_PROMPT_TEMPLATE = """\
 
 == 出力先（厳守）==
 - 正規パス（絶対パス）: **`{abs_output_dir}`**
-- 正規パス（リポジトリ相対）: `work/{work_subdir}/`
+- 正規パス（リポジトリ相対）: `{rel_output_dir}`
 - CWD は親 runner によりリポジトリルート `{repo_root}` に固定されています（LLM 側で `cd` する必要はありません）。
 - 例:
-  - ✅ 正例: `work/{work_subdir}/completion-report.md`
+    - ✅ 正例: `{rel_output_dir}completion-report.md`
   - ❌ 誤例: `hve/work/{work_subdir}/completion-report.md`（このリポジトリには `hve/work/` という別ディレクトリも存在しますが、完了判定は参照しません）
 - 全ての成果物（completion-report.md および本文内で言及するスライス／フラグメント等）を上記の正規パス配下に出力すること。
 
@@ -598,6 +721,7 @@ def build_subtask_prompt(
     parent_custom_agent: Optional[str],
     work_subdir: str,
     repo_root: Optional[Path] = None,
+    work_root: Optional[Path] = None,
 ) -> str:
     """サブタスク実行用のプロンプト文字列を構築する。
 
@@ -605,17 +729,29 @@ def build_subtask_prompt(
         subissue: 対象サブタスク定義
         parent_step_id: 親 Step ID（例 "2.1"）
         parent_custom_agent: 親 Step の Custom Agent 名
-        work_subdir: サブタスクの出力 work ディレクトリ（リポジトリ直下
-            `work/` からの相対パス。例 "Arch-UI-Detail/Issue-screen-detail/sub-001"）
+        work_subdir: サブタスクの出力 work_root 相対ディレクトリ。
+            例 "Arch-UI-Detail/Issue-screen-detail/sub-001"
         repo_root: リポジトリルートの絶対パス。指定時はプロンプトに絶対パスで
             正規出力先を埋め込む。未指定時は `Path.cwd()` を使用する。
+        work_root: `resolve_work_root()` 済みの出力ルート。未指定時は
+            `repo_root / "work" / "run" / "unknown-run"` を安全側 fallback とする。
 
     Returns:
         プロンプト文字列。
     """
     if repo_root is None:
         repo_root = Path.cwd()
-    abs_output_dir = (repo_root / "work" / work_subdir).as_posix() + "/"
+    effective_work_root = (
+        Path(work_root).resolve()
+        if work_root is not None
+        else (repo_root / WORK_DIRNAME / WORK_RUN_DIRNAME / "unknown-run").resolve()
+    )
+    abs_output_path = (effective_work_root / work_subdir).resolve()
+    abs_output_dir = abs_output_path.as_posix() + "/"
+    try:
+        rel_output_dir = abs_output_path.relative_to(repo_root.resolve()).as_posix() + "/"
+    except ValueError:
+        rel_output_dir = abs_output_dir
     return _SUBTASK_PROMPT_TEMPLATE.format(
         parent_step_id=parent_step_id,
         parent_custom_agent=parent_custom_agent or "(none)",
@@ -627,6 +763,7 @@ def build_subtask_prompt(
         work_subdir=work_subdir,
         repo_root=repo_root.as_posix(),
         abs_output_dir=abs_output_dir,
+        rel_output_dir=rel_output_dir,
     )
 
 
@@ -704,12 +841,10 @@ def check_subtask_completion(
     except OSError as exc:
         return False, f"completion-report.md 読み込み失敗: {exc}"
 
-    for pat in _VALIDATION_MARKER_PATTERNS:
-        if pat.search(content):
-            return True, "OK"
+    if has_validation_marker(content):
+        return True, "OK"
 
     return False, f"検証マーカーが見つからない: {report_path}"
-
 
 # ---------------------------------------------------------------------------
 # compute_waves — depends_on を解釈して並列実行可能な wave 列に分割

@@ -2,6 +2,11 @@
 
 ← [README](../README.md)
 
+> ⚠️ **移行ノート（AAS 共通化対応）**: 本ワークフロー（ADFDV）の上流である ADFD（Architecture Design - Dataflow）は、旧 9 ステップ構成から **Step.1〜3（per-job 詳細・監視・テスト仕様）の 3 ステップのみ**へ再設計され、共通カタログは AAS が `docs/catalog/*` として SoT を提供します。
+> - 旧 `docs/dataflow/dataflow-domain-analytics.md` / `dataflow-data-source-analysis.md` / `dataflow-data-model.md` / `dataflow-app-catalog.md` / `dataflow-service-catalog.md` / `dataflow-test-strategy.md` の生成は廃止されました。
+> - ADFDV ワークフローは現状これらを依存に持つ記述が残っています（`hve/workflow_registry.py` の `adfdv` 依存定義を含む）。AAS の `docs/catalog/*` を参照する形への追従修正は別タスクで実施予定です（[CHANGELOG](../CHANGELOG.md) の Known Issues 参照）。
+> - 以下の表中の `docs/dataflow/dataflow-*.md` への参照は、現時点では追従未完了のため旧記述のままです。
+
 ---
 
 ## 目次

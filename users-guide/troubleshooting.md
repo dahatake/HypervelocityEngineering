@@ -406,23 +406,10 @@ HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティ
 | 並列実行でメモリ不足 | [付録D: 並列実行でメモリ不足](./hve-cli-orchestrator-guide.md#並列実行でメモリ不足) |
 | PR 作成時に HTTP 422 エラー | [付録D: PR 作成時に HTTP 422 エラー](./hve-cli-orchestrator-guide.md#pr-作成時に-http-422-エラー) |
 
-### Resume 関連のよくある質問
+### Resume 関連のよくある質問 — 廃止（v1.1）
 
-#### Q. 実行を中断したら続きから再開したい
+GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、Session State（Resume）機能（`Ctrl+R` 中断・`hve resume` サブコマンド・`session-state/` 永続化）は v1.1 で全廃しました。ワークフローを分割実行したい場合は `--steps` でステップ範囲を絞ってください。
 
-**A.** 実行中に `Ctrl+R` で保存し、次回 `python -m hve` 起動時の Resume プロンプト、または `python -m hve resume continue <run_id>` を使って再開してください。
-
-#### Q. SDK バージョン差異の警告が出る
-
-**A.** 保存時と実行時で Copilot SDK の major version が異なる可能性があります。厳密に止めたい場合は `python -m hve resume continue <run_id> --abort-on-sdk-mismatch` を利用してください。
-
-#### Q. `Ctrl+R` を押しても反応しない
-
-**A.** 非 TTY 環境（リダイレクト/CI）や VS Code 統合ターミナルで keybind が安定しない場合があります。`HVE_DISABLE_KEYBIND=1` を設定し、`hve resume ...` の CLI サブコマンドを使用してください。
-
-#### Q. `state.json not found` で Resume できない
-
-**A.** 実行時の CWD が保存時と違う可能性があります。保存時と同じディレクトリで起動するか、`--work-dir` に `work/runs` の絶対パスを指定してください。
 
 ## knowledge/ ドキュメント関連のトラブル
 

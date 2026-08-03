@@ -78,11 +78,14 @@ class TestResolveLanguage:
 class TestInstallTranslator:
     @pytest.fixture(autouse=True)
     def _ensure_app(self) -> None:
-        # QCoreApplication が必要
-        if QCoreApplication.instance() is None:
-            self._app = QCoreApplication(sys.argv[:1])
-        else:
-            self._app = QCoreApplication.instance()
+        # 翻訳 install には QCoreApplication で十分だが、同一 pytest プロセス内の
+        # 後続 GUI テスト（QWidget ベース）は QApplication を要求する。ここで
+        # 非 GUI の QCoreApplication を先に生成すると "Cannot create a QWidget
+        # without QApplication" で後続がクラッシュ/ハングするため、GUI と共存
+        # できる QApplication を生成する。
+        from PySide6.QtWidgets import QApplication
+
+        self._app = QApplication.instance() or QApplication(sys.argv[:1])
 
     def test_source_language_returns_true_without_load(self) -> None:
         # ja_JP はソース言語のため .qm ロード不要、True を返す
@@ -92,7 +95,13 @@ class TestInstallTranslator:
         qm_path = _I18N_DIR / "hve_gui_en_US.qm"
         if not qm_path.exists():
             pytest.skip(".qm not built; run setup-hve to compile")
-        assert i18n.install_translator(self._app, "en_US") is True
+        try:
+            assert i18n.install_translator(self._app, "en_US") is True
+        finally:
+            # 後続テスト（例: test_status_banner の "待機" 等 ja_JP 文言検証）への
+            # 翻訳汚染を防ぐため、ソース言語 ja_JP へ戻して QTranslator を取り外す。
+            # install_translator(app, "ja_JP") は既存 translator を removeTranslator する。
+            i18n.install_translator(self._app, "ja_JP")
 
 
 # ---------------------------------------------------------------------------
@@ -115,6 +124,15 @@ class TestAssets:
         content = ts_path.read_text(encoding="utf-8")
         assert '<source>' in content
         assert 'sourcelanguage="ja_JP"' in content or 'language="en_US"' in content
+
+    def test_cq_settings_section_is_translated(self) -> None:
+        """FR-GUI-04: Code-Query セクションの文字列が翻訳カタログに載っていること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "cq/gui/settings_section.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        assert '<context>\n    <name>CqIndexSection</name>' in content
+        assert "<source>インデックス管理</source>" in content
 
 
 class TestAvailableLanguages:

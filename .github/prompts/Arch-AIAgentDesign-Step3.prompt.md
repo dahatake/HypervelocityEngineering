@@ -1,6 +1,6 @@
 > AI Agent 詳細設計（Step 3）を実施し、docs/agent/agent-detail-{key}.md（fan-out 子毎、1 ファイル、key = `AG-*`）および docs/ai-agent-catalog.md を作成する。
 
-> **WORK**: `/work/Arch-AIAgentDesign-Step3/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-AIAgentDesign-Step3/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -25,6 +25,7 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 - `task-questionnaire` — 詳細設計時の不明点確認
+- `ai-agent-capability-contract` — AG-CAP-01〜06 の詳細設計・N/A・完了判定契約
 
 ## 1) 目的と非目的
 - 対象：指定されたユースケースに対する **AI Agent の設計 Step 3（詳細設計）** を実施し、Agent 一覧を出力する。
@@ -55,7 +56,7 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog.md` | 画面一覧。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
 | 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
 | 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
 | 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
@@ -99,10 +100,18 @@
 - `users-guide/08-ai-agent.md` の **Step 3** セクションの Prompt ガイドラインに従い、以下を実施する：
   - Step 2 の Agent Catalog の **各 Agent** について詳細設計書を作成する
   - 出力形式テンプレ（12セクション: Agent Overview〜System Prompt Instruction Format）に厳密に従う
-  - 完成判定チェック（9項目）を実施する
+  - Section 2.1 `Goal Contract` に Mission / Mutation Intent / Criterion / Evaluator / Evidence / Failure・Partial・Handoff を確定する
+  - Section 6.1 `Runtime Goal Loop` に有限のPLAN / ACT / OBSERVE / EVALUATE / REPLAN、反復上限、deadline、budget、停止条件を確定する
+  - Section 7.0 `Knowledge & Structured Data Routing` にRequest class、Preferred / Fallback / Blocked、runtime probe、permission、citationを確定する
+  - Section 7.1 `REST CRUD Matrix` にC/R/U/D、REST method/path、HITL、RBAC、冪等性、error、auditを確定する。C/U/Dのprimary経路はREST Function Toolだけにする
+  - Section 7.3 `MCP Integration Plan` にclient利用、Tool allowlist、auth、failure behavior、Remote adapter ownerを確定し、REST mutationを迂回させない
+  - Section 7.4 `Skill Packaging Decision` をrequired / not-requiredで確定する。required時だけ配置先・resources・明示load・validationを記載する
+  - 各AG-CAPが非該当の場合は Contract ID / 理由 / Decision source / 再判定条件を持つN/Aとし、単語だけのN/Aを禁止する
+  - Step 1 / 2から引き継いだMutation Intent、Required flag、Request class、owner、MCP、SkillのTBDを解消する。provider固有値を確認できない場合は`Design status: unknown`、確認日、確認した公式根拠、runtime probe、Blocked条件を確定し、値自体は推測しない
+  - 完成判定チェック（15項目）を実施する
   - `docs/agent/agent-detail-{key}.md`（`{key}` = `AG-*`、Agent 名はファイル名に含めない）を作成する
 - **量が多い場合の分割**: Agent 数が多い場合は Skill task-dag-planning の分割ルールに従い、Agent ごとに Sub Issue に分割する
-- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / 完成判定チェック9項目を全てパスしている
+- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / `users-guide/08-ai-agent.md` の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Step 1・2由来TBDが残っていない
 
 ### 5.2 Agent 一覧の出力
 - Step 2 と Step 3 の成果物を元に、`docs/ai-agent-catalog.md` を作成/更新する。
@@ -144,35 +153,38 @@
 - まず `large-output-chunking` スキルのルールに従う。
 - 設計書が長い場合は見出し境界で分割して追記する。
 
-## 6) セルフチェック（出力前に必ず確認）
+## 8) 最終品質レビュー（単回インライン・セルフチェック）
 
 ### 8.1 事前チェック
 - 全 3 Step の設計書が作成されている
 - `docs/ai-agent-catalog.md` が存在し、全 Agent が記載されている
 - 各 Agent の詳細設計書に System Prompt の雛形が含まれている
 - 各設計書の完成判定チェックをパスしている
+- 各設計書にAG-CAP-01〜06の固定見出しがあり、理由なしN/Aと上流TBDが残っていない
 
-### 8.2 品質レビュー（異なる観点で3度のレビュー）
-Skill adversarial-review に従う。
+### 8.2 ドメイン固有観点
 
-#### 3つの異なる観点（AI Agent 設計の場合）
-- **1回目：設計の網羅性・整合性**
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+- **設計の網羅性・整合性**
   - 全ユースケースがカバーされているか
   - Agent 間の境界（データ/権限/SLA）が矛盾していないか
   - 詳細設計の I/O 契約がアーキテクチャ設計と一致しているか
   - AC がすべて満たされているか
 
-- **2回目：実装可能性・運用視点**
+- **実装可能性・運用視点**
   - System Prompt が実装に十分な具体性を持っているか
   - Tool/Knowledge Source の定義が実装チームに伝わるレベルか
+  - Runtime Goal Loop、検索route、REST CRUD、MCP、Skill loadingが実装可能な契約になっているか
   - エラーハンドリング・エスカレーション方針が明確か
   - 評価計画が実行可能か
 
-- **3回目：保守性・拡張性・セキュリティ**
+- **保守性・拡張性・セキュリティ**
   - Agent 追加時の変更容易性
   - Guardrails（禁止行為/PII/権限分離）が十分か
+  - REST mutationがMCP/SQL/direct DBで迂回されず、Tool allowlistとHITLが維持されるか
   - Observability（ログ/メトリクス/監査）が運用可能か
   - ドキュメント保守性と見直し周期の妥当性
 
-### 8.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 8.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。

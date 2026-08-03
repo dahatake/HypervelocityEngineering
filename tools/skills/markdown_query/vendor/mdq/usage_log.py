@@ -47,7 +47,7 @@ import datetime
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 USAGE_LOG_RELATIVE: str = ".mdq/usage.jsonl"
@@ -87,6 +87,58 @@ def _resolve_log_path(repo_root: Optional[Path] = None) -> Path:
     """
     base = Path(repo_root) if repo_root is not None else Path.cwd()
     return (base / USAGE_LOG_RELATIVE).resolve()
+
+
+def read_records(
+    repo_root: Path,
+    *,
+    run_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    since_iso: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """``.mdq/usage.jsonl`` のレコードを読み込んで返す。
+
+    書き込み側（:func:`append_record`）と同じモジュールに置くことで、ログの
+    所在と形式の判断を 1 箇所に閉じる。``hve.run_journal`` は本関数へ委譲する。
+
+    Args:
+        repo_root: リポジトリルート。``<repo_root>/.mdq/usage.jsonl`` を読む。
+        run_id: 指定時は ``record["context"]["run_id"]`` が一致するもののみ返す。
+        workflow_id: 指定時は ``record["context"]["workflow_id"]`` が一致するもののみ返す。
+        since_iso: 指定時は ``record["ts"] >= since_iso`` のもののみ返す
+                   （文字列比較で動作する ISO8601 UTC 前提）。
+
+    Returns:
+        条件を満たすレコードのリスト。ファイル不存在時は空リスト。
+        パース不能行はスキップする（観測用ログのため例外を投げない）。
+    """
+    path = _resolve_log_path(repo_root)
+    if not path.exists():
+        return []
+    records: List[Dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if since_iso is not None and str(rec.get("ts", "")) < since_iso:
+                    continue
+                ctx = rec.get("context") or {}
+                if run_id is not None and ctx.get("run_id") != run_id:
+                    continue
+                if workflow_id is not None and ctx.get("workflow_id") != workflow_id:
+                    continue
+                records.append(rec)
+    except OSError:
+        return []
+    return records
 
 
 def append_record(

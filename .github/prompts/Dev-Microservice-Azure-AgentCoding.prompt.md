@@ -1,6 +1,46 @@
 ﻿> AI Agent 詳細設計書から Azure AI Foundry Agent Service を使用して Agent を実装し、src/test/agent/ のテストが全て PASS するまで反復する（TDD GREEN フェーズ）。Issue body 記載の回数（未指定時 5 回）反復。
 
-> **WORK**: `/work/Dev-Microservice-Azure-AgentCoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AgentCoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フェーズ）専用Agent。
 
@@ -27,9 +67,31 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
+- `ai-agent-capability-contract` — AG-CAP-01〜06 の選択能力、実装境界、GREEN判定
+
+## 生成テストの実行環境
+
+- `src/test/agent/{key}.Tests/` のテストは **ローカル端末 / CI で `pytest` または `dotnet test` により決定的に PASS** すること。
+- GREEN 化のためにテストコードを Azure AI Foundry Agent Service、公開Web、Microsoft 365、Fabric、Search、SQL database、外部REST API、MCP Serverへ実接続する内容へ変更しない。Agent / Tool / RAG / HTTP / SQL / MCP 呼び出しは mock/stub/fake で切り分ける。
+- 実装コードは Azure AI Foundry へデプロイ可能にしつつ、Endpoint、モデル名、Tool サービス URL、認証情報は環境変数または設定ファイルから読み込む。
+- 接続文字列・API キー・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。README にはローカル実行コマンドとデプロイ先で使う設定キー名を記載する。
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードに加え、Microsoft 365 / Work IQ MCP / Fabric IQ / Azure AI Search / Foundry IQ / Foundry Agent Service の Tool・認証・権限・path・operation仕様を扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項 / 確認日** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+
+### Microsoft Foundry required meta skill workflow（必須）
+
+- AAGD Step.2.3 は Foundry-required Step である。session で公開済みの `microsoft-foundry` meta skillを必ず最初に読む。以後はその指示に従う。
+1. 実装を開始する前に、repository-pinned Azure MCP の利用可能な Foundry関連toolを最初に発見する。server名・tool名を推測しない。MCP server を新規追加・接続構成変更しない。既に接続済みの official MCP だけを discovery 対象とする。
+2. 選択した言語・SDK・詳細設計書に一致する最新の公式実装例を、Microsoft Learn MCP の `microsoft_code_sample_search` で取得する。title / URL / 確認事項 / 確認日を作業ログに残し、作成に一致する guidance だけを読む。
+3. meta skill 自身の routing に従い、sub-skill 名を推測・列挙しない。既存のHVE成果物、TDD、AC、GitHub Actions contractを優先し、Foundry Skillの一般的な `azd` lifecycleへ移行しない。
+4. official evaluation suiteは今回の成果物へ追加せず、後続案として記録する。AAGD RED Stepへlive Foundry Skillを追加しない。
 
 # 1) 目的（スコープ固定）
-- 対象は **1 Agent 分のみ**：`{agentId}-{agentName}`。
+- 対象は **1 Agent 分のみ**：`{key}`（canonical Agent ID。名称はAgent一覧から参照）。
 - 目的は「Agent 詳細設計書の System Prompt・Tool Catalog・State Machine を実装コードに変換し、TDD テストを全て PASS させる」。
 - **Microsoft Foundry（Azure AI Foundry Agent Service）** を使用して Agent を実装する。
 - "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
@@ -52,6 +114,7 @@ Issue body または追加コメントにプログラミング言語の指定が
 
 - 必ず **最新版** を使用する（バージョンはパッケージマネージャーで確認する）
 - チュートリアルに記載されているバージョンが古い場合は、最新版 API に読み替えること
+- 実装前に、選択した正規パッケージ（Python: `azure-ai-projects` / C#: `Azure.AI.Projects`）の package manager 上のversionと、使用するAPI signatureをMicrosoft Learn MCPまたは公式API referenceで確認し、確認日・version・title / URLを `{WORK}` の作業ログへ記録する。Promptの静的例や別名パッケージからversion/APIを推測しない。
 
 ## 2.3 認証
 - `DefaultAzureCredential` を使用して Azure に認証する
@@ -63,10 +126,10 @@ Issue body または追加コメントにプログラミング言語の指定が
 
 # 3) 入力（優先順位順）
 必須:
-- `docs/agent/agent-detail-{agentId}-*.md`（Agent 詳細設計書）
+- `docs/agent/agent-detail-{key}.md`（Agent 詳細設計書。AG-CAP-01〜06の選択結果を正本とする）
 - `docs/ai-agent-catalog.md`（Agent 一覧）
-- `src/test/agent/{AgentName}.Tests/`（TDD テストコード — RED 状態。Step.2.7TC の成果物）
-- `docs/test-specs/{agentId}-test-spec.md`（Agent テスト仕様書）
+- `src/test/agent/{key}.Tests/`（TDD テストコード — RED 状態。Step.2.7TC の成果物）
+- `docs/test-specs/{key}-test-spec.md`（Agent テスト仕様書）
 - `docs/catalog/service-catalog-matrix.md`（Tool として呼び出すサービスの API 一覧）
 - `docs/azure/azure-services-additional.md`（Azure AI Foundry プロジェクト・AI Search 等の設定）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠）
@@ -88,18 +151,21 @@ Issue body または追加コメントにプログラミング言語の指定が
 
 # 4) 出力（成果物）
 必須:
-- `src/agent/{AgentID}-{AgentName}/` 配下に以下を作成:
+- `src/agent/{key}/` 配下に以下を作成（`{key}` は canonical Agent ID）:
   - **エントリポイント**: Azure AI Foundry Agent Service に接続する Agent クライアントコード
   - **System Prompt ファイル**: 詳細設計書 Section 12 に基づく System Prompt（ファイルとして管理）
-  - **Tool 定義コード**: 詳細設計書 Section 7（Tool Catalog）に基づき、既存マイクロサービス API を Function calling 経由で Tool として登録
-  - **Knowledge Source 接続コード**: Azure AI Search インデックスや Azure Cosmos DB をナレッジソースとして接続（設計書の Knowledge Source 定義に従う）
+  - **Runtime Goal Loop**: 詳細設計書 Section 2.1 / 6.1 に基づく有限のPLAN / ACT / OBSERVE / EVALUATE / REPLANと停止条件
+  - **Tool 定義コード**: 詳細設計書 Section 7.1（Tool Catalog / REST CRUD Matrix）でRequiredな既存APIだけをFunction calling Toolとして登録
+  - **Knowledge / Structured Data接続コード**: 詳細設計書 Section 7.0で選択されたPreferred / Fallback routeだけを接続
+  - **MCP client**: 詳細設計書 Section 7.3で選択されたserver / Tool allowlist / auth / failure behaviorだけを実装
+  - **Agent Skill**: 詳細設計書 Section 7.4が`required`の場合だけ、選択されたSkillとresourceを作成して明示load
   - **Guardrails / Policy Gate 実装**: 詳細設計書 Section 8 の Policy & Guardrails に基づく入出力フィルタリング
   - **Observability コード**: Application Insights / OpenTelemetry による監査ログ・メトリクス
   - **設定ファイル**: `agent-config.json`（Python）または `appsettings.json`（C#）— 環境変数・接続先の管理
   - **依存定義**: `requirements.txt`（Python）または `.csproj`（C#）
 
 任意だが推奨:
-- `src/agent/{AgentID}-{AgentName}/README.md`（起動方法・設定項目・テスト実行方法）
+- `src/agent/{key}/README.md`（起動方法・設定項目・テスト実行方法）
 
 作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
@@ -108,30 +174,50 @@ Issue body または追加コメントにプログラミング言語の指定が
 
 | 実装内容 | 参照する設計書セクション |
 |---------|----------------------|
-| Agent エントリポイント | Section 1: Agent Overview, Section 3: I/O Contract |
+| Agent エントリポイント | Section 1: Agent Overview, Section 4: Inputs / Outputs |
 | System Prompt ファイル | **Section 12: System Prompt Instruction Format**（最重要） |
-| Tool 定義・Function calling | Section 7: Tool Catalog |
-| Knowledge Source / RAG 接続 | Section 6: Knowledge Source |
+| Goal評価と有限Runtime Loop | Section 2.1: Goal Contract, Section 6.1: Runtime Goal Loop |
+| Knowledge / Structured Data接続 | Section 7.0: Knowledge & Structured Data Routing |
+| Tool 定義・Function calling | Section 7.1: Tool Catalog / REST CRUD Matrix |
+| MCP client | Section 7.3: MCP Integration Plan |
+| Agent Skill | Section 7.4: Skill Packaging Decision |
 | Guardrails / Policy Gate | Section 8: Policy & Guardrails |
-| 状態遷移ロジック | Section 5: State Machine |
-| エラーハンドリング・縮退 | Section 10: Error Handling |
-| Observability | Section 11: Observability |
-| 権限モデル | Section 9: Permission Model |
+| 状態遷移ロジック | Section 6: State Machine / Flow |
+| エラーハンドリング・縮退 | Section 9: Error Handling & Resilience |
+| Observability | Section 10: Observability |
+| 権限モデル | Section 7.2: Permission Model |
+
+## 5.1) AG-CAP実装境界
+- **AG-CAP-01 / 02**: Criterion evaluatorとEvidenceを実装し、各ACT前にUSER_CANCELLED、POLICY_STOP、deadline、cost、Tool budget、Max iterationsを短絡評価する。Action fingerprintとrequest内attempted setで、新Evidenceなしの同一action反復を拒否する。System Prompt、policy、RBAC、production code、testをruntimeで自己変更しない。
+- **AG-CAP-03**: Web IQ / Foundry Web Search / Work IQ / Fabric IQ / Foundry IQ / Azure AI Search / SELECT-only SQL / operational REST GETのうち、Section 7.0のPreferred / Fallbackに選択されたrouteだけを実装する。未選択providerのpackage、client、設定flag、mockを追加しない。
+- **Work IQ read-only境界**: Work IQ MCPを検索経路に選択した場合も、本リポジトリの「mutationは既存REST Function Toolのみ」を優先する。`create_entity` / `update_entity` / `delete_entity` / `do_action`と、その他の副作用operationをTool allowlistから除外する。`WorkIQAgent.Ask` delegated permissionはMicrosoft 365 resourceへのread/write accessを含み、`ask`は`agentId`で別Agentへ委譲できるため、本契約のread-only経路には登録しない。`fetch` / `call_function`はSection 7.0 / 7.3で承認されたread-only operationとrelative pathだけ、`get_schema`は`operationType=fetch`だけを許可する。Tool・operation・relative pathをAgent初期化時と呼出直前の両方で検査し、未承認`agentId`、任意Agentへの委譲、read-onlyを証明できないoperationは実行せずblocked / Handoffにする。
+- **SELECT-only SQL**: 選択時だけ、単一SELECT、parameterization、table/view/column allowlist、read-only identity、row limit、timeout、構文検査を実装する。INSERT / UPDATE / DELETE / MERGE / DDL / stored procedure、複文、検査不能queryを実行しない。監査証跡には正規化・redact済みquery識別情報、対象source、実行時刻、返却行数を残し、token、secret、parameter値、結果本文、過剰な機微値を保存しない。
+- **AG-CAP-04**: Create / Update / Deleteは既存API契約に対応するREST Function Toolだけをprimary経路にする。method / path / schema、認証、RBAC、HITL、冪等性、有限retry、error class、audit evidenceを実装し、SQL/direct DB writeやMCP mutation迂回を禁止する。
+- **AG-CAP-05**: Agentは選択されたMCP Serverのclientとして接続する。Tool allowlist、auth、untrusted result、timeout、有限retry、failure behaviorを実装し、Agent自身のRemote MCP Server化を既定で行わない。adapterが必要な場合はSection 7.3記載のowner serviceを参照し、`src/agent/`へ複製しない。
+- **AG-CAP-06**: Section 7.4の`Decision` / `Repeated procedure count` / `Reuse evidence` / `Location` / `Decision source`を検証する。`required`は共有能力契約の3条件、すなわち(1)同じ手順連鎖が3回以上、(2)複数Toolまたは複数状態から再利用する明確な要件がある、(3)deterministic script化で反復処理の正確性が上がる、のいずれかに証跡付きで該当する場合だけ認める。根拠のない`required`、`TBD`、Location未記載、Section 7.4の恒久的な`Decision source`で承認されていないLocationは設計不整合としてblocked / Handoffにし、Skillを生成しない。妥当な`required`の場合だけ、承認された`src/agent/{key}/skills/{skill-name}/`へ`SKILL.md`と実際に必要な`scripts/` / `references/` / `assets/`を作り、target runtimeから明示loadする。`not-required`ではSkill、loader、hook、設定flagを作らない。
 
 # 6) TDD GREEN フロー（反復 — Issue body 指定値 / 未指定時 5 回）
 
 ```
-1. テストコードが存在し、全テストが FAIL（RED 状態）であることを確認する
-2. Section 5 の設計書マッピング表に基づき、最小限の Agent 実装を作成する
+1. テストコードがbuild/collection可能で、未実装production behaviorに対応するテストが1件以上FAILしてsuite全体がREDであることを確認する（既成立の不在・禁止契約テストはPASS可）
+2. Section 5 の設計書マッピング表に基づき、選択された能力だけの最小限の Agent 実装を作成する
 3. テストを実行する
-   - Python: pytest src/test/agent/{AgentName}.Tests/
-   - C#: dotnet test src/test/agent/{AgentName}.Tests/
+  - Python: pytest src/test/agent/{key}.Tests/
+  - C#: dotnet test src/test/agent/{key}.Tests/
 4. 全テスト PASS なら Section 6.5 の REFACTOR フェーズへ進む。FAIL があれば実装を修正して手順3に戻る
 5. **リトライ上限**: Issue body に記載されている回数（例: `最大 N 回反復する`）を上限とする。記載がない場合は **最大 5 回** を上限とする。
 6. 上限を超えた場合:
    - `aagd:blocked` ラベルを Issue に付与する（gh コマンド: `gh issue edit <Issue番号> --add-label "aagd:blocked"`）
    - 未 PASS テスト一覧と失敗原因の分析を Issue コメントで報告する（`gh issue comment <Issue番号> --body "..."` で投稿）
 ```
+
+## 6.1) GREEN 化リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）
+- 上記の反復（手順3〜4）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。
+- 各 FAIL 時は失敗の実出力（テスト名・スタックトレース・例外）から根本原因を特定し、次の修正を決める前に、実装言語に応じた公式技術情報 MCP で正しい API・構文・パターンを確認する:
+  - **C# / .NET / Azure AI Foundry / Azure SDK**: **Microsoft Learn MCP**
+  - **Python / Python ライブラリ**: 利用可能な **Python 技術情報 MCP**（Python 公式ドキュメント・ライブラリ API を提供するもの）
+  - Web 検索は上記 MCP で解決できない場合のみ用いる。
+- 参照した公式情報の URL を作業ログに記録する。
 
 ## 6.5) TDD REFACTOR フェーズ（必須）
 GREEN 確認後、以下の観点でプロダクションコードのリファクタリングを行う:
@@ -184,13 +270,13 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 ```
 
 ## Tool（Function calling）定義ガイドライン
-- 詳細設計書 Section 7 の Tool Catalog の各 Tool を Function calling 形式で定義する
+- 詳細設計書 Section 7.1 で`Required: yes`のToolだけをFunction calling形式で定義する
 - 各 Tool の入出力スキーマは設計書の Tool I/O Schema に従う
 - 既存マイクロサービス API は HTTP クライアント経由で呼び出す（`docs/catalog/service-catalog-matrix.md` の API 仕様に従う）
-- Tool の実行エラー時は設計書 Section 10 のエラーハンドリング方針に従う
+- Tool の実行エラー時は設計書 Section 9 のエラーハンドリング方針に従う
 
 ## System Prompt 管理ガイドライン
-- System Prompt は **コードに直接書かず、ファイルとして管理する**（`src/agent/{AgentID}-{AgentName}/prompts/system-prompt.md` 等）
+- System Prompt は **コードに直接書かず、ファイルとして管理する**（`src/agent/{key}/prompts/system-prompt.md` 等）
 - System Prompt の内容は詳細設計書 Section 12 を忠実に実装する
 - 言語・トーン・禁止事項は設計書の Safeguards セクションに従う
 
@@ -210,26 +296,35 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 - テストコード（`src/test/agent/`）を GREEN にする目的でテストを弱める・スキップしない。
 - テスト仕様書（`docs/test-specs/`）および Agent 詳細設計書（`docs/agent/`）を変更しない。
 - Azure AI Foundry Agent Service 以外の Agent フレームワーク（Semantic Kernel 直接等）を使用しない（設計書で明示的に指定されている場合を除く）。
+- 詳細設計で選択されていない検索provider、MCP Server、Skillを先回り実装しない。
+- C/U/DをSQL、直接DB更新、MCP Toolで実装しない。
 
 # 10) 完了条件（DoD）
-- `src/agent/{AgentID}-{AgentName}/` 配下に Agent 実装コードが存在する。
+- `src/agent/{key}/` 配下に Agent 実装コードが存在する。
 - System Prompt がファイルとして管理されている。
-- Tool Catalog の全 Tool が Function calling 形式で実装されている。
+- Goal Contractのrequired criteriaを評価する有限Runtime Goal Loopと全停止条件が実装されている。
+- Section 7.0で選択されたrouteだけが実装され、未選択providerの不要依存がない。
+- Section 7.1でRequiredなToolがFunction calling形式で実装され、C/U/DはREST Function Toolだけを使用している。
+- MCP client / SkillはSection 7.3 / 7.4の選択結果どおりであり、N/A / not-requiredの不要artifactがない。
 - `DefaultAzureCredential` を使用した認証が実装されている。
 - テストを実行し、全テストが PASS している（TDD GREEN 確認）。
 - TDD REFACTOR フェーズを実施し、リファクタリング後も全テストが PASS している。
 - 環境変数・設定項目が設定ファイルで管理されている（ハードコードなし）。
 - 作業ログと README が更新されている。
 
-# 11) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+# 11) 最終品質レビュー（単回インライン・セルフチェック）
 
-## 3つの異なる観点（AI Agent 実装の場合）
-- **1回目：設計書との整合性・要件達成度**：Agent 詳細設計書の全セクション（特に Section 7/8/10/12）が実装に反映されているか、Tool Catalog が完全に実装されているか、System Prompt が設計書と一致しているか
-- **2回目：Microsoft Foundry 実装品質**：最新 SDK API が正しく使用されているか、`DefaultAzureCredential` が適切に使われているか、エンドポイント・キーがハードコードされていないか、Observability が実装されているか
-- **3回目：保守性・セキュリティ・堅牢性**：環境変数管理が適切か、エラーハンドリング・縮退動作が設計書通りか、Guardrails が正しく実装されているか、Tool 失敗時の動作が定義されているか
+## 11.1 セルフチェック契約
 
-## 3) 出力フォーマット（Markdown固定スキーマ）
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+## 11.2 ドメイン固有観点
+- **設計書との整合性・要件達成度**：Agent詳細設計のGoal Contract / Runtime Goal Loop / route / REST CRUD / MCP / Skill / Guardrails / Observability / System Promptが選択結果どおり実装され、未選択能力の不要artifactがないか
+- **Microsoft Foundry 実装品質**：最新 SDK API が正しく使用されているか、`DefaultAzureCredential` が適切に使われているか、エンドポイント・キーがハードコードされていないか、全テストが決定的にPASSするか
+- **保守性・セキュリティ・堅牢性**：有限停止条件、同一action反復拒否、read-only / SELECT-only境界、REST mutation、HITL/RBAC、Tool allowlist、エラー時のpartial/blocked/Handoff、監査redactionが設計どおりか
+
+## 11.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

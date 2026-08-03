@@ -341,3 +341,73 @@ def test_fanout_child_done_without_init_does_not_complete_base(qapp):
     # 子は seed されている
     child = page._state.find_step_in_instance(inst_id, "2.3/A")
     assert child is not None and child.status == "done"
+
+
+# ---------------------------------------------------------------------------
+# instance 経路 (`_apply_fanout_child_status_in_instance`) の blocked 集約検証
+# (T-H1H2a — Major #3: instance 経路と text/Plan 経路で集約優先順位
+#  failed > blocked > done が同一に実装されていることを保証)
+# ---------------------------------------------------------------------------
+
+
+def test_fanout_blocked_child_with_done_promotes_base_to_blocked_in_instance(qapp):
+    """instance 経路: 全 child が terminal で blocked + done 混在の場合、base は blocked。
+
+    集約優先順位: failed > blocked > done。
+    blocked はユーザー介入要求のため done より優先される。
+    """
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/A", "2.3/B"])
+    )
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/A", "done"))
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/B", "blocked"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    assert base.status == "blocked"
+
+
+def test_fanout_failed_overrides_blocked_in_instance(qapp):
+    """instance 経路: failed > blocked の優先順位を検証する。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/A", "2.3/B"])
+    )
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/A", "blocked"))
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/B", "failed"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    # failed が優先される
+    assert base.status == "failed"
+
+
+def test_fanout_running_overrides_blocked_in_instance(qapp):
+    """instance 経路: running > blocked の優先順位を検証する。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    inst_id = "aad-web#APP-02"
+    _seed_instance_with_step(page, inst_id, "2.3")
+
+    page.append_log(
+        inst_id, "", _stats_fanout_init_line("2.3", ["2.3/A", "2.3/B"])
+    )
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/A", "blocked"))
+    page.append_log(inst_id, "", _stats_step_status_line("2.3/B", "running"))
+
+    base = page._state.find_step_in_instance(inst_id, "2.3")
+    assert base is not None
+    # running が優先される
+    assert base.status == "running"

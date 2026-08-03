@@ -1,5 +1,5 @@
 inputs:
-- path: docs/test-specs/{agentId}-test-spec.md
+- path: docs/test-specs/{key}-test-spec.md
   required: true
   kind: agent_artifact
   producer: Arch-TDD-TestSpec
@@ -15,7 +15,7 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-ApplicationAnalytics
-- path: docs/agent/agent-detail-{agentId}-*.md
+- path: docs/agent/agent-detail-{key}.md
   required: true
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step3
@@ -32,10 +32,10 @@ inputs:
   kind: agent_artifact
   producer: Dev-Microservice-Azure-ServiceCoding-AzureFunctions
 outputs:
-- path: src/test/agent/{AgentName}.Tests/
+- path: src/test/agent/{key}.Tests/
   required: true
   mode: create
-- path: src/test/agent/{AgentName}.Tests/README.md
+- path: src/test/agent/{key}.Tests/README.md
   required: true
   mode: create
 - path: '{WORK}'

@@ -24,6 +24,8 @@ SAMPLE = """# Application Architecture Catalog
 | APP-01 | web-1 | Webフロントエンド + クラウド |
 | APP-02 | batch-1 | データデータフロー処理 |
 | APP-03 | web-2 | Webフロントエンド + クラウド |
+| APP-04 | bff | BFF + 会員管理マイクロサービス |
+| APP-05 | analytics | クラウドDWH + BI/Analytics Platform |
 """
 
 
@@ -44,33 +46,41 @@ def test_checklist_no_filter_shows_all(qapp, tmp_path):
     root = _setup_catalog(tmp_path)
     cl = AppIdChecklist(root)
     ids = [cb.property("app_id") for cb in cl._checkboxes]
-    assert sorted(ids) == ["APP-01", "APP-02", "APP-03"]
+    assert sorted(ids) == ["APP-01", "APP-02", "APP-03", "APP-04", "APP-05"]
 
 
 def test_checklist_filters_by_web_cloud(qapp, tmp_path):
     root = _setup_catalog(tmp_path)
     cl = AppIdChecklist(root, architecture_kinds={"web-cloud"})
     ids = [cb.property("app_id") for cb in cl._checkboxes]
-    assert sorted(ids) == ["APP-01", "APP-03"]
+    assert sorted(ids) == ["APP-01", "APP-03", "APP-04"]
 
 
 def test_checklist_filters_by_batch(qapp, tmp_path):
     root = _setup_catalog(tmp_path)
     cl = AppIdChecklist(root, architecture_kinds={"batch"})
     ids = [cb.property("app_id") for cb in cl._checkboxes]
-    assert ids == ["APP-02"]
+    assert ids == ["APP-02", "APP-05"]
 
 
 def test_checklist_set_architecture_kinds_switches(qapp, tmp_path):
     root = _setup_catalog(tmp_path)
     cl = AppIdChecklist(root, architecture_kinds={"web-cloud"})
-    assert sorted(cb.property("app_id") for cb in cl._checkboxes) == ["APP-01", "APP-03"]
+    assert sorted(cb.property("app_id") for cb in cl._checkboxes) == ["APP-01", "APP-03", "APP-04"]
     cl.set_architecture_kinds({"batch"})
-    assert [cb.property("app_id") for cb in cl._checkboxes] == ["APP-02"]
+    assert [cb.property("app_id") for cb in cl._checkboxes] == ["APP-02", "APP-05"]
     cl.set_architecture_kinds(None)
     assert sorted(cb.property("app_id") for cb in cl._checkboxes) == [
-        "APP-01", "APP-02", "APP-03",
+        "APP-01", "APP-02", "APP-03", "APP-04", "APP-05",
     ]
+
+
+def test_checklist_web_and_batch_kinds_show_all_non_empty_architectures(qapp, tmp_path):
+    """AAD-WEB と ADFD の同時選択相当では全ての非空推薦を表示する。"""
+    root = _setup_catalog(tmp_path)
+    cl = AppIdChecklist(root, architecture_kinds={"web-cloud", "batch"})
+    ids = [cb.property("app_id") for cb in cl._checkboxes]
+    assert ids == ["APP-01", "APP-02", "APP-03", "APP-04", "APP-05"]
 
 
 def test_checklist_preserves_selection_across_kind_switch(qapp, tmp_path):

@@ -36,8 +36,10 @@ def qapp():
 
 
 def _make_main_window(tmp_path: Path) -> MainWindow:
-    win = MainWindow()
-    win._repo_root = str(tmp_path)
+    # repo_root は構築時に渡す。MainWindow.__init__ 内で
+    # GuiSessionWorkdir.create(self._repo_root) が work/run/<id>/ を作成するため、
+    # 後付け代入では実リポジトリ直下に dir が作られてしまう（隔離が手遅れになる）。
+    win = MainWindow(repo_root=tmp_path)
     return win
 
 
@@ -146,7 +148,15 @@ class TestShouldShowAppIdPicker:
             run_ard=False, run_aas=True, run_aad_web=True,
             run_asdw_web=False, run_abd=False, run_abdv=False,
         )
-        result = win._should_show_app_id_picker(sel, catalog)
+        # 設定 autopilot_show_app_id_picker は他テスト（settings 永続化）の実行順で
+        # 実ファイルに False が残ると本テストが汚染されるため、ON を明示 patch して
+        # テスト独立性を担保する（既定 True 相当）。
+        with patch(
+            "hve.gui.settings_store.get_option",
+            side_effect=lambda k, **kw: True
+            if k == "autopilot_show_app_id_picker" else 300,
+        ):
+            result = win._should_show_app_id_picker(sel, catalog)
         assert result is not None
         assert len(result) >= 1
         assert all(isinstance(t, tuple) and len(t) == 2 for t in result)

@@ -38,6 +38,6 @@ inputs:
   kind: agent_artifact
   producer: Arch-AIAgentDesign-Step1--aagd--1
 outputs:
-- path: docs/test-specs/{agentId}-test-spec.md
+- path: docs/test-specs/{key}-test-spec.md
   required: true
   mode: create

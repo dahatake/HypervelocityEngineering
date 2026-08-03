@@ -1,7 +1,7 @@
 """hve.gui.step1_args_snapshot — Step 1 事前チェック完了時の args/パラメータ保存。
 
 Issue: gui Step 1 のすべての事前チェック完了後に、タスク実行用の全 args/
-パラメーターを ``work/gui-runs/<session_run_id>/step1-precheck/`` 配下に
+パラメーターを ``work/run/<session_run_id>/step1-precheck/`` 配下に
 JSON スナップショットとして保存する。
 
 設計方針:

@@ -62,6 +62,39 @@ def test_collect_planned_inputs_skips_unselected_workflow(tmp_path: Path) -> Non
     assert inputs == []
 
 
+def test_collect_planned_inputs_lists_midstream_step_without_predecessors(
+    tmp_path: Path,
+) -> None:
+    """T1 回帰防止: 前段ステップ（1.1〜1.3）を選択せず途中ステップ 2.1 のみを
+    選択した場合でも、2.1 の required_input_paths が漏れなく列挙されること。
+
+    依存伝播の撤廃後、選択ステップ単位の入力ファイル検証（Phase B プランレビュー）が
+    前段ステップの選択に依存せず機能する安全網であることを固定する。
+    """
+    from hve.workflow_registry import get_workflow
+
+    wf = get_workflow("asdw-web")
+    assert wf is not None
+    step_21 = wf.get_step("2.1")
+    assert step_21 is not None
+    declared = list(step_21.required_input_paths or [])
+    # 前提（捏造防止）: 2.1 は app-catalog.md を必須入力として宣言している。
+    assert "docs/catalog/app-catalog.md" in declared
+
+    inputs = collect_planned_inputs(
+        ["asdw-web"], tmp_path, steps_by_workflow={"asdw-web": ["2.1"]}
+    )
+    # 2.1 の宣言入力が全て列挙される（前段 1.x 非選択でも欠落しない）
+    assert {i.path for i in inputs} == set(declared)
+    # 代表として app-catalog.md が step 2.1 に紐づき列挙されている
+    assert any(
+        i.path == "docs/catalog/app-catalog.md" and i.step_id == "2.1"
+        for i in inputs
+    )
+    # 前段ステップ 1.x の入力は混入しない（選択ステップのみが対象）
+    assert all(i.step_id == "2.1" for i in inputs)
+
+
 def test_collect_planned_outputs(tmp_path: Path) -> None:
     outputs = collect_planned_outputs(
         ["aas"], tmp_path, steps_by_workflow={"aas": ["1"]}

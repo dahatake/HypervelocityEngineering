@@ -1,6 +1,6 @@
 ﻿> CI/CDワークフロー定義ファイルを要約する。
 
-> **WORK**: `/work/Doc-CICDSummary/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-CICDSummary/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

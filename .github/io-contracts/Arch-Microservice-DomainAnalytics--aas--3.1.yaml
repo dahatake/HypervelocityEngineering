@@ -2,11 +2,15 @@ inputs:
 - path: docs/catalog/use-case-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ARD-UseCaseCatalog--ard--4.3
+  producer: Arch-ARD-UseCaseCatalog--ard--3.3
 - path: docs/catalog/app-arch-catalog.md
   required: true
   kind: agent_artifact
   producer: Arch-ArchitectureCandidateAnalyzer--aas--2
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
 outputs:
 - path: docs/catalog/domain-analytics.md
   required: true

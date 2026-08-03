@@ -14,7 +14,7 @@ inputs:
 - path: docs/services/{serviceId}-{serviceNameSlug}-description.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceDetail
+  producer: Arch-Microservice-ServiceDetail--aad-web--2.2
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
@@ -22,7 +22,7 @@ inputs:
 - path: docs/catalog/data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling
+  producer: Arch-DataModeling--aas--4.1
 - path: docs/azure/azure-services-*.md
   required: true
   kind: external

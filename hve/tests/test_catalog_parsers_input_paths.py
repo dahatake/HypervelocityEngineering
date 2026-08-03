@@ -19,8 +19,8 @@ def test_get_parser_input_path_returns_expected_paths() -> None:
         "app_catalog": "docs/catalog/app-catalog.md",
         "screen_catalog": "docs/catalog/screen-catalog-APP-*.md",
         "service_catalog": "docs/catalog/service-catalog.md",
-        "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
-        "agent_catalog": "docs/agent/agent-application-definition.md",
+        "dataflow_catalog": "docs/catalog/app-catalog.md",
+        "agent_catalog": "docs/agent/agent-architecture.md",
         "business_candidate": "docs/company-business-recommendation.md",
         "use_case_skeleton": "docs/catalog/use-case-skeleton.md",
     }

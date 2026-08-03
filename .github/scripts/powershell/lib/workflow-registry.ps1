@@ -67,7 +67,7 @@ $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     )
 }
 
-# ADFD — Dataflow Design (9 steps)
+# ADFD — Dataflow Design (3 steps)
 $script:WorkflowRegistryData['adfd'] = [PSCustomObject]@{
     id            = 'adfd'
     name          = 'Dataflow Design'
@@ -81,15 +81,9 @@ $script:WorkflowRegistryData['adfd'] = [PSCustomObject]@{
     }
     params        = @()
     steps         = @(
-        (NewWorkflowStep -Id '1.1' -Title 'バッチドメイン分析' -CustomAgent 'Arch-Dataflow-DomainAnalytics' -BodyTemplatePath 'templates/adfd/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title 'データソース/デスティネーション分析' -CustomAgent 'Arch-Dataflow-DataSourceAnalysis' -BodyTemplatePath 'templates/adfd/step-1.2.md')
-        (NewWorkflowStep -Id '2' -Title 'バッチデータモデル' -CustomAgent 'Arch-Dataflow-DataModel' -DependsOn @('1.1', '1.2') -BodyTemplatePath 'templates/adfd/step-2.md')
-        (NewWorkflowStep -Id '3' -Title 'ジョブ設計書' -CustomAgent 'Arch-Dataflow-AppCatalog' -DependsOn @('2') -SkipFallbackDeps @('2') -BodyTemplatePath 'templates/adfd/step-3.md')
-        (NewWorkflowStep -Id '4' -Title 'サービスカタログ' -CustomAgent 'Arch-Dataflow-ServiceCatalog' -DependsOn @('3') -SkipFallbackDeps @('3') -BodyTemplatePath 'templates/adfd/step-4.md')
-        (NewWorkflowStep -Id '5' -Title 'テスト戦略書' -CustomAgent 'Arch-Dataflow-TestStrategy' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-5.md')
-        (NewWorkflowStep -Id '6.1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Dataflow-AppSpec' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-6.1.md')
-        (NewWorkflowStep -Id '6.2' -Title '監視・運用設計書' -CustomAgent 'Arch-Dataflow-MonitoringDesign' -DependsOn @('5') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/adfd/step-6.2.md')
-        (NewWorkflowStep -Id '6.3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Dataflow-TDD-TestSpec' -DependsOn @('6.1', '6.2') -BodyTemplatePath 'templates/adfd/step-6.3.md')
+        (NewWorkflowStep -Id '1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Dataflow-AppSpec' -BodyTemplatePath 'templates/adfd/step-1.md')
+        (NewWorkflowStep -Id '2' -Title '監視・運用設計書' -CustomAgent 'Arch-Dataflow-MonitoringDesign' -BodyTemplatePath 'templates/adfd/step-2.md')
+        (NewWorkflowStep -Id '3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Dataflow-TDD-TestSpec' -DependsOn @('1', '2') -BodyTemplatePath 'templates/adfd/step-3.md')
     )
 }
 

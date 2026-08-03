@@ -1,5 +1,5 @@
 name: "Web App Design"
-description: "Issue から Web アプリサブシステムの設計ワークフロー (Step.1〜Step.2.3) を自動起動します"
+description: "Issue から Web アプリサブシステムの設計ワークフロー (Step.1〜Step.2.4) を自動起動します"
 title: "[Web App Design] Web アプリ設計"
 labels:
   - "auto-app-detail-design-web"
@@ -17,7 +17,8 @@ body:
         | **Step.1** | 画面一覧と遷移図 |
         | **Step.2.1** | 画面定義書 |
         | **Step.2.2** | マイクロサービス定義書 |
-        | **Step.2.3** | TDD テスト仕様書（Step.2.1 AND Step.2.2 完了後） |
+        | **Step.2.3** | TDD テスト仕様書（サービス、Step.2.2 完了後） |
+        | **Step.2.4** | TDD テスト仕様書（画面、Step.2.1 完了後） |
 
         ⚠️ **前提条件**:
         - Architecture Design (AAS) が完了していること
@@ -78,12 +79,13 @@ body:
         実行したいステップにチェックを入れてください。
         ✅ **デフォルト（全チェックなし）: すべてのチェックを外した状態で Issue を作成すると、全 Step が実行されます。**
         ⚠️ チェックを入れた場合: チェックを入れたステップだけが実行されます。依存関係があるステップは前段も必ずチェックしてください。
-        📋 **依存関係**: Step.1 → Step.2.1 ‖ Step.2.2 → Step.2.3
+        📋 **依存関係**: Step.1 → (Step.2.1, Step.2.2) ; Step.2.2 → Step.2.3 ; Step.2.1 → Step.2.4 （Step.2.3 と Step.2.4 は並列実行）
       options:
         - label: "Step.1 — 画面一覧と遷移図"
         - label: "Step.2.1 — 画面定義書 ※ Step.1 が必須"
         - label: "Step.2.2 — マイクロサービス定義書 ※ Step.1 が必須"
-        - label: "Step.2.3 — TDD テスト仕様書 ※ Step.2.1 AND Step.2.2 が必須"
+        - label: "Step.2.3 — TDD テスト仕様書（サービス） ※ Step.2.2 が必須"
+        - label: "Step.2.4 — TDD テスト仕様書（画面） ※ Step.2.1 が必須"
 
   - type: dropdown
     id: model
@@ -108,7 +110,7 @@ body:
     attributes:
       label: "レビュー用モデル（任意）"
       description: |
-        敵対的レビュー（auto-context-review）/ Code Review Agent で使用するモデル（hve CLI `--review-model` 相当）。
+        敵対的レビュー（adversarial-review）で使用するモデル（hve CLI `--review-model` 相当）。このモデル選択だけではレビューを発動しません。発動は「敵対的レビューを有効にする」の指定が必要です。一般 Code Review Agent の設定とは別です。
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
@@ -142,10 +144,10 @@ body:
     attributes:
       label: "レビュー設定"
       description: |
-        チェックを入れると、Copilot が PR を完成させた際にセルフレビュー（auto-context-review）を自動実行します。
-        デフォルト（チェックなし）ではセルフレビューは実行されません。
+        チェックを入れると、Copilot が PR を完成させた際に敵対的レビュー（adversarial-review）を自動実行します。
+        デフォルト（チェックなし）では敵対的レビューは実行されません。
       options:
-        - label: "セルフレビューを有効にする（チェックすると auto-context-review ラベルが付与され、セルフレビューが自動実行されます）"
+        - label: "敵対的レビューを有効にする（チェックすると adversarial-review ラベルが付与されます）"
 
   - type: checkboxes
     id: enable_qa
@@ -240,16 +242,20 @@ body:
     validations:
       required: false
 
-  - type: checkboxes
+  - type: dropdown
     id: enable_auto_merge
     attributes:
       label: "PR完全自動化設定"
       description: |
-        チェックを入れると、QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
+        QA・レビュー完了後に PR の自動 Approve と Auto-merge（squash）が実行されます。
         ⚠️ この設定を有効にすると、人間によるレビュー・承認なしで PR がマージされます。
         本番ブランチへの直接マージには十分ご注意ください。
       options:
-        - label: "PR の自動 Approve & Auto-merge を有効にする"
+        - "有効にする"
+        - "無効にする"
+      default: 0
+    validations:
+      required: false
 
   - type: textarea
     id: additional_comment

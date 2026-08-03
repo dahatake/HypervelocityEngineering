@@ -16,7 +16,7 @@ import configparser
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 
 _logger = logging.getLogger(__name__)
 
@@ -44,6 +44,11 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "reasoning_effort": "",
             "review_reasoning_effort": "",
             "qa_reasoning_effort": "",
+            # context_tier: SDK create_session(context_tier=...) へ渡す値。
+            # 設定画面の既定は long_context（要件）。
+            "context_tier": "long_context",
+            # `<run-id>` 生成時のタイムゾーン (IANA 名)。既定 JST。
+            "run_id_timezone": "Asia/Tokyo",
             # C2
             "max_parallel": 15,
             # C3 自動プロンプト
@@ -88,10 +93,20 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "additional_prompt": "",
             "context_max_chars": 0,
             # C16
-            "self_improve": False,
-            "no_self_improve": False,
+            "self_improve": "",
+            # self_improve_* は _SECTION_FIELDS["C3"] 登録済みだが defaults 未登録だった。
+            # _coerce(default=None) フォールバックでの型喪失を防ぐため明示既定値を置く
+            # (page_options の QSpinBox=3 / QLineEdit="" / QPlainTextEdit="" と整合)。
+            "self_improve_max_iterations": 3,
+            "self_improve_target_scope": "",
+            "self_improve_goal": "",
             "mdq_watch": "",  # 空 = 未指定
             "mdq_watch_debounce_ms": 0,
+            # cq リアルタイム索引更新（FR-GUI-04）。mdq 系と同じく
+            # `[options]` 側に置き、`settings_apply` の autosave 経路へ乗せる。
+            # debounce は 0 = 未指定（cq 側の既定を使う）。
+            "cq_watch": "",
+            "cq_watch_debounce_ms": 0,
             # C11 (AKM) sources チェックボックス 3 個の永続化既定値。
             # 旧実装では `_SECTION_FIELDS` に登録されておらず保存されなかったため、
             # ここに既定値を明示し autosave 経路に乗せる（_C11AKM の初期値と整合）。
@@ -115,6 +130,7 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "workiq_prompt_review": "",
             # C5 (Issue/PR) 追加既定値。_SECTION_FIELDS 登録済みだが defaults 未登録だった。
             "enable_auto_merge": False,
+            "delete_local_merged_branch": True,
             # C10 (App ID) 既定値。
             "app_id": "",
             "app_ids": "",
@@ -138,7 +154,15 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "target_recommendation_id": "",
             "attached_docs": "",
             # AZURE セクション既定値。
+            # FR-GUI-03: ASDW-WEB Step 1.3 の required_params（FR-DAG-07）も永続化する。
+            # 既定値そのものはレジストリ側 `StepDef.default_params` が正本であり、
+            # ここでは空文字を置いて二重管理を避ける。
             "resource_group": "",
+            "data_location": "",
+            "data_resource_suffix": "",
+            "data_vnet_cidr": "",
+            "data_private_endpoint_subnet_cidr": "",
+            "data_aci_subnet_cidr": "",
             # ADOC 既定
             "doc_purpose": "all",
             "max_file_lines": 0,
@@ -156,6 +180,20 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # True: ギャップ 0 件でも必ずプランレビュー Dialog を表示する
             # （実行プランの内訳確認を毎回行いたい上級ユーザー向け）。
             "step1_show_plan_review_always": False,
+            # SDK 自動コンテキスト圧縮（infinite_sessions）をサブステップ実行で有効化するか。
+            # False（既定）: 無効。True: --auto-compaction を subprocess に伝播し SDK に圧縮を委ねる。
+            "auto_compaction": False,
+            # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
+            # SPLIT_REQUIRED ではなく、複数 Step の DAG wave を対象にする。
+            "fleet_mode_enabled": "",
+            # Cloud Sessions（GitHub Copilot SDK 1.0.0+）。既定 OFF。
+            "cloud_session_enabled": False,
+            "cloud_session_repository_branch": "",
+            "cloud_session_max_concurrency": 5,
+            "cloud_session_integration_id": "",
+            "cloud_session_mc_base_url": "",
+            "cloud_session_step_overrides": "",
+            "cloud_session_subtask_overrides": "",
             # AAS 完了後 / downstream 起動前の APP-ID 選択ダイアログ。
             # True（既定）: AAS が catalog を再生成した直後にダイアログを表示し、
             #   ユーザーが downstream 対象 APP-ID を絞り込めるようにする。
@@ -186,9 +224,9 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # 空文字列 = 未保存（既定レイアウトで起動）。
             "workbench_layout_state": "",
             # Issue-gui-session-workdir-isolation T7/T8:
-            # GUI セッション作業ディレクトリ (work/gui-runs/<id>/) の後処理。
+            # GUI セッション作業ディレクトリ (work/run/<id>/) の後処理。
             # "keep"   = 何もしない（既定）
-            # "archive" = work/gui-runs/.archive/<id>.zip に zip 化して元 dir 削除
+            # "archive" = work/archive/<id>.zip に zip 化して元 dir 削除
             # "purge"  = 元 dir を削除
             "gui_session_cleanup_policy": "keep",
         },
@@ -224,6 +262,16 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "semantic_late_chunking": False,
             "semantic_fusion_alpha": 0.5,
             "semantic_bge_m3_warning_dismissed": False,
+        },
+        "cq": {
+            # FR-GUI-04: cq 索引の GUI 運用設定。
+            # 索引ルート・除外・最大ファイルサイズは cq の設定ファイルが SoT
+            # であり、GUI からは書き換えないためここには持たない。
+            # profile は空 = 未選択。特定の profile 名を既定値として持たない（他
+            # リポジトリでは存在しないため）。未選択時は設定ファイルの先頭 profile を採る。
+            "profile": "",
+            # 一括ビルド対象 profile 群。";" 区切り。空 = 全 profile 選択扱い。
+            "build_profiles": "",
         },
     }
 
@@ -282,6 +330,45 @@ def _migrate_renamed_keys(cp: configparser.ConfigParser) -> bool:
     return changed
 
 
+def _migrate_self_improve_tristate(cp: configparser.ConfigParser) -> bool:
+    """旧boolean pairを ``self_improve = on/off/''`` へ移行する。
+
+    優先順位はCLIと同じく旧 ``no_self_improve=true`` が最優先。新形式の
+    ``on`` / ``off`` / 空値は保持し、旧キーだけを削除する。
+    """
+    if "options" not in cp:
+        return False
+    options = cp["options"]
+    if "self_improve" not in options and "no_self_improve" not in options:
+        return False
+
+    raw_enabled = options.get("self_improve", "").strip().lower()
+    raw_disabled = options.get("no_self_improve", "").strip().lower()
+    truthy = {"1", "true", "yes", "on"}
+    legacy_boolean = raw_enabled in {
+        "1", "0", "true", "false", "yes", "no",
+    }
+
+    if raw_disabled in truthy:
+        normalized = "off"
+    elif raw_enabled in truthy:
+        normalized = "on"
+    elif legacy_boolean or raw_enabled in {"", "inherit"}:
+        normalized = ""
+    elif raw_enabled == "off":
+        normalized = "off"
+    else:
+        # 不明値は既定継承へ縮退し、暗黙の変更実行を避ける。
+        normalized = ""
+
+    changed = options.get("self_improve", "") != normalized
+    options["self_improve"] = normalized
+    if "no_self_improve" in options:
+        del options["no_self_improve"]
+        changed = True
+    return changed
+
+
 # ---------------------------------------------------------------------------
 # I/O
 # ---------------------------------------------------------------------------
@@ -308,6 +395,8 @@ def load() -> Dict[str, Dict[str, Any]]:
     if _migrate_obsolete_keys(cp):
         changed = True
     if _migrate_renamed_keys(cp):
+        changed = True
+    if _migrate_self_improve_tristate(cp):
         changed = True
     if changed:
         try:
@@ -394,6 +483,48 @@ def set_option(key: str, value: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# ';' 区切りリスト（[mdq] target_folders / [cq] build_profiles など）
+# ---------------------------------------------------------------------------
+def _strip_quotes(raw: str) -> Optional[str]:
+    s = (raw or "").strip().strip('"').strip("'")
+    return s or None
+
+
+def parse_semicolon_list(
+    raw: str, *, normalize: Callable[[str], Optional[str]] = _strip_quotes
+) -> list[str]:
+    """';' 区切り文字列を要素リストへ分解する（重複除去・順序保持）。
+
+    ``normalize`` が ``None`` を返した要素は捨てる。GUI が扱う ';' 区切り値は
+    すべてこの単一実装を通す（FR-MAINT-07）。
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in (raw or "").split(";"):
+        norm = normalize(part)
+        if norm is None or norm in seen:
+            continue
+        seen.add(norm)
+        out.append(norm)
+    return out
+
+
+def serialize_semicolon_list(
+    items: Iterable[Any], *, normalize: Callable[[str], Optional[str]] = _strip_quotes
+) -> str:
+    """要素リストを ';' 区切り文字列へ整形する（重複除去・順序保持）。"""
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items or []:
+        norm = normalize(str(item))
+        if norm is None or norm in seen:
+            continue
+        seen.add(norm)
+        out.append(norm)
+    return ";".join(out)
+
+
+# ---------------------------------------------------------------------------
 # Markdown-Query 対象フォルダ ([mdq] target_folders)
 # ---------------------------------------------------------------------------
 def _normalize_target_folder(raw: str) -> Optional[str]:
@@ -404,8 +535,8 @@ def _normalize_target_folder(raw: str) -> Optional[str]:
     - 末尾 '/' を除去
     - 空文字や '.' は ``None``
     """
-    s = (raw or "").strip().strip('"').strip("'")
-    if not s:
+    s = _strip_quotes(raw)
+    if s is None:
         return None
     s = s.replace("\\", "/")
     while s.endswith("/") and len(s) > 1:
@@ -417,28 +548,12 @@ def _normalize_target_folder(raw: str) -> Optional[str]:
 
 def parse_target_folders(raw: str) -> list[str]:
     """';' 区切り文字列を正規化済みパスのリストに変換する（重複除去・順序保持）。"""
-    out: list[str] = []
-    seen: set[str] = set()
-    for part in (raw or "").split(";"):
-        norm = _normalize_target_folder(part)
-        if norm is None or norm in seen:
-            continue
-        seen.add(norm)
-        out.append(norm)
-    return out
+    return parse_semicolon_list(raw, normalize=_normalize_target_folder)
 
 
 def serialize_target_folders(folders: list[str]) -> str:
     """正規化済みリストを ';' 区切り文字列にシリアライズする。"""
-    normed: list[str] = []
-    seen: set[str] = set()
-    for item in folders or []:
-        norm = _normalize_target_folder(str(item))
-        if norm is None or norm in seen:
-            continue
-        seen.add(norm)
-        normed.append(norm)
-    return ";".join(normed)
+    return serialize_semicolon_list(folders, normalize=_normalize_target_folder)
 
 
 def get_mdq_target_folders(
@@ -451,46 +566,3 @@ def get_mdq_target_folders(
     s = settings if settings is not None else load()
     raw = s.get("mdq", {}).get("target_folders", "")
     return parse_target_folders(str(raw))
-
-
-# ---------------------------------------------------------------------------
-# T5 (Wave 1 / C2): MCP Server 利用 ON/OFF (mcp_enabled セクション)
-# ---------------------------------------------------------------------------
-def load_mcp_enabled() -> Dict[str, bool]:
-    """``[mcp_enabled]`` セクションを ``{server_name: bool}`` で読み込む。
-
-    セクション欠落・ファイル無し・破損時は ``{}`` を返す (捏造禁止)。
-    """
-    path = settings_path()
-    if not path.exists():
-        return {}
-    cp = configparser.ConfigParser()
-    try:
-        cp.read(path, encoding="utf-8")
-    except (configparser.Error, OSError):
-        return {}
-    if "mcp_enabled" not in cp:
-        return {}
-    out: Dict[str, bool] = {}
-    for key, raw in cp.items("mcp_enabled"):
-        out[key] = raw.strip().lower() in ("1", "true", "yes", "on")
-    return out
-
-
-def save_mcp_enabled(mcp_enabled: Dict[str, bool]) -> None:
-    """``[mcp_enabled]`` セクションをアトミックに更新する (他セクションは保持)。"""
-    cp = configparser.ConfigParser()
-    path = settings_path()
-    if path.exists():
-        try:
-            cp.read(path, encoding="utf-8")
-        except (configparser.Error, OSError):
-            cp = configparser.ConfigParser()
-    # 敵対的レビュー #15: 廃止キーをこの機会に migration
-    _migrate_obsolete_keys(cp)
-    cp["mcp_enabled"] = {name: ("true" if bool(v) else "false") for name, v in mcp_enabled.items()}
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        cp.write(f)
-    os.replace(tmp, path)

@@ -63,26 +63,11 @@ class TestAutoQaToReviewTransitionWorkflow(unittest.TestCase):
         """validation-confirmed マーカーが判定対象に含まれること。"""
         self.assertIn("<!-- validation-confirmed -->", self.content)
 
-    def test_t4_heading_regex_matches_auto_approve_and_merge(self):
-        """見出し方式の正規表現が auto-approve-and-merge.yml と同一パターンであること。"""
-        self.assertIn(
-            "'^#{1,6}[[:space:]]+.*(検証|Validation|Verification)'",
-            self.content,
-        )
-
-    def test_t4_bullet_regex_matches_auto_approve_and_merge(self):
-        """箇条書き/強調方式の正規表現が auto-approve-and-merge.yml と同一パターンであること。"""
-        self.assertIn(
-            "'^[[:space:]*>-]*(\\*\\*|__)?(検証|Validation|Verification)(\\*\\*|__)?[[:space:]]*[:：]'",
-            self.content,
-        )
-
-    def test_t4_legacy_regex_matches_auto_approve_and_merge(self):
-        """互換フォールバック正規表現が auto-approve-and-merge.yml と同一パターンであること。"""
-        self.assertIn(
-            "'(^#{1,6}[[:space:]]+|^)(Validation|検証)'",
-            self.content,
-        )
+    def test_t4_validation_marker_decision_is_delegated(self):
+        """検証マーカー判定を単一実装（FR-MAINT-06）へ委譲していること。"""
+        self.assertIn("check_validation_marker.py", self.content)
+        for name in ("HEADING_REGEX", "BULLET_REGEX", "LEGACY_REGEX"):
+            self.assertNotIn(name, self.content)
 
     def test_t4_validation_check_before_label_assignment(self):
         """検証マーカーチェックが auto-approve-ready ラベル付与より前に来ること。"""
@@ -108,19 +93,23 @@ class TestAutoQaToReviewTransitionWorkflow(unittest.TestCase):
         """検証マーカーが存在する場合にラベル付与に進む案内メッセージが存在すること。"""
         self.assertIn("検証実施記録を確認しました。auto-approve-ready ラベルを付与します。", self.content)
 
-    def test_t4_auto_context_review_path_unaffected(self):
-        """auto-context-review 付与ステップは検証チェックの影響を受けないこと。"""
-        # auto-context-review 付与ステップ範囲内には VALIDATION_MISSING_MARKER や
-        # has_validation 変数の参照が含まれないことを確認する
-        context_review_step_start = self.content.find("- name: auto-context-review ラベルを PR に付与")
-        direct_approve_step_start = self.content.find(
-            "- name: auto-approve-ready ラベルを PR に付与（レビューなしパス）"
+    def test_pr_false_marker_overrides_root_review_setting(self):
+        """PR bodyのfalse markerをRoot Issue設定より優先すること。"""
+        self.assertIn("PR_REVIEW_OPTED_OUT", self.content)
+        self.assertIn('pr_review_opted_out="true"', self.content)
+        self.assertIn('--remove-label "adversarial-review"', self.content)
+        self.assertIn(
+            'if [ "${PR_REVIEW_OPTED_OUT:-false}" = "true" ]; then',
+            self.content,
         )
-        self.assertGreater(context_review_step_start, 0)
-        self.assertGreater(direct_approve_step_start, 0)
-        context_review_body = self.content[context_review_step_start:direct_approve_step_start]
-        self.assertNotIn("VALIDATION_MISSING_MARKER", context_review_body)
-        self.assertNotIn("has_validation", context_review_body)
+
+    def test_issue_true_marker_restores_review_without_label(self):
+        """Issue bodyのtrue marker単独でもレビュー設定を復元すること。"""
+        self.assertIn(
+            '<!--[[:space:]]*adversarial-review:[[:space:]]*true[[:space:]]*-->',
+            self.content,
+        )
+        self.assertIn('has_issue_review_label="true"', self.content)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@
 
 skill: adversarial-review
 skill_path: .github/skills/harness/adversarial-review/SKILL.md
-description: 成果物の敵対的レビューを実行するスキル。5つの検証軸で問題を発見し、Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。
+description: 成果物の敵対的レビューを実行するスキル。6つの検証軸で問題を発見し、Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。
 
 test_cases:
   # --- 正のテストケース（このSkillが発動すべき入力） ---
@@ -15,28 +15,52 @@ test_cases:
     expected_trigger: true
     verify:
       - type: content_contains
-        detail: "5軸検証（目的適合性/内容の妥当性/整合性/品質・運用性/根拠性・不確実性管理）の結果が出力されること"
+        detail: "6軸検証（目的適合性/内容の妥当性/整合性/品質・運用性/根拠性・不確実性管理/オーバーエンジニアリング検出）の結果が出力されること"
       - type: content_contains
         detail: "Critical/Major/Minor の重大度分類と PASS/FAIL 判定が含まれること"
-    reason: "SKILL.md の実施条件に 'adversarial-review ラベルが付与されている場合のみ実施' と明示されており、ラベル付与はトリガー条件に該当する"
+    reason: "SKILL.md の実施条件に 'adversarial-review ラベルが付与されている場合' と明示されており、ラベル付与はトリガー条件に該当する"
 
   - id: explicit-comment-flag-review
-    input: "<!-- adversarial-review: true --> が PR body に記載されています。成果物を5軸でレビューしてください。"
+    input: "<!-- adversarial-review: true --> が PR body に記載されています。成果物を6軸でレビューしてください。"
     expected_trigger: true
     verify:
       - type: content_contains
-        detail: "5軸の敵対的レビュー結果が出力されること"
+        detail: "6軸の敵対的レビュー結果が出力されること"
       - type: content_contains
         detail: "PASS または FAIL の最終判定が記載されること"
-    reason: "SKILL.md の実施条件に 'Issue/PR body に <!-- adversarial-review: true --> を記載している場合のみ実施' と明示されている"
+    reason: "SKILL.md の実施条件に 'Issue/PR body に <!-- adversarial-review: true --> を記載している場合' と明示されている"
 
   - id: pre-production-deploy-review
     input: "本番デプロイ前の最終チェックとして、adversarial-review: true を指定したので成果物をレビューしてください。"
     expected_trigger: true
     verify:
       - type: content_contains
-        detail: "設計レビューおよびコードレビューの5軸評価が実行されること"
-    reason: "SKILL.md の When to Activate に '本番デプロイ前の最終チェック' が含まれており、adversarial-review: true 指定と組み合わせることでトリガーされる"
+        detail: "設計レビューおよびコードレビューの6軸評価が実行されること"
+    reason: "adversarial-review: true の明示指定が marker によるトリガー条件に該当する。本番デプロイ前という文脈だけでは発動しない。"
+
+  - id: explicit-user-adversarial-review-request
+    input: "この成果物について敵対的レビューを実施してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "6軸の敵対的レビュー結果と重大度分類が出力されること"
+    reason: "ユーザーが敵対的レビューを明示的に依頼しており、ユーザー依頼によるトリガー条件に該当する"
+
+  - id: hve-phase3-review
+    input: "HVE Phase 3 として auto_contents_review=true で敵対的レビューを実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "HVE Phase 3 の所有範囲として6軸の敵対的レビューが実行されること"
+    reason: "HVE CLI / GUI の auto_contents_review=true による Phase 3 がトリガー条件に該当する"
+
+  - id: plan-only-with-explicit-marker
+    input: "Plan-Only の PR ですが、<!-- adversarial-review: true --> を明示したので敵対的レビューを実行してください。"
+    expected_trigger: true
+    verify:
+      - type: content_contains
+        detail: "plan.md と subissues.md を対象に6軸の敵対的レビューが実行されること"
+    reason: "Plan-Onlyの省略は明示triggerがない場合だけであり、true markerは発動条件に該当する"
 
   # --- 負のテストケース（このSkillが発動すべきでない入力） ---
   - id: no-explicit-trigger-with-implementation
@@ -55,7 +79,7 @@ test_cases:
     input: "SPLIT_REQUIRED と判定されたので、plan.md と subissues.md のみ作成した PR です。adversarial-review: true は指定されていません。"
     expected_trigger: false
     expected_skill: null
-    reason: "SKILL.md の例外セクションに '§2.3 分割モード（Plan-Only）の場合は本スキルを省略する' と明示されており、adversarial-review 未指定の分割モードPRは対象外"
+    reason: "SKILL.md の例外は明示triggerがないPlan-Onlyだけを省略対象としており、この入力にはmarker / label / ユーザー依頼 / HVE Phase 3のいずれもない"
 
   # --- エッジケース ---
   - id: ambiguous-review-request-without-flag

@@ -98,7 +98,7 @@ async def _generate_one_section(
     from copilot.session import PermissionHandler  # type: ignore
 
     # Late import to avoid hard dep at module import time
-    from ..config import DEFAULT_MODEL, MODEL_AUTO_REASONING_EFFORT, MODEL_AUTO_VALUE
+    from ..config import to_wire_model
     from ..orchestrator import _create_session_with_auto_reasoning_fallback  # type: ignore
     from ..runner import _extract_text  # type: ignore
 
@@ -115,12 +115,10 @@ async def _generate_one_section(
         "streaming": True,
         "session_id": f"br-gen-{section.section_id.lower()}",
     }
-    model = config.model
-    if model and model != MODEL_AUTO_VALUE:
-        session_opts["model"] = model
-    else:
-        session_opts["model"] = DEFAULT_MODEL
-        session_opts["reasoning_effort"] = MODEL_AUTO_REASONING_EFFORT
+    # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
+    _wire_model = to_wire_model(config.model)
+    if _wire_model:
+        session_opts["model"] = _wire_model
 
     try:
         session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
@@ -193,7 +191,7 @@ async def generate_business_requirement(
     """
     # SDK 利用可否チェック（捏造防止: SDK 不在なら空ファイルを書かない）
     try:
-        from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig  # type: ignore
+        import copilot  # noqa: F401  # type: ignore
     except ImportError as exc:
         return BRGenerationResult(
             ok=False,
@@ -216,17 +214,17 @@ async def generate_business_requirement(
             error="読み取り可能な添付資料がありません。",
         )
 
-    # SDK config 構築
-    if config.cli_url:
-        sdk_cfg = ExternalServerConfig(url=config.cli_url)
-    else:
-        sdk_cfg = SubprocessConfig(
-            cli_path=config.cli_path,
-            github_token=config.github_token,
-            log_level="error",
-        )
+    try:
+        from hve.copilot_client_factory import create_copilot_client
+    except ImportError:  # pragma: no cover
+        from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
 
-    client = CopilotClient(config=sdk_cfg)
+    client = create_copilot_client(
+        cli_path=config.cli_path,
+        cli_url=config.cli_url,
+        github_token=config.github_token,
+        log_level="error",
+    )
     try:
         await client.start()
     except Exception as exc:

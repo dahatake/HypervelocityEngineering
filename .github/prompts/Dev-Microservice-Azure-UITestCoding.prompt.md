@@ -1,6 +1,70 @@
 > 画面別テスト仕様書（docs/test-specs/{screenId}-test-spec.md）に基づき、TDD RED フェーズのUIテストコード（失敗するテスト）を src/test/ui/ 配下に生成する。実装コードは作成しない。
 
-> **WORK**: `/work/Dev-Microservice-Azure-UITestCoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-UITestCoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `<workflow-id>` は HVE workflow id を指す。ASDW-WEB では `asdw-web` を使い、Agent 名 `Dev-Microservice-Azure-UITestCoding` を workflow id として使わない。
+- HVE から `## TDD report 出力先（HVE gate 必須）` として具体パスが提示された場合は、その具体パスを必ず優先する。
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+- RED フェーズで `TDD-Judgement: PASS` とする場合、それはテストが成功した意味ではなく、期待どおり RED になった証跡判定を表す。
+
+```markdown
+# TDD Test Report - <target-key> RED
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: Dev-Microservice-Azure-UITestCoding
+- Target-Key: <target-key>
+- Phase: RED
+- Test-Code-Path: <src/test/ui/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: PASS
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+- CWD: `<repository-root>`
+- Command: `<jest/jsdom or playwright command>`
+- Exit-Code: <exit-code>
+
+## Expected Outcome
+
+- Expected: 初回実行は UI 実装未完了により RED。再実行で実装既存なら canonical スイートは PASS し得る（実装先行として許容）
+- Reason: <テスト仕様書と RED フェーズの根拠。再実行時は実装先行の旨>
+
+## Actual Result
+
+- Test-Suites: <summary>
+- Tests: <summary>
+- Summary: <actual summary>
+
+## Evidence
+
+- Log-Excerpt: <sanitized excerpt or N/A>
+- Raw-Log-Path: <path or N/A>
+- Secret-Redaction: confirmed
+
+## Failure Analysis
+
+- Root-Cause: <expected RED failure root cause>
+- Next-Action: Dev-Microservice-Azure-UICoding で GREEN 化する
+
+## Test Protection
+
+- Test-Files-Changed: <yes/no/N/A>
+- Allowed-Test-Changes: <changed test files or N/A>
+```
 
 TDD RED フェーズ UI テストコード生成専用Agent。
 このエージェントは **画面別テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
@@ -22,6 +86,21 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 
 ## Agent 固有の Skills 依存
 - `repo-onboarding-fast`：リポジトリ高速オンボーディング（必要な場合のみ）
+- `tdd-red-green-reality`：実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
+
+## ツール利用衛生（fan-out）
+- Markdown 仕様参照は `markdown-query` を優先し、0件時のみ `read_file` / `grep` へフォールバックする。
+- `read_file` / view の行範囲は実在行数が不明なまま大きく指定しない。`view_range out of bounds` 時は見出し検索または小範囲で再取得し、同じ範囲を繰り返さない。
+- `{WORK}` / `work/run/...` / 任意入力パスは `Test-Path` / `[ -e ]` で確認してから検索・読取する。出力先ディレクトリのみ必要時に作成し、入力・仕様・参照パスが存在しない場合は作成せず「未作成」と記録する。
+- Web docs は MCP 優先とし、redirect / 404 は最終 URL または別公式ソースへ一度だけ切り替える。
+
+## 生成テストの実行環境
+
+- 生成する UI テストは **ローカル端末 / CI で Jest/jsdom または Playwright により実行可能**であること。
+- RED フェーズでは Azure Static Web Apps や実 API へ接続しない。API 呼び出しはテスト仕様書の API モック / テストダブル設計に従い mock/stub で置き換える。
+- E2E テストを生成する場合も、base URL は `E2E_BASE_URL` などの環境変数または画面固有設定から取得し、未設定を PASS 扱いしない。
+- 接続文字列・Function Key・Bearer token 等の秘密情報をテストコード、README、ログにハードコードしない。
+- `tdd-test-report.md` の `Expected Outcome` には、RED フェーズとしてローカルでテストを実行し、UI 実装未完了により失敗することを明記する。
 
 # 1) 目的（スコープ固定）
 - 対象は **1画面分のみ**：`{screenId}-{画面名}`。
@@ -38,7 +117,7 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 
 参照候補（存在すれば読む）:
 - `docs/screen/{screenId}-{screenNameSlug}-description.md`（画面定義書 — UI要素・操作シナリオ・バリデーションルールの確認用）
-- `docs/catalog/screen-catalog.md`（画面一覧・遷移図）
+- `docs/catalog/screen-catalog-APP-*.md`（画面一覧・遷移図 — 全 APP 集約 glob。`Arch-UI-List` Step 1 の per-APP fan-out 出力）
 - `docs/catalog/service-catalog-matrix.md`（API一覧・依存関係マトリクス）
 - `src/data/sample-data.json`（サンプルデータ）
 - `src/test/ui/` ディレクトリ構造（既存テストコードのパターン確認）
@@ -61,6 +140,11 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 
 作業ログ（Skill work-artifacts-layout 既定）:
 - `{WORK}` に従う
+
+## fan-out 共有設定ファイル保護（必須）
+- 本 Agent は画面別 fan-out 子として並列実行されるため、リポジトリルートの `package.json` / `jest.config.js` を作成・更新しない。
+- 既存のルート `package.json` / `jest.config.js` は読み取り専用の参照対象とし、画面固有の設定が必要な場合は `src/test/ui/{screenId}/` 配下（例: `jest.red.config.js`）に閉じる。
+- ルートのテスト実行基盤が存在せず RED 確認できない場合は、共有設定を新規作成せず `{WORK}` にブロッカーとして記録して停止する。
 
 # 4) 依存確認（必須・最初に実行）
 入力ファイルを `read` で確認し、以下の条件を満たさない場合は **即座に停止** する：
@@ -88,10 +172,14 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - アクセシビリティテスト（§4.7）を A11y テストにマッピングする（記載がある場合）。
 
 ## 5.3) テストコード生成（RED 状態）
-- テストは UI 実装が存在しないため **失敗する** ことを前提とする。
+- 生成するのは **テスト仕様書に 1:1 対応する canonical なテスト群**（§2/§3/§4.5 の各行 = 1 テスト、`// 出典` で対応付け。カテゴリ別に複数ファイルへ分けてよい）とする。RED を作るための spec 非対応の ad-hoc 失敗テスト（`*.red-gaps` / `*.red-a11y-gaps` 等）を追加しない。
+- 初回実行（`src/app/{screenId}/` に実装なし）ではテストは **失敗する**（RED）ことを前提とする。ただし **再実行で実装が既存**の場合は canonical スイートが PASS し得る。これは実装先行として許容し、RED を強制するための失敗テストを **捏造しない**（`Expected Outcome`・作業ログに「実装先行のため PASS」と記録する）。
+- `src/test/ui/{screenId}/` に前 run の spec 非対応 / 相互矛盾テストが累積している場合は、生成元 Step として canonical スイートへ **再整合（置換）** し、累積を解消する（新規の失敗テストを積み増さない）。
 - テスト仕様書の操作ステップを忠実にテストコードに反映する。
 - API モックは仕様書の「モックレスポンス概要」「正常/異常パターン」に基づいて設定する。
 - API 契約検証設計（§4.6）が存在する場合、リクエスト/レスポンス スキーマの契約に準拠したモックレスポンスを設定し、契約違反パターン（型不一致・必須フィールド欠落等）を検証するテストも追加する（§4.6 の定義は `docs/test-specs/{screenId}-test-spec.md` の `### 4.6 API 契約検証（UI → API 間）` を参照）。
+- TBD（要確認）を含む未確定契約を GREEN 必達の実行テストとして生成しない。正式 API endpoint / event / schema / enum 値が未確定の場合、テスト内ローカル定数で `TBD（要確認）` を固定して `true` を期待する Contract テストにはせず、`{WORK}` の作業ログ・README・契約メモに契約確定待ちとして記録する。
+- 完了前に `src/test/ui/{screenId}/` 配下の `.js` を確認し、非コメント行に `TBD（要確認` が残っていないことを確認する。検出した場合は実行コードから除去し、`{WORK}` の作業ログ・README・契約メモに契約確定待ちとして記録する。
 - 各テストに `// 出典: {テスト仕様書パス}#{テストID}` のコメントを付与する（トレーサビリティ）。
 - テストデータは仕様書の「テストデータ定義（画面表示用）」（§4）に基づく。
 - テスト名は `テストID_テストシナリオ_期待結果` のパターンを推奨（既存慣習があればそれに従う。`ServiceTestCoding` と命名規則を統一する）。
@@ -102,13 +190,13 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - 1テスト = 1つの操作シナリオまたはバリデーション検証（単一責任テスト）を原則とする。テスト仕様書のテストケース表（§2）の各行が1テストに対応すること。
 
 ## 5.4) テスト実行環境のセットアップ
-- `package.json`（または相当のプロジェクト設定ファイル）がなければ作成する。
-- テスト実行に必要な最小限の依存関係を定義する。
-- `npm test`（または相当のコマンド）で実行可能にする。
+- 既存のルート `package.json` / `jest.config.js` / npm scripts を参照し、画面別テストを実行する。
+- 画面固有の補助設定が必要な場合のみ、`src/test/ui/{screenId}/` 配下に閉じて作成する。
+- ルート共有設定や依存関係の追加が必要な場合は、本 fan-out 子では変更せず `{WORK}` に不足事項として記録する。
 
 ## 5.5) 実行確認（RED 状態確認）
-- テストが実行可能であること（セットアップエラーではなく、テスト失敗であること）を確認する。
-- 実行結果を作業ログに記録する。
+- テストが実行可能であること（セットアップエラーではなく、テスト実行に到達していること）を確認する。
+- 初回実行（実装なし）は失敗（RED）を、再実行（実装既存）は canonical スイートの実結果（PASS を含む）を、そのまま作業ログに記録する。RED を作るための失敗テストは捏造しない。
 
 # 6) 禁止事項（このタスク固有）
 - `src/app/` 配下の実装コードを作成・変更しない（これは後続の `Dev-Microservice-Azure-UICoding` が行う）。
@@ -124,21 +212,25 @@ TDD RED フェーズ UI テストコード生成専用Agent。
 - テスト仕様書のテストケース表（§2）の全行に対応するテストが存在する。
 - バリデーションテストケース表（§3）の全行に対応するバリデーションテストが存在する。
 - API モック（§4.5）が適切にセットアップされている。
-- テストの実行が **全て失敗する**（RED 状態）。
+- テストが実行可能で実結果が記録されている（初回=実装なしのため RED、再実行=実装既存なら canonical スイートは PASS し得る。RED を作るための失敗テストは捏造しない）。
 - 各テストに出典コメントが付与されている（トレーサビリティ）。
 - テスト名が `テストID_テストシナリオ_期待結果` パターンに従っている（既存慣習があればそれに従う）。
 - 各テストが AAA パターン（Arrange / Act / Assert）で構造化されている。
 - 作業ログと README が更新されている。
 
-# 8) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+# 8) 最終品質レビュー（単回インライン・セルフチェック）
 
-## 3つの異なる観点（TDD RED フェーズ UI テストコードの場合）
-- **1回目：テスト仕様書との整合性**：テストケース表・バリデーションテスト・A11y テストの全行がテストコードに反映されているか、テストデータが仕様書と一致しているか、API モック設計が仕様書の方針と一致しているか、出典コメントが正確か
-- **2回目：TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序と一致しているか、後続の GREEN フェーズで UI 実装者が理解しやすい構造か、操作ステップが画面定義書の UX フローと整合しているか
-- **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/フィクスチャの再利用性、新テストケース追加時の変更容易性、既存テスト資産との一貫性、テストフレームワークの選定妥当性
+## 8.1 セルフチェック契約
 
-## 3) 出力フォーマット（Markdown固定スキーマ）
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+## 8.2 ドメイン固有観点
+- **テスト仕様書との整合性**：テストケース表・バリデーションテスト・A11y テストの全行がテストコードに反映されているか、テストデータが仕様書と一致しているか、API モック設計が仕様書の方針と一致しているか、出典コメントが正確か
+- **TDD RED フェーズとしての妥当性**：spec に 1:1 対応する canonical なテスト群のみか（RED を強制するための spec 非対応 ad-hoc 失敗テストを捏造していないか）、初回実行は RED・再実行で実装既存なら canonical スイートの PASS も許容されるか、テスト実行順序が仕様書の TDD 実行順序と一致しているか、後続の GREEN フェーズで UI 実装者が理解しやすい構造か、操作ステップが画面定義書の UX フローと整合しているか
+- **保守性・拡張性・堅牢性**：テストコードの可読性、モック/フィクスチャの再利用性、新テストケース追加時の変更容易性、既存テスト資産との一貫性、テストフレームワークの選定妥当性
+
+## 8.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

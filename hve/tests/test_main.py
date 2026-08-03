@@ -26,6 +26,9 @@ _build_params = _main_mod._build_params
 _build_config = _main_mod._build_config
 _load_mcp_config = _main_mod._load_mcp_config
 _validate_auto_coding_agent_review = _main_mod._validate_auto_coding_agent_review
+_run_copilot_auth_preflight = _main_mod._run_copilot_auth_preflight
+_run_workiq_auth_preflight = _main_mod._run_workiq_auth_preflight
+_run_azure_auth_preflight = _main_mod._run_azure_auth_preflight
 _resolve_model = _main_mod._resolve_model
 _prompt_valid_doc_purpose = _main_mod._prompt_valid_doc_purpose
 _prompt_valid_aqod_depth = _main_mod._prompt_valid_aqod_depth
@@ -37,10 +40,8 @@ _PARAM_DEFAULTS = _main_mod._PARAM_DEFAULTS
 _PARAM_PROMPT_LABELS = _main_mod._PARAM_PROMPT_LABELS
 main = _main_mod.main
 
-# Phase 4 Resume プロンプトをテスト全体で抑止（テスト環境の work/runs/ 状態に依存させない）。
-# 個別の Resume プロンプトテストは test_wizard_resume_prompt.py 側で行う。
-_resume_prompt_patcher = mock.patch.object(_main_mod, "_maybe_show_resume_prompt", return_value=None)
-_resume_prompt_patcher.start()
+from workflow_registry import get_workflow as _get_workflow
+
 
 def _parse(argv):
     """_build_parser() でコマンドライン引数をパースするヘルパー。"""
@@ -50,11 +51,11 @@ def _parse(argv):
 class TestParserBasic(unittest.TestCase):
     """基本的な argparse テスト。"""
 
-    def test_workflow_required(self) -> None:
-        """--workflow が必須であることを確認。"""
-        parser = _build_parser()
-        with self.assertRaises(SystemExit):
-            parser.parse_args(["orchestrate"])
+    def test_workflow_or_autopilot_chain_required_at_command_runtime(self) -> None:
+        """--workflow / --autopilot-chain 未指定は parser ではなく _cmd_orchestrate で拒否する。"""
+        args = _parse(["orchestrate"])
+        self.assertIsNone(args.workflow)
+        self.assertIsNone(args.autopilot_chain)
 
     def test_workflow_short_option(self) -> None:
         """-w の短縮形が動作することを確認。"""
@@ -172,6 +173,15 @@ class TestParserBasic(unittest.TestCase):
         """--create-pr フラグのテスト。"""
         args = _parse(["orchestrate", "-w", "aas", "--create-pr"])
         self.assertTrue(args.create_pr)
+
+    def test_delete_local_merged_branch_flag(self) -> None:
+        """--delete-local-merged-branch / --no-... フラグのテスト（既定 True）。"""
+        args_default = _parse(["orchestrate", "-w", "aas"])
+        self.assertTrue(args_default.delete_local_merged_branch)
+        args_off = _parse(["orchestrate", "-w", "aas", "--no-delete-local-merged-branch"])
+        self.assertFalse(args_off.delete_local_merged_branch)
+        args_on = _parse(["orchestrate", "-w", "aas", "--delete-local-merged-branch"])
+        self.assertTrue(args_on.delete_local_merged_branch)
 
     def test_quiet_flag(self) -> None:
         """-q / --quiet フラグのテスト。"""
@@ -340,11 +350,94 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(params["app_ids"], ["APP-01"])
         self.assertEqual(params["app_id"], "APP-01")
 
+    def test_conflicting_app_id_and_app_ids_are_rejected(self) -> None:
+        args = _parse(
+            [
+                "orchestrate",
+                "-w",
+                "asdw",
+                "--app-ids",
+                "APP-009",
+                "--app-id",
+                "APP-010",
+            ]
+        )
+
+        with self.assertRaisesRegex(ValueError, "--app-id must match"):
+            _build_params(args)
+
+    def test_matching_app_id_and_app_ids_are_accepted(self) -> None:
+        args = _parse(
+            [
+                "orchestrate",
+                "-w",
+                "asdw",
+                "--app-ids",
+                "APP-009",
+                "--app-id",
+                "APP-009",
+            ]
+        )
+
+        params = _build_params(args)
+
+        self.assertEqual(params["app_ids"], ["APP-009"])
+        self.assertEqual(params["app_id"], "APP-009")
+
+    def test_autopilot_chain_rejects_conflicting_app_ids_before_runner_start(self) -> None:
+        args = _parse(
+            [
+                "orchestrate",
+                "--autopilot-chain",
+                "aad-web,asdw-web",
+                "--app-ids",
+                "APP-009",
+                "--app-id",
+                "APP-010",
+            ]
+        )
+
+        with mock.patch.object(
+            _main_mod,
+            "_cmd_orchestrate_autopilot_chain",
+        ) as runner:
+            self.assertEqual(_main_mod._cmd_orchestrate(args), 1)
+
+        runner.assert_not_called()
+
     def test_resource_group_in_params(self) -> None:
         """resource_group がパラメータに含まれることを確認。"""
         args = _parse(["orchestrate", "-w", "asdw", "--resource-group", "rg-test"])
         params = _build_params(args)
         self.assertEqual(params["resource_group"], "rg-test")
+
+    def test_data_deploy_bootstrap_inputs_are_carried_to_params(self) -> None:
+        args = _parse(
+            [
+                "orchestrate",
+                "-w",
+                "asdw-web",
+                "--data-location",
+                "japaneast",
+                "--data-resource-suffix",
+                "app009",
+                "--data-vnet-cidr",
+                "10.40.0.0/16",
+                "--data-private-endpoint-subnet-cidr",
+                "10.40.1.0/24",
+                "--data-aci-subnet-cidr",
+                "10.40.2.0/24",
+            ]
+        )
+
+        params = _build_params(args)
+
+        self.assertEqual(params["data_location"], "japaneast")
+        self.assertEqual(params["data_resource_suffix"], "app009")
+        self.assertEqual(params["data_vnet_cidr"], "10.40.0.0/16")
+        self.assertEqual(params["data_private_endpoint_subnet_cidr"], "10.40.1.0/24")
+        self.assertEqual(params["data_aci_subnet_cidr"], "10.40.2.0/24")
+        self.assertNotIn("data_verify_aci_image", params)
 
     def test_steps_with_spaces(self) -> None:
         """--steps のスペースが除去されることを確認。"""
@@ -523,6 +616,35 @@ class TestBuildParams(unittest.TestCase):
             config = _build_config(args)
             self.assertEqual(config.model, "claude-opus-4.7")
 
+    def test_auto_compaction_default_false(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertFalse(config.auto_compaction)
+
+    def test_auto_compaction_cli_enabled(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--auto-compaction"])
+        config = _build_config(args)
+        self.assertTrue(config.auto_compaction)
+
+    def test_auto_compaction_cli_disabled(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--no-auto-compaction"])
+        config = _build_config(args)
+        self.assertFalse(config.auto_compaction)
+
+    def test_build_config_enable_auto_merge(self) -> None:
+        """--enable-auto-merge が cfg.enable_auto_merge に反映され、未指定時は False。"""
+        cfg_on = _build_config(_parse(["orchestrate", "-w", "aas", "--enable-auto-merge"]))
+        self.assertTrue(cfg_on.enable_auto_merge)
+        cfg_off = _build_config(_parse(["orchestrate", "-w", "aas"]))
+        self.assertFalse(cfg_off.enable_auto_merge)
+
+    def test_build_config_delete_local_merged_branch(self) -> None:
+        """--delete-local-merged-branch / --no-... が cfg に反映され、未指定時は True（既定有効）。"""
+        cfg_default = _build_config(_parse(["orchestrate", "-w", "aas"]))
+        self.assertTrue(cfg_default.delete_local_merged_branch)
+        cfg_off = _build_config(_parse(["orchestrate", "-w", "aas", "--no-delete-local-merged-branch"]))
+        self.assertFalse(cfg_off.delete_local_merged_branch)
+
     def test_build_config_workiq(self) -> None:
         args = _parse([
             "orchestrate", "-w", "aas", "--workiq",
@@ -649,9 +771,124 @@ class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
         self.assertEqual(con.prompt_yes_no.call_count, 0)
 
 
+class TestAsdwDataDeployWizardParams(unittest.TestCase):
+    """FR-CLI-14: ASDW-WEB wizard の Step 1.3 パラメータ収集と既定値提示。"""
+
+    def _make_con(self):
+        con = mock.MagicMock()
+        con.menu_select.return_value = 0
+        con.prompt_input.return_value = ""
+        con.prompt_yes_no.return_value = False
+        return con
+
+    def _data_prompts(self, con) -> list:
+        """DataDeploy ブロックの prompt_input 呼び出しを (label, default, required) で返す。"""
+        step = _get_workflow("asdw-web").get_step("1.3")
+        labels = {
+            _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS[key]
+            for key in step.required_params
+        }
+        result = []
+        for call in con.prompt_input.call_args_list:
+            label = call.args[0] if call.args else call.kwargs.get("label")
+            if label in labels:
+                result.append((
+                    label,
+                    call.kwargs.get("default"),
+                    call.kwargs.get("required"),
+                ))
+        return result
+
+    def _collect(self, con, selected_step_ids, is_quick_auto=False):
+        return _collect_generic_workflow_params(
+            con,
+            _get_workflow("asdw-web"),
+            is_quick_auto=is_quick_auto,
+            selected_step_ids=selected_step_ids,
+        )
+
+    def test_prompts_all_required_params_in_declared_order(self) -> None:
+        con = self._make_con()
+        self._collect(con, ["1.3"])
+        step = _get_workflow("asdw-web").get_step("1.3")
+        expected = [
+            _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS[key]
+            for key in step.required_params
+        ]
+        self.assertEqual([row[0] for row in self._data_prompts(con)], expected)
+
+    def test_offers_declared_defaults(self) -> None:
+        con = self._make_con()
+        self._collect(con, ["1.3"])
+        step = _get_workflow("asdw-web").get_step("1.3")
+        by_label = {row[0]: row[1] for row in self._data_prompts(con)}
+        for key, default_value in step.default_params.items():
+            label = _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS[key]
+            self.assertEqual(by_label[label], default_value)
+
+    def test_params_without_default_are_prompted_empty_and_required(self) -> None:
+        con = self._make_con()
+        self._collect(con, ["1.3"])
+        step = _get_workflow("asdw-web").get_step("1.3")
+        by_label = {row[0]: (row[1], row[2]) for row in self._data_prompts(con)}
+        for key in step.required_params:
+            if key in step.default_params:
+                continue
+            label = _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS[key]
+            self.assertEqual(by_label[label], ("", True))
+
+    def test_skips_params_already_collected(self) -> None:
+        """既に非空値を持つキーは再質問しない。"""
+        con = self._make_con()
+        collected = {"resource_group": "rg-existing"}
+        values = _main_mod._prompt_asdw_data_deploy_params(con, collected)
+        self.assertNotIn("resource_group", values)
+        labels = [row[0] for row in self._data_prompts(con)]
+        self.assertNotIn(
+            _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS["resource_group"], labels
+        )
+        self.assertIn(
+            _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS["data_location"], labels
+        )
+
+    def test_blank_collected_value_is_reprompted(self) -> None:
+        """空白のみの値は未収集として扱い再質問する。"""
+        con = self._make_con()
+        values = _main_mod._prompt_asdw_data_deploy_params(con, {"resource_group": "  "})
+        self.assertIn("resource_group", values)
+
+    def test_generic_loop_does_not_double_prompt_resource_group(self) -> None:
+        """汎用ループと DataDeploy ブロックで resource_group を二重質問しない。"""
+        con = self._make_con()
+        self._collect(con, ["1.3"])
+        labels = [
+            (call.args[0] if call.args else call.kwargs.get("label"))
+            for call in con.prompt_input.call_args_list
+        ]
+        self.assertNotIn(_PARAM_PROMPT_LABELS["resource_group"], labels)
+        self.assertEqual(
+            labels.count(_main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS["resource_group"]), 1
+        )
+
+    def test_quick_auto_does_not_prompt(self) -> None:
+        con = self._make_con()
+        self._collect(con, ["1.3"], is_quick_auto=True)
+        self.assertEqual(self._data_prompts(con), [])
+
+    def test_not_prompted_when_step_1_3_unreachable(self) -> None:
+        con = self._make_con()
+        self._collect(con, ["1.1"])
+        self.assertEqual(self._data_prompts(con), [])
+
+    def test_labels_cover_every_required_param(self) -> None:
+        """ラベル表が宣言済み required_params を全て網羅すること。"""
+        step = _get_workflow("asdw-web").get_step("1.3")
+        for key in step.required_params:
+            self.assertIn(key, _main_mod._ASDW_DATA_DEPLOY_PARAM_LABELS)
+
+
 class TestReviewModelCLI(unittest.TestCase):
     """review/qa モデル CLI の動作を検証する。"""
-
     def test_review_model_parsed(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--review-model", "claude-opus-4.6"])
         self.assertEqual(args.review_model, "claude-opus-4.6")
@@ -771,6 +1008,26 @@ class TestLoadMCPConfig(unittest.TestCase):
         finally:
             pathlib.Path(tmp_path).unlink()
 
+    def test_unwraps_mcpservers_wrapper(self) -> None:
+        """.github/.mcp.json 形式の mcpServers wrapper を SDK 用 map に変換する。"""
+        servers = {
+            "azure": {
+                "command": "npx",
+                "args": ["-y", "@azure/mcp@latest", "server", "start"],
+            }
+        }
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"mcpServers": servers}, f)
+            tmp_path = f.name
+
+        try:
+            result = _load_mcp_config(tmp_path)
+            self.assertEqual(result, servers)
+        finally:
+            pathlib.Path(tmp_path).unlink()
+
     def test_none_when_file_not_found(self) -> None:
         """存在しないファイルの場合 None を返すことを確認。"""
         result = _load_mcp_config("/tmp/nonexistent_mcp_config_xyz.json")
@@ -782,6 +1039,34 @@ class TestLoadMCPConfig(unittest.TestCase):
             mode="w", suffix=".json", delete=False, encoding="utf-8"
         ) as f:
             f.write("{ invalid json }")
+            tmp_path = f.name
+
+        try:
+            result = _load_mcp_config(tmp_path)
+            self.assertIsNone(result)
+        finally:
+            pathlib.Path(tmp_path).unlink()
+
+    def test_none_when_json_root_is_not_object(self) -> None:
+        """JSON root が object でない場合 None を返すことを確認。"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump(["not", "object"], f)
+            tmp_path = f.name
+
+        try:
+            result = _load_mcp_config(tmp_path)
+            self.assertIsNone(result)
+        finally:
+            pathlib.Path(tmp_path).unlink()
+
+    def test_none_when_mcpservers_is_not_object(self) -> None:
+        """mcpServers が object でない場合 None を返すことを確認。"""
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        ) as f:
+            json.dump({"mcpServers": []}, f)
             tmp_path = f.name
 
         try:
@@ -815,7 +1100,16 @@ class TestMainDryRun(unittest.TestCase):
         self.assertEqual(exit_code, 1)
 
     def test_main_all_valid_workflows_dry_run(self) -> None:
-        """全ての有効なワークフローで dry_run が成功することを確認。"""
+        """全ての有効なワークフローで dry_run が成功することを確認。
+
+        FR-DAG-08: 宣言済み必須パラメータ（FR-DAG-07）の不足は dry-run より前で
+        blocked となるため、既定値を持たないキーは CLI 引数で与える。
+        """
+        extra_args = {
+            "asdw-web": [
+                "--resource-group", "test-resource-group",
+            ],
+        }
         for wf_id in ["aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "adoc"]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
@@ -823,6 +1117,7 @@ class TestMainDryRun(unittest.TestCase):
                     "--workflow", wf_id,
                     "--dry-run",
                     "--quiet",
+                    *extra_args.get(wf_id, []),
                 ])
                 self.assertEqual(exit_code, 0, f"{wf_id} の dry_run で終了コードが 0 以外")
 
@@ -1018,6 +1313,177 @@ class TestValidateAutoCodingAgentReview(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertNotIn("WARNING", output)
+
+
+class TestCopilotAuthPreflight(unittest.TestCase):
+    """orchestrate 起動前 Copilot 認証 preflight のテスト。"""
+
+    def _make_config(self, *, dry_run: bool = False, force_interactive: bool = False):
+        args = _parse(["orchestrate", "-w", "aas"] + (["--dry-run"] if dry_run else []))
+        cfg = _build_config(args)
+        cfg.dry_run = dry_run
+        cfg.force_interactive = force_interactive
+        return args, cfg
+
+    def test_dry_run_skips_auth_check(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+        args, cfg = self._make_config(dry_run=True)
+        with mock.patch.object(auth_mod, "ensure_authenticated") as ensure_mock:
+            self.assertTrue(_run_copilot_auth_preflight(args, cfg))
+        ensure_mock.assert_not_called()
+
+    def test_authenticated_returns_true(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+        args, cfg = self._make_config()
+        with mock.patch.object(auth_mod, "ensure_authenticated", return_value=auth_mod.AuthInfo(is_authenticated=True)):
+            self.assertTrue(_run_copilot_auth_preflight(args, cfg))
+
+    def test_non_interactive_unauthenticated_returns_false(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+        args, cfg = self._make_config()
+        with mock.patch.object(auth_mod, "ensure_authenticated", return_value=auth_mod.AuthInfo(is_authenticated=False)), \
+             mock.patch("sys.stdin.isatty", return_value=False):
+            self.assertFalse(_run_copilot_auth_preflight(args, cfg))
+
+    def test_interactive_accepts_login_and_rechecks(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+        args, cfg = self._make_config(force_interactive=True)
+        with mock.patch.object(
+            auth_mod,
+            "ensure_authenticated",
+            side_effect=[
+                auth_mod.AuthInfo(is_authenticated=False),
+                auth_mod.AuthInfo(is_authenticated=True, login="alice"),
+            ],
+        ) as ensure_mock, mock.patch("builtins.input", return_value=""):
+            self.assertTrue(_run_copilot_auth_preflight(args, cfg))
+        self.assertEqual(ensure_mock.call_count, 2)
+        self.assertFalse(ensure_mock.call_args_list[0].kwargs["interactive"])
+        self.assertTrue(ensure_mock.call_args_list[1].kwargs["interactive"])
+
+    def test_interactive_rejects_login(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+        args, cfg = self._make_config(force_interactive=True)
+        with mock.patch.object(auth_mod, "ensure_authenticated", return_value=auth_mod.AuthInfo(is_authenticated=False)) as ensure_mock, \
+             mock.patch("builtins.input", return_value="n"):
+            self.assertFalse(_run_copilot_auth_preflight(args, cfg))
+        ensure_mock.assert_called_once()
+
+    def test_cmd_orchestrate_stops_when_auth_preflight_fails(self) -> None:
+        with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=False):
+            exit_code = main(["orchestrate", "--workflow", "aas", "--quiet"])
+        self.assertEqual(exit_code, 1)
+
+
+class TestWorkIQAuthPreflight(unittest.TestCase):
+    """Work IQ 使用時 preflight のテスト。"""
+
+    def _make_config(self, argv: list[str]):
+        args = _parse(argv)
+        cfg = _build_config(args)
+        return args, cfg
+
+    def test_dry_run_skips_workiq_login(self) -> None:
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq", "--dry-run"])
+        with mock.patch("workiq.workiq_login") as login_mock:
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+        login_mock.assert_not_called()
+
+    def test_not_requested_skips_workiq_login(self) -> None:
+        args, cfg = self._make_config(["orchestrate", "-w", "aas"])
+        with mock.patch("workiq.workiq_login") as login_mock:
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+        login_mock.assert_not_called()
+
+    def test_success_returns_true(self) -> None:
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
+        with mock.patch("workiq.workiq_login", return_value=True):
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+
+    def test_non_interactive_failure_returns_false(self) -> None:
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("sys.stdin.isatty", return_value=False):
+            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+
+    def test_interactive_failure_can_disable_workiq_and_continue(self) -> None:
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq", "--workiq-draft"])
+        cfg.force_interactive = True
+        params = {"sources": "qa,workiq,original-docs", "workiq_akm_ingest_dxx": ["D01"]}
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("builtins.input", return_value="y"):
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg, params))
+        self.assertFalse(cfg.workiq_enabled)
+        self.assertFalse(cfg.workiq_draft_mode)
+        self.assertEqual(params["sources"], "qa,original-docs")
+        self.assertEqual(params["workiq_akm_ingest_dxx"], [])
+
+    def test_cmd_orchestrate_stops_when_workiq_preflight_fails(self) -> None:
+        with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=False):
+            exit_code = main(["orchestrate", "--workflow", "aas", "--workiq", "--quiet"])
+        self.assertEqual(exit_code, 1)
+
+
+class TestAzureAuthPreflight(unittest.TestCase):
+    """Azure 利用時 preflight のテスト。"""
+
+    def _make_config(self, argv: list[str]):
+        args = _parse(argv)
+        cfg = _build_config(args)
+        params = _build_params(args)
+        return args, cfg, params
+
+    def test_not_requested_skips_azure_check(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "aas"])
+        with mock.patch.object(_main_mod, "_azure_account_available") as account_mock:
+            self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
+        account_mock.assert_not_called()
+
+    def test_resource_group_requests_azure_check(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "asdw-web", "--resource-group", "rg"])
+        with mock.patch.object(_main_mod, "_azure_account_available", return_value=True):
+            self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
+
+    def test_azure_mcp_server_requests_azure_check(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "aas"])
+        cfg.mcp_servers = {"azure": {}}
+        with mock.patch.object(_main_mod, "_azure_account_available", return_value=True):
+            self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
+
+    def test_non_interactive_missing_azure_returns_false(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "asdw-web", "--resource-group", "rg"])
+        with mock.patch.object(_main_mod, "_azure_account_available", return_value=False), \
+             mock.patch("sys.stdin.isatty", return_value=False):
+            self.assertFalse(_run_azure_auth_preflight(args, cfg, params))
+
+    def test_missing_az_binary_does_not_prompt(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "asdw-web", "--resource-group", "rg"])
+        cfg.force_interactive = True
+        with mock.patch.object(_main_mod, "_azure_account_available", return_value=False), \
+             mock.patch("shutil.which", return_value=None), \
+             mock.patch("builtins.input") as input_mock:
+            self.assertFalse(_run_azure_auth_preflight(args, cfg, params))
+        input_mock.assert_not_called()
+
+    def test_interactive_runs_az_login_then_rechecks(self) -> None:
+        args, cfg, params = self._make_config(["orchestrate", "-w", "asdw-web", "--resource-group", "rg"])
+        cfg.force_interactive = True
+        completed = mock.Mock(returncode=0)
+        with mock.patch.object(_main_mod, "_azure_account_available", side_effect=[False, True]) as account_mock, \
+             mock.patch("shutil.which", return_value="az"), \
+             mock.patch("subprocess.run", return_value=completed) as run_mock, \
+             mock.patch("builtins.input", return_value=""):
+            self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
+        self.assertEqual(account_mock.call_count, 2)
+        self.assertEqual(run_mock.call_args.args[0], ["az", "login"])
+
+    def test_cmd_orchestrate_stops_when_azure_preflight_fails(self) -> None:
+        with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=False):
+            exit_code = main(["orchestrate", "--workflow", "asdw-web", "--resource-group", "rg", "--quiet"])
+        self.assertEqual(exit_code, 1)
 
 
 class TestCreateIssuesNewFlow(unittest.TestCase):
@@ -1259,7 +1725,9 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }), mock.patch.object(_main_mod, "_maybe_show_resume_prompt", return_value=None):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
 
@@ -1270,6 +1738,12 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         cfg = self._run_interactive_with_inputs(code_review=True)
         self.assertIsNotNone(cfg)
         self.assertTrue(cfg.auto_coding_agent_review)
+
+    def test_interactive_self_improve_no_sets_explicit_skip(self) -> None:
+        cfg = self._run_interactive_with_inputs()
+        self.assertIsNotNone(cfg)
+        self.assertFalse(cfg.auto_self_improve)
+        self.assertTrue(cfg.self_improve_skip)
 
     def test_interactive_auto_approval_sets_config(self) -> None:
         """auto_approval=True が SDKConfig に反映される。"""
@@ -1452,7 +1926,9 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
 
@@ -1574,7 +2050,9 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
 
@@ -1651,7 +2129,9 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
         cfg = captured.get("cfg")
@@ -1734,7 +2214,9 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
         cfg = captured.get("cfg")
@@ -1815,7 +2297,9 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
         captured["warning_called"] = con.warning.call_count
@@ -1896,7 +2380,9 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-        }):
+           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
         return captured, con
@@ -1980,6 +2466,79 @@ class TestCreateRemoteMcpServerParam(unittest.TestCase):
         call_default = call_kwargs.get("default") if "default" in call_kwargs else (call_positional[1] if len(call_positional) > 1 else None)
         self.assertIs(call_default, True)
         self.assertTrue(params["create_remote_mcp_server"])
+
+    def test_collect_generic_prompts_data_bootstrap_only_when_asdw_data_deploy_selected(self) -> None:
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = []
+        con = mock.MagicMock()
+        # FR-CLI-14: 収集順は Step 1.3 の required_params 宣言順（resource_group が先頭）。
+        con.prompt_input.side_effect = [
+            "rg-example",
+            "japaneast",
+            "app009",
+            "10.40.0.0/16",
+            "10.40.1.0/24",
+            "10.40.2.0/24",
+        ]
+
+        params = _collect_generic_workflow_params(
+            con,
+            mock_wf,
+            is_quick_auto=False,
+            selected_step_ids=["1.3"],
+        )
+
+        self.assertEqual(params["resource_group"], "rg-example")
+        self.assertEqual(params["data_location"], "japaneast")
+        self.assertNotIn("data_verify_aci_image", params)
+
+    def test_collect_generic_does_not_prompt_data_bootstrap_without_asdw_data_deploy(self) -> None:
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = []
+        con = mock.MagicMock()
+
+        params = _collect_generic_workflow_params(
+            con,
+            mock_wf,
+            is_quick_auto=False,
+            selected_step_ids=["2.1"],
+        )
+
+        self.assertEqual(params, {})
+        con.prompt_input.assert_not_called()
+
+    @unittest.mock.patch("hve.__main__._prompt_param_input")
+    @unittest.mock.patch("hve.__main__._prompt_app_ids")
+    @unittest.mock.patch("hve.__main__._default_param_value")
+    def test_asdw_bootstrap_prompt_selection_boundary(
+        self,
+        _default_value,
+        _prompt_app_ids,
+        _prompt_param,
+    ) -> None:
+        mock_wf = mock.MagicMock()
+        mock_wf.id = "asdw-web"
+        mock_wf.params = []
+        con = mock.MagicMock()
+        con.prompt_input.side_effect = lambda *_args, **_kwargs: "x"
+
+        for selected_steps, expected_prompted in (
+            ([], True),
+            (["1"], True),
+            (["1.3/APP-009"], True),
+            (["1.2"], False),
+            (["2.1"], False),
+        ):
+            con.prompt_input.reset_mock()
+            _collect_generic_workflow_params(
+                con,
+                mock_wf,
+                is_quick_auto=False,
+                selected_step_ids=selected_steps,
+            )
+            self.assertEqual(con.prompt_input.called, expected_prompted)
 
 
 class TestDocPurposePrompt(unittest.TestCase):

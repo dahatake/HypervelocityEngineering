@@ -184,7 +184,7 @@ cd .github/scripts/powershell
 
 ```bash
 # Bash — 単一ファイル
-./validate-plan.sh --path work/Issue-123/plan.md
+./validate-plan.sh --path work/run/<run-id>/Issue-123/plan.md
 
 # Bash — ディレクトリ再帰
 ./validate-plan.sh --directory work/
@@ -192,7 +192,7 @@ cd .github/scripts/powershell
 
 ```powershell
 # PowerShell — 単一ファイル
-.\validate-plan.ps1 -Path work/Issue-123/plan.md
+.\validate-plan.ps1 -Path work/run/<run-id>/Issue-123/plan.md
 
 # PowerShell — ディレクトリ再帰
 .\validate-plan.ps1 -Directory work/

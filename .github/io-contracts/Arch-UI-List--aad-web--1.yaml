@@ -15,6 +15,10 @@ inputs:
   required: true
   kind: agent_artifact
   producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/catalog/persona-screen-catalog.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-UI-PersonaScreenList--aas--8
 - path: knowledge/
   required: false
   kind: static
@@ -25,6 +29,6 @@ inputs:
   required: true
   kind: static
 outputs:
-- path: docs/catalog/screen-catalog.md
+- path: docs/catalog/screen-catalog-{key}.md
   required: true
   mode: create

@@ -46,6 +46,10 @@ def _make_mock_main_window(repo_root: Path) -> MainWindow:
     # 連結経路で参照されるメソッドを mock 化（実行検証用に呼び出し記録のみ）
     mw._activate_autopilot_workbench = MagicMock()
     mw._launch_autopilot_main_workflow_queue = MagicMock()
+    # _start_autopilot は app_chains 経路で _session_workdir.env_overrides() を参照する。
+    mw._session_workdir = MagicMock()
+    # _set_status (gui-status-banner) は _status_banner.set_status を呼ぶ。
+    mw._status_banner = MagicMock()
     return mw
 
 

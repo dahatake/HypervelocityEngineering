@@ -79,6 +79,7 @@ test_cases:
 | github-actions-cicd | 6 | 2026-04-10 |
 | test-strategy-template | 6 | 2026-04-10 |
 | repo-onboarding-fast | 6 | 2026-04-10 |
+| ai-agent-capability-contract | 9 | 2026-07-10 |
 | azure-deploy | 7 | 2026-04-13 |
 | azure-prepare | 7 | 2026-04-13 |
 | azure-validate | 7 | 2026-04-13 |

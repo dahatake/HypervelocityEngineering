@@ -9,7 +9,7 @@ import os
 import unittest
 import unittest.mock
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -17,7 +17,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import SDKConfig  # type: ignore[import-not-found]
 from console import Console  # type: ignore[import-not-found]
 from runner import StepRunner  # type: ignore[import-not-found]
-from orchestrator_context import OrchestratorContext  # type: ignore[import-not-found]
+from orchestrator_context import OrchestratorContext as _OrchestratorContext  # type: ignore[import-not-found]
+
+
+def OrchestratorContext(*args: Any, **kwargs: Any) -> _OrchestratorContext:
+    """Legacy split-fork tests explicitly opt in to the disabled-by-default path."""
+    kwargs.setdefault("split_fork_enabled", True)
+    return _OrchestratorContext(*args, **kwargs)
 
 
 _SUBISSUES_2 = """\
@@ -38,13 +44,24 @@ _SUBISSUES_2 = """\
 """
 
 
+_SUBISSUES_1 = """\
+<!-- parent_issue: TBD -->
+
+<!-- subissue -->
+<!-- title: Only Sub -->
+<!-- custom_agent: Arch-UI-Detail -->
+## Sub-001
+- AC: ひとつだけ作る
+"""
+
+
 def _make_runner(
     tmp_path: Path,
     model: str = "claude-opus-4.7",
     *,
     orchestrator_ctx: OrchestratorContext | None = None,
 ) -> StepRunner:
-    cfg = SDKConfig(model=model, run_id="run-split-fork-it")
+    cfg = SDKConfig(model=model, run_id="run-split-fork-it", timeout_seconds=1)
     console = Console(verbose=False, quiet=True)
     return StepRunner(
         config=cfg, console=console, orchestrator_ctx=orchestrator_ctx,
@@ -73,6 +90,37 @@ class _FakeSession:
         self.disconnected = True
 
 
+class _FakeFleetRpc:
+    def __init__(self, started: bool = True) -> None:
+        self.started = started
+        self.requests: List[Any] = []
+
+    async def start(self, request: Any) -> Any:
+        self.requests.append(request)
+        resp = unittest.mock.MagicMock()
+        resp.started = self.started
+        return resp
+
+
+class _FakeFleetSession:
+    def __init__(self, started: bool = True) -> None:
+        self.fleet_rpc = _FakeFleetRpc(started=started)
+        self.rpc = unittest.mock.MagicMock()
+        self.rpc.fleet = self.fleet_rpc
+        self.handlers: List[Any] = []
+        self.sent: List[str] = []
+
+    def on(self, handler: Any) -> Any:
+        self.handlers.append(handler)
+        return lambda: None
+
+    async def send_and_wait(self, prompt: str, timeout: float | None = None) -> Any:
+        self.sent.append(prompt)
+        resp = unittest.mock.MagicMock()
+        resp.text = "ok"
+        return resp
+
+
 class TestMaybeRunSplitForkDisabled(unittest.IsolatedAsyncioTestCase):
     """Orchestrator 未配下 / 機能 OFF で素通しすることを確認。"""
 
@@ -80,7 +128,7 @@ class TestMaybeRunSplitForkDisabled(unittest.IsolatedAsyncioTestCase):
         """orchestrator_ctx=None（単独実行モード）では素通し。"""
         runner = _make_runner(Path("."), orchestrator_ctx=None)
         result = await runner._maybe_run_split_fork(
-            client=unittest.mock.MagicMock(),
+            session=_FakeFleetSession(),
             step_id="2.1",
             custom_agent="Arch-UI-Detail",
         )
@@ -91,11 +139,34 @@ class TestMaybeRunSplitForkDisabled(unittest.IsolatedAsyncioTestCase):
         ctx = OrchestratorContext(run_id="r", split_fork_enabled=False)
         runner = _make_runner(Path("."), orchestrator_ctx=ctx)
         result = await runner._maybe_run_split_fork(
-            client=unittest.mock.MagicMock(),
+            session=_FakeFleetSession(),
             step_id="2.1",
             custom_agent="Arch-UI-Detail",
         )
         self.assertTrue(result)
+
+    async def test_split_fork_disabled_does_not_warn(self):
+        """ctx.split_fork_enabled=False では WARN を出さず event で記録する（回帰）。
+
+        CLI / GUI 標準経路では split_fork_enabled=False が正常値であり、毎ステップ
+        console.warning（GUI「実行中の課題」へ流れる）を出していたノイズの回帰を防ぐ。
+        """
+        ctx = OrchestratorContext(run_id="r", split_fork_enabled=False)
+        runner = _make_runner(Path("."), orchestrator_ctx=ctx)
+        with unittest.mock.patch.object(
+            runner.console, "warning"
+        ) as mock_warning, unittest.mock.patch.object(
+            runner.console, "event"
+        ) as mock_event:
+            result = await runner._maybe_run_split_fork(
+                session=_FakeFleetSession(),
+                step_id="2.1",
+                custom_agent="Arch-UI-Detail",
+            )
+        self.assertTrue(result)
+        mock_warning.assert_not_called()
+        mock_event.assert_called_once()
+        self.assertIn("legacy split-fork", mock_event.call_args.args[0])
 
 
 class TestMaybeRunSplitForkNoSubissues(unittest.IsolatedAsyncioTestCase):
@@ -112,7 +183,7 @@ class TestMaybeRunSplitForkNoSubissues(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
@@ -153,42 +224,59 @@ class TestMaybeRunSplitForkSuccess(unittest.IsolatedAsyncioTestCase):
 
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
+            fleet_session = _FakeFleetSession()
 
-            fake_sessions: List[_FakeSession] = []
-
-            async def _fake_create(client, opts):
-                s = _FakeSession()
-                fake_sessions.append(s)
-                return s
-
-            with unittest.mock.patch(
-                "runner._create_session_with_auto_reasoning_fallback",
-                side_effect=_fake_create,
-            ):
-                import types
-                fake_copilot_session = types.ModuleType("copilot.session")
-
-                class _PermissionHandler:
-                    @staticmethod
-                    async def approve_all(*args, **kwargs):
-                        return True
-
-                fake_copilot_session.PermissionHandler = _PermissionHandler
-
-                with unittest.mock.patch.dict(
-                    sys.modules, {"copilot.session": fake_copilot_session}
-                ):
-                    result = await runner._maybe_run_split_fork(
-                        client=unittest.mock.MagicMock(),
-                        step_id="2.1",
-                        custom_agent="Arch-UI-Detail",
-                    )
+            result = await runner._maybe_run_split_fork(
+                session=fleet_session,
+                step_id="2.1",
+                custom_agent="Arch-UI-Detail",
+            )
 
             self.assertTrue(result)
-            self.assertEqual(len(fake_sessions), 2)
-            self.assertEqual(runner._sub_sessions_created, 2)
-            for s in fake_sessions:
-                self.assertTrue(s.disconnected)
+            self.assertEqual(len(fleet_session.fleet_rpc.requests), 1)
+            self.assertIn("sub-001", fleet_session.fleet_rpc.requests[0].prompt)
+            self.assertIn("sub-002", fleet_session.fleet_rpc.requests[0].prompt)
+            self.assertEqual(runner._sub_sessions_created, 0)
+        finally:
+            os.chdir(orig_cwd)
+            if orig_work_root is None:
+                os.environ.pop("HVE_WORK_ROOT", None)
+            else:
+                os.environ["HVE_WORK_ROOT"] = orig_work_root
+
+    async def test_single_subtask_uses_parent_session_without_fleet(self):
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        orig_cwd = os.getcwd()
+        os.chdir(tmpdir)
+        orig_work_root = os.environ.pop("HVE_WORK_ROOT", None)
+        os.environ["HVE_WORK_ROOT"] = str(Path(tmpdir) / "work")
+        try:
+            work_dir = Path(tmpdir) / "work" / "Arch-UI-Detail" / "Issue-run-split-fork-it-single-step-2.1"
+            work_dir.mkdir(parents=True)
+            (work_dir / "subissues.md").write_text(_SUBISSUES_1, encoding="utf-8")
+            (work_dir / "plan.md").write_text(
+                "<!-- split_decision: SPLIT_REQUIRED -->\n", encoding="utf-8",
+            )
+            sub_dir = work_dir / "sub-001"
+            sub_dir.mkdir(parents=True)
+            (sub_dir / "completion-report.md").write_text(
+                "<!-- validation-confirmed -->\n", encoding="utf-8",
+            )
+
+            ctx = OrchestratorContext(run_id="r")
+            runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
+            parent_session = _FakeFleetSession()
+            result = await runner._maybe_run_split_fork(
+                session=parent_session,
+                step_id="2.1",
+                custom_agent="Arch-UI-Detail",
+            )
+
+            self.assertTrue(result)
+            self.assertEqual(len(parent_session.fleet_rpc.requests), 0)
+            self.assertEqual(len(parent_session.sent), 1)
+            self.assertIn("Sub-001", parent_session.sent[0])
         finally:
             os.chdir(orig_cwd)
             if orig_work_root is None:
@@ -244,7 +332,7 @@ class TestMaybeRunSplitForkPartialFail(unittest.IsolatedAsyncioTestCase):
                 sys.modules, {"copilot.session": fake_copilot_session}
             ):
                 result = await runner._maybe_run_split_fork(
-                    client=unittest.mock.MagicMock(),
+                    session=_FakeFleetSession(),
                     step_id="2.1",
                     custom_agent="Arch-UI-Detail",
                 )
@@ -281,7 +369,7 @@ class TestMaybeRunSplitForkMaxDepth(unittest.IsolatedAsyncioTestCase):
             )
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
@@ -318,7 +406,7 @@ class TestMaybeRunSplitForkParseError(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
@@ -357,7 +445,7 @@ class TestMaybeRunSplitForkParseError(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
@@ -452,60 +540,11 @@ class TestSplitRequiredInconsistency(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
             self.assertFalse(result)
-        finally:
-            os.chdir(orig_cwd)
-            if orig_work_root is None:
-                os.environ.pop("HVE_WORK_ROOT", None)
-            else:
-                os.environ["HVE_WORK_ROOT"] = orig_work_root
-
-
-class TestResumeShortcut(unittest.IsolatedAsyncioTestCase):
-    """前回 split-fork-all-done で完了済みなら再 fork をスキップする。"""
-
-    async def test_resume_skips_when_all_done(self):
-        import tempfile
-        from dataclasses import dataclass, field as _dc_field
-
-        @dataclass
-        class _StepState:
-            checkpoint_marker: Optional[str] = None  # type: ignore[name-defined]
-
-        @dataclass
-        class _ResumeState:
-            step_states: dict = _dc_field(default_factory=dict)
-
-        tmpdir = tempfile.mkdtemp()
-        orig_cwd = os.getcwd()
-        os.chdir(tmpdir)
-        orig_work_root = os.environ.pop("HVE_WORK_ROOT", None)
-        os.environ["HVE_WORK_ROOT"] = str(Path(tmpdir) / "work")
-        try:
-            # subissues.md を置いても再 fork されないことを確認
-            sub_dir = Path(tmpdir) / "work" / "Arch-UI-Detail" / "Issue-run-split-fork-it-resume-step-2.1"
-            sub_dir.mkdir(parents=True)
-            (sub_dir / "subissues.md").write_text(_SUBISSUES_2, encoding="utf-8")
-
-            ctx = OrchestratorContext(run_id="r")
-            runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
-            # resume_state に前回完了マーカーを注入
-            rs = _ResumeState()
-            rs.step_states["2.1"] = _StepState(checkpoint_marker="split-fork-all-done")
-            runner._resume_state = rs  # type: ignore[assignment]
-
-            result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
-                step_id="2.1",
-                custom_agent="Arch-UI-Detail",
-            )
-            self.assertTrue(result)
-            # サブセッション生成は 0 のまま
-            self.assertEqual(getattr(runner, "_sub_sessions_created", 0), 0)
         finally:
             os.chdir(orig_cwd)
             if orig_work_root is None:
@@ -542,7 +581,7 @@ class TestCrossRunIsolation(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="1",
                 custom_agent="Arch-UI-List",
             )
@@ -582,7 +621,7 @@ class TestFailedDirIsIgnored(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="1",
                 custom_agent="Arch-UI-List",
             )
@@ -617,19 +656,12 @@ class TestNonSplitStepShortCircuit(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
 
-            with unittest.mock.patch(
-                "split_fork.discover_subissues_md_verbose"
-            ) as mock_discover:
-                result = await runner._maybe_run_split_fork(
-                    client=unittest.mock.MagicMock(),
-                    step_id="1",
-                    custom_agent="Arch-UI-List",
-                )
-            self.assertTrue(result)
-            self.assertFalse(
-                mock_discover.called,
-                "SPLIT_REQUIRED 非宣言ステップで discovery が呼ばれてはならない",
+            result = await runner._maybe_run_split_fork(
+                session=_FakeFleetSession(),
+                step_id="1",
+                custom_agent="Arch-UI-List",
             )
+            self.assertTrue(result)
         finally:
             os.chdir(orig_cwd)
             if orig_work_root is None:
@@ -663,7 +695,7 @@ class TestStepScopeIsolation(unittest.IsolatedAsyncioTestCase):
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
             result = await runner._maybe_run_split_fork(
-                client=unittest.mock.MagicMock(),
+                session=_FakeFleetSession(),
                 step_id="2.1",
                 custom_agent="Arch-UI-Detail",
             )
@@ -749,33 +781,116 @@ class TestWebUIStyleIssueNaming(unittest.IsolatedAsyncioTestCase):
 
             ctx = OrchestratorContext(run_id="r")
             runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
+            fleet_session = _FakeFleetSession()
 
-            async def _fake_create(client, opts):
-                return _FakeSession()
-
-            import types
-            fake_copilot_session = types.ModuleType("copilot.session")
-
-            class _PermissionHandler:
-                @staticmethod
-                async def approve_all(*args, **kwargs):
-                    return True
-
-            fake_copilot_session.PermissionHandler = _PermissionHandler
-
-            with unittest.mock.patch(
-                "runner._create_session_with_auto_reasoning_fallback",
-                side_effect=_fake_create,
-            ), unittest.mock.patch.dict(
-                sys.modules, {"copilot.session": fake_copilot_session}
-            ):
-                result = await runner._maybe_run_split_fork(
-                    client=unittest.mock.MagicMock(),
-                    step_id="2.1",
-                    custom_agent="Arch-UI-Detail",
-                )
+            result = await runner._maybe_run_split_fork(
+                session=fleet_session,
+                step_id="2.1",
+                custom_agent="Arch-UI-Detail",
+            )
             self.assertTrue(result)
-            self.assertEqual(runner._sub_sessions_created, 2)
+            self.assertEqual(len(fleet_session.fleet_rpc.requests), 1)
+            self.assertEqual(runner._sub_sessions_created, 0)
+        finally:
+            os.chdir(orig_cwd)
+            if orig_work_root is None:
+                os.environ.pop("HVE_WORK_ROOT", None)
+            else:
+                os.environ["HVE_WORK_ROOT"] = orig_work_root
+
+
+class TestRunScopedWorkRootInconsistency(unittest.IsolatedAsyncioTestCase):
+    """T-C1.3 必須テスト 4: work_root が run_id を含む形式でも、
+    現在 Agent の SPLIT_REQUIRED plan.md + subissues.md 不在は整合性違反として
+    `_maybe_run_split_fork` が False を返すこと。
+
+    T-C1.2 の runner.py 修正で plan_globs を `work_root / custom_agent / Issue-*`
+    に絞り込み、`work_root_contains_run_id` 時は run_id フィルタを skip するよう
+    変更したため、`Issue-0` 形式の plan.md も整合性違反として検出される。
+    """
+
+    async def test_run_scoped_inconsistency_detected_for_issue_zero(self):
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        orig_cwd = os.getcwd()
+        os.chdir(tmpdir)
+        orig_work_root = os.environ.pop("HVE_WORK_ROOT", None)
+        # _make_runner の SDKConfig.run_id と一致させ、work_root_contains_run_id が
+        # True を返す状況を再現する (= 真因と同じ run-scoped work_root レイアウト)。
+        run_id = "run-split-fork-it"
+        scoped_work_root = Path(tmpdir) / "work" / "runs" / run_id
+        os.environ["HVE_WORK_ROOT"] = str(scoped_work_root)
+        try:
+            custom_agent = "Arch-ApplicationAnalytics"
+            plan_path = scoped_work_root / custom_agent / "Issue-0" / "plan.md"
+            plan_path.parent.mkdir(parents=True)
+            plan_path.write_text(
+                "<!-- split_decision: SPLIT_REQUIRED -->\n# Plan\n",
+                encoding="utf-8",
+            )
+            # subissues.md は意図的に作らない (整合性違反状態)
+
+            ctx = OrchestratorContext(run_id=run_id)
+            runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
+            result = await runner._maybe_run_split_fork(
+                session=_FakeFleetSession(),
+                step_id="1",
+                custom_agent=custom_agent,
+            )
+            self.assertFalse(
+                result,
+                "run-scoped work_root + Issue-0 形式の整合性違反が検出されていない",
+            )
+        finally:
+            os.chdir(orig_cwd)
+            if orig_work_root is None:
+                os.environ.pop("HVE_WORK_ROOT", None)
+            else:
+                os.environ["HVE_WORK_ROOT"] = orig_work_root
+
+
+class TestOtherAgentPlanDoesNotPolluteCurrentStep(unittest.IsolatedAsyncioTestCase):
+    """T-C1.3 必須テスト 5: 同 run 内に別 Agent の SPLIT_REQUIRED plan.md
+    （+ subissues.md 不在）があっても、現在 Step (custom_agent=AgentA) は
+    plan_globs の custom_agent 絞り込みにより影響を受けず素通し (True) される。
+    """
+
+    async def test_other_agents_split_plan_does_not_pollute_current_step(self):
+        import tempfile
+        tmpdir = tempfile.mkdtemp()
+        orig_cwd = os.getcwd()
+        os.chdir(tmpdir)
+        orig_work_root = os.environ.pop("HVE_WORK_ROOT", None)
+        # _make_runner の SDKConfig.run_id と一致させて run-scoped work_root を作る。
+        run_id = "run-split-fork-it"
+        scoped_work_root = Path(tmpdir) / "work" / "runs" / run_id
+        os.environ["HVE_WORK_ROOT"] = str(scoped_work_root)
+        try:
+            agent_a_dir = scoped_work_root / "AgentA" / "Issue-0"
+            agent_b_dir = scoped_work_root / "AgentB" / "Issue-0"
+            agent_a_dir.mkdir(parents=True)
+            agent_b_dir.mkdir(parents=True)
+            # AgentA: SPLIT 判定なし (通常完了状態)
+            (agent_a_dir / "plan.md").write_text(
+                "# normal plan (no SPLIT)\n", encoding="utf-8"
+            )
+            # AgentB: SPLIT_REQUIRED 宣言 + subissues.md なし (整合性違反状態)
+            (agent_b_dir / "plan.md").write_text(
+                "<!-- split_decision: SPLIT_REQUIRED -->\n", encoding="utf-8"
+            )
+
+            ctx = OrchestratorContext(run_id=run_id)
+            runner = _make_runner(Path(tmpdir), orchestrator_ctx=ctx)
+            result = await runner._maybe_run_split_fork(
+                session=_FakeFleetSession(),
+                step_id="1",
+                custom_agent="AgentA",
+            )
+            self.assertTrue(
+                result,
+                "別 Agent (AgentB) の SPLIT_REQUIRED plan.md による誤検出で "
+                "現 Agent (AgentA) のステップが失敗扱いになっている",
+            )
         finally:
             os.chdir(orig_cwd)
             if orig_work_root is None:

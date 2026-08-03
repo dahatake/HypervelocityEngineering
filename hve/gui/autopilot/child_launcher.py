@@ -27,7 +27,8 @@ class AutopilotController(QObject):
     log_line = Signal(object)  # LogLineEvent
     # チェーン (= 1 app_id) 完了通知 (app_id, returncode)。WorkbenchPage 側で進捗集計に
     # 用いる。returncode は最終ステージの rc。
-    chain_finished = Signal(str, int)
+    # returncode は Windows の符号なし 32bit 終了コードが int を超えるため 64bit (qlonglong)。
+    chain_finished = Signal(str, "qlonglong")  # type: ignore[arg-type]  # PySide6 は文字列型名を許容（スタブ未対応）
 
     def __init__(
         self,

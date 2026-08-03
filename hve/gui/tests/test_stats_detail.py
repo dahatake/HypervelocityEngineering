@@ -159,6 +159,10 @@ def test_build_snapshot_returns_all_sections():
         "Step Activity",
         "Compaction",
         "Permission",
+        "AI Credit (SDK 直接)",
+        "Quota Snapshot",
+        "Cost (pricing 計算)",
+        "Elapsed",
         "その他",
     ]
     assert header == {"current": 0, "limit": 0, "pct": 0.0}

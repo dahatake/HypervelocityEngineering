@@ -51,6 +51,8 @@ class LogTabsWidget(QWidget):
         self._selected_view = _make_log_view()
         # "選択中" 初期表示メッセージ
         self._selected_placeholder = "（ツリーで Workflow を選択するとログを表示します）"
+        # 選択済みだが該当ログが 0 行のときの表示（未選択と区別する）
+        self._selected_empty_message = "（選択した項目に関連するログはありません）"
         self._selected_view.setPlainText(self._selected_placeholder)
 
         self._tabs = QTabWidget()
@@ -87,11 +89,17 @@ class LogTabsWidget(QWidget):
             sb.setValue(sb.maximum())
 
     def set_selected_content(self, lines: Iterable[str]) -> None:
-        """選択中タブに複数行を差し替え反映し、末尾追従する。"""
+        """選択中タブに複数行を差し替え反映し、末尾追従する。
+
+        該当ログが 0 行（空）の場合は、未選択時プレースホルダと区別できる
+        「関連ログなし」文言を表示する。
+        """
         if isinstance(lines, str):
             text = lines
         else:
             text = "\n".join(str(x) for x in lines)
+        if not text:
+            text = self._selected_empty_message
         self._selected_view.setPlainText(text)
         sb = self._selected_view.verticalScrollBar()
         if sb is not None:

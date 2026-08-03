@@ -2,7 +2,7 @@ inputs:
 - path: docs/azure/azure-services-data.md
   required: true
   kind: agent_artifact
-  producer: Dev-Microservice-Azure-DataDesign
+  producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
@@ -15,21 +15,24 @@ inputs:
   kind: agent_artifact
   producer: Arch-ApplicationAnalytics
 - path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
-  required: true
+  required: false
   kind: static
 - path: users-guide/setup-self-hosted-runner.md
   required: true
   kind: static
 outputs:
+# HVE-owned lifecycle output; Agent read-only
 - path: src/infra/azure/create-azure-data-resources-prep.sh
   required: true
-  mode: create
+  mode: upsert
+# HVE-owned lifecycle output; Agent read-only
 - path: src/infra/azure/create-azure-data-resources.sh
   required: true
-  mode: create
+  mode: upsert
+# HVE-owned lifecycle output; Agent read-only
 - path: src/data/azure/data-registration-script.sh
   required: true
-  mode: create
+  mode: upsert
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   mode: upsert
@@ -39,10 +42,20 @@ outputs:
 - path: src/infra/azure/data/README.md
   required: true
   mode: create
-- path: work/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/work-status.md
-  required: true
-  mode: upsert
-- path: work/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/ac-verification.md
+- path: work/run/<run-id>/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/work-status.md
   required: true
   mode: create
+  owner: hve
+  evidence_source: stage_results
+- path: work/run/<run-id>/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/ac-verification.md
+  required: true
+  mode: create
+  owner: hve
+  evidence_source: stage_results
+  acceptance_criteria: [AC-1, AC-2, AC-3]
+- path: tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md
+  required: true
+  mode: create
+  owner: hve
+  evidence_source: stage_results
 

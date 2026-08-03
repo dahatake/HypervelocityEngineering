@@ -7,9 +7,9 @@
 - `docs/test-specs/{{key}}-test-spec.md`（Step 6.3 のみ）
 
 ## 必須参照
-- `docs/dataflow/dataflow-app-catalog.md` の `{{key}}` 該当行
-- `docs/dataflow/dataflow-service-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
+- `docs/catalog/app-catalog.md` の `{{key}}` 該当行（AAS の共通 APP カタログ）
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/data-model.md`
 
 ## 並列実行ルール
 - 他ジョブのファイルに書き込まない。

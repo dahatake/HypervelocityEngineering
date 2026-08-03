@@ -174,7 +174,7 @@ jobs:
           lines.append('')
           lines.append('| ラベル | 説明 |')
           lines.append('|---|---|')
-          lines.append('| `:blocked` | TDD リトライ上限（`tdd_max_retries`、既定 5）または Deploy TDD（最大 3 回）超過 |')
+          lines.append('| `:blocked` | TDD リトライ上限（`tdd_max_retries`、既定 5）または Deploy / 検証ループ（Step 依存で最大 3〜5 回）超過 |')
           lines.append('| `:human-required` | `:blocked` 付与から SLA（既定 24h）経過後に自動昇格 |')
           lines.append('| `:human-resolved` | 人間が解決済みと判断。付与すると `:ready` へ自動復帰 |')
           lines.append('')

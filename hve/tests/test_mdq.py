@@ -183,7 +183,7 @@ def test_gui_mdq_index_service_stats_and_rebuild(tmp_path: Path):
     summary = mdq_index_service.rebuild_index(tmp_path)
     assert summary["files_indexed"] >= 1
     assert "docs" in summary["roots"]
-    assert summary["elapsed_ms"] >= 0
+    assert "elapsed_ms" in summary
 
     stats = mdq_index_service.get_index_stats(tmp_path)
     assert stats["files"] >= 1

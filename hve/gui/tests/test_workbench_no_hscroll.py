@@ -111,18 +111,6 @@ def test_page_workbench_log_pane_no_hscroll(qapp, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# [REMOVED] ActivityStatusWidget の Tree 横スクロール検証は DagStatusWidget への
-# 置換で陳腐化したためスキップする。DAG ビューは QGraphicsView ベースであり
-# 横スクロールはコンテンツに応じて出る前提（ScrollBarAsNeeded）。
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skip(reason="ActivityStatusWidget removed; replaced by DagStatusWidget")
-def test_activity_status_tree_no_hscroll_and_delegate(qapp):
-    pass
-
-
-# ---------------------------------------------------------------------------
 # 横幅永続化キーが defaults に登録されている
 # ---------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@ name: PR 自動 Approve & Auto-merge
 # auto-approve-ready ラベルが付与された PR に対して、自動 Approve → auto-merge（squash）を有効化する。
 #
 # 安全装置:
-#   - split-mode ラベル付き PR はジョブ条件で除外
+#   - split-mode は auto-approve/merge 対象外。create-subissues 遷移は PR Transition Dispatcher が所有
 #   - 冪等化マーカー（done/partial/failed）で重複実行防止とリトライ制御
 #   - 既存 Approve レビューの API 直接確認（dismiss 考慮）
 #   - Approve/Merge 失敗時のグレースフルフォールバック（手動対応を促すコメント）
@@ -16,7 +16,7 @@ name: PR 自動 Approve & Auto-merge
 
 on:
   pull_request_target:
-    types: [labeled, ready_for_review, synchronize]
+    types: [labeled, ready_for_review, synchronize, edited]
 
 concurrency:
   group: auto-approve-merge-${{ github.event.pull_request.number }}
@@ -26,6 +26,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  checks: read
 
 jobs:
   notify-split-mode-skip:
@@ -34,6 +35,7 @@ jobs:
         (github.event.action == 'labeled' && github.event.label.name == 'auto-approve-ready')
         || (github.event.action == 'ready_for_review' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
         || (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
+        || (github.event.action == 'edited' && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready'))
       )
       && contains(github.event.pull_request.labels.*.name, 'split-mode')
     runs-on: ubuntu-latest
@@ -66,97 +68,19 @@ jobs:
         if: steps.guard.outputs.posted != 'true'
         run: |
           set -euo pipefail
-          comment_body=$(printf '%s\n\n%s\n\n%s\n%s\n%s' \
+          comment_body=$(printf '%s\n\n%s\n\n%s\n%s' \
             '<!-- auto-approve-and-merge-skipped-split-mode -->' \
             '## ℹ️ split-mode のため auto-approve/auto-merge をスキップしました' \
             'この PR は `split-mode` のため `auto-approve-and-merge.yml` 対象外です。' \
-            'このジョブで PR 差分に `subissues.md` を検出した場合、`create-subissues` ラベルを自動付与します。' \
-            '> ⚠️ **フォールバック**: PR 差分に `subissues.md` がない場合は、手動で `create-subissues` ラベルを付与してください。')
+            '`create-subissues` 遷移は `auto-pr-transition-dispatcher.yml` が strict gate（`split-mode` + `auto-approve-ready`）確認後に担当します。')
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "${comment_body}"
 
-      - name: split-mode 用 create-subissues ラベル付与
-        run: |
-          set -euo pipefail
-
-          gh_api_with_retry() {
-            local attempt=1
-            local max_attempts=5
-            local delay=2
-            while true; do
-              if gh api "$@"; then
-                return 0
-              fi
-              if [ "${attempt}" -ge "${max_attempts}" ]; then
-                return 1
-              fi
-              echo "::warning::gh api failed (attempt ${attempt}/${max_attempts}); retrying in ${delay}s: $*"
-              sleep "${delay}"
-              attempt=$((attempt + 1))
-              delay=$((delay * 2))
-            done
-          }
-
-          post_fallback_comment_once() {
-            local reason="$1"
-            local marker='<!-- auto-approve-and-merge-subissues-missing -->'
-            local existing=0
-            if ! existing=$(gh_api_with_retry "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
-              --paginate \
-              --jq '.[]' 2>/dev/null \
-              | jq -s --arg marker "${marker}" '[.[] | select(.body | contains($marker))] | length' \
-              2>/dev/null); then
-              echo "::warning::フォールバックコメント一覧の取得またはフィルタリングに失敗したため、コメント投稿をスキップします。"
-              return 0
-            fi
-            if [ "${existing:-0}" -gt 0 ]; then
-              echo "フォールバック案内コメントは投稿済みです。"
-              return 0
-            fi
-
-            fallback_comment=$(printf '%s\n\n%s\n\n%s\n%s' \
-              "${marker}" \
-              '## ⚠️ `create-subissues` を自動付与できませんでした' \
-              "${reason}" \
-              '`subissues.md` を確認し、必要に応じて手動で `create-subissues` ラベルを付与してください。')
-            if ! gh_api_with_retry --method POST "/repos/${REPO}/issues/${PR_NUMBER}/comments" -f body="${fallback_comment}" >/dev/null; then
-              echo "::warning::フォールバック案内コメントの投稿に失敗しました。"
-            fi
-          }
-
-          if ! labels_json=$(gh_api_with_retry "/repos/${REPO}/issues/${PR_NUMBER}/labels" --jq '.[].name' | jq -R -s -c 'split("\n")[:-1]'); then
-            echo "::warning::PR ラベル取得に失敗したため、create-subissues ラベル自動付与をスキップします。"
-            post_fallback_comment_once 'PR ラベル取得で GitHub API エラーが発生しました。'
-            exit 0
-          fi
-          has_create_subissues=$(printf '%s' "${labels_json}" | jq -r 'if index("create-subissues") then "true" else "false" end')
-          if [ "${has_create_subissues}" = "true" ]; then
-            echo "create-subissues ラベルは既に付与済みです。"
-            exit 0
-          fi
-
-          if ! subissues_files=$(gh_api_with_retry "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
-            --paginate \
-            --jq '.[] | select(.filename | test("(^|/)subissues\\.md$")) | select(.status == "added" or .status == "modified") | .filename'); then
-            echo "::warning::PR 差分ファイル取得に失敗したため、create-subissues ラベル自動付与をスキップします。"
-            post_fallback_comment_once 'PR 差分ファイル取得で GitHub API エラーが発生しました。'
-            exit 0
-          fi
-          if [ -n "${subissues_files}" ]; then
-            echo "PR 差分に subissues.md を検出したため create-subissues ラベルを付与します。"
-            if ! gh pr edit "${PR_NUMBER}" --repo "${REPO}" --add-label create-subissues; then
-              echo "::warning::create-subissues ラベル付与に失敗しました。手動対応を案内します。"
-              post_fallback_comment_once 'PR ラベル付与（`gh pr edit --add-label create-subissues`）に失敗しました。'
-            fi
-            exit 0
-          fi
-
-          post_fallback_comment_once '`subissues.md` が PR 差分に見つかりませんでした。'
-
   approve-and-merge:
     # labeled イベント: auto-approve-ready ラベルが付与された時
     # ready_for_review イベント: draft → ready 遷移後に auto-approve-ready ラベルがある場合
+    # edited イベント: PR body 変更後に検証マーカーが追加された場合の再評価
     # （draft 中にラベルが付いた場合、labeled では !draft 条件を満たさず実行されないため）
     if: >
       (
@@ -172,11 +96,20 @@ jobs:
           github.event.action == 'synchronize'
           && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
         )
+        || (
+          github.event.action == 'edited'
+          && contains(github.event.pull_request.labels.*.name, 'auto-approve-ready')
+        )
       )
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'split-mode')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
     env:
       GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
@@ -184,6 +117,12 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
+      - name: 判定スクリプトをチェックアウト（base 側のみ・PR コードは実行しない）
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+
       - name: 冪等化チェック（既に完了・Approve 済みかどうか確認）
         id: guard
         run: |
@@ -267,76 +206,73 @@ jobs:
         run: |
           set -euo pipefail
           VALIDATION_MARKER='<!-- auto-approve-validation-missing -->'
-          VALIDATION_CONFIRMED_MARKER='<!-- validation-confirmed -->'
-          HEADING_REGEX='^#{1,6}[[:space:]]+.*(検証|Validation|Verification)'
-          BULLET_REGEX='^[[:space:]*>-]*(\*\*|__)?(検証|Validation|Verification)(\*\*|__)?[[:space:]]*[:：]'
-          LEGACY_REGEX='(^#{1,6}[[:space:]]+|^)(Validation|検証)'
+          HEAD_COMMIT_SUBJECT=$(gh api "/repos/${REPO}/commits/${HEAD_SHA}" \
+            --jq '.commit.message // ""' 2>/dev/null \
+            | head -n1 \
+            | tr -d '\r' || echo '')
 
-          # PR body を取得
-          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
-            --jq '.body // ""' 2>/dev/null || echo '')
-
-          # PR コメントを取得（検証不足通知コメントは判定対象から除外）
-          pr_comments_all=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
-            --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
-          pr_comments=$(echo "${pr_comments_all}" \
-            | jq --arg marker "${VALIDATION_MARKER}" '[.[] | select(.body | contains($marker) | not)]' \
-            2>/dev/null || echo '[]')
-
-          # 1) HTML コメントマーカー方式（最優先）
-          combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null)")
-          if printf '%s' "${combined_text}" | grep -qiF "${VALIDATION_CONFIRMED_MARKER}"; then
-            echo "✅ PR body/コメントに validation-confirmed マーカーを確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+          if [ "${HEAD_COMMIT_SUBJECT}" = "Initial plan" ]; then
+            echo "ℹ️ HEAD commit message が 'Initial plan' のため、検証不足コメント/auto-approve 判定をスキップします。"
+            echo "has_validation=false" >> "${GITHUB_OUTPUT}"
+            echo "skip_reason=initial_plan" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
+          echo "skip_reason=none" >> "${GITHUB_OUTPUT}"
 
-          # 2) 見出し方式（PR body）
-          if printf '%s' "${pr_body}" | grep -qiE "${HEADING_REGEX}"; then
-            echo "✅ PR body に検証実施記録を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+          max_attempts=3
+          attempt=1
+          # 直前の成功取得結果を保持する（API 一時失敗で空配列に上書きされるのを防ぐ）
+          pr_comments_all='[]'
+          while [ "${attempt}" -le "${max_attempts}" ]; do
+            echo "[診断] 検証リトライ ${attempt}/${max_attempts}"
 
-          # 3) 箇条書き/強調方式（PR body）
-          if printf '%s' "${pr_body}" | grep -qiE "${BULLET_REGEX}"; then
-            echo "✅ PR body に検証実施記録（箇条書き/強調）を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+            # PR body を取得
+            pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" \
+              --jq '.body // ""' 2>/dev/null || echo '')
 
-          # 互換フォールバック: 旧判定（行頭 Validation/検証）
-          if printf '%s' "${pr_body}" | grep -qiE "${LEGACY_REGEX}"; then
-            echo "✅ PR body に検証実施記録（互換フォールバック）を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+            # [診断ログ] pr_body の取得結果を確認（全文ダンプは不可・先頭20行のみ）
+            echo "取得 pr_body 文字数: ${#pr_body}"
+            echo "--- pr_body 先頭20行 ---"
+            printf '%s' "${pr_body}" | head -20
+            echo "--- pr_body 先頭20行 ここまで ---"
 
-          # 4) 見出し方式（PR コメント）
-          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${HEADING_REGEX}"; then
-            echo "✅ PR コメントに検証実施記録を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+            # PR コメントを取得（検証不足通知コメントは判定対象から除外）
+            # 成功時のみ pr_comments_all を更新し、失敗時は直前の取得結果を保持する
+            # （API 一時失敗で [] に上書きされ、ループ後の冪等性チェックが誤判定するのを防ぐ）
+            pr_comments_fetched=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '')
+            if [ -n "${pr_comments_fetched}" ] \
+              && echo "${pr_comments_fetched}" | jq -e 'type == "array"' >/dev/null 2>&1; then
+              pr_comments_all="${pr_comments_fetched}"
+            else
+              echo "[診断] PR コメント取得に失敗しました。直前の取得結果を保持します。"
+            fi
+            pr_comments=$(echo "${pr_comments_all}" \
+              | jq --arg marker "${VALIDATION_MARKER}" '[.[] | select(.body | contains($marker) | not)]' \
+              2>/dev/null || echo '[]')
 
-          # 5) 箇条書き/強調方式（PR コメント）
-          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${BULLET_REGEX}"; then
-            echo "✅ PR コメントに検証実施記録（箇条書き/強調）を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+            # 判定は hve/split_fork.py の単一実装（FR-MAINT-06）へ委譲する
+            combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null)")
+            validation_subject="${RUNNER_TEMP}/validation-subject.md"
+            printf '%s' "${combined_text}" > "${validation_subject}"
+            if python3 "${GITHUB_WORKSPACE}/.github/scripts/check_validation_marker.py" \
+              --text-file "${validation_subject}"; then
+              echo "✅ PR body/コメントに検証実施記録を確認しました。"
+              echo "has_validation=true" >> "${GITHUB_OUTPUT}"
+              echo "[診断] has_validation=true"
+              exit 0
+            fi
+            echo "[診断] 検証マーカー: 不一致"
 
-          # 互換フォールバック: 旧判定（行頭 Validation/検証）
-          if echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null \
-              | grep -qiE "${LEGACY_REGEX}"; then
-            echo "✅ PR コメントに検証実施記録（互換フォールバック）を確認しました。"
-            echo "has_validation=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+            if [ "${attempt}" -lt "${max_attempts}" ]; then
+              echo "[診断] 全分岐 不一致（試行 ${attempt}/${max_attempts}）→ 10秒後に再取得します"
+              sleep 10
+            fi
+            attempt=$((attempt + 1))
+          done
 
-          # 6) 全不一致
+          # 8) 全不一致
+          echo "[診断] 全分岐 不一致（全${max_attempts}回）→ has_validation=false"
           echo "has_validation=false" >> "${GITHUB_OUTPUT}"
           echo "⚠️ PR body・コメントに検証実施記録（marker/見出し/箇条書き）が見つかりません。"
 
@@ -397,7 +333,7 @@ jobs:
         # verify-qa-reference-in-pr.yml が required モードで FAIL を出した場合に自動 Approve/Merge をスキップする。
         # warning モードの FAIL またはマーカーコメントが存在しない場合は後方互換のためスキップしない。
         id: check-qa-reference
-        if: steps.guard.outputs.already_done != 'true'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
         run: |
           set -euo pipefail
           QA_REF_MARKER='<!-- auto-approve-qa-reference-missing -->'
@@ -510,9 +446,216 @@ jobs:
             --body "${comment_body}" || echo "WARNING: QA Reference 案内コメントの投稿に失敗しました。"
           echo "QA Reference 案内コメントを PR #${PR_NUMBER} に投稿しました。"
 
+      - name: Check-run 失敗確認（auto-approve 前提条件）
+        id: check-check-runs
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          CHECK_FAIL_MARKER='<!-- auto-approve-check-runs-failed -->'
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+          blocked="false"
+
+          CHECK_API_ERR_FILE=$(mktemp)
+          if ! check_runs_json=$(gh api "/repos/${REPO}/commits/${HEAD_SHA}/check-runs" 2>"${CHECK_API_ERR_FILE}"); then
+            api_err_msg=$(head -5 "${CHECK_API_ERR_FILE}" 2>/dev/null || echo "unknown error")
+            rm -f "${CHECK_API_ERR_FILE}"
+            echo "::error::check-runs API の取得に失敗しました: ${api_err_msg}"
+            echo "checks_passed=false" >> "${GITHUB_OUTPUT}"
+            CHECK_API_ERR_MARKER='<!-- auto-approve-check-runs-api-error -->'
+            existing_err=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null \
+              | jq -s --arg marker "${CHECK_API_ERR_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+                '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
+            if [ "${existing_err:-0}" -eq 0 ]; then
+              err_comment="$(printf '%s\n\n%s\n\n%s\n%s\n%s' \
+                "${CHECK_API_ERR_MARKER}" \
+                '## ❌ check-runs API 取得失敗 → auto-approve/auto-merge を停止しました' \
+                "check-runs API の取得に失敗したため、fail-closed として auto-approve/auto-merge を停止しました。" \
+                "エラー詳細: \`${api_err_msg}\`" \
+                "${SHA_MARKER}")"
+              gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${err_comment}" \
+                || echo "WARNING: check-runs API エラー案内コメント投稿に失敗しました。"
+            fi
+            exit 0
+          fi
+          rm -f "${CHECK_API_ERR_FILE}"
+          failed_checks=$(printf '%s' "${check_runs_json}" | jq -c '
+            [.check_runs[]?
+              | select(
+                  (.conclusion == "failure")
+                  or (.conclusion == "cancelled")
+                  or (.conclusion == "timed_out")
+                  or (.conclusion == "action_required")
+                  or (.conclusion == "startup_failure")
+                )
+              | select((.name // "") | test("auto-approve-and-merge|PR 自動 Approve & Auto-merge"; "i") | not)
+              | {name: (.name // "unknown"), conclusion: (.conclusion // "unknown"), details_url: (.details_url // "")}
+            ]')
+          failed_count=$(printf '%s' "${failed_checks}" | jq 'length')
+
+          if [ "${failed_count}" -gt 0 ]; then
+            blocked="true"
+            echo "⚠️ 失敗 check-run を ${failed_count} 件検出しました。"
+          else
+            echo "✅ check-run 失敗は検出されませんでした。"
+          fi
+
+          echo "checks_passed=$([ "${blocked}" = "true" ] && echo false || echo true)" >> "${GITHUB_OUTPUT}"
+
+          if [ "${blocked}" != "true" ]; then
+            exit 0
+          fi
+
+          # 同一 SHA の案内コメントがある場合は重複投稿しない
+          comments_json=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+          existing_count=$(printf '%s' "${comments_json}" \
+            | jq --arg marker "${CHECK_FAIL_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
+          if [ "${existing_count:-0}" -gt 0 ]; then
+            echo "同一 SHA の check-run 失敗案内は投稿済みです。"
+            exit 0
+          fi
+
+          failed_md=$(printf '%s' "${failed_checks}" | jq -r '.[] | "- `\(.name)` (\(.conclusion)) \(.details_url)"')
+          comment_body="$(
+            {
+              printf '%s\n\n' "${CHECK_FAIL_MARKER}"
+              printf '%s\n\n' '## ⚠️ failed check-run を検出したため auto-approve/auto-merge を停止しました'
+              printf '%s\n' '以下の check-run が失敗状態です（failure/cancelled/timed_out/action_required/startup_failure）。'
+              printf '\n%s\n\n' "${failed_md}"
+              printf '%s\n' '失敗 check を解消した後に再実行してください。'
+              printf '%s\n' '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。'
+              printf '%s\n' "${SHA_MARKER}"
+            }
+          )"
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${comment_body}" || echo "WARNING: check-run 失敗案内コメント投稿に失敗しました。"
+
+      - name: Deploy / AC gate 確認（auto-approve 前提条件）
+        id: check-deploy-ac
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
+        run: |
+          set -euo pipefail
+          DEPLOY_MARKER='<!-- auto-approve-deploy-gate-blocked -->'
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+          deploy_gate_passed="true"
+          is_deploy_pr="false"
+          reasons=()
+
+          pr_title=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.title // ""' 2>/dev/null || echo '')
+          pr_body=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}" --jq '.body // ""' 2>/dev/null || echo '')
+          changed_files=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' 2>/dev/null || echo '')
+          comments_text=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[].body' 2>/dev/null || true)
+          combined_text=$(printf '%s\n%s\n%s\n' "${pr_title}" "${pr_body}" "${comments_text}")
+          ac13_required="false"
+
+          if printf '%s' "${combined_text}" | grep -Eiq '(deploy|デプロイ)'; then
+            is_deploy_pr="true"
+          fi
+          if printf '%s\n' "${changed_files}" | grep -Eq '(^|/)src/infra/azure/create-|(^|/)src/infra/azure/verify-.*-resources\\.sh|(^|/)docs/test-specs/deploy-|(^|/)\\.github/workflows/(deploy-|azure-static-web-apps-|e2e-app009-playwright\\.yml)'; then
+            is_deploy_pr="true"
+          fi
+          if printf '%s\n' "${changed_files}" | grep -Eq '(^|/)src/infra/azure/create-azure-additional-resources(/|$)|(^|/)src/infra/azure/create-azure-additional-resources-prep\\.sh$|(^|/)docs/test-specs/deploy-step2-additional-test-spec\\.md$'; then
+            ac13_required="true"
+          fi
+
+          ac_text=''
+          ac_file=$(printf '%s\n' "${changed_files}" | grep -E 'ac-verification\\.md$' | head -n1 || true)
+          if [ -n "${ac_file}" ]; then
+            ac_content=$(gh api "/repos/${REPO}/contents/${ac_file}?ref=${HEAD_SHA}" --jq '.content // ""' 2>/dev/null || true)
+            if [ -n "${ac_content}" ]; then
+              ac_text=$(printf '%s' "${ac_content}" | tr -d '\n' | base64 -d 2>/dev/null || true)
+            fi
+          fi
+          source_text=$(printf '%s\n%s\n' "${ac_text}" "${combined_text}")
+          ac_table_rows=$(printf '%s\n' "${source_text}" | grep -E '^[[:space:]]*\|[[:space:]]*(AC-[0-9]+|AC4B-[0-9]+)[[:space:]]*\|' || true)
+          # AC テーブル行の状態カラム（3列目: | AC | 観点 | 状態 | 証跡 |）だけを抽出する。
+          # 証跡カラムはスクリプト実出力（例: `FAIL=0`）や設計注記（例: マージ後手動のため未実行）を
+          # 含み、whole-row substring 照合では成功シグナルを誤検出する。runner 側
+          # validate_deploy_ac_verification と同じく状態カラムのみで not-green を判定する。
+          ac_status_cells=$(printf '%s\n' "${ac_table_rows}" | awk -F'|' '{ print $4 }' || true)
+
+          if [ "${is_deploy_pr}" = "true" ]; then
+            if [ -n "${ac_table_rows}" ]; then
+              if printf '%s' "${ac_status_cells}" | grep -Eq 'NEEDS-VERIFICATION|❌|⏳'; then
+                deploy_gate_passed="false"
+                reasons+=('AC テーブル行の状態カラムに未検証/失敗（NEEDS-VERIFICATION/❌/⏳）を検出しました。')
+              fi
+
+              for required_ac in AC-2 AC-3 AC-6 AC-8 AC-9 AC4B-1; do
+                if printf '%s\n' "${ac_table_rows}" | grep -Eq "^[[:space:]]*\|[[:space:]]*${required_ac}[[:space:]]*\|"; then
+                  if ! printf '%s\n' "${ac_table_rows}" | grep -Eq "^[[:space:]]*\|[[:space:]]*${required_ac}[[:space:]]*\|[^[:cntrl:]]*✅"; then
+                    deploy_gate_passed="false"
+                    reasons+=("\`${required_ac} ✅\` が AC テーブル行で確認できません。")
+                  fi
+                fi
+              done
+
+              if printf '%s\n' "${ac_table_rows}" | grep -Eq '^[[:space:]]*\|[[:space:]]*AC-13[[:space:]]*\|'; then
+                if ! printf '%s\n' "${ac_table_rows}" | grep -Eq '^[[:space:]]*\|[[:space:]]*AC-13[[:space:]]*\|[^[:cntrl:]]*(✅|N/A|NA|該当なし)'; then
+                  deploy_gate_passed="false"
+                  reasons+=('`AC-13 ✅`（または N/A）が AC テーブル行で確認できません。')
+                fi
+              elif [ "${ac13_required}" = "true" ]; then
+                if ! printf '%s' "${source_text}" | grep -Eq 'AC-?13[^0-9[:cntrl:]][^[:cntrl:]]*(✅|N/A|NA|該当なし)'; then
+                  deploy_gate_passed="false"
+                  reasons+=('追加 Azure サービス deploy PR で `AC-13 ✅`（または N/A）が確認できません。')
+                fi
+              fi
+            else
+              # AC テーブル行が無い場合は既存の AC-1 / AC-13 フォールバックで判定する。
+              # AC-1 判定: AC-1 の直後が数字でないことを保証（AC-10/AC-11 等との部分一致を防ぐ）
+              if ! printf '%s' "${source_text}" | grep -Eq 'AC-?1[^0-9[:cntrl:]][^[:cntrl:]]*✅'; then
+                deploy_gate_passed="false"
+                reasons+=('`AC-1 ✅` が確認できません。')
+              fi
+
+              # AC-13 判定: AC-13 の直後が数字でないことを保証（AC-130 等との部分一致を防ぐ）
+              if [ "${ac13_required}" = "true" ] && ! printf '%s' "${source_text}" | grep -Eq 'AC-?13[^0-9[:cntrl:]][^[:cntrl:]]*(✅|N/A|NA|該当なし)'; then
+                deploy_gate_passed="false"
+                reasons+=('追加 Azure サービス deploy PR で `AC-13 ✅`（または N/A）が確認できません。')
+              fi
+            fi
+
+            # ac-verification.md（ac_text）は上のテーブル行チェック（状態カラム＋必須 AC ✅）で
+            # 権威的に検証済み。証跡 prose を naive substring で再走査すると `FAIL=0` や
+            # 「マージ後手動のため未実行」等を誤検出するため、ここは PR 本文/コメント
+            # （combined_text）だけを対象に未検証キーワードの安全網を残す。
+            if printf '%s' "${combined_text}" | grep -Eiq 'NEEDS-VERIFICATION|⏳|FAIL|未実行|手動実行が必要|残作業'; then
+              deploy_gate_passed="false"
+              reasons+=('PR 本文/コメントに未検証/失敗を示すキーワード（NEEDS-VERIFICATION/⏳/FAIL/未実行/手動実行が必要/残作業）が残っています。')
+            fi
+          fi
+
+          echo "is_deploy_pr=${is_deploy_pr}" >> "${GITHUB_OUTPUT}"
+          echo "deploy_gate_passed=${deploy_gate_passed}" >> "${GITHUB_OUTPUT}"
+          if [ "${deploy_gate_passed}" = "true" ]; then
+            echo "✅ Deploy/AC gate: PASS（非 deploy PR または条件充足）"
+            exit 0
+          fi
+
+          reasons_md=$(printf '%s\n' "${reasons[@]}" | sed '/^$/d' | sed 's/^/- /')
+          comments_json=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null | jq -s '.' 2>/dev/null || echo '[]')
+          existing_count=$(printf '%s' "${comments_json}" \
+            | jq --arg marker "${DEPLOY_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
+          if [ "${existing_count:-0}" -eq 0 ]; then
+            comment_body="$(
+              {
+                printf '%s\n\n' "${DEPLOY_MARKER}"
+                printf '%s\n\n' '## ⚠️ Deploy/AC gate で auto-approve/auto-merge を停止しました'
+                printf '%s\n\n' "${reasons_md}"
+                printf '%s\n' 'Deploy 系 PR は `AC-1 ✅`（追加 Azure サービス deploy で AC-13 対象の場合は `AC-13 ✅` または `N/A`）が確認できる状態にして再実行してください。'
+                printf '%s\n' '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。'
+                printf '%s\n' "${SHA_MARKER}"
+              }
+            )"
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${comment_body}" || echo "WARNING: Deploy/AC gate 案内コメント投稿に失敗しました。"
+          fi
+
       - name: PR を Approve
         id: approve
-        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -531,7 +674,7 @@ jobs:
 
       - name: Auto-merge を有効化（squash）
         id: merge
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -559,7 +702,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-qa-reference.outputs.qa_reference_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}

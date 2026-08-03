@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import os
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -18,10 +21,14 @@ from config import DEFAULT_CONTEXT_INJECTION_MAX_CHARS, SDKConfig
 from console import Console
 from runner import (
     StepRunner,
+    _ensure_step_work_dir,
     _extract_safe_qa_artifact_paths,
+    _filter_mcp_servers_for_session,
     _is_review_fail,
     _parse_qa_content_with_artifact_fallback,
     _truncate_context,
+    _work_identifier_for_step,
+    _step_work_dir,
 )
 from workiq import WORKIQ_MCP_SERVER_NAME  # type: ignore[import-untyped]
 
@@ -111,8 +118,557 @@ class TestStepRunnerDryRun(unittest.TestCase):
         self.assertFalse(runner._workiq_tool_called)
 
 
+class TestWorkIdentifierForStep(unittest.TestCase):
+    """Agent Prompt の WORK 識別子を Step / fan-out 単位で分離する契約。"""
+
+    def test_non_fanout_keeps_legacy_issue_zero(self) -> None:
+        self.assertEqual(_work_identifier_for_step("3.4", None), "0")
+
+    def test_fanout_child_uses_step_scoped_identifier(self) -> None:
+        self.assertEqual(
+            _work_identifier_for_step(
+                "3.3/SVC-13",
+                {"fanout_key": "SVC-13", "base_step_id": "3.3"},
+            ),
+            "step-3-3-SVC-13",
+        )
+
+    def test_fanout_identifier_does_not_contain_path_separator(self) -> None:
+        identifier = _work_identifier_for_step(
+            "3.2/SVC-16",
+            {"fanout_key": "SVC-16", "base_step_id": "3.2"},
+        )
+        self.assertNotIn("/", identifier)
+        self.assertNotIn("\\", identifier)
+
+
+class TestStepWorkDirectory(unittest.TestCase):
+    """Agent起動前に作成するrun-scoped work directory契約。"""
+
+    def test_custom_agent_issue_zero_path_and_idempotent_create(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "work" / "run" / "run-1"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(work_root)},
+                clear=False,
+            ):
+                expected = (
+                    work_root
+                    / "Dev-Microservice-Azure-DataTestCoding"
+                    / "Issue-0"
+                ).resolve()
+                self.assertEqual(
+                    _step_work_dir(
+                        "Dev-Microservice-Azure-DataTestCoding",
+                        "0",
+                    ),
+                    expected,
+                )
+                first = _ensure_step_work_dir(
+                    "Dev-Microservice-Azure-DataTestCoding",
+                    "0",
+                )
+                second = _ensure_step_work_dir(
+                    "Dev-Microservice-Azure-DataTestCoding",
+                    "0",
+                )
+                self.assertEqual(first, second)
+                self.assertTrue(first.is_dir())
+
+    def test_non_custom_agent_and_fanout_paths_are_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "run-root"
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(work_root)},
+                clear=False,
+            ):
+                plain = _ensure_step_work_dir(None, "0")
+                fanout = _ensure_step_work_dir(
+                    "Arch-Microservice-ServiceCatalog",
+                    "step-3-3-SVC-13",
+                )
+                self.assertEqual(plain, (work_root / "Issue-0").resolve())
+                self.assertEqual(
+                    fanout,
+                    (
+                        work_root
+                        / "Arch-Microservice-ServiceCatalog"
+                        / "Issue-step-3-3-SVC-13"
+                    ).resolve(),
+                )
+                self.assertNotEqual(plain, fanout)
+
+    def test_rejects_unsafe_agent_or_identifier_components(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(Path(td) / "root")},
+                clear=False,
+            ):
+                for agent, identifier in (
+                    ("../outside", "0"),
+                    ("Agent\\outside", "0"),
+                    ("Agent", "../outside"),
+                    ("Agent", ""),
+                ):
+                    with self.subTest(agent=agent, identifier=identifier):
+                        with self.assertRaises(ValueError):
+                            _ensure_step_work_dir(agent, identifier)
+
+    def test_rejects_symlink_escape_without_creating_outside_issue_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "root"
+            outside = Path(td) / "outside"
+            root.mkdir()
+            outside.mkdir()
+            link = root / "Agent"
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError):
+                if os.name != "nt":
+                    self.skipTest("directory symlink is unavailable on this platform")
+                completed = subprocess.run(
+                    ["cmd", "/d", "/c", "mklink", "/J", str(link), str(outside)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if completed.returncode != 0:
+                    self.fail(
+                        "directory junction could not be created for escape test: "
+                        + completed.stderr
+                    )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(root)},
+                clear=False,
+            ):
+                with self.assertRaises(ValueError):
+                    _ensure_step_work_dir("Agent", "0")
+            self.assertFalse((outside / "Issue-0").exists())
+
+    def test_dry_run_does_not_create_step_work_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "work-root"
+            runner = StepRunner(
+                config=SDKConfig(dry_run=True, model="claude-opus-4.7"),
+                console=Console(verbose=False, quiet=True),
+            )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(work_root)},
+                clear=False,
+            ):
+                result = _run(
+                    runner.run_step(
+                        "1.1",
+                        "Data design",
+                        "design",
+                        custom_agent="Dev-Microservice-Azure-DataDesign",
+                    )
+                )
+            self.assertTrue(result)
+            self.assertFalse(work_root.exists())
+
+    def test_pre_gate_failure_does_not_create_step_work_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "work-root"
+            runner = StepRunner(
+                config=SDKConfig(dry_run=False, model="claude-opus-4.7"),
+                console=Console(verbose=False, quiet=True),
+            )
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(work_root)},
+                clear=False,
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_asdw_data_verify_contract_gate",
+                return_value=["stale verifier"],
+            ):
+                result = _run(
+                    runner.run_step(
+                        "1.3",
+                        "Data deploy",
+                        "deploy",
+                        custom_agent="Dev-Microservice-Azure-DataDeploy",
+                    )
+                )
+            self.assertFalse(result)
+            self.assertFalse(work_root.exists())
+
+    def test_mkdir_failure_stops_before_sdk_import(self) -> None:
+        console = Console(verbose=False, quiet=True)
+        console.error = unittest.mock.MagicMock()
+        runner = StepRunner(
+            config=SDKConfig(dry_run=False, model="claude-opus-4.7"),
+            console=console,
+        )
+        with unittest.mock.patch(
+            "runner._ensure_step_work_dir",
+            side_effect=PermissionError("denied"),
+        ), unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": None},
+        ):
+            result = _run(
+                runner.run_step(
+                    "1.1",
+                    "Data design",
+                    "design",
+                    custom_agent="Dev-Microservice-Azure-DataDesign",
+                )
+            )
+        self.assertFalse(result)
+        self.assertEqual(console.error.call_count, 1)
+        self.assertIn(
+            "step work directory creation failed",
+            str(console.error.call_args.args[0]),
+        )
+        self.assertNotIn(
+            "GitHub Copilot SDK",
+            str(console.error.call_args.args[0]),
+        )
+
+    def test_fanout_prompt_and_work_directory_share_identifier(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            work_root = root / "work-root"
+            prompts = root / "prompts"
+            prompts.mkdir()
+            (prompts / "Agent.prompt.md").write_text(
+                "> **WORK**: `work/run/<run-id>/Agent/Issue-<識別子>/`",
+                encoding="utf-8",
+            )
+            captured: dict[str, str] = {}
+
+            class FakeSession:
+                def on(self, _callback) -> None:
+                    return None
+
+                async def disconnect(self) -> None:
+                    return None
+
+            class FakeClient:
+                async def stop(self) -> None:
+                    return None
+
+            runner = StepRunner(
+                config=SDKConfig(dry_run=False, model="claude-opus-4.7"),
+                console=Console(verbose=False, quiet=True),
+            )
+
+            async def fake_start_client(_client, *, console) -> None:
+                return None
+
+            async def fake_session(_self, **_kwargs):
+                return FakeSession()
+
+            async def fake_send(_self, _session, prompt, *, timeout, step_id):
+                captured["prompt"] = prompt
+                return object()
+
+            with unittest.mock.patch.dict(
+                os.environ,
+                {"HVE_WORK_ROOT": str(work_root), "HVE_RUN_ID": "run-1"},
+                clear=False,
+            ), unittest.mock.patch(
+                "runner._start_client_with_retry",
+                fake_start_client,
+            ), unittest.mock.patch(
+                "copilot_client_factory.create_copilot_client",
+                return_value=FakeClient(),
+            ), unittest.mock.patch(
+                "runner.load_prompt",
+                create=True,
+            ) as _unused:
+                # load_prompt is imported inside run_step; patch its source module.
+                with unittest.mock.patch(
+                    "prompt_loader.load_prompt",
+                    return_value=(prompts / "Agent.prompt.md").read_text(encoding="utf-8"),
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_create_main_session",
+                    side_effect=fake_session.__get__(runner, StepRunner),
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_send_and_wait_with_model_call_failure_guard",
+                    side_effect=fake_send.__get__(runner, StepRunner),
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_maybe_run_split_fork",
+                    return_value=True,
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_run_asdw_data_verify_contract_gate",
+                    return_value=[],
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_run_ai_agent_capability_gate",
+                    return_value=[],
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_run_tdd_report_gate",
+                    return_value=[],
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_run_asdw_ui_red_unresolved_contract_gate",
+                    return_value=[],
+                ), unittest.mock.patch.object(
+                    runner,
+                    "_run_deploy_ac_gate",
+                    return_value=[],
+                ), unittest.mock.patch(
+                    "runner._check_output_paths_gate",
+                    return_value=[],
+                ), unittest.mock.patch(
+                    "runner._extract_text",
+                    return_value="",
+                ):
+                    result = _run(
+                        runner.run_step(
+                            "3.3/SVC-13",
+                            "fanout",
+                            "generate",
+                            custom_agent="Agent",
+                            workflow_id="asdw-web",
+                            fanout_meta={
+                                "fanout_key": "SVC-13",
+                                "base_step_id": "3.3",
+                            },
+                        )
+                    )
+            self.assertTrue(result)
+            self.assertIn("Issue-step-3-3-SVC-13", captured["prompt"])
+            first = work_root / "Agent" / "Issue-step-3-3-SVC-13"
+            self.assertTrue(first.is_dir())
+            second = _ensure_step_work_dir("Agent", "step-3-3-SVC-16")
+            self.assertTrue(second.is_dir())
+            self.assertNotEqual(first.resolve(), second)
+
+    def test_non_dry_run_creates_work_dir_before_sdk_import(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "work-root"
+            cfg = SDKConfig(dry_run=False, model="claude-opus-4.7")
+            runner = StepRunner(
+                config=cfg,
+                console=Console(verbose=False, quiet=True),
+            )
+            original = sys.modules.get("copilot", _SENTINEL)
+            sys.modules["copilot"] = None  # type: ignore[assignment]
+            try:
+                with unittest.mock.patch.dict(
+                    os.environ,
+                    {"HVE_WORK_ROOT": str(work_root)},
+                    clear=False,
+                ):
+                    result = _run(
+                        runner.run_step(
+                            "1.1",
+                            "Data design",
+                            "design data stores",
+                            custom_agent="Dev-Microservice-Azure-DataDesign",
+                            workflow_id="asdw-web",
+                        )
+                    )
+            finally:
+                if original is _SENTINEL:
+                    sys.modules.pop("copilot", None)
+                else:
+                    sys.modules["copilot"] = original  # type: ignore[assignment]
+
+            self.assertFalse(result)
+            self.assertTrue(
+                (
+                    work_root
+                    / "Dev-Microservice-Azure-DataDesign"
+                    / "Issue-0"
+                ).is_dir()
+            )
+
+
+class TestMcpServerFiltering(unittest.TestCase):
+    """main session に Work IQ MCP alias を誤接続しないためのフィルタ。"""
+
+    def test_excludes_hve_and_plain_workiq_aliases_by_default(self) -> None:
+        servers = {
+            WORKIQ_MCP_SERVER_NAME: {"command": "npx"},
+            "workiq": {"command": "npx"},
+            " WorkIQ ": {"command": "npx"},
+            "azure": {"command": "azmcp"},
+        }
+
+        filtered = _filter_mcp_servers_for_session(servers)
+
+        self.assertEqual(filtered, {"azure": {"command": "azmcp"}})
+
+    def test_include_workiq_keeps_aliases_for_dedicated_workiq_phase(self) -> None:
+        servers = {
+            WORKIQ_MCP_SERVER_NAME: {"command": "npx"},
+            "workiq": {"command": "npx"},
+            " WorkIQ ": {"command": "npx"},
+            "azure": {"command": "azmcp"},
+        }
+
+        filtered = _filter_mcp_servers_for_session(servers, include_workiq=True)
+
+        self.assertEqual(filtered, servers)
+
+
 class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
     """dry_run=False で SDK 未インストール時に False を返す。"""
+
+    def test_asdw_data_deploy_verify_contract_fails_before_sdk_import(self) -> None:
+        """DataDeploy の stale verify 入力は SDK import より前に fail-fast する。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            script = root / "src" / "infra" / "azure" / "verify-data-resources.sh"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                """#!/usr/bin/env bash
+section "PostgreSQL Flexible Server: ${PG_SERVER_NAME}"
+PG_STATE="$(az postgres flexible-server show -g "$RESOURCE_GROUP" -n "$PG_SERVER_NAME" --query state -o tsv)"
+[ "$PG_STATE" = "Ready" ] && echo "state=Ready"
+az container create -g "$RESOURCE_GROUP" -n verify-pg --image postgres:16-alpine \
+  --restart-policy Never \
+  --command-line "sh -c 'PGPASSWORD=$PG_TOKEN psql -h $PG_HOST -U $PG_ADMIN_USER -d $PG_DB_NAME'"
+section "Cosmos DB: ${COSMOS_ACCOUNT_NAME}"
+""",
+                encoding="utf-8",
+            )
+            cfg = SDKConfig(dry_run=False, model="claude-opus-4.7")
+            console = Console(verbose=False, quiet=True)
+            console.error = unittest.mock.MagicMock()
+            runner = StepRunner(
+                config=cfg,
+                console=console,
+                # Step 1.3 は APP-009 スコープと bootstrap context を満たしてから
+                # verify 契約 gate へ到達する。
+                workflow_params={
+                    "app_ids": ["APP-009"],
+                    "resource_group": "test-resource-group",
+                    "data_location": "japaneast",
+                    "data_resource_suffix": "app009",
+                    "data_vnet_cidr": "10.40.0.0/16",
+                    "data_private_endpoint_subnet_cidr": "10.40.1.0/24",
+                    "data_aci_subnet_cidr": "10.40.2.0/24",
+                },
+            )
+            # 事前 gate（work root / Learn MCP pin）を満たし、verify 契約 gate まで到達させる。
+            run_id = "20260725T000000-verifygate"
+            sample_data = root / "src" / "data" / "sample-data.json"
+            sample_data.parent.mkdir(parents=True, exist_ok=True)
+            sample_data.write_text("{}", encoding="utf-8")
+            mcp_config = root / ".github" / ".mcp.json"
+            mcp_config.parent.mkdir(parents=True, exist_ok=True)
+            mcp_config.write_text(
+                json.dumps(
+                    {
+                        "mcpServers": {
+                            "microsoft-learn": {
+                                "type": "http",
+                                "url": "https://learn.microsoft.com/api/mcp",
+                                "tools": ["*"],
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            original_cwd = os.getcwd()
+            original = sys.modules.get("copilot", _SENTINEL)
+            sys.modules["copilot"] = None  # type: ignore[assignment]
+            original_env = {
+                key: os.environ.get(key) for key in ("HVE_RUN_ID", "HVE_WORK_ROOT")
+            }
+            work_root = root / "work" / "run" / run_id
+            work_root.mkdir(parents=True, exist_ok=True)
+            os.environ["HVE_RUN_ID"] = run_id
+            os.environ["HVE_WORK_ROOT"] = str(work_root.resolve())
+            try:
+                os.chdir(root)
+                with _CaptureOutput() as cap, unittest.mock.patch(
+                    "runner._resolve_asdw_data_deploy_subscription_id",
+                    return_value="00000000-0000-0000-0000-000000000001",
+                ):
+                    result = _run(
+                        runner.run_step(
+                            "1.3",
+                            "Azure データサービス Deploy",
+                            "プロンプト",
+                            custom_agent="Dev-Microservice-Azure-DataDeploy",
+                            workflow_id="asdw-web",
+                        )
+                    )
+            finally:
+                os.chdir(original_cwd)
+                for key, value in original_env.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+                if original is _SENTINEL:
+                    sys.modules.pop("copilot", None)
+                else:
+                    sys.modules["copilot"] = original  # type: ignore[assignment]
+
+        self.assertFalse(result)
+        error_text = "\n".join(str(call.args[0]) for call in console.error.call_args_list)
+        self.assertIn("input verify-data-resources.sh contract failed", error_text)
+        self.assertIn("--os-type Linux", error_text)
+        self.assertNotIn("GitHub Copilot SDK がインストールされていません", cap.stdout)
+
+    def test_asdw_data_testcoding_stale_verify_does_not_fail_before_sdk_import(self) -> None:
+        """DataTestCoding は producer なので stale verify があっても生成前 gate で落とさない。"""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            script = root / "src" / "infra" / "azure" / "verify-data-resources.sh"
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text(
+                """#!/usr/bin/env bash
+section "PostgreSQL Flexible Server: ${PG_SERVER_NAME}"
+PG_STATE="$(az postgres flexible-server show -g "$RESOURCE_GROUP" -n "$PG_SERVER_NAME" --query state -o tsv)"
+[ "$PG_STATE" = "Ready" ] && echo "state=Ready"
+az container create -g "$RESOURCE_GROUP" -n verify-pg --image postgres:16-alpine \
+  --restart-policy Never \
+  --command-line "sh -c 'PGPASSWORD=$PG_TOKEN psql -h $PG_HOST -U $PG_ADMIN_USER -d $PG_DB_NAME'"
+section "Cosmos DB: ${COSMOS_ACCOUNT_NAME}"
+""",
+                encoding="utf-8",
+            )
+            cfg = SDKConfig(dry_run=False, model="claude-opus-4.7")
+            console = Console(verbose=False, quiet=True)
+            console.error = unittest.mock.MagicMock()
+            runner = StepRunner(config=cfg, console=console)
+
+            original_cwd = os.getcwd()
+            original = sys.modules.get("copilot", _SENTINEL)
+            sys.modules["copilot"] = None  # type: ignore[assignment]
+            try:
+                os.chdir(root)
+                result = _run(
+                    runner.run_step(
+                        "1.2",
+                        "データストア検証テスト生成 (TDD RED)",
+                        "プロンプト",
+                        custom_agent="Dev-Microservice-Azure-DataTestCoding",
+                        workflow_id="asdw-web",
+                    )
+                )
+            finally:
+                os.chdir(original_cwd)
+                if original is _SENTINEL:
+                    sys.modules.pop("copilot", None)
+                else:
+                    sys.modules["copilot"] = original  # type: ignore[assignment]
+
+        self.assertFalse(result)
+        error_text = "\n".join(str(call.args[0]) for call in console.error.call_args_list)
+        self.assertNotIn("generated verify-data-resources.sh contract failed", error_text)
+        self.assertNotIn("PostgreSQL ACI fallback", error_text)
 
     def test_returns_false_when_sdk_missing(self) -> None:
         cfg = SDKConfig(dry_run=False, model="claude-opus-4.7")
@@ -241,6 +797,75 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
             runner._handle_session_event(event)
         self.assertEqual(cap.stdout, "World")
 
+    def test_model_call_failure_logs_warning_and_counts(self) -> None:
+        """model.call_failure は未知イベント扱いではなく warning として記録される。"""
+        runner = self._make_runner(show_stream=False)
+        event = _FakeEvent("model.call_failure", _FakeEventData(reason="quota"))
+
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+
+        output = cap.stdout + cap.stderr
+        self.assertIn("model.call_failure", output)
+        self.assertEqual(runner._model_call_failure_counts["1.1"], 1)
+
+    def test_bound_session_event_uses_bound_step_id(self) -> None:
+        """並列 Step で _current_step_id が別値でも、束縛済み step_id でイベント処理する。"""
+        runner = self._make_runner(show_stream=False)
+        runner._current_step_id = "3.3/SVC-16"
+        event = _FakeEvent("model.call_failure", _FakeEventData(reason="quota"))
+
+        with _CaptureOutput() as cap:
+            runner._handle_session_event_for_step(event, "3.3/SVC-13")
+
+        output = cap.stdout + cap.stderr
+        self.assertIn("[3.3/SVC-13]", output)
+        self.assertNotIn("[3.3/SVC-16]", output)
+        self.assertEqual(runner._model_call_failure_counts["3.3/SVC-13"], 1)
+        self.assertNotIn("3.3/SVC-16", runner._model_call_failure_counts)
+
+    def test_model_call_failure_sets_guard_event_at_threshold(self) -> None:
+        """同一 step で model.call_failure が3回に達すると guard event が set される。"""
+        async def scenario() -> bool:
+            runner = self._make_runner(show_stream=False)
+            event = asyncio.Event()
+            runner._model_call_failure_events["1.1"] = event
+            with _CaptureOutput():
+                for _ in range(3):
+                    runner._handle_session_event(_FakeEvent("model.call_failure"))
+            return event.is_set()
+
+        self.assertTrue(_run(scenario()))
+
+    def test_send_and_wait_guard_fails_fast_after_repeated_model_call_failure(self) -> None:
+        """Phase 1 guard は model.call_failure 3回で send_and_wait をキャンセルして失敗する。"""
+        class _HangingSession:
+            async def send_and_wait(self, *_args, **_kwargs):
+                await asyncio.sleep(5.0)
+                return None
+
+        async def scenario() -> str:
+            runner = self._make_runner(show_stream=False)
+            task = asyncio.create_task(
+                runner._send_and_wait_with_model_call_failure_guard(
+                    _HangingSession(),
+                    "prompt",
+                    timeout=10.0,
+                    step_id="1.1",
+                )
+            )
+            await asyncio.sleep(0)
+            with _CaptureOutput():
+                for _ in range(3):
+                    runner._handle_session_event(_FakeEvent("model.call_failure"))
+            try:
+                await task
+            except RuntimeError as exc:
+                return str(exc)
+            return ""
+
+        self.assertIn("model.call_failure repeated 3 times", _run(scenario()))
+
     def test_message_delta_empty_no_output(self) -> None:
         """トークンが空の場合は出力しない。"""
         runner = self._make_runner(show_stream=True)
@@ -350,6 +975,863 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
         with _CaptureOutput() as cap:
             runner._handle_session_event(event)
         self.assertIn("12 files found", cap.stdout)
+
+    def test_tool_execution_complete_failure_includes_tool_name(self) -> None:
+        """T-M5: tool.execution_complete (failure) でツール名がエラーメッセージに前置される。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                tool_name="view",
+                error=_FakeEventData(message="timeout"),
+            ),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("view: timeout", cap.stdout)
+
+    def test_tool_execution_complete_failure_includes_recent_view_path_and_range(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                arguments={
+                    "path": "docs/test-specs/APP-009-S010-test-spec.md",
+                    "view_range": [200, 260],
+                },
+            ),
+        )
+        complete = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                tool_name="view",
+                error=_FakeEventData(message="view_range out of bounds"),
+            ),
+        )
+
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(start)
+            runner._handle_session_event(complete)
+
+        self.assertIn("view: view_range out of bounds", cap.stdout)
+        self.assertIn("path=docs/test-specs/APP-009-S010-test-spec.md", cap.stdout)
+        self.assertIn("view_range=[200, 260]", cap.stdout)
+
+    def test_tool_execution_complete_success_clears_recent_view_args(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                arguments={"path": "docs/test-specs/APP-009-S010-test-spec.md", "view_range": [200, 260]},
+            ),
+        )
+        success = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(success=True, result_summary="ok"),
+        )
+        later_failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(success=False, error=_FakeEventData(message="timeout")),
+        )
+
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(start)
+            runner._handle_session_event(success)
+            runner._handle_session_event(later_failure)
+
+        failure_line = cap.stdout.rsplit("ツール失敗:", 1)[-1]
+        self.assertIn("timeout", failure_line)
+        self.assertNotIn("path=docs/test-specs/APP-009-S010-test-spec.md", failure_line)
+        self.assertNotIn("view_range=[200, 260]", failure_line)
+
+    def test_tool_execution_complete_legacy_parallel_calls_remain_ambiguous_until_done(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        events = (
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    arguments={"path": "docs/first.md", "view_range": [1, 5]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    arguments={"path": "docs/second.md", "view_range": [6, 10]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    error=_FakeEventData(message="first failed"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    error=_FakeEventData(message="second failed"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    arguments={"path": "docs/third.md", "view_range": [11, 15]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    error=_FakeEventData(message="third failed"),
+                ),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            for event in events:
+                runner._handle_session_event(event)
+
+        self.assertEqual(tool_result.call_count, 3)
+        self.assertEqual(tool_result.call_args_list[0].kwargs["error_msg"], "first failed")
+        self.assertEqual(tool_result.call_args_list[1].kwargs["error_msg"], "second failed")
+        third_msg = tool_result.call_args_list[2].kwargs["error_msg"]
+        self.assertIn("view: third failed", third_msg)
+        self.assertIn("path=docs/third.md", third_msg)
+        self.assertIn("view_range=[11, 15]", third_msg)
+
+    def test_tool_execution_complete_correlates_parallel_calls_by_camelcase_id(self) -> None:
+        """camelCase event payloadとの互換経路でもcall IDを相関する。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start_a = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                toolCallId="call-a",
+                arguments={
+                    "path": "docs/a.md",
+                    "view_range": [221, 440],
+                },
+            ),
+        )
+        start_b = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                toolCallId="call-b",
+                arguments={
+                    "path": "docs/b.md",
+                    "view_range": [441, 700],
+                },
+            ),
+        )
+        success_b = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(success=True, toolCallId="call-b", result_summary="ok"),
+        )
+        failure_a = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="call-a",
+                error=_FakeEventData(message="view_range out of bounds"),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            for event in (start_a, start_b, success_b, failure_a):
+                runner._handle_session_event(event)
+
+        tool_result.assert_called_once()
+        args, kwargs = tool_result.call_args
+        self.assertEqual(args[:2], ("1.1", False))
+        error_msg = kwargs["error_msg"]
+        self.assertIn("view: view_range out of bounds", error_msg)
+        self.assertIn("path=docs/a.md", error_msg)
+        self.assertIn("view_range=[221, 440]", error_msg)
+        self.assertNotIn("docs/b.md", error_msg)
+        self.assertNotIn("[441, 700]", error_msg)
+
+    def test_tool_execution_complete_correlates_reverse_failures_with_real_sdk_data(self) -> None:
+        from copilot.generated.session_events import (
+            ToolExecutionCompleteData,
+            ToolExecutionCompleteError,
+            ToolExecutionStartData,
+        )
+
+        runner = self._make_runner(show_stream=False, verbose=True)
+        events = (
+            _FakeEvent(
+                "tool.execution_start",
+                ToolExecutionStartData(
+                    tool_call_id="call-a",
+                    tool_name="view",
+                    arguments={"path": "docs/a.md", "view_range": [1, 10]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                ToolExecutionStartData(
+                    tool_call_id="call-b",
+                    tool_name="view",
+                    arguments={"path": "docs/b.md", "view_range": [11, 20]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                ToolExecutionCompleteData(
+                    success=False,
+                    tool_call_id="call-b",
+                    error=ToolExecutionCompleteError(message="b failed"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                ToolExecutionCompleteData(
+                    success=False,
+                    tool_call_id="call-a",
+                    error=ToolExecutionCompleteError(message="a failed"),
+                ),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            for event in events:
+                runner._handle_session_event(event)
+
+        self.assertEqual(tool_result.call_count, 2)
+        first_args, first_kwargs = tool_result.call_args_list[0]
+        second_args, second_kwargs = tool_result.call_args_list[1]
+        self.assertEqual(first_args[:2], ("1.1", False))
+        self.assertEqual(second_args[:2], ("1.1", False))
+        self.assertIn("view: b failed", first_kwargs["error_msg"])
+        self.assertIn("path=docs/b.md", first_kwargs["error_msg"])
+        self.assertNotIn("docs/a.md", first_kwargs["error_msg"])
+        self.assertIn("view: a failed", second_kwargs["error_msg"])
+        self.assertIn("path=docs/a.md", second_kwargs["error_msg"])
+        self.assertNotIn("docs/b.md", second_kwargs["error_msg"])
+
+    def test_tool_execution_complete_unknown_id_does_not_borrow_other_call_args(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                toolCallId="known-call",
+                arguments={"path": "docs/known.md", "view_range": [30, 40]},
+            ),
+        )
+        unknown_failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="unknown-call",
+                error=_FakeEventData(message="unknown failed"),
+            ),
+        )
+
+        known_failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="known-call",
+                error=_FakeEventData(message="known failed"),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event(start)
+            runner._handle_session_event(unknown_failure)
+            runner._handle_session_event(known_failure)
+
+        self.assertEqual(tool_result.call_count, 2)
+        unknown_msg = tool_result.call_args_list[0].kwargs["error_msg"]
+        known_msg = tool_result.call_args_list[1].kwargs["error_msg"]
+        self.assertIn("unknown failed", unknown_msg)
+        self.assertNotIn("docs/known.md", unknown_msg)
+        self.assertNotIn("[30, 40]", unknown_msg)
+        self.assertIn("view: known failed", known_msg)
+        self.assertIn("path=docs/known.md", known_msg)
+        self.assertIn("view_range=[30, 40]", known_msg)
+
+    def test_tool_execution_complete_call_ids_are_isolated_by_step(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        same_id = "shared-call"
+        runner._handle_session_event_for_step(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId=same_id,
+                    arguments={"path": "docs/step-a.md", "view_range": [1, 5]},
+                ),
+            ),
+            "step-a",
+        )
+        runner._handle_session_event_for_step(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId=same_id,
+                    arguments={"path": "docs/step-b.md", "view_range": [6, 10]},
+                ),
+            ),
+            "step-b",
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event_for_step(
+                _FakeEvent(
+                    "tool.execution_complete",
+                    _FakeEventData(
+                        success=False,
+                        toolCallId=same_id,
+                        error=_FakeEventData(message="step-a failed"),
+                    ),
+                ),
+                "step-a",
+            )
+            runner._handle_session_event_for_step(
+                _FakeEvent(
+                    "tool.execution_complete",
+                    _FakeEventData(
+                        success=False,
+                        toolCallId=same_id,
+                        error=_FakeEventData(message="step-b failed"),
+                    ),
+                ),
+                "step-b",
+            )
+
+        self.assertEqual(tool_result.call_count, 2)
+        first_args, first_kwargs = tool_result.call_args_list[0]
+        second_args, second_kwargs = tool_result.call_args_list[1]
+        self.assertEqual(first_args[:2], ("step-a", False))
+        self.assertEqual(second_args[:2], ("step-b", False))
+        self.assertIn("docs/step-a.md", first_kwargs["error_msg"])
+        self.assertNotIn("docs/step-b.md", first_kwargs["error_msg"])
+        self.assertIn("docs/step-b.md", second_kwargs["error_msg"])
+        self.assertNotIn("docs/step-a.md", second_kwargs["error_msg"])
+
+    def test_tool_execution_start_with_id_recovers_name_without_arguments(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        argument_cases: tuple[dict[str, Any] | None, ...] = (None, {})
+        for index, arguments in enumerate(argument_cases):
+            call_id = f"empty-{index}"
+            runner._handle_session_event(
+                _FakeEvent(
+                    "tool.execution_start",
+                    _FakeEventData(
+                        tool_name="view",
+                        toolCallId=call_id,
+                        arguments=arguments,
+                    ),
+                )
+            )
+            with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+                runner._handle_session_event(
+                    _FakeEvent(
+                        "tool.execution_complete",
+                        _FakeEventData(
+                            success=False,
+                            toolCallId=call_id,
+                            error=_FakeEventData(message="empty failed"),
+                        ),
+                    )
+                )
+            self.assertIn("view: empty failed", tool_result.call_args.kwargs["error_msg"])
+
+    def test_internal_tools_with_ids_recover_start_names(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        for tool_name in ("task", "report_intent"):
+            call_id = f"{tool_name}-call"
+            runner._handle_session_event(
+                _FakeEvent(
+                    "tool.execution_start",
+                    _FakeEventData(
+                        tool_name=tool_name,
+                        toolCallId=call_id,
+                        arguments=None,
+                    ),
+                )
+            )
+            with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+                runner._handle_session_event(
+                    _FakeEvent(
+                        "tool.execution_complete",
+                        _FakeEventData(
+                            success=False,
+                            toolCallId=call_id,
+                            error=_FakeEventData(message="internal failed"),
+                        ),
+                    )
+                )
+            self.assertIn(
+                f"{tool_name}: internal failed",
+                tool_result.call_args.kwargs["error_msg"],
+            )
+
+    def test_duplicate_active_call_id_does_not_borrow_either_start(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        for path in ("docs/first.md", "docs/second.md"):
+            runner._handle_session_event(
+                _FakeEvent(
+                    "tool.execution_start",
+                    _FakeEventData(
+                        tool_name="view",
+                        toolCallId="duplicate-call",
+                        arguments={"path": path, "view_range": [1, 5]},
+                    ),
+                )
+            )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event(
+                _FakeEvent(
+                    "tool.execution_complete",
+                    _FakeEventData(
+                        success=False,
+                        toolCallId="duplicate-call",
+                        error=_FakeEventData(message="duplicate failed"),
+                    ),
+                )
+            )
+
+        error_msg = tool_result.call_args.kwargs["error_msg"]
+        self.assertEqual(error_msg, "duplicate failed")
+        self.assertNotIn("docs/first.md", error_msg)
+        self.assertNotIn("docs/second.md", error_msg)
+
+    def test_duplicate_call_id_remains_ambiguous_until_all_completes_arrive(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        duplicate_id = "duplicate-call"
+        starts_and_completes = (
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId=duplicate_id,
+                    arguments={"path": "docs/first.md", "view_range": [1, 5]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId=duplicate_id,
+                    arguments={"path": "docs/second.md", "view_range": [6, 10]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    toolCallId=duplicate_id,
+                    error=_FakeEventData(message="first duplicate completion"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId=duplicate_id,
+                    arguments={"path": "docs/new.md", "view_range": [11, 15]},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    toolCallId=duplicate_id,
+                    error=_FakeEventData(message="second duplicate completion"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    toolCallId=duplicate_id,
+                    error=_FakeEventData(message="third duplicate completion"),
+                ),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            for event in starts_and_completes:
+                runner._handle_session_event(event)
+
+        self.assertEqual(tool_result.call_count, 3)
+        expected_messages = (
+            "first duplicate completion",
+            "second duplicate completion",
+            "third duplicate completion",
+        )
+        for call, expected in zip(tool_result.call_args_list, expected_messages):
+            self.assertEqual(call.kwargs["error_msg"], expected)
+
+    def test_run_step_finally_clears_tool_starts_arriving_during_cleanup(self) -> None:
+        async def scenario(cancel_disconnect: bool) -> tuple[StepRunner, bool, int]:
+            runner = StepRunner(
+                config=SDKConfig(
+                    dry_run=False,
+                    auto_qa=False,
+                    auto_contents_review=False,
+                    auto_self_improve=False,
+                ),
+                console=Console(verbose=False, quiet=True),
+            )
+
+            class FakeSession:
+                def on(self, _callback) -> None:
+                    return None
+
+                async def disconnect(self) -> None:
+                    runner._handle_session_event_for_step(
+                        _FakeEvent(
+                            "tool.execution_start",
+                            _FakeEventData(
+                                tool_name="view",
+                                toolCallId="late-disconnect",
+                                arguments={"path": "docs/late-disconnect.md"},
+                            ),
+                        ),
+                        "1.1",
+                    )
+                    if cancel_disconnect:
+                        raise asyncio.CancelledError()
+
+            class FakeClient:
+                stop_calls = 0
+
+                async def stop(self) -> None:
+                    self.stop_calls += 1
+                    runner._handle_session_event_for_step(
+                        _FakeEvent(
+                            "tool.execution_start",
+                            _FakeEventData(
+                                tool_name="view",
+                                toolCallId="late-stop",
+                                arguments={"path": "docs/late-stop.md"},
+                            ),
+                        ),
+                        "1.1",
+                    )
+
+            async def fake_start_client(_client, *, console) -> None:
+                return None
+
+            async def fake_create_session(*_args, **_kwargs):
+                return FakeSession()
+
+            async def fake_send(*_args, **_kwargs):
+                return object()
+
+            fake_client = FakeClient()
+            with unittest.mock.patch(
+                "copilot_client_factory.create_copilot_client",
+                return_value=fake_client,
+            ), unittest.mock.patch(
+                "runner._start_client_with_retry",
+                fake_start_client,
+            ), unittest.mock.patch.object(
+                runner,
+                "_create_main_session",
+                side_effect=fake_create_session,
+            ), unittest.mock.patch.object(
+                runner,
+                "_send_and_wait_with_model_call_failure_guard",
+                side_effect=fake_send,
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_asdw_data_verify_contract_gate",
+                return_value=[],
+            ), unittest.mock.patch.object(
+                runner,
+                "_maybe_run_split_fork",
+                return_value=True,
+            ), unittest.mock.patch(
+                "runner._extract_text",
+                return_value="",
+            ):
+                try:
+                    result = await runner.run_step("1.1", "test", "prompt")
+                except asyncio.CancelledError:
+                    result = False
+            return runner, result, fake_client.stop_calls
+
+        for cancel_disconnect in (False, True):
+            with self.subTest(cancel_disconnect=cancel_disconnect):
+                runner, result, stop_calls = _run(scenario(cancel_disconnect))
+                self.assertEqual(result, not cancel_disconnect)
+                self.assertEqual(stop_calls, 1)
+                with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+                    for call_id in ("late-disconnect", "late-stop"):
+                        runner._handle_session_event_for_step(
+                            _FakeEvent(
+                                "tool.execution_complete",
+                                _FakeEventData(
+                                    success=False,
+                                    toolCallId=call_id,
+                                    error=_FakeEventData(message="late failure"),
+                                ),
+                            ),
+                            "1.1",
+                        )
+                for call in tool_result.call_args_list:
+                    self.assertEqual(call.kwargs["error_msg"], "late failure")
+
+    def test_tool_execution_complete_removes_only_the_matching_call_state(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                toolCallId="call-a",
+                arguments={"path": "docs/a.md", "view_range": [1, 5]},
+            ),
+        )
+        success = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(success=True, toolCallId="call-a", result_summary="ok"),
+        )
+        stale_failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="call-a",
+                error=_FakeEventData(message="later failure"),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event(start)
+            runner._handle_session_event(success)
+            runner._handle_session_event(stale_failure)
+
+        error_msg = tool_result.call_args.kwargs["error_msg"]
+        self.assertIn("later failure", error_msg)
+        self.assertNotIn("docs/a.md", error_msg)
+        self.assertNotIn("[1, 5]", error_msg)
+
+    def test_tool_execution_failure_removes_its_matching_call_state(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        start = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(
+                tool_name="view",
+                toolCallId="call-a",
+                arguments={"path": "docs/a.md", "view_range": [1, 5]},
+            ),
+        )
+        failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="call-a",
+                error=_FakeEventData(message="first failure"),
+            ),
+        )
+        duplicate_failure = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                toolCallId="call-a",
+                error=_FakeEventData(message="duplicate failure"),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event(start)
+            runner._handle_session_event(failure)
+            runner._handle_session_event(duplicate_failure)
+
+        self.assertEqual(tool_result.call_count, 2)
+        first_msg = tool_result.call_args_list[0].kwargs["error_msg"]
+        duplicate_msg = tool_result.call_args_list[1].kwargs["error_msg"]
+        self.assertIn("path=docs/a.md", first_msg)
+        self.assertIn("view_range=[1, 5]", first_msg)
+        self.assertNotIn("docs/a.md", duplicate_msg)
+        self.assertNotIn("[1, 5]", duplicate_msg)
+
+    def test_run_step_start_clears_only_its_stale_call_id_state(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        runner._handle_session_event_for_step(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId="stale",
+                    arguments={"path": "docs/stale.md", "view_range": [1, 5]},
+                ),
+            ),
+            "1.1",
+        )
+        runner._handle_session_event_for_step(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="view",
+                    toolCallId="active",
+                    arguments={"path": "docs/active.md", "view_range": [6, 10]},
+                ),
+            ),
+            "2.2",
+        )
+
+        with _CaptureOutput():
+            result = _run(runner.run_step("1.1", "test", "prompt"))
+
+        self.assertTrue(result)
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            runner._handle_session_event_for_step(
+                _FakeEvent(
+                    "tool.execution_complete",
+                    _FakeEventData(
+                        success=False,
+                        toolCallId="stale",
+                        error=_FakeEventData(message="stale failure"),
+                    ),
+                ),
+                "1.1",
+            )
+            runner._handle_session_event_for_step(
+                _FakeEvent(
+                    "tool.execution_complete",
+                    _FakeEventData(
+                        success=False,
+                        toolCallId="active",
+                        error=_FakeEventData(message="active failure"),
+                    ),
+                ),
+                "2.2",
+            )
+
+        stale_msg = tool_result.call_args_list[0].kwargs["error_msg"]
+        active_msg = tool_result.call_args_list[1].kwargs["error_msg"]
+        self.assertNotIn("docs/stale.md", stale_msg)
+        self.assertIn("path=docs/active.md", active_msg)
+
+    def test_tool_call_id_correlation_does_not_add_shell_or_query_secrets_to_failure_error_msg(self) -> None:
+        runner = self._make_runner(show_stream=False, verbose=True)
+        secret = "SECRET_SENTINEL_42"
+        events = (
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="bash",
+                    toolCallId="shell-call",
+                    arguments={"command": f"echo {secret}"},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    toolCallId="shell-call",
+                    error=_FakeEventData(message="shell failed"),
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(
+                    tool_name="grep",
+                    toolCallId="grep-call",
+                    arguments={"query": secret, "path": "hve"},
+                ),
+            ),
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeEventData(
+                    success=False,
+                    toolCallId="grep-call",
+                    error=_FakeEventData(message="grep failed"),
+                ),
+            ),
+        )
+
+        with unittest.mock.patch.object(runner.console, "tool_result") as tool_result:
+            for event in events:
+                runner._handle_session_event(event)
+
+        self.assertEqual(tool_result.call_count, 2)
+        shell_args, shell_kwargs = tool_result.call_args_list[0]
+        grep_args, grep_kwargs = tool_result.call_args_list[1]
+        self.assertEqual(shell_args[:2], ("1.1", False))
+        self.assertEqual(grep_args[:2], ("1.1", False))
+        self.assertIn("bash: shell failed", shell_kwargs["error_msg"])
+        self.assertIn("grep: grep failed", grep_kwargs["error_msg"])
+        self.assertNotIn(secret, shell_kwargs["error_msg"])
+        self.assertNotIn(secret, grep_kwargs["error_msg"])
+
+    def test_tool_execution_complete_failure_includes_mcp_tool_name(self) -> None:
+        """T-M5: tool.execution_complete (failure) で MCP 系ツール名も前置される。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                mcp_tool_name="ask_work_iq",
+                error=_FakeEventData(message="timeout"),
+            ),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("ask_work_iq: timeout", cap.stdout)
+
+    def test_tool_execution_complete_failure_without_tool_name_unchanged(self) -> None:
+        """T-M5: tool_name が無い場合は従来通り error_msg のみ表示（既存互換）。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                error=_FakeEventData(message="timeout"),
+            ),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("ツール失敗: timeout", cap.stdout)
+        self.assertNotIn(": timeout", cap.stdout.replace("ツール失敗: timeout", ""))
+
+    def test_tool_execution_complete_failure_mcp_tool_name_camelcase(self) -> None:
+        """T-M5: mcpToolName (camelCase) も認識される (SDK 変動対応)。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                mcpToolName="ask_work_iq",
+                error=_FakeEventData(message="timeout"),
+            ),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("ask_work_iq: timeout", cap.stdout)
+
+    def test_tool_execution_complete_failure_mcp_takes_priority_over_legacy(self) -> None:
+        """T-M5: workiq.py:689 と同じく MCP ツール名が legacy より優先される。"""
+        runner = self._make_runner(show_stream=False, verbose=True)
+        event = _FakeEvent(
+            "tool.execution_complete",
+            _FakeEventData(
+                success=False,
+                tool_name="task",  # legacy (SDK 内部 dispatcher 名)
+                mcp_tool_name="ask_work_iq",  # 実体は MCP ツール
+                error=_FakeEventData(message="timeout"),
+            ),
+        )
+        with _CaptureOutput() as cap:
+            runner._handle_session_event(event)
+        self.assertIn("ask_work_iq: timeout", cap.stdout)
+        self.assertNotIn("task: timeout", cap.stdout)
 
     def test_assistant_intent_calls_thinking(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
@@ -510,6 +1992,211 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
             runner._handle_session_event(event)
         self.assertEqual(cap.stdout, "")
         self.assertEqual(cap.stderr, "")
+
+    def test_assistant_usage_duration_timedelta_converted_to_ms(self) -> None:
+        """assistant.usage の duration が timedelta でも TypeError にならず ms に変換される。
+
+        SDK の AssistantUsageData.duration は timedelta | None 型のため、
+        int(timedelta) は TypeError になる。total_seconds() 経由で ms へ変換する。
+        """
+        from datetime import timedelta
+
+        runner = self._make_runner(show_stream=False)
+        event = _FakeEvent(
+            "assistant.usage",
+            _FakeEventData(
+                model="gpt-test",
+                input_tokens=10,
+                output_tokens=20,
+                duration=timedelta(milliseconds=1500),
+            ),
+        )
+        with unittest.mock.patch.object(runner.console, "usage") as mock_usage:
+            runner._handle_session_event(event)
+        mock_usage.assert_called_once_with(
+            "1.1", "gpt-test", 10, 20, duration_ms=1500
+        )
+
+    def test_assistant_usage_duration_none_passes_none(self) -> None:
+        """assistant.usage の duration が None の場合は duration_ms=None で渡る。"""
+        runner = self._make_runner(show_stream=False)
+        event = _FakeEvent(
+            "assistant.usage",
+            _FakeEventData(
+                model="gpt-test",
+                input_tokens=5,
+                output_tokens=7,
+                duration=None,
+            ),
+        )
+        with unittest.mock.patch.object(runner.console, "usage") as mock_usage:
+            runner._handle_session_event(event)
+        mock_usage.assert_called_once_with(
+            "1.1", "gpt-test", 5, 7, duration_ms=None
+        )
+
+
+# ----------------------------------------------------------------------
+# AI Credit (assistant.usage) 抽出の回帰テスト
+# ----------------------------------------------------------------------
+# github-copilot-sdk の版により AssistantUsageData.copilot_usage /
+# quota_snapshots は公開属性または internal 属性として提供される。属性公開状態に
+# 依存せず AI Credit を抽出するため、runner は data.to_dict() の camelCaseキーを
+# 正本として扱う。この互換契約を固定化する。
+try:  # 実 SDK 不在の CI 環境では skip し、test_runner.py の collection を壊さない
+    from copilot.generated.session_events import (  # type: ignore[import]
+        AssistantUsageData as _RealAssistantUsageData,
+    )
+except Exception:  # pragma: no cover - 環境依存
+    _RealAssistantUsageData = None  # type: ignore[assignment]
+
+
+class _FakeUsageData:
+    """AssistantUsageData 互換の最小フェイク。
+
+    公開属性 (model/cost 等) は getattr で読めるが、copilotUsage /
+    quotaSnapshots は to_dict() でのみ得られる。これにより「ハンドラが
+    getattr ではなく to_dict() を使う」ことを保証する (SDK 1.0.x の
+    Internal 属性改名に対する回帰ガード)。
+    """
+
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+        self.model = payload.get("model")
+        self.input_tokens = payload.get("inputTokens")
+        self.output_tokens = payload.get("outputTokens")
+        self.cost = payload.get("cost")
+        self.api_call_id = payload.get("apiCallId")
+        self.duration = None
+
+    def to_dict(self) -> dict:
+        return dict(self._payload)
+
+
+# 実 SDK / フェイク双方で再利用する代表ペイロード (totalNanoAiu は probe 実測値)。
+_USAGE_PAYLOAD = {
+    "model": "claude-opus-4.6",
+    "apiCallId": "call-1",
+    "inputTokens": 10,
+    "outputTokens": 20,
+    "cost": 3.0,
+    "copilotUsage": {
+        "totalNanoAiu": 8935775000.0,
+        "tokenDetails": [
+            {"tokenType": "input", "tokenCount": 10,
+             "costPerBatch": 2, "batchSize": 100}
+        ],
+    },
+    "quotaSnapshots": {
+        "chat": {"usedRequests": 5, "entitlementRequests": 100,
+                 "remainingPercentage": 95.0, "overage": 0.0,
+                 "isUnlimitedEntitlement": False,
+                 "overageAllowedWithExhaustedQuota": False,
+                 "usageAllowedWithExhaustedQuota": False},
+    },
+}
+
+
+class TestAssistantUsageCreditExtraction(unittest.TestCase):
+    """assistant.usage からの AI Credit / quota 抽出 (SDK 1.0.x 対応) の回帰テスト。"""
+
+    def _make_runner(self) -> StepRunner:
+        cfg = SDKConfig(dry_run=True)
+        console = Console(verbose=False, quiet=False, show_stream=False)
+        runner = StepRunner(config=cfg, console=console)
+        runner._current_step_id = "1.1"
+        return runner
+
+    @staticmethod
+    def _stats_of(mock_obj: Any, kind: str) -> list:
+        return [
+            c.kwargs for c in mock_obj.call_args_list
+            if c.args and c.args[0] == kind
+        ]
+
+    def _dispatch(self, runner: StepRunner, data: Any):
+        with _CaptureOutput():
+            with unittest.mock.patch.object(runner.console, "stats_event") as m:
+                runner._handle_session_event(_FakeEvent("assistant.usage", data))
+        return m
+
+    def test_to_dict_extracts_nano_aiu_and_quota(self) -> None:
+        """copilotUsage.totalNanoAiu / quotaSnapshots / tokenDetails を to_dict 経由で抽出する。"""
+        runner = self._make_runner()
+        m = self._dispatch(runner, _FakeUsageData(_USAGE_PAYLOAD))
+        uc = self._stats_of(m, "usage_credit")
+        self.assertEqual(len(uc), 1)
+        self.assertEqual(uc[0]["nano_aiu"], 8935775000.0)
+        self.assertEqual(uc[0]["multiplier_cost"], 3.0)
+        self.assertEqual(uc[0]["api_call_id"], "call-1")
+        self.assertIsNone(uc[0]["unavailable_reason"])
+        qs = self._stats_of(m, "quota_snapshot")
+        self.assertEqual(len(qs), 1)
+        self.assertEqual(qs[0]["quota_id"], "chat")
+        self.assertEqual(qs[0]["used_requests"], 5.0)
+        au = self._stats_of(m, "assistant_usage")
+        self.assertEqual(len(au), 1)
+        self.assertEqual(au[0]["token_details"][0]["type"], "input")
+        self.assertEqual(au[0]["token_details"][0]["count"], 10)
+
+    def test_missing_copilot_usage_sets_unavailable_reason(self) -> None:
+        """copilotUsage 欠落時は nano_aiu=None かつ unavailable_reason 併送、quota 不発火。"""
+        runner = self._make_runner()
+        m = self._dispatch(
+            runner, _FakeUsageData({"model": "m", "inputTokens": 1, "outputTokens": 2})
+        )
+        uc = self._stats_of(m, "usage_credit")
+        self.assertEqual(len(uc), 1)
+        self.assertIsNone(uc[0]["nano_aiu"])
+        self.assertTrue(uc[0]["unavailable_reason"])
+        self.assertEqual(self._stats_of(m, "quota_snapshot"), [])
+
+    def test_getattr_path_alone_would_miss_credit(self) -> None:
+        """回帰ガード: copilotUsage を属性に持たない (to_dict のみ) 場合でも nano_aiu を抽出する。
+
+        SDK 1.0.x では copilot_usage が Internal 属性 _copilot_usage へ改名され、
+        getattr(data, "copilot_usage"/"copilotUsage") は None を返す。本フェイクも
+        同属性を持たないため、ハンドラが getattr に依存していれば nano_aiu は
+        抽出されない。to_dict 経由なら抽出される。
+        """
+        data = _FakeUsageData({
+            "model": "m",
+            "copilotUsage": {"totalNanoAiu": 1_000_000_000.0, "tokenDetails": []},
+        })
+        # 前提条件: getattr では取得不可であることを明示する
+        self.assertIsNone(getattr(data, "copilot_usage", None))
+        self.assertIsNone(getattr(data, "copilotUsage", None))
+        runner = self._make_runner()
+        m = self._dispatch(runner, data)
+        uc = self._stats_of(m, "usage_credit")
+        self.assertEqual(len(uc), 1)
+        self.assertEqual(uc[0]["nano_aiu"], 1_000_000_000.0)
+
+    @unittest.skipUnless(
+        _RealAssistantUsageData is not None, "copilot SDK が未インストール"
+    )
+    def test_real_sdk_assistant_usage_data_extraction(self) -> None:
+        """実 SDK の AssistantUsageData.from_dict 経由でも AI Credit / quota を抽出する。
+
+        実 SDK の to_dict() が copilotUsage.totalNanoAiu / quotaSnapshots を
+        camelCase キーで出力する契約を固定化する。SDK が再度フィールド名を
+        変えた場合に本テストで検知する。
+        """
+        data = _RealAssistantUsageData.from_dict(dict(_USAGE_PAYLOAD))
+        serialized = data.to_dict()
+        self.assertEqual(
+            serialized["copilotUsage"]["totalNanoAiu"],
+            8935775000.0,
+        )
+        runner = self._make_runner()
+        m = self._dispatch(runner, data)
+        uc = self._stats_of(m, "usage_credit")
+        self.assertEqual(len(uc), 1)
+        self.assertEqual(uc[0]["nano_aiu"], 8935775000.0)
+        qs = self._stats_of(m, "quota_snapshot")
+        self.assertTrue(
+            any(q["quota_id"] == "chat" and q["used_requests"] == 5.0 for q in qs)
+        )
 
 
 class TestIsReviewFail(unittest.TestCase):
@@ -782,11 +2469,34 @@ class TestSessionIdPropagation(unittest.TestCase):
     常に同じ session_id が SDK に渡されること。
     """
 
-    def _build_fake_sdk(self):
+    def _build_fake_sdk(self, *, reject_skill_directories: bool = False):
         """create_session の kwargs を全て記録する Fake SDK モジュールを構築する。"""
         import types
 
         class _FakeSession:
+            def __init__(self) -> None:
+                self.rpc = types.SimpleNamespace(
+                    mcp=types.SimpleNamespace(
+                        list=self._list_mcp_servers,
+                    )
+                )
+
+            async def _list_mcp_servers(self):
+                return types.SimpleNamespace(
+                    servers=[
+                        types.SimpleNamespace(
+                            name="azure",
+                            status=types.SimpleNamespace(value="connected"),
+                            error=None,
+                        ),
+                        types.SimpleNamespace(
+                            name="microsoft-learn",
+                            status=types.SimpleNamespace(value="connected"),
+                            error=None,
+                        ),
+                    ]
+                )
+
             async def send_and_wait(self, *args, **kwargs):
                 # メインタスク 1 回のみ応答する最小モック
                 return None
@@ -809,13 +2519,27 @@ class TestSessionIdPropagation(unittest.TestCase):
 
             async def create_session(self, **kwargs):
                 self.create_session_kwargs.append(kwargs)
+                if reject_skill_directories and "skill_directories" in kwargs:
+                    raise TypeError(
+                        "create_session() got an unexpected keyword argument "
+                        "'skill_directories'"
+                    )
                 return _FakeSession()
 
         fake_client = _FakeClient()
         fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+        fake_copilot.CopilotClient = lambda **kwargs: fake_client
+
+        class _RuntimeConnection:
+            @staticmethod
+            def for_stdio(**kwargs):
+                return object()
+
+            @staticmethod
+            def for_uri(*args, **kwargs):
+                return object()
+
+        fake_copilot.RuntimeConnection = _RuntimeConnection
 
         fake_copilot_session = types.ModuleType("copilot.session")
 
@@ -854,6 +2578,162 @@ class TestSessionIdPropagation(unittest.TestCase):
         self.assertIn("session_id", kw)
         # フォーマット: "hve-{run_id}-step-{step_id}"
         self.assertEqual(kw["session_id"], "hve-20260507T100000-test01-step-1-1")
+
+    def test_main_session_receives_declared_external_skill_directory(self) -> None:
+        """required external Skill はroot全体ではなく個別directoryだけを渡す。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260720T000000-external-skill",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            external_root = Path(temp_dir) / "skills"
+            external_skill = external_root / "microsoft-foundry"
+            external_skill.mkdir(parents=True)
+            (external_skill / "SKILL.md").write_text(
+                "---\nname: microsoft-foundry\n---\n# Test skill\n",
+                encoding="utf-8",
+            )
+
+            with unittest.mock.patch.dict(
+                sys.modules,
+                {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+            ), unittest.mock.patch(
+                "skill_resolver.get_required_skills_for_step",
+                return_value=["microsoft-foundry"],
+            ), unittest.mock.patch(
+                "skill_resolver._external_skills_root",
+                return_value=external_root,
+            ), unittest.mock.patch(
+                "prompt_loader.load_prompt",
+                return_value="",
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_asdw_data_verify_contract_gate",
+                return_value=[],
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_ai_agent_capability_gate",
+                return_value=[],
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_tdd_report_gate",
+                return_value=[],
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_asdw_ui_red_unresolved_contract_gate",
+                return_value=[],
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_deploy_ac_gate",
+                return_value=[],
+            ):
+                result = asyncio.run(
+                    runner.run_step(
+                        "2.3",
+                        "Foundry agent coding",
+                        "external Skill routing probe",
+                        custom_agent="Dev-Microservice-Azure-AgentCoding",
+                        workflow_id="aagd",
+                    )
+                )
+
+        self.assertTrue(result)
+        options = fake_client.create_session_kwargs[0]
+        self.assertIn(str(external_skill), options["skill_directories"])
+        self.assertNotIn(str(external_root), options["skill_directories"])
+
+    def test_main_session_fails_closed_when_sdk_rejects_required_external_skill_directory(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260720T000000-external-skill-reject",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk(
+            reject_skill_directories=True
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            external_root = Path(temp_dir) / "skills"
+            external_skill = external_root / "microsoft-foundry"
+            external_skill.mkdir(parents=True)
+            (external_skill / "SKILL.md").write_text(
+                "---\nname: microsoft-foundry\n---\n# Test skill\n",
+                encoding="utf-8",
+            )
+
+            with unittest.mock.patch.dict(
+                sys.modules,
+                {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+            ), unittest.mock.patch(
+                "skill_resolver.get_required_skills_for_step",
+                return_value=["microsoft-foundry"],
+            ), unittest.mock.patch(
+                "skill_resolver._external_skills_root",
+                return_value=external_root,
+            ), unittest.mock.patch(
+                "prompt_loader.load_prompt",
+                return_value="",
+            ), unittest.mock.patch.object(
+                runner,
+                "_run_asdw_data_verify_contract_gate",
+                return_value=[],
+            ):
+                result = asyncio.run(
+                    runner.run_step(
+                        "2.3",
+                        "Foundry agent coding",
+                        "external Skill routing rejection probe",
+                        custom_agent="Dev-Microservice-Azure-AgentCoding",
+                        workflow_id="aagd",
+                    )
+                )
+
+        self.assertFalse(result)
+        self.assertEqual(len(fake_client.create_session_kwargs), 1)
+        self.assertIn("skill_directories", fake_client.create_session_kwargs[0])
+
+    def test_main_session_does_not_start_when_required_skill_resolution_raises(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260720T000000-external-skill-resolver-error",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ), unittest.mock.patch(
+            "skill_resolver.get_required_skills_for_step",
+            side_effect=RuntimeError("resolver unavailable"),
+        ):
+            result = asyncio.run(
+                runner.run_step(
+                    "2.3",
+                    "Foundry agent coding",
+                    "required Skill resolver failure probe",
+                    custom_agent="Dev-Microservice-Azure-AgentCoding",
+                    workflow_id="aagd",
+                )
+            )
+
+        self.assertFalse(result)
+        self.assertEqual(fake_client.create_session_kwargs, [])
 
     def test_session_id_is_deterministic_across_runs(self) -> None:
         """同じ run_id + step_id で複数回 run_step() を呼ぶと常に同じ session_id が渡される。"""
@@ -983,7 +2863,13 @@ class TestSessionIdPropagation(unittest.TestCase):
 
 
 class TestSubSessionOptsReasoningEffort(unittest.TestCase):
-    """Auto モデル時の reasoning_effort 付与契約を固定する。"""
+    """_build_sub_session_opts の model 引数処理を検証する。
+
+    Auto 指定時は wire 値 "auto" を SDK へ渡し、reasoning_effort は付与しない
+    （サーバ側 Auto Model Selection に委譲）。空文字時は model キー自体を
+    payload から省略する。明示モデル時はそのまま渡し、reasoning_effort は
+    付与しない（SDK 既定動作）。
+    """
 
     def _make_runner_with_fake_permission(self) -> StepRunner:
         cfg = SDKConfig(model="claude-opus-4.7", run_id="run-reasoning-effort")
@@ -1004,16 +2890,19 @@ class TestSubSessionOptsReasoningEffort(unittest.TestCase):
         fake_copilot_session.PermissionHandler = _PermissionHandler
         return {"copilot.session": fake_copilot_session}
 
-    def test_auto_model_adds_reasoning_effort_high(self) -> None:
-        from config import MODEL_AUTO_VALUE, DEFAULT_MODEL
+    def test_auto_model_sends_wire_auto_no_reasoning(self) -> None:
+        """Auto 指定時は SDK へ model="auto" (wire 値) を渡し、reasoning_effort は付与しない。
+
+        サーバ側 Auto Model Selection がモデル毎に適切な reasoning_effort を選ぶため、
+        クライアント側で reasoning_effort を強制しない。
+        """
+        from config import MODEL_AUTO_VALUE, MODEL_AUTO_WIRE_VALUE
 
         runner = self._make_runner_with_fake_permission()
         with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
             opts = runner._build_sub_session_opts(MODEL_AUTO_VALUE)
-        # Auto 指定時は CLI ユーザー設定の -high バリアント上書きを避けるため
-        # 実装は DEFAULT_MODEL を明示付与し reasoning_effort='high' を設定する。
-        self.assertEqual(opts.get("model"), DEFAULT_MODEL)
-        self.assertEqual(opts.get("reasoning_effort"), "high")
+        self.assertEqual(opts.get("model"), MODEL_AUTO_WIRE_VALUE)
+        self.assertNotIn("reasoning_effort", opts)
 
     def test_explicit_model_omits_reasoning_effort(self) -> None:
         runner = self._make_runner_with_fake_permission()
@@ -1022,14 +2911,13 @@ class TestSubSessionOptsReasoningEffort(unittest.TestCase):
         self.assertEqual(opts.get("model"), "claude-opus-4.7")
         self.assertNotIn("reasoning_effort", opts)
 
-    def test_empty_string_treated_as_auto(self) -> None:
-        from config import DEFAULT_MODEL
-
+    def test_empty_string_omits_model_and_reasoning(self) -> None:
+        """空文字は to_wire_model で None → model キーを payload から省略（CLI 既定に委譲）。"""
         runner = self._make_runner_with_fake_permission()
         with unittest.mock.patch.dict(sys.modules, self._patched_modules()):
             opts = runner._build_sub_session_opts("")
-        self.assertEqual(opts.get("model"), DEFAULT_MODEL)
-        self.assertEqual(opts.get("reasoning_effort"), "high")
+        self.assertNotIn("model", opts)
+        self.assertNotIn("reasoning_effort", opts)
 
 
 class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
@@ -1766,9 +3654,18 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
 
         fake_client = _FakeClient()
         fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: fake_client
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
+        fake_copilot.CopilotClient = lambda **kwargs: fake_client
+
+        class _RuntimeConnection:
+            @staticmethod
+            def for_stdio(**kwargs):
+                return object()
+
+            @staticmethod
+            def for_uri(*args, **kwargs):
+                return object()
+
+        fake_copilot.RuntimeConnection = _RuntimeConnection
 
         fake_copilot_session = types.ModuleType("copilot.session")
 
@@ -1848,10 +3745,46 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
         self.assertEqual(opts.get("available_tools"), ["bash"])
         self.assertEqual(opts.get("excluded_tools"), ["web_search"])
 
-    def test_resume_session_keys_includes_tools(self) -> None:
-        from runner import StepRunner as SR
-        self.assertIn("available_tools", SR._RESUME_SESSION_KEYS)
-        self.assertIn("excluded_tools", SR._RESUME_SESSION_KEYS)
+    def test_main_session_includes_infinite_sessions_when_auto_compaction(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-compact01",
+            auto_compaction=True,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertEqual(kw.get("infinite_sessions"), {"enabled": True})
+
+    def test_main_session_omits_infinite_sessions_by_default(self) -> None:
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-compact02",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertNotIn("infinite_sessions", kw)
 
 
 # ---------------------------------------------------------------------------

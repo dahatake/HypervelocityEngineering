@@ -156,7 +156,7 @@ jobs:
           create_label "adoc:running" "E4E669" ""
           create_label "adoc:done" "0E8A16" ""
           create_label "adoc:blocked" "D73A4A" ""
-          create_label "auto-context-review" "1D76DB" "auto context review trigger for copilot-auto-review workflow"
+          create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-qa" "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
 
@@ -353,9 +353,13 @@ jobs:
                   return not bool(re.search(r"-\s*\[[xX]\]", txt))
               return bool(re.search(r"-\s*\[[xX]\]", txt))
 
-          auto_context_review = parse_checkbox("レビュー設定")
+          adversarial_review = parse_checkbox("レビュー設定")
           auto_qa = parse_checkbox("質問票設定")
           auto_merge = parse_checkbox("PR完全自動化設定")
+          if not auto_merge:
+              _ms = re.search(r"###\s*PR完全自動化設定\s*\n(.*?)(?=###|\Z)", body, re.DOTALL)
+              if _ms and re.search(r"^\s*有効にする\s*$", _ms.group(1), re.MULTILINE):
+                  auto_merge = True
 
           def parse_field(title, default=""):
               m = re.search(rf"###\s*{re.escape(title)}[^\n]*\n+(.*?)(?=###|\Z)", body, re.DOTALL)
@@ -386,7 +390,7 @@ jobs:
               "branch": branch,
               "skip_steps": sorted(list(skip_steps)),
               "additional_comment": additional_comment,
-              "auto_context_review": auto_context_review,
+              "adversarial_review": adversarial_review,
               "auto_qa": auto_qa,
               "auto_merge": auto_merge,
               "target_dirs": target_dirs,
@@ -404,7 +408,7 @@ jobs:
           BRANCH=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['branch'])")
           SKIP_STEPS=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(d['skip_steps']))")
           ADDITIONAL_COMMENT=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['additional_comment'])")
-          AUTO_CONTEXT_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_context_review') else 'false')")
+          ADVERSARIAL_REVIEW=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('adversarial_review') else 'false')")
           AUTO_QA=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_qa') else 'false')")
           if [[ "${AUTO_QA}" == "true" && "${SKIP_AUTO_QA}" == "true" ]]; then
             echo "既存 QA 検知により AUTO_QA を false に上書きします: ${SKIP_AUTO_QA_REASON}"
@@ -425,8 +429,11 @@ jobs:
           DOC_PURPOSE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['doc_purpose'])")
           MAX_FILE_LINES=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['max_file_lines'])")
 
-          if [[ "${AUTO_CONTEXT_REVIEW}" == "true" ]]; then
-            add_label "${ROOT_ISSUE}" "auto-context-review"
+          if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
+            add_label "${ROOT_ISSUE}" "adversarial-review"
+          else
+            gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
+            echo "false marker を優先し、Root Issue #${ROOT_ISSUE} の adversarial-review ラベルを除去しました。"
           fi
           if [[ "${AUTO_QA}" == "true" ]]; then
             add_label "${ROOT_ISSUE}" "auto-qa"
@@ -444,13 +451,13 @@ jobs:
             add_label "${ROOT_ISSUE}" "qa-model/${SELECTED_QA_MODEL}" || true
           fi
 
-          # ---- Root Issue body に auto-context-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
-          export AUTO_CONTEXT_REVIEW AUTO_QA AUTO_MERGE BRANCH ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
+          # ---- Root Issue body に adversarial-review / auto-qa / auto-merge / branch / self-improve タグを埋め込み ----
+          export ADVERSARIAL_REVIEW AUTO_QA AUTO_MERGE BRANCH ENABLE_SELF_IMPROVE SELF_IMPROVE_MAX_ITER SELF_IMPROVE_QUALITY_THRESHOLD
           _ROOT_UPDATED=$(python3 - <<'PY'
           import os, re
           body = os.environ.get("ISSUE_BODY", "")
           meta = [
-              ("auto-context-review", os.environ.get("AUTO_CONTEXT_REVIEW", "false")),
+              ("adversarial-review", os.environ.get("ADVERSARIAL_REVIEW", "false")),
               ("auto-qa", os.environ.get("AUTO_QA", "false")),
               ("auto-merge", os.environ.get("AUTO_MERGE", "false")),
               ("branch", os.environ.get("BRANCH", "main")),
@@ -477,15 +484,16 @@ jobs:
           )
           api_call PATCH "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" "${_ROOT_PAYLOAD}" > /dev/null || true
 
-          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- auto-context-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- adversarial-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- target-dirs: %s -->\n<!-- exclude-patterns: %s -->\n<!-- doc-purpose: %s -->\n<!-- max-file-lines: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
+          if [[ " ${SKIP_STEPS} " =~ " 1 " ]]; then
             post_comment "${ROOT_ISSUE}" "⚠️ Step.1 がスキップ指定のため、初期Waveで作成される Sub-issue はありません。"
             exit 0
           fi
@@ -506,11 +514,11 @@ jobs:
           PY
           )
 
-          STEP_LABELS=$(python3 - "${AUTO_CONTEXT_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" <<'PY'
+          STEP_LABELS=$(python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" <<'PY'
           import json, sys
           labels = ["auto-app-documentation"]
           if sys.argv[1] == "true":
-              labels.append("auto-context-review")
+              labels.append("adversarial-review")
           if sys.argv[2] == "true":
               labels.append("auto-qa")
           if sys.argv[3] == "true":

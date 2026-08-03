@@ -6,11 +6,11 @@ inputs:
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
 - path: docs/services/{serviceId}-*-description.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceDetail
+  producer: Arch-Microservice-ServiceDetail--aad-web--2.2
 - path: knowledge/D05-ユースケース・シナリオカタログ.md
   required: true
   kind: static
@@ -20,7 +20,7 @@ inputs:
 - path: docs/catalog/domain-analytics.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-DomainAnalytics
+  producer: Arch-Microservice-DomainAnalytics--aas--3.1
 outputs:
 - path: docs/services/{serviceId}-agentic-retrieval-spec.md
   required: true

@@ -14,7 +14,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from PySide6.QtCore import QObject, Signal
 
-StepStatus = Literal["pending", "running", "done", "failed", "skipped"]
+StepStatus = Literal["pending", "running", "done", "failed", "skipped", "blocked"]
 ActionLevel = Literal["INFO", "WARN", "ERROR"]
 StepKind = Literal["step", "container", "fanout_child", "subagent"]
 
@@ -80,7 +80,7 @@ def format_log_prefix(
     return " ".join(parts) + " "
 
 _VALID_STATUS: frozenset = frozenset(
-    {"pending", "running", "done", "failed", "skipped"}
+    {"pending", "running", "done", "failed", "skipped", "blocked"}
 )
 
 BODY_WINDOW_MIN = 10
@@ -88,7 +88,6 @@ BODY_WINDOW_MAX = 20
 BODY_WINDOW_DEFAULT = 10
 
 USER_ACTIONS_VISIBLE = 5
-USER_ACTIONS_CAPACITY = 50
 
 
 @dataclass
@@ -261,6 +260,9 @@ class StepStatsSnapshot:
     context_limit: Optional[int]
     tool_counts: Dict[str, int] = field(default_factory=dict)
     skill_counts: Dict[str, int] = field(default_factory=dict)
+    # Phase A: SDK 直接値 (Workflow 累積を Step 完了時にスナップショット)
+    sdk_aiu_total_nano: Optional[int] = None
+    quota_used_delta_total: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -275,6 +277,8 @@ class StepStatsSnapshot:
             "context_limit": self.context_limit,
             "tool_counts": dict(self.tool_counts),
             "skill_counts": dict(self.skill_counts),
+            "sdk_aiu_total_nano": self.sdk_aiu_total_nano,
+            "quota_used_delta_total": self.quota_used_delta_total,
         }
 
 
@@ -293,6 +297,9 @@ class WorkflowStatsSnapshot:
     context_limit: Optional[int] = None
     finalized: bool = False
     steps: List[StepStatsSnapshot] = field(default_factory=list)
+    # Phase A: SDK 直接値 (Workflow 累積)
+    sdk_aiu_total_nano: Optional[int] = None
+    quota_used_delta_total: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -307,6 +314,8 @@ class WorkflowStatsSnapshot:
             "context_limit": self.context_limit,
             "finalized": self.finalized,
             "steps": [s.to_dict() for s in self.steps],
+            "sdk_aiu_total_nano": self.sdk_aiu_total_nano,
+            "quota_used_delta_total": self.quota_used_delta_total,
         }
 
 
@@ -322,7 +331,7 @@ class WorkflowInstance:
         workflow_id: ワークフロー定義 ID。
         label: ツリー表示名（例 ``"Arch-Microservice (APP-01)"``）。
         app_id: 並列起動を区別する任意キー（``None`` 可）。
-        status: ``pending`` / ``running`` / ``done`` / ``failed`` / ``skipped``。
+        status: ``pending`` / ``running`` / ``done`` / ``failed`` / ``skipped`` / ``blocked``。
         steps: ``OrderedDict[step_id, StepView]``。挿入順に表示する。
         log_buffer: ワークフロー横断ログ（全行保持・無制限）。
         step_log_buffers: ``step_id -> List[str]``。Step 配下ログ。
@@ -338,6 +347,8 @@ class WorkflowInstance:
     steps: "OrderedDict[str, StepView]" = field(default_factory=OrderedDict)
     log_buffer: List[str] = field(default_factory=list)
     step_log_buffers: Dict[str, List[str]] = field(default_factory=dict)
+    cloud_session_urls: Dict[str, str] = field(default_factory=dict)
+    latest_cloud_session_url: str = ""
     returncode: Optional[int] = None
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
@@ -401,7 +412,10 @@ class WorkbenchState:
     assistant_reasoning_tokens_total: int = 0
     assistant_cache_read_total: int = 0
     assistant_cache_write_total: int = 0
-    assistant_usage_count: int = 0  # assistant.usage 発火回数
+    # assistant.usage 発火回数。Unlimited プランでは quota_snapshots の
+    # used_requests が常に 0 で baseline 差分が出ないため、display_reqs の
+    # フォールバック Reqs としても使う (apply_assistant_usage で +1)。
+    assistant_usage_count: int = 0
     # 直近の inter_token_latency_ms（モデル応答品質の参考値）
     assistant_inter_token_latency_ms_last: Optional[float] = None
     # 課金カテゴリ別累積 token_count (token_type -> count)
@@ -432,6 +446,31 @@ class WorkbenchState:
     pricing_usd_jpy_rate: Optional[float] = 150.0
     # 計算で使用する plan_id (空=自動推定)
     pricing_plan_id: str = ""
+
+    # --- AI Credit / SDK 直接値 (Phase A) ---
+    # SDK の `assistant.usage.copilot_usage.total_nano_aiu` を毎ターン累積する。
+    # 単位は Nano AIU (1 AIU = 1e9 Nano AIU)。session.shutdown 経由の
+    # totalPremiumRequests は session.disconnect 即時ハンドラクリアにより
+    # 届かないため、こちらが Workflow 全体の AI Credit 真値となる (捏造禁止)。
+    sdk_aiu_total_nano: int = 0
+    # SDK の `assistant.usage.cost` (Model multiplier cost) の累積。補助情報。
+    sdk_multiplier_cost_total: Optional[float] = None
+    # model -> {"nano_aiu": int, "multiplier_cost": float, "count": int}
+    sdk_credit_per_model: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # quota_id -> 最新スナップショット dict (used_requests / entitlement_requests / etc.)
+    quota_snapshots_latest: Dict[str, dict] = field(default_factory=dict)
+    # quota_id -> 初回観測スナップショット dict (Workflow 開始時の baseline)
+    # used_requests は quota window 全体の累積値なので、Workflow 実行内の
+    # 増分を計算するためには baseline との差分を取る必要がある。
+    quota_snapshots_baseline: Dict[str, dict] = field(default_factory=dict)
+    # api_call_id の重複排除 (イベント再送・retry 対策)
+    seen_api_call_ids: set = field(default_factory=set)
+    # AI Credit が取れなかった理由 (UI 表示用、空=正常)
+    sdk_credit_unavailable_reason: str = ""
+    # T4: Unlimited プランでは quota_snapshots の used_requests が常に 0 で
+    # baseline 差分が出ないため、display_reqs のフォールバックとして既存の
+    # assistant_usage_count (line 414 で定義済、apply_assistant_usage で +1) を
+    # そのまま使う。重複フィールド追加・別 set 管理は不要 (rubber-duck T4 review)。
 
     # 実行履歴（Workflow 跨ぎ）
     stats_history: List["WorkflowStatsSnapshot"] = field(default_factory=list)
@@ -533,7 +572,7 @@ class WorkbenchState:
             self.running_step_ids.add(step_id)
         elif self.current_running_step_id == step_id:
             self.current_running_step_id = None
-        if status in ("done", "failed", "skipped"):
+        if status in ("done", "failed", "skipped", "blocked"):
             self.running_step_ids.discard(step_id)
 
         # TaskTree 更新
@@ -545,19 +584,19 @@ class WorkbenchState:
                 status=status,
                 kind="step",
                 started_at=time.monotonic() if status == "running" else None,
-                finished_at=time.monotonic() if status in ("done", "failed", "skipped") else None,
+                finished_at=time.monotonic() if status in ("done", "failed", "skipped", "blocked") else None,
             )
             self.task_tree.add_child("__workflow__", node)
         else:
             updates = {"status": status}
             if status == "running" and node.started_at is None:
                 updates["started_at"] = time.monotonic()
-            if status in ("done", "failed", "skipped") and node.finished_at is None:
+            if status in ("done", "failed", "skipped", "blocked") and node.finished_at is None:
                 updates["finished_at"] = time.monotonic()
             self.task_tree.update(step_id, **updates)
 
         # 完了系遷移時に Step スナップショットを履歴に push
-        if status in ("done", "failed", "skipped"):
+        if status in ("done", "failed", "skipped", "blocked"):
             self._record_step_snapshot(step_id, status)
 
         self._signals.step_status_changed.emit(step_id, status)
@@ -578,8 +617,6 @@ class WorkbenchState:
             category=category,
         )
         self.user_actions.append(action)
-        if len(self.user_actions) > USER_ACTIONS_CAPACITY:
-            self.user_actions.pop(0)
         self._signals.user_action_added.emit(timestamp, level, message)
 
     def set_context(self, current: int, limit: int, msgs: int) -> None:
@@ -807,6 +844,144 @@ class WorkbenchState:
         if br.cost_jpy is not None:
             self.cost_jpy_total = (self.cost_jpy_total or 0.0) + float(br.cost_jpy)
 
+    # --- AI Credit / SDK 直接値 (Phase A) ---
+
+    def apply_assistant_credit(
+        self,
+        *,
+        api_call_id: Optional[str] = None,
+        model: Optional[str] = None,
+        multiplier_cost: Optional[float] = None,
+        nano_aiu: Optional[float] = None,
+        unavailable_reason: Optional[str] = None,
+    ) -> bool:
+        """SDK ``assistant.usage`` イベントから AI Credit を累積する。
+
+        Args:
+            api_call_id: SDK の ``apiCallId``。同一 ID は重複排除のためスキップ。
+            model: 当該 API call で使われたモデル名。
+            multiplier_cost: SDK の ``cost`` (Model multiplier cost)。補助情報。
+            nano_aiu: SDK の ``copilot_usage.total_nano_aiu``。1 AIU = 1e9 Nano AIU。
+            unavailable_reason: SDK が ``copilot_usage=None`` を返した等で
+                ``total_nano_aiu`` が取得不能だった理由。Unlimited プラン契約者
+                では SDK 側が常に None を返すため UI 表示を「N/A」に切り替える
+                目的で使用する (捏造禁止のため取得不能事実を明示)。
+
+        Returns:
+            実際に累積した場合 True、重複排除 / 値ゼロでスキップした場合 False。
+        """
+        if unavailable_reason and not self.sdk_credit_unavailable_reason:
+            self.sdk_credit_unavailable_reason = str(unavailable_reason)
+        if api_call_id:
+            aid = str(api_call_id)
+            if aid in self.seen_api_call_ids:
+                return False
+            self.seen_api_call_ids.add(aid)
+
+        accumulated = False
+        if nano_aiu is not None:
+            try:
+                n = float(nano_aiu)
+            except (TypeError, ValueError):
+                n = 0.0
+            if n > 0:
+                self.sdk_aiu_total_nano += int(n)
+                accumulated = True
+        if multiplier_cost is not None:
+            try:
+                c = float(multiplier_cost)
+            except (TypeError, ValueError):
+                c = 0.0
+            if c > 0:
+                self.sdk_multiplier_cost_total = (
+                    self.sdk_multiplier_cost_total or 0.0
+                ) + c
+                accumulated = True
+
+        if accumulated and model:
+            slot = self.sdk_credit_per_model.setdefault(
+                str(model), {"nano_aiu": 0.0, "multiplier_cost": 0.0, "count": 0.0}
+            )
+            if nano_aiu is not None:
+                try:
+                    slot["nano_aiu"] = float(slot.get("nano_aiu", 0.0)) + max(
+                        0.0, float(nano_aiu)
+                    )
+                except (TypeError, ValueError):
+                    pass
+            if multiplier_cost is not None:
+                try:
+                    slot["multiplier_cost"] = float(
+                        slot.get("multiplier_cost", 0.0)
+                    ) + max(0.0, float(multiplier_cost))
+                except (TypeError, ValueError):
+                    pass
+            slot["count"] = float(slot.get("count", 0.0)) + 1.0
+
+        return accumulated
+
+    def apply_quota_snapshot(self, quota_id: str, snap: dict) -> None:
+        """SDK ``assistant.usage.quota_snapshots[*]`` の最新値を保存する。
+
+        - 初回観測時のみ baseline に保存する (以降の delta 計算用)。
+        - 同 quota_id の latest は常に上書き。
+        - ``snap`` は primitive dict であることを期待する (runner 側で正規化済み)。
+        """
+        if not quota_id:
+            return
+        qid = str(quota_id)
+        if qid not in self.quota_snapshots_baseline:
+            # 初回観測値を baseline として記録。以降の Workflow 実行で
+            # この値からの増分を「Reqs」として表示する。
+            self.quota_snapshots_baseline[qid] = dict(snap)
+        self.quota_snapshots_latest[qid] = dict(snap)
+
+    @property
+    def sdk_aiu_total(self) -> float:
+        """累積 AIU (= ``sdk_aiu_total_nano / 1e9``)。"""
+        return self.sdk_aiu_total_nano / 1_000_000_000.0
+
+    def quota_used_delta(self, quota_id: str) -> int:
+        """指定 quota の Workflow 実行内 used_requests 増分。"""
+        qid = str(quota_id)
+        latest = self.quota_snapshots_latest.get(qid)
+        baseline = self.quota_snapshots_baseline.get(qid)
+        if not latest:
+            return 0
+        try:
+            latest_used = float(latest.get("used_requests", 0) or 0)
+            baseline_used = (
+                float(baseline.get("used_requests", 0) or 0) if baseline else 0.0
+            )
+        except (TypeError, ValueError):
+            return 0
+        return max(0, int(latest_used - baseline_used))
+
+    @property
+    def total_quota_used_delta(self) -> int:
+        """全 quota の Workflow 実行内 used_requests 増分の合計。"""
+        return sum(self.quota_used_delta(qid) for qid in self.quota_snapshots_latest)
+
+    @property
+    def display_reqs(self) -> int:
+        """Footer 表示用の Reqs 値 (優先順位: shutdown > quota delta > assistant_usage_count > 0)。
+
+        - session.shutdown 経由の累積 (premium_requests_total) を最優先。
+          ただし現状の SDK 仕様では届かないため通常は 0。
+        - 次点: 全 quota の baseline 差分合計。
+        - 次点 (T4): assistant.usage 受信回数 (Unlimited プランは used_requests が
+          動かないためここがフォールバック源、SDK が 1 API call につき 1 回 emit)。
+        - どれも 0 なら 0 を返す (UI 側で "-" 表示可)。
+        """
+        if self.premium_requests_total > 0:
+            return int(self.premium_requests_total)
+        delta = self.total_quota_used_delta
+        if delta > 0:
+            return delta
+        if self.assistant_usage_count > 0:
+            return int(self.assistant_usage_count)
+        return 0
+
     def set_model(self, name: str) -> None:
         self.model = name
         self._signals.model_updated.emit(name)
@@ -930,12 +1105,23 @@ class WorkbenchState:
             context_limit=self.context_limit or None,
             tool_counts=tool_counts,
             skill_counts=skill_counts,
+            sdk_aiu_total_nano=(
+                self.sdk_aiu_total_nano if self.sdk_aiu_total_nano > 0 else None
+            ),
+            quota_used_delta_total=(
+                self.total_quota_used_delta if self.quota_snapshots_latest else None
+            ),
         )
         wf.steps.append(snap)
         # Workflow 側の最新 Context も更新
         wf.context_current = self.context_current or wf.context_current
         wf.context_limit = self.context_limit or wf.context_limit
         wf.model = self.model or wf.model
+        # Workflow 側の SDK 累積値も最新化
+        if self.sdk_aiu_total_nano > 0:
+            wf.sdk_aiu_total_nano = self.sdk_aiu_total_nano
+        if self.quota_snapshots_latest:
+            wf.quota_used_delta_total = self.total_quota_used_delta
 
         if self._history_store is not None:
             try:
@@ -955,6 +1141,11 @@ class WorkbenchState:
         wf.context_current = self.context_current or wf.context_current
         wf.context_limit = self.context_limit or wf.context_limit
         wf.model = self.model or wf.model
+        # Phase A: SDK 直接値の最終累積を Workflow snapshot へ反映
+        if self.sdk_aiu_total_nano > 0:
+            wf.sdk_aiu_total_nano = self.sdk_aiu_total_nano
+        if self.quota_snapshots_latest:
+            wf.quota_used_delta_total = self.total_quota_used_delta
         wf.finalized = True
 
         if self._history_store is not None:
@@ -1073,9 +1264,37 @@ class WorkbenchState:
             return
         if status == "running" and inst.started_at is None:
             inst.started_at = time.monotonic()
-        if status in ("done", "failed", "skipped") and inst.finished_at is None:
+        if status in ("done", "failed", "skipped", "blocked") and inst.finished_at is None:
             inst.finished_at = time.monotonic()
         inst.status = status
+        self._signals.workflow_instance_changed.emit(instance_id)
+
+    def record_cloud_session_url(
+        self,
+        instance_id: str,
+        *,
+        step_id: str,
+        subtask_kind: str,
+        url: str,
+    ) -> None:
+        """WorkflowInstance に Mission Control URL を記録する。"""
+        if not instance_id or not url:
+            return
+        inst = self.workflows.get(instance_id)
+        if inst is None:
+            self.ensure_workflow_instance(
+                instance_id=instance_id,
+                workflow_id=instance_id,
+                label=instance_id,
+            )
+            inst = self.workflows.get(instance_id)
+        if inst is None:
+            return
+        key = f"{step_id or 'main'}:{subtask_kind or 'main'}"
+        if inst.cloud_session_urls.get(key) == url:
+            return
+        inst.cloud_session_urls[key] = url
+        inst.latest_cloud_session_url = url
         self._signals.workflow_instance_changed.emit(instance_id)
 
     def mark_workflow_instance_finished(
@@ -1175,7 +1394,7 @@ class WorkbenchState:
         """instance のツリーから step を検索し、status を更新する（任意の深さ）。
 
         running 遷移時に ``started_at`` が未設定なら time.monotonic() を記録、
-        終了状態 (done/failed/skipped) で ``finished_at`` を記録する。
+        終了状態 (done/failed/skipped/blocked) で ``finished_at`` を記録する。
         ``workflow_instance_changed`` signal を emit する。
         """
         if status not in _VALID_STATUS:
@@ -1186,7 +1405,7 @@ class WorkbenchState:
         node.status = status
         if status == "running" and node.started_at is None:
             node.started_at = time.monotonic()
-        if status in ("done", "failed", "skipped") and node.finished_at is None:
+        if status in ("done", "failed", "skipped", "blocked") and node.finished_at is None:
             node.finished_at = time.monotonic()
         self._signals.workflow_instance_changed.emit(instance_id)
 

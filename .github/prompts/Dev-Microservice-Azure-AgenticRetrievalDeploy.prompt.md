@@ -1,7 +1,7 @@
 ﻿> Agentic Retrieval Azure 実装設計を入力に、Azure CLI / az rest で冪等デプロイする実行骨子と受け入れ条件を定義する（IaC スクリプト本体は実行時生成）。
 
 <!-- markdownlint-disable MD013 MD022 MD031 MD032 MD041 MD058 MD060 -->
-> **WORK**: `/work/Dev-Microservice-Azure-AgenticRetrievalDeploy/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AgenticRetrievalDeploy/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -114,6 +114,22 @@
 AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ）。
 
 ### 4.3 Execute（PROCEED 判定時のみ）
+
+#### 4.3.0 Pre-flight（TDD サイクル必須）
+
+以下を順に実行し、すべて成功した場合のみ Deploy に進む。いずれか失敗時は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: {理由} -->` を記載し、非ゼロ exit で Step を fail させる（`NEEDS-VERIFICATION` で逃げることは**禁止**）。
+
+- `command -v az` / `az account show -o tsv`
+- `command -v gh` / `gh auth status`
+
+#### 4.3.1 RED → Deploy → GREEN（TDD サイクル）
+
+- **RED（初回 deploy 時のみ）**: `verify-*.sh` を実行し、リソース未作成で FAIL を確認。冪等再実行時はスキップ可（`ac-verification.md` に明記）。
+- **Deploy**: 以下順序で実行。CI/CD を伴う場合は `gh workflow run` 発火 → `timeout 1800 gh run watch --exit-status --interval 10` で完了待ち（タイムアウト時 Step fail）。
+- **GREEN**: `verify-*.sh` 再実行で全 TC PASS。出力ログを `ac-verification.md` の AC4B-1 行に証跡として貼る。
+
+#### 4.3.2 リソース作成順序
+
 `azure-deploy` / `azure-validate` の実在 Skill を参照し、
 以下順序で実行する。
 1. Search サービス作成（SKU は MS Learn MCP 動的解決値）
@@ -142,6 +158,8 @@ AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ�
 - `harness-verification-loop` と `azure-validate` に従い
   `ac-verification.md` を生成
 - PASS / NEEDS-VERIFICATION / FAIL を明示
+- **実在系 AC4B-1 は `✅` のみ許容**。`❌` / `⏳ NEEDS-VERIFICATION` のまま完了した場合、Orchestrator gate が Step を fail に降格させる。
+- `ac-verification.md` は 1 行 1 AC のテーブル行で記録（例: `| AC4B-1 | リソース存在 | ✅ | <verify-*.sh GREEN ログ抜粋> |`）。
 
 ## 5) Microsoft Learn 根拠（必須）
 既存 Design Agent と同パターンで、SKU / モデル / API バージョン / Indexer 対応データソースについて以下を `{WORK}artifacts/cli-evidence.md` に記録する。
@@ -151,6 +169,9 @@ AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ�
 - 取得不可時は `要確認（要：Microsoft Learn 確認）`
 
 ## 6) 禁止事項
+- 実在系 **AC4B-1 を `❌` または `⏳ NEEDS-VERIFICATION` のまま完了扱いにすること**
+- Pre-flight 失敗時に `NEEDS-VERIFICATION` で逃げて Step を success にすること
+- `ac-verification.md` を作成しないままターンを終えること（ブロッカー / タイムアウト時も未達 AC を `❌` で記録して必ず作成する。未作成は Orchestrator gate が「ファイル不在」で fail 降格）
 - SKU / モデル名 / API バージョン / リージョン具体名のハードコード
 - 秘密情報を成果物に含めること
 - 破壊的変更（既存リソース削除）

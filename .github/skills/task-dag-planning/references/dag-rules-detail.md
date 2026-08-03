@@ -20,7 +20,7 @@
 
 > **フェーズ遷移の前提条件**: §1.1 または §1.2 のコンテキスト収集プロトコルが適用される場合、そのコンテキスト収集が完了していること。コンテキスト収集が未完了の状態で計画作成に進むことは禁止する。
 
-次のいずれかに当てはまる場合、実装開始前に `work/Issue-<識別子>/plan.md` を作る：
+次のいずれかに当てはまる場合、実装開始前に `work/run/<run-id>/Issue-<識別子>/plan.md` を作る：
 - 大規模/大量/生成/複数モジュール/複数サービス/仕様→実装
 - 影響範囲や検証方法が不明
 - task_scope=multi または context_size=large に該当する
@@ -156,11 +156,11 @@ else:  # task_scope == "single" かつ context_size IN ("small", "medium")
 subissues.md を作成した後、以下のチェックを **必ず** 実行すること（CI でも自動検証される）：
 
 ```bash
-bash .github/scripts/bash/validate-subissues.sh --path work/<Agent>/<Issue>/subissues.md
+bash .github/scripts/bash/validate-subissues.sh --path work/run/<run-id>/<Agent>/<Issue>/subissues.md
 ```
 
 ```powershell
-pwsh .github/scripts/powershell/validate-subissues.ps1 -Path work/<Agent>/<Issue>/subissues.md
+pwsh .github/scripts/powershell/validate-subissues.ps1 -Path work/run/<run-id>/<Agent>/<Issue>/subissues.md
 ```
 
 1. 各 `<!-- subissue -->` ブロック内に `<!-- title: ... -->` が存在すること（**必須** — 欠落すると Issue 作成がスキップされる）

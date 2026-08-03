@@ -37,7 +37,7 @@
   <rect x="44" y="162" width="260" height="92" class="card entry"/>
   <text x="62" y="190" class="label">Issue Template</text>
   <text x="62" y="214" class="body">`.github/ISSUE_TEMPLATE/*.yml`</text>
-  <text x="62" y="234" class="small">12 種のフォームで Web 実行を開始</text>
+  <text x="62" y="234" class="small">11 種のフォームで Web 実行を開始</text>
 
   <rect x="44" y="278" width="260" height="92" class="card entry"/>
   <text x="62" y="306" class="label">hve CLI</text>

@@ -1,6 +1,6 @@
 ﻿> ユースケース内の全マイクロサービスについて、最適な Azure コンピュート（ホスティング）を選定し、根拠・代替案・前提・未決事項を設計書に記録する（ドキュメント作成特化）
 
-> **WORK**: `/work/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-ComputeDesign/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -14,6 +14,8 @@
 - **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- **`report_progress` 必須**: `report_progress.prDescription` に検証記録を必ず含める。推奨形式は `- [x] <!-- validation-confirmed --> 検証・セキュリティ確認を実施する`。
+- **最終回答のみ記載は不可**: 最終 assistant message だけに `<!-- validation-confirmed -->` を書いても不十分。PR body 反映対象の `report_progress.prDescription` に含めること。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
 - **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
@@ -27,17 +29,26 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+
 ## 1) 目的 / スコープ
 ### 目的
 `docs/services/service-list.md` に列挙された **対象サービス**（APP-ID 指定時はスコープ内のサービス+共有サービスのみ）について、Azure のホスティング先（コンピュート）を選定し、技術的根拠（公式ドキュメントURL）を添えて設計書に残す。
 
 ### 入力（必読）
 - リソースグループ名: `{リソースグループ名}`
+- `docs/azure/azure-services-data.md`（Step.1.1 出力 — データ系サービスの planned design）
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/use-case-catalog.md`
 - `docs/catalog/data-model.md`
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
+
+> **実行順序**: local-first / live-last DAG において、本 Agent は Deploy 系 Step（1.3 / 2.2 / 3.4）**より前**に実行される。Step.1.3 が生成する `docs/azure/service-catalog.md` など deploy 後の live 成果物を入力にしない。データ系の接続先・SKU は `azure-services-data.md` の planned design を根拠にし、未確定値は推測せず未決事項として記録する。
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
 ### 成果物（必須）
@@ -121,17 +132,19 @@
 - 1ファイルが大きくなりそうなら、`large-output-chunking` スキルに従い、
   `{WORK}artifacts/` に index + part 分割で保存する（設計書の本体は読みやすさ優先で維持）。
 
-## 8) 最終品質レビュー（3度のレビューで確実に）
-成果物が依頼の目的を確実に達成するため、**異なる観点で3度のレビュー** を実施する。最終コミット前に、以下を満たすまで修正する（"問題点の大量列挙"は不要）。
+## 8) 最終品質レビュー（単回インライン・セルフチェック）
 
-- Skill adversarial-review に従う。
+### 8.1 セルフチェック契約
 
-### 8.2 3つの異なる観点（Azure コンピュート選定設計書の場合）
-- **1回目：技術妥当性・要件達成度**：Azure コンピュート選定の根拠が十分か、AC と入力ドキュメントの要件がすべて満たされているか、代替案の検討が十分か
-- **2回目：ユーザー/運用視点**：設計書の使い易さ、開発チーム/運用チームが理解しやすいか、ドキュメントの粒度と詳細さが適切か、参照 URL の有用性
-- **3回目：保守性・拡張性・スケーラビリティ**：選定の根拠が将来も有効か、サービス追加時の変更容易性、新たな Azure サービスオプションへの対応余地、ドキュメント保守性
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 8.3 品質ゲート チェックリスト
+### 8.2 ドメイン固有観点
+
+- **技術妥当性・要件達成度**：Azure コンピュート選定の根拠が十分か、AC と入力ドキュメントの要件がすべて満たされているか、代替案の検討が十分か
+- **ユーザー/運用視点**：設計書の使い易さ、開発チーム/運用チームが理解しやすいか、ドキュメントの粒度と詳細さが適切か、参照 URL の有用性
+- **保守性・拡張性・スケーラビリティ**：選定の根拠が将来も有効か、サービス追加時の変更容易性、新たな Azure サービスオプションへの対応余地、ドキュメント保守性
+
+### 8.3 品質ゲートと反映方法
 以下のすべてを満たすまで修正する：
 - **網羅**：service-list の対象サービス（APP-ID 指定時はスコープ内+共有、未指定時は全件）が1行ずつ存在する
 - **要件**：Primary / Alternatives / 理由（>=3観点） / 公式URL（>=1） が各行にある
@@ -139,8 +152,7 @@
 - **妥当性**：推測が混ざる箇所は前提/未決事項に隔離されている
 - **変更最小**：無関係ファイルに触れていない
 
-### 8.4 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

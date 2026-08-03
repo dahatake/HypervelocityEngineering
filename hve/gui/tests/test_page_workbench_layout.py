@@ -5,7 +5,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication, QSplitter  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel, QPlainTextEdit, QSplitter  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -44,6 +44,75 @@ def test_right_pane_vertical_splitter(page):
     assert rs.childrenCollapsible() is False
 
 
+def test_user_actions_text_box_expands_with_pane_height(page):
+    pane = page._user_actions_pane
+    view = pane.view
+    header = next(lbl for lbl in pane.findChildren(QLabel) if lbl.text().startswith("実行中の課題"))
+    default_view = QPlainTextEdit()
+
+    try:
+        assert isinstance(view, QPlainTextEdit)
+        assert view.maximumHeight() == default_view.maximumHeight()
+
+        pane.show()
+        pane.resize(360, 160)
+        pane.layout().setGeometry(pane.rect())
+        QApplication.processEvents()
+        header_height = header.height()
+        view_height = view.height()
+
+        pane.resize(360, 320)
+        pane.layout().setGeometry(pane.rect())
+        QApplication.processEvents()
+
+        assert header.height() == header_height
+        assert view.height() > view_height
+    finally:
+        default_view.deleteLater()
+
+
+def test_user_actions_pane_renders_all_retained_actions(page):
+    state = page._state
+    action_count = 51
+    for i in range(action_count):
+        state.add_user_action(
+            timestamp=f"12:00:{i:02d}",
+            level="ERROR",
+            message=f"retained-action-{i}",
+            step_id=f"step-{i}",
+        )
+
+    page._user_actions_pane.update_from_state(state)
+    text = page._user_actions_pane.view.toPlainText()
+
+    assert len(state.user_actions) == action_count
+    header = next(
+        label
+        for label in page._user_actions_pane.findChildren(QLabel)
+        if label.text().startswith("実行中の課題")
+    )
+    assert header.text() == f"実行中の課題 ({action_count})"
+    for i in range(action_count):
+        assert f"retained-action-{i}" in text
+
+
+def test_user_actions_pane_header_shows_total_count(page):
+    pane = page._user_actions_pane
+    header = next(lbl for lbl in pane.findChildren(QLabel) if lbl.text().startswith("実行中の課題"))
+
+    pane.update_from_state(page._state)
+    assert header.text() == "実行中の課題"
+
+    page._state.add_user_action(
+        timestamp="12:34:56",
+        level="WARN",
+        message="header-count-check",
+        step_id="step-1",
+    )
+    pane.update_from_state(page._state)
+    assert header.text() == "実行中の課題 (1)"
+
+
 def test_left_pane_is_activity_widget(page):
     sp = page._splitter
     assert sp.widget(0) is page._progress_widget
@@ -61,8 +130,9 @@ def test_workflow_instance_selection_updates_selected_tab(page):
     s.append_workflow_log("wf-x", None, "line-b")
     # Tree を instances モードに切替・選択
     page._progress_widget.update_workflow_instances(s)
-    tree = page._progress_widget._tree
-    tree.setCurrentItem(tree.topLevelItem(0))
+    # DagStatusWidget はノード選択時に node_selected(instance_id, step_id) を emit する。
+    # Workflow ヘッダ選択 (step_id="") を再現してインスタンス全体ログを選択タブへ反映。
+    page._progress_widget.node_selected.emit("wf-x", "")
     txt = page._log_tabs.selected_text()
     assert "line-a" in txt and "line-b" in txt
 
@@ -71,6 +141,6 @@ def test_single_workflow_set_plan_still_works(page):
     """シングル workflow 回帰確認: set_plan ベースの描画が動く。"""
     plan = [{"workflow_id": "wf-1", "workflow_name": "WF-1", "steps": [("s1", "Step 1")]}]
     page._progress_widget.set_plan(plan, {"wf-1": "実行中"}, {"wf-1": {"s1": "実行中"}})
-    tree = page._progress_widget._tree
-    assert tree.topLevelItemCount() == 1
-    assert "WF-1" in tree.topLevelItem(0).text(0)
+    entries = page._progress_widget._entries
+    assert len(entries) == 1
+    assert "WF-1" in entries[0].label

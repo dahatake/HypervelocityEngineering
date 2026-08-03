@@ -38,7 +38,7 @@ def test_running_step_ids_tracks_parallel_steps():
     assert s.last_known_step_id == "base/child_3"
 
 
-@pytest.mark.parametrize("terminal_status", ["done", "failed", "skipped"])
+@pytest.mark.parametrize("terminal_status", ["done", "failed", "skipped", "blocked"])
 def test_running_step_ids_drops_on_terminal(terminal_status):
     s = _new_state()
     s.set_step_status("a", "running")
@@ -47,6 +47,24 @@ def test_running_step_ids_drops_on_terminal(terminal_status):
     assert s.running_step_ids == {"b"}
     s.set_step_status("b", terminal_status)  # type: ignore[arg-type]
     assert s.running_step_ids == set()
+
+
+def test_blocked_is_accepted_as_valid_status():
+    """T-H1H2a: GUI 層が core 層の status="blocked" を受理することを確認。
+
+    blocked 追加前は ValueError("invalid status: blocked") が発生していた。
+    """
+    s = _new_state()
+    s.set_step_status("a", "running")
+    # ValueError が出なければ受理成功
+    s.set_step_status("a", "blocked")
+    # 終了状態として扱われ、running_step_ids から除外される
+    assert s.running_step_ids == set()
+    # TaskTree node に finished_at が記録される
+    node = s.task_tree.get("a")
+    assert node is not None
+    assert node.finished_at is not None
+    assert node.status == "blocked"
 
 
 def test_running_step_ids_idempotent_running_transition():

@@ -39,8 +39,10 @@ def test_append_log_routes_to_step_and_global(qapp):
     s.append_workflow_log("missing", "step1", "ignored")  # no-op
 
     inst = s.workflows["wf-a#APP-01"]
-    assert inst.log_buffer == ["hello", "global-only"]
-    assert inst.step_log_buffers == {"step1": ["hello"]}
+    # append_workflow_log は `[WF大文字] [step_id] ` プレフィックスを付与する
+    # （workflow_id="wf-a" → "WF-A"、step_id None → "main"）。
+    assert inst.log_buffer == ["[WF-A] [step1] hello", "[WF-A] [main] global-only"]
+    assert inst.step_log_buffers == {"step1": ["[WF-A] [step1] hello"]}
 
 
 def test_mark_finished_sets_status_by_returncode(qapp):

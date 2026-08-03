@@ -39,7 +39,7 @@ class MarkdownHtmlRenderer:
     """Markdown 文字列を完成 HTML（preview.html テンプレート埋込済）に変換する。"""
 
     def __init__(self) -> None:
-        self._md = MarkdownIt("commonmark", {"html": False, "linkify": True, "typographer": False})
+        self._md = MarkdownIt("commonmark", {"html": False, "linkify": True, "typographer": False}).enable("table")
         self._highlighter = CodeHighlighter()
         self._install_fence_rule()
         self._template = _load_template()

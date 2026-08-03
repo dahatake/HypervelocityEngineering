@@ -56,7 +56,7 @@ def run_step1_precheck(
         ``AutopilotPrecheckResult``: warn 項目のみを格納（ok は除外）。
     """
     from hve.gui.workflow_step_requirements import (
-        summarize_requirements_for_selection,
+        summarize_all_requirements_for_selection,
     )
 
     selected: List = []
@@ -78,7 +78,7 @@ def run_step1_precheck(
                 return False
         return target.exists()
 
-    summaries = summarize_requirements_for_selection(
+    summaries = summarize_all_requirements_for_selection(
         selected,
         input_values=dict(input_values or {}),
         file_exists=_file_exists,

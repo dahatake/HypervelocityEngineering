@@ -1,33 +1,19 @@
-﻿"""T2.4: tools/skills/markdown_query/generate_usage_report.py のテスト。"""
+﻿"""T2.4: mdq/usage_report.py のテスト。"""
 
 from __future__ import annotations
 
 import datetime
-import importlib.util
 import json
-import sys
 from pathlib import Path
 
 import pytest
 
 
-_SCRIPT_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "tools" / "skills" / "markdown_query" / "generate_usage_report.py"
-)
-
-
 @pytest.fixture()
 def gen_module():
-    """generate_usage_report.py をモジュールとしてロードする。"""
-    spec = importlib.util.spec_from_file_location(
-        "generate_usage_report", _SCRIPT_PATH
-    )
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from mdq import usage_report
+
+    return usage_report
 
 
 def test_generate_report_creates_four_files(gen_module, tmp_path: Path) -> None:
@@ -46,7 +32,7 @@ def test_generated_json_is_valid_schema(gen_module, tmp_path: Path) -> None:
     out = gen_module.generate_report(tmp_path, today=datetime.date(2026, 5, 15),
                                       output_dir=tmp_path / "usage-report")
     data = json.loads(out["json"].read_text(encoding="utf-8"))
-    # 必須キー（15 指標）
+    # schema v2 必須キー（v1系 + routing/parent expansion指標）
     for k in (
         "E1_index_size", "E2_index_freshness", "E5_pruned_chunks_total",
         "F2_index_delta_update_ratio",
@@ -54,11 +40,11 @@ def test_generated_json_is_valid_schema(gen_module, tmp_path: Path) -> None:
         "A4_skill_routing_listed", "D1_donot_use_for_violations",
         "B1_context_reduction_ratio", "B2_arg_averages", "B3_get_search_ratio",
         "C1_zero_hit_rate", "C2_score_gap_avg", "C3_expansion_flag_usage_rate",
-        "F1_search_elapsed_ms", "G1_step_completion_rate_diff",
-        "G4_step_retry_count_diff", "D3_typical_query_rate",
+        "F1_search_elapsed_ms", "D3_typical_query_rate",
+        "H1_auto_strategy_distribution", "H2_parent_expansion_rate",
     ):
         assert k in data, f"missing key: {k}"
-    assert data["schema_version"] == 1
+    assert data["schema_version"] == 2
     assert "generated_at" in data
 
 
@@ -71,7 +57,7 @@ def test_generated_markdown_contains_section_headings(gen_module, tmp_path: Path
     assert "② 呼び出し量・選択妥当性" in md
     assert "③ Context 削減" in md
     assert "④ 結果品質" in md
-    assert "⑤ パフォーマンス / 成果" in md
+    assert "⑤ パフォーマンス" in md
 
 
 def test_latest_files_match_dated_files(gen_module, tmp_path: Path) -> None:
@@ -83,7 +69,7 @@ def test_latest_files_match_dated_files(gen_module, tmp_path: Path) -> None:
 
 def test_render_markdown_handles_none_values_gracefully(gen_module) -> None:
     stats = {
-        "schema_version": 1, "window_days": 7, "since_iso": "x",
+        "schema_version": 2, "window_days": 7, "since_iso": "x",
         "record_count": 0,
         "E1_index_size": {"files": None, "chunks": None, "note": "x"},
         "E2_index_freshness": {"age_seconds": None, "db_mtime": None,
@@ -108,24 +94,17 @@ def test_render_markdown_handles_none_values_gracefully(gen_module) -> None:
         "C3_expansion_flag_usage_rate": {"value": None, "note": "x"},
         "F1_search_elapsed_ms": {"p50": None, "p95": None,
                                   "sample_size": 0, "note": "x"},
-        "G1_step_completion_rate_diff": {"value": None,
-                                          "used_avg": None,
-                                          "unused_avg": None,
-                                          "used_run_count": 0,
-                                          "unused_run_count": 0,
-                                          "run_ids_with_mdq_count": 0,
-                                          "note": "x"},
-        "G4_step_retry_count_diff": {"value": None,
-                                       "used_avg": None,
-                                       "unused_avg": None,
-                                       "used_run_count": 0,
-                                       "unused_run_count": 0,
-                                       "note": "x"},
         "D3_typical_query_rate": {"value": None,
                                     "matched_count": 0,
                                     "total_search": 0,
                                     "per_workflow": {},
                                     "note": "x"},
+        "H1_auto_strategy_distribution": {
+            "value": None, "total_auto_search": 0, "note": "x"
+        },
+        "H2_parent_expansion_rate": {
+            "value": None, "total_parent_requests": 0, "note": "x"
+        },
     }
     md = gen_module.render_markdown(stats)
     # None は「（データ不足）」と置換されていること

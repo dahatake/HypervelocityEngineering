@@ -117,8 +117,8 @@ class TestCheckPlanMdMetadata(unittest.TestCase):
         issues = check_plan_md_metadata(Path("/nonexistent-path-xyz/plan.md"))
         self.assertTrue(any("ファイルが存在しません" in m for m in issues))
 
-    def test_orchestrator_exception_appends_continuation_note_for_multi(self):
-        """orchestrator_ctx 非 None かつ task_scope=multi で継続可注記が追記される。"""
+    def test_orchestrator_context_notes_split_fork_disabled_for_multi(self):
+        """orchestrator_ctx 非 None でも既定では runtime split-fork 無効の注記が付く。"""
         from dag_validation import check_plan_md_metadata
         from orchestrator_context import OrchestratorContext
         import tempfile
@@ -129,7 +129,20 @@ class TestCheckPlanMdMetadata(unittest.TestCase):
                 p, orchestrator_ctx=OrchestratorContext(run_id="r1"),
             )
         self.assertTrue(any("SPLIT_REQUIRED" in m and "実装着手禁止" in m for m in issues))
-        self.assertTrue(any("Orchestrator 配下" in m and "実装継続可" in m for m in issues))
+        self.assertTrue(any("Orchestrator 配下" in m and "runtime split-fork は既定無効" in m for m in issues))
+
+    def test_orchestrator_legacy_split_fork_enabled_adds_continuation_note(self):
+        """legacy opt-in の split_fork_enabled=True では継続可注記が付く。"""
+        from dag_validation import check_plan_md_metadata
+        from orchestrator_context import OrchestratorContext
+        import tempfile
+        body = "# t\nrun_id: x\ntask_scope: multi\ncontext_size: small\nmode: SPLIT\n\nbody\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._make_plan(tmp, body)
+            issues = check_plan_md_metadata(
+                p, orchestrator_ctx=OrchestratorContext(run_id="r1", split_fork_enabled=True),
+            )
+        self.assertTrue(any("split_fork_enabled=True" in m and "実装継続可" in m for m in issues))
 
     def test_orchestrator_exception_applies_for_large_too(self):
         """新仕様: context_size=large 単独でも Orchestrator 配下なら継続可注記が付く。"""
@@ -143,7 +156,7 @@ class TestCheckPlanMdMetadata(unittest.TestCase):
                 p, orchestrator_ctx=OrchestratorContext(run_id="r1"),
             )
         self.assertTrue(any("SPLIT_REQUIRED" in m and "context_size=large" in m for m in issues))
-        self.assertTrue(any("Orchestrator 配下" in m for m in issues))
+        self.assertTrue(any("Orchestrator 配下" in m and "runtime split-fork は既定無効" in m for m in issues))
 
     def test_orchestrator_ctx_none_keeps_existing_message(self):
         """orchestrator_ctx=None なら従来通りの停止メッセージのみ（単独実行モード）。"""

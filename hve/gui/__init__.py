@@ -30,10 +30,21 @@ def run_gui(args=None) -> int:
     try:
         from .app import run_app
     except ImportError as e:
+        import os
         import sys
+
+        # ここに到達するのは「.venv の Python で動作しているが gui extra 未導入」
+        # のケース（例: setup を -NoGui / -Minimal で実行した、または手動 venv）。
+        # `python -m hve gui` をシステム Python で実行した場合は __main__.py の
+        # _reexec_in_venv_if_needed() が先に .venv へ再 exec するため通常ここには来ない。
+        if os.name == "nt":
+            setup_hint = "hve\\setup-hve.cmd            （GUI 依存を含めて再セットアップ）"
+        else:
+            setup_hint = "./hve/setup-hve.sh           （GUI 依存を含めて再セットアップ）"
         print(
-            "[hve.gui] PySide6 がインストールされていません。\n"
-            "  pip install -e .[gui]  でインストールしてください。\n"
+            "[hve.gui] PySide6 がインストールされていません（GUI 依存が未導入です）。\n"
+            f"  - 推奨: {setup_hint}\n"
+            '  - 手動: pip install -e ".[gui]"\n'
             f"  詳細: {e}",
             file=sys.stderr,
         )

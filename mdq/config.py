@@ -17,6 +17,11 @@ Schema (TOML)::
     # by the indexer.
     roots = ["docs", "users-guide", "knowledge"]
 
+    # Repo-root-relative glob patterns of tabular files (CSV / TSV) indexed
+    # row-by-row (FR-MDQ-02). Empty by default so the Skill stays portable:
+    # a repository opts in explicitly.
+    tabular = ["hve-dev/*.csv"]
+
 If no config file is found, ``GENERIC_DEFAULT_ROOTS`` is used. This keeps the
 generic Skill portable across repositories: a fresh clone of any project only
 needs to drop a ``mdq.toml`` to declare its documentation layout.
@@ -71,3 +76,21 @@ def resolve_roots(repo_root: Path,
     if isinstance(raw, list) and raw:
         return [str(r) for r in raw]
     return list(GENERIC_DEFAULT_ROOTS)
+
+
+def resolve_tabular_globs(repo_root: Path,
+                          cli_globs: Optional[list[str]] = None,
+                          config_path: Optional[Path] = None) -> list[str]:
+    """Resolve the effective tabular (CSV / TSV) glob patterns.
+
+    Priority: ``--tabular`` CLI flags > ``[index].tabular`` in config file >
+    empty list. Empty means tabular files are not indexed at all, which keeps
+    the Skill portable to repositories that have no such inventories.
+    """
+    if cli_globs:
+        return list(cli_globs)
+    cfg = load_config(repo_root, explicit=config_path)
+    raw = cfg.get("index", {}).get("tabular")
+    if isinstance(raw, list) and raw:
+        return [str(g) for g in raw]
+    return []

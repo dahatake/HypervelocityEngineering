@@ -33,8 +33,23 @@ _ARCH_KIND_MAP: Dict[str, str] = {
     "Webフロントエンド+クラウド":    "web-cloud",
     "Webフロントエンド ＋ クラウド": "web-cloud",
     "データデータフロー処理":              "batch",
+    "データフロー処理":                  "batch",
     "バッチ":                        "batch",
 }
+
+_BATCH_KEYWORDS: tuple[str, ...] = (
+    "バッチ",
+    "etl",
+    "集計",
+    "データ処理",
+    "データパイプライン",
+    "dwh",
+    "analytics",
+    "分析",
+)
+# 短い英字語 ``BI`` だけは BIBLE 等の部分一致を避ける。他の語は
+# 「DWH に関する推薦」のような複合表記も拾うため、意図的に部分一致とする。
+_BI_KEYWORD_RE = re.compile(r"(?<![A-Za-z0-9])bi(?![A-Za-z0-9])", re.IGNORECASE)
 
 _CATALOG_SECTION = "A) サマリ表（全APP横断）"
 _DEFAULT_CATALOG_PATH = "docs/catalog/app-arch-catalog.md"
@@ -123,9 +138,27 @@ def _normalize_arch_whitespace(arch: str) -> str:
 
 
 def _classify_arch(arch: str) -> Optional[str]:
-    """推薦アーキテクチャ文字列を内部分類に変換する。None = 未知。"""
-    normalized = _normalize_arch_whitespace(arch)
-    return _ARCH_KIND_MAP.get(normalized)
+    """推薦アーキテクチャ文字列を内部分類に変換する。None = 空白のみを含む空入力。
+
+    カタログ値に Markdown 強調マーカー（``**…**``）が付与されている
+    ケース（生成 Sub-Agent が出力契約に違反したケース）でも分類できるよう、
+    分類直前に先頭/末尾の ``*`` を除去する。``_parse_catalog`` の戻り値
+    （生文字列）は変更しない。
+    """
+    normalized = _normalize_arch_whitespace(arch).strip("*").strip()
+    if not normalized:
+        return None
+
+    exact_kind = _ARCH_KIND_MAP.get(normalized)
+    if exact_kind:
+        return exact_kind
+
+    normalized_lower = normalized.lower()
+    if any(keyword in normalized_lower for keyword in _BATCH_KEYWORDS):
+        return "batch"
+    if _BI_KEYWORD_RE.search(normalized):
+        return "batch"
+    return "web-cloud"
 
 
 def _parse_catalog(catalog_path: str) -> Dict[str, str]:
@@ -159,6 +192,15 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
         + r")[^\n]*\n(.*?)(?=\n##\s|\Z)",
         re.DOTALL,
     )
+    # numbered: 生成 Sub-Agent が出力契約に違反し、`## A) …` ではなく
+    #          `## 2. Architecture Selection Summary` のような番号付き見出しを
+    #          出力したケースを受理する。誤マッチを防ぐため
+    #          `サマリ` / `Summary` キーワードを必須とし、`## 1. Metadata` 等の
+    #          非 Summary セクションは選ばない。loose と同様 WARN を出す。
+    numbered_re = re.compile(
+        r"##\s*\d+[.)、]?\s*[^\n]*?(?:サマリ|Summary)[^\n]*\n(.*?)(?=\n##\s|\Z)",
+        re.DOTALL | re.IGNORECASE,
+    )
 
     m = canonical_re.search(content)
     if not m:
@@ -172,9 +214,22 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
                 file=sys.stderr,
             )
         else:
-            raise ValueError(
-                f"catalog に `{_CATALOG_SECTION}` セクションが見つかりません: {catalog_path}"
-            )
+            m = numbered_re.search(content)
+            if m:
+                actual_heading = re.search(
+                    r"^##\s*\d+[.)、]?[^\n]*?(?:サマリ|Summary)[^\n]*",
+                    content, re.MULTILINE | re.IGNORECASE,
+                )
+                actual = actual_heading.group(0) if actual_heading else "(unknown)"
+                print(
+                    f"⚠️ WARNING: catalog の見出しが canonical (`## {_CATALOG_SECTION_CANONICAL}`) と異なります: "
+                    f"`{actual}` を受理しました。出力契約に合わせて見出しを揃えることを推奨します: {catalog_path}",
+                    file=sys.stderr,
+                )
+            else:
+                raise ValueError(
+                    f"catalog に `{_CATALOG_SECTION}` セクションが見つかりません: {catalog_path}"
+                )
 
     section = m.group(1)
 
@@ -200,7 +255,7 @@ def _parse_catalog(catalog_path: str) -> Dict[str, str]:
         return -1
 
     appid_col = _find_column_index(["APP-ID"])
-    arch_col = _find_column_index(["推薦アーキテクチャ"])
+    arch_col = _find_column_index(["推薦アーキテクチャ", "Primary Arch"])
 
     if appid_col < 0:
         raise ValueError(
@@ -369,7 +424,7 @@ def classify_architecture(arch: str) -> Optional[str]:
     """推薦アーキテクチャ文字列を内部分類に変換する。
 
     Returns:
-        "web-cloud" | "batch" | None（未知 / 未マッピング）
+        "web-cloud" | "batch" | None（空白のみを含む空入力）
     """
     return _classify_arch(arch)
 

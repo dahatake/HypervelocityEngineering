@@ -35,6 +35,7 @@
 #   BRANCH      — Target branch (default: main)
 #   STEPS       — Comma-separated step IDs
 #   ISSUE_NO    — Issue number for advance subcommand
+#   SKIP_REVIEW — Set to "1" to disable adversarial-review for manual Cloud Issues
 
 set -euo pipefail
 
@@ -97,6 +98,7 @@ Environment Variables (for default/advance):
   BRANCH      Target branch (default: main)
   STEPS       Comma-separated step IDs
   ISSUE_NO    Completed issue number (for advance)
+  SKIP_REVIEW Set to "1" to disable adversarial-review
   DRY_RUN     Set to "1" for dry-run mode
 
 Examples:
@@ -181,11 +183,20 @@ main() {
         [[ -n "${BRANCH:-}" ]]   && args+=(--branch "${BRANCH}")
         [[ -n "${STEPS:-}" ]]    && args+=(--steps "${STEPS}")
         [[ -n "${REPO:-}" ]]     && args+=(--repo "${REPO}")
+        [[ "${SKIP_REVIEW:-0}" == "1" ]] && args+=(--skip-review)
         [[ "${DRY_RUN:-0}" == "1" ]] && args+=(--dry-run)
         exec "${_SCRIPT_DIR}/orchestrate.sh" "${args[@]}"
       elif (( $# > 0 )); then
-        # Pass all CLI args directly (including --workflow etc.)
-        exec "${_SCRIPT_DIR}/orchestrate.sh" "$@"
+        # Pass CLI args directly, while preserving the environment opt-out.
+        local passthrough_args=("$@")
+        if [[ "${SKIP_REVIEW:-0}" == "1" ]]; then
+          local has_skip_review=false arg
+          for arg in "${passthrough_args[@]}"; do
+            [[ "${arg}" == "--skip-review" ]] && has_skip_review=true
+          done
+          [[ "${has_skip_review}" == false ]] && passthrough_args+=(--skip-review)
+        fi
+        exec "${_SCRIPT_DIR}/orchestrate.sh" "${passthrough_args[@]}"
       else
         echo "Error: WORKFLOW environment variable or --workflow option is required" >&2
         echo ""

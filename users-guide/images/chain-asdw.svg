@@ -48,48 +48,40 @@
   <text class="agent" x="80" y="313">Dev-Microservice-Azure-AddServiceDeploy</text>
 
   <rect class="box service" x="380" y="260" width="280" height="72"/>
-  <text class="step" x="400" y="290">Step.2.3T テスト仕様書</text>
-  <text class="agent" x="400" y="313">Arch-TDD-TestSpec</text>
+  <text class="step" x="400" y="290">Step.2.3TC テストコード</text>
+  <text class="agent" x="400" y="313">Dev-Microservice-Azure-ServiceTestCoding</text>
 
   <rect class="box service" x="700" y="260" width="280" height="72"/>
-  <text class="step" x="720" y="290">Step.2.3TC テストコード</text>
-  <text class="agent" x="720" y="313">Dev-Microservice-Azure-ServiceTestCoding</text>
+  <text class="step" x="720" y="290">Step.2.4 サービス実装</text>
+  <text class="agent" x="720" y="313">Dev-Microservice-Azure-ServiceCoding-AzureFunctions</text>
 
   <rect class="box service" x="1020" y="260" width="280" height="72"/>
-  <text class="step" x="1040" y="290">Step.2.4 サービス実装</text>
-  <text class="agent" x="1040" y="313">Dev-Microservice-Azure-ServiceCoding-AzureFunctions</text>
+  <text class="step" x="1040" y="290">Step.2.5 Compute Deploy</text>
+  <text class="agent" x="1040" y="313">Dev-Microservice-Azure-ComputeDeploy-AzureFunctions</text>
 
-  <rect class="box service" x="60" y="390" width="280" height="72"/>
-  <text class="step" x="80" y="420">Step.2.5 Compute Deploy</text>
-  <text class="agent" x="80" y="443">Dev-Microservice-Azure-ComputeDeploy-AzureFunctions</text>
+  <rect class="box ui" x="60" y="390" width="280" height="72"/>
+  <text class="step" x="80" y="420">Step.3.0TC UI テストコード</text>
+  <text class="agent" x="80" y="443">Dev-Microservice-Azure-UITestCoding</text>
 
   <rect class="box ui" x="380" y="390" width="280" height="72"/>
-  <text class="step" x="400" y="420">Step.3.0T UI テスト仕様書</text>
-  <text class="agent" x="400" y="443">Arch-TDD-TestSpec</text>
+  <text class="step" x="400" y="420">Step.3.1 UI 実装</text>
+  <text class="agent" x="400" y="443">Dev-Microservice-Azure-UICoding</text>
 
   <rect class="box ui" x="700" y="390" width="280" height="72"/>
-  <text class="step" x="720" y="420">Step.3.0TC UI テストコード</text>
-  <text class="agent" x="720" y="443">Dev-Microservice-Azure-UITestCoding</text>
+  <text class="step" x="720" y="420">Step.3.2 SWA Deploy</text>
+  <text class="agent" x="720" y="443">Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps</text>
 
   <rect class="box ui" x="1020" y="390" width="280" height="72"/>
-  <text class="step" x="1040" y="420">Step.3.1 UI 実装</text>
-  <text class="agent" x="1040" y="443">Dev-Microservice-Azure-UICoding</text>
+  <text class="step" x="1040" y="420">Step.3.3 UI E2E</text>
+  <text class="agent" x="1040" y="443">E2ETesting-Playwright</text>
 
-  <rect class="box ui" x="60" y="520" width="280" height="72"/>
-  <text class="step" x="80" y="550">Step.3.2 SWA Deploy</text>
-  <text class="agent" x="80" y="573">Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps</text>
+  <rect class="box qa" x="60" y="520" width="280" height="72"/>
+  <text class="step" x="80" y="550">Step.4.1 WAF レビュー</text>
+  <text class="agent" x="80" y="573">QA-AzureArchitectureReview</text>
 
-  <rect class="box ui" x="380" y="520" width="280" height="72"/>
-  <text class="step" x="400" y="550">Step.3.3 UI E2E</text>
-  <text class="agent" x="400" y="573">E2ETesting-Playwright</text>
-
-  <rect class="box qa" x="700" y="520" width="280" height="72"/>
-  <text class="step" x="720" y="550">Step.4.1 WAF レビュー</text>
-  <text class="agent" x="720" y="573">QA-AzureArchitectureReview</text>
-
-  <rect class="box qa" x="1020" y="520" width="280" height="72"/>
-  <text class="step" x="1040" y="550">Step.4.2 整合性チェック</text>
-  <text class="agent" x="1040" y="573">QA-AzureDependencyReview</text>
+  <rect class="box qa" x="380" y="520" width="280" height="72"/>
+  <text class="step" x="400" y="550">Step.4.2 整合性チェック</text>
+  <text class="agent" x="400" y="573">QA-AzureDependencyReview</text>
 
   <!-- Arrows -->
   <path class="arrow" d="M340 166 L380 166"/>
@@ -104,9 +96,6 @@
   <path class="arrow" d="M660 426 L700 426"/>
   <path class="arrow" d="M980 426 L1020 426"/>
   <path class="arrow" d="M1160 462 L200 520"/>
-  <path class="arrow" d="M340 556 L380 556"/>
-  <path class="arrow" d="M660 556 L700 556"/>
-  <path class="arrow" d="M660 556 L1020 556"/>
 
   <rect class="legend" x="60" y="670" width="1240" height="170" rx="10" ry="10"/>
   <text x="84" y="704" class="step">凡例</text>

@@ -102,6 +102,34 @@ class TestFatalIntegrationViaSubprocess(unittest.TestCase):
             except OSError:
                 pass
 
+    def test_large_windows_exit_code_does_not_overflow(self) -> None:
+        """Windows の符号なし 32bit 終了コードが ``finished_with_code`` emit で
+        OverflowError にならないことを保証する回帰テスト。
+
+        修正前は ``Signal(int)``（Qt 符号付き 32bit, 上限 2_147_483_647）のため
+        ``0xC000013A``(=3221225786, Ctrl-C 終了) の emit で
+        ``libshiboken: Overflow`` → OverflowError が発生していた。
+        ``Signal("qlonglong")``(64bit) 化により解消。
+        """
+        win_ctrl_c_exit = 3221225786  # 0xC000013A, 2**31-1=2147483647 を超える
+
+        class _FakeProc:
+            """``returncode`` を直接注入する Popen 代替（プラットフォーム非依存）。"""
+
+            def __init__(self, code: int) -> None:
+                self.returncode = code
+                self.stdout = None  # run() の「stdout is None」分岐で即 emit させる
+                self.pid = -1
+
+            def wait(self) -> int:
+                return self.returncode
+
+        reader = SubprocessReader(_FakeProc(win_ctrl_c_exit), parent=self.page)
+        received: list = []
+        reader.finished_with_code.connect(received.append)
+        reader.run()  # 直接実行（スレッド不要）。crash していた emit 経路を通す
+        self.assertEqual(received, [win_ctrl_c_exit])
+
     def test_no_fatal_marker_keeps_state_clean(self) -> None:
         proc = self._spawn(_MOCK_SCRIPT_NORMAL_EXIT)
         try:

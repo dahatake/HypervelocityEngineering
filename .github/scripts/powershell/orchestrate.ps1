@@ -1,9 +1,8 @@
 # orchestrate.ps1 — ワークフロー起動（Issue 一括作成 + Copilot アサイン）
 #
 # ============================================================
-# DEPRECATED: このスクリプトは GitHub Actions ワークフローからは
-# 直接呼び出されていません（grep で参照 0 件を確認済み）。
-# ローカルでのデバッグ・手動実行用途として残されています。
+# LEGACY MANUAL ENTRY: このスクリプトは GitHub Actions からは直接呼ばれませんが、
+# run-workflow.ps1 のローカル手動 Cloud Issue 作成経路として利用されます。
 # 本番フローは .github/workflows/auto-*-reusable.yml を使用してください。
 # ============================================================
 #
@@ -33,7 +32,7 @@ param(
     [string]$AppId = '',
     [string]$ResourceGroup = '',
     [string]$UsecaseId = '',
-    [string]$AppId = '',
+    [string]$JobIds = '',
     [string]$Comment = '',
     [switch]$SkipReview,
     [switch]$SkipQa,
@@ -102,8 +101,8 @@ function script:BuildRootRef {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefAppId = '',
-        [string]$AutoReview = 'true',
+        [string]$RefJobIds = '',
+        [string]$AdversarialReview = 'true',
         [string]$AutoQa = 'true'
     )
 
@@ -111,10 +110,9 @@ function script:BuildRootRef {
     $parts += "<!-- root-issue: #$RootIssueNum -->"
     $parts += "<!-- branch: $RefBranch -->"
     if ($RefResourceGroup) { $parts += "<!-- resource-group: $RefResourceGroup -->" }
-    if ($RefAppId) { $parts += "<!-- app-id: $RefAppId -->" }
     if ($RefAppId) { $parts += "<!-- app-ids: $RefAppId -->" }
-    $parts += "<!-- auto-review: $AutoReview -->"
-    $parts += "<!-- auto-context-review: true -->"
+    if ($RefJobIds) { $parts += "<!-- job-ids: $RefJobIds -->" }
+    $parts += "<!-- adversarial-review: $AdversarialReview -->"
     $parts += "<!-- auto-qa: $AutoQa -->"
     return $parts -join "`n"
 }
@@ -152,21 +150,21 @@ function script:RenderTemplate {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefAppId = '',
+        [string]$RefJobIds = '',
         [string]$RefUsecaseId = '',
         [string]$AdditionalComment = '',
-        [string]$AutoReview = 'true',
+        [string]$AdversarialReview = 'true',
         [string]$AutoQa = 'true'
     )
 
     $bodyContent = LoadTemplate -TemplatePath $TemplatePath
     if (-not $bodyContent) { return '' }
 
-    $rootRef = BuildRootRef -RootIssueNum $RootIssueNum -RefBranch $RefBranch -RefResourceGroup $RefResourceGroup -RefAppId $RefAppId -RefAppId $RefAppId -AutoReview $AutoReview -AutoQa $AutoQa
+    $rootRef = BuildRootRef -RootIssueNum $RootIssueNum -RefBranch $RefBranch -RefResourceGroup $RefResourceGroup -RefAppId $RefAppId -RefJobIds $RefJobIds -AdversarialReview $AdversarialReview -AutoQa $AutoQa
     $additionalSection = BuildAdditionalSection -AdditionalComment $AdditionalComment
     $appIdSection = BuildAppIdSection -RefAppId $RefAppId
     $rgSection = BuildRgSection -RefResourceGroup $RefResourceGroup
-    $jobSection = BuildJobSection -RefAppId $RefAppId
+    $jobSection = BuildJobSection -RefAppId $RefJobIds
 
     $bodyContent = $bodyContent -replace '\{root_ref\}', $rootRef
     $bodyContent = $bodyContent -replace '\{additional_section\}', $additionalSection
@@ -191,7 +189,7 @@ function script:BuildRootIssueBody {
         [string]$RefBranch = 'main',
         [string]$RefResourceGroup = '',
         [string]$RefAppId = '',
-        [string]$RefAppId = '',
+        [string]$RefJobIds = '',
         [string]$RefUsecaseId = '',
         [string]$AdditionalComment = '',
         [string]$SkipReviewStr = 'false',
@@ -201,7 +199,7 @@ function script:BuildRootIssueBody {
     $prefix = $script:WorkflowPrefixMap[$WorkflowId]
     $displayName = $script:WorkflowDisplayNames[$WorkflowId]
 
-    $autoReview = if ($SkipReviewStr -eq 'true') { 'false' } else { 'true' }
+    $adversarialReview = if ($SkipReviewStr -eq 'true') { 'false' } else { 'true' }
     $autoQa = if ($SkipQaStr -eq 'true') { 'false' } else { 'true' }
 
     $lines = @()
@@ -209,10 +207,9 @@ function script:BuildRootIssueBody {
     $lines += ''
     $lines += "<!-- branch: $RefBranch -->"
     if ($RefResourceGroup) { $lines += "<!-- resource-group: $RefResourceGroup -->" }
-    if ($RefAppId) { $lines += "<!-- app-id: $RefAppId -->" }
     if ($RefAppId) { $lines += "<!-- app-ids: $RefAppId -->" }
-    $lines += "<!-- auto-review: $autoReview -->"
-    $lines += "<!-- auto-context-review: true -->"
+    if ($RefJobIds) { $lines += "<!-- job-ids: $RefJobIds -->" }
+    $lines += "<!-- adversarial-review: $adversarialReview -->"
     $lines += "<!-- auto-qa: $autoQa -->"
     $lines += ''
     $lines += "ワークフロー: **$displayName**"
@@ -221,7 +218,7 @@ function script:BuildRootIssueBody {
     if ($RefAppId) { $lines += "APP-ID: ``$RefAppId``" }
     if ($RefResourceGroup) { $lines += "リソースグループ: ``$RefResourceGroup``" }
     if ($RefUsecaseId) { $lines += "ユースケースID: ``$RefUsecaseId``" }
-    if ($RefAppId) { $lines += "データフローアプリ ID: ``$RefAppId``" }
+    if ($RefJobIds) { $lines += "データフローアプリ ID: ``$RefJobIds``" }
 
     if ($AdditionalComment) {
         $lines += ''
@@ -248,9 +245,9 @@ Options:
   -AppId <id>            ASDW: Application ID
   -ResourceGroup <name>  ASDW/ADFDV: Resource group name
   -UsecaseId <id>        ASDW: Usecase ID
-  -AppId <ids>      ADFDV: Batch job IDs (comma-separated)
+    -JobIds <ids>          ADFDV: Batch job IDs (comma-separated)
   -Comment <text>        Additional comment
-  -SkipReview            Skip self-review
+    -SkipReview            Skip adversarial review (legacy option name)
   -SkipQa                Skip QA questionnaire
   -Repo <owner/repo>     Repository (env: REPO)
   -DryRun                Preview without API calls
@@ -284,7 +281,7 @@ if (-not $Repo -and -not $dryRunMode) {
     exit 1
 }
 
-$autoReview = if ($SkipReview) { 'false' } else { 'true' }
+$adversarialReview = if ($SkipReview) { 'false' } else { 'true' }
 $autoQa = if ($SkipQa) { 'false' } else { 'true' }
 
 # Parse selected steps
@@ -404,13 +401,13 @@ foreach ($lbl in @($wf.state_labels.initialized, $wf.state_labels.ready, $wf.sta
     if ($lbl) { try { New-GitHubLabel -Name $lbl -Color 'ededed' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" } }
 }
 try { New-GitHubLabel -Name $triggerLabel -Color 'ededed' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
-try { New-GitHubLabel -Name 'auto-context-review' -Color '1D76DB' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
+try { New-GitHubLabel -Name 'adversarial-review' -Color 'B60205' -Description 'explicit adversarial review trigger for Copilot review workflow' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
 try { New-GitHubLabel -Name 'auto-qa' -Color 'BFD4F2' -Repo $Repo -Confirm:$false } catch { Write-Debug "Suppressed: $_" }
 
 # 2. Create Root Issue
 Write-Information ''
 Write-Information '📝 Root Issue 作成...'
-$rootBody = BuildRootIssueBody -WorkflowId $workflowId -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -SkipReviewStr $(if ($SkipReview) { 'true' } else { 'false' }) -SkipQaStr $(if ($SkipQa) { 'true' } else { 'false' })
+$rootBody = BuildRootIssueBody -WorkflowId $workflowId -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefJobIds $JobIds -RefUsecaseId $UsecaseId -AdditionalComment $Comment -SkipReviewStr $(if ($SkipReview) { 'true' } else { 'false' }) -SkipQaStr $(if ($SkipQa) { 'true' } else { 'false' })
 $rootTitle = "[$prefix] $displayName"
 $initializedLabel = $wf.state_labels.initialized
 $rootLabelsJson = ConvertTo-Json @($triggerLabel, $initializedLabel) -Compress
@@ -420,8 +417,10 @@ $rootParts = $rootResult -split '\s+'
 $rootNum = $rootParts[0]
 Write-Information "  ✅ Root Issue 作成: #$rootNum"
 
-# Add auto-context-review / auto-qa labels to Root
-try { Add-IssueLabel -IssueNum $rootNum -Label 'auto-context-review' -Repo $Repo } catch { Write-Debug "Suppressed: $_" }
+# Add adversarial-review / auto-qa labels to Root
+if ($adversarialReview -eq 'true') {
+    try { Add-IssueLabel -IssueNum $rootNum -Label 'adversarial-review' -Repo $Repo } catch { Write-Debug "Suppressed: $_" }
+}
 if ($autoQa -eq 'true') {
     try { Add-IssueLabel -IssueNum $rootNum -Label 'auto-qa' -Repo $Repo } catch { Write-Debug "Suppressed: $_" }
 }
@@ -430,7 +429,8 @@ if ($autoQa -eq 'true') {
 Write-Information ''
 Write-Information '📦 Sub-Issue 一括生成...'
 
-$stepLabels = @($triggerLabel, 'auto-context-review')
+$stepLabels = @($triggerLabel)
+if ($adversarialReview -eq 'true') { $stepLabels += 'adversarial-review' }
 if ($autoQa -eq 'true') { $stepLabels += 'auto-qa' }
 
 $appIdSuffix = ''
@@ -447,10 +447,10 @@ foreach ($step in $wf.steps) {
     $issueBody = ''
 
     if ($step.body_template_path) {
-        $issueBody = RenderTemplate -TemplatePath $step.body_template_path -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -RefUsecaseId $UsecaseId -AdditionalComment $Comment -AutoReview $autoReview -AutoQa $autoQa
+        $issueBody = RenderTemplate -TemplatePath $step.body_template_path -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefJobIds $JobIds -RefUsecaseId $UsecaseId -AdditionalComment $Comment -AdversarialReview $adversarialReview -AutoQa $autoQa
     }
     if (-not $issueBody) {
-        $rootRef = BuildRootRef -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefAppId $AppId -AutoReview $autoReview -AutoQa $autoQa
+        $rootRef = BuildRootRef -RootIssueNum $rootNum -RefBranch $Branch -RefResourceGroup $ResourceGroup -RefAppId $AppId -RefJobIds $JobIds -AdversarialReview $adversarialReview -AutoQa $autoQa
         $additionalSection = BuildAdditionalSection -AdditionalComment $Comment
         $issueBody = "$rootRef`n`nStep.${sid}: $($step.title)$additionalSection"
     }

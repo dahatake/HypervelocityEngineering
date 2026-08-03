@@ -1,6 +1,6 @@
 > AI Agent アプリケーション定義（Step 1）を実施し、docs/agent/agent-application-definition.md を作成する。
 
-> **WORK**: `/work/Arch-AIAgentDesign-Step1/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-AIAgentDesign-Step1/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -25,6 +25,7 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 - `task-questionnaire` — 不明点の優先度付き質問票作成
+- `ai-agent-capability-contract` — AG-CAP-01 Goal Contract と後続Stepへ渡す能力判定の共通契約
 
 ## 1) 目的と非目的
 - 対象：指定されたユースケースに対する **AI Agent の設計 Step 1（アプリケーション定義）** を実施する。
@@ -53,7 +54,7 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog.md` | 画面一覧。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
 | 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
 | 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
 | 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
@@ -76,6 +77,15 @@
 ## 3) 出力フォーマット（Markdown固定スキーマ）
 1) Agent アプリケーション定義書（作成/更新）
    - `docs/agent/agent-application-definition.md`
+  - `Requirements` 内に `### Goal Contract` を必ず含める
+  - Goal Contract の詳細は Skill `ai-agent-capability-contract` の AG-CAP-01 に従う
+  - Success criteria は条件群全体、Criterion はその個別評価単位とする
+  - Criterion ID は本文内で一意な `GC-001`, `GC-002`, ... の3桁連番とする
+  - 各Criterionに Description / Required for Done / Evaluator type / Evaluation procedure / Evidence required / Failure action / Source を含める
+  - Evaluator type は `schema | rule | tool-result | test | human-approval` から選ぶ
+  - Done は `Required for Done: yes` の全 Success criteria が PASS した状態として記載する
+  - Mutation Intent は共通契約 §5.2 に従い、Step 1 で `required | none | TBD` を先行判定する
+  - 未確定値は Goal Contract 内を `TBD（要確認: {理由}。Q-GC-NNN参照）` とし、同じIDの質問を Open Questions に記載する
 
 2) 進捗ログ（追記専用）
    - `{WORK}ai-agent-design-work-status.md`
@@ -95,13 +105,24 @@
 - 受け入れ条件（AC）を定義する：
   - Step 1（定義）の設計書が作成されている
   - `docs/agent/agent-application-definition.md` が存在し、全セクションが埋まっている
+  - `Requirements > Goal Contract` に Mission / Mutation Intent / Success criteria / Evaluator / Evidence / Failure・Partial・Handoff がある
+  - Mission と各CriterionのDescriptionは根拠付きで確定している
+  - 既知の各criterionにEvaluatorとEvidence要件がある
+  - Mutation Intent、数値閾値、latency / Tool / cost制約は、根拠不足時に限り理由付きTBDと対応Open Questionを許可する
 
 ### 5.1 Step 1: アプリケーション定義
 - `users-guide/08-ai-agent.md` の **Step 1** セクションの Prompt ガイドラインに従い、以下を実施する：
   - ユースケース記述を読み、AI Agent の目的・スコープ・要求を整理する
+  - ユーザー価値を表す Mission を1文で記載する
+  - ユースケースの主要・例外フローと `service-catalog-matrix.md` のAPI操作から永続的なCreate / Update / Deleteの有無を確認し、`Mutation Intent: required | none | TBD` を根拠付きで判定する
+  - Success criteria を Criterion ID 単位で記載し、各criterionに決定的な Evaluator と Evidence 要件を設定する
+  - 各Criterionについて、目的達成に不可欠なら`Required for Done: yes`、補助なら`no`、判定根拠不足なら理由付きTBDとする
+  - Required flagがTBDの場合はStep 1のOpen Questionとして許可するが、AAG Step 3完了までに解決が必要と明記する
+  - Failure / Partial success / Handoff 条件と、Runtime Goal Loop の上限判断に必要な latency / Tool / cost 制約を抽出する
+  - 数値・閾値に入力根拠がなければ推測せず Open Questions へ移す
   - `docs/agent/agent-application-definition.md` を作成する
   - 出力形式は `users-guide/08-ai-agent.md` Step 1 の Output requirements に従う
-- **完了判定**: Overview / Scope / Requirements / NFR / Security & Compliance / Dependencies / Ops & Monitoring / Open Questions の全セクションが埋まっている
+- **完了判定**: Overview / Scope / Requirements / NFR / Security & Compliance / Dependencies / Ops & Monitoring / Open Questions の全セクションが埋まっている。Mission、各CriterionのDescription、既知criterionのEvaluator/Evidence、Failure/Partial/Handoffは根拠付きで確定する。Mutation Intent、Required flag、数値制約を確定できない場合だけ、Goal Contractの理由付きTBDと同じ`Q-GC-NNN`を持つOpen Questionの両方を必須とし、AAG Step 3までの解決事項にする
 
 ### 5.2 進捗ログ追記（必須）
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：

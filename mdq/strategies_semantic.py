@@ -42,9 +42,8 @@ _PERCENTILE_TOLERANCE: float = 1.0
 # Cap iterations to keep indexing time bounded.
 _BS_MAX_ITER: int = 8
 
-# Default contextualizer template (Q11=B). See mdq.contextualizer for the
-# stand-alone module; we duplicate the minimal logic here to keep the
-# strategy import-light.
+# Default contextualizer template (Q11=B). Defined here so the strategy stays
+# import-light; this constant is the single source of truth for the template.
 _CTX_TEMPLATE = "[Context] {path} > {heading_path}\n\n{body}"
 
 # Module-level runtime overrides set by the CLI (mdq.cli.cmd_index).

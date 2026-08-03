@@ -33,9 +33,9 @@ def test_has_blocking_gaps_property(tmp_path: Path) -> None:
     r = build_step1_plan_review(
         ["aad-web"], tmp_path, steps_by_workflow={"aad-web": []}
     )
-    # aad-web は implicit 依存で app-arch-catalog.md を要求する。
-    # tmp_path 上にファイルなしかつ producer 解決済なら gap として現れる。
-    assert isinstance(r.has_blocking_gaps, bool)
+    # ブロッキング判定は Phase A Precheck (run_step1_precheck) に統一済み。
+    # プランレビュー Dialog の gaps は補完サジェスト情報のみで常に False。
+    assert r.has_blocking_gaps is False
 
 
 def test_parameters_collected_when_inputs_given(tmp_path: Path) -> None:
@@ -63,28 +63,28 @@ def test_file_status_enum_values_used() -> None:
 
 
 def test_ard_group_id_expanded_to_real_step_ids(tmp_path: Path) -> None:
-    """ARD グループ ID "4" を渡すと実 Step 4.1 / 4.3 の output が列挙される。
+    """ARD グループ ID "4" を渡すと実 Step 3.1 / 3.3 の output が列挙される。
 
     バグ: 旧実装では plan_review_collector が expand_group_step_ids を呼ばず、
-    ARD 実 Step (4.1, 4.3 等) が plan review の outputs から脱落していた。
+    ARD 実 Step (3.1, 3.3 等) が plan review の outputs から脱落していた。
     """
     r = build_step1_plan_review(
         ["ard"], tmp_path, steps_by_workflow={"ard": ["4"]}
     )
     out_paths = {o.path for o in r.outputs}
-    # Step 4.1 と 4.3 の output_paths が含まれる（4.2 は output_paths_template
+    # Step 3.1 と 3.3 の output_paths が含まれる（3.2 は output_paths_template
     # のため fanout 未展開時は outputs に出ない）。
     assert "docs/catalog/use-case-skeleton.md" in out_paths, (
-        f"ARD 4.1 の output が脱落: {sorted(out_paths)}"
+        f"ARD 3.1 の output が脱落: {sorted(out_paths)}"
     )
     assert "docs/catalog/use-case-catalog.md" in out_paths, (
-        f"ARD 4.3 の output が脱落: {sorted(out_paths)}"
+        f"ARD 3.3 の output が脱落: {sorted(out_paths)}"
     )
 
 
 def test_ard_group_4_resolves_use_case_catalog_gap(tmp_path: Path) -> None:
     """ARD グループ "4" 選択時、aas 側の use-case-catalog.md 要求が
-    MISSING_PRODUCED に昇格する（ARD 4.3 が producer として解決される）。
+    MISSING_PRODUCED に昇格する（ARD 3.3 が producer として解決される）。
     """
     r = build_step1_plan_review(
         ["ard", "aas"],
@@ -99,11 +99,11 @@ def test_ard_group_4_resolves_use_case_catalog_gap(tmp_path: Path) -> None:
     assert target, "aas/1 の use-case-catalog.md 入力が見つからない"
     inp = target[0]
     assert inp.status == FileStatus.MISSING_PRODUCED, (
-        f"ARD 4.3 が producer として解決されていない: status={inp.status}, "
+        f"ARD 3.3 が producer として解決されていない: status={inp.status}, "
         f"producer={inp.producer}"
     )
-    assert inp.producer == ("ard", "4.3"), (
-        f"producer が ARD 4.3 ではない: {inp.producer}"
+    assert inp.producer == ("ard", "3.3"), (
+        f"producer が ARD 3.3 ではない: {inp.producer}"
     )
 
 

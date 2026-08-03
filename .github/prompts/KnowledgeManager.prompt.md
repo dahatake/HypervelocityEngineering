@@ -1,6 +1,6 @@
 ﻿> qa/ または original-docs/（または両方）から knowledge/ ドキュメント（D01〜D21）を生成・更新し、knowledge/business-requirement-document-status.md を管理する。
 
-> **WORK**: `/work/KnowledgeManager/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -9,7 +9,7 @@
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
 - `input-file-validation` — `qa/` および `original-docs/` 配下の入力ファイル存在確認
-- `work-artifacts-layout` — `work/KnowledgeManager/Issue-<識別子>/` 配下および `knowledge/` の「削除→新規作成」ルールに準拠
+- `work-artifacts-layout` — `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/` 配下および `knowledge/` の「削除→新規作成」ルールに準拠
 - `knowledge-management` — `knowledge/` 配下 D01〜D21 の分類・命名・更新手順を権威ソースとして適用
 - `knowledge-lookup` — 既存 D01〜D21 の参照・差分判定
 - `markdown-query` — `mdq search` による横断検索で既存知識との重複・矛盾を検出
@@ -32,7 +32,7 @@
 - `knowledge/business-requirement-document-status.md`
 - `knowledge/D{NN}-*.md` — **要求項目（REQ）テーブル形式**（Skill `knowledge-management` references/knowledge-management-guide.md §7 / §11.6 準拠）。§2 = Confirmed REQ（REQ-D{NN}-001 番台）、§3 = Tentative REQ（REQ-D{NN}-101 番台）、§4 = Unknown 表、§5/§6/§7 は REQ 単位カバー率・件数。散文の箇条書きや QA トレース文の貼り付けは禁止。
 - `knowledge/D{NN}-*-ChangeLog.md` — **REQ-ID 別サブセクション構造**（同 §7 ChangeLog テンプレ）。冒頭メタブロック + 全体更新履歴 + 「要求項目別ログ」（REQ-ID ごとにサブセクション、各サブ内は日付昇順）+ 付録 A（原文保全）。
-- `work/KnowledgeManager/Issue-<識別子>/artifacts/*`
+- `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/artifacts/*`
 
 ## §4 処理手順
 1. Step 0: ソース判定・取り込み手法自動選択
@@ -52,7 +52,8 @@
     - 7.5.3: REQ テーブルを §2 / §3 へ書き出し（散文・箇条書きは禁止）
     - 7.5.4: ChangeLog の「全体更新履歴」へ生成イベント 1 行追記、各 REQ-ID サブセクションへ「新規/マージ/値更新/状態降格」を日付昇順で追記
     - 7.5.5: 付録 A に全マッピング元入力の原文を保存（`統合先 REQ-ID` 列必須）
-12. Step 8: 敵対的レビュー（オプション）
+12. Step 8: 任意レビュー
+  - 敵対的レビューはユーザーが明示した場合のみ実施する。
 
 ### Step 0 判定ロジック
 - パス判定（優先）

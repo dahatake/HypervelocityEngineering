@@ -29,8 +29,10 @@ def qapp():
 
 
 def _make_main_window(tmp_path: Path) -> MainWindow:
-    win = MainWindow()
-    win._repo_root = str(tmp_path)
+    # repo_root は構築時に渡す。MainWindow.__init__ 内で
+    # GuiSessionWorkdir.create(self._repo_root) が work/run/<id>/ を作成するため、
+    # 後付け代入では実リポジトリ直下に dir が作られてしまう（隔離が手遅れになる）。
+    win = MainWindow(repo_root=tmp_path)
     return win
 
 
@@ -105,10 +107,13 @@ def test_warning_when_plan_empty_after_catalog_ready(qapp, tmp_path: Path) -> No
 def test_starts_autopilot_controller_on_success(qapp, tmp_path: Path) -> None:
     """catalog 準備 OK + plan 非空 + Yes → AutopilotController が起動する。
 
-    NOTE: 成功パスでは `_activate_autopilot_workbench()` / `_setup_autopilot_log_routing()`
-    / `_update_title()` 等の UI 更新が走り、`MainWindow` のフルセット（
-    CopilotChatPanel / PTY 依存）と組み合わせて Qt イベントループ起因のハングを引き起こす
-    観測あり（既知の問題、本テスト固有）。Controller 起動の確認に絞るため UI 更新側は
+    NOTE: 実装 `_start_autopilot_app_chains_controller` は
+    ``from .autopilot.planner import build_plan`` (= ``hve.gui.autopilot.planner``
+    の re-export) を呼ぶため、patch 対象は ``hve.gui.autopilot.planner.build_plan``
+    でなければ無効化されない。旧テストは ``hve.autopilot.planner.build_plan`` を
+    patch しており実 build_plan が catalog="data" を空 plan に解析 → ``plan.is_empty()``
+    で ``QMessageBox.warning`` モーダルが起動しハングしていた。成功パスの UI 更新
+    (`_activate_autopilot_workbench` 等) は Qt イベントループ起因のハング回避のため
     patch でスタブ化する。
     """
     win = _make_main_window(tmp_path)
@@ -131,7 +136,7 @@ def test_starts_autopilot_controller_on_success(qapp, tmp_path: Path) -> None:
     # AutopilotController(...) コンストラクタを差し替える。
     ctor_mock = MagicMock(return_value=controller_mock)
     with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes), \
-         patch("hve.autopilot.planner.build_plan", return_value=plan), \
+         patch("hve.gui.autopilot.planner.build_plan", return_value=plan), \
          patch("hve.gui.autopilot.child_launcher.AutopilotController", ctor_mock), \
          patch.object(MainWindow, "_activate_autopilot_workbench"), \
          patch.object(MainWindow, "_setup_autopilot_log_routing"), \

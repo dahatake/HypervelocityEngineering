@@ -21,7 +21,7 @@
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
 - `input-file-validation` — テスト戦略書・画面/サービス定義書の存在確認
-- `work-artifacts-layout` — `work/Arch-TDD-TestSpec/Issue-<識別子>/` 配下の成果物構造に準拠
+- `work-artifacts-layout` — `work/run/<run-id>/Arch-TDD-TestSpec/Issue-<識別子>/` 配下の成果物構造に準拠
 - `testing/test-strategy-template` — TDD Red フェーズ test-spec テンプレートに準拠
 - `knowledge-lookup` — 業務要件・受け入れ基準の参照
 - `markdown-query` — 既存 test-spec / 設計書の横断検索
@@ -63,11 +63,25 @@
    - 領域: サービス=API、画面=UI、AI Agent=AI Agent。
    - AC-ID ↔ Test-ID の双方向表を必須記載。
    - 未確定IDは `TBD（要確認）` として両方向表へ同値反映。
+  - 未確定契約は後続 GREEN Step で PASS 必須の実行テストにしない。正式 API ID / path / event / schema / enum 値が未確定の場合は、契約確定待ちとして Questions / 残リスク / blocker に記録し、契約確定後に Contract test 化する。
+  - 各テストケースに **実行環境**（ローカル / CI / デプロイ先）、**外部サービス要否**、**必要な環境変数または設定ファイル**を記載する。
+  - Unit / 実装コード向け TDD RED/GREEN はローカル実行可能を既定とし、外部 I/O は Mock / Stub / Emulator / Testcontainers 等へ切り分ける。
+  - Integration / Post-deploy / E2E は構成済み外部サービスを使用してよいが、接続先・認証・base URL は環境変数またはテスト設定ファイルで注入する。未設定を PASS 扱いしない。
+  - 接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をテスト仕様、README、ログへハードコードしない。
 5. 書き込み安全
    - `large-output-chunking` に従って空ファイル・欠落を防止。
 6. 最終品質レビュー
-   - Skill `adversarial-review` の3観点（機能完全性 / 実践可能性・トレーサビリティ / 保守性）でレビュー記録。
+  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
 </task>
+
+## 最終品質レビュー（単回インライン・セルフチェック）
+
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+- **機能完全性**：必須セクション、対象 API / UI / AI Agent のケース、実行環境・外部サービス要否・必要設定が入力仕様を網羅しているか。
+- **実践可能性・トレーサビリティ**：ATDD templateを適用し、AC-ID ↔ Test-ID双方向表、テストデータ、ダブル、契約、TDD順序が実装前に一意に解釈できるか。
+- **保守性**：未確定契約を実行テストとして固定せず、Questions / blocker / 残リスクに同値で記録し、秘密情報を含めていないか。
+- 問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 <output_contract>
 - 出力先パス（fan-out 子 1 件あたり 1 ファイル、ファイル名は parser キー = `{key}`）:
@@ -75,24 +89,27 @@
   | workflow / Step | fan-out 子の単位（parser キー）| 出力先 |
   |---|---|---|
   | aad-web 2.3 | per-service（`SVC-*`）| `docs/test-specs/{key}-test-spec.md` |
-  | asdw-web 2.3T | per-service（`SVC-*`）| `docs/test-specs/{key}-test-spec.md` |
-  | asdw-web 3.0T | per-screen（`APP-NN-S###`）| `docs/test-specs/{key}-test-spec.md` |
+  | aad-web 2.4 | per-screen（`APP-NN-S###`）| `docs/test-specs/{key}-test-spec.md` |
   | aagd 2.1 | per-agent（`AG-*`）| `docs/test-specs/{key}-test-spec.md` |
 
   - Agent 側で `{key}` 以外のプレースホルダ（`{serviceId}` / `{screenId}` / `{agentId}` 等）を含むパスに書き込んではならない。
-  - 分割時: `work/Arch-TDD-TestSpec/Issue-<識別子>/plan.md`, `subissues.md`
+  - 分割時: `work/run/<run-id>/Arch-TDD-TestSpec/Issue-<識別子>/plan.md`, `subissues.md`
 - 出力フォーマット（必須セクション）:
   - サービス別:
     1) 概要 1.5) ATDD(API) 2) テストケース表 2.5) AC→Test トレーサビリティ
     3) テストデータ 4) テストダブル 5) 契約テスト 6) TDD順序 7) 網羅性 8) Questions 9) Test→AC 逆引き
+    - `2) テストケース表` には `実行環境` / `外部サービス要否` / `必要設定` 列を含める。
   - 画面別:
     1) 概要 1.5) ATDD(UI) 2) E2E/操作シナリオ 2.5) AC→Test
     3) バリデーション 4) テストデータ 4.5) APIモック/ダブル 4.6) API契約検証 4.7) A11y
     5) TDD順序 6) 網羅性 7) Questions 8) Test→AC 逆引き
+    - `2) E2E/操作シナリオ` と `3) バリデーション` には `実行環境` / `外部サービス要否` / `必要設定` 列を含める。
   - AI Agent別:
     1) 概要 1.5) ATDD(AI Agent)（必要情報は同様方針で記載）
+    - テストケース表には `実行環境` / `外部サービス要否` / `必要設定` 列を含め、Azure AI Foundry 等の実呼び出しが必要なケースと mock/stub ケースを区別する。
 - 必須ルール:
   - 出典（ファイル#見出し）を可能な限り表に付与
+  - テストケース表には `実行環境` / `外部サービス要否` / `必要設定` を含める
   - UIカテゴリでは Jest 単体 + Playwright E2E の両観点を含める
 - 文字数/粒度目安:
   - API/シナリオ/依存が実装前に一意に解釈できる粒度

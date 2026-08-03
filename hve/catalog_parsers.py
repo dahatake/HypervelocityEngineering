@@ -12,8 +12,8 @@
 - "app_catalog"        : docs/catalog/app-catalog.md
 - "screen_catalog"     : docs/catalog/screen-catalog-APP-*.md（per-APP 直読み、合成キー ``APP-NN-S###`` を返却）
 - "service_catalog"    : docs/catalog/service-catalog.md
-- "dataflow_catalog"  : docs/dataflow/dataflow-app-catalog.md
-- "agent_catalog"      : docs/agent/agent-application-definition.md
+- "dataflow_catalog"  : docs/catalog/app-catalog.md（AAS の共通カタログを SoT として参照）
+- "agent_catalog"      : docs/agent/agent-architecture.md（Step 2 の Agent Inventory）
 
 == 設計方針 ==
 - カタログは必ず Markdown テーブルまたは見出し ``## {ID}`` 形式で ID を列挙する想定。
@@ -111,7 +111,7 @@ _SCREEN_LOCAL_ID_PATTERN = r"S\d{3,}"
 _SCREEN_CATALOG_FILE_PATTERN = re.compile(r"^screen-catalog-(APP-\d{2,3})\.md$")
 _SERVICE_ID_PATTERN = r"SVC-[A-Za-z0-9_\-]+"
 _APP_ID_PATTERN_DATAFLOW = r"JOB-[A-Za-z0-9_\-]+"
-_AGENT_ID_PATTERN = r"AG-[A-Za-z0-9_\-]+"
+_AGENT_ID_PATTERN = r"(?:AGT|AG)-[A-Za-z0-9_\-]+"
 # Sub-9 (D-2 / ADR-0003): ARD fan-out 用 ID パターン
 _BIZ_ID_PATTERN = r"BIZ-\d{2,3}"
 _UC_ID_PATTERN = r"UC-[A-Za-z0-9_\-]+"
@@ -190,29 +190,145 @@ def parse_service_catalog(repo_root: Path) -> List[str]:
     return ids
 
 
+def parse_service_app_mapping(repo_root: Path) -> Dict[str, List[str]]:
+    """docs/catalog/service-catalog.md A 節サマリ表から ``SVC-NN`` → ``[APP-NN, ...]`` を抽出する。
+
+    fan-out 展開時の APP-ID フィルタ（app_ids 指定時に該当 APP に紐付く SVC のみ残す）
+    で参照される。SVC→APP は service-catalog.md 上で 1:1 を原則とするが、将来複数
+    APP に跨る SVC が出現しても破綻しないよう戻り値型を ``Dict[str, List[str]]``
+    とし、カンマ / 読点 / 全角カンマ区切りを許容する。
+
+    実装方針:
+    - A. サマリ 節（``## A. サマリ`` 以降、``## B.`` 直前まで）のテーブルのみ対象。
+    - ヘッダ行から「利用APP」列の 0-indexed 位置を動的検出する（列追加/順序変更に耐性）。
+    - SVC-NN 形式の行のみ拾い、利用APP セルから ``APP-\\d{2,3}`` を全件抽出。
+    - ファイル不在 / セクション不在 / 列不在の場合は空辞書を返す（呼び出し側で
+      フィルタなし扱い）。
+    """
+    text = _read_text(repo_root, "docs/catalog/service-catalog.md")
+    if text is None:
+        return {}
+
+    in_summary = False
+    header_seen = False
+    app_col_idx: Optional[int] = None
+    mapping: Dict[str, List[str]] = {}
+    svc_pat = re.compile(r"^SVC-\d{2,3}$")
+    app_pat = re.compile(_APP_ID_PATTERN)
+
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("## A.") or s.startswith("## A "):
+            in_summary = True
+            header_seen = False
+            app_col_idx = None
+            continue
+        if in_summary and s.startswith("## ") and not (s.startswith("## A.") or s.startswith("## A ")):
+            break
+        if not in_summary:
+            continue
+        if not s.startswith("|"):
+            continue
+        if re.match(r"^\|\s*[-:\s|]+\s*\|?$", s):
+            continue
+        cols = [c.strip() for c in s.strip("|").split("|")]
+        if not header_seen:
+            for i, c in enumerate(cols):
+                if "利用APP" in c or "利用 APP" in c:
+                    app_col_idx = i
+                    break
+            header_seen = True
+            continue
+        if app_col_idx is None:
+            continue
+        if not cols or not svc_pat.match(cols[0]):
+            continue
+        if app_col_idx >= len(cols):
+            continue
+        cell = cols[app_col_idx]
+        app_ids: List[str] = []
+        seen: set = set()
+        for m in app_pat.finditer(cell):
+            v = m.group(0)
+            if v in seen:
+                continue
+            seen.add(v)
+            app_ids.append(v)
+        if app_ids:
+            mapping[cols[0]] = app_ids
+    return mapping
+
+
 def parse_dataflow_catalog(repo_root: Path) -> List[str]:
-    """docs/dataflow/dataflow-app-catalog.md から ``JOB-*`` 形式の ID を抽出する。"""
-    text = _read_text(repo_root, "docs/dataflow/dataflow-app-catalog.md")
+    """ADFD fan-out 用に APP-ID を抽出する。
+
+    T3.3 (Phase-3) 以降、ADFD は AAS が SoT として生成する共通カタログを参照する。
+
+    優先順:
+      1. ``docs/catalog/app-arch-catalog.md`` があれば、推薦アーキテクチャ
+         ``データデータフロー処理`` / ``バッチ`` に該当する APP-ID のみ抽出。
+      2. 未生成の場合は ``docs/catalog/app-catalog.md`` の全 APP-ID を返す（フォールバック）。
+
+    関数名と ``dataflow_catalog`` parser キーは fan-out 経路の互換性維持のため残置している。
+    """
+    # 1) 推薦アーキテクチャでフィルタできる場合はそれを優先
+    try:
+        from hve.app_arch_filter import resolve_app_arch_scope
+
+        result = resolve_app_arch_scope(
+            workflow_id="adfd",
+            requested_app_ids=None,
+            catalog_path=str(repo_root / "docs/catalog/app-arch-catalog.md"),
+            dry_run=True,
+        )
+        if result.catalog_found and result.matched_app_ids:
+            return list(result.matched_app_ids)
+    except Exception:
+        # フォールバックへ
+        pass
+
+    # 2) フォールバック: app-catalog.md から全 APP-ID
+    text = _read_text(repo_root, "docs/catalog/app-catalog.md")
     if text is None:
         return []
-    ids = _extract_ids_from_table(text, id_pattern=_APP_ID_PATTERN_DATAFLOW)
+    ids = _extract_ids_from_table(text, id_pattern=_APP_ID_PATTERN)
     if not ids:
-        ids = _extract_ids_from_headings(text, id_pattern=_APP_ID_PATTERN_DATAFLOW)
+        ids = _extract_ids_from_headings(text, id_pattern=_APP_ID_PATTERN)
     return ids
 
 
 def parse_agent_catalog(repo_root: Path) -> List[str]:
-    """docs/agent/agent-application-definition.md から ``AG-*`` 形式の ID を抽出する。"""
-    text = _read_text(repo_root, "docs/agent/agent-application-definition.md")
-    if text is None:
-        # 後段 (Step 2 出力) のフォールバック
-        text = _read_text(repo_root, "docs/agent/agent-architecture.md")
-    if text is None:
-        return []
-    ids = _extract_ids_from_table(text, id_pattern=_AGENT_ID_PATTERN)
-    if not ids:
-        ids = _extract_ids_from_headings(text, id_pattern=_AGENT_ID_PATTERN)
-    return ids
+    """AAG Step 2 以降の成果物から canonical ``AGT-*`` ID を抽出する。
+
+    Step 2 は Agent ID を新規採番する producer なので fan-out しない。Step 3 と
+    AAGD は Step 2 の ``agent-architecture.md`` を最優先で読む。再利用実行では
+    ``ai-agent-catalog.md``、旧成果物との互換時だけ application definition へ
+    fallback する。ファイルが存在しても ID が 0 件なら次候補を試す。
+    """
+    for rel_path in (
+        "docs/agent/agent-architecture.md",
+        "docs/ai-agent-catalog.md",
+        "docs/agent/agent-application-definition.md",
+    ):
+        text = _read_text(repo_root, rel_path)
+        if text is None:
+            continue
+        ids: List[str] = []
+        # Agent Inventory / AI Agent一覧は連番列を持つ場合があるため、
+        # canonical ID は第1列または第2列に限定して探索する。
+        for column_index in (0, 1):
+            for agent_id in _extract_ids_from_table(
+                text,
+                id_pattern=_AGENT_ID_PATTERN,
+                column_index=column_index,
+            ):
+                if agent_id not in ids:
+                    ids.append(agent_id)
+        if not ids:
+            ids = _extract_ids_from_headings(text, id_pattern=_AGENT_ID_PATTERN)
+        if ids:
+            return ids
+    return []
 
 
 def parse_business_candidate(repo_root: Path) -> List[str]:
@@ -274,8 +390,8 @@ _PARSER_INPUT_PATHS: Dict[str, str] = {
     "app_catalog": "docs/catalog/app-catalog.md",
     "screen_catalog": "docs/catalog/screen-catalog-APP-*.md",
     "service_catalog": "docs/catalog/service-catalog.md",
-    "dataflow_catalog": "docs/dataflow/dataflow-app-catalog.md",
-    "agent_catalog": "docs/agent/agent-application-definition.md",
+    "dataflow_catalog": "docs/catalog/app-catalog.md",
+    "agent_catalog": "docs/agent/agent-architecture.md",
     "business_candidate": "docs/company-business-recommendation.md",
     "use_case_skeleton": "docs/catalog/use-case-skeleton.md",
 }

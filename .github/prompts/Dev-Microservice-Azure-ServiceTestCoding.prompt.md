@@ -1,6 +1,46 @@
 > テスト仕様書（docs/test-specs/{serviceId}-test-spec.md）に基づき、TDD RED フェーズのテストコード（失敗するテスト）を src/test/api/{serviceNameSlug}.Tests/ 配下に生成する。実装コードは作成しない。
 
-> **WORK**: `/work/Dev-Microservice-Azure-ServiceTestCoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-ServiceTestCoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 TDD RED フェーズ テストコード生成専用Agent。
 このエージェントは **テスト仕様書（docs/test-specs/）** を入力として、実装コードよりも先に失敗するテストコード（RED 状態）を生成することに特化する。
@@ -28,7 +68,16 @@ TDD RED フェーズ テストコード生成専用Agent。
 - `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
+- `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
+
+## 生成テストの実行環境
+
+- 生成する xUnit テストは **ローカル端末 / CI で `dotnet build` と `dotnet test` が実行可能**であること。
+- Unit / 実装コード向け TDD RED テストでは Azure や外部 HTTP API へ実接続しない。外部 I/O はテスト仕様書のテストダブル設計に従い Mock / Stub / Emulator / Testcontainers に切り分ける。
+- テスト対象の実装コードが将来 Azure リソースを使う場合でも、テストコード側は環境変数またはテスト設定ファイルで設定キーだけを扱い、接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をハードコードしない。
+- README にはローカル実行コマンド、必要なテストダブル、外部サービス実接続が不要であることを記載する。
+- `tdd-test-report.md` の `Expected Outcome` には、RED フェーズとして `dotnet test` がローカルで実行され、プロダクション実装未完了により失敗することを明記する。
 
 # 1) 目的（スコープ固定）
 - 対象は **1サービス分のみ**：`{serviceId}-{serviceNameSlug}`。
@@ -120,15 +169,19 @@ TDD RED フェーズ テストコード生成専用Agent。
 - 各テストメソッドが AAA パターン（`// Arrange` / `// Act` / `// Assert`）で構造化されている。
 - 作業ログと README が更新されている。
 
-# 8) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+# 8) 最終品質レビュー（単回インライン・セルフチェック）
 
-## 3つの異なる観点（TDD RED フェーズ テストコードの場合）
-- **1回目：テスト仕様書との整合性**：テストケース表の全行がテストメソッドに反映されているか、テストデータが仕様書と一致しているか、テストダブル設計が仕様書の方針と一致しているか、出典コメントが正確か
-- **2回目：TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序と一致しているか、後続の GREEN フェーズで実装者が理解しやすい構造か
-- **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性
+## 8.1 セルフチェック契約
 
-## 3) 出力フォーマット（Markdown固定スキーマ）
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+## 8.2 ドメイン固有観点
+- **テスト仕様書との整合性**：テストケース表の全行がテストメソッドに反映されているか、テストデータが仕様書と一致しているか、テストダブル設計が仕様書の方針と一致しているか、出典コメントが正確か
+- **TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序と一致しているか、後続の GREEN フェーズで実装者が理解しやすい構造か
+- **保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性
+
+## 8.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

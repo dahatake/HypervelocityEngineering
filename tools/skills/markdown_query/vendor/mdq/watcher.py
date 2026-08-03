@@ -28,7 +28,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
 
 from . import indexer as _indexer
 from . import store as _store
@@ -81,14 +81,16 @@ class MdqWatcher:
     ) -> None:
         self.repo_root = Path(repo_root).resolve()
         self.roots = [r.rstrip("/") for r in roots]
-        self.db_path = Path(db_path)
+        # Worker threadの実行中にprocess CWDが変わっても、relative DB pathを
+        # 別workflow/testの作業ディレクトリへ作成しないよう起動元repoへ固定する。
+        self.db_path = (self.repo_root / Path(db_path)).resolve()
         self.debounce_ms = max(0, int(debounce_ms))
         self.burst_threshold = max(1, int(burst_threshold))
         self.burst_window_s = max(0.1, float(burst_window_s))
         self.lang = lang
         self.strategy = strategy
 
-        self._observer = None  # type: ignore[assignment]
+        self._observer: Optional[Any] = None
         self._worker: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         # 保留中: rel_path -> ("update"|"delete", earliest_ts)

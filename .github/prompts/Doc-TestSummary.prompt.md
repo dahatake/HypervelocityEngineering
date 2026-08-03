@@ -1,6 +1,6 @@
 ﻿> テストコード1ファイルのテスト対象・ケース・モック構成を要約する。
 
-> **WORK**: `/work/Doc-TestSummary/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-TestSummary/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

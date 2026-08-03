@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Validate routing consistency between _routing/SKILL.md and skill files."""
+"""Validate routing consistency between _routing/README.md and skill files.
+
+Only repository-local ``.github/skills/.../SKILL.md`` references participate in
+existence checks. Canonical user-level references under ``~/.agents/skills/``
+are optional external dependencies: their path format is validated, but their
+per-user file existence is intentionally not checked here.
+"""
 
 from __future__ import annotations
 
@@ -10,16 +16,20 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_ROUTING = Path(".github/skills/_routing/SKILL.md")
+DEFAULT_ROUTING = Path(".github/skills/_routing/README.md")
 SKILLS_ROOT = Path(".github/skills")
 SKILL_FILE_NAME = "SKILL.md"
 
-# Intentionally minimal: keep only true exceptions that are expected to be unreferenced.
+# Intentionally minimal: add an exception only when a repository-local Skill is
+# deliberately not routed. External ~/.agents references do not belong here.
 UNREFERENCED_ALLOWLIST: set[str] = {
     ".github/skills/karpathy-guidelines/SKILL.md",
 }
 
-PATH_PATTERN = re.compile(r"(?P<path>(?:\.\.?/|\.github/)[A-Za-z0-9_./-]+/SKILL\.md)")
+SKILL_PATH_PATTERN = re.compile(r"`(?P<path>[^`\r\n]+/SKILL\.md)`")
+EXTERNAL_SKILL_PATH_PATTERN = re.compile(
+    r"^~/\.agents/skills/(?:[A-Za-z0-9_.-]+/)+SKILL\.md$"
+)
 
 
 @dataclass(frozen=True)
@@ -129,14 +139,35 @@ def resolve_reference_path(candidate: str, routing_file: Path, root: Path) -> Pa
     return (routing_file.parent / candidate).resolve()
 
 
-def extract_routing_references(routing_file: Path, root: Path) -> tuple[set[str], list[str]]:
-    """Extract referenced SKILL.md paths from routing markdown."""
+def extract_routing_references(
+    routing_file: Path,
+    root: Path,
+) -> tuple[set[str], set[str], list[str]]:
+    """Extract local, external, and invalid SKILL.md routing references."""
     content = routing_file.read_text(encoding="utf-8")
+    # A Skill may intentionally serve multiple routing triggers, so local and
+    # external references are sets. Duplicate rows are not duplicate Skill
+    # definitions; duplicate frontmatter names are checked separately below.
     references: set[str] = set()
+    external_references: set[str] = set()
     escaped_references: list[str] = []
 
-    for match in PATH_PATTERN.finditer(content):
-        candidate = match.group("path")
+    for match in SKILL_PATH_PATTERN.finditer(content):
+        candidate = match.group("path").strip()
+        if candidate.startswith("~/.agents/"):
+            if (
+                EXTERNAL_SKILL_PATH_PATTERN.fullmatch(candidate)
+                and ".." not in candidate.split("/")
+            ):
+                external_references.add(candidate)
+            else:
+                escaped_references.append(candidate)
+            continue
+
+        if not candidate.startswith((".github/", "./", "../")):
+            escaped_references.append(candidate)
+            continue
+
         resolved = resolve_reference_path(candidate, routing_file, root)
         try:
             rel = to_rel_path(resolved, root)
@@ -147,7 +178,7 @@ def extract_routing_references(routing_file: Path, root: Path) -> tuple[set[str]
         if rel.startswith(f"{SKILLS_ROOT.as_posix()}/") and rel.endswith("/SKILL.md"):
             references.add(rel)
 
-    return references, escaped_references
+    return references, external_references, escaped_references
 
 
 def list_skill_files(root: Path, ignore_patterns: list[str]) -> list[Path]:
@@ -179,7 +210,7 @@ def check_missing_references(
             Violation(
                 "ERROR",
                 "MISSING_REFERENCE",
-                f"_routing -> {raw_reference}（リポジトリ外を参照）",
+                f"_routing -> {raw_reference}（リポジトリ外を参照、または外部 Skill パス形式が不正）",
             )
         )
 
@@ -280,7 +311,9 @@ def build_violations(root: Path, ignore_patterns: list[str]) -> list[Violation]:
             )
         ]
 
-    references, escaped_references = extract_routing_references(routing_file, root)
+    references, _external_references, escaped_references = extract_routing_references(
+        routing_file, root
+    )
     skill_files = list_skill_files(root, ignore_patterns)
 
     violations: list[Violation] = []

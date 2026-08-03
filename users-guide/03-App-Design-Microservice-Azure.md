@@ -39,7 +39,7 @@
 ## 概要
 
 AAD-WEB（Web App Design）は、Issue Form から親 Issue を作成するだけで、
-Step.1〜Step.2.3 の設計タスクを Sub-issue として生成し、依存関係に従って実行するワークフローです。
+Step.1〜Step.2.4 の設計タスクを Sub-issue として生成し、依存関係に従って実行するワークフローです。
 
 > [!NOTE]
 > 旧 AAD の Step.1.1〜6（ドメイン分析・サービス一覧・データモデル・データカタログ・サービスカタログ・テスト戦略書）は
@@ -73,7 +73,8 @@ Step.1〜Step.2.3 の設計タスクを Sub-issue として生成し、依存関
 ### 依存グラフ
 
 ```text
-step-1 ──┬──► step-2.1 ──┐
+step-1 ──┬──► step-2.1 ──┬──► step-2.4
+         │               │
          └──► step-2.2 ──┴──► step-2.3
 ```
 
@@ -84,7 +85,8 @@ step-1 ──┬──► step-2.1 ──┐
 | step-1 | 画面一覧と遷移図 | `Arch-UI-List` | `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/app-catalog.md` | `docs/catalog/screen-catalog.md` | AAS 完了 |
 | step-2.1 | 画面定義書 | `Arch-UI-Detail` | `docs/catalog/screen-catalog.md`, `docs/catalog/app-catalog.md`, `docs/catalog/test-strategy.md`（存在する場合） | `docs/screen/{screenId}-{screenNameSlug}-description.md` | step-1 |
 | step-2.2 | マイクロサービス定義書 | `Arch-Microservice-ServiceDetail` | `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md`, `docs/catalog/test-strategy.md`（存在する場合） | `docs/services/{serviceId}-{serviceNameSlug}-description.md` | step-1 |
-| step-2.3 | TDDテスト仕様書 | `Arch-TDD-TestSpec` | `docs/catalog/test-strategy.md`（存在する場合）, 画面定義書, サービス定義書, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/test-specs/{serviceId}-test-spec.md`, `docs/test-specs/{screenId}-test-spec.md` | step-2.1, step-2.2 |
+| step-2.3 | サービス TDD テスト仕様書 | `Arch-TDD-TestSpec` | `docs/catalog/test-strategy.md`（存在する場合）, サービス定義書, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/test-specs/{serviceId}-test-spec.md` | step-2.2 |
+| step-2.4 | 画面 TDD テスト仕様書 | `Arch-TDD-TestSpec` | `docs/catalog/test-strategy.md`（存在する場合）, 画面定義書, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/test-specs/{screenId}-test-spec.md` | step-2.1 |
 
 ---
 
@@ -108,11 +110,17 @@ step-1 ──┬──► step-2.1 ──┐
 - 入力: `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md`
 - 出力: `docs/services/{serviceId}-{serviceNameSlug}-description.md`
 
-### Step 2.3. TDD テスト仕様書
+### Step 2.3. サービス TDD テスト仕様書
 
 - Prompt: `Arch-TDD-TestSpec`
-- 入力: `docs/catalog/test-strategy.md`（存在する場合）, 画面定義書, サービス定義書
-- 出力: `docs/test-specs/{serviceId}-test-spec.md`, `docs/test-specs/{screenId}-test-spec.md`
+- 入力: `docs/catalog/test-strategy.md`（存在する場合）, サービス定義書
+- 出力: `docs/test-specs/{serviceId}-test-spec.md`
+
+### Step 2.4. 画面 TDD テスト仕様書
+
+- Prompt: `Arch-TDD-TestSpec`
+- 入力: `docs/catalog/test-strategy.md`（存在する場合）, 画面定義書
+- 出力: `docs/test-specs/{screenId}-test-spec.md`
 
 ---
 

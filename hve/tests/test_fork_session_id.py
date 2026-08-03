@@ -74,19 +74,19 @@ class TestSetForkIndexAndMainSessionId(unittest.TestCase):
 
     def test_set_fork_index_adds_fork_suffix(self) -> None:
         runner = _make_runner()
-        main_id = runner._make_step_session_id("3.0T")
-        runner.set_fork_index("3.0T", 1)
-        forked_id = runner._make_step_session_id("3.0T")
+        main_id = runner._make_step_session_id("3.0TC")
+        runner.set_fork_index("3.0TC", 1)
+        forked_id = runner._make_step_session_id("3.0TC")
         self.assertNotEqual(main_id, forked_id)
         self.assertIn("fork1", forked_id)
 
     def test_reset_returns_main_session_id(self) -> None:
         runner = _make_runner()
-        main_id = runner._make_step_session_id("3.0T")
-        runner.set_fork_index("3.0T", 1)
-        self.assertNotEqual(main_id, runner._make_step_session_id("3.0T"))
-        runner.set_fork_index("3.0T", 0)
-        self.assertEqual(main_id, runner._make_step_session_id("3.0T"))
+        main_id = runner._make_step_session_id("3.0TC")
+        runner.set_fork_index("3.0TC", 1)
+        self.assertNotEqual(main_id, runner._make_step_session_id("3.0TC"))
+        runner.set_fork_index("3.0TC", 0)
+        self.assertEqual(main_id, runner._make_step_session_id("3.0TC"))
 
     def test_fork_index_does_not_leak_across_step_ids(self) -> None:
         runner = _make_runner()

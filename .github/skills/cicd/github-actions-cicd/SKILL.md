@@ -21,6 +21,13 @@ GitHub Actions CI/CD ワークフローの **共通仕様** を一元管理す�
 2. **workflow_dispatch トリガー必須**: Copilot push 制約（自動発火しない）の回避。PR description に手動実行案内を記載する
 3. **シークレット管理**: GitHub Secrets から取得。ハードコード禁止。ログ漏洩なし
 
+### HVE local orchestrator の Step 単位 CI/CD 境界
+
+- HVE GUI/CLI の ASDW-WEB Step 単位 CI/CD では、Step 専用ブランチ作成・PR 作成・merge・base branch 復帰は **HVE Orchestrator の責務**。
+- Deploy Agent は Orchestrator から提供された branch を、default branch に存在する workflow の `workflow_dispatch` / `gh workflow run ... --ref <branch>` に使用する。
+- 同一 Step 内で新規作成した workflow を dispatch しない。workflow を新規追加する必要がある場合は、当該 workflow が default branch に反映された後の Step / run で実行する。
+- Deploy Agent は新規 branch 作成、任意の checkout、`gh pr create`、merge を行わない。GitHub Actions 実行前に remote へ反映が必要な場合でも、`git push origin HEAD` を実行しない。`main` または base branch へ push しない。push が不可欠な場合は、現在 branch が Orchestrator から提供された `<branch>` と一致することを確認し、許可される push は `git push origin HEAD:<branch>` のみに限定する。一致しない場合は push せず、ブロッカーとして作業ログに記録する。
+
 ---
 
 ## ガイド一覧（references/）
@@ -41,4 +48,4 @@ GitHub Actions CI/CD ワークフローの **共通仕様** を一元管理す�
 
 ## 参照元
 
-- `work/Issue-skills-migration-investigation/duplication-patterns.md` — P-04 の詳細
+- P-04 の詳細は旧 work スナップショット由来のため、実行時には参照しない。

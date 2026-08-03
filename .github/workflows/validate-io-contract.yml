@@ -7,6 +7,8 @@ on:
       - '.github/scripts/validate-io-contract.py'
       - '.github/io-contract-exceptions.yaml'
       - '.github/workflows/validate-io-contract.yml'
+      # registry-check の必須化(E-09)に伴い、StepDef 側の変更でも検証する。
+      - 'hve/workflow_registry.py'
   push:
     branches:
       - main
@@ -15,6 +17,7 @@ on:
       - '.github/scripts/validate-io-contract.py'
       - '.github/io-contract-exceptions.yaml'
       - '.github/workflows/validate-io-contract.yml'
+      - 'hve/workflow_registry.py'
 
 jobs:
   validate-io-contract:
@@ -31,18 +34,16 @@ jobs:
         run: pip install PyYAML
 
       - name: Validate io-contracts (schema + integrity)
-        # Schema と Integrity は厳格チェック（fail）。Registry mismatch は
-        # 別ステップで warning 出力のみ（段階的厳格化のための過渡的措置）。
+        # Schema と Integrity の厳格チェック。次ステップの registry-check も
+        # hard fail のため、切り分けを容易にする目的で先に単体実行する。
         run: |
           python .github/scripts/validate-io-contract.py --no-registry-check
 
-      - name: Registry mismatch report (warning-only)
-        # StepDef × io-contract 突き合わせ。fail させず件数推移を可視化する。
-        # 件数が継続的に減ることを GitHub Actions ログで確認。閾値ベースの
-        # 厳格化（例: 件数しきい値設定）は将来検討。
-        if: always()
+      - name: Validate io-contracts (registry-check, hard fail)
+        # E-09: StepDef × io-contract 突き合わせ（registry mismatch）を必須化。
+        # 126 件あった mismatch を 0 件へ解消したうえで warning-only を撤廃した。
+        # 新たな mismatch は `hve/workflow_registry.py` の StepDef 宣言か
+        # `.github/io-contracts/*.yaml` のいずれかを修正して解消すること
+        # （registry mismatch は `.github/io-contract-exceptions.yaml` では抑止できない）。
         run: |
-          set +e
-          python .github/scripts/validate-io-contract.py 2>&1 | tee /tmp/io-contract-report.txt
-          echo "::notice::Registry mismatch errors are reported above. CI does not fail on these (warning-only mode)."
-          exit 0
+          python .github/scripts/validate-io-contract.py

@@ -1,6 +1,6 @@
 ﻿> 設定・IaCファイル1つの構成と依存を要約する。
 
-> **WORK**: `/work/Doc-ConfigSummary/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-ConfigSummary/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

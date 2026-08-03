@@ -4,11 +4,11 @@
 
 ## 対象
 - per-service (`SVC-*`): `src/test/api/{{key}}.Tests/`, `src/api/{{key}}/`
-- per-screen (`SC-*`): `src/test/ui/{{key}}/`, `src/app/{{key}}/`
+- per-screen (`APP-*-S*`): `src/test/ui/{{key}}/`, `src/app/{{key}}/`
 
 ## 必須参照
 - `docs/catalog/service-catalog-matrix.md`
-- `docs/services/{{key}}.md` または `docs/screen/{{key}}.md`
+- `docs/services/{{key}}-description.md` または `docs/screen/{{key}}-description.md`
 - `docs/test-specs/{{key}}-test-spec.md`
 
 ## 並列実行ルール

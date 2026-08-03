@@ -68,7 +68,7 @@ hve\setup-hve.cmd
 ./hve/setup-hve.sh
 ```
 
-スクリプトは `.venv` 作成 + `github-copilot-sdk` + 全 extras（`mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を既定でインストールします。CLI のみで良い場合は `--no-gui`、最小構成にしたい場合は `--minimal` を付けてください。詳細・オプションは [hve-cli-orchestrator-guide.md の「セットアップスクリプトを使った環境構築」](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照してください。
+スクリプトは `.venv` 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を既定でインストールします。`test` は repository / VS Code task 検証用の pytest を含みます。CLI のみで良い場合は `--no-gui`、runtime baseだけにしたい場合は `--minimal` を付けてください。詳細・オプションは [hve-cli-orchestrator-guide.md の「セットアップスクリプトを使った環境構築」](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照してください。
 
 > **Python 自動インストールと管理者権限について**
 >
@@ -161,6 +161,7 @@ python -m hve cli
 ## 次のステップ
 
 - **CLI Orchestrator の本格利用**: [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)
+- **ローカルから CI/CD を有効化する**: [local-cicd-enablement.md](./local-cicd-enablement.md)
 - **要求定義ワークフローの詳細**: [01-business-requirement.md](./01-business-requirement.md)
 - **別の方式を試す**: [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md)
 - **全体像の把握**: [README.md](../README.md)

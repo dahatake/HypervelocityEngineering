@@ -27,6 +27,7 @@ metadata:
 
 - **テストピラミッド**: Unit Test 70-80% / Integration Test 15-20% / E2E Test 5-10%
 - **テストダブル選択**: Azurite（Azure Storage）→ Testcontainers（DB/コンテナ）→ Mock/Stub（その他）の優先順位
+- **実行環境**: Unit / 実装コード向け TDD RED / TDD GREEN はローカル実行可能を既定とし、外部サービスを使う Integration / Post-deploy / E2E は環境変数・設定ファイルで接続先を注入する
 - **テストデータ**: Faker（ランダム生成）/ シード管理（固定シード・再現可能）/ 本番データサニタイズ
 - **カバレッジ**: Unit Test ビジネスロジック 80% 以上、変換ロジック 100% 目標
 
@@ -50,4 +51,4 @@ metadata:
 
 ## 参照元
 
-- `work/Issue-skills-migration-investigation/duplication-patterns.md` — P-06 の詳細
+- P-06 の詳細は旧 work スナップショット由来のため、実行時には参照しない。

@@ -360,6 +360,105 @@ class TestDiscoverSubissues:
         )
         assert result.path == target
 
+    # T-C1.3 必須テスト 1: 真因の回帰
+    def test_discover_with_run_id_in_work_root_path(self, tmp_path: Path):
+        """work_root が `work/run/<run-id>/` 形式で run_id をパスセグメントに含む場合、
+        `Issue-0` のような run_id 非含有命名でも subissues.md が検出される。
+
+        修正前 (`_passes_run_scope` の部分一致判定) では Issue-0 が誤除外されて
+        result.path が None になり、T-C1.2 の修正でこの誤除外を skip するように
+        変更したことを保証する。
+        """
+        run_id = "20260603T085833-306ec3"
+        work_root = tmp_path / "work" / "run" / run_id
+        subissues = work_root / "Arch-ApplicationAnalytics" / "Issue-0" / "subissues.md"
+        subissues.parent.mkdir(parents=True)
+        subissues.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        result = discover_subissues_md_verbose(
+            work_root=work_root,
+            custom_agent="Arch-ApplicationAnalytics",
+            parent_step_id="1",
+            run_id=run_id,
+        )
+        assert result.path == subissues, (
+            f"run-scoped work_root 配下の Issue-0/subissues.md が検出されない: {result.path}"
+        )
+
+    # T-C1.3 必須テスト 2: 旧形式 (Issue-<run_id>-step-<id>) の後方互換
+    def test_discover_with_run_id_not_in_work_root_legacy_naming(
+        self, tmp_path: Path
+    ):
+        """work_root が run_id を含まない（旧 work/ 直下レイアウト）場合、
+        Issue-<run_id>-step-<id> 形式は run_id フィルタで絞り込まれる。
+
+        フィルタ破損時の偶発 PASS を防ぐため、`other` (絞り込みで除外されるべき)
+        を valid より **後に** 書き込んで mtime を新しくし、もしフィルタが壊れて
+        両候補が残った場合は `max(..., key=mtime)` で `other` が選ばれて失敗する
+        ようにしている。
+        """
+        import time
+
+        run_id = "20260603T085833-306ec3"
+        work_root = tmp_path / "work"
+        valid_dir = work_root / "AgentX" / f"Issue-{run_id}-step-1"
+        other_dir = work_root / "AgentX" / "Issue-OTHER-step-1"
+        valid_dir.mkdir(parents=True)
+        other_dir.mkdir(parents=True)
+        valid = valid_dir / "subissues.md"
+        other = other_dir / "subissues.md"
+        # 順序: valid を先、other を後に書き込み、other の mtime を新しくする
+        valid.write_text(_VALID_SUBISSUES, encoding="utf-8")
+        time.sleep(0.05)
+        other.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        result = discover_subissues_md_verbose(
+            work_root=work_root,
+            custom_agent="AgentX",
+            parent_step_id="1",
+            run_id=run_id,
+        )
+        assert result.path == valid, (
+            "旧 work/ 直下レイアウトの run_id フィルタが効いていない "
+            f"(mtime newer な other が選ばれた可能性): {result.path}"
+        )
+
+    # T-C1.3 必須テスト 3: パスセグメント完全一致による誤検出防止
+    def test_discover_run_id_segment_match_not_substring(self, tmp_path: Path):
+        """run_id 文字列を含む別名ディレクトリ ('<run_id>-old' 等) を
+        work_root にしても、フィルタを誤って skip しない。
+
+        `work_root_contains_run_id` は `Path.parts` のセグメント完全一致で判定する
+        ため、`<run-id>-old` のような連結形は run-scoped と扱われず、parent.name
+        フィルタが従来通り適用される。フィルタ破損時に確実に失敗させるため、
+        テスト 2 と同様 `other` を後に書き込んで mtime を新しくする。
+        """
+        import time
+
+        run_id = "20260603T085833-306ec3"
+        fake_dir = f"{run_id}-old"
+        work_root = tmp_path / "work" / "runs" / fake_dir
+        valid_dir = work_root / "AgentX" / f"Issue-{run_id}-step-1"
+        other_dir = work_root / "AgentX" / "Issue-OTHER-step-1"
+        valid_dir.mkdir(parents=True)
+        other_dir.mkdir(parents=True)
+        valid = valid_dir / "subissues.md"
+        other = other_dir / "subissues.md"
+        valid.write_text(_VALID_SUBISSUES, encoding="utf-8")
+        time.sleep(0.05)
+        other.write_text(_VALID_SUBISSUES, encoding="utf-8")
+
+        result = discover_subissues_md_verbose(
+            work_root=work_root,
+            custom_agent="AgentX",
+            parent_step_id="1",
+            run_id=run_id,
+        )
+        assert result.path == valid, (
+            "work_root 名が run_id を部分文字列として含むだけのケースで "
+            f"フィルタが skip され誤った候補が選ばれた: {result.path}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # build_subtask_prompt
@@ -399,10 +498,12 @@ class TestBuildSubtaskPrompt:
         prompt = build_subtask_prompt(
             sub, "1", None, "Issue-x/sub-002", repo_root=tmp_path,
         )
-        expected_abs = (tmp_path / "work" / "Issue-x" / "sub-002").as_posix() + "/"
+        expected_abs = (
+            tmp_path / "work" / "run" / "unknown-run" / "Issue-x" / "sub-002"
+        ).as_posix() + "/"
         assert expected_abs in prompt
         # 正例/誤例の対比が含まれる
-        assert "work/Issue-x/sub-002/completion-report.md" in prompt
+        assert "work/run/unknown-run/Issue-x/sub-002/completion-report.md" in prompt
         assert "hve/work/Issue-x/sub-002/completion-report.md" in prompt
 
 

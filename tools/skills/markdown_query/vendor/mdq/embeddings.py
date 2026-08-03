@@ -5,6 +5,10 @@ Design (per work/semantic-paragraph/plan.md):
 - Q2=C: default model    = **intfloat/multilingual-e5-large** (multilingual, MIT, ~2.2GB first DL).
 - Q8=A: every default is overridable via env var or CLI flag.
 
+Note: switched from BAAI/bge-m3 because fastembed 0.8.0+ removed bge-m3 from
+TextEmbedding.list_supported_models(). multilingual-e5-large is MIT-licensed
+(commercial use OK) and well-supported for Japanese.
+
 Public API:
 - :class:`EmbeddingProvider` ABC with :meth:`embed(texts: list[str]) -> np.ndarray`
   returning a `(n_texts, dim)` float32 numpy array.

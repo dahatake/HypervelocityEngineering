@@ -7,8 +7,8 @@ NOTE:
   現時点で Agentic Retrieval は専用の独立 Step ではなく、以下のステップ内で処理される：
   - AAD-WEB Step.2.2: Arch-Microservice-ServiceDetail
       → Arch-AgenticRetrieval-Detail Custom Agent に委譲（Arch-AgenticRetrieval-Detail 相当）
-  - ASDW-WEB Step.2.2: Dev-Microservice-Azure-AddServiceDesign（AgenticRetrievalDesign 相当）
-  - ASDW-WEB Step.2.3: Dev-Microservice-Azure-AddServiceDeploy（AgenticRetrievalDeploy 相当）
+  - ASDW-WEB Step.2.1: Dev-Microservice-Azure-AddServiceDesign（AgenticRetrievalDesign 相当）
+  - ASDW-WEB Step.2.2: Dev-Microservice-Azure-AddServiceDeploy（AgenticRetrievalDeploy 相当）
   スキップ判定は registry 単体では完結せず normalize_agentic_retrieval_answers によって
   orchestrator レベルで処理される（本ファイルの TestAgenticRetrievalSkipCondition を参照）。
 """
@@ -49,12 +49,6 @@ class TestAadWebAgenticRetrievalStep:
         assert step is not None
         assert step.custom_agent == "Arch-Microservice-ServiceDetail"
 
-    def test_aad_web_step_2_2_depends_on_step_1(self):
-        """AAD-WEB の Step.2.2 が Step.1 に依存すること。"""
-        step = get_step("aad-web", "2.2")
-        assert step is not None
-        assert "1" in step.depends_on
-
     def test_aad_web_step_2_2_is_not_container(self):
         """AAD-WEB の Step.2.2 がコンテナでないこと。"""
         step = get_step("aad-web", "2.2")
@@ -74,44 +68,43 @@ class TestAadWebAgenticRetrievalStep:
 
 
 class TestAsdwWebAgenticRetrievalSteps:
-    """ASDW-WEB の AgenticRetrievalDesign / AgenticRetrievalDeploy 相当 Step を検証する。"""
+    """ASDW-WEB の AgenticRetrievalDesign / AgenticRetrievalDeploy 相当 Step を検証する。
 
-    def test_asdw_web_step_2_2_exists(self):
-        """ASDW-WEB の Step.2.2（AgenticRetrievalDesign 相当）が存在すること。"""
-        step = get_step("asdw-web", "2.2")
+    ASDW-WEB では Agentic Retrieval は独立 Step ではなく AddService 系 Step で処理される:
+      - Step.2.1: Dev-Microservice-Azure-AddServiceDesign（AgenticRetrievalDesign 相当）
+      - Step.2.2: Dev-Microservice-Azure-AddServiceDeploy（AgenticRetrievalDeploy 相当）
+    """
+
+    def test_asdw_web_step_2_1_exists(self):
+        """ASDW-WEB の Step.2.1（AgenticRetrievalDesign 相当）が存在すること。"""
+        step = get_step("asdw-web", "2.1")
         assert step is not None
 
-    def test_asdw_web_step_2_2_uses_add_service_design_agent(self):
-        """ASDW-WEB の Step.2.2 が Dev-Microservice-Azure-AddServiceDesign を使用すること。
+    def test_asdw_web_step_2_1_uses_add_service_design_agent(self):
+        """ASDW-WEB の Step.2.1 が Dev-Microservice-Azure-AddServiceDesign を使用すること。
 
         このステップは Agentic Retrieval の設計 (AgenticRetrievalDesign 相当) を担う。
         """
-        step = get_step("asdw-web", "2.2")
+        step = get_step("asdw-web", "2.1")
         assert step is not None
         assert step.custom_agent == "Dev-Microservice-Azure-AddServiceDesign"
 
-    def test_asdw_web_step_2_3_exists(self):
-        """ASDW-WEB の Step.2.3（AgenticRetrievalDeploy 相当）が存在すること。"""
-        step = get_step("asdw-web", "2.3")
+    def test_asdw_web_step_2_2_exists(self):
+        """ASDW-WEB の Step.2.2（AgenticRetrievalDeploy 相当）が存在すること。"""
+        step = get_step("asdw-web", "2.2")
         assert step is not None
 
-    def test_asdw_web_step_2_3_uses_add_service_deploy_agent(self):
-        """ASDW-WEB の Step.2.3 が Dev-Microservice-Azure-AddServiceDeploy を使用すること。
+    def test_asdw_web_step_2_2_uses_add_service_deploy_agent(self):
+        """ASDW-WEB の Step.2.2 が Dev-Microservice-Azure-AddServiceDeploy を使用すること。
 
         このステップは Agentic Retrieval のデプロイ (AgenticRetrievalDeploy 相当) を担う。
         """
-        step = get_step("asdw-web", "2.3")
+        step = get_step("asdw-web", "2.2")
         assert step is not None
         assert step.custom_agent == "Dev-Microservice-Azure-AddServiceDeploy"
 
-    def test_asdw_web_step_2_3_depends_on_step_2_2(self):
-        """ASDW-WEB の Step.2.3 が Step.2.2 に依存すること（Deploy は Design 後）。"""
-        step = get_step("asdw-web", "2.3")
-        assert step is not None
-        assert "2.2" in step.depends_on
-
     def test_asdw_web_step_2_2_depends_on_step_2_1(self):
-        """ASDW-WEB の Step.2.2 が Step.2.1 に依存すること。"""
+        """ASDW-WEB の Step.2.2 が Step.2.1 に依存すること（Deploy は Design 後）。"""
         step = get_step("asdw-web", "2.2")
         assert step is not None
         assert "2.1" in step.depends_on
@@ -143,12 +136,19 @@ class TestAadWebStepOrderIntegrity:
         assert step is not None
         assert "1" in step.depends_on
 
-    def test_step_2_3_depends_on_step_2_1_and_2_2(self):
-        """AAD-WEB の Step.2.3 が Step.2.1 AND Step.2.2 に依存すること（AND join）。"""
+    def test_step_2_3_depends_on_step_2_2_only(self):
+        """AAD-WEB の Step.2.3 (サービス TDD) が Step.2.2 のみに依存すること。"""
         step = get_step("aad-web", "2.3")
         assert step is not None
-        assert "2.1" in step.depends_on
         assert "2.2" in step.depends_on
+        assert "2.1" not in step.depends_on
+
+    def test_step_2_4_depends_on_step_2_1_only(self):
+        """AAD-WEB の Step.2.4 (画面 TDD) が Step.2.1 のみに依存すること。"""
+        step = get_step("aad-web", "2.4")
+        assert step is not None
+        assert "2.1" in step.depends_on
+        assert "2.2" not in step.depends_on
 
     def test_step_2_1_and_2_2_parallel_after_step_1(self):
         """Step.2.1 と Step.2.2 が Step.1 完了後に並列起動可能であること。"""
@@ -159,21 +159,30 @@ class TestAadWebStepOrderIntegrity:
         assert "2.1" in next_ids
         assert "2.2" in next_ids
 
-    def test_step_2_3_requires_both_2_1_and_2_2(self):
-        """Step.2.1 だけ完了でも Step.2.3 は起動されないこと（AND join）。"""
+    def test_step_2_3_available_after_step_2_2(self):
+        """Step.2.2 完了で Step.2.3 (サービス TDD) が起動可能になること。Step.2.1 完了は不要。"""
+        from hve.workflow_registry import get_next_steps
+
+        nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.2"])
+        next_ids = [s.id for s in nexts]
+        assert "2.3" in next_ids
+
+    def test_step_2_4_available_after_step_2_1(self):
+        """Step.2.1 完了で Step.2.4 (画面 TDD) が起動可能になること。Step.2.2 完了は不要。"""
         from hve.workflow_registry import get_next_steps
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1"])
         next_ids = [s.id for s in nexts]
-        assert "2.3" not in next_ids
+        assert "2.4" in next_ids
 
-    def test_step_2_3_available_after_both_2_1_and_2_2(self):
-        """Step.2.1 AND Step.2.2 完了後に Step.2.3 が起動可能になること。"""
+    def test_step_2_3_and_2_4_parallel_after_step_2_1_and_2_2(self):
+        """Step.2.1 AND Step.2.2 完了後に Step.2.3 と Step.2.4 が並列起動可能になること。"""
         from hve.workflow_registry import get_next_steps
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2"])
         next_ids = [s.id for s in nexts]
         assert "2.3" in next_ids
+        assert "2.4" in next_ids
 
 
 # ---------------------------------------------------------------------------
@@ -196,17 +205,52 @@ class TestAsdwWebStepOrderIntegrity:
         assert step is not None
         assert "1.1" in step.depends_on
 
-    def test_step_2_1_depends_on_step_1_2(self):
-        """ASDW-WEB の Step.2.1 が Step.1.2 に依存すること。"""
+    def test_step_2_1_depends_on_step_1_1(self):
+        """ASDW-WEB の Step.2.1 が Step.1.1（データストア選定）に依存すること。"""
         step = get_step("asdw-web", "2.1")
         assert step is not None
-        assert "1.2" in step.depends_on
+        assert "1.1" in step.depends_on
 
-    def test_step_2_5_depends_on_step_2_4(self):
-        """ASDW-WEB の Step.2.5 が Step.2.4 に依存すること。"""
-        step = get_step("asdw-web", "2.5")
+    def test_step_2_4_depends_on_step_2_3(self):
+        """ASDW-WEB の Step.2.4 が Step.2.3 に依存すること。"""
+        step = get_step("asdw-web", "2.4")
         assert step is not None
-        assert "2.4" in step.depends_on
+        assert "2.3" in step.depends_on
+
+
+# ---------------------------------------------------------------------------
+# P12: local-first / live-last 化に伴う設計入力の付け替え
+# ---------------------------------------------------------------------------
+
+
+class TestAsdwWebLocalFirstDesignInputs:
+    """local Step が deploy 済みリソースではなく設計を入力にすること。"""
+
+    def test_step_2_1_depends_on_data_design_not_data_deploy(self):
+        """Step.2.1 は Step.1.1（設計）に依存し、Step.1.3（Deploy）に依存しないこと。"""
+        step = get_step("asdw-web", "2.1")
+        assert step is not None
+        assert "1.1" in step.depends_on
+        assert "1.3" not in step.depends_on
+
+    def test_step_2_3_generates_baseline_tests_from_design(self):
+        """Step.2.3 は deploy 済みリソースを前提にせず Step.2.1 の設計から生成すること。"""
+        step = get_step("asdw-web", "2.3")
+        assert step is not None
+        assert step.depends_on == ["2.1"]
+
+    def test_step_3_1_uses_planned_design_not_live_service_catalog(self):
+        """Step.3.1 は Step.1.3 が生成する live service catalog を必須入力にしないこと。"""
+        step = get_step("asdw-web", "3.1")
+        assert step is not None
+        assert step.depends_on == ["2.3"]
+        assert "docs/azure/service-catalog.md" not in (step.required_input_paths or [])
+
+    def test_step_1_3_runs_after_local_ui_coding(self):
+        """Step.1.3 は local generation checkpoint（Step.4.2 完了）後に実行されること。"""
+        step = get_step("asdw-web", "1.3")
+        assert step is not None
+        assert "4.2" in step.depends_on
 
 
 # ---------------------------------------------------------------------------
@@ -374,24 +418,20 @@ class TestWorkflowYamlAgenticInputs:
             assert input_name in with_keys, \
                 f"dispatcher の aad-web ジョブ with に '{input_name}' が見つかりません"
 
-    def test_dispatcher_propagates_all_agentic_inputs_to_asdw_web(self):
-        """Dispatcher の asdw-web ジョブ `with:` セクションに Q1〜Q6 が存在すること。
+    def test_dispatcher_does_not_dispatch_asdw_web(self):
+        """FR-CLOUD-06: dispatcher から ASDW-WEB の Cloud 起動ジョブが削除されていること。
 
-        jobs.asdw-web.with の keys を YAML パースで構造的に確認する。
-        ファイル全体の文字列検索ではなく、ジョブスコープに限定して検証する。
+        auto-app-dev-microservice-web-reusable.yml は hve/workflow_registry.py の
+        ASDW-WEB Step 体系と非同期（OUT-OF-SYNC NOTICE を自己申告）のため、
+        Cloud 起動を停止し CLI / GUI 経路を supported とする。
+        reusable workflow 側の Agentic 入力宣言は
+        test_asdw_web_reusable_has_all_six_agentic_inputs で引き続き検証する。
         """
-        with_keys = _get_dispatcher_job_with_keys("asdw-web")
-        expected_inputs = [
-            "enable_agentic_retrieval",
-            "agentic_data_source_modes",
-            "foundry_mcp_integration",
-            "agentic_data_sources_hint",
-            "agentic_existing_design_diff_only",
-            "foundry_sku_fallback_policy",
-        ]
-        for input_name in expected_inputs:
-            assert input_name in with_keys, \
-                f"dispatcher の asdw-web ジョブ with に '{input_name}' が見つかりません"
+        jobs = _load_workflow_yaml("auto-orchestrator-dispatcher.yml").get("jobs", {})
+        assert "asdw-web" not in jobs, "dispatcher に ASDW-WEB 起動ジョブが残っています"
+        assert f"uses: ./.github/workflows/{self._ASDW_WEB_REUSABLE}" not in _read_workflow_text(
+            "auto-orchestrator-dispatcher.yml"
+        )
 
 
 class TestQaReadyLabelTokenFallback:
@@ -583,6 +623,23 @@ class TestLabelStateMachineFixWorkflows(unittest.TestCase):
         self.assertIn("付与をスキップ", content)
         self.assertIn("if [ \"${done_present}\" != \"true\" ]; then", content)
         self.assertIn("残置ラベル削除をスキップ", content)
+
+    def test_state_transition_on_pr_merge_has_issue_resolution_fallback_and_auto_close(self):
+        content = _read_workflow_text("state-transition-on-pr-merge.yml")
+        self.assertIn("closingIssuesReferences", content)
+        self.assertIn("PR title の #N", content)
+        self.assertIn("Method 5", content)
+        self.assertIn("cross-referenced", content)
+        self.assertIn("/timeline", content)
+        self.assertIn("<!-- auto-close-done -->", content)
+        self.assertIn("gh issue close \"${ISSUE_NUMBER}\"", content)
+        self.assertIn("steps.transition-labels.outputs.done_present", content)
+
+    def test_link_copilot_pr_guard_considers_closing_keyword_presence(self):
+        content = _read_workflow_text("link-copilot-pr-to-issue.yml")
+        self.assertIn("existing_closing=", content)
+        self.assertIn("done マーカーはありますが closing キーワードが無いため再試行します。", content)
+        self.assertIn("PR body に既存の closing キーワード", content)
 
 
 class TestVerifyQaReferenceInPrWorkflow:

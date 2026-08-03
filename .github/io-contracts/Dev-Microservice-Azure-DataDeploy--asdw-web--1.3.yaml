@@ -1,0 +1,65 @@
+# ASDW-WEB Step 1.3 は HVE native 実装（execute_pipeline）で実行される。
+# Agent session は成果物を著作しない:
+#   - lifecycle outputs（producer 3 本）は HVE generator が生成し、Agent は read-only。
+#   - evidence outputs（work-status.md / ac-verification.md / tdd-test-report.md）は
+#     `owner: hve` + `evidence_source: stage_results` のとおり HVE evidence が
+#     StageResult だけを根拠に生成する。Agent は新規作成・上書き・訂正を行わない。
+inputs:
+- path: docs/azure/azure-services-data.md
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
+- path: docs/catalog/service-catalog-matrix.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--6
+- path: src/infra/azure/verify-data-resources.sh
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-DataTestCoding--asdw-web--1.2
+- path: src/data/sample-data.json
+  required: true
+  kind: agent_artifact
+  producer: Arch-DataModeling--aas--4.2
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
+  required: false
+  kind: static
+- path: users-guide/setup-self-hosted-runner.md
+  required: true
+  kind: static
+outputs:
+# HVE-owned lifecycle output; Agent read-only
+- path: src/infra/azure/create-azure-data-resources-prep.sh
+  required: true
+  mode: upsert
+# HVE-owned lifecycle output; Agent read-only
+- path: src/infra/azure/create-azure-data-resources.sh
+  required: true
+  mode: upsert
+# HVE-owned lifecycle output; Agent read-only
+- path: src/data/azure/data-registration-script.sh
+  required: true
+  mode: upsert
+- path: docs/azure/service-catalog.md
+  required: true
+  mode: upsert
+- path: work/run/<run-id>/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/work-status.md
+  required: true
+  mode: create
+  owner: hve
+  evidence_source: stage_results
+- path: work/run/<run-id>/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/ac-verification.md
+  required: true
+  mode: create
+  owner: hve
+  evidence_source: stage_results
+  acceptance_criteria: [AC-1, AC-2, AC-3]
+- path: tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md
+  required: true
+  mode: create
+  owner: hve
+  evidence_source: stage_results

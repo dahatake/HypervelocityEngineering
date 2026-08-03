@@ -1,0 +1,20 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/catalog/service-catalog-matrix.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--6
+- path: docs/catalog/data-model.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-DataModeling--aas--4.1
+outputs:
+# ADFD Step 1 の fan-out キーは `dataflow_catalog` parser が返す ``APP-NN``。
+# 下流 (adfdv) の producer 解決は完全一致のみのため、契約上の表記を
+# registry の `output_paths_template` と同じ ``{key}`` に一本化する。
+- path: docs/dataflow/apps/{key}-spec.md
+  required: true
+  mode: create

@@ -3,6 +3,9 @@
 ## 目的
 サービス定義書の「外部依存・統合」から、追加で必要な Azure サービス（AI/認証/統合/運用等）を選定し、根拠（Microsoft Learn）付きで記録する（APP-ID 指定時はスコープ内のサービスのみ）。
 
+## 補足: AI/LLM ・ 検索カテゴリの強制ルール
+対象サービスの機能要件に `チャットボット` / `Prompt` / `AI Agent` / `RAG` 等が含まれる場合は、Prompt `Dev-Microservice-Azure-AddServiceDesign` の§3.1 強制ルールに従う（AI/LLM 第一候補 = Microsoft Foundry / 検索第一候補 = Azure AI Search）。
+
 ## 入力
 - リソースグループ名: `{resource_group}`
 - `docs/catalog/use-case-catalog.md`

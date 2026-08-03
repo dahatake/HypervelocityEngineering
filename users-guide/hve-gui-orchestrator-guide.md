@@ -4,7 +4,7 @@
 
 > **対象読者**: PySide6 GUI ウィンドウで HVE ワークフローを実行したい方。コマンドライン操作が不要です。  
 > **前提**: Python 3.11+、GitHub CLI（`gh`）、対象リポジトリのローカルクローンがあること  
-> **次のステップ**: まず「[クイックスタート](#クイックスタート)」を実行し、必要に応じて「[インストール](#インストール)」「[3 ステップ操作ガイド](#3-ステップ操作ガイド)」を確認してください。
+> **次のステップ**: まず「[クイックスタート](#クイックスタート)」を実行し、必要に応じて「[インストール](#インストール)」「[2 ステップ操作ガイド](#2-ステップ操作ガイド)」を確認してください。
 
 ---
 
@@ -16,11 +16,11 @@
 - [前提条件](#前提条件)
 - [インストール](#インストール)
 - [起動](#起動)
-- [3 ステップ操作ガイド](#3-ステップ操作ガイド)
+- [2 ステップ操作ガイド](#2-ステップ操作ガイド)
 - [Plugin / MCP Server 認証](#plugin-mcp-server-認証)
 - [データフロー](#データフロー)
 - [複数セッションの同時起動](#複数セッションの同時起動)
-- [中断と再開（Resume）](#中断と再開resume)
+- [中断と再開（Resume）— 廃止（v1.1）](#中断と再開resume-廃止v11)
 - [コマンドリファレンス](#コマンドリファレンス)
 - [ワークフロー一覧](#ワークフロー一覧)
 - [CLI との違い・使い分け](#cli-との違い使い分け)
@@ -34,7 +34,7 @@
 
 ## 概要
 
-**HVE GUI Orchestrator** は、HVE の 3 つ目の Orchestrator（HVE Cloud Agent Orchestrator / HVE CLI Orchestrator に続く位置づけ）です。`python -m hve`（引数なし、既定）または `python -m hve gui` で起動する PySide6 製 GUI アプリケーションで、単一ウィンドウの 3 ステップ ウィザードからワークフローを選択・設定・実行できます。内部で `hve orchestrate` エンジンを呼び出すため、CLI Orchestrator と同じ DAG 実行エンジンを共有しています。
+**HVE GUI Orchestrator** は、HVE の 3 つ目の Orchestrator（HVE Cloud Agent Orchestrator / HVE CLI Orchestrator に続く位置づけ）です。`python -m hve`（引数なし、既定）または `python -m hve gui` で起動する PySide6 製 GUI アプリケーションで、単一ウィンドウの 2 ステップ ウィザード（Step 1: ワークフロー選択＋オプション設定 / Step 2: 実行）からワークフローを選択・設定・実行できます。内部で `hve orchestrate` エンジンを呼び出すため、CLI Orchestrator と同じ DAG 実行エンジンを共有しています。
 
 ![HVE 3 Orchestrators アーキテクチャ比較](./images/hve-gui-orchestrator-architecture.svg)
 
@@ -85,7 +85,7 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 
 **macOS / Linux**: `./hve/setup-hve.sh` で一括セットアップ後、`./hve-gui.sh` で起動。
 
-ウィザードが開いたら **Step 1（ワークフロー選択）→ Step 2（オプション設定）→ Step 3（実行）** の順に進めます。詳細は [3 ステップ操作ガイド](#3-ステップ操作ガイド) を参照してください。
+ウィザードが開いたら **Step 1（ワークフロー選択＋オプション設定）→ Step 2（実行）** の順に進めます（Step 1 は左ペインで選択、右ペインでオプション設定）。詳細は [2 ステップ操作ガイド](#2-ステップ操作ガイド) を参照してください。
 
 ---
 
@@ -104,14 +104,14 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 
 ## インストール
 
-**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + 全 extras（mdq-watch / mdq-ja / semantic / **gui** / gui-pty / gui-docconvert）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は後述の **`hve-gui.bat`** をダブルクリックで GUI を起動できます。
+**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + 全 extras（test / mdq-watch / mdq-ja / semantic / **gui** / gui-pty / gui-docconvert）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は後述の **`hve-gui.bat`** をダブルクリックで GUI を起動できます。
 
 ```bash
 # リポジトリをクローン後、セットアップスクリプトで GUI + 添付変換（markitdown）を一括インストールするのが推奨（v0.1.x 以降、GUI extras は既定 ON）:
 # Windows (初心者向け、cmd ダブルクリック対応):
 hve\setup-hve.cmd
-# Windows (PowerShell):
-powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
+# Windows (PowerShell 7+):
+pwsh -NoProfile -File hve\setup-hve.ps1
 # Linux / macOS:
 ./hve/setup-hve.sh
 
@@ -204,13 +204,15 @@ chmod +x hve-gui.command
 
 ### 共通: 起動後の動作
 
-いずれの方法でも **単一ウィンドウ** が開き、ヘッダーの進捗バーに沿って 3 ステップを進めます。
+いずれの方法でも **単一ウィンドウ** が開き、2 つの画面（ワークフロー選択 → 実行）を順に進めます。
 
 ---
 
-## 3 ステップ操作ガイド
+## 2 ステップ操作ガイド
 
-![3 ステップ操作フロー](./images/hve-gui-orchestrator-3step-flow.svg)
+![2 ステップ操作フロー](./images/hve-gui-orchestrator-2step-flow.svg)
+
+> GUI ウィザードは **2 ステップ** です。**Step 1** の画面は左ペイン（ワークフロー選択）と右ペイン（オプション設定）で構成され、**Step 2** が Workbench（実行）です。以下では Step 1 を「ワークフロー選択（左ペイン）」「オプション選択（右ペイン）」の 2 パートに分けて説明します。
 
 ### Step 1: ワークフロー選択
 
@@ -239,11 +241,13 @@ chmod +x hve-gui.command
 | `ard` | Auto Requirement Definition |
 
 - 選択中ワークフローの ID・正式名称・短い説明を下部に表示。
-- 「次へ →」で Step 2 へ。
+- 画面左下の **「実行ステップ（チェック ON のみ実行対象）」** では、実行したいステップだけを個別に ON/OFF できます。各チェックは**単独で切り替わり、前後のステップへ自動連動しません**（依存伝播なし）。前段ステップの成果物が既に存在していれば、途中のステップ（例: `Step 2.1` の追加サービスから）だけを選んで実行できます。
+- 選択したステップが必要とする入力ファイルは、[次へ] 押下時のプランレビューで存在確認されます（未配置のファイルは提案として一覧表示されます）。
+- 左ペインで選択後、同じ画面右ペインの「オプション選択」（下記）でオプションを設定します。
 
 ---
 
-### Step 2: オプション選択
+### Step 1（右ペイン）: オプション選択
 
 `orchestrate` サブコマンドの **80 以上のオプション** を `QToolBox` アコーディオン形式で 16 カテゴリに分類します（Cloud 版 Issue Template と類似の UI）。
 
@@ -252,7 +256,7 @@ chmod +x hve-gui.command
 | C1 基本設定 | `--model` / `--review-model` / `--qa-model` |
 | C2 並列実行 | `--max-parallel` |
 | C3 自動プロンプト | `--auto-qa` / `--auto-contents-review` / `--auto-coding-agent-review` / **QA 回答モード**（下記参照） |
-| C4 **Work IQ**（GUI / CLI 両対応） | `--workiq` 系 10 オプション（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。<br>**Sub-002 / Phase 1**: 起動ウィザード (`hve.gui.LaunchWizard`) にも独立した **Work IQ ページ** を追加 (`hve/gui/page_workiq.py` の `WorkIQWizardPage`)。設定値は `OrchestrateArgs` へ書き戻され `--workiq*` 引数として CLI に渡る。 |
+| C4 **Work IQ**（GUI / CLI 両対応） | `--workiq` 系 10 オプション（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。GUI では本カテゴリ（`hve/gui/page_workiq.py` の Work IQ 設定 UI）で設定し、値は `OrchestrateArgs` 経由で `--workiq*` 引数として CLI に渡る。 |
 | C5 Issue / PR 作成 | `--create-issues` / `--create-pr` / `--repo` |
 | C6 出力制御 | `--verbose` / `--quiet` / `--verbosity` / `--log-level` 他 |
 | C7 MCP / CLI 接続 | `--mcp-config` / `--cli-path` / `--cli-url` |
@@ -277,9 +281,9 @@ chmod +x hve-gui.command
 
 - `argparse.BooleanOptionalAction`（例: `--banner` / `--no-banner`）は「継承（未指定）/ 明示 ON / 明示 OFF」の 3 状態を `QComboBox` で表現します。
 - 「プレビュー更新」をクリックすると、生成される `python -m hve orchestrate ...` コマンドを確認・コピーできます。
-- 「実行 ▶」で Step 3 に移行します。
+- 「実行 ▶」で Step 2（Workbench 実行）に移行します。
 
-> **GUI 強制制約**: GUI モードでは内部で `--workbench off` が自動注入され、ターミナル UI 系オプション（`--workbench` / `--workbench-body-lines` / `--workbench-history`）は Step 2 C16 から除外されます。
+> **GUI 強制制約**: GUI モードでは内部で `--workbench off` が自動注入され、ターミナル UI 系オプション（`--workbench` / `--workbench-body-lines` / `--workbench-history`）はオプション設定（右ペイン）C16 から除外されます。
 
 #### ARD のみ: 添付ファイル D&D
 
@@ -321,7 +325,7 @@ chmod +x hve-gui.command
 
 ---
 
-### Step 3: Workbench（実行）
+### Step 2: Workbench（実行）
 
 実行画面は左に「作業状況」ツリー（各 Step がノードとして表示）、右に「ログ」ペインを並べた構成です。下部には実行モデル・経過時間・コスト・Reqs・Tools・Skills の集計が表示されます。
 
@@ -329,7 +333,7 @@ chmod +x hve-gui.command
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Step 3: 実行 (ard — Auto Requirement Definition)    │
+│ Step 2: 実行 (ard — Auto Requirement Definition)    │
 │ 実行コマンド: python -m hve orchestrate ...  [📋]   │
 ├─────────────────────────────────────────────────────┤
 │  ログ出力                                     [📋]  │
@@ -352,11 +356,14 @@ chmod +x hve-gui.command
 
 ## Plugin / MCP Server 認証
 
-GUI Orchestrator は実行前に **GitHub Copilot** およびオプション接続先（**Work IQ MCP** / 任意の **MCP Server** / **外部 Copilot CLI サーバー**）の認証状態を一元管理します。
+GUI Orchestrator は、GitHub Copilot / GitHub CLI / Work IQ の認証導線を GUI から起動できます。一方、任意の MCP Server の登録・OAuth 再認証は GitHub Copilot CLI 側で管理します。GUI は登録済み MCP Server / Plugin の一覧表示と手順案内を行います。
 
 ### 認証ボタンの場所
 
-ウィンドウ最上段の左に「**HVE Workbench**」タイトルが表示されている行の右側に「🔐 **PluginやMCP Serverへの認証**」ボタンがあります（[セッション] / [設定] / [Copilot] の左隣）。未認証の対象が 1 つでもあるとオレンジ色で強調表示されます。
+- CLI: `python -m hve login` — GitHub Copilot SDK へのログインを行います（GUI に専用ボタンはありません）。
+- ステータスバー / 設定 → 基本設定: **「利用できるモデルの取得」** — ログイン済みの GitHub Copilot SDK からモデル一覧を取得しキャッシュを更新します（ログイン自体は行いません）。取得結果は隣接する **「使用するモデル」** 表示にも反映されます。
+- 設定 → 連携 → GitHub: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
+- Work IQ 設定: **「Work IQ 認証確認」** — `@microsoft/workiq` の EULA / Microsoft 365 認証を確認します。
 
 ### 対象とする認証先
 
@@ -364,9 +371,9 @@ GUI は **GitHub Copilot CLI を唯一の信頼ソース** とし、以下の方
 
 | 対象 | 検出方法 | 認証方式 |
 |---|---|---|
-| GitHub Copilot | 常時必須 | `copilot login` (Device Flow) |
-| Microsoft Work IQ | `copilot plugin list` に `workiq@work-iq` が表示されているとき | `npx @microsoft/workiq accept-eula` + `ask -q ping` |
-| 任意の MCP Server | `copilot mcp list --json` に登録されている全サーバ | サーバ毎の疎通テスト（個別認証は manifest または事前ログインに委譲） |
+| GitHub Copilot | 常時必須 | `copilot login` (Device Flow)。CLI (`python -m hve login`) から実行（GUI に専用ボタンはなし） |
+| Microsoft Work IQ | Work IQ オプションを有効にするとき | `npx @microsoft/workiq accept-eula` + `ask -q ping`。GUI の「Work IQ 認証確認」から実行可能 |
+| 任意の MCP Server | `copilot mcp list --json` に登録されている全サーバ | GitHub Copilot CLI 側で登録・認証。GUI は一覧表示と認証手順表示のみ |
 | 外部 Copilot SDK サーバー | 「設定」→「CLI 接続」で `cli_url`（例: `localhost:4321`）を指定 | TCP 疎通テスト |
 
 > **Breaking Change (Wave 3 以降)**: GUI 設定の `mcp_config`（MCP Server 設定 JSON
@@ -374,27 +381,18 @@ GUI は **GitHub Copilot CLI を唯一の信頼ソース** とし、以下の方
 > 代わりに `copilot mcp add` / `copilot plugin install` で Copilot CLI 側に登録してください。
 > 既存設定ファイルに残存していた場合、初回起動時に自動削除されます。
 
-### インタラクティブ認証フロー（PTY 統合）
+### MCP Server の扱い
 
-Azure CLI のサブスクリプション選択、`gh auth login` のブラウザ承認、Device Flow
-のコード入力など、**対話的な認証**を必要とする MCP サーバについては、GUI 内に
-xterm.js ベースのターミナルが埋め込まれた専用ダイアログが開き、ユーザーは矢印キーや
-Enter で通常の CLI と同じ手順で認証を完走できます。
+GUI の MCP セクションは **登録済み一覧** です。実行時に MCP Server を Copilot SDK セッションへ渡す場合は、CLI と同じく `--mcp-config` を使います。`--mcp-config` は直接 map 形式と `.github/.mcp.json` の `mcpServers` wrapper 形式の両方を受け付けます。
 
-対応プロバイダと操作手順の詳細は次のガイドを参照してください:
-
-- **[Plugin / MCP Server インタラクティブ認証ガイド](./plugin-mcp-auth.md)**
-  - Azure MCP / GitHub MCP の操作手順
-  - 自前 MCP サーバ向けのカスタム manifest 追加方法
-  - トラブルシューティング
+MCP Server の登録・OAuth 再認証は GitHub Copilot CLI の対話 UI で実施してください。GUI の「認証手順...」ボタンは、対象サーバーの再認証手順を表示する案内機能です。
 
 ### 操作フロー
 
-1. 「🔐 PluginやMCP Serverへの認証」を押下
-2. 開いたダイアログのテーブルに、設定済みの全プロバイダが列挙される
-3. 各行の [認証] ボタンで個別実行、または [全て認証] ですべてを順次実行
-4. 進捗ログが下部に表示される。長時間動作する Device Flow も非同期実行のため UI はブロックされない
-5. [キャンセル] で実行中のタイムアウトを早めに打ち切れる（プロバイダによってはタイムアウト経過まで完了を待つことがある）
+1. GitHub Copilot SDK を使う前に、必要なら CLI で **`python -m hve login`** を実行
+2. Issue / PR 作成やブランチ取得を使う場合は、必要なら **「GitHub CLI でログイン」** を押下
+3. Work IQ を使う場合は、必要なら **「Work IQ 認証確認」** を押下
+4. 任意 MCP Server は、GUI の一覧で登録状況を確認し、必要なら **「認証手順...」** で Copilot CLI 側の手順を確認
 
 ### トークン失効への対策
 
@@ -402,12 +400,15 @@ Enter で通常の CLI と同じ手順で認証を完走できます。
 - **ワークフロー実行直前の再確認**: [実行 ▶] 押下時に必須プロバイダの状態を改めて確認し、未認証ならダイアログを再表示
 - **実行中の失効検知**: 認証失効を検知した時点でワークフローを自動停止し、再認証ダイアログを開きます
 
-### 「利用できるモデルの取得」ボタンとの関係
+### 「利用できるモデルの取得」ボタンと「使用するモデル」表示
 
 ステータスバー右端の「**利用できるモデルの取得**」ボタンは:
 
-- 常に表示されますが、**GitHub 認証が成功するまで無効（グレーアウト）** です
-- 認証成功で有効化され、押下時は **モデル一覧の取得とキャッシュ更新のみ** を実行します（認証フローは含みません）
+- 常に表示されます
+- 押下時は **モデル一覧の取得とキャッシュ更新のみ** を実行します（GitHub Copilot SDK へのログイン自体は行いません。未ログインの場合は事前に CLI で `python -m hve login` を実行してください）
+- 同じボタンは「HVE 設定」→「基本設定」の一番上にも配置されており、機能・挙動は全く同じです（どちらから押しても同じ処理が実行され、両方の画面の表示に反映されます）
+
+「利用できるモデルの取得」ボタンの右側には **「使用するモデル」** / **「Effort」** の選択コンボがあり、「HVE 設定」→「基本設定」の「使用するモデル *必須」および「Effort」と**同一のウィジェット**（同じ選択内容）です。ここで直接選択を変更でき、変更内容は即座に `settings_store` へ保存され、「HVE 設定」ダイアログを開いている場合はそちらの表示にも反映されます。
 
 ---
 
@@ -440,19 +441,16 @@ python -m hve &
 | ログスクロール | キーバインド（`↑↓` / `PgUp/Dn`） | マウスホイール・スクロールバー |
 | テキストコピー | ターミナルバッファ依存 | 📋 アイコン / `Ctrl+C` |
 | 複数セッション | 非対応 | メニューから複数ウィンドウ起動 |
-| 起動ウィザード | 逐次プロンプト | 単一ウィンドウ 3 ステップ |
+| 起動ウィザード | 逐次プロンプト | 単一ウィンドウ 2 ステップ |
 | ARD 添付資料 | 手動でファイル配置 + `--attached-docs` | ドラッグ&ドロップ自動変換 |
 | 追加依存 | なし | `PySide6>=6.6` |
 | Work IQ C4 オプション | 利用可 | 利用可（GUI 固有制約なし） |
 
 ---
 
-## 中断と再開（Resume）
+## 中断と再開（Resume）— 廃止（v1.1）
 
-GUI Orchestrator は CLI Orchestrator と同じ Resume 機構を共有しています。中断方法のみが異なります（GUI: 「■ 停止」ボタン / CLI: ターミナルで `Ctrl+R`）。
-
-- **概要・state.json 仕様・再開コマンド（`resume list` / `show` / `rename` / `delete` / `continue`）**: [hve-cli-orchestrator-guide.md — 中断と再開（Resume）](./hve-cli-orchestrator-guide.md#中断と再開resume) を参照。
-- **GUI 固有の振る舞い**: 「■ 停止」ボタンは `subprocess.terminate()`（Windows ではハードキル相当）を送信します。Resume 可能な graceful pause（CLI の `Ctrl+R` 相当）は GUI からは提供されていないため、その用途では CLI Orchestrator を使用してください。
+GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、CLI / GUI の Session State（Resume）機能は **v1.1 で全廃** しました。GUI の「■ 停止」ボタンは `subprocess.terminate()`（Windows ではハードキル相当）を送信してワークフローを停止しますが、保存付き中断・再開（Resume）は提供されません。
 
 ---
 
@@ -497,7 +495,7 @@ DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--a
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
-| `hve-gui.bat` をダブルクリックすると `.venv が見つかりません` と表示される | 仮想環境未作成 | バッチが案内する通り `powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1` を実行 |
+| `hve-gui.bat` をダブルクリックすると `.venv が見つかりません` と表示される | 仮想環境未作成 | バッチが案内する通り `pwsh -NoProfile -File hve\setup-hve.ps1` を実行 |
 | `hve-gui.bat` 実行中に exit code 2 で `pause` | PySide6 未インストール | バッチが案内する通り `.venv\Scripts\python.exe -m pip install -e ".[gui]"` を実行 |
 | GUI 終了後もコマンドプロンプトが残る（Windows） | エラー時のメッセージ保持のための仕様 | 正常終了時は黒画面を任意で閉じて OK |
 | `hve-gui.sh` が `Permission denied` | 実行権限なし | `chmod +x hve-gui.sh` を実行してから再試行 |

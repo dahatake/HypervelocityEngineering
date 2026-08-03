@@ -181,25 +181,24 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 | `web-app-dev.yml` | Web App Dev & Deploy（ASDW-WEB） |
 | `ai-agent-design.yml` | AI Agent Design（AAG） |
 | `ai-agent-dev.yml` | AI Agent Dev & Deploy（AAGD） |
-| `batch-design.yml` | データフロー設計（ADFD） |
-| `batch-dev.yml` | バッチ実装（ADFDV） |
+| `dataflow-design.yml` | データフロー設計（ADFD） |
+| `dataflow-dev.yml` | バッチ実装（ADFDV） |
 | `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成（ADOC） |
 | `knowledge-management.yml` | knowledge ドキュメント管理（AKM: qa/original-docs/both） |
 | `original-docs-review.yml` | Original Docs Review 質問票生成（AQOD） |
-| `self-improve.yml` | セルフ改善ループ |
 
 
 #### ワークフロー別チェーン図
 
 ワークフロー別チェーン図の一覧は [workflow-reference.md — ワークフロー別チェーン図](./workflow-reference.md#ワークフロー別チェーン図) を参照してください。
 
-> **補足**: `self-improve.yml` については、`.github/workflows/` 配下に対応する GitHub Actions ワークフローが存在しないため、Issue 作成のみでは Web UI から自動実行されません。このテンプレートは自己改善ループを直接起動する専用テンプレートであり、通常ワークフロー（AAS / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / ADOC / AKM / AQOD）の `enable_self_improve` チェックボックスとは別経路です。このテンプレートを実行する場合は、Issue に対して手動で `@copilot` をアサインするか、HVE CLI Orchestratorから実行してください。`knowledge-management.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-knowledge-management-reusable.yml`、`sourcecode-to-documentation.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-app-documentation-reusable.yml` により自動実行されます。
+> **補足**: 自己改善ループ（Self-Improve）専用の Issue Template は存在しません。自己改善は上記の設計・実装テンプレートの `enable_self_improve` チェックボックス（後述の Step.1.5b）で起動し、各 reusable workflow 内の Self-Improve ステップとして実行されます。`knowledge-management.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-knowledge-management-reusable.yml`、`sourcecode-to-documentation.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-app-documentation-reusable.yml` により自動実行されます。
 >
 > `setup-labels.yml` はラベル初期セットアップ専用テンプレートであり、オーケストレーションではないため自己改善の対象外です。
 
 #### Step.1.5 PR 完全自動化チェックボックス（対応テンプレートのみ）
 
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `batch-design.yml` / `batch-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` / `original-docs-review.yml` には **「PR完全自動化設定」** チェックボックスがあります。
+`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` / `original-docs-review.yml` には **「PR完全自動化設定」** チェックボックスがあります。
 
 - チェック ON: `auto-approve-ready` ラベル連携により、レビュー完了後に Auto Approve / Auto-merge まで自動実行
 - チェック OFF: 通常どおり人手レビュー・手動マージ
@@ -209,11 +208,10 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 #### Step.1.5b 自己改善ループ設定（対応テンプレートのみ）
 
 以下の全テンプレートには **「自己改善ループ設定」** チェックボックスがあります:
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `batch-design.yml` / `batch-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml` / `original-docs-review.yml`
+`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml` / `original-docs-review.yml`
 
 - チェック ON: 全ステップ完了後に自己改善ループが実行され、ruff / pytest / markdownlint で品質スキャンを行い、目標スコアに達するまで改善を繰り返します
 - チェック OFF（デフォルト）: 自己改善ループは実行されません
-- `self-improve.yml` は自己改善ループを直接起動する専用テンプレートであり、このチェックボックスとは **別経路** です
 - `setup-labels.yml` は自己改善の対象外です
 
 **hve CLI からも制御可能**:

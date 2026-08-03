@@ -1,31 +1,32 @@
 @echo off
 REM ============================================================
-REM hve.cmd ? HVE CLI �����`���[ (Windows)
+REM hve.cmd - HVE CLI launcher (Windows)
 REM
-REM �ړI:
-REM   .venv �� activate �����ɁA���|�W�g�������� .venv �� Python ��
-REM   `python -m hve` �����s���锖�����b�p�[�B
-REM   activate �Y��ɂ�� ModuleNotFoundError (PySide6 ��) ��h���B
+REM Purpose:
+REM   Run `python -m hve` with the repository-local .venv Python WITHOUT
+REM   activating the venv. Prevents ModuleNotFoundError (PySide6, etc.)
+REM   caused by forgetting to activate.
 REM
-REM �g����:
-REM   hve.cmd                       (�����Ȃ� �� GUI ���� / PySide6 ���������� CLI �t�H�[���o�b�N)
+REM Usage:
+REM   hve.cmd                       (no args -> GUI mode; falls back to CLI when PySide6 missing)
 REM   hve.cmd cli
 REM   hve.cmd orchestrate --workflow aad
 REM   hve.cmd --help
 REM
-REM �O��:
-REM   hve\setup-hve.cmd �܂��� hve\setup-hve.ps1 �� .venv ���쐬�ς݂ł��邱�ƁB
+REM Prerequisite:
+REM   The .venv must have been created by hve\setup-hve.cmd or hve\setup-hve.ps1.
 REM ============================================================
 
 setlocal
-set SCRIPT_DIR=%~dp0
-set VENV_PY=%SCRIPT_DIR%.venv\Scripts\python.exe
+set "SCRIPT_DIR=%~dp0"
+set "VENV_PY=%SCRIPT_DIR%.venv\Scripts\python.exe"
 
 if not exist "%VENV_PY%" (
-    echo [ERROR] .venv ��������܂���: %VENV_PY%
-    echo         ��Ɏ��̂����ꂩ�����s���Ă�������:
+    echo [ERROR] .venv Python not found: %VENV_PY%
+    echo         Run one of the following first:
     echo           hve\setup-hve.cmd
-    echo           powershell -ExecutionPolicy Bypass -File hve\setup-hve.ps1
+    echo           pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1
+    echo         See: users-guide\hve-cli-getting-started.md
     endlocal
     exit /b 1
 )

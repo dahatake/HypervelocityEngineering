@@ -119,7 +119,7 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 | Step.1.2 | 要求定義書作成（対象事業 指定済） | Microsoft 365 Copilot 等 / ARD `Arch-ARD-BusinessAnalysis-Targeted` | `docs/company-business-requirement.md`（任意）、各種既存文書 | `docs/business-requirement.md` | なし（Step.1.1 出力があれば参考） | **新 Step 2** |
 | Step.1.3 | （任意・ARD 対象外）必要文書クラス D01〜D21 の新規作成 | Microsoft 365 Copilot（Researcher 推奨） | 事業分析レポート・既存規程・既存設計 等 | `knowledge/D{NN}-*.md`（作成対象とした文書クラスのみ。AKM ワークフローと同じ保存先） | Step.1.1 / 1.2 | （ARD 対象外） |
 | Step.2 | （ARD 対象外）ビジネスドキュメントの一覧の作成 | Microsoft 365 Copilot 等 | `docs/company-business-requirement.md`、各種既存文書 | 不足文書一覧・追加文書（`docs/` 配下） | Step.1 | （ARD 対象外） |
-| Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 / ARD `Arch-ARD-UseCaseCatalog` | `docs/business-requirement.md`、各種文書 | `docs/catalog/use-case-catalog.md` | Step.1.2 | **新 Step 3** |
+| Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 / ARD `Arch-ARD-UseCaseCatalog` | `docs/business-requirement.md`、各種文書 | `docs/catalog/use-case-catalog.md` | Step.1.2 | **新 Step 4** |
 | Step.4 | qa/ 質問票ベースの要求定義プロセス | `KnowledgeManager` | `qa/` 質問票ファイル | `knowledge/business-requirement-document-status.md` | なし | （ARD 対象外） |
 
 > [!NOTE]
@@ -3614,7 +3614,7 @@ python -m hve orchestrate --workflow ard --steps 2,3,4 \
 
 ### 後続工程での参照
 
-- **ARD Step 4.1 / 4.2（ユースケース作成）**: 各 UC が満たす `KPI-*` / `OKR-*` ID を任意で記載
+- **ARD Step 3.1 / 3.2（ユースケース作成・実 Step ID）**: 各 UC が満たす `KPI-*` / `OKR-*` ID を任意で記載
 - **`aas`（アプリケーション選定）**: `Arch-ApplicationAnalytics` が `docs/catalog/app-catalog.md` の **「対応 KPI/OKR」列** に APP-* と KPI/OKR ID を紐付け
 - **テスト仕様（`docs/test-specs/`）**: `docs/recommended-kpi-okr.md` §7.2 の運用ルールに従って KPI/OKR ID を紐付け
 

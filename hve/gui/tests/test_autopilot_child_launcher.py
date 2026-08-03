@@ -39,9 +39,26 @@ class _FakeProc:
         self._exit_code = exit_code
         self._finished = finish_immediately
         self.terminate_called = False
+        # child_launcher._spawn_app_stage() は proc を state_bridge.SubprocessReader
+        # でラップし stdout 読み出しを試みる（`stdout=None` なら「何も emit せず
+        # finished_with_code のみ通知する」既存仕様の分岐に入る想定。同分岐は
+        # `self._proc.wait()` と `self._proc.returncode` も参照するため、
+        # 双方を Popen 互換で公開する）。欠落させると SubprocessReader.run() が
+        # 別スレッドで AttributeError を送出し、テスト自体は PASS のまま隠れて
+        # プロセス終了コードが 0 以外になる。
+        self.stdout = None
+        self.returncode = exit_code
 
     def poll(self):
         return self._exit_code if self._finished else None
+
+    def wait(self) -> int:
+        # SubprocessReader.run() の stdout=None 分岐からのみ呼ばれる（バックグラウンド
+        # QThread 上）。`_finished`/`poll()` は本体の `_poll()`（メインスレッド駆動の
+        # ポーリングループ）が唯一の真実の情報源であるため、ここでは絶対に変更しない
+        # （変更すると max_parallel/チェーン継続系テストの意図したタイミングを
+        # 別スレッドから壊しうる）。
+        return self._exit_code
 
     def terminate(self) -> None:
         self.terminate_called = True

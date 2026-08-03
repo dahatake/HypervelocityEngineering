@@ -1,0 +1,285 @@
+{
+  "schema_version": 1,
+  "queries": [
+    {
+      "id": "REQ-01",
+      "q": "markdown query golden query top-1 top-k accuracy",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MDQ-01**:"}]
+    },
+    {
+      "id": "REQ-02",
+      "q": "feature change TDD requirement mapping RED inventory GREEN order",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-03**:"}]
+    },
+    {
+      "id": "REQ-03",
+      "q": "repository-wide instructions context minimization traceability router",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **NFR-CTX-01**:"}]
+    },
+    {
+      "id": "REQ-04",
+      "q": "fanout static keys parser dynamic child step id",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-DAG-04**:"}]
+    },
+    {
+      "id": "REQ-05",
+      "q": "delete local merged branch polling timeout",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-CLI-34**:"}]
+    },
+    {
+      "id": "REQ-06",
+      "q": "out of sync cloud reusable workflow dispatcher ASDW",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-CLOUD-06**:"}]
+    },
+    {
+      "id": "REQ-07",
+      "q": "prefix existence gate dropped output path fan-out key",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-WF-OUT-10**:"}]
+    },
+    {
+      "id": "REQ-08",
+      "q": "data deploy required params six bootstrap",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-WF-ASDW-01**:"}]
+    },
+    {
+      "id": "CAT-01",
+      "q": "APP-009 member self service support",
+      "group": "catalog",
+      "paths": ["docs/catalog/app-catalog.md"],
+      "expected": [{"path": "docs/catalog/app-catalog.md", "anchor": "| APP-009 | 会員セルフサービス/サポート |"}]
+    },
+    {
+      "id": "CAT-02",
+      "q": "APP-002 loyalty ledger points processing",
+      "group": "catalog",
+      "paths": ["docs/catalog/app-catalog.md"],
+      "expected": [{"path": "docs/catalog/app-catalog.md", "anchor": "| APP-002 | ロイヤルティ台帳・ポイント処理 |"}]
+    },
+    {
+      "id": "CAT-03",
+      "q": "SVC-09 member support service",
+      "group": "catalog",
+      "paths": ["docs/catalog/service-catalog.md"],
+      "expected": [{"path": "docs/catalog/service-catalog.md", "anchor": "| SVC-09 | 会員サポートサービス |"}]
+    },
+    {
+      "id": "CAT-04",
+      "q": "APP-009-S003 self service inquiry screen",
+      "group": "catalog",
+      "paths": ["docs/catalog/screen-catalog-APP-009.md"],
+      "expected": [{"path": "docs/catalog/screen-catalog-APP-009.md", "anchor": "| APP-009-S003 | セルフサービス問い合わせ画面 |"}]
+    },
+    {
+      "id": "DOC-01",
+      "q": "SVC-09 ownership boundary data model",
+      "group": "design-docs",
+      "paths": ["docs/catalog/data-model.md"],
+      "expected": [{"path": "docs/catalog/data-model.md", "anchor": "### 3.1 SVC-09 会員サポートサービス（APP-009所有境界）"}]
+    },
+    {
+      "id": "DOC-02",
+      "q": "test double strategy",
+      "group": "design-docs",
+      "paths": ["docs/catalog/test-strategy.md"],
+      "expected": [{"path": "docs/catalog/test-strategy.md", "anchor": "## 4. テストダブル戦略"}]
+    },
+    {
+      "id": "DOC-03",
+      "q": "disable self improve web UI",
+      "group": "guides",
+      "paths": ["users-guide/web-ui-guide.md"],
+      "expected": [{"path": "users-guide/web-ui-guide.md", "anchor": "hve orchestrate -w aas --no-self-improve"}]
+    },
+    {
+      "id": "DOC-04",
+      "q": "self improve command environment variable workflow reference",
+      "group": "guides",
+      "paths": ["users-guide/workflow-reference.md"],
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "> **hve CLI からの自己改善制御**:"}]
+    },
+    {
+      "id": "INV-01",
+      "q": "FR-MDQ-01 active requirement inventory",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-feature-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-feature-inventory.csv", "anchor": "FR,FR-MDQ-01,active-or-described"}]
+    },
+    {
+      "id": "INV-02",
+      "q": "resolve run id implementation surface",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-surface-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-surface-inventory.csv", "anchor": "core,function,resolve_run_id,hve/split_fork.py"}]
+    },
+    {
+      "id": "INV-03",
+      "q": "resolve run id from environment test",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-test-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-test-inventory.csv", "anchor": "hve/tests/test_cloud_run_id.py,22,test,module,test_resolve_run_id_from_env"}]
+    },
+    {
+      "id": "INV-04",
+      "q": "ASDW web workflow active code inventory",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-feature-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-feature-inventory.csv", "anchor": "WORKFLOW,WF-ASDW-WEB,active-code"}]
+    },
+    {
+      "id": "CAT-05",
+      "q": "APP-009 推薦アーキテクチャ Webフロントエンド クラウド",
+      "group": "catalog",
+      "paths": ["docs/catalog/app-arch-catalog.md"],
+      "expected": [{"path": "docs/catalog/app-arch-catalog.md", "anchor": "| APP-009 | 会員セルフサービス/サポート | Webフロントエンド + クラウド |"}]
+    },
+    {
+      "id": "CAT-06",
+      "q": "SVC-03 リワード管理サービス",
+      "group": "catalog",
+      "paths": ["docs/catalog/service-catalog.md"],
+      "expected": [{"path": "docs/catalog/service-catalog.md", "anchor": "### SVC-03 リワード管理サービス"}]
+    },
+    {
+      "id": "CAT-07",
+      "q": "SVC-09 会員サポートサービス サービス定義",
+      "group": "catalog",
+      "paths": ["docs/catalog/service-catalog.md"],
+      "expected": [{"path": "docs/catalog/service-catalog.md", "anchor": "### SVC-09 会員サポートサービス"}]
+    },
+    {
+      "id": "CAT-08",
+      "q": "APP-009-S006 有人引継ぎキュー画面",
+      "group": "catalog",
+      "paths": ["docs/catalog/screen-catalog-APP-009.md"],
+      "expected": [{"path": "docs/catalog/screen-catalog-APP-009.md", "anchor": "| APP-009-S006 | 有人引継ぎキュー画面 |"}]
+    },
+    {
+      "id": "DOC-05",
+      "q": "AC-SVC-09 TEST-SVC-09 実行環境 外部サービス要否 必要設定",
+      "group": "design-docs",
+      "paths": ["docs/test-specs/SVC-09-test-spec.md"],
+      "expected": [{"path": "docs/test-specs/SVC-09-test-spec.md", "anchor": "| Test-ID | 種別 | 対応AC | テストケース / 期待結果 | 実行環境 | 外部サービス要否 | 必要設定 | 出典 |"}]
+    },
+    {
+      "id": "DOC-06",
+      "q": "APP-009-S007 テスト仕様 UI-CMP UI-E2E A11Y",
+      "group": "design-docs",
+      "paths": ["docs/test-specs/APP-009-S007-test-spec.md"],
+      "expected": [{"path": "docs/test-specs/APP-009-S007-test-spec.md", "anchor": "## 4.7) A11y"}]
+    },
+    {
+      "id": "DOC-07",
+      "q": "SVC-07 有料会員契約サービス 外部依存 統合",
+      "group": "design-docs",
+      "paths": ["docs/services/SVC-07-paid-membership-contract-service-description.md"],
+      "expected": [{"path": "docs/services/SVC-07-paid-membership-contract-service-description.md", "anchor": "## 7. 外部依存・統合"}]
+    },
+    {
+      "id": "DOC-08",
+      "q": "APP-009-S003 画面 非機能要件",
+      "group": "design-docs",
+      "paths": ["docs/screen/APP-009-S003.md"],
+      "expected": [{"path": "docs/screen/APP-009-S003.md", "anchor": "## 8. 非機能要件"}]
+    },
+    {
+      "id": "DOC-09",
+      "q": "GH_TOKEN 環境変数 Issue PR 作成 認証",
+      "group": "guides",
+      "paths": ["users-guide/hve-cli-orchestrator-guide.md"],
+      "expected": [{"path": "users-guide/hve-cli-orchestrator-guide.md", "anchor": "#### 認証手段B: 環境変数"}]
+    },
+    {
+      "id": "DOC-10",
+      "q": "markdown-query 利用統計 追加指標 schema_version",
+      "group": "guides",
+      "paths": ["users-guide/skills-markdown-query.md"],
+      "expected": [{"path": "users-guide/skills-markdown-query.md", "anchor": "## 利用統計の追加指標"}]
+    },
+    {
+      "id": "REQ-09",
+      "q": "FR-MAINT-05 実装シンボル索引 surface inventory 機械生成",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-05**:"}]
+    },
+    {
+      "id": "REQ-10",
+      "q": "規範リテラル 判定実装 単一 実行面 併存禁止",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-06**:"}]
+    },
+    {
+      "id": "REQ-11",
+      "q": "新規ロジック追加前 既存実装 確認 規範リテラル 振る舞い要約 シンボル名",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-07**:"}]
+    },
+    {
+      "id": "REQ-12",
+      "q": "変更前 feature inventory 索引 適用候補 絞り込み",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-01**:"}]
+    },
+    {
+      "id": "REQ-13",
+      "q": "要求書全文を既定入力にしない 関連チャンク 段階的拡張 再試行",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MAINT-02**:"}]
+    },
+    {
+      "id": "REQ-14",
+      "q": "Step 依存 AND join 並列 fork skip_fallback block_unless",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-DAG-01**:"}]
+    },
+    {
+      "id": "REQ-15",
+      "q": "qa-ready ラベル Copilot アサイン 保留 遷移",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-STATE-02**:"}]
+    },
+    {
+      "id": "REQ-16",
+      "q": "既定モデル claude-opus",
+      "group": "requirements",
+      "paths": ["hve-dev/requirement-definition.md"],
+      "expected": [{"path": "hve-dev/requirement-definition.md", "anchor": "- **FR-MODEL-01**:"}]
+    },
+    {
+      "id": "INV-05",
+      "q": "hve_scope is_in_scope 対象境界 判定 実装",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-surface-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-surface-inventory.csv", "anchor": "cloud,function,is_in_scope,.github/scripts/hve_scope.py"}]
+    },
+    {
+      "id": "INV-06",
+      "q": "AKM fan-out 21 キー テスト",
+      "group": "generated-inventory",
+      "paths": ["hve-dev/hve-test-inventory.csv"],
+      "expected": [{"path": "hve-dev/hve-test-inventory.csv", "anchor": "test_akm_has_fanout_21_keys"}]
+    }
+  ]
+}

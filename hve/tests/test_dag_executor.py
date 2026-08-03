@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import time
 import unittest
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
@@ -66,6 +67,34 @@ class _WorkflowDef:
                 if deps_ok:
                     result.append(step)
         return result
+
+
+class _RecordingConsole:
+    """DAGExecutor の console 呼び出しを記録する最小スタブ。"""
+
+    def __init__(self) -> None:
+        self.stats_events: List[tuple] = []
+        self.status_lines: List[str] = []
+        self.warning_lines: List[str] = []
+        self.error_lines: List[str] = []
+
+    def stats_event(self, kind: str, step_id: str = "", **fields: object) -> None:
+        self.stats_events.append((kind, step_id, dict(fields)))
+
+    def status(self, msg: str) -> None:
+        self.status_lines.append(msg)
+
+    def warning(self, msg: str) -> None:
+        self.warning_lines.append(msg)
+
+    def error(self, msg: str) -> None:
+        self.error_lines.append(msg)
+
+    def dag_wave_start(self, *_args, **_kwargs) -> None:
+        return None
+
+    def dag_progress(self, *_args, **_kwargs) -> None:
+        return None
 
 
 def _run(coro):
@@ -207,6 +236,238 @@ class TestDAGExecutorABD(unittest.TestCase):
         for sid in ["1", "2a", "2b", "3"]:
             self.assertIn(sid, result)
             self.assertTrue(result[sid].success)
+
+    def test_on_wave_start_receives_parallel_wave(self) -> None:
+        run_fn = self._make_run_step_fn({"1": True, "2a": True, "2b": True, "3": True})
+        waves_seen: List[List[str]] = []
+
+        def on_wave_start(steps, wave_index):
+            waves_seen.append([s.id for s in steps])
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_fn,
+            active_step_ids={"1", "2a", "2b", "3"},
+            on_wave_start=on_wave_start,
+        )
+        _run(executor.execute())
+
+        self.assertIn(["1"], waves_seen)
+        self.assertIn(["2a", "2b"], waves_seen)
+        self.assertIn(["3"], waves_seen)
+
+    def test_parallel_wave_can_use_fleet_wave_runner(self) -> None:
+        executed: List[str] = []
+        fleet_waves: List[List[str]] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            executed.append(step_id)
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            step_ids = [s.id for s in steps]
+            if step_ids == ["2a", "2b"]:
+                fleet_waves.append(step_ids)
+                return {
+                    sid: StepResult(sid, success=True, elapsed=0.0)
+                    for sid in step_ids
+                }
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertEqual(fleet_waves, [["2a", "2b"]])
+        self.assertNotIn("2a", executed)
+        self.assertNotIn("2b", executed)
+        self.assertIn("1", executed)
+        self.assertIn("3", executed)
+        self.assertEqual(executor.completed, {"1", "2a", "2b", "3"})
+
+    def test_fleet_wave_emits_running_and_terminal_step_status(self) -> None:
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            step_ids = [s.id for s in steps]
+            if step_ids == ["2a", "2b"]:
+                return {
+                    "2a": StepResult("2a", success=True, elapsed=0.0),
+                    "2b": StepResult("2b", success=False, elapsed=0.0),
+                }
+            return None
+
+        console = _RecordingConsole()
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            console=console,
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        status_events = [
+            (step_id, fields.get("status"))
+            for kind, step_id, fields in console.stats_events
+            if kind == "step_status"
+        ]
+        self.assertIn(("2a", "running"), status_events)
+        self.assertIn(("2b", "running"), status_events)
+        self.assertIn(("2a", "done"), status_events)
+        self.assertIn(("2b", "failed"), status_events)
+
+    def test_fleet_wave_invokes_on_step_start_for_state_updates(self) -> None:
+        starts: List[str] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            step_ids = [s.id for s in steps]
+            if step_ids == ["2a", "2b"]:
+                return {
+                    sid: StepResult(sid, success=True, elapsed=0.0)
+                    for sid in step_ids
+                }
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+            on_step_start=starts.append,
+        )
+        _run(executor.execute())
+
+        self.assertEqual(starts, ["2a", "2b"])
+
+    def test_fleet_wave_runner_none_falls_back_to_semaphore(self) -> None:
+        executed: List[str] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            executed.append(step_id)
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            if [s.id for s in steps] == ["2a", "2b"]:
+                return None
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertIn("2a", executed)
+        self.assertIn("2b", executed)
+        self.assertEqual(executor.completed, {"1", "2a", "2b", "3"})
+
+    def test_fleet_wave_runner_exception_marks_wave_failed(self) -> None:
+        executed: List[str] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            executed.append(step_id)
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            if [s.id for s in steps] == ["2a", "2b"]:
+                raise RuntimeError("fleet unavailable")
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertNotIn("2a", executed)
+        self.assertNotIn("2b", executed)
+        self.assertIn("2a", executor.failed)
+        self.assertIn("2b", executor.failed)
+        self.assertNotIn("3", executed)
+
+    def test_fleet_wave_runner_incomplete_results_mark_wave_failed(self) -> None:
+        executed: List[str] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            executed.append(step_id)
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            if [s.id for s in steps] == ["2a", "2b"]:
+                return {"2a": StepResult("2a", success=True, elapsed=0.0)}
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertNotIn("2a", executed)
+        self.assertNotIn("2b", executed)
+        self.assertIn("2a", executor.failed)
+        self.assertIn("2b", executor.failed)
+
+    def test_fleet_wave_runner_step_id_mismatch_marks_wave_failed(self) -> None:
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            if [s.id for s in steps] == ["2a", "2b"]:
+                return {
+                    "2a": StepResult("2b", success=True, elapsed=0.0),
+                    "2b": StepResult("2b", success=True, elapsed=0.0),
+                }
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertIn("2a", executor.failed)
+        self.assertIn("2b", executor.failed)
+
+    def test_fleet_wave_runner_invalid_state_marks_wave_failed(self) -> None:
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            return True
+
+        async def fleet_wave_runner(steps, wave_index):
+            if [s.id for s in steps] == ["2a", "2b"]:
+                return {
+                    "2a": StepResult("2a", success=True, elapsed=0.0, state="mystery"),
+                    "2b": StepResult("2b", success=True, elapsed=0.0),
+                }
+            return None
+
+        executor = DAGExecutor(
+            workflow=self.wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2a", "2b", "3"},
+            fleet_wave_runner=fleet_wave_runner,
+        )
+        _run(executor.execute())
+
+        self.assertIn("2a", executor.failed)
+        self.assertIn("2b", executor.failed)
 
 
 class TestDAGExecutorMaxParallel(unittest.TestCase):
@@ -474,6 +735,196 @@ class TestDAGExecutorPlanPrompts(unittest.TestCase):
         _run(executor.execute())
 
         self.assertEqual(captured["1"], "planned prompt")
+
+
+class TestDAGExecutorStepTimeout(unittest.TestCase):
+    """per-step wall-clock タイムアウト（ハング打ち切り）のテスト。
+
+    DAGExecutor に ``step_timeout_seconds`` を渡すと、``run_step_fn`` の実行が
+    その秒数を超えた場合に当該ステップを失敗扱いで打ち切り、DAG 全体の
+    無期限ハングを防ぐことを固定する（root cause: 1 子のハングが step 全体と
+    後続 DAG を無期限停止させる構造欠陥の是正）。
+    """
+
+    @staticmethod
+    def _single_step_wf() -> "_WorkflowDef":
+        return _WorkflowDef([_StepDef(id="1", title="Step 1", depends_on=[])])
+
+    def test_hung_step_is_timed_out_and_marked_failed(self) -> None:
+        """step_timeout_seconds を超えてハングする step は failed 扱いで打ち切られる。"""
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            await asyncio.sleep(5.0)  # timeout より十分長い
+            return True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=0.1,
+        )
+        start = time.monotonic()
+        result = _run(executor.execute())
+        elapsed = time.monotonic() - start
+
+        # ハングせず即座に返る（5s 待たない）
+        self.assertLess(elapsed, 2.0)
+        self.assertIn("1", executor.failed)
+        self.assertFalse(result["1"].success)
+        self.assertIsNotNone(result["1"].error)
+        self.assertIn("step-timeout", result["1"].error)
+
+    def test_none_timeout_disables_check(self) -> None:
+        """step_timeout_seconds=None なら従来通り（打ち切りなし）。"""
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            await asyncio.sleep(0.05)
+            return True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=None,
+        )
+        result = _run(executor.execute())
+        self.assertTrue(result["1"].success)
+        self.assertIn("1", executor.completed)
+
+    def test_zero_timeout_disables_check(self) -> None:
+        """step_timeout_seconds<=0 は None と同様に無効化される。"""
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            await asyncio.sleep(0.05)
+            return True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=0,
+        )
+        result = _run(executor.execute())
+        self.assertTrue(result["1"].success)
+        self.assertIn("1", executor.completed)
+
+    def test_fast_step_within_timeout_succeeds(self) -> None:
+        """timeout 有効でも、期限内に完了する step は通常通り success になる。"""
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            await asyncio.sleep(0.05)
+            return True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=5.0,
+        )
+        result = _run(executor.execute())
+        self.assertTrue(result["1"].success)
+        self.assertIn("1", executor.completed)
+        self.assertNotIn("1", executor.failed)
+
+    def test_timeout_blocks_downstream(self) -> None:
+        """timeout した step の後続（依存先）は起動しない。"""
+        executed: List[str] = []
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            executed.append(step_id)
+            if step_id == "1":
+                await asyncio.sleep(5.0)
+            return True
+
+        wf = _WorkflowDef([
+            _StepDef(id="1", title="Step 1", depends_on=[]),
+            _StepDef(id="2", title="Step 2", depends_on=["1"]),
+        ])
+        executor = DAGExecutor(
+            workflow=wf,
+            run_step_fn=run_step,
+            active_step_ids={"1", "2"},
+            step_timeout_seconds=0.1,
+        )
+        _run(executor.execute())
+
+        self.assertIn("1", executor.failed)
+        self.assertNotIn("2", executor.completed)
+        self.assertNotIn("2", executed)
+
+    def test_fork_retry_attempt_is_also_bounded(self) -> None:
+        """fork_on_retry=True 時、初回・リトライの双方が timeout で bound される。"""
+        call_count = {"n": 0}
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            call_count["n"] += 1
+            await asyncio.sleep(5.0)
+            return True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=0.1,
+            fork_on_retry=True,
+            on_fork_retry=lambda s, i: None,
+        )
+        start = time.monotonic()
+        result = _run(executor.execute())
+        elapsed = time.monotonic() - start
+
+        # 初回 + リトライの 2 回呼ばれ、いずれも 5s 待たずに打ち切られる
+        self.assertEqual(call_count["n"], 2)
+        self.assertLess(elapsed, 3.0)
+        self.assertFalse(result["1"].success)
+
+    def test_cancelled_inner_runs_finally_cleanup(self) -> None:
+        """timeout でキャンセルされた際、inner coroutine の finally が実行される
+        （SDK セッションの session.disconnect 等のクリーンアップ相当）。"""
+        cleaned = {"done": False}
+
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            try:
+                await asyncio.sleep(5.0)
+                return True
+            finally:
+                cleaned["done"] = True
+
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=0.1,
+        )
+        _run(executor.execute())
+        self.assertTrue(cleaned["done"])
+
+    def test_timeout_emits_warning_log(self) -> None:
+        """timeout 打ち切り時に warning ログ（step-timeout を含む）を出力する。"""
+        async def run_step(step_id, title, prompt, custom_agent=None):
+            await asyncio.sleep(5.0)
+            return True
+
+        console = _RecordingConsole()
+        executor = DAGExecutor(
+            workflow=self._single_step_wf(),
+            run_step_fn=run_step,
+            active_step_ids={"1"},
+            step_timeout_seconds=0.1,
+            console=console,
+        )
+        _run(executor.execute())
+        joined = " ".join(console.warning_lines)
+        self.assertIn("step-timeout", joined)
+        self.assertIn("1", joined)
+
+
+class TestOrchestratorWiresStepTimeout(unittest.TestCase):
+    """orchestrator が config.step_timeout_seconds を DAGExecutor へ配線することを
+    ソース検査で確認する（重い run_workflow のモック実行を避ける軽量検証。
+    既存 test_aqod_qa_prompt.py の inspect.getsource パターンに倣う）。"""
+
+    def test_run_workflow_passes_step_timeout_to_executor(self) -> None:
+        import inspect
+        from orchestrator import run_workflow
+        src = inspect.getsource(run_workflow)
+        self.assertIn("step_timeout_seconds=getattr(config", src)
 
 
 if __name__ == "__main__":

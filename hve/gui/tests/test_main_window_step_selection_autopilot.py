@@ -88,8 +88,9 @@ def test_autopilot_prephase_path_ard_group_ids() -> None:
 
     csv, display = MainWindow._resolve_steps_for_workflow(fake, "ard", None)
     assert csv == "2,4"
-    # display は実 Step ID 展開済 (Q4=A)
-    assert "4.1" in display
+    # display は実 Step ID 展開済 (Q4=A)。registry SSOT
+    # _WORKFLOW_GROUP_MAPS["ard"] でグループ "4" は ["3.1","3.2","3.3"] に再採番済み。
+    assert "3.1" in display
     assert "1" not in display
 
 

@@ -1,6 +1,6 @@
 ﻿> 技術的負債を集約・分類・優先度付けする。
 
-> **WORK**: `/work/Doc-TechDebt/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Doc-TechDebt/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。

@@ -49,7 +49,7 @@ metadata:
 
 ## 参照元
 
-- `work/Issue-skills-migration-investigation/duplication-patterns.md` — P-08, P-07 の詳細
+- P-08, P-07 の詳細は旧 work スナップショット由来のため、実行時には参照しない。
 
 ## Related Skills
 

@@ -1,14 +1,17 @@
 """Orchestrator 実行コンテキスト。
 
-`HVE_ORCHESTRATOR_ACTIVE` 環境変数の置き換え。Orchestrator (CLI `hve orchestrate` /
-Cloud Agent Orchestrator) が起動時に生成し、`StepRunner` / `check_plan_md_metadata`
-等へ明示的引数として伝播させる。
+`HVE_ORCHESTRATOR_ACTIVE` 環境変数の置き換え。CLI Orchestrator
+(`hve orchestrate`) が起動時に生成し、`StepRunner` / `check_plan_md_metadata`
+等へ明示的引数として伝播させる。Cloud Agent Orchestrator は GitHub
+Issue Template + GitHub Actions + Copilot Coding Agent の Sub-Issue 経路を
+正とし、この runtime split-fork は標準経路では使用しない。
 
 設計方針 (copilot-instructions.md §0 / plan メモ参照):
   - **None == 単独実行モード**: Agent 直接起動・テスト等。Split Mode 検出時は
     plan.md + subissues.md のみ作成して停止する従来挙動。
-  - **インスタンス有り == Orchestrator 配下**: Split Mode 検出時に subissues.md から
-    サブタスクを並列実行し、全完了後に親 Step を完了扱いで後続へ進める。
+    - **インスタンス有り == Orchestrator 配下**: run_id / continue_on_error 等を
+        明示伝播する。Split Mode runtime fork は legacy / 実験用途の明示 opt-in
+        (`split_fork_enabled=True`) のみで動作し、CLI / GUI 標準経路では無効。
 
 `HVE_SPLIT_FORK_ENABLED` / `HVE_SPLIT_FORK_DEPTH` / `HVE_SPLIT_FORK_MAX_DEPTH` も
 このコンテキストへ統合する（環境変数を参照しない）。
@@ -27,8 +30,8 @@ class OrchestratorContext:
     Attributes:
         run_id: 親 run の識別子（observability 用）。
         split_fork_enabled: Split Mode 検出時にサブタスクを fork 実行するか。
-            既定 True。False の場合は単独実行モードと同等に plan.md/subissues.md
-            のみ作成して停止する（テスト・デバッグ用途）。
+            既定 False。CLI / GUI 標準経路では GitHub Sub-Issue 相当の
+            runtime fork を行わない。True は legacy / 実験用途の明示 opt-in。
         split_fork_depth: 現在の fork 再帰深度（0 起点）。サブタスク内で更に
             SPLIT が発生したケース用。
         split_fork_max_depth: 再帰深度上限。超えた場合は fork せず失敗扱い。
@@ -40,7 +43,7 @@ class OrchestratorContext:
     """
 
     run_id: str = ""
-    split_fork_enabled: bool = True
+    split_fork_enabled: bool = False
     split_fork_depth: int = 0
     split_fork_max_depth: int = 2
     max_parallel_subtasks: int = 4

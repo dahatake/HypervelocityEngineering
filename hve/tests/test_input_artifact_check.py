@@ -345,6 +345,7 @@ class TestCheckStepInputArtifactsUnknownKey(unittest.TestCase):
 _KNOWN_ARTIFACT_KEYS = frozenset([
     "app_catalog", "service_catalog", "data_model", "domain_analytics",
     "screen_catalog", "test_strategy", "service_catalog_matrix", "use_case_catalog",
+    "persona_catalog",
     "dataflow_catalog", "batch_service_catalog", "batch_data_model", "batch_domain_analytics",
     "service_specs", "screen_specs", "test_specs",
     "src_files", "test_files", "knowledge",
@@ -419,6 +420,418 @@ class TestSDKConfigRequireInputArtifacts(unittest.TestCase):
         with unittest.mock.patch.dict(os.environ, env, clear=True):
             config = SDKConfig.from_env()
         self.assertFalse(config.require_input_artifacts)
+
+
+# ---------------------------------------------------------------------------
+# テスト: T-H1H2b — strict モード時の blocked / blocked_step_ids フィールド
+# ---------------------------------------------------------------------------
+
+
+class TestCheckWorkflowInputArtifactsBlockedFields(unittest.TestCase):
+    """_check_workflow_input_artifacts が新 status ``blocked`` の入口を返すこと。
+
+    新 status ``blocked`` (T-H1H2a) と連動し、artifact 不足を検出した時に
+    上位レイヤーが「failed と区別された停止」として扱える情報を提供する。
+    """
+
+    def _make_wf(self, consumed_artifacts):
+        step = _make_step("1", consumed_artifacts=consumed_artifacts)
+        wf = MagicMock()
+        wf.steps = [step]
+        return wf
+
+    def test_strict_mode_returns_blocked_true_on_missing(self) -> None:
+        """strict + missing → blocked=True, blocked_step_ids にステップ ID。"""
+        wf = self._make_wf(consumed_artifacts=["app_catalog"])
+        config = SDKConfig(require_input_artifacts=True)
+        console = _make_console()
+        result = _check_workflow_input_artifacts(
+            wf=wf,
+            active_steps={"1"},
+            existing_artifacts={},
+            config=config,
+            console=console,
+        )
+        self.assertTrue(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], ["1"])
+
+    def test_strict_mode_no_missing_returns_blocked_false(self) -> None:
+        """strict + 全て揃っている → blocked=False, blocked_step_ids=[]。"""
+        wf = self._make_wf(consumed_artifacts=["app_catalog"])
+        config = SDKConfig(require_input_artifacts=True)
+        console = _make_console()
+        result = _check_workflow_input_artifacts(
+            wf=wf,
+            active_steps={"1"},
+            existing_artifacts={"app_catalog": "docs/catalog/app-catalog.md"},
+            config=config,
+            console=console,
+        )
+        self.assertFalse(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], [])
+
+    def test_warning_mode_does_not_set_blocked_even_on_missing(self) -> None:
+        """warning モードでは missing があっても blocked=False (続行が前提)。"""
+        wf = self._make_wf(consumed_artifacts=["app_catalog"])
+        config = SDKConfig(require_input_artifacts=False)
+        console = _make_console()
+        result = _check_workflow_input_artifacts(
+            wf=wf,
+            active_steps={"1"},
+            existing_artifacts={},
+            config=config,
+            console=console,
+        )
+        self.assertFalse(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], [])
+
+    def test_blocked_step_ids_dedup_when_same_step_multiple_missing(self) -> None:
+        """同一 step に複数 missing がある場合、blocked_step_ids は dedup される。"""
+        step = _make_step("1", consumed_artifacts=["app_catalog", "service_catalog"])
+        wf = MagicMock()
+        wf.steps = [step]
+        config = SDKConfig(require_input_artifacts=True)
+        console = _make_console()
+        result = _check_workflow_input_artifacts(
+            wf=wf,
+            active_steps={"1"},
+            existing_artifacts={},
+            config=config,
+            console=console,
+        )
+        self.assertTrue(result["blocked"])
+        # step "1" は missing が 2 件あっても 1 件のみ
+        self.assertEqual(result["blocked_step_ids"], ["1"])
+
+    def test_blocked_step_ids_preserve_order_across_steps(self) -> None:
+        """複数 step が missing の場合、検出順を保持する。"""
+        step_a = _make_step("A", consumed_artifacts=["app_catalog"])
+        step_b = _make_step("B", consumed_artifacts=["service_catalog"])
+        wf = MagicMock()
+        wf.steps = [step_a, step_b]
+        config = SDKConfig(require_input_artifacts=True)
+        console = _make_console()
+        result = _check_workflow_input_artifacts(
+            wf=wf,
+            active_steps={"A", "B"},
+            existing_artifacts={},
+            config=config,
+            console=console,
+        )
+        self.assertTrue(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], ["A", "B"])
+
+
+# ---------------------------------------------------------------------------
+# T-H1H2b: _run_workflow Phase 8 abort 戻り値の統合検証
+# ---------------------------------------------------------------------------
+class TestRunWorkflowAbortIncludesBlockedField(unittest.TestCase):
+    """T-H1H2b: _run_workflow の strict abort path 戻り値に `blocked` キーが
+    含まれることを検証する。
+
+    `_run_workflow` 本体は依存が多く直接呼ぶと重いため、
+    test_continue_on_error_e2e.py のパターンに準拠して
+    Phase 8 abort 戻り値構造を等価ロジックで再現し検証する。
+    併せて、orchestrator.py 内に該当の戻り値リテラルが存在する
+    ことをソースコード regex で固定し、構造変更時にテストが
+    壊れるようにする（最重要統合点の固定）。
+    """
+
+    def _build_abort_result(
+        self,
+        *,
+        workflow_id: str,
+        artifact_check: dict,
+        continue_on_error: bool,
+    ) -> dict | None:
+        """orchestrator.py:3594-3618 の等価ロジック。
+
+        実装と同一の dict literal を組み立て、戻り値構造の固定に用いる。
+        """
+        if artifact_check["should_abort"] and not continue_on_error:
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "blocked": list(artifact_check.get("blocked_step_ids", [])),
+                "elapsed_total": 0.0,
+                "error": artifact_check["error"],
+            }
+        return None
+
+    def test_abort_dict_contains_blocked_step_ids(self) -> None:
+        artifact_check = {
+            "should_abort": True,
+            "error": "missing input artifact for step 'step-a'",
+            "blocked": True,
+            "blocked_step_ids": ["step-a"],
+        }
+        result = self._build_abort_result(
+            workflow_id="Arch-Sample",
+            artifact_check=artifact_check,
+            continue_on_error=False,
+        )
+        self.assertIsNotNone(result)
+        assert result is not None  # for type narrowing
+        self.assertEqual(result["blocked"], ["step-a"])
+        self.assertEqual(result["completed"], [])
+        self.assertEqual(result["failed"], [])
+        self.assertEqual(result["skipped"], [])
+        self.assertEqual(result["workflow_id"], "Arch-Sample")
+        self.assertIn("missing input artifact", result["error"])
+
+    def test_abort_dict_blocked_is_empty_list_when_no_ids(self) -> None:
+        """blocked_step_ids が空でも blocked キーは空配列で存在する（型安定性）。"""
+        artifact_check = {
+            "should_abort": True,
+            "error": "missing",
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
+        result = self._build_abort_result(
+            workflow_id="wf-1",
+            artifact_check=artifact_check,
+            continue_on_error=False,
+        )
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["blocked"], [])
+
+    def test_no_abort_when_continue_on_error_true(self) -> None:
+        """continue_on_error=True なら abort 戻り値が組み立てられない（警告に降格）。"""
+        artifact_check = {
+            "should_abort": True,
+            "error": "missing",
+            "blocked": True,
+            "blocked_step_ids": ["step-a"],
+        }
+        result = self._build_abort_result(
+            workflow_id="wf-2",
+            artifact_check=artifact_check,
+            continue_on_error=True,
+        )
+        self.assertIsNone(result)
+
+    def test_no_abort_when_should_abort_false(self) -> None:
+        """should_abort=False なら abort 戻り値が組み立てられない。"""
+        artifact_check = {
+            "should_abort": False,
+            "error": None,
+            "blocked": False,
+            "blocked_step_ids": [],
+        }
+        result = self._build_abort_result(
+            workflow_id="wf-3",
+            artifact_check=artifact_check,
+            continue_on_error=False,
+        )
+        self.assertIsNone(result)
+
+    def test_orchestrator_source_includes_blocked_key_in_abort_literal(self) -> None:
+        """orchestrator.py の Phase 8 (artifact) と Phase 9 (skill) abort dict
+        literal に `"blocked":` が含まれることをソース regex で固定。
+        構造変更時に本テストが壊れる。
+        """
+        import re
+        from pathlib import Path
+
+        source_path = Path(__file__).resolve().parent.parent / "orchestrator.py"
+        source = source_path.read_text(encoding="utf-8")
+        # artifact check (Phase 8) abort 戻り値
+        artifact_pattern = re.compile(
+            r'"blocked":\s*list\(_artifact_check\.get\("blocked_step_ids"',
+        )
+        artifact_matches = artifact_pattern.findall(source)
+        self.assertGreaterEqual(
+            len(artifact_matches),
+            1,
+            "Phase 8 abort 戻り値 dict literal に 'blocked' キーが含まれていません。"
+            " orchestrator.py の run_workflow の戻り値構造を確認してください。",
+        )
+        # skill check (Phase 9) abort 戻り値
+        skill_pattern = re.compile(
+            r'"blocked":\s*list\(_skill_check\.get\("blocked_step_ids"',
+        )
+        skill_matches = skill_pattern.findall(source)
+        self.assertGreaterEqual(
+            len(skill_matches),
+            1,
+            "Phase 9 abort 戻り値 dict literal に 'blocked' キーが含まれていません。"
+            " orchestrator.py の Skill 不足 abort path を確認してください。",
+        )
+
+
+# ---------------------------------------------------------------------------
+# T-H1H2b: _check_required_skills_for_active_steps の blocked フィールド検証
+# ---------------------------------------------------------------------------
+class TestCheckRequiredSkillsBlockedFields(unittest.TestCase):
+    """T-H1H2b: 必須 Skill 不足 abort path の戻り値に `blocked` /
+    `blocked_step_ids` が含まれることを検証する。
+    """
+
+    def _make_console(self) -> Any:
+        console = MagicMock()
+        console.warning = MagicMock()
+        console.error = MagicMock()
+        return console
+
+    def _make_step(self, step_id: str, required_skills: list[str]) -> Any:
+        step = MagicMock()
+        step.id = step_id
+        step.title = f"step-{step_id}"
+        step.is_container = False
+        step.required_skills = required_skills
+        return step
+
+    def _make_wf(self, steps: list[Any]) -> Any:
+        wf = MagicMock()
+        wf.steps = steps
+        return wf
+
+    def test_no_missing_skills_returns_blocked_false(self) -> None:
+        from hve.orchestrator import _check_required_skills_for_active_steps
+
+        wf = self._make_wf([self._make_step("A", [])])
+        console = self._make_console()
+        result = _check_required_skills_for_active_steps(
+            wf=wf,
+            workflow_id="test-wf",
+            active_steps={"A"},
+            console=console,
+        )
+        self.assertFalse(result["should_abort"])
+        self.assertFalse(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], [])
+
+    def test_missing_skill_returns_blocked_true_with_step_ids(self) -> None:
+        from hve.orchestrator import _check_required_skills_for_active_steps
+
+        wf = self._make_wf(
+            [
+                self._make_step("A", ["nonexistent-skill-xyz"]),
+                self._make_step("B", ["another-missing-skill"]),
+            ]
+        )
+        console = self._make_console()
+        # validate_skill_names が "nonexistent-skill-xyz" / "another-missing-skill"
+        # を missing として返すように patch する。
+        with unittest.mock.patch(
+            "hve.skill_resolver.validate_skill_names",
+            return_value=(
+                ["nonexistent-skill-xyz", "another-missing-skill"],
+                [],
+                {},
+            ),
+        ), unittest.mock.patch(
+            "hve.skill_resolver.get_required_skills_for_step",
+            side_effect=lambda workflow_id, step_id, step_declared_required: (
+                ["nonexistent-skill-xyz"] if step_id == "A" else ["another-missing-skill"]
+            ),
+        ):
+            result = _check_required_skills_for_active_steps(
+                wf=wf,
+                workflow_id="test-wf",
+                active_steps={"A", "B"},
+                console=console,
+            )
+        self.assertTrue(result["should_abort"])
+        self.assertTrue(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], ["A", "B"])
+        self.assertIn("status=blocked", result["error"])
+
+    def test_skill_resolver_import_failure_returns_blocked_false(self) -> None:
+        """Skill resolver 自体が読み込めない場合は warning 経由で skip するため
+        blocked=False を維持する（後方互換）。
+        """
+        from hve.orchestrator import _check_required_skills_for_active_steps
+
+        wf = self._make_wf([self._make_step("A", ["x"])])
+        console = self._make_console()
+        # skill_resolver 自体の import を失敗させる
+        with unittest.mock.patch.dict("sys.modules", {"hve.skill_resolver": None}), \
+             unittest.mock.patch.dict("sys.modules", {"skill_resolver": None}):
+            result = _check_required_skills_for_active_steps(
+                wf=wf,
+                workflow_id="test-wf",
+                active_steps={"A"},
+                console=console,
+            )
+        # blocked フィールドが存在し False であることを確認
+        self.assertIn("blocked", result)
+        self.assertFalse(result["blocked"])
+        self.assertEqual(result["blocked_step_ids"], [])
+
+
+# ---------------------------------------------------------------------------
+# T-H1H2b: CLI 終了コード判定で blocked を error より先に判定することの検証
+# ---------------------------------------------------------------------------
+class TestCLIBlockedBranchEvaluatedBeforeError(unittest.TestCase):
+    """T-H1H2b: __main__.py の終了コード判定で `blocked` が `error` より
+    先に判定されることを検証する（等価ロジックレベル）。
+
+    実 CLI ハンドラ (`_cmd_workflow` / Cloud workflow) は重い
+    `asyncio.run` セットアップを含むため、`test_continue_on_error_e2e.py`
+    のパターンに準拠して終了コード判定ロジックを等価再現する。
+    併せて、`__main__.py` の該当箇所にも `result.get("blocked")` 分岐が
+    `result.get("error")` 分岐より前に存在することを regex で確認する。
+    """
+
+    def _classify(self, result: dict) -> str:
+        """__main__.py の終了コード判定等価ロジック (blocked / error / failed / ok)。"""
+        if result.get("blocked"):
+            return "blocked"
+        if result.get("error"):
+            return "error"
+        if result.get("failed"):
+            return "failed"
+        return "ok"
+
+    def test_blocked_takes_precedence_over_error(self) -> None:
+        result = {
+            "blocked": ["step-a"],
+            "error": "missing input artifact for step 'step-a'",
+            "failed": [],
+        }
+        self.assertEqual(self._classify(result), "blocked")
+
+    def test_error_evaluated_when_blocked_is_empty(self) -> None:
+        result = {"blocked": [], "error": "some other error", "failed": []}
+        self.assertEqual(self._classify(result), "error")
+
+    def test_error_evaluated_when_blocked_key_absent(self) -> None:
+        # 後方互換: 古い戻り値 (blocked キーなし) でも従来通り error 経路に流れる。
+        result = {"error": "some error", "failed": []}
+        self.assertEqual(self._classify(result), "error")
+
+    def test_failed_evaluated_when_no_blocked_or_error(self) -> None:
+        result = {"blocked": [], "error": None, "failed": ["step-x"]}
+        self.assertEqual(self._classify(result), "failed")
+
+    def test_main_source_includes_blocked_branch_before_error_branch(self) -> None:
+        """__main__.py の 2 ハンドラ全てで `result.get("blocked")` が
+        `result.get("error")` より先に評価されていることを regex で固定。
+        """
+        import re
+        from pathlib import Path
+
+        source_path = Path(__file__).resolve().parent.parent / "__main__.py"
+        source = source_path.read_text(encoding="utf-8")
+        # 「result.get("blocked")」が出現してから「result.get("error")」が
+        # 出現するパターンが少なくとも 2 箇所 (workflow CLI /
+        # cloud workflow CLI) で存在することを確認。
+        pattern = re.compile(
+            r'result\.get\("blocked"\).*?result\.get\("error"\)',
+            re.DOTALL,
+        )
+        matches = pattern.findall(source)
+        self.assertGreaterEqual(
+            len(matches),
+            2,
+            "__main__.py の終了コード判定で `blocked` 分岐が `error` 分岐より"
+            "前に評価されていない箇所があります。workflow / cloud "
+            "workflow の 2 ハンドラ全てを確認してください。",
+        )
 
 
 if __name__ == "__main__":

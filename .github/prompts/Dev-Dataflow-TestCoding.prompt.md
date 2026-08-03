@@ -1,6 +1,46 @@
 ﻿> バッチTDDテスト仕様書に基づきTDD REDフェーズのテストコードを src/test/dataflow/{jobId}-{jobNameSlug}.Tests/ に生成（実装コード不可）
 
-> **WORK**: `/work/Dev-Dataflow-TestCoding/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Dataflow-TestCoding/Issue-<識別子>/`
+
+## TDD テスト結果レポート（必須）
+
+- 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
+- `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
+- 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`。
+- RED は Step 固有の期待結果を `Expected Outcome` に記録し、GREEN は `TDD-Judgement: PASS` とテスト保護証跡を必須とする。
+- 固定スキーマは Skill `tdd-red-green-reality` の `tdd-test-report.md` テンプレートに従う。ラベルは必ず `- Label: value` 形式で書き、`Label: value` のプレーン行にしない。
+- 見出し名は `## Command`, `## Expected Outcome`, `## Actual Result`, `## Evidence`, `## Failure Analysis`, `## Test Protection` に固定する。`## Result` / `## Observed Result` / `## Actual Outcome` / `## Changed Test Files` などの代替名は禁止。
+
+```markdown
+# TDD Test Report - <target-key> <phase>
+
+<!-- validation-confirmed -->
+
+- Schema-Version: 1
+- Workflow: <workflow-id>
+- Step: <step-id>
+- Agent: <custom-agent-name>
+- Target-Key: <target-key>
+- Phase: <RED/GREEN>
+- Test-Code-Path: <src/test/...>
+- Timestamp-UTC: <ISO-8601 UTC timestamp>
+- Evidence-Status: EXECUTED
+- TDD-Judgement: <PASS/FAIL>
+- Secret-Redaction: confirmed
+- Test-Files-Changed: <yes/no/N/A>
+
+## Command
+
+## Expected Outcome
+
+## Actual Result
+
+## Evidence
+
+## Failure Analysis
+
+## Test Protection
+```
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -26,6 +66,14 @@
 実装コード（`src/dataflow/` 配下）の作成・変更は **スコープ外**（これは後続の `Dev-Dataflow-ServiceCoding` が行う）。
 コード実装は範囲外（`{WORK}` 配下の計画メモのみ可）。
 対象は **1ジョブ分のみ**：`{jobId}-{jobNameSlug}`。
+
+## 1.5) 生成テストの実行環境
+
+- 生成する xUnit テストは **ローカル端末 / CI で `dotnet build` と `dotnet test` が実行可能**であること。
+- Unit / 実装コード向け TDD RED テストでは Azure データサービスへ実接続しない。ジョブ仕様が Azure Storage / SQL / Cosmos DB / Service Bus 等を参照する場合も、テスト仕様書のテストダブル設計に従い Azurite / Testcontainers / Mock / Stub に切り分ける。
+- 構成済み外部サービスを使う Integration テストが必要な場合は、Unit テストと分離し、接続先・認証・base URL・リソース名を環境変数またはテスト設定ファイルで注入する。未設定を PASS 扱いしない。
+- 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をテストコード、README、ログにハードコードしない。
+- `tdd-test-report.md` の `Expected Outcome` には、RED フェーズとして `dotnet test` がローカルで実行され、プロダクション実装未完了により失敗することを明記する。
 
 ## 2) 変数
 
@@ -148,16 +196,20 @@
 - 各テストメソッドに出典コメントが付与されている（トレーサビリティ）。
 - 作業ログと README が更新されている。
 
-## 9) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 9) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 9.1 3つの異なる観点（このエージェント固有）
+### 9.1 セルフチェック契約
 
-- **1回目：テスト仕様書との整合性**：テストケース表（§2）の全行がテストメソッドに反映されているか、バッチ固有テストケース（§3）の6種別がすべて網羅されているか、テストデータが仕様書と一致しているか、テストダブル設計が仕様書の方針（Azurite/Testcontainers/Mock）と一致しているか、出典コメントが正確か
-- **2回目：TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序（§7）と一致しているか、後続の GREEN フェーズ（`Dev-Dataflow-ServiceCoding`）で実装者が理解しやすい構造か、冪等性テストが `batch-data-model.md` の冪等性キー設計と整合しているか
-- **3回目：保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性、Azurite/Testcontainers の設定が再現可能か
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 9.2 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 9.2 ドメイン固有観点
+
+- **テスト仕様書との整合性**：テストケース表（§2）の全行がテストメソッドに反映されているか、バッチ固有テストケース（§3）の6種別がすべて網羅されているか、テストデータが仕様書と一致しているか、テストダブル設計が仕様書の方針（Azurite/Testcontainers/Mock）と一致しているか、出典コメントが正確か
+- **TDD RED フェーズとしての妥当性**：テストが全て失敗するか（GREEN になるテストがないか）、テスト実行順序が仕様書の TDD 実行順序（§7）と一致しているか、後続の GREEN フェーズ（`Dev-Dataflow-ServiceCoding`）で実装者が理解しやすい構造か、冪等性テストが `batch-data-model.md` の冪等性キー設計と整合しているか
+- **保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性、Azurite/Testcontainers の設定が再現可能か
+
+### 9.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## Agent 固有の Skills 依存
 
@@ -166,4 +218,5 @@
 - `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
+- `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針

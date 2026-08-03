@@ -90,16 +90,21 @@ def test_japanese_in_regex_fallback(monkeypatch):
 
 
 def test_mixed_block_with_fence_and_prose():
+    # 単一大文字＋ピリオド（"Prose A."）は Punkt がイニシャル/略語として扱い
+    # 分割しない（実測: sent_tokenize("Prose A. Prose B.") -> 1 要素）。
+    # ここで見たいのはフェンスの原子性と前後の散文が分割されることなので、
+    # その判定に干渉しない語を使う。
     text = (
-        "Prose A. Prose B.\n"
+        "Prose one. Prose two.\n"
         "```\n"
         "code.line.with.dots\n"
         "```\n"
-        "Prose C. Prose D."
+        "Prose three. Prose four."
     )
     sents = ss.split_sentences(text)
-    # We expect at least: "Prose A.", "Prose B.", fence-as-one, "Prose C.", "Prose D."
-    assert any(s.startswith("Prose A") for s in sents)
-    assert any(s.startswith("Prose D") for s in sents)
+    # We expect at least: "Prose one.", "Prose two.", fence-as-one,
+    # "Prose three.", "Prose four."
+    assert any(s.startswith("Prose one") for s in sents)
+    assert any(s.startswith("Prose four") for s in sents)
     fence_sents = [s for s in sents if s.startswith("```")]
     assert len(fence_sents) == 1

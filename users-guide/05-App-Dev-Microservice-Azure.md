@@ -23,7 +23,7 @@
 ## 対象読者
 
 - AAS + AAD-WEB 完了後に Web アプリ実装〜デプロイを自動化したい人
-- `web-app-dev.yml` と `auto-app-dev-microservice-web-reusable.yml` を運用する人
+- HVE CLI / GUI Orchestrator で `asdw-web` ワークフローを運用する人
 
 ## 前提
 
@@ -41,10 +41,16 @@
 ## 概要
 
 ASDW-WEB（Web App Dev & Deploy）は、AAS + AAD-WEB で作成した設計成果物を入力として、
-Step.1〜Step.4 を Sub-issue 化して順次（Step.4 のみ並列）実行するワークフローです。
+Step.1〜Step.4 を順次（Step.4 のみ並列）実行するワークフローです。
 
-- トリガー: `web-app-dev.yml`（Issue Template）
-- 実行: `auto-app-dev-microservice-web-reusable.yml`（GitHub Actions）
+> **⛔ Cloud 起動は停止中です（FR-CLOUD-06）**
+>
+> `auto-app-dev-microservice-web-reusable.yml` は `hve/workflow_registry.py` の ASDW-WEB Step 体系と非同期（冒頭に `OUT-OF-SYNC NOTICE` を自己申告）のため、`auto-orchestrator-dispatcher.yml` からの起動を停止しています。
+> `auto-app-dev-microservice-web` ラベル付き Issue を作成しても Sub-Issue は生成されず、dispatcher が CLI / GUI への誘導コメントを投稿します。
+> ASDW-WEB は **CLI 経路 / GUI 経路が supported** です。
+
+- 実行（CLI）: `python -m hve orchestrate --workflow asdw-web ...`（[hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)）
+- 実行（GUI）: `python -m hve` を起動し、Wizard で `asdw-web` を選択（[hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)）
 - `knowledge/` の活用方法は [km-guide.md](./km-guide.md) を参照
 
 ## Agent チェーン図 ASDW-WEB
@@ -64,7 +70,7 @@ Step.1〜Step.4 を Sub-issue 化して順次（Step.4 のみ並列）実行す�
 ## ツール
 
 - GitHub Copilot cloud agent / GitHub Copilot for Azure
-- GitHub Actions（`auto-app-dev-microservice-web-reusable.yml`）
+- HVE CLI / GUI Orchestrator（`python -m hve`）
 - MCP Server（Microsoft Learn / Azure）
 
 ---
@@ -74,11 +80,11 @@ Step.1〜Step.4 を Sub-issue 化して順次（Step.4 のみ並列）実行す�
 ### 依存グラフ
 
 ```text
-Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.2.3 → Step.2.3T → Step.2.3TC → Step.2.4 → Step.2.5
-                                                                     ↓
-                                                                 Step.3.0T → Step.3.0TC → Step.3.1 → Step.3.2 → Step.3.3
-                                                                                                      ├─► Step.4.1
-                                                                                                      └─► Step.4.2
+Step.1.1 → Step.1.2 → Step.1.3 → Step.2.1 → Step.2.2 → Step.2.3 → Step.2.3TC → Step.2.4 → Step.2.5
+                                                          ↓
+                                                       Step.3.0TC → Step.3.1 → Step.3.2 → Step.3.3
+                                                                                ├─► Step.4.1
+                                                                                └─► Step.4.2
 ```
 
 ### 各ステップの入出力
@@ -86,16 +92,15 @@ Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.2.3 → Step.2.3T → S
 | Step ID | タイトル | Prompt | 入力 | 出力 | 依存 |
 |---|---|---|---|---|---|
 | step-1.1 | Azure データストア選定 | `Dev-Microservice-Azure-DataDesign` | `docs/catalog/data-model.md`, `docs/catalog/service-catalog.md`, `docs/catalog/domain-analytics.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-data.md` | なし |
-| step-1.2 | Azure データサービス Deploy | `Dev-Microservice-Azure-DataDeploy` | `docs/azure/azure-services-data.md`, `docs/catalog/service-catalog-matrix.md`, `src/data/sample-data.json`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-data-resources-prep.sh`, `src/infra/azure/create-azure-data-resources.sh`, `src/data/azure/data-registration-script.sh`, `src/infra/azure/verify-data-resources.sh`, `docs/test-specs/deploy-step1-data-test-spec.md`, `docs/azure/service-catalog.md` 更新 | step-1.1 |
-| step-2.1 | Azure コンピュート選定 | `Dev-Microservice-Azure-ComputeDesign` | `docs/catalog/service-catalog.md`, `docs/catalog/use-case-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-compute.md` | step-1.2 |
+| step-1.2 | データストア検証テスト生成 (TDD RED) | `Dev-Microservice-Azure-DataTestCoding` | `docs/azure/azure-services-data.md`, `docs/catalog/app-catalog.md`, `src/data/sample-data.json` | `src/infra/azure/verify-data-resources.sh` | step-1.1 |
+| step-1.3 | Azure データサービス Deploy (TDD GREEN) | `Dev-Microservice-Azure-DataDeploy` | `docs/azure/azure-services-data.md`, `docs/catalog/service-catalog-matrix.md`, `src/data/sample-data.json`, `src/infra/azure/verify-data-resources.sh`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-data-resources-prep.sh`, `src/infra/azure/create-azure-data-resources.sh`, `src/data/azure/data-registration-script.sh`, `docs/azure/service-catalog.md` 更新 | step-1.2 |
+| step-2.1 | Azure コンピュート選定 | `Dev-Microservice-Azure-ComputeDesign` | `docs/catalog/service-catalog.md`, `docs/catalog/use-case-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-compute.md` | step-1.3 |
 | step-2.2 | 追加 Azure サービス選定 | `Dev-Microservice-Azure-AddServiceDesign` | `docs/catalog/use-case-catalog.md`, `docs/catalog/service-catalog.md`, `docs/services/`, `docs/azure/azure-services-compute.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-additional.md` | step-2.1 |
 | step-2.3 | 追加 Azure サービス Deploy | `Dev-Microservice-Azure-AddServiceDeploy` | `docs/azure/azure-services-additional.md`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-additional-resources*`, `src/infra/azure/verify-additional-resources.sh` | step-2.2 |
-| step-2.3T | サービス テスト仕様書 (TDD RED) | `Arch-TDD-TestSpec` | `docs/catalog/test-strategy.md`, `docs/catalog/service-catalog-matrix.md`, `docs/services/`, `docs/catalog/data-model.md`, `docs/catalog/domain-analytics.md`, `docs/catalog/app-catalog.md` | `docs/test-specs/{serviceId}-test-spec.md` | step-2.3 |
-| step-2.3TC | サービス テストコード生成 (TDD RED) | `Dev-Microservice-Azure-ServiceTestCoding` | `docs/test-specs/{serviceId}-test-spec.md`, `docs/services/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/api/{ServiceName}.Tests/` | step-2.3T |
+| step-2.3TC | サービス テストコード生成 (TDD RED) | `Dev-Microservice-Azure-ServiceTestCoding` | `docs/test-specs/{serviceId}-test-spec.md` (AAD-WEB Step.2.3 生成物), `docs/services/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/api/{ServiceName}.Tests/` | step-2.3 |
 | step-2.4 | サービスコード実装 (TDD GREEN) | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` | サービス定義書, RED テストコード, テスト仕様書, `docs/catalog/app-catalog.md` | `src/api/{serviceId}-{serviceName}/` | step-2.3TC |
 | step-2.5 | Azure Compute Deploy | `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` | `docs/catalog/service-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `src/api/`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-api-resources-prep.sh`, `src/infra/azure/verify-api-resources.sh`, `.github/workflows/` | step-2.4 |
-| step-3.0T | UI テスト仕様書 (TDD RED) | `Arch-TDD-TestSpec` | `docs/catalog/test-strategy.md`, `docs/catalog/service-catalog-matrix.md`, `docs/screen/`, `docs/catalog/data-model.md`, `docs/catalog/domain-analytics.md`, `docs/catalog/app-catalog.md` | `docs/test-specs/{screenId}-test-spec.md` | step-2.5 |
-| step-3.0TC | UI テストコード生成 (TDD RED) | `Dev-Microservice-Azure-UITestCoding` | `docs/test-specs/{screenId}-test-spec.md`, `docs/screen/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/ui/` | step-3.0T |
+| step-3.0TC | UI テストコード生成 (TDD RED) | `Dev-Microservice-Azure-UITestCoding` | `docs/test-specs/{screenId}-test-spec.md` (AAD-WEB Step.2.4 生成物), `docs/screen/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/ui/` | step-2.5 |
 | step-3.1 | UI 実装 (TDD GREEN) | `Dev-Microservice-Azure-UICoding` | 画面定義書, サービスカタログ, RED テストコード, テスト仕様書, `docs/catalog/app-catalog.md` | `src/app/` | step-3.0TC |
 | step-3.2 | Web アプリ Deploy (Azure SWA) | `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` | `src/app/`, リソースグループ名, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-webui-resources-prep.sh`, `src/infra/azure/create-azure-webui-resources.sh`, `src/infra/azure/verify-webui-resources.sh`, `docs/test-specs/deploy-step3-swa-test-spec.md`, `docs/catalog/service-catalog-matrix.md` 更新, `.github/workflows/azure-static-web-apps-*.yml`（`AZURE_STATIC_WEB_APPS_API_TOKEN` 参照） | step-3.1 |
 | step-3.3 | UI E2E テスト (Playwright) | `E2ETesting-Playwright` | `src/app/`, `docs/catalog/service-catalog-matrix.md`, `docs/test-specs/`, `docs/catalog/app-catalog.md` | E2E 実行結果（artifact） | step-3.2 |
@@ -122,21 +127,20 @@ ASDW-WEB は TDD を前提とし、次を順守します。
 ### Step.1 データ
 
 - Step.1.1: `Dev-Microservice-Azure-DataDesign`
-- Step.1.2: `Dev-Microservice-Azure-DataDeploy`
+- Step.1.2: `Dev-Microservice-Azure-DataTestCoding`（TDD RED — データストア検証スクリプト生成）
+- Step.1.3: `Dev-Microservice-Azure-DataDeploy`（TDD GREEN — デプロイ + 検証スクリプト PASS）
 
 ### Step.2 マイクロサービス
 
 - Step.2.1: `Dev-Microservice-Azure-ComputeDesign`
 - Step.2.2: `Dev-Microservice-Azure-AddServiceDesign`
 - Step.2.3: `Dev-Microservice-Azure-AddServiceDeploy`
-- Step.2.3T: `Arch-TDD-TestSpec`
 - Step.2.3TC: `Dev-Microservice-Azure-ServiceTestCoding`
 - Step.2.4: `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`
 - Step.2.5: `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`
 
 ### Step.3 UI
 
-- Step.3.0T: `Arch-TDD-TestSpec`
 - Step.3.0TC: `Dev-Microservice-Azure-UITestCoding`
 - Step.3.1: `Dev-Microservice-Azure-UICoding`
 - Step.3.2: `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`
@@ -153,8 +157,9 @@ ASDW-WEB は TDD を前提とし、次を順守します。
 
 ### 関連ファイル
 
-- Issue Template: `.github/ISSUE_TEMPLATE/web-app-dev.yml`
-- Workflow: `.github/workflows/auto-app-dev-microservice-web-reusable.yml`
+- Issue Template: `.github/ISSUE_TEMPLATE/web-app-dev.yml`（パラメータの参照用。Cloud 起動は停止中）
+- Workflow: `.github/workflows/auto-app-dev-microservice-web-reusable.yml`（**FR-CLOUD-06 により dispatcher からは起動されません**）
+- Registry: `hve/workflow_registry.py`（CLI / GUI が参照する ASDW-WEB Step 体系の SSOT）
 
 ### 状態ラベル
 
@@ -181,9 +186,12 @@ ASDW-WEB は TDD を前提とし、次を順守します。
 
 ### 実行手順
 
-1. Issues → New Issue → **Web App Dev & Deploy** を選択
-2. 必要項目を入力して Submit
-3. `auto-app-dev-microservice-web` が付与され、`ASDW-WEB: Web App Dev & Deploy (Reusable)` が起動
+ASDW-WEB の Cloud 起動は停止中のため、CLI または GUI から実行します。
+
+1. CLI: `python -m hve orchestrate --workflow asdw-web --app-ids <APP-ID> --resource-group <RG> ...`
+2. GUI: `python -m hve` を起動し、Wizard で `asdw-web` を選択してパラメータを入力
+
+> `auto-app-dev-microservice-web` ラベル付き Issue を作成した場合、dispatcher は reusable workflow を起動せず、CLI / GUI への誘導コメントを Issue に投稿します（FR-CLOUD-06）。
 
 ### HITL エスカレーション
 
@@ -196,10 +204,10 @@ ASDW-WEB は TDD を前提とし、次を順守します。
 
 ## 動作確認手順
 
-1. `.github/ISSUE_TEMPLATE/web-app-dev.yml` が存在することを確認
-2. `.github/workflows/auto-app-dev-microservice-web-reusable.yml` が存在することを確認
-3. Issues で **Web App Dev & Deploy** テンプレートが表示されることを確認
-4. Issue 作成後に親 Issue に `asdw-web:initialized` が付与されることを確認
-5. Step が `1.1 → 1.2 → 2.1 → 2.2 → 2.3 → 2.3T → 2.3TC → 2.4 → 2.5 → 3.0T → 3.0TC → 3.1 → 3.2 → 3.3` と進むことを確認
+1. `hve/workflow_registry.py` に `asdw-web` ワークフローが登録されていることを確認
+2. `python -m hve orchestrate --workflow asdw-web --help` がエラーなく表示されることを確認
+3. GUI の Wizard で `asdw-web` が選択肢に表示されることを確認
+4. `auto-app-dev-microservice-web` ラベル付き Issue を作成した場合に、Sub-Issue が生成されず CLI / GUI 誘導コメントが投稿されることを確認（FR-CLOUD-06）
+5. Step が `1.1 → 1.2 → 1.3 → 2.1 → 2.2 → 2.3 → 2.3TC → 2.4 → 2.5 → 3.0TC → 3.1 → 3.2 → 3.3` と進むことを確認
 6. `step-4.1` と `step-4.2` が並列起動することを確認
 7. 最終的に Root Issue に `asdw-web:done` が付与されることを確認

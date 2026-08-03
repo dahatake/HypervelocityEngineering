@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .workflow_registry import WorkflowDef
+from .workflow_registry import WorkflowDef, canonicalize_workflow_id
 
 # ---------------------------------------------------------------------------
 # 定数
@@ -25,6 +25,22 @@ _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
 _EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH = "templates/_shared/existing-artifact-policy.md"
+_AZURE_OFFICIAL_INFO_SECTION = """
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+""".strip()
+
+_GENERATED_TEST_RUNTIME_SECTION = """
+## 生成テストの実行環境
+
+- Unit / 実装コード向け TDD RED / TDD GREEN はローカル端末 / CI で実行可能にする。
+- 外部サービスを使う Integration / Post-deploy / E2E は、構成済みサービスを前提にしてよいが、接続先・認証・base URL は環境変数またはテスト設定ファイルで注入する。
+- 必須設定が未設定の場合は環境ブロッカーとして扱い、未実行のまま PASS / GREEN 扱いしない。
+- 接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。
+""".strip()
 
 
 def _get_default_akm_target_files(sources) -> str:
@@ -39,7 +55,8 @@ def _get_default_akm_target_files(sources) -> str:
     try:
         from .orchestrator import _default_akm_target_files as _impl  # type: ignore
     except ImportError:
-        from orchestrator import _default_akm_target_files as _impl  # type: ignore[no-redef]
+        import importlib
+        _impl = getattr(importlib.import_module("orchestrator"), "_default_akm_target_files")
     return _impl(sources)
 
 # ワークフロー名称マップ（タイトルプレフィックス用）
@@ -182,8 +199,7 @@ def format_agentic_retrieval_block(workflow_id: str) -> str:
         Agentic Retrieval 質問ブロックの Markdown 文字列。
         対象ワークフローでない場合は空文字列。
     """
-    # 後方互換エイリアス解決
-    wf_id = {"aad": "aad-web", "asdw": "asdw-web"}.get(workflow_id, workflow_id)
+    wf_id = canonicalize_workflow_id(workflow_id)
     keys = _AGENTIC_RETRIEVAL_KEYS_FOR.get(wf_id)
     if not keys:
         return ""
@@ -489,7 +505,10 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
     params["selected_steps"] = _prompt_steps(wf)
 
     # レビュー / 質問票設定
-    params["skip_review"] = _prompt_yes_no("セルフレビューをスキップする？", default=False)
+    params["skip_review"] = _prompt_yes_no(
+        "HVE Phase 3 の敵対的レビューをスキップする？",
+        default=False,
+    )
     params["skip_qa"] = _prompt_yes_no("質問票の作成をスキップする？", default=False)
 
     return params
@@ -514,6 +533,30 @@ def _build_existing_artifact_policy_section() -> str:
     return _load_template(_EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH).strip()
 
 
+def _inject_azure_official_info_section(body: str) -> str:
+    """Azure 関連 Step に Microsoft Learn MCP 参照規律を補う。
+
+    テンプレート側に既に明記済みの場合は重複させない。
+    """
+    if "Azure" not in body or "利用可能なら必ず参照" in body:
+        return body
+    return f"{body.rstrip()}\n\n{_AZURE_OFFICIAL_INFO_SECTION}\n"
+
+
+def _inject_generated_test_runtime_section(body: str) -> str:
+    """TDD 関連テンプレートに生成テストの実行環境契約を補う。
+
+    既にテンプレート側へ `## 生成テストの実行環境` が明記されている場合は
+    重複させない。対象は TDD 専用レポートを要求するテンプレートに限定し、
+    通常の設計・ドキュメント生成テンプレートへは注入しない。
+    """
+    if "生成テストの実行環境" in body:
+        return body
+    if "tdd-test-report.md" not in body and "TDD テスト結果レポート" not in body:
+        return body
+    return f"{body.rstrip()}\n\n{_GENERATED_TEST_RUNTIME_SECTION}\n"
+
+
 def _resolve_app_ids(params: dict) -> list:
     """params から app_ids リストを解決する。
 
@@ -536,8 +579,6 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
         params = {}
 
     branch = params.get("branch", "main")
-    auto_review = str(not params.get("skip_review", False)).lower()
-    auto_context_review = "true"
     auto_qa = str(not params.get("skip_qa", False)).lower()
     auto_merge = str(bool(params.get("enable_auto_merge", False))).lower()
 
@@ -557,8 +598,6 @@ def _build_root_ref(root_issue_num: int, params: Optional[dict] = None) -> str:
     if app_id:
         parts.append(f"<!-- app-ids: {app_id} -->")
 
-    parts.append(f"<!-- auto-review: {auto_review} -->")
-    parts.append(f"<!-- auto-context-review: {auto_context_review} -->")
     parts.append(f"<!-- auto-qa: {auto_qa} -->")
     parts.append(f"<!-- auto-merge: {auto_merge} -->")
 
@@ -584,7 +623,8 @@ def _build_qa_review_context_section() -> str:
         "- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n"
         "- この PR または関連 Issue のレビュー指摘\n"
         "- Self-Improve 結果または改善計画（存在する場合のみ）\n"
-        "- `## 入力` に記載された前 Step 成果物\n"
+        "- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。"
+        "他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n"
         "- 追加で注入された既存成果物・reuse context\n\n"
         "参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。"
         "反映しない場合は理由を完了コメントまたは成果物内に記録してください。"
@@ -937,6 +977,9 @@ def render_template(
             body,
         )
 
+    body = _inject_azure_official_info_section(body)
+    body = _inject_generated_test_runtime_section(body)
+
     return body
 
 
@@ -994,8 +1037,6 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
     """Root Issue の本文を組み立てる。"""
     prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
     branch = params.get("branch", "main")
-    auto_review = str(not params.get("skip_review", False)).lower()
-    auto_context_review = "true"
     auto_qa = str(not params.get("skip_qa", False)).lower()
     auto_merge = str(bool(params.get("enable_auto_merge", False))).lower()
 
@@ -1011,8 +1052,6 @@ def build_root_issue_body(wf: WorkflowDef, params: dict) -> str:
         lines.append(f"<!-- app-ids: {', '.join(app_ids)} -->")
     if params.get("app_id"):
         lines.append(f"<!-- app-ids: {params['app_id']} -->")
-    lines.append(f"<!-- auto-review: {auto_review} -->")
-    lines.append(f"<!-- auto-context-review: {auto_context_review} -->")
     lines.append(f"<!-- auto-qa: {auto_qa} -->")
     lines.append(f"<!-- auto-merge: {auto_merge} -->")
     if "create_remote_mcp_server" in wf.params:

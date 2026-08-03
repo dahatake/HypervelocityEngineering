@@ -10,7 +10,11 @@ import pytest
 
 from hve.__main__ import _build_parser, _cmd_login
 from hve.auth import AuthError, AuthInfo
-from hve.models_api import ModelsAPIError
+from hve.models_api import ModelEntry, ModelsAPIError
+
+
+def _entries(*model_ids: str) -> list[ModelEntry]:
+    return [ModelEntry(id=model_id, name=model_id) for model_id in model_ids]
 
 
 def _parse(argv):
@@ -90,7 +94,7 @@ class TestNormalLogin:
         info = AuthInfo(is_authenticated=True, login="alice")
         with patch("hve.auth.run_login", return_value=0), \
              patch("hve.auth.get_auth_status", return_value=info), \
-             patch("hve.models_api.fetch_models", return_value=["a", "b", "c"]):
+             patch("hve.models_api.fetch_model_entries", return_value=_entries("a", "b", "c")):
             rc = _cmd_login(_parse(["login"]))
         assert rc == 0
         cached = models_cache.load()
@@ -103,7 +107,7 @@ class TestNormalLogin:
         info = AuthInfo(is_authenticated=True, login="alice")
         with patch("hve.auth.run_login", return_value=0), \
              patch("hve.auth.get_auth_status", return_value=info), \
-             patch("hve.models_api.fetch_models") as mock_fetch:
+             patch("hve.models_api.fetch_model_entries") as mock_fetch:
             rc = _cmd_login(_parse(["login", "--skip-fetch"]))
         assert rc == 0
         mock_fetch.assert_not_called()
@@ -123,7 +127,7 @@ class TestNormalLogin:
         info = AuthInfo(is_authenticated=True, login="alice")
         with patch("hve.auth.run_login", return_value=0), \
              patch("hve.auth.get_auth_status", return_value=info), \
-             patch("hve.models_api.fetch_models", side_effect=ModelsAPIError("net error")):
+             patch("hve.models_api.fetch_model_entries", side_effect=ModelsAPIError("net error")):
             rc = _cmd_login(_parse(["login"]))
         # ログイン自体は成功しているため非エラー
         assert rc == 0
@@ -132,7 +136,7 @@ class TestNormalLogin:
         info = AuthInfo(is_authenticated=True, login="alice")
         with patch("hve.auth.run_login", return_value=0) as mock_login, \
              patch("hve.auth.get_auth_status", return_value=info), \
-             patch("hve.models_api.fetch_models", return_value=["a"]):
+             patch("hve.models_api.fetch_model_entries", return_value=_entries("a")):
             _cmd_login(_parse(["login", "--host", "https://example.ghe.com"]))
         mock_login.assert_called_once()
         assert mock_login.call_args.kwargs.get("host") == "https://example.ghe.com"
@@ -143,7 +147,7 @@ class TestNormalLogin:
         info = AuthInfo(is_authenticated=True, login="alice")
         with patch("hve.auth.run_login", return_value=0), \
              patch("hve.auth.get_auth_status", return_value=info), \
-             patch("hve.models_api.fetch_models", return_value=[]):
+             patch("hve.models_api.fetch_model_entries", return_value=[]):
             rc = _cmd_login(_parse(["login"]))
         assert rc == 0
         assert models_cache.load() is None

@@ -1,6 +1,6 @@
 ﻿> GitHub Actions CI/CD ワークフロー・README・スモークテストを作成し Azure Functions データフローアプリをデプロイする（Step 3: Azure Functions Deploy）
 
-> **WORK**: `/work/Dev-Dataflow-FunctionsDeploy/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Dev-Dataflow-FunctionsDeploy/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -48,7 +48,14 @@
 
 - `.github/workflows/deploy-batch-functions.yml`（データフローアプリ Azure Functions の CI/CD ワークフロー）
 - `src/infra/azure/dataflow/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
+- AC 検証結果（`{WORK}ac-verification.md` に記録。Orchestrator gate は `Issue-<識別子>` 直下を検査するため `artifacts/` 配下に置かない）
 - 作業ログ: `{WORK}` 配下
+
+## Azure 公式情報参照（Microsoft Learn MCP 必須）
+
+- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
+- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
+- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -128,6 +135,14 @@ B) GitHub Actions CI/CD ワークフロー
 | AC-4 | `.github/workflows/deploy-batch-functions.yml` が YAML 構文的に正しい（`yamllint` またはスキーマ確認） | |
 | AC-5 | `dotnet build`・`dotnet test` がリポジトリルートで成功する | |
 
+#### 実在系 AC の記録要件（必須）
+
+- `{WORK}ac-verification.md` に各 AC を 1 行 1 AC のテーブル行で記録する。
+- 実在系 **AC-2 / AC-3 は `✅` のみ許容**。`❌` / `⏳` / `NEEDS-VERIFICATION` のまま success / 成功扱いにしてはならない。
+- 記録例: `| AC-2 | verify-batch-resources.sh GREEN | ✅ | <verify-batch-resources.sh ログ抜粋> |`
+- 記録例: `| AC-3 | Azure resources exist | ✅ | <az resource show / verify ログ抜粋> |`
+- ブロッカー・タイムアウト・権限不足などで GREEN 未達の場合も `{WORK}ac-verification.md` を作成し、未達 AC を `❌` として理由を記録して終了する。
+
 ## 7) 書き込み安全策（空ファイル/欠落対策）
 
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: ヘッダ → リソースグループ作成 → Function App 作成 → ...）。
@@ -152,16 +167,20 @@ B) GitHub Actions CI/CD ワークフロー
 - `src/infra/azure/dataflow/README.md` に手順・環境変数・トラブルシューティングが記載されている。
 - 作業ログが更新されている。
 
-## 10) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 10) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 10.1 3つの異なる観点（このエージェント固有）
+### 10.1 セルフチェック契約
 
-- **1回目：技術妥当性・AC 達成度**：スクリプトがべき等で安全か、全リソースが `batch-service-catalog.md` のマッピングを網羅しているか、AC 検証の全項目が合格しているか、シークレット管理が正しいか（Key Vault / GitHub Secrets）
-- **2回目：運用・自動化視点**：CI/CD ワークフローが再実行耐性を持つか、デプロイ失敗時のロールバック手順は README に記載されているか、スモークテストで基本動作が確認できるか、モニタリング（Application Insights / Azure Monitor アラート）の設定は `docs/dataflow/dataflow-monitoring-design.md` と整合しているか
-- **3回目：保守性・セキュリティ・コンプライアンス**：スクリプトの可読性と再利用性、パラメータのハードコードがないか、最小権限原則が守られているか（マネージド ID 優先）、既存の `src/infra/azure/` パターンとの一貫性
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 10.2 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 10.2 ドメイン固有観点
+
+- **技術妥当性・AC 達成度**：スクリプトがべき等で安全か、全リソースが `batch-service-catalog.md` のマッピングを網羅しているか、実在系AC-2/AC-3を含む全ACが合格しているか、シークレット管理が正しいか（Key Vault / GitHub Secrets）
+- **運用・自動化視点**：CI/CD ワークフローが再実行耐性を持つか、デプロイ失敗時のロールバック手順は README に記載されているか、スモークテストで基本動作が確認できるか、モニタリング（Application Insights / Azure Monitor アラート）の設定は `docs/dataflow/dataflow-monitoring-design.md` と整合しているか
+- **保守性・セキュリティ・コンプライアンス**：スクリプトの可読性と再利用性、パラメータのハードコードがないか、最小権限原則が守られているか（マネージド ID 優先）、既存の `src/infra/azure/` パターンとの一貫性
+
+### 10.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。

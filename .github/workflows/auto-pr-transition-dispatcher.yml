@@ -2,7 +2,7 @@ name: PR Transition Dispatcher
 
 on:
   pull_request_target:
-    types: [synchronize]
+    types: [synchronize, labeled]
   issue_comment:
     types: [created]
 
@@ -60,11 +60,15 @@ jobs:
           pr_data=$(gh api "/repos/${REPO}/pulls/${pr_number}")
           pr_labels=$(echo "${pr_data}" | jq -c '[.labels[].name] // []')
           pr_body=$(echo "${pr_data}" | jq -r '.body // ""')
+          pr_body_head=$(printf '%s' "${pr_body}" | sed '/<!-- START COPILOT ORIGINAL PROMPT -->/,$d')
           is_draft=$(echo "${pr_data}" | jq -r '.draft // false')
 
           has_auto_qa=$(echo "${pr_labels}" | jq -r 'if index("auto-qa") == null then "false" else "true" end')
           has_qa_questionnaire_pr=$(echo "${pr_labels}" | jq -r 'if index("qa-questionnaire-pr") == null then "false" else "true" end')
-          has_auto_context_review=$(echo "${pr_labels}" | jq -r 'if index("auto-context-review") == null then "false" else "true" end')
+          has_adversarial_review=$(echo "${pr_labels}" | jq -r 'if index("adversarial-review") == null then "false" else "true" end')
+          if printf '%s' "${pr_body_head}" | grep -qF '<!-- adversarial-review: false -->'; then
+            has_adversarial_review=false
+          fi
           has_auto_approve_ready=$(echo "${pr_labels}" | jq -r 'if index("auto-approve-ready") == null then "false" else "true" end')
           has_create_subissues=$(echo "${pr_labels}" | jq -r 'if index("create-subissues") == null then "false" else "true" end')
           has_split_mode=$(echo "${pr_labels}" | jq -r 'if index("split-mode") == null then "false" else "true" end')
@@ -87,37 +91,27 @@ jobs:
               target=create_subissues
             elif [[ "${has_auto_qa}" == "true" ]] \
                  && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
-                 && [[ "${has_auto_context_review}" != "true" ]] \
+                 && [[ "${has_adversarial_review}" != "true" ]] \
                  && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=qa_to_review
-            elif [[ "${has_auto_context_review}" == "true" ]] \
+            elif [[ "${has_adversarial_review}" == "true" ]] \
                  && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
                  && [[ "${has_auto_approve_ready}" != "true" ]] \
                  && [[ "${is_draft}" != "true" ]]; then
               target=review_to_approve
-            elif [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then
-              target=create_subissues
             fi
           else
-            if [[ "${has_split_mode}" == "true" ]] \
-               && [[ "${has_auto_approve_ready}" == "true" ]] \
-               && [[ "${has_create_subissues}" != "true" ]] \
-               && [[ "${is_copilot_bot}" == "true" ]]; then
-              target=create_subissues
-            elif ([[ "${is_copilot_bot}" == "true" ]] || [[ "${is_default_answer_comment}" == "true" ]]) \
+            if ([[ "${is_copilot_bot}" == "true" ]] || [[ "${is_default_answer_comment}" == "true" ]]) \
                && [[ "${has_auto_qa}" == "true" ]] \
                && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
-               && [[ "${has_auto_context_review}" != "true" ]] \
+               && [[ "${has_adversarial_review}" != "true" ]] \
                && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=qa_to_review
             elif [[ "${is_copilot_bot}" == "true" ]] \
-                 && [[ "${has_auto_context_review}" == "true" ]] \
+                 && [[ "${has_adversarial_review}" == "true" ]] \
                  && [[ "${has_qa_questionnaire_pr}" != "true" ]] \
                  && [[ "${has_auto_approve_ready}" != "true" ]]; then
               target=review_to_approve
-            elif [[ "${is_copilot_bot}" == "true" ]] \
-                 && [[ "${has_split_mode}" == "true" ]] && [[ "${has_create_subissues}" != "true" ]]; then
-              target=create_subissues
             fi
           fi
 

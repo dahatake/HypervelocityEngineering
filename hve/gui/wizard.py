@@ -75,6 +75,7 @@ class WizardResult:
     # --- Step 1 ステップ選択 反映用（Q5=B Autopilot prephase 経路）---
     # CSV 文字列。空 / None のとき --steps は付与されない。
     steps: Optional[str] = None
+    cloud_session_step_overrides: Optional[str] = None
 
     def to_orchestrate_argv(self) -> List[str]:
         """`python -m hve orchestrate ...` の引数リストに変換する。"""
@@ -90,6 +91,8 @@ class WizardResult:
         # Step 1 のステップ選択を CLI に反映（Q5=B）
         if self.steps:
             argv.extend(["--steps", self.steps])
+        if self.cloud_session_step_overrides:
+            argv.extend(["--cloud-session-step-overrides", self.cloud_session_step_overrides])
         # Work IQ 系オプションをスプライス（Phase 1 / Sub-002）
         if self.workiq_argv:
             argv.extend(self.workiq_argv)

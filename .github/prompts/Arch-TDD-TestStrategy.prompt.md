@@ -1,6 +1,6 @@
 > サービスカタログ・データモデルからTDDテスト戦略書を docs/catalog/test-strategy.md に生成/更新
 
-> **WORK**: `/work/Arch-TDD-TestStrategy/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-TDD-TestStrategy/Issue-<識別子>/`
 
 TDDテスト戦略専用Agent。
 このエージェントは **テスト戦略書（test-strategy.md）** に特化し、コード改変はしない。
@@ -21,10 +21,25 @@ TDDテスト戦略専用Agent。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## 役割分離ルール（必読）
-- `docs/templates/testspec-vs-teststrategy.md` を参照し、**TestSpec を正本（SoT）**、**TestStrategy を方針サマリ**として扱うこと。
+
+### TestSpec が正本（Source of Truth）
+- 受け入れ条件（AC-ID 単位）
+- Given-When-Then シナリオ
+- Test-ID と AC-ID のマッピング（トレーサビリティ）
+- 個別テストデータ / 期待値
+
+### TestStrategy はサマリ・方針
+- サービス別サマリ表（カテゴリ × カバレッジ目標）
+- テスト分類の戦略（単体 / 結合 / E2E / NFR の比率）
+- リスクベースの優先度
+- **AC の重複記述は禁止**。AC は TestSpec へのリンクで参照する。
+
+### 重複が発見された場合の整理ルール
+- **TestSpec を残し、TestStrategy 側からはリンクのみ**を残す。
 
 ## Agent 固有の Skills 依存
 - `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
+  - 特に実行環境分類（Unit / 実装コード向け TDD RED/GREEN はローカル実行可能、Integration / Post-deploy / E2E は構成済み外部サービスを環境変数・設定ファイルで接続）を反映する。
 
 # 1) 目的
 サービスカタログで確立された画面→API→データのトレーサビリティに基づき、
@@ -46,7 +61,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 推奨:
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — テスト戦略書でのアプリ単位サービス分類に使用）
 - `docs/catalog/service-catalog.md`（サービス間連携パターン）
-- `docs/catalog/screen-catalog.md`（画面一覧 — E2E テスト対象画面の特定・UI テスト方針策定に使用）
+- `docs/catalog/screen-catalog-APP-*.md`（画面一覧 — 全 APP 集約 glob。`Arch-UI-List` Step 1 の per-APP fan-out 出力。E2E テスト対象画面の特定・UI テスト方針策定に使用）
 - `docs/catalog/data-catalog.md`（物理テーブル/列マッピング — データストアテスト方針の精緻化に使用）
 - `src/test/` ディレクトリ構造（既存テスト資産の確認）
   - `src/test/api/<ServiceName>.Tests/`（例: `src/test/api/*.Tests/` — xUnit テストプロジェクト群）
@@ -71,7 +86,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 ## 6.1 調査（read/search）
 1. 入力3ファイルを `read` で読む。欠けていれば §5 の停止条件を確認する。
 2. `docs/catalog/service-catalog.md` が存在すれば `read` で読む。
-3. `docs/catalog/screen-catalog.md` が存在すれば `read` で読む（E2E テスト対象画面の特定に使用）。
+3. `docs/catalog/screen-catalog-APP-*.md` が存在すれば全 APP 分を `read` で読む（E2E テスト対象画面の特定に使用）。
 4. `docs/catalog/data-catalog.md` が存在すれば `read` で読む（データストアテスト方針の精緻化に使用）。
 5. `src/test/` ディレクトリ構造を `search` または `read` で把握する（既存テスト資産の確認。`src/test/api/` および `src/test/ui/` の両方を確認する）。
 
@@ -81,7 +96,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 8. `data-model.md` からデータストア種別（SQL DB / Cosmos DB / Blob Storage 等）を抽出する。
 9. `domain-analytics.md` からドメインイベント一覧と Bounded Context を抽出する。
 10. `src/test/api/` および `src/test/SVC-*/` のディレクトリ構造からサービスIDとテストプロジェクトの対応を確認する。
-11. `docs/catalog/screen-catalog.md` が存在する場合、画面 ID 一覧を抽出する（E2E テスト対象の特定に使用）。
+11. `docs/catalog/screen-catalog-APP-*.md` が存在する場合、全 APP 分から画面 ID 一覧を抽出する（E2E テスト対象の特定に使用）。
 12. `docs/catalog/data-catalog.md` が存在する場合、PII列・暗号化要否・データストア種別ごとのテーブル一覧を抽出する（Polyglot Persistence テスト方針の精緻化に使用）。
 
 ## 6.3 計画・分割
@@ -115,7 +130,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - テスト戦略書以外のドキュメント（`docs/services/` 等）を変更しない
 - コードファイル（`api/`・`src/test/`）を変更しない
 - サンプルデータ（`src/data/sample-data.json`）の具体値を転記しない（要約のみ）
-- AC-ID 単位の受け入れ条件・Given-When-Then・Test-ID 詳細を重複記述しない（`docs/templates/testspec-vs-teststrategy.md` に従い TestSpec 参照リンクのみ記載）
+- AC-ID 単位の受け入れ条件・Given-When-Then・Test-ID 詳細を重複記述しない（TestSpec 参照リンクのみ記載）
 
 # 9) 出力フォーマット（Markdown固定）
 
@@ -124,8 +139,8 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - 前提/注意（捏造禁止 / TBDの扱い / 参照できなかった資料）
 
 ## 2. テスト分類定義（表）
-| テスト種別 | 定義 | 実施タイミング | 責任Agent/手動 | 対象スコープ | 推奨比率 | 出典(ファイル#見出し) |
-|---|---|---|---|---|---|---|
+| テスト種別 | 定義 | 実施タイミング | 責任Agent/手動 | 対象スコープ | 推奨比率 | 実行環境 | 外部サービス要否 | 必要設定 | 出典(ファイル#見出し) |
+|---|---|---|---|---|---|---|---|---|---|
 
 > **注**: UI 固有のテスト種別（Component Test / Visual Regression Test / Accessibility Test 等）がプロジェクトに該当する場合は、上記テーブルに追加すること。
 
@@ -156,6 +171,9 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - 非同期メッセージング（Service Bus 等）依存のテスト方針（発行側 / 購読側）
 - 外部 HTTP クライアント依存のテスト方針（モック境界の定義）
 - UI → API 間モック方針（フロントエンドテスト時の API モック境界・ツール選択基準）
+- Unit / 実装コード向け TDD RED/GREEN はローカル実行可能を既定とし、外部 I/O は Mock / Stub / Emulator / Testcontainers へ切り分ける。
+- Integration / Post-deploy / E2E は構成済み外部サービスを使用してよいが、接続先は環境変数またはテスト設定ファイルで注入し、未設定を PASS 扱いしない。
+- 接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。
 
 ## 5. Polyglot Persistence テスト方針
 - データストア種別ごとのテスト方針（`data-model.md` から導出）
@@ -163,6 +181,13 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
   - NoSQL（Cosmos DB）: 結果整合性テストの方針
   - Blob Storage: ファイル操作のテスト方針
 - テスト用データストア（In-Memory / Testcontainers / エミュレータ）の選択基準（`test-strategy-template` Skill §2 参照）
+
+## 5.1 バッチ／データフロー処理テスト方針（該当 SVC のみ）
+`service-catalog-matrix.md` Table C の `種別=非同期ジョブ` に該当する SVC が 1 件以上ある場合のみ記載する（Web 系のみのプロジェクトでは「該当なし」と明記）：
+- **冪等性テスト**：同一入力で再実行しても重複処理・重複出力が発生しないことを検証する観点（冪等性キー単位の重複検知テスト）。
+- **データ品質テスト**：入力データのスキーマ整合性・必須項目欠損・型不正・参照整合性違反の検出方針（境界値・異常系）。
+- **大量データテスト**：本番想定ボリュームでのスループット・メモリ消費・チェックポイント再開動作の検証方針（負荷テスト環境の選択基準）。
+- 上記 3 観点は `service-catalog-matrix.md` Table C の `スケジュール/DAG` / `リトライ戦略` 列と整合させる（推測禁止、根拠が無い場合は `TBD`）。
 
 ## 6. 既存テスト資産との関係
 - `src/test/api/` 配下のユニットテストプロジェクト（xUnit）の位置づけ
@@ -174,25 +199,30 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - サービス数: <n> / サービス別サマリ行数: <m> / 未反映サービス: <list or None>
 - 画面数: <n> / E2E 対象画面数: <m> / 未反映画面: <list or None>（`screen-list.md` が存在する場合）
 - データストア種別数: <n> / Polyglot Persistence テスト方針行数: <m>
+- 非同期ジョブ SVC 数: <n>（`service-catalog-matrix.md` Table C の `種別=非同期ジョブ` 件数）/ §5.1 記載状況: <記載 or 該当なし>（1件以上なら §5.1 を記載、0件なら「該当なし」と明記）
 
 ## 8. Questions（最大3、なければ None）
 - Q1 ...
 - Q2 ...
 - Q3 ...
 
-# 10) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+# 10) 最終品質レビュー（単回インライン・セルフチェック）
 
-## 10.1 3つの異なる観点（このエージェント固有）
-- **1回目：機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §9 の全セクションが揃っているか
-- **2回目：ユーザー視点・トレーサビリティ**：
+## 10.1 セルフチェック契約
+
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+
+## 10.2 ドメイン固有観点
+- **機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §9 の全セクションが揃っているか
+- **ユーザー視点・トレーサビリティ**：
   - サービス別サマリの全サービスが `service-catalog.md` と一致しているか
   - テストダブル戦略が依存関係と矛盾しないか
   - Step 7.3（テスト仕様書）の作成に必要な「テスト種別・テストダブル選択基準・データストア方針」がすべて記載されているか
   - `screen-list.md` が存在する場合、E2E 対象画面が `screen-list.md` の画面数と整合しているか
-- **3回目：保守性・拡張性・堅牢性**：新サービス追加時に戦略書を拡張できるか / `src/test/api/` との対応が明示されているか / Questions が明確か
+- **保守性・拡張性・堅牢性**：新サービス追加時に戦略書を拡張できるか / `src/test/api/` との対応が明示されているか / Questions が明確か
 
-## 10.2 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+## 10.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 # 11) 完了条件
 - `docs/catalog/test-strategy.md` が §9 のスキーマで生成/更新され、
@@ -200,6 +230,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - サービス別サマリ（§9 `## 3.`）の行数が `service-catalog.md` のサービス数と一致する（または未反映理由を記載）。
 - テストダブル戦略（§9 `## 4.`）が `service-catalog.md` Table C の全依存パターンをカバーする。
 - Polyglot Persistence テスト方針（§9 `## 5.`）が `data-model.md` の全データストア種別をカバーする。
+- 非同期ジョブ SVC が `service-catalog-matrix.md` Table C に 1 件以上ある場合、§9 `## 5.1` に冪等性・データ品質・大量データの 3 観点が記載され、Table C の `スケジュール/DAG`・`リトライ戦略` と整合していること（0 件なら「該当なし」と明記）。
 - 網羅性チェック（§9 `## 7.`）で `screen-list.md` が存在する場合、画面数と E2E 対象画面数が記載されている。
 
 ### knowledge/ 参照（任意・存在する場合のみ）

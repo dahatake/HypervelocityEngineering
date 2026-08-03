@@ -16,7 +16,7 @@ Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を�
 ## 入力
 - `docs/agent/agent-detail-*.md`（Agent 詳細設計書）
 - `docs/ai-agent-catalog.md`
-- TDD テストコード（RED状態）: `test/agent/{AgentName}.Tests/`
+- TDD テストコード（RED状態）: `src/test/agent/{AgentName}.Tests/`
 - TDD テスト仕様書: `docs/test-specs/{agentId}-test-spec.md`
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/azure/azure-services-additional.md`

@@ -109,9 +109,8 @@ class PtySession(ABC):
             - POSIX 実装 (``ptyprocess``) は ``select`` ベースで真の非ブロッキング。
             - Windows 実装 (``pywinpty``) は内部 ``read()`` が短時間ブロッキング
               (バックエンドの内部タイムアウト依存、概ね 1 秒以下) する場合がある。
-              呼び出し側の Qt UI ループは ``QTimer`` ポーリング (20ms) を想定して
-              いるため、Windows での出力が長時間来ない区間ではポーリング間隔が
-              実質伸びる可能性がある。
+              GUI から利用する場合は UI スレッドで直接呼ばず、worker thread 等で
+              読み取ること。
 
         子プロセス終了後に残バッファが空になった場合も ``b""`` が返るため、
         :meth:`is_alive` と組み合わせて EOF を判定する。
@@ -201,7 +200,8 @@ class _WindowsPtySession(PtySession):
         try:
             # pywinpty の read() はブロッキング寄り。非ブロッキング読み出しは
             # `read(size, blocking=False)` 形式が無いため、isalive + 短いタイムアウト相当の
-            # 読み出しに頼る。ここでは ``read`` を呼んで EOF/空文字を許容する。
+            # 読み出しに頼る。GUI 呼び出し側は worker thread でこのメソッドを呼ぶ。
+            # ここでは ``read`` を呼んで EOF/空文字を許容する。
             data = self._proc.read(max_bytes)
         except EOFError:
             return b""

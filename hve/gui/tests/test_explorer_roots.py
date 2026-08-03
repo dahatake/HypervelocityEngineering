@@ -67,7 +67,7 @@ def test_resolve_explorer_roots_creates_and_returns_dirs(tmp_path: Path) -> None
 
 
 def test_resolve_explorer_roots_with_extra_roots_first(tmp_path: Path) -> None:
-    work_root = tmp_path / "work" / "gui-runs" / "session-1"
+    work_root = tmp_path / "work" / "runs" / "session-1"
     work_root.mkdir(parents=True)
     result = resolve_explorer_roots(
         "docs;qa", repo_root=tmp_path, extra_roots=[work_root]

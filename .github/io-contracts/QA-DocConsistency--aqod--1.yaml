@@ -8,7 +8,7 @@ inputs:
 - path: knowledge/D07-用語集-ドメインモデル定義書.md
   required: true
   kind: static
-- path: work/kpi/fork-kpi-<run_id>.jsonl
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
   required: true
   kind: external
 outputs:

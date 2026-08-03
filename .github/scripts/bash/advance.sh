@@ -261,7 +261,7 @@ _find_step_issue_number() {
 }
 
 # ---------------------------------------------------------------------------
-# Propagate PR labels (auto-context-review / auto-qa)
+# Propagate PR labels (adversarial-review / auto-qa)
 # ---------------------------------------------------------------------------
 
 propagate_pr_labels() {
@@ -281,14 +281,16 @@ propagate_pr_labels() {
      | .source.issue.number
     ] | unique | .[]' 2>/dev/null) || return 0
 
-  local auto_review auto_qa
-  auto_review=$(extract_metadata "${body}" "auto-context-review" 2>/dev/null) || true
+  local adversarial_review auto_qa
+  adversarial_review=$(extract_metadata "${body}" "adversarial-review" 2>/dev/null) || true
   auto_qa=$(extract_metadata "${body}" "auto-qa" 2>/dev/null) || true
 
   local pr_num
   for pr_num in ${pr_numbers}; do
-    if [[ "${auto_review}" == "true" ]]; then
-      add_label "${pr_num}" "auto-context-review" "${repo}" 2>/dev/null || true
+    if [[ "${adversarial_review}" == "true" ]]; then
+      add_label "${pr_num}" "adversarial-review" "${repo}" 2>/dev/null || true
+    elif [[ "${adversarial_review}" == "false" ]]; then
+      gh issue edit "${pr_num}" --repo "${repo}" --remove-label "adversarial-review" >/dev/null 2>&1 || true
     fi
     if [[ "${auto_qa}" == "true" ]]; then
       add_label "${pr_num}" "auto-qa" "${repo}" 2>/dev/null || true

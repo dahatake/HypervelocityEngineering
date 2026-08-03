@@ -92,8 +92,10 @@ class SubprocessReader(QThread):
 
     # 1 行受信するたびに emit（行末改行なし）
     line_received = Signal(str)
-    # サブプロセス終了時に returncode を emit
-    finished_with_code = Signal(int)
+    # サブプロセス終了時に returncode を emit。
+    # Windows のプロセス終了コードは符号なし 32bit（例: 0xC000013A=3221225786,
+    # Ctrl-C 終了）になり得て Qt の符号付き 32bit int を超えるため qlonglong(64bit) を使う。
+    finished_with_code = Signal("qlonglong")  # type: ignore[arg-type]  # PySide6 は文字列型名を許容（スタブ未対応）
 
     def __init__(
         self,

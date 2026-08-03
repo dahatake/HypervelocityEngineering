@@ -2,11 +2,12 @@
 
 {app_arch_scope_section}
 ## 目的
-サービスカタログとデータモデルを根拠に、データフロー処理固有のテスト戦略書（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト方針）を作成する。
+全社テスト戦略・データフローアプリカタログ・データフローサービスカタログに基づき、データフロー処理固有のテスト戦略書を作成する。
 
 ## 入力
+- `docs/catalog/test-strategy.md`
+- `docs/dataflow/dataflow-app-catalog.md`
 - `docs/dataflow/dataflow-service-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
 
 ## 出力
 - `docs/dataflow/dataflow-test-strategy.md`
@@ -17,8 +18,8 @@
 `Arch-Dataflow-TestStrategy` を使用
 
 ## 依存
-- Step.4（サービスカタログ）が `adfd:done` であること
+- Step.4（データフローサービスカタログ）が `adfd:done` であること
 
 ## 完了条件
-- `docs/dataflow/dataflow-test-strategy.md` が作成されている
+- `docs/dataflow/dataflow-test-strategy.md` が作成され、`## 4. テストダブル戦略` に Azurite / Testcontainers の利用有無が明記されている
 {completion_instruction}{additional_section}

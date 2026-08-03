@@ -218,8 +218,8 @@ def build_snapshot(state: WorkbenchState) -> Tuple[List[StatSection], dict]:
         pricing_fetched_at = str(getattr(pricing_obj, "fetched_at", "") or "")
         pricing_status = str(getattr(pricing_obj, "status", "") or "")
     cost_items = [
-        StatItem("累積コスト", cost_disp),
-        StatItem("Premium Requests 累積", _fmt_int(getattr(state, "premium_requests_total", 0))),
+        StatItem("累積コスト (pricing 計算)", cost_disp),
+        StatItem("Premium Requests (shutdown)", _fmt_int(getattr(state, "premium_requests_total", 0))),
         StatItem("計算方式", cost_method or _DASH),
         StatItem("USD/JPY レート", _fmt_int(int(getattr(state, "pricing_usd_jpy_rate", 0) or 0))),
         StatItem("料金表 取得日時", pricing_fetched_at or _DASH),
@@ -227,6 +227,85 @@ def build_snapshot(state: WorkbenchState) -> Tuple[List[StatSection], dict]:
     ]
     if cost_reason:
         cost_items.append(StatItem("未計算理由", cost_reason))
+
+    # --- AI Credit (SDK 直接、Phase A) ---
+    # SDK の assistant.usage.copilot_usage.total_nano_aiu を累積した値。
+    # pricing 表に依存せず、SDK が提供する正規の AI Credit (AIU 単位)。
+    sdk_aiu_nano = int(getattr(state, "sdk_aiu_total_nano", 0) or 0)
+    sdk_aiu = sdk_aiu_nano / 1_000_000_000.0 if sdk_aiu_nano > 0 else 0.0
+    sdk_mc_total = getattr(state, "sdk_multiplier_cost_total", None)
+    sdk_credit_items = [
+        StatItem(
+            "累積 AI Credit (AIU)",
+            f"{sdk_aiu:.6f} AIU" if sdk_aiu_nano > 0 else _DASH,
+        ),
+        StatItem("累積 Nano AIU", _fmt_int(sdk_aiu_nano) if sdk_aiu_nano > 0 else _DASH),
+        StatItem(
+            "累積 Multiplier Cost",
+            f"{float(sdk_mc_total):.4f}" if sdk_mc_total else _DASH,
+        ),
+        StatItem(
+            "API call 件数 (dedup 後)",
+            _fmt_int(len(getattr(state, "seen_api_call_ids", set()))),
+        ),
+    ]
+    credit_reason = getattr(state, "sdk_credit_unavailable_reason", "") or ""
+    if credit_reason:
+        sdk_credit_items.append(StatItem("未取得理由", credit_reason))
+    # model 別内訳
+    credit_per_model = getattr(state, "sdk_credit_per_model", {}) or {}
+    for model_name, slot in credit_per_model.items():
+        try:
+            m_nano = int(slot.get("nano_aiu", 0) or 0)
+            m_count = int(slot.get("count", 0) or 0)
+        except (TypeError, ValueError):
+            m_nano = 0
+            m_count = 0
+        if m_nano > 0 or m_count > 0:
+            sdk_credit_items.append(
+                StatItem(
+                    f"  └ {model_name}",
+                    f"{m_nano / 1_000_000_000.0:.6f} AIU / {m_count} calls",
+                )
+            )
+
+    # --- Quota Snapshot (Phase A) ---
+    # 各 quota の最新値と、Workflow 開始時 baseline からの差分 (=Reqs 増分)。
+    quota_latest = getattr(state, "quota_snapshots_latest", {}) or {}
+    quota_items: List[StatItem] = []
+    if quota_latest:
+        for qid in sorted(quota_latest.keys()):
+            snap = quota_latest.get(qid) or {}
+            try:
+                used = float(snap.get("used_requests", 0) or 0)
+                ent = float(snap.get("entitlement_requests", 0) or 0)
+                rem_pct = float(snap.get("remaining_percentage", 0) or 0)
+                over = float(snap.get("overage", 0) or 0)
+                unlim = bool(snap.get("is_unlimited_entitlement", False))
+            except (TypeError, ValueError):
+                continue
+            try:
+                delta = int(state.quota_used_delta(qid))
+            except Exception:
+                delta = 0
+            ent_str = "∞" if unlim else f"{int(ent)}"
+            quota_items.append(
+                StatItem(
+                    f"quota:{qid}",
+                    f"used={int(used)} / ent={ent_str} / 残{rem_pct:.1f}% / over={int(over)} / Δ={delta}",
+                )
+            )
+            reset_iso = snap.get("reset_date_iso")
+            if reset_iso:
+                quota_items.append(StatItem(f"  └ reset_date", str(reset_iso)))
+        try:
+            quota_items.append(
+                StatItem("全 quota Δ 合計 (= Reqs)", _fmt_int(int(state.total_quota_used_delta)))
+            )
+        except Exception:
+            pass
+    else:
+        quota_items.append(StatItem("quota_snapshots", _DASH))
 
     # --- Elapsed (Wave 4) ---
     import time as _time
@@ -274,7 +353,9 @@ def build_snapshot(state: WorkbenchState) -> Tuple[List[StatSection], dict]:
         StatSection("Step Activity", tuple(step_items)),
         StatSection("Compaction", tuple(compaction_items)),
         StatSection("Permission", tuple(permission_items)),
-        StatSection("Cost (AI Credit)", tuple(cost_items)),
+        StatSection("AI Credit (SDK 直接)", tuple(sdk_credit_items)),
+        StatSection("Quota Snapshot", tuple(quota_items)),
+        StatSection("Cost (pricing 計算)", tuple(cost_items)),
         StatSection("Elapsed", tuple(elapsed_items)),
         StatSection("その他", tuple(other_items)),
     ]

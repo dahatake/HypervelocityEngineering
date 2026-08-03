@@ -38,9 +38,8 @@ class KeyReader:
         return self._enabled
 
     def _can_enable(self) -> bool:
-        # Workbench 起動中は stdin の所有権を KeyReader が持つ前提（呼び出し元の
-        # orchestrator が KeybindMonitor を起動しない構成）。デフォルト有効・
-        # opt-out は `HVE_NO_KEYREADER=1` のみ。
+        # Workbench 起動中は stdin の所有権を KeyReader が持つ前提。
+        # デフォルト有効・opt-out は `HVE_NO_KEYREADER=1` のみ。
         # 後方互換として `HVE_WORKBENCH_KEYREADER=0` も無効化として受け付ける。
         if os.environ.get("HVE_NO_KEYREADER", "").strip() in ("1", "true", "True"):
             return False

@@ -1,6 +1,6 @@
-﻿> データフローアプリ設計（一覧・依存DAG・スケジュール・リトライ）を docs/dataflow/dataflow-app-catalog.md に作成
+> データフローアプリカタログを docs/dataflow/dataflow-app-catalog.md に作成
 
-> **WORK**: `/work/Arch-Dataflow-AppCatalog/Issue-<識別子>/`
+> **WORK**: `work/run/<run-id>/Arch-Dataflow-AppCatalog/Issue-<識別子>/`
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
@@ -19,7 +19,7 @@
 
 ## Agent 固有の Skills 依存
 
-- `dataflow-design-guide` — ジョブ一覧・依存 DAG・スケジュール・リトライ設計の手順
+- `dataflow-design-guide` — データフローアプリ（ジョブ）一覧・依存 DAG・スケジューリング・リトライ設計手順。`references/dataflow-job-design.md` を参照する。**本 Prompt に手順を複製せず、Skill を読んで適用すること**
 - `work-artifacts-layout` — `work/` 配下の成果物ディレクトリ構造 (§4.1) に準拠
 - `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
@@ -27,25 +27,20 @@
 
 ## 1) 目的と非目的
 
-データフローアプリ設計カタログ作成専用Agent。
-データフロー処理ドメイン分析・データソース分析・データモデルを根拠に、ジョブ分解・依存関係 DAG・スケジュール定義・リトライ戦略・エラーハンドリング方針・チェックポイント設計・並列処理戦略を **1ファイル** にまとめる。
-コード実装は範囲外（`{WORK}` 配下の計画メモのみ可）。
-
-**注意**: 本書の「ジョブ依存関係 DAG」はデータ処理の実行順序を定義するものであり、Skill task-dag-planning の「タスク計画 DAG」（Copilot の作業分割）とは別概念です。混同しないでください。
+データフローアプリカタログ作成専用Agent。
+AAS のアプリケーションカタログ・サービスカタログマトリクスと、ADFD Step 0.1 のデータフローデータモデルを根拠に、**データフロー処理を実行単位（ジョブ）へ分解した一覧**と依存 DAG・スケジュール・リトライ戦略を **1ファイル** にまとめる。
+本書は ADFDV Step 1.1 / 1.2 / 2.2 / 3 が「Job-ID 一覧・スケジュール・リトライ戦略・依存 DAG」を読み取る唯一の参照先であり、依存確認で **「1. ジョブ一覧表」の見出しの存在**が停止条件として検査される。
+ジョブごとの詳細仕様（変換ルール・フィールドマッピング）は範囲外（ADFD Step 1 = `Arch-Dataflow-AppSpec` が担当）。Azure サービス選定も範囲外（ADFD Step 4 = `Arch-Dataflow-ServiceCatalog` が担当）。
 
 ## 2) 入力・出力
 
 ### 2.1 入力（必須）
 
-- `docs/dataflow/dataflow-domain-analytics.md`（Arch-Dataflow-DomainAnalytics の出力）
-- `docs/dataflow/dataflow-data-source-analysis.md`（Arch-Dataflow-DataSourceAnalysis の出力）
-- `docs/dataflow/dataflow-data-model.md`（Arch-Dataflow-DataModel の出力）
+- `docs/catalog/app-catalog.md`（AAS の SoT — APP-ID 一覧・主責務・所有 SoR）
+- `docs/catalog/service-catalog-matrix.md`（AAS の SoT — サービス × 連携・スケジュール・依存関係）
+- `docs/dataflow/dataflow-data-model.md`（ADFD Step 0.1 の出力 — 対象エンティティ・冪等性キー）
 
-### 2.2 参照（任意・必要最小限）
-
-- `docs/catalog/use-case-catalog.md`（存在する場合）
-
-### 2.3 出力（必須）
+### 2.2 出力（必須）
 
 - `docs/dataflow/dataflow-app-catalog.md`
 
@@ -53,9 +48,9 @@
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
 - `knowledge/D04-業務プロセス仕様書.md` — 業務プロセス
 - `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ
-- `knowledge/D06-業務ルール-判定表仕様書.md` — 業務ルール・判定表
+- `knowledge/D15-非機能-運用-監視-DR-仕様書.md` — 非機能・運用・監視・DR
 
-## 4) 実行手順（順序固定）
+## 3) 実行手順（順序固定）
 
 ### 3.0 依存確認（必須・最初に実行）
 
@@ -64,17 +59,16 @@
   - **「依存 Step が未完了のため、このタスクは実行不可です。不足: <ファイル名>」** と出力して **即座に停止** する。
   - ⚠️ 他Agent呼出・不足ファイル自己作成は禁止（スコープ外）。
 - 「見出し構造が不完全」の判定基準：
-  - `batch-domain-analytics.md`：`## 10.` 系（Bounded Context）、`## 11.` 系（データフロー処理 BC）が存在しない
-  - `batch-data-source-analysis.md`：章 1〜5（データソース一覧・データ量見積・デスティネーション定義・変換ルール・SLA/SLO）が揃っていない
-  - `batch-data-model.md`：`## 2.` 系（4層データモデル）、`## 3.` 系（エンティティ定義）が存在しない
+  - `docs/catalog/app-catalog.md`：APP-ID 一覧の表が存在しない
+  - `docs/catalog/service-catalog-matrix.md`：サービス × 連携／依存関係の表が存在しない
+  - `docs/dataflow/dataflow-data-model.md`：「2. エンティティ定義」が存在しない
 
 ### 3.1 Discovery（根拠の回収）
 
 - 入力3ファイルから以下を抽出し、根拠（ファイルパス + 見出し/節）を控える：
-  - データフロー処理 Bounded Context 一覧とトリガー種別
-  - データソース/デスティネーション・変換ルール・SLA/SLO
-  - エンティティ定義・冪等性キー設計・4層データモデル
-  - データ型マッピングと処理パターン
+  - `docs/catalog/app-catalog.md` から：APP-ID 一覧・主責務・所有 SoR
+  - `docs/catalog/service-catalog-matrix.md` から：連携・スケジュール・依存関係・SLA/タイムアウト
+  - `docs/dataflow/dataflow-data-model.md` から：対象エンティティ・冪等性キー（ジョブの入出力を確定するため）
 
 ### 3.2 計画・分割
 
@@ -95,61 +89,76 @@
 
 ### 3.3 Execution（Split Mode でない場合のみ）
 
-1. 入力3ファイルを `read` する。`docs/catalog/use-case-catalog.md` が存在する場合も `read` して参照する。
+1. 入力3ファイルを `read` する。
 2. 出力ディレクトリ `docs/dataflow/` が存在しない場合は作成する。
-3. Job-ID は `JOB-{連番3桁}`（例：`JOB-001`）で採番する。
-4. `docs/dataflow/dataflow-app-catalog.md` を以下のチャンク方式で作成する：
-   - **チャンク1**: ヘッダ＋「1. ジョブ一覧表」を新規作成 → `read` で空でないことを確認
-   - **チャンク2**: 「2. ジョブ依存 DAG」（Mermaid `graph TD`）を `edit` で追記 → `read` 確認
-   - **チャンク3**: 「3. スケジュール定義」「4. リトライ戦略」を `edit` で追記 → `read` 確認
-   - **チャンク4**: 「5. エラーハンドリング方針」「6. チェックポイント/リスタート設計」「7. 並列処理戦略」「8. 参照」を `edit` で追記 → `read` 確認
+3. `docs/dataflow/dataflow-app-catalog.md` を以下のチャンク方式で作成する：
+   - **チャンク1**: ヘッダ（対象スコープ・前提）＋「1. ジョブ一覧表」を新規作成 → `read` で空でないことを確認
+   - **チャンク2**: 「2. ジョブ依存 DAG」を `edit` で追記 → `read` 確認
+   - **チャンク3**: 「3. スケジュール定義」「4. リトライ戦略・冪等性」を `edit` で追記 → `read` 確認
+   - **チャンク4**: 「5. 参照」を `edit` で追記 → `read` 確認
    - 失敗/空になった場合：さらに小さく分割して再試行（最大3回）
-5. べき等性（再実行耐性）：同一 Job-ID は上書き更新（重複作成しない）。
+4. べき等性（再実行耐性）：`docs/dataflow/dataflow-app-catalog.md` は上書き更新（重複作成しない）。
 
-## 4) ジョブ設計カタログの作り方（簡潔ルール）
+## 4) データフローアプリカタログの作り方（ルール）
 
-- **ジョブ分解**：データモデルの各層（入力/ステージング/中間/出力）をジョブ単位に対応させる。粒度は「1つのデータソースから1つのデスティネーションへ」を基本とする。
-- **依存関係 DAG**：Mermaid `graph TD` で表現。並列実行可能なジョブは明示的に並列配置する。ループ（循環依存）は許可しない。
-- **スケジュール定義**：Cron 式、実行ウィンドウ（開始〜終了時刻）、タイムゾーンを Job-ID ごとに定義する。
-- **リトライ戦略**：ジョブごとにリトライ回数・初回間隔・指数バックオフ係数・最大間隔・デッドレターキューの配置先を定義する。
-- **エラーハンドリング方針**：Skip（スキップして継続）/ Fail-Fast（即座に停止）/ Compensate（補償トランザクション実行）の3方針から選択し、選定根拠を記述する。
-- **チェックポイント設計**：チェックポイント間隔・記録ストア・リスタート時の動作（最後のチェックポイントから再開）を定義する。
-- **並列処理戦略**：チャンクサイズ（レコード数/バイト数）・並列度（スレッド数）・スレッドプール上限を Job-ID ごとに定義する。
+- **Job-ID 採番**：Job-ID は本書で一意に採番し、以降の全 ADFD / ADFDV 成果物（`docs/dataflow/apps/{jobId}-*-spec.md`、`docs/test-specs/{jobId}-test-spec.md`、`src/dataflow/{jobId}-{jobNameSlug}/`）のキーとなる。ジョブ名スラグ（`{jobNameSlug}`）もあわせて確定し、ケバブケースで記載する。
+- **ジョブ一覧表**：1 行 1 ジョブで、Job-ID / ジョブ名 / ジョブ名スラグ / 対応 APP-ID / 処理パターン / 入力エンティティ / 出力エンティティ / 並列度 / タイムアウト / 根拠を定義する。
+- **ジョブ依存 DAG**：全ジョブの依存関係を Mermaid `graph TD` で表現する。ノード ID は Job-ID を使う。循環依存を作らない。
+- **スケジュール定義**：Job-ID ごとにトリガー種別（Timer / Queue / ServiceBus / Blob / 手動）・Cron 式またはイベント名・実行ウィンドウ・排他制御・タイムゾーンを定義する。
+- **リトライ戦略・冪等性**：Job-ID ごとにリトライ回数・バックオフ方式・リトライ対象エラー・冪等性キー（`docs/dataflow/dataflow-data-model.md` の「4. 冪等性キー定義」を参照）・エラーハンドリング方針を定義する。
+- 詳細な表項目とテンプレートは Skill `dataflow-design-guide` の `references/dataflow-job-design.md`（§1 ジョブ一覧 / §2 ジョブ依存関係 DAG / §3 スケジューリング定義）に従う。本書へ複製しない。
 - すべての定義は入力ファイルを根拠にする。根拠がない場合は `TBD` と明記する。
 
-## 5) batch-job-catalog.md の出力契約（章立て固定・順序固定）
+## 5) dataflow-app-catalog.md の出力契約（章立て固定・順序固定）
 
 以下の見出しをこの順序で含める（`docs-output-format` Skill §1 参照）。
+**「1. ジョブ一覧表」は ADFDV の依存確認が文字列一致で検査する見出しであり、名称・番号を変更してはならない。**
 
 ### 出力見出し
 
+（冒頭に見出し番号なしの前置きとして、対象スコープ・前提/注意（推測禁止・TBD の扱い・参照できなかった資料）を記載する）
+
 1. ジョブ一覧表
-   - 表：Job-ID / ジョブ名 / 処理パターン / 入力 / 出力 / 並列度 / タイムアウト / リトライ回数 / 根拠
-2. ジョブ依存 DAG（Mermaid `graph TD`）
+   - 表：Job-ID / ジョブ名 / ジョブ名スラグ / 対応 APP-ID / 処理パターン / 入力エンティティ / 出力エンティティ / 並列度 / タイムアウト / 根拠
+2. ジョブ依存 DAG
+   - Mermaid `graph TD`（ノード ID = Job-ID）
+   - 表：Job-ID / 先行ジョブ / 後続ジョブ / 結合種別（AND/OR） / 根拠
 3. スケジュール定義
-   - 表：Job-ID / Cron 式 / 実行ウィンドウ / タイムゾーン / 排他制御 / 根拠
-4. リトライ戦略
-   - 表：Job-ID / リトライ回数 / 初回間隔 / バックオフ係数 / 最大間隔 / デッドレターキュー先 / 根拠
-5. エラーハンドリング方針
-   - 表：Job-ID / エラー種別 / 方針（Skip / Fail-Fast / Compensate） / 根拠
-6. チェックポイント/リスタート設計
-   - 表：Job-ID / チェックポイント間隔 / 記録ストア / リスタート動作 / 根拠
-7. 並列処理戦略
-   - 表：Job-ID / チャンクサイズ / 並列度 / スレッドプール上限 / 根拠
-8. 参照（必須）
-   - 読んだファイルのパス一覧（例：`docs/dataflow/dataflow-domain-analytics.md`）
+   - 表：Job-ID / トリガー種別 / Cron 式・イベント名 / 実行ウィンドウ / 排他制御 / タイムゾーン / 根拠
+4. リトライ戦略・冪等性
+   - 表：Job-ID / リトライ回数 / バックオフ方式 / リトライ対象エラー / 冪等性キー / エラーハンドリング方針 / 根拠
+5. 参照（必須）
+   - 読んだファイルのパス一覧（例：`docs/catalog/service-catalog-matrix.md`）
 
 ## 6) 書き込み安全策（空ファイル/欠落対策）
 
-`large-output-chunking` Skill §3 に従う。分割粒度: §5 の出力セクション単位。
+`large-output-chunking` Skill §3 に従う（具体的なセクション順: ジョブ一覧表→依存 DAG→スケジュール→リトライ戦略→参照）。分割粒度: §5 の出力セクション単位。
 
-## 7) 最終品質レビュー（Skill adversarial-review 準拠・3観点）
+## 7) 最終品質レビュー（単回インライン・セルフチェック）
 
-### 7.2 3つの異なる観点（データフローアプリ設計カタログ固有）
+### 7.1 セルフチェック契約
 
-- **1回目：網羅性・要件達成度**：全 Bounded Context がジョブに対応付けられ、依存 DAG・スケジュール・リトライ戦略・エラーハンドリング方針・チェックポイント設計・並列処理戦略が全 Job-ID に定義され、根拠と整合しているか
-- **2回目：ユーザー視点・実装可能性**：Job-ID が安定で重複なく、DAG が正しく描画され、リトライ戦略と並列処理戦略が実装可能な粒度で定義されているか。Mermaid 記法が正しいか。
-- **3回目：保守性・拡張性・安全性**：チェックポイント設計が全ジョブに定義され、エラーハンドリング方針の根拠が妥当で、TBD 運用が適切か
+以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-### 7.3 出力方法
-レビュー記録は `{WORK}` に保存（Skill work-artifacts-layout §4.1）。PR本文にも記載。最終版のみ成果物出力。
+### 7.2 ドメイン固有観点
+
+- **網羅性・要件達成度**：全 Job-ID がジョブ一覧表・依存 DAG・スケジュール・リトライ戦略のすべてに登場し、§5 の全見出しが埋まっているか。
+- **下流適合性**：見出し「1. ジョブ一覧表」が一字一句そのまま存在するか（ADFDV 依存確認の停止条件）。Job-ID / ジョブ名スラグが下流のファイル名規約にそのまま使える形式か。
+- **保守性・拡張性・安全性**：依存 DAG に循環がないか。入力に根拠のないジョブ・スケジュールを発明していないか。TBD の運用が適切か。
+
+### 7.3 反映方法
+確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+
+<output_contract>
+- 出力先パス:
+  - 本体: `docs/dataflow/dataflow-app-catalog.md`（1 件のみ）
+  - 分割時: `work/run/<run-id>/Arch-Dataflow-AppCatalog/Issue-<識別子>/plan.md`, `subissues.md`
+- 出力フォーマット（必須セクション・順序固定）:
+  1) ジョブ一覧表 2) ジョブ依存 DAG 3) スケジュール定義 4) リトライ戦略・冪等性 5) 参照
+- 必須ルール:
+  - 見出し `## 1. ジョブ一覧表` を一字一句そのまま出力する（ADFDV 依存確認の停止条件）
+  - Job-ID は本書で一意採番し、下流成果物のファイル名キーとして再利用できる形式にする
+  - 各表に `根拠`（ファイルパス + 見出し/節）列を付与する
+- 文字数/粒度目安:
+  - ADFDV Step 1.1（データサービス選定）が、ジョブ単位で必要な Azure リソースとスケジュールを一意に導出できる粒度
+</output_contract>

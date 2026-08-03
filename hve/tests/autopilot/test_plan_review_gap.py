@@ -41,7 +41,7 @@ def test_implicit_constants_preserved() -> None:
         "docs/catalog/app-arch-catalog.md"
     ]
     assert _ARD_STEP_TO_GROUP["1.1"] == "1"
-    assert _ARD_STEP_TO_GROUP["4.2"] == "4"
+    assert _ARD_STEP_TO_GROUP["3.2"] == "4"
     # canonical order に必須 11 workflow が含まれる
     for wf in ["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
                "aag", "aagd", "akm", "aqod", "adoc"]:
@@ -133,5 +133,25 @@ def test_compute_gaps_ard_grouping(tmp_path: Path) -> None:
     from hve.autopilot.plan_review_gap import _to_enable_id
 
     assert _to_enable_id("ard", "1.1") == "1"
-    assert _to_enable_id("ard", "4.2") == "4"
+    assert _to_enable_id("ard", "3.2") == "4"
     assert _to_enable_id("aas", "1.1") == "1.1"
+
+
+def test_compute_gaps_skips_unexpanded_placeholder(tmp_path: Path) -> None:
+    """fanout 未展開プレースホルダ ``{key}`` を含むパスは gap 提案対象外。"""
+    inputs = [
+        PlannedInput(
+            workflow_id="ard",
+            step_id="3.2",
+            path="docs/usecase/{key}-detail.md",
+            status=FileStatus.MISSING_GAP,
+            producer=None,
+        )
+    ]
+    resolved, gaps = compute_gaps_and_resolve_inputs(
+        inputs, ["ard"], tmp_path, steps_by_workflow={"ard": ["3.2"]}
+    )
+    # 入力一覧には残る
+    assert any(r.path == "docs/usecase/{key}-detail.md" for r in resolved)
+    # gap 提案には含まれない
+    assert all(g.missing_path != "docs/usecase/{key}-detail.md" for g in gaps)
