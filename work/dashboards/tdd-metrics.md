@@ -1,6 +1,6 @@
 # TDD リトライメトリクス ダッシュボード
 
-> 生成日時: 2026-08-03 03:12:40 UTC  
+> 生成日時: 2026-08-04 03:10:48 UTC  
 > 集計期間: 過去 30 日  
 > リポジトリ: dahatake/HypervelocityEngineering
 
@@ -26,7 +26,7 @@
 
 | ラベル | 説明 |
 |---|---|
-| `:blocked` | TDD リトライ上限（`tdd_max_retries`、既定 5）または Deploy TDD（最大 3 回）超過 |
+| `:blocked` | TDD リトライ上限（`tdd_max_retries`、既定 5）または Deploy / 検証ループ（Step 依存で最大 3〜5 回）超過 |
 | `:human-required` | `:blocked` 付与から SLA（既定 24h）経過後に自動昇格 |
 | `:human-resolved` | 人間が解決済みと判断。付与すると `:ready` へ自動復帰 |
 
