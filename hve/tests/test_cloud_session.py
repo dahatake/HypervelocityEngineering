@@ -24,6 +24,7 @@ from cloud_session import (  # type: ignore  # noqa: E402
     is_policy_blocked_error,
     resolve_cloud_repository,
     should_use_cloud_session,
+    wait_for_cloud_session_ready,
 )
 from config import SDKConfig  # type: ignore  # noqa: E402
 
@@ -284,6 +285,47 @@ class TestCloudSessionEvents(unittest.TestCase):
         self.assertEqual(extract_mission_control_url(event), "")
 
 
+class _FakeEventSession:
+    """on(handler) 呼び出し時に即座に事前設定イベントを配信するフェイクセッション。"""
+
+    def __init__(self, event: object = None) -> None:
+        self._event = event
+
+    def on(self, handler):
+        if self._event is not None:
+            handler(self._event)
+        return lambda: None
+
+
+def _session_start_event(producer: str) -> types.SimpleNamespace:
+    return types.SimpleNamespace(
+        type=types.SimpleNamespace(value="session.start"),
+        data=types.SimpleNamespace(producer=producer),
+    )
+
+
+class TestWaitForCloudSessionReady(unittest.IsolatedAsyncioTestCase):
+    """Cloud Session の初回送信レース対策（session.start producer==copilot-agent 待機）。"""
+
+    async def test_resolves_when_copilot_agent_producer_starts(self) -> None:
+        session = _FakeEventSession(_session_start_event("copilot-agent"))
+        await wait_for_cloud_session_ready(session, timeout=1.0)
+
+    async def test_times_out_on_other_producer(self) -> None:
+        session = _FakeEventSession(_session_start_event("other-producer"))
+        with self.assertRaises(TimeoutError):
+            await wait_for_cloud_session_ready(session, timeout=0.05)
+
+    async def test_times_out_when_no_event_fires(self) -> None:
+        session = _FakeEventSession(None)
+        with self.assertRaises(TimeoutError):
+            await wait_for_cloud_session_ready(session, timeout=0.05)
+
+    async def test_returns_immediately_when_session_has_no_on(self) -> None:
+        # timeout は .on 欠如による早期 return 経路では参照されない（意図的に大きい値で明示）。
+        await wait_for_cloud_session_ready("not-a-session", timeout=60.0)
+
+
 class TestOrchestratorCloudSessionFallback(unittest.IsolatedAsyncioTestCase):
     async def test_cloud_fallback_removes_cloud_injected_streaming_only(self) -> None:
         import orchestrator  # type: ignore
@@ -385,6 +427,154 @@ class TestOrchestratorCloudSessionFallback(unittest.IsolatedAsyncioTestCase):
         self.assertIn("cloud", client.calls[0])
         self.assertIn("reasoning_effort", client.calls[1])
         self.assertNotIn("reasoning_effort", client.calls[2])
+
+    async def test_cloud_session_waits_for_readiness_before_returning(self) -> None:
+        import orchestrator  # type: ignore
+
+        class FakeCloud:
+            pass
+
+        class FakeSession:
+            pass
+
+        class FakeClient:
+            async def create_session(self, **kwargs):
+                return FakeSession()
+
+        def fake_build(*_args, **_kwargs):
+            return FakeCloud()
+
+        waited_sessions: list[object] = []
+
+        async def fake_wait(session, **_kwargs):
+            waited_sessions.append(session)
+
+        client = FakeClient()
+        with unittest.mock.patch.object(orchestrator, "build_cloud_session_options", new=fake_build), \
+                unittest.mock.patch.object(orchestrator, "wait_for_cloud_session_ready", new=fake_wait):
+            result = await orchestrator._create_session_with_auto_reasoning_fallback(
+                client,
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="orchestrator",
+                subtask_kind="orchestrator",
+            )
+        self.assertEqual(len(waited_sessions), 1)
+        self.assertIs(waited_sessions[0], result)
+
+    async def test_cloud_session_readiness_timeout_falls_back_to_local(self) -> None:
+        import orchestrator  # type: ignore
+
+        class FakeCloud:
+            pass
+
+        class FakeClient:
+            def __init__(self) -> None:
+                self.calls: list[dict] = []
+
+            async def create_session(self, **kwargs):
+                self.calls.append(dict(kwargs))
+                return object()
+
+        def fake_build(*_args, **_kwargs):
+            return FakeCloud()
+
+        async def fake_wait_timeout(session, **_kwargs):
+            raise TimeoutError("readiness timeout")
+
+        client = FakeClient()
+        with unittest.mock.patch.object(orchestrator, "build_cloud_session_options", new=fake_build), \
+                unittest.mock.patch.object(orchestrator, "wait_for_cloud_session_ready", new=fake_wait_timeout):
+            result = await orchestrator._create_session_with_auto_reasoning_fallback(
+                client,
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="orchestrator",
+                subtask_kind="orchestrator",
+            )
+        self.assertIsNotNone(result)
+        self.assertEqual(len(client.calls), 2)
+        self.assertIn("cloud", client.calls[0])
+        self.assertNotIn("cloud", client.calls[1])
+
+    async def test_cloud_session_readiness_timeout_releases_limiter_slot(self) -> None:
+        import orchestrator  # type: ignore
+
+        class FakeCloud:
+            pass
+
+        class FakeSessionWithDisconnect:
+            """disconnect() を持つセッション（release_slot が disconnect 経由でしか
+            起きない現実的な形にするため、attach_cloud_session_limiter_release の
+            即時解放フォールバックを意図的に迂回する）。"""
+
+            async def disconnect(self) -> None:
+                return None
+
+        class FakeClient:
+            async def create_session(self, **kwargs):
+                return FakeSessionWithDisconnect()
+
+        def fake_build(*_args, **_kwargs):
+            return FakeCloud()
+
+        async def fake_wait_timeout(session, **_kwargs):
+            raise TimeoutError("readiness timeout")
+
+        limiter = CloudSessionLimiter(1)
+
+        async def fake_acquire(_config):
+            await limiter.acquire_slot()
+            return limiter
+
+        client = FakeClient()
+        with unittest.mock.patch.object(orchestrator, "build_cloud_session_options", new=fake_build), \
+                unittest.mock.patch.object(orchestrator, "wait_for_cloud_session_ready", new=fake_wait_timeout), \
+                unittest.mock.patch.object(orchestrator, "acquire_cloud_session_slot", new=fake_acquire):
+            await orchestrator._create_session_with_auto_reasoning_fallback(
+                client,
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="orchestrator",
+                subtask_kind="orchestrator",
+            )
+        self.assertEqual(limiter.active_count, 0)
+
+    async def test_cloud_session_readiness_wait_uses_default_timeout(self) -> None:
+        """呼び出し元は timeout を明示せず、wait_for_cloud_session_ready の既定値（60秒）に委ねる。"""
+        import orchestrator  # type: ignore
+
+        class FakeCloud:
+            pass
+
+        class FakeSession:
+            pass
+
+        class FakeClient:
+            async def create_session(self, **kwargs):
+                return FakeSession()
+
+        def fake_build(*_args, **_kwargs):
+            return FakeCloud()
+
+        calls: list[tuple[tuple, dict]] = []
+
+        async def fake_wait(*args, **kwargs):
+            calls.append((args, kwargs))
+
+        client = FakeClient()
+        with unittest.mock.patch.object(orchestrator, "build_cloud_session_options", new=fake_build), \
+                unittest.mock.patch.object(orchestrator, "wait_for_cloud_session_ready", new=fake_wait):
+            await orchestrator._create_session_with_auto_reasoning_fallback(
+                client,
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="orchestrator",
+                subtask_kind="orchestrator",
+            )
+        self.assertEqual(len(calls), 1)
+        _args, kwargs = calls[0]
+        self.assertNotIn("timeout", kwargs)
 
 
 class TestSelfImproveCloudSessionPath(unittest.IsolatedAsyncioTestCase):

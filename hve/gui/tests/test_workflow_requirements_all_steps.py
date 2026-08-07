@@ -19,11 +19,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from hve.gui.workflow_step_requirements import (
     INPUT_FIELD_KEYS,
+    REQUIREMENT_TABLE,
+    WORKFLOW_PRIORITY,
     registry_required_param_keys,
     summarize_all_requirements_for_selection,
     summarize_requirements_for_selection,
 )
-from hve.workflow_registry import get_workflow
+from hve.workflow_registry import get_workflow, list_workflows
 
 
 def _get_app():
@@ -256,6 +258,50 @@ class TestPrecheckRunnerUsesAllSteps(unittest.TestCase):
         fields = {item.field_name for item in result.items}
         self.assertNotIn("data_verify_aci_image", fields)
         self.assertNotIn("resource_group", fields)
+
+
+class TestRequirementTableCoversRegistry(unittest.TestCase):
+    """FR-GUI-01: 要件テーブルはレジストリの全ワークフローを網羅する。
+
+    GUI のワークフロー一覧は `list_workflows()` から動的に構築されるため、
+    未登録のワークフローは選択できるのにファイル要件が 1 件も評価されない。
+    """
+
+    def test_requirement_table_covers_every_registered_workflow(self) -> None:
+        registered = {wf.id for wf in list_workflows()}
+        covered = {workflow_id for workflow_id, _step_id in REQUIREMENT_TABLE}
+        self.assertEqual(
+            registered - covered,
+            set(),
+            "REQUIREMENT_TABLE に未登録のワークフローがあります",
+        )
+
+    def test_workflow_priority_covers_every_registered_workflow(self) -> None:
+        registered = {wf.id for wf in list_workflows()}
+        self.assertEqual(
+            registered - set(WORKFLOW_PRIORITY),
+            set(),
+            "WORKFLOW_PRIORITY に未登録のワークフローがあります",
+        )
+
+    def test_registered_workflow_alone_yields_a_file_requirement(self) -> None:
+        """単独選択でも代表 Step のファイル要件が評価されること。"""
+        for wf in list_workflows():
+            entry_steps = sorted(
+                step_id for workflow_id, step_id in REQUIREMENT_TABLE if workflow_id == wf.id
+            )
+            if not entry_steps:
+                continue
+            with self.subTest(workflow=wf.id):
+                summaries = summarize_all_requirements_for_selection(
+                    [(wf.id, entry_steps[:1])],
+                    input_values={},
+                    file_exists=lambda _p: False,
+                )
+                self.assertTrue(
+                    summaries,
+                    f"{wf.id} の要件サマリーが 1 件も返りません",
+                )
 
 
 if __name__ == "__main__":

@@ -20,6 +20,10 @@ from prompts import (
     render_pre_execution_qa_comment_body,
 )
 
+# FR-QA-01 / FR-QA-02 で全経路が共有する説明項目名と、深さルールの必須語。
+_DEPTH_FIELD_NAMES = ("背景と根拠", "判断の観点")
+_DEPTH_RULE_PHRASES = ("記述の深さ", "出典", "未確認", "評価軸", "他の選択肢", "1 行で記述")
+
 
 class TestPromptsNotEmpty(unittest.TestCase):
     """プロンプト定数が文字列であり、空でないことを検証する。"""
@@ -97,6 +101,22 @@ class TestQaPromptV2(unittest.TestCase):
             "QA_PROMPT_V2 should mention alphabetic labels (A. or A/B/C)",
         )
 
+    def test_qa_prompt_v2_requires_background_field(self) -> None:
+        """FR-QA-01: 質問テンプレートに「背景と根拠」フィールドがある。"""
+        self.assertIn("- 背景と根拠:", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_requires_viewpoints_field(self) -> None:
+        """FR-QA-01: 質問テンプレートに「判断の観点」フィールドがある。"""
+        self.assertIn("- 判断の観点:", QA_PROMPT_V2)
+
+    def test_qa_prompt_v2_requires_depth_rules(self) -> None:
+        """FR-QA-01: 説明の深さ（出典・未確定・評価軸・他選択肢）を指示する。"""
+        for phrase in _DEPTH_RULE_PHRASES:
+            self.assertIn(
+                phrase, QA_PROMPT_V2,
+                msg=f"QA_PROMPT_V2 に深さルールの語が無い: {phrase}",
+            )
+
 
 class TestAqodPrompt(unittest.TestCase):
     """AQOD_PROMPT は R3.5 (2026-05-20) で死コードとして削除済み。
@@ -129,6 +149,41 @@ class TestPreExecutionQaPromptV2(unittest.TestCase):
 
     def test_contains_issue_comment_replication_instruction(self) -> None:
         self.assertIn("この Issue のコメントとしても投稿してください", PRE_EXECUTION_QA_PROMPT_V2)
+
+    def test_requires_background_field(self) -> None:
+        """FR-QA-01: 質問テンプレートに「背景と根拠」フィールドがある。"""
+        self.assertIn("- 背景と根拠:", PRE_EXECUTION_QA_PROMPT_V2)
+
+    def test_requires_viewpoints_field(self) -> None:
+        """FR-QA-01: 質問テンプレートに「判断の観点」フィールドがある。"""
+        self.assertIn("- 判断の観点:", PRE_EXECUTION_QA_PROMPT_V2)
+
+    def test_requires_depth_rules(self) -> None:
+        """FR-QA-01: 説明の深さ（出典・未確定・評価軸・他選択肢）を指示する。"""
+        for phrase in _DEPTH_RULE_PHRASES:
+            self.assertIn(
+                phrase, PRE_EXECUTION_QA_PROMPT_V2,
+                msg=f"PRE_EXECUTION_QA_PROMPT_V2 に深さルールの語が無い: {phrase}",
+            )
+
+
+class TestQuestionnaireSkillFieldParity(unittest.TestCase):
+    """FR-QA-02: Skill 側テンプレートがプロンプトと同一の説明項目を宣言する。"""
+
+    _SKILL_FILES = (
+        ".github/skills/task-questionnaire/SKILL.md",
+        ".github/skills/task-questionnaire/references/standalone-protocol.md",
+        ".github/skills/task-questionnaire/references/pr-protocol.md",
+    )
+
+    def test_skill_templates_declare_same_depth_fields_as_prompts(self) -> None:
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        for rel in self._SKILL_FILES:
+            path = repo_root / rel
+            self.assertTrue(path.is_file(), msg=f"Skill ファイルが見つからない: {rel}")
+            text = path.read_text(encoding="utf-8")
+            for field in _DEPTH_FIELD_NAMES:
+                self.assertIn(field, text, msg=f"{rel} が '{field}' を宣言していない")
 
 
 class TestPreExecutionQaCommentBody(unittest.TestCase):

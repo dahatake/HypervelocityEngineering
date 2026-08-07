@@ -110,6 +110,7 @@ from hve.cloud_session import (
     is_policy_blocked_error,
     resolve_cloud_repository,
     should_use_cloud_session,
+    wait_for_cloud_session_ready,
 )
 
 
@@ -227,6 +228,7 @@ async def _create_session_with_auto_reasoning_fallback(
                     step_id=step_id,
                     subtask_kind=subtask_kind,
                 )
+                await wait_for_cloud_session_ready(session)
                 if limiter is not None:
                     attach_cloud_session_limiter_release(session, limiter)
                     limiter = None
@@ -273,7 +275,7 @@ async def _create_session_with_auto_reasoning_fallback(
                 if console is not None:
                     try:
                         console.warning(
-                            f"Cloud Session 作成に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
+                            f"Cloud Session の準備に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
                         )
                     except Exception:
                         pass
@@ -2069,7 +2071,7 @@ _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
     "use_case_catalog": "ard",  # ARD Step 4.3 で生成（旧仕様では user_provided）
-    "persona_catalog": "aas",   # T-H3: AAS Step 9 (Arch-PersonaCatalog) で生成
+    "persona_catalog": "aas",   # T-H3: AAS Step 8 (Arch-PersonaCatalog) で生成
     "dataflow_catalog": "aas",  # docs/catalog/app-catalog.md を AAS Step.1 が生成
     "batch_service_catalog": "adfd",
     "batch_data_model": "adfd",
@@ -4730,7 +4732,7 @@ async def run_workflow(
     _expand_info: Any = None
     try:
         _expanded_wf, _expanded_active, _expand_info = _expand_workflow_for_dag(
-            wf_for_dag, active_steps, Path(__file__).resolve().parent.parent,
+            wf_for_dag, active_steps, Path.cwd(),
             app_ids=effective_params.get("app_ids"),
         )
         wf_for_dag = _expanded_wf
@@ -5443,7 +5445,7 @@ async def run_workflow(
         if not bool(getattr(config, "fleet_mode_enabled", False)):
             return None
 
-        repo_root = Path(__file__).resolve().parent.parent
+        repo_root = Path.cwd()
 
         async def _fleet_wave_runner(executable_steps: List[Any], wave_index: int) -> Optional[Dict[str, StepResult]]:
             if len(executable_steps) <= 1:
@@ -5684,7 +5686,7 @@ async def run_workflow(
         console=console,
         step_prompts=step_prompts,
         dag_plan=dag_plan,
-        repo_root=Path(__file__).resolve().parent.parent,
+        repo_root=Path.cwd(),
         # Fork-integration (T2.6/T2.8): フィーチャフラグ off （既定）で旧挙動と完全一致
         fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
         fork_kpi_logger=_build_fork_kpi_logger(config),

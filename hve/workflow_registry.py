@@ -466,27 +466,26 @@ AAS = WorkflowDef(
                                       "docs/catalog/domain-analytics.md",
                                       "docs/catalog/service-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
-        # Step 9 — ペルソナカタログ（Use Case Catalog からアクター/ロールを抽出）
+        # Step 8 — ペルソナカタログ（Use Case Catalog からアクター/ロールを抽出）
         # Q3=B 採用: docs/catalog/use-case-catalog.md を一次ソースとする
-        # 注: ID 体系は 7→9→8 のままだが、ソース上の記述順は 7→8→9 に揃えるため、Step 8 を Step 9 の前に配置する。
-        # Step 8 — ペルソナ別共通画面カタログ（Step 9 のペルソナ一覧を前提）
-        StepDef(id="8", title="ペルソナ別共通画面カタログ",
-                custom_agent="Arch-UI-PersonaScreenList",
-                depends_on=["9"],
-                skip_fallback_deps=["9"],
-                consumed_artifacts=["persona_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-8.md",
-                output_paths=["docs/catalog/persona-screen-catalog.md"],
-                required_input_paths=["docs/catalog/persona-catalog.md",
-                                      "docs/catalog/app-catalog.md"]),
-        StepDef(id="9", title="ペルソナカタログ",
+        StepDef(id="8", title="ペルソナカタログ",
                 custom_agent="Arch-PersonaCatalog",
                 depends_on=["7"],
                 skip_fallback_deps=["7"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-9.md",
+                body_template_path="templates/aas/step-8.md",
                 output_paths=["docs/catalog/persona-catalog.md"],
                 required_input_paths=["docs/catalog/use-case-catalog.md",
+                                      "docs/catalog/app-catalog.md"]),
+        # Step 9 — ペルソナ別共通画面カタログ（Step 8 のペルソナ一覧を前提）
+        StepDef(id="9", title="ペルソナ別共通画面カタログ",
+                custom_agent="Arch-UI-PersonaScreenList",
+                depends_on=["8"],
+                skip_fallback_deps=["8"],
+                consumed_artifacts=["persona_catalog", "app_catalog"],
+                body_template_path="templates/aas/step-9.md",
+                output_paths=["docs/catalog/persona-screen-catalog.md"],
+                required_input_paths=["docs/catalog/persona-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
     ],
 )

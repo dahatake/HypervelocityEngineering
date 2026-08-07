@@ -126,7 +126,9 @@ def _reexec_in_venv_if_needed() -> None:
       - ``HVE_NO_VENV_REEXEC=1`` でオプトアウト（再帰防止にも使用）。
       - 検出・再 exec に失敗した場合は現在の Python で続行（フォールバック）。
 
-    ``if __name__ == "__main__":`` ブロックからのみ呼び出すこと。
+    呼び出し箇所は 2 か所に限定する:
+      - ``__name__ == "__main__"`` の module level（重い import より前）
+      - ``_console_main()``（``hve`` console script 経路）
     ``import hve.__main__`` 等のライブラリ利用時には発火させない。
     """
     if os.environ.get("HVE_NO_VENV_REEXEC", "").strip().lower() in {"1", "true", "yes"}:
@@ -177,10 +179,22 @@ def _reexec_in_venv_if_needed() -> None:
             return
 
 
+if __name__ == "__main__":
+    # 重い依存 (`.config` -> `cq`) を読み込む前に .venv へ再 exec する。
+    # `python -m hve` では以下の module level import がファイル末尾の
+    # `if __name__ == "__main__":` ブロックより先に評価されるため、
+    # ガードをここに置かないと依存欠落で先に落ちる。
+    _reexec_in_venv_if_needed()
+
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
     from .workflow_registry import canonicalize_workflow_id, get_workflow
 except ImportError:
+    # 平坦 import への退避は `cd hve && python __main__.py` のような
+    # パッケージ文脈なし実行のときだけ。パッケージとして import されて
+    # いる場合の失敗は依存欠落 (例: cq 未導入) なので真因を握り潰さず再送出する。
+    if __package__:
+        raise
     from config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig  # type: ignore[no-redef]
     _workflow_registry_module = __import__("workflow_" + "registry")
     canonicalize_workflow_id = getattr(
@@ -4579,6 +4593,16 @@ def _cmd_emit_prompt(args: argparse.Namespace) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def _console_main() -> int:
+    """``hve`` console script のエントリポイント。
+
+    ``python -m hve`` と同じように .venv への再 exec を先に試みる。
+    ``main()`` 自体はライブラリ用途 (テスト等) でも呼ばれるため、
+    再 exec はここと ``__main__`` ブロックに限定する。
+    """
     _reexec_in_venv_if_needed()
-    sys.exit(main())
+    return main()
+
+
+if __name__ == "__main__":
+    sys.exit(_console_main())

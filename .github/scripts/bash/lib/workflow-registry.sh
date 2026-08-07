@@ -77,8 +77,8 @@ _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
     {"id":"5","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":["4.1"],"block_unless":[],"body_template_path":"templates/aas/step-5.md"},
     {"id":"6","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["5"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aas/step-6.md"},
     {"id":"7","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["6"],"is_container":false,"skip_fallback_deps":["6"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"},
-    {"id":"9","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["7"],"is_container":false,"skip_fallback_deps":["7"],"block_unless":[],"body_template_path":"templates/aas/step-9.md"},
-    {"id":"8","title":"ペルソナ別共通画面カタログ","custom_agent":"Arch-UI-PersonaScreenList","depends_on":["9"],"is_container":false,"skip_fallback_deps":["9"],"block_unless":[],"body_template_path":"templates/aas/step-8.md"}
+    {"id":"8","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["7"],"is_container":false,"skip_fallback_deps":["7"],"block_unless":[],"body_template_path":"templates/aas/step-8.md"},
+    {"id":"9","title":"ペルソナ別共通画面カタログ","custom_agent":"Arch-UI-PersonaScreenList","depends_on":["8"],"is_container":false,"skip_fallback_deps":["8"],"block_unless":[],"body_template_path":"templates/aas/step-9.md"}
   ]
 }
 JSONEOF

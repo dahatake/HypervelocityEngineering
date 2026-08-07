@@ -10,6 +10,7 @@ GhLoginDialog の単体テスト（offscreen）。
 from __future__ import annotations
 
 import os
+import sys
 import time
 from typing import List, Optional
 
@@ -17,9 +18,26 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-PySide6 = pytest.importorskip("PySide6")
 from PySide6.QtCore import Signal  # noqa: E402
 from PySide6.QtWidgets import QApplication, QLabel, QWidget  # noqa: E402
+
+
+_PLATFORM_SETUP_CASES = [
+    pytest.param("win32", r"hve\setup-hve.cmd", id="windows"),
+    pytest.param("linux", "./hve/setup-hve.sh", id="posix"),
+]
+
+
+def _assert_setup_is_primary_guidance(guidance: str, setup_command: str) -> None:
+    """通常 setup が、存在する手動復旧案内すべてより先に現れることを検証する。"""
+    assert setup_command in guidance
+    setup_index = guidance.index(setup_command)
+    for marker in ("gh auth login", "pip install", "gui-pty", "http://", "https://"):
+        marker_index = guidance.find(marker)
+        if marker_index >= 0:
+            assert setup_index < marker_index, (
+                f"{setup_command!r} must precede {marker!r}: {guidance!r}"
+            )
 
 
 @pytest.fixture(scope="module")
@@ -131,9 +149,13 @@ def _force_cleanup_dialog(dlg) -> None:
 # ---------------------------------------------------------------------------
 # 事前チェック分岐
 # ---------------------------------------------------------------------------
-def test_gh_missing_shows_guidance_and_no_spawn(qapp, monkeypatch) -> None:
+@pytest.mark.parametrize(("platform", "setup_command"), _PLATFORM_SETUP_CASES)
+def test_gh_missing_shows_guidance_and_no_spawn(
+    qapp, monkeypatch, platform: str, setup_command: str
+) -> None:
     import hve.gui.gh_login_dialog as mod
 
+    monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr(mod.gh_cli, "find_gh_binary", lambda: None)
     called = {"spawn": False}
     monkeypatch.setattr(
@@ -143,7 +165,9 @@ def test_gh_missing_shows_guidance_and_no_spawn(qapp, monkeypatch) -> None:
     try:
         assert dlg.terminal_started is False
         assert called["spawn"] is False
-        assert "gh" in _label_texts(dlg)
+        guidance = _label_texts(dlg)
+        assert "gh" in guidance
+        _assert_setup_is_primary_guidance(guidance, setup_command)
     finally:
         dlg.close()
 
@@ -162,6 +186,31 @@ def test_pty_unavailable_shows_guidance_and_no_spawn(qapp, monkeypatch) -> None:
         assert dlg.terminal_started is False
         assert called["spawn"] is False
         assert "PTY" in _label_texts(dlg)
+    finally:
+        dlg.close()
+
+
+@pytest.mark.parametrize(("platform", "setup_command"), _PLATFORM_SETUP_CASES)
+def test_pty_unavailable_guidance_recommends_platform_setup(
+    qapp, monkeypatch, platform: str, setup_command: str
+) -> None:
+    """FR-GUI-09: PTY 不足案内は OS 別の通常 setup を主導線にする。"""
+    import hve.gui.gh_login_dialog as mod
+
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(mod.gh_cli, "find_gh_binary", lambda: "/usr/bin/gh")
+    monkeypatch.setattr(mod.pty_backend, "is_pty_available", lambda: False)
+    called = {"spawn": False}
+    monkeypatch.setattr(
+        mod.pty_backend, "spawn", lambda *_a, **_k: called.__setitem__("spawn", True)
+    )
+
+    dlg = mod.GhLoginDialog()
+    try:
+        assert dlg.terminal_started is False
+        assert called["spawn"] is False
+        guidance = _label_texts(dlg)
+        _assert_setup_is_primary_guidance(guidance, setup_command)
     finally:
         dlg.close()
 

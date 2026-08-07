@@ -37,7 +37,7 @@
 - `docs/catalog/service-catalog.md`（機能/責務の補助）
 - `docs/catalog/data-model.md`（表示/入力項目の補助）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面がどの APP-ID に所属するかの判定根拠。**必須**）
-- `docs/catalog/persona-screen-catalog.md`（**存在する場合のみ**。AAS Step.8 で生成される APP-ID 横断のペルソナ別共通画面骨格。共通画面の再定義防止に使用）
+- `docs/catalog/persona-screen-catalog.md`（**存在する場合のみ**。AAS Step.9 で生成される APP-ID 横断のペルソナ別共通画面骨格。共通画面の再定義防止に使用）
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

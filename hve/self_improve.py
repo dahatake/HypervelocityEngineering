@@ -810,6 +810,7 @@ async def discover_task_goal_with_llm(
             attach_cloud_session_limiter_release,
             build_cloud_session_options,
             is_policy_blocked_error,
+            wait_for_cloud_session_ready,
         )
     except ImportError:
         from config import SDKConfig, to_wire_model  # type: ignore[no-redef]
@@ -819,6 +820,7 @@ async def discover_task_goal_with_llm(
             attach_cloud_session_limiter_release,
             build_cloud_session_options,
             is_policy_blocked_error,
+            wait_for_cloud_session_ready,
         )
 
     cloud_config = SDKConfig.from_env()
@@ -855,6 +857,7 @@ async def discover_task_goal_with_llm(
                         step_id="self_improve",
                         subtask_kind="self_improve",
                     )
+                    await wait_for_cloud_session_ready(session)
                     if limiter is not None:
                         attach_cloud_session_limiter_release(session, limiter)
                         limiter = None

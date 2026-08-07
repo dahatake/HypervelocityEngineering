@@ -1877,6 +1877,8 @@ class Console:
         - 8列: No. | 重要度 | 分類項目 | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響
         - 5列: No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由
 
+        background / viewpoints は長文のため列にせず、表の後に詳細ブロックとして出力する。
+
         TTY 接続時はボックス罫線 + ANSI カラーで描画し、
         非 TTY 時はプレーンテキストテーブル（| 区切り）を出力する。
         空リストの場合は何も表示しない。
@@ -2132,6 +2134,26 @@ class Console:
                 # データ行間を空行で区切り（最終行以外）
                 if ri < len(wrapped_rows_plain) - 1:
                     self._print("", ts=False)
+
+        # 背景と根拠 / 判断の観点 は長文のため、列にすると他列の可読幅を失う。表の後に出す。
+        depth_targets = [q for q in questions if q.background or q.viewpoints]
+        if depth_targets:
+            self._print("", ts=False)
+            self._print(
+                " " * _TABLE_INDENT + f"{s.BOLD}【質問の背景と論点】{s.RESET}", ts=False
+            )
+            for q in depth_targets:
+                self._print(
+                    " " * _TABLE_INDENT + f"{s.CYAN}Q{q.no}{s.RESET} {q.question}", ts=False
+                )
+                if q.background:
+                    self._print(
+                        " " * (_TABLE_INDENT + 2) + f"背景と根拠: {q.background}", ts=False
+                    )
+                if q.viewpoints:
+                    self._print(
+                        " " * (_TABLE_INDENT + 2) + f"判断の観点: {q.viewpoints}", ts=False
+                    )
 
         self._print("", ts=False)
 

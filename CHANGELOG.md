@@ -2,6 +2,127 @@
 
 ## [Unreleased]
 
+### Changed — AAS Step 8/9 を成果物依存と同じ昇順へ再採番（FR-WF-AAS-01）
+
+**破壊的変更**: AAS ワークフロー末尾 2 Step の ID の意味を入れ替えた。従来は Step 9（ペルソナカタログ）の出力を Step 8（ペルソナ別共通画面カタログ）が消費しており、実行順が `Step.7 → Step.9 → Step.8` と番号に逆行していた。成果物依存は変えずに ID だけを入れ替え、実行順を `Step.7 → Step.8 → Step.9` へ揃えた。
+
+- **Step.8** = ペルソナカタログ（`Arch-PersonaCatalog` / `depends_on=["7"]` / `docs/catalog/persona-catalog.md`）
+- **Step.9** = ペルソナ別共通画面カタログ（`Arch-UI-PersonaScreenList` / `depends_on=["8"]` / `docs/catalog/persona-screen-catalog.md`）
+
+**移行時の注意**: Step ID は SDK セッション ID（`run_id × step_id`）と Cloud の Step Issue タイトルの構成要素であり、同じ ID の意味が変わる。透過的な旧 ID 変換は実装していないため、実行中の AAS run は本変更の取り込み前に完了させること。完了できない run は新しいコードで再開せず、新しい run-id（CLI / GUI）または新しい Issue（Cloud）で再起動する。旧番号の Step Issue が開いている状態で新しい workflow を有効化しないこと。
+
+**変更内容**:
+
+- **要件**: `hve-dev/requirement-definition.md` §13.1 に Step 8/9 行と FR-WF-AAS-01 を追加。`hve-dev/requirement-test-mapping.md` に対応表を追加。
+- **正本**: `hve/workflow_registry.py` の AAS StepDef を入れ替え。`hve/orchestrator.py` の producer コメントを同期。
+- **Prompt / Template / I-O 契約**: `templates/aas/step-8.md` と `step-9.md` を入れ替え、`Arch-PersonaCatalog--aas--8.yaml` / `Arch-UI-PersonaScreenList--aas--9.yaml` へリネーム。AAD-WEB 側 consumer（`Arch-UI-List` / `Arch-UI-Detail` の prompt・io-contract・テンプレート）の producer 参照を Step.9 へ更新。
+- **Cloud**: `auto-app-selection-reusable.yml` の skip 伝播を「Step.8 スキップ → Step.9 も強制スキップ」へ反転し、Step Issue 生成・紐付け・状態遷移（7→8→9→done）を更新。Step.9 の前提入力を registry 宣言（persona-catalog.md / app-catalog.md）に合わせた。
+- **Issue Form**: `app-architecture-design.yml` のステップ表・依存チェーン・チェックボックスを新採番へ更新。
+- **Bash / PowerShell**: `workflow-registry.sh` を同期。`workflow-registry.ps1` の AAS を旧 2 Step 定義から現行 11 Step へ同期し、Pester の AAS 期待値を更新。
+- **ドキュメント**: `users-guide/02-app-architecture-design.md` を 11 ステップ構成へ更新し、Step 8/9 の入出力と手動実行手順を追加。AAS の SVG 3 点に Step 8/9 を追加。
+- **テスト**: `hve/tests/test_aas_persona_step_numbering_contract.py` を新設し、registry・DAG wave・GUI rank・I-O 契約・Template・Prompt・Bash / PowerShell registry・Cloud workflow・Issue Form・ユーザーガイドを 1 ファイルで突き合わせる。`test_aas_template_parity.py` の依存パターンに Step 8/9 を追加。
+
+**検証**: 新規契約テストは実装前に 30 failed（旧採番のみが理由）で RED を確認し、実装後に全 GREEN。`validate-io-contract.py` は Schema / Integrity / Registry mismatch すべて 0。Cloud / Issue Form の YAML parse、Bash 構文チェック、SVG の XML parse、PowerShell registry の直接実行検証（11 Step、7→8→9）を実施。各サブタスクで独立した敵対的レビューを行い、指摘を反映済み。
+
+**既知の制約**: PowerShell の Pester はローカル環境に 3.4.0 のみ導入されており、テストが要求する Pester 5 構文を実行できないため、AAS の assertion はローカルでは未実行（構文解析と registry の直接呼び出しで代替検証）。Pester 5 が利用可能な環境（CI 等）で `workflow-registry.Tests.ps1` の AAS assertion を必ず実行して確認すること。`workflow-registry.Tests.ps1` の ADFD 関連 assertion は本変更以前から実装と乖離しており、本変更では対象外として据え置いた。
+
+<!-- validation-confirmed -->
+
+### Added — GUI 質問票で「その他」を自由記述として回答・保存できるようにした（FR-GUI-08）
+
+選択肢付きの QA 質問へ「その他」を 1 件表示し、選択時に自由記述を入力できるようにした。既に「その他」を含む質問票では選択肢を重複させず、通常選択肢・選択肢なし自由記述・キャンセル・既存 IPC 形式は維持する。
+
+- 自由記述は既存の `N:: その他: <text>` 形式で GUI から CLI へ渡し、マージ済み質問票の「ユーザー回答」へ保存する。
+- 構造化質問票の `D. その他`、ラベル自体が「その他」の既定値、空欄時の既定値採用、および「その他」で始まる通常選択肢を回帰テストで保護した。
+
+### Changed — QA 質問票が「なぜ不明点なのか」を説明せず、既定値候補の理由が一語で終わっていた（FR-QA-01 / FR-QA-02）
+
+QA 質問票の各質問は `分類項目` / `重要度` / `質問文` / `選択肢` / `既定値候補` / `既定値候補の理由` / `未回答のまま進めた場合の影響` の 7 項目しか持たず、**「その論点がなぜ不明点として挙がったのか」「どの評価軸で判断が分かれるのか」を出力させるフィールドが存在しなかった**。結果として `既定値候補の理由` が「実績あり」「チーム習熟度を優先」のような結論のみの一語に収束し、回答者は各質問の妥当性を自分で調べ直さなければ判断できなかった。
+
+- **質問テンプレートへ「背景と根拠」「判断の観点」の 2 項目を追加した**（[hve/prompts.py](hve/prompts.py) `PRE_EXECUTION_QA_PROMPT_V2` / `QA_PROMPT_V2`）。「背景と根拠」は確認した対象（出典）・確定した事項と確定していない事項・その未確定が質問に値する理由の 3 点を、「判断の観点」は回答で結論が変わる評価軸 2 つ以上と各選択肢の有利不利を求める。確認していない場合は「未確認」と書かせ、出典の推測を禁止した。
+- **「既定値候補の理由」に 3 要素（根拠となる事実 / 優先した評価軸 / 他の選択肢を採らなかった理由）を必須化した**。従来は結論だけを書いても形式上は満たせてしまい、これが説明の浅さの直接原因だった。文面は `QUESTIONNAIRE_DEPTH_RULES_TEXT` を単一定義とし、事前 QA と事後 QA の両プロンプトから連結している（同一文面の二重管理を避けるため）。
+- **`QAMerger` を新項目に対応させた**（[hve/qa_merger.py](hve/qa_merger.py)）。構造化質問票（`[Qxx]` 形式）とマージ済みテーブルの双方で解析し、拡張テーブルへ列として出力する。**GUI は `render_merged` の出力を IPC ファイル経由で再パースしてダイアログを組み立てるため、テーブル列として持たないと GUI に一切届かない**。この往復でのデータ保持を回帰テストで固定した。新項目を持たない既存の質問票は空値として扱う。
+- **CLI は表の列を増やさず、表の直後に詳細ブロックを出力するようにした**（[hve/console.py](hve/console.py)）。拡張表はすでに 8 列で `_shrink_to_available` による幅圧縮が働く状態にあり、長文 2 列を足すと重要度や選択肢まで数文字に潰れて読めなくなるため。
+- **GUI の QA 回答ダイアログへ「背景と根拠」「判断の観点」の 2 列を追加した**（[hve/gui/qa_answer_dialog.py](hve/gui/qa_answer_dialog.py)）。回答を選ぶ画面が唯一の判断材料提示面であるため、ここに無いと目的を達成できない。
+- **Skill 側テンプレートを同一項目定義へ揃えた**（`.github/skills/task-questionnaire/` の SKILL.md と `references/` 配下 2 ファイル）。Cloud Agent 経路の質問票は `hve/prompts.py` ではなく Skill テンプレートを見るため、揃えないと「CLI/GUI は深いが Cloud は浅い」という経路依存の品質差が残る。プロンプトと Skill のフィールド名一致を契約テストで固定した。
+
+**検証**: RED は 18 件（プロンプト 6 / `QAMerger` 9 / CLI 表示 2 / Skill 整合 1）＋ GUI 2 件が意図通り失敗することを確認。実装後は関連 8 ファイル（`test_prompts` / `test_qa_merger` / `test_questionnaire_ui` / `test_runner_pre_qa` / `test_main` / `test_console` / GUI 2 ファイル）で 688 passed / 1 skipped。棚卸し索引（[hve-dev/hve-feature-inventory.csv](hve-dev/hve-feature-inventory.csv) 他）を再生成し、FR-QA-01 / FR-QA-02 が `source=hve-dev/requirement-definition.md` / `active-or-described` で登録されること、新規テストクラス 4 種が索引に載ることを照合した。拡張テーブルは 11 列（通常）/ 13 列（Work IQ 併用）の双方について、ヘッダーとセパレータの列数一致および render → parse の往復で値が復元されることを実データで実測した。
+
+**既知の制約**: 各フィールドの値を 1 行に限定しているのは、`QAMerger` の行単位フィールド解析が継続行を取り込まないためで、複数行で出力された場合は 2 行目以降が無視される。プロンプト側の指示で担保しており、解析側での強制は行っていない。LLM が実際に十分な深さを出力するかはプロンプト遵守に依存し、追加した契約テストはプロンプトの指示内容を固定するもので生成結果の品質を検証するものではない。CLI の詳細ブロックはセル内折り返しを行わず、長文は端末のソフトラップに任せている（表の幅制約は適用されない）。既存の `qa/` 配下ファイルは新項目が空欄のまま残る（再生成もマイグレーションも行わない）。[hve/workiq.py](hve/workiq.py) の Work IQ 問い合わせメタには新項目を渡していない。
+
+### Fixed — setup が Copilot ランタイムの版不整合を検出できず、`session.event` 解析の AssertionError を素通ししていた（FR-MODEL-07）
+
+macOS 環境で `hve` CLI 起動時に `CopilotClient._connect_via_stdio.<locals>.handle_notification` 内の `session_event_from_dict` → `from_uuid(obj.get("id"))` → `assert isinstance(x, str)` が AssertionError となる報告を調査した。原因は hve 側のバグではなく、**`github-copilot-sdk` の生成イベントパーサと、実際に spawn される Copilot CLI ランタイムのスキーマドリフト**である。パーサは未知のイベント "種別" にしか前方互換を持たず（`SessionEventType._missing_` → `UNKNOWN` + `RawSessionEventData`）、エンベロープ（`id` / `timestamp` / `type`）は assert で固めてあるため、pin と異なるランタイムを掴むと当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）。トレースバックの行番号を実 wheel と照合し、報告環境の SDK が公開翌日の 1.0.9 であることを特定した。
+
+- **`github-copilot-sdk` の導入版を [hve/copilot-sdk.lock](hve/copilot-sdk.lock) で固定した**。従来は `setup-hve.{sh,ps1}` が毎回 `pip install --upgrade` していたため「セットアップした日」でマシンごとに版が変わり、公開直後のリリースに不整合があると特定の人だけ壊れて再現・切り分けができなかった。既定は lock からの導入とし、最新化は `--upgrade-sdk` / `-UpgradeSdk` 指定時にだけ行って lock の pin 行と Copilot CLI ランタイム記録行を書き換える。更新が意図的な 1 回のコミットになるため、チーム全体が同じ版で動く。
+- **`setup-hve.sh` / `setup-hve.ps1` に「Copilot ランタイム整合性」ステップを追加した**。SDK 版と pin 版（`copilot/_cli_version.py` の `CLI_VERSION`）を表示し、`python -m copilot download-runtime` で pin 版ランタイムを先読みしたうえで、キャッシュ済みバイナリの実バージョンと pin を突合して不一致を警告する。
+- **pin を無効化する環境変数（`COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD`）を検出して警告するようにした**。前者 2 つは SDK のバージョン固定キャッシュを迂回するため、設定されている限り版ドリフトが不可避になる。
+- **外部 `copilot` CLI の実バージョンを表示し、npm 管理下にある場合のみ `@github/copilot@latest` へ更新するようにした**。この CLI は GUI チャットパネル専用で SDK の pin とは独立に自己更新するため、`COPILOT_CLI_PATH` へ流用しない旨をスクリプト内コメントと出力の両方に明記した。VS Code 同梱 CLI など npm 管理外のものは更新対象から除外し、競合インストールを避けている。
+- **バージョン突合には `--no-auto-update` を必須とした**。`copilot --version` 単体はオンライン更新チェックを走らせ「最新利用可能版」を返すため pin との比較に使えない（実測: `cli/1.0.69/copilot.exe --version` → `1.0.78`、`--no-auto-update --version` → `1.0.69`、バイナリ内文字列は `1.0.69` が 8 件・`1.0.78` は 0 件）。この罠は調査自体を誤診させるため、契約テストで固定した。
+- **`pyproject.toml` の下限指定が導入版の情報源ではないことをコメントで明記した**。lock を唯一の情報源とし、二重管理を避けている。
+
+**検証**: `bash -n hve/setup-hve.sh` と PowerShell パーサでの構文検証。SDK 1.0.9rc3 へドリフトさせた `.venv` に対し `pip install --no-deps -r hve/copilot-sdk.lock` を実行し、1.0.9rc3 をアンインストールして 1.0.8 へ戻ることを実測。lock 更新ロジックを一時コピーへ適用し、pin 行と CLI ランタイム記録行の双方が書き換わり LF / BOM なしが維持されることを実測。追加ロジックを実バイナリへ適用したプローブで、SDK 1.0.8 / pin 1.0.73 / 実ランタイム 1.0.73 = 一致、PATH 上の VS Code 同梱 CLI 1.0.78 = 乖離を正しく検出。`hve/tests/test_dev_task_environment_contract.py` に契約テスト 4 件を追加し、トレーサビリティ・索引・scope の関連テストと併せて 242 passed / 2 skipped。追加テストは変更前の HEAD では検出マーカーが 0 件で失敗することを確認済み。棚卸し索引（[hve-dev/hve-feature-inventory.csv](hve-dev/hve-feature-inventory.csv) 他）を再生成し、FR-MODEL-07 の source / status / テストパスの登録を照合した。
+
+**既知の制約**: 本変更は「pin と実ランタイムの不整合」および「マシン間の版ドリフト」を防ぐもので、**SDK の特定リリース自体にパーサ不整合がある場合の解析失敗そのものは防げない**。実行時のフェイルソフト（`AssertionError` をイベント欠落警告へ変換する asyncio 例外ハンドラ）は未実装で、別要件として扱う。`--check-only` / `-CheckOnly` は `.venv` 構築前に終了するため、これらの検証ステップは実行されない。`pip install -e .[extras]` が先に走るため、新規環境では一度最新版を取得してから lock 版へ入れ替わる（最終状態は lock 版で正しいが wheel の二重取得が発生する）。lock の初期値は実測で動作を確認済みの 1.0.8（pin CLI 1.0.73）とし、報告のあった 1.0.9 は採用していない。
+
+### Fixed — fan-out 展開の基準ルートが HVE の設置ディレクトリを指し、対象リポジトリのカタログを読めていなかった（FR-DAG-04）
+
+macOS で HVE を対象リポジトリとは別の場所へ設置して ARD を実行すると、Step 3.1 が `docs/catalog/use-case-skeleton.md` を正しく生成した直後に Step 3.2 が `⏭️ deferred fan-out が依存解決後も 0 件のため skip` で落ちる事象を調査した。原因は [hve/orchestrator.py](hve/orchestrator.py) が fan-out 展開の `repo_root` に `Path(__file__).resolve().parent.parent`（= HVE パッケージの設置ディレクトリ）を渡していたことで、カタログが対象リポジトリに実在しても展開キーが 0 件になり `fanout-empty` で**無警告 skip** されていた。ARD 固有ではなく全ワークフローの全 fan-out Step に波及する。
+
+- **事前展開・deferred 再展開・Fleet wave prompt の 3 箇所を `Path.cwd()` へ是正した**。`DAGExecutor` 自身の既定値は `repo_root=None → Path.cwd()` で元から正しく、orchestrator が明示引数で誤った値に上書きしていた。リポジトリ内の他の作業リポジトリ解決（[hve/runner.py](hve/runner.py) ほか）はすべて `Path.cwd()` 系で統一されている。
+- **本リポジトリは HVE 自身を dogfooding するため `Path(__file__).resolve().parent.parent == Path.cwd()` が成立し、素の実行では症状が出ない**。既存テストも `repo_root` を直接注入しており orchestrator の実配線を通っていなかったため、`monkeypatch.chdir` で両者を必ず分離する回帰テストを追加した。
+- **Self-Improve の `repo_root` は HVE 自身の prompts / skills を改善対象とするため変更していない**。用途が異なるため一括置換していない。
+- **FR-DAG-04 へ「展開の基準ルートは実行プロセスの作業ディレクトリ」を明文化した**。併せて同要件が挙げていた実在しない parser 名 `batch_job_catalog` を `dataflow_catalog` へ、`use_case_skeleton` の対応 Step を現行の ARD Step 3.2 へ是正した。
+
+**検証**: 追加した [hve/tests/test_orchestrator_fanout_repo_root.py](hve/tests/test_orchestrator_fanout_repo_root.py) が変更前は 4 件失敗（作業ディレクトリに UC 2 件しか置いていないのに本リポジトリ側の 26 件へ展開される事象を再現）、変更後は 4 件成功。既存の fan-out / ARD 回帰 79 件、GUI 要件 106 件、ARD 系 213 件が pass。
+
+**既知の制約**: Fleet wave prompt 経路（fleet mode 有効時のみ）は実行証跡が無く、AST による契約テストでのみ固定している。Self-Improve が `collect_workflow_output_paths`（内部で fan-out 展開）と改善対象ルートを同一変数で兼務している点は未分離のまま残している。
+
+### Fixed — `aar` ワークフローが GUI の要件テーブルに未登録で、起動前チェックが無警告で通過していた（FR-GUI-01）
+
+GUI のワークフロー一覧は [hve/gui/page_workflow_select.py](hve/gui/page_workflow_select.py) が `list_workflows()` から動的に構築するため `aar` も選択できるが、`REQUIREMENT_TABLE` / `WORKFLOW_PRIORITY` / `WORKFLOW_TO_SECTION` のいずれにも登録が無く、レジストリ 12 ワークフロー中で唯一の欠落だった。`pick_target_step` は `WORKFLOW_PRIORITY` 順にしか走査しないため、`aar` 単独選択時はファイル要件が 1 件も評価されないまま precheck が通過する。
+
+- **`aar` Step 1 の要件を 3 テーブルへ登録した**（[hve/gui/workflow_step_requirements.py](hve/gui/workflow_step_requirements.py)）。必須ファイルは同構成の AAD-WEB / ASDW-WEB と同じ `app_catalog` を流用し、新しいファイル種別は追加していない。`aar` Step 1〜6 は `required_params` を持たないため必須情報キーは空とした。
+- **FR-GUI-01 へ「`REQUIREMENT_TABLE` / `WORKFLOW_PRIORITY` はレジストリの全ワークフローを網羅する」義務を追加した**。`WORKFLOW_TO_SECTION` は既定値 `OPTIONS_TOP` を持ち precheck を壊さないため規範には含めていないが、既存の `WORKFLOW_PRIORITY ⊆ WORKFLOW_TO_SECTION` 不変条件を満たすため登録自体は行った。
+
+**検証**: 追加した `TestRequirementTableCoversRegistry` が変更前は 2 件失敗（`aar` 欠落）、変更後は同ファイル 22 passed / 12 subtests。GUI 要件・バナー・autopilot の関連 106 passed / 1 skipped。
+
+### Added — ARD がユーザー提供資料を一次情報として最優先で参照する契約（FR-WF-ARD-02）
+
+ユーザーが PDF などを Markdown 化して ARD の入力に指定した場合、その資料は ARD の**どの Step の `required_input_paths` にも宣言されず**、`{attached_docs}` / `{target_business}` のパラメータ注入だけが到達経路である。Step 2（Targeted）のプロンプトには「一次情報として最優先で参照する」という規定があったが、Step 1（Untargeted）側には同等の規定が無く、`情報源の優先順位` は公開 IR 資料を筆頭に列挙していたため、ユーザー提供資料が既定入力に埋没しうる非対称があった。
+
+- **Untargeted プロンプトの入力節・参照資料節・情報源の優先順位節に最優先参照規定を追加した**（[.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md)）。公開情報は「添付資料に記載が無い事項」を補う位置付けに整理し、従来の信頼性評価順は維持した。
+- **Step 1 の Body テンプレートにも同じ規定を明記した**（[.github/scripts/templates/ard/step-1.md](.github/scripts/templates/ard/step-1.md)）。Agent が実際に読むのはテンプレートの `## 入力` 節であるため、プロンプト側だけでは到達しない。
+- **ファイル名を推測せず与えられたパスをそのまま読むことを明示した**。ユーザー指定ファイル名は固定ではなく、`docs/company-business-recommendation.md` のような既定の出力ファイル名と混同させないため。
+
+**検証**: 追加した [hve/tests/test_ard_attached_docs_priority.py](hve/tests/test_ard_attached_docs_priority.py) が変更前は 2 件失敗、変更後は 5 件成功（Targeted 側の既存規定と `step-2.md` のプレースホルダ保持も回帰として固定）。
+
+**既知の制約**: 本変更は Step 1 / Step 2 のプロンプトとテンプレートに規定を置くもので、Step 2.1 / 3.1 / 3.2 / 3.3 はユーザー提供資料を入力として宣言していない（従来どおり Step 2 が生成した `docs/business-requirement.md` 経由で間接的に伝播する）。生成物の出力ファイル名を可変にする対応は含まない。
+
+## [0.4.0] - 2026-08-07
+
+### Fixed — Cloud Session の初回送信が無言でドロップされ得るレース条件を解消した
+
+`client.create_session(cloud=...)` は Mission Control がタスクを予約した時点で解決するが、実際にリモートの `copilot-agent` ワーカーが接続して `session.start` を発火するまでには数秒のタイムラグがある。GitHub Copilot SDK のドキュメント（Cloud Sessions ガイド）は、このタイムラグ中に送信するとサーバ側がプロンプトを無言で破棄し得ると明記しており、実際にインストール済み SDK（`github-copilot-sdk` 1.0.8）のソースを確認したところ、`CopilotSession.send_and_wait()` にはこのレースに対する保護が一切無いことを確認した。hve は Cloud Session 作成直後に `send_and_wait()` を呼ぶ構成のため、この既知のレースにそのまま曝露していた。
+
+- **`wait_for_cloud_session_ready()` を新設した**（[hve/cloud_session.py](hve/cloud_session.py)）。Cloud Session 作成成功後、最初の送信前に `session.start`（`producer == "copilot-agent"`）を待つ。60 秒でタイムアウトした場合は `TimeoutError` を送出し、既存の Cloud Session 失敗時フォールバック（ローカルセッションへの切り替え）にそのまま委ねる。
+- **[hve/orchestrator.py](hve/orchestrator.py) と [hve/runner.py](hve/runner.py) の `_create_session_with_auto_reasoning_fallback` に統合した**。並行利用数制限（`CloudSessionLimiter`）のスロット解放が正しく行われるよう、readiness 待機はスロット解放処理より前に配置した。
+- **実装中に発見した第三の該当箇所として、[hve/self_improve.py](hve/self_improve.py) の `discover_task_goal_with_llm` にも同じ脆弱パターンがあったため、同様に修正した**（当初計画では未対象だったが、根本原因が同一のため対応した）。
+
+**検証**: RED は `hve/tests/test_cloud_session.py` / `hve/tests/test_cloud_session_runtime.py` で 5 件、`hve/tests/test_self_improve.py` で 1 件が意図通り失敗。実装後は該当 3 ファイル合計で 210 passed（既存分含む）。関連する `hve/tests/test_orchestrator.py`（181 passed。無関係な pre-existing 失敗 1 件を除く）・`hve/tests/test_runner.py`（205 passed）でも回帰なしを確認した。
+
+**既知の制約**: readiness 待機がタイムアウトした場合、見捨てられた Cloud Session を明示的に `disconnect()` しないため、リモート側タスクが孤立する可能性がある（ローカル側の並行数制限スロットは既存の解放処理で正しく戻る）。この待機（最大60秒）が呼び出し元の `send_and_wait(timeout=...)` を含むステップ全体のタイムアウト予算に与える影響は個別に検証していない。`hve/self_improve.py` の Cloud Session フォールバック経路は本来 console 警告を持たない設計（pre-existing）で、今回追加した readiness timeout もこの経路に該当し無警告でフォールバックし得る。実際の `CopilotSession`（実 SDK）に対する統合テストは行っておらず、全テストは fake ベースの単体テストに留まる。
+
+### Fixed — モデル一覧のトークン単価が常に取得できず、SDK 0.3.0 時代の互換パッチが陳腐化していた
+
+`hve/models_api.py` は SDK 0.3.0 時代の `ModelBilling.multiplier` 必須化バグを避けるモンキーパッチと、`billing.token_prices` / `capabilities.supports.reasoning_effort` を独自の低レベル RPC 直叩きで補う回避コードを持っていた。インストール済み SDK（1.0.8）のソースを直接確認したところ、(1) `ModelBilling.from_dict` は `multiplier` 欠落を今は許容しており当該パッチは不要、(2) 低レベル RPC 側のキー名が snake_case（`token_prices` / `batch_size` / `reasoning_effort` 等）だったのに対し実際の wire フォーマットは camelCase（`tokenPrices` / `batchSize` / `reasoningEffort` 等）のため、このキー不一致により現行 SDK（1.0.8）では両回避コードとも空振りしていた（過去バージョンでの動作有無までは未検証）。
+
+- **`_apply_sdk_billing_patch()` を削除した**。現行 SDK の `ModelBilling.from_dict` が `multiplier` 欠落を素通しすることを回帰テストで固定した。
+- **価格抽出を公開 API 経由（`ModelInfo.billing.token_prices.*`）に置き換えた**。既存の USD/1M 換算式は変更していない。非推奨化された `cache_price` の代わりに SDK が案内する `cache_read_price` を参照するようにした。
+- **機能していなかった `capabilities.supports.reasoning_effort` の縮退救済ロジックを削除した**。この項目は wire・SDK 双方で単なる bool であり、削除前から一度も「候補一覧」を返せていなかったため、既存の正規経路（トップレベル `supported_reasoning_efforts` および `capabilities.supports.reasoning_effort` の bool 値）には影響しない。
+
+**検証**: RED は `hve/tests/test_models_api.py` で 2 件が意図通り失敗。実装後は同ファイルで 14 passed、関連する `hve/tests/test_cli_login.py` / `hve/tests/test_get_model_choices.py` で 26 passed を確認した。
+
 ### Changed — 一時作業ファイルをリポジトリルート直下に作れないよう強制した
 
 リポジトリルート直下に一時デバッグスクリプト・pytest 出力・`MagicMock/` ディレクトリが堆積していた。`.gitignore` 済みのものは気付かれないまま作業ツリーを汚し、うち 1 件（`_tmp_mdq_probe3.py`）は Git 管理下にコミットされていた。ルールは Skill 側に散在しておらず、CI での検出手段も無かった。

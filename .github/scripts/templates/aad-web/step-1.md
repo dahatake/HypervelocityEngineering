@@ -9,7 +9,7 @@
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/data-model.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `docs/catalog/persona-screen-catalog.md`（存在する場合のみ。AAS Step.8 で生成される共通画面骨格）
+- `docs/catalog/persona-screen-catalog.md`（存在する場合のみ。AAS Step.9 で生成される共通画面骨格）
 
 ## 出力
 - `docs/catalog/screen-catalog-{APP-ID}.md`（**APP-ID 単位で分割**。担当 APP の画面のみを書く）

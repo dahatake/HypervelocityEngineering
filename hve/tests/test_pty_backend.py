@@ -14,6 +14,24 @@ import pytest
 from hve.gui import pty_backend
 
 
+_PLATFORM_SETUP_CASES = [
+    pytest.param("win32", r"hve\setup-hve.cmd", id="windows"),
+    pytest.param("linux", "./hve/setup-hve.sh", id="posix"),
+]
+
+
+def _assert_setup_is_primary_guidance(guidance: str, setup_command: str) -> None:
+    """通常 setup が、存在する手動復旧案内すべてより先に現れることを検証する。"""
+    assert setup_command in guidance
+    setup_index = guidance.index(setup_command)
+    for marker in ("gh auth login", "pip install", "gui-pty", "http://", "https://"):
+        marker_index = guidance.find(marker)
+        if marker_index >= 0:
+            assert setup_index < marker_index, (
+                f"{setup_command!r} must precede {marker!r}: {guidance!r}"
+            )
+
+
 # ---------------------------------------------------------------------------
 # 純粋ロジック (バックエンド不在でも実行可能)
 # ---------------------------------------------------------------------------
@@ -31,10 +49,16 @@ def test_spawn_rejects_non_list_argv() -> None:
         pty_backend.spawn(["echo", 123])  # type: ignore[list-item]
 
 
-def test_missing_dependency_hint_mentions_extras() -> None:
-    """エラーメッセージに extras インストール手順が含まれる。"""
+@pytest.mark.parametrize(("platform", "setup_command"), _PLATFORM_SETUP_CASES)
+def test_missing_dependency_hint_recommends_platform_setup(
+    monkeypatch, platform: str, setup_command: str
+) -> None:
+    """FR-GUI-09: PTY 不足時は OS 別の通常 setup を主復旧導線にする。"""
+    monkeypatch.setattr(pty_backend.sys, "platform", platform)
+
     hint = pty_backend.missing_dependency_hint()
-    assert "gui-pty" in hint
+
+    _assert_setup_is_primary_guidance(hint, setup_command)
 
 
 # ---------------------------------------------------------------------------
@@ -42,10 +66,18 @@ def test_missing_dependency_hint_mentions_extras() -> None:
 # ---------------------------------------------------------------------------
 
 
+# 通常 base CI は [gui-pty] を導入しないため、実 backend テストは skip を許容する。
+# Sub-006 の 3 OS 専用 job は [gui-pty] を導入し、skip 0 を検査する前提。
 pty_required = pytest.mark.skipif(
     not pty_backend.is_pty_available(),
     reason="PTY backend (pywinpty/ptyprocess) not installed",
 )
+
+
+@pty_required
+def test_platform_backend_is_available_for_normal_gui_setup() -> None:
+    """FR-GUI-09: 通常 GUI setup 後の実環境では対象 OS の PTY が利用可能。"""
+    assert pty_backend.is_pty_available(), pty_backend.missing_dependency_hint()
 
 
 def _echo_argv() -> list[str]:

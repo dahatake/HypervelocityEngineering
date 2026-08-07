@@ -285,6 +285,45 @@ class TestMergePartialAnswers(unittest.TestCase):
         self.assertEqual(self.merged.status, "回答済み")
 
 
+class TestMergeOtherFreeText(unittest.TestCase):
+    """選択肢付き質問の「その他」自由記述を保存する。"""
+
+    @staticmethod
+    def _make_doc() -> QADocument:
+        return QADocument(
+            title="その他回答テスト",
+            questions=[
+                QAQuestion(
+                    no=1,
+                    question="方式はどれか",
+                    choices=[
+                        Choice(label="A", text="標準方式"),
+                        Choice(label="B", text="別方式"),
+                    ],
+                    default_answer="A) 標準方式",
+                    reason="既定値",
+                ),
+            ],
+        )
+
+    def test_other_freetext_is_persisted_in_output_file(self):
+        answers = QAMerger.parse_answers("1:: その他: 独自の方式")
+        merged = QAMerger.merge_answers(self._make_doc(), answers)
+        self.assertEqual(merged.questions[0].user_answer, "その他: 独自の方式")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "merged.md"
+            self.assertTrue(QAMerger.save_merged(QAMerger.render_merged(merged), path))
+            self.assertIn("その他: 独自の方式", path.read_text(encoding="utf-8"))
+            persisted = QAMerger.parse_qa_file(path)
+            self.assertEqual(persisted.questions[0].user_answer, "その他: 独自の方式")
+
+    def test_empty_other_freetext_falls_back_to_default(self):
+        answers = QAMerger.parse_answers("1::   ")
+        merged = QAMerger.merge_answers(self._make_doc(), answers)
+        self.assertEqual(merged.questions[0].user_answer, "A) 標準方式")
+
+
 class TestRenderMerged(unittest.TestCase):
     """マージ済み QADocument → 6列 Markdown"""
 
@@ -634,6 +673,8 @@ _STRUCTURED_CONTENT = """\
 - 分類項目: アーキテクチャ
 - 重要度: 最重要
 - 質問文: サービス分割方針はどれか
+- 背景と根拠: 出典: domain-analytics.md / 確定: 現行は分割 / 未確定: 統合時の移行コストが未計測
+- 判断の観点: 変更容易性: A 有利 / 運用コスト: B 有利
 - 選択肢:
   A. 分割維持
   B. 統合
@@ -646,6 +687,8 @@ _STRUCTURED_CONTENT = """\
 - 分類項目: 通信
 - 重要度: 高
 - 質問文: 通信方式はどれか
+- 背景と根拠: 出典: 未確認 / 確定: 既存は REST / 未確定: gRPC の運用実績
+- 判断の観点: 習熟度: A 有利 / スループット: B 有利
 - 選択肢:
   A. REST
   B. gRPC
@@ -748,6 +791,14 @@ class TestStructuredQuestionParsing(unittest.TestCase):
 
     def test_q1_impact_if_unanswered(self):
         self.assertIn("設計が固まらない", self.doc.questions[0].impact_if_unanswered)
+
+    def test_q1_background(self):
+        """FR-QA-02: 背景と根拠がパースされる。"""
+        self.assertIn("統合時の移行コストが未計測", self.doc.questions[0].background)
+
+    def test_q1_viewpoints(self):
+        """FR-QA-02: 判断の観点がパースされる。"""
+        self.assertIn("変更容易性: A 有利", self.doc.questions[0].viewpoints)
 
     def test_q1_choices_alpha_labels(self):
         """英字ラベル選択肢が正しくパースされる"""
@@ -852,6 +903,14 @@ class TestQAQuestionNewFields(unittest.TestCase):
         q = QAQuestion(no=1, question="テスト")
         self.assertEqual(q.impact_if_unanswered, "")
 
+    def test_background_defaults_empty(self):
+        q = QAQuestion(no=1, question="テスト")
+        self.assertEqual(q.background, "")
+
+    def test_viewpoints_defaults_empty(self):
+        q = QAQuestion(no=1, question="テスト")
+        self.assertEqual(q.viewpoints, "")
+
     def test_new_fields_can_be_set(self):
         q = QAQuestion(no=1, question="テスト", priority="最重要", category="設計", impact_if_unanswered="影響大")
         self.assertEqual(q.priority, "最重要")
@@ -898,6 +957,61 @@ class TestRenderMergedDynamicColumns(unittest.TestCase):
         rendered = QAMerger.render_merged(self._make_doc_no_new_fields())
         self.assertIn("既定値候補の理由", rendered)
         self.assertNotIn("選択理由", rendered)
+
+
+class TestRenderMergedDepthColumns(unittest.TestCase):
+    """FR-QA-02: 背景と根拠 / 判断の観点 の列出力と往復保持テスト。"""
+
+    def _make_doc(self) -> QADocument:
+        doc = QAMerger.parse_qa_content(_STRUCTURED_CONTENT)
+        return QAMerger.merge_answers(doc, {}, use_defaults=True)
+
+    @staticmethod
+    def _table_lines(rendered: str) -> list:
+        """テーブル行だけを返す。preamble には元の [Qxx] 全文が残るため除外する。"""
+        return [line for line in rendered.splitlines() if line.startswith("|")]
+
+    def _table_header(self, rendered: str) -> str:
+        return next(line for line in self._table_lines(rendered) if "No." in line)
+
+    def test_extended_header_includes_depth_columns(self):
+        header = self._table_header(QAMerger.render_merged(self._make_doc()))
+        self.assertIn("背景と根拠", header)
+        self.assertIn("判断の観点", header)
+
+    def test_depth_values_are_rendered(self):
+        rendered = QAMerger.render_merged(self._make_doc())
+        rows = [line for line in self._table_lines(rendered) if "サービス分割方針" in line]
+        self.assertTrue(rows, "質問行がテーブルに見つからない")
+        self.assertIn("統合時の移行コストが未計測", rows[0])
+        self.assertIn("変更容易性: A 有利", rows[0])
+
+    def test_depth_only_document_uses_extended_table(self):
+        """重要度・分類項目が無くても、深さ項目だけで拡張テーブルになる。"""
+        doc = QADocument(questions=[
+            QAQuestion(
+                no=1, question="テスト",
+                background="出典: 未確認", viewpoints="保守性: A 有利",
+            ),
+        ])
+        rendered = QAMerger.render_merged(doc)
+        self.assertIn("背景と根拠", rendered)
+        self.assertIn("判断の観点", rendered)
+
+    def test_rendered_table_round_trips_depth_columns(self):
+        """GUI の IPC 往復（render → parse）で深さ項目が欠落しない。"""
+        rendered = QAMerger.render_merged(self._make_doc())
+        reparsed = QAMerger.parse_qa_content(rendered)
+        self.assertEqual(len(reparsed.questions), 2)
+        self.assertIn("統合時の移行コストが未計測", reparsed.questions[0].background)
+        self.assertIn("変更容易性: A 有利", reparsed.questions[0].viewpoints)
+
+    def test_legacy_document_leaves_depth_fields_empty(self):
+        """深さ項目を持たない旧形式は空文字列となり、解析は失敗しない。"""
+        doc = QAMerger.parse_qa_content(_LEGACY_5COL_CONTENT)
+        for q in doc.questions:
+            self.assertEqual(q.background, "")
+            self.assertEqual(q.viewpoints, "")
 
 
 class TestColumnIndexZeroSafety(unittest.TestCase):

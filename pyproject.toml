@@ -4,11 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hve"
-version = "0.3.0"
+version = "0.4.0"
 description = "HVE CLI Orchestrator package"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
+  # 具体的な導入版は hve/copilot-sdk.lock（唯一の情報源）で固定し、setup-hve.{sh,ps1}
+  # がそこから導入する。ここの下限は API 互換の床であって「最新に追従してよい」という
+  # 意味ではない。更新は setup を --upgrade-sdk / -UpgradeSdk 付きで実行して lock を
+  # 書き換え、その差分をコミットする。
   "github-copilot-sdk>=1.0.0",
   # pydantic / pydantic-core はペアで固定する。github-copilot-sdk は pydantic を
   # 非固定 (`pydantic`) で要求するため、`pip install -U github-copilot-sdk` 等で
@@ -163,7 +167,8 @@ gui-docconvert = [
 ]
 
 [project.scripts]
-hve = "hve.__main__:main"
+# `python -m hve` と同じ .venv 再 exec ガードを通すため、main ではなく _console_main を指す。
+hve = "hve.__main__:_console_main"
 hve-mdq = "mdq.cli:main"
 mdq = "mdq.cli:main"
 
@@ -206,7 +211,7 @@ exclude = ["hve.tests*"]
 # 連動対象外: cq / mdq engine、各 Skill / GUI / 移植用キット（独立ライフサイクル）
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.3.0"
+current_version = "0.4.0"
 commit = true
 tag = true
 tag_name = "v{new_version}"

@@ -23,6 +23,10 @@ def _make_model(
     supported_efforts: list[str] | None = None,
     supports_reasoning_effort: bool = False,
     max_context_window_tokens: int | None = None,
+    batch_size: int | None = None,
+    input_price: float | None = None,
+    output_price: float | None = None,
+    cache_read_price: float | None = None,
 ):
     m = MagicMock()
     m.id = id_
@@ -36,6 +40,18 @@ def _make_model(
     caps.limits = MagicMock()
     caps.limits.max_context_window_tokens = max_context_window_tokens
     m.capabilities = caps
+    # billing.token_prices は ModelInfo.billing が Optional なため、指定時のみ組み立てる
+    if batch_size is None:
+        m.billing = None
+    else:
+        token_prices = MagicMock()
+        token_prices.batch_size = batch_size
+        token_prices.input_price = input_price
+        token_prices.output_price = output_price
+        token_prices.cache_read_price = cache_read_price
+        billing = MagicMock()
+        billing.token_prices = token_prices
+        m.billing = billing
     return m
 
 
@@ -137,6 +153,35 @@ class TestFetchModelEntries:
             entries = fetch_model_entries(timeout=5.0)
         assert entries[0].name == "only-id"
 
+    def test_extracts_price_from_public_billing_field(self):
+        """SDK が公開する ModelInfo.billing.token_prices から USD/1M 価格を算出する。"""
+        fake = _make_fake_client(
+            models=[
+                _make_model(
+                    "claude-sonnet-4.6",
+                    batch_size=1_000_000,
+                    input_price=300_000_000_000.0,
+                    output_price=1_500_000_000_000.0,
+                    cache_read_price=30_000_000_000.0,
+                ),
+            ]
+        )
+        with patch("copilot.CopilotClient", return_value=fake):
+            entries = fetch_model_entries(timeout=5.0)
+        e = entries[0]
+        assert e.input_price_usd_per_1m == pytest.approx(3.00)
+        assert e.output_price_usd_per_1m == pytest.approx(15.00)
+        assert e.cache_price_usd_per_1m == pytest.approx(0.30)
+
+    def test_billing_none_leaves_prices_none(self):
+        """ModelInfo.billing が None のモデルは価格 None のままエラーにならない。"""
+        fake = _make_fake_client(models=[_make_model("m1")])
+        with patch("copilot.CopilotClient", return_value=fake):
+            entries = fetch_model_entries(timeout=5.0)
+        assert entries[0].input_price_usd_per_1m is None
+        assert entries[0].output_price_usd_per_1m is None
+        assert entries[0].cache_price_usd_per_1m is None
+
     def test_list_models_failure_raises(self):
         fake = _make_fake_client(list_raises=RuntimeError("boom"))
         with patch("copilot.CopilotClient", return_value=fake):
@@ -191,3 +236,27 @@ class TestModelEntry:
         e = ModelEntry(id="x", name="X")
         with pytest.raises(Exception):
             e.id = "y"  # type: ignore[misc]
+
+
+# =====================================================================
+# SDK 0.3.0 互換パッチ削除の安全性（回帰ガード）
+# =====================================================================
+
+
+class TestModelBillingCompat:
+    """installed SDK の ModelBilling.from_dict が multiplier 欠落を許容することを確認する。
+
+    hve.models_api は SDK 0.3.0 時代の multiplier 必須化バグ回避パッチを持っていたが、
+    現行 SDK では multiplier 欠落時も例外を投げないため不要。将来 SDK がこの挙動を
+    再び壊した場合に検知できるよう、SDK 自体の振る舞いを直接固定する。
+    """
+
+    def test_sdk_model_billing_tolerates_missing_multiplier(self):
+        from copilot.client import ModelBilling
+
+        billing = ModelBilling.from_dict(
+            {"tokenPrices": {"batchSize": 1_000_000, "inputPrice": 300_000_000_000.0}}
+        )
+        assert billing.multiplier is None
+        assert billing.token_prices is not None
+        assert billing.token_prices.input_price == 300_000_000_000.0

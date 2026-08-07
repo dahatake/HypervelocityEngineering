@@ -48,7 +48,7 @@ function script:NewWorkflowStep {
 
 $script:WorkflowRegistryData = @{}
 
-# AAS — App Architecture Design (2 steps)
+# AAS — App Architecture Design (11 steps)
 $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     id            = 'aas'
     name          = 'App Architecture Design'
@@ -64,6 +64,15 @@ $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     steps         = @(
         (NewWorkflowStep -Id '1' -Title 'アプリケーションリストの作成' -CustomAgent 'Arch-ApplicationAnalytics' -BodyTemplatePath 'templates/aas/step-1.md')
         (NewWorkflowStep -Id '2' -Title 'ソフトウェアアーキテクチャの推薦' -CustomAgent 'Arch-ArchitectureCandidateAnalyzer' -DependsOn @('1') -BodyTemplatePath 'templates/aas/step-2.md')
+        (NewWorkflowStep -Id '3.1' -Title 'ドメイン分析' -CustomAgent 'Arch-Microservice-DomainAnalytics' -DependsOn @('2') -BodyTemplatePath 'templates/aas/step-3.1.md')
+        (NewWorkflowStep -Id '3.2' -Title 'サービス一覧抽出' -CustomAgent 'Arch-Microservice-ServiceIdentify' -DependsOn @('3.1') -BodyTemplatePath 'templates/aas/step-3.2.md')
+        (NewWorkflowStep -Id '4.1' -Title 'データモデル設計' -CustomAgent 'Arch-DataModeling' -DependsOn @('3.2') -BodyTemplatePath 'templates/aas/step-4.1.md')
+        (NewWorkflowStep -Id '4.2' -Title 'サンプルデータ生成' -CustomAgent 'Arch-DataModeling' -DependsOn @('4.1') -BodyTemplatePath 'templates/aas/step-4.2.md')
+        (NewWorkflowStep -Id '5' -Title 'データカタログ作成' -CustomAgent 'Arch-DataCatalog' -DependsOn @('4.1') -SkipFallbackDeps @('4.1') -BodyTemplatePath 'templates/aas/step-5.md')
+        (NewWorkflowStep -Id '6' -Title 'サービスカタログ' -CustomAgent 'Arch-Microservice-ServiceCatalog' -DependsOn @('5') -SkipFallbackDeps @('5') -BodyTemplatePath 'templates/aas/step-6.md')
+        (NewWorkflowStep -Id '7' -Title 'テスト戦略書' -CustomAgent 'Arch-TDD-TestStrategy' -DependsOn @('6') -SkipFallbackDeps @('6') -BodyTemplatePath 'templates/aas/step-7.md')
+        (NewWorkflowStep -Id '8' -Title 'ペルソナカタログ' -CustomAgent 'Arch-PersonaCatalog' -DependsOn @('7') -SkipFallbackDeps @('7') -BodyTemplatePath 'templates/aas/step-8.md')
+        (NewWorkflowStep -Id '9' -Title 'ペルソナ別共通画面カタログ' -CustomAgent 'Arch-UI-PersonaScreenList' -DependsOn @('8') -SkipFallbackDeps @('8') -BodyTemplatePath 'templates/aas/step-9.md')
     )
 }
 

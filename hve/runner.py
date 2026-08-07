@@ -986,6 +986,7 @@ try:
         is_policy_blocked_error,
         resolve_cloud_repository,
         should_use_cloud_session,
+        wait_for_cloud_session_ready,
     )
 except ImportError:
     from config import (  # type: ignore[no-redef]
@@ -1027,6 +1028,7 @@ except ImportError:
         is_policy_blocked_error,
         resolve_cloud_repository,
         should_use_cloud_session,
+        wait_for_cloud_session_ready,
     )
 
 # Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
@@ -1340,6 +1342,7 @@ async def _create_session_with_auto_reasoning_fallback(
                     step_id=step_id,
                     subtask_kind=subtask_kind,
                 )
+                await wait_for_cloud_session_ready(session)
                 if limiter is not None:
                     attach_cloud_session_limiter_release(session, limiter)
                     limiter = None
@@ -1409,7 +1412,7 @@ async def _create_session_with_auto_reasoning_fallback(
                 if console is not None:
                     try:
                         console.warning(
-                            f"Cloud Session 作成に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
+                            f"Cloud Session の準備に失敗したため、ローカルセッションにフォールバックします ({type(exc).__name__})。"
                         )
                     except Exception:
                         pass

@@ -1,6 +1,6 @@
 # HVE TDD ベースライン突合サマリー
 
-- 生成日時 (UTC): `2026-08-06T21:41:36Z`
+- 生成日時 (UTC): `2026-08-07T09:25:23Z`
 - 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。
 - 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。
 
@@ -17,40 +17,40 @@
 
 ## テスト棚卸し件数
 
-- 抽出行数: **10500**
-- 対象ファイル数: **521**
+- 抽出行数: **10843**
+- 対象ファイル数: **528**
 
 | 分類 | ファイル数 | 行数 |
 |---|---:|---:|
-| core-python | 300 | 7676 |
+| core-python | 305 | 7958 |
 | cq-support-python | 32 | 603 |
-| github-script-powershell | 5 | 76 |
+| github-script-powershell | 5 | 79 |
 | github-script-python | 3 | 58 |
 | github-script-shell | 7 | 94 |
-| gui-python | 138 | 1629 |
+| gui-python | 140 | 1687 |
 | markdown-query-gui-support-python | 6 | 40 |
 | mdq-support-python | 30 | 324 |
 
 | 種別 | 行数 |
 |---|---:|
 | fixture | 188 |
-| helper | 1973 |
-| pester-it | 85 |
+| helper | 2047 |
+| pester-it | 88 |
 | python-file | 8 |
 | script | 1 |
-| setup-teardown | 114 |
+| setup-teardown | 130 |
 | shell-case | 36 |
 | shell-helper | 5 |
-| test | 8090 |
+| test | 8340 |
 
 ## 機能一覧件数
 
-- 抽出行数: **323**
+- 抽出行数: **330**
 
 | 種別 | 行数 |
 |---|---:|
 | C | 4 |
-| FR | 158 |
+| FR | 165 |
 | GATE | 5 |
 | NFR | 30 |
 | UC | 6 |
@@ -59,8 +59,8 @@
 
 ## 要求定義 ↔ 既存マッピング文書の突合
 
-- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **203**
-- `hve-dev/requirement-test-mapping.md` 側 ID 数: **223**
+- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **210**
+- `hve-dev/requirement-test-mapping.md` 側 ID 数: **230**
 - 要求定義にあるがマッピング見出しが未確認の ID: **2**
 - マッピングにあるが要求定義の抽出対象に無い ID: **2**
 - 要求定義上で廃止/削除表記を含む ID: **7**

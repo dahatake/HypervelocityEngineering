@@ -19,7 +19,7 @@
 ユースケースからアプリケーションリストの作成・アーキテクチャ選定を行うフェーズ1のガイドです。
 
 > [!NOTE]
-> フェーズ1（Step.1〜Step.7、8ステップ構成）はすべての設計で共通のステップです。
+> フェーズ1（Step.1〜Step.9、11ステップ構成）はすべての設計で共通のステップです。
 > フェーズ2は以下を参照してください。
 > - Web アプリケーション設計: [Web Application 設計ガイド（AAD-WEB）](./03-app-design-microservice-azure.md)
 > - AI Agent 設計: [AI Agent 設計ガイド（AAG）](./08-ai-agent.md)（Issue Template: `ai-agent-design.yml`）
@@ -31,7 +31,7 @@
 
 ### フローの目的・スコープ
 
-Issue Form から親 Issue を作成するだけで、Step.1〜Step.7 の8ステップのアプリケーションアーキテクチャ設計タスクが
+Issue Form から親 Issue を作成するだけで、Step.1〜Step.9 の11ステップのアプリケーションアーキテクチャ設計タスクが
 Sub-issue として自動生成され、Copilot が依存関係に従って順次実行するワークフローです。
 
 フェーズ2（Web アプリケーション設計）を実行するには **Web App Design（AAD-WEB）** の Issue を、AI Agent 設計には **AI Agent Design（AAG）** の Issue を別途作成してください。
@@ -62,7 +62,7 @@ Sub-issue として自動生成され、Copilot が依存関係に従って順�
 以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
 
 
-![AAS: Arch-ApplicationAnalytics → Arch-TDD-TestStrategy の8ステップチェーン（直列）](./images/chain-aas.svg)
+![AAS: Arch-ApplicationAnalytics → Arch-UI-PersonaScreenList の11ステップチェーン（直列）](./images/chain-aas.svg)
 
 
 ### アーキテクチャ図
@@ -88,7 +88,8 @@ GitHub Copilot cloud agent を使用します。ツールの詳細は [README.md
 ### 依存グラフ
 
 ```
-step-1 ──► step-2 ──► step-3.1 ──► step-3.2 ──► step-4 ──► step-5 ──► step-6 ──► step-7
+step-1 ──► step-2 ──► step-3.1 ──► step-3.2 ──► step-4.1 ─┬─► step-4.2
+                                                        └─► step-5 ──► step-6 ──► step-7 ──► step-8 ──► step-9
 ```
 
 ### 各ステップの入出力
@@ -99,10 +100,13 @@ step-1 ──► step-2 ──► step-3.1 ──► step-3.2 ──► step-4 �
 | step-2 | ソフトウェアアーキテクチャの推薦 | `Arch-ArchitectureCandidateAnalyzer` | docs/catalog/app-catalog.md, docs/architectural-requirements-app-xx.md（存在するもののみ） | docs/catalog/app-arch-catalog.md | step-1 |
 | step-3.1 | ドメイン分析 | `Arch-Microservice-DomainAnalytics` | docs/catalog/use-case-catalog.md | docs/domain-analytics.md | step-2 |
 | step-3.2 | サービス一覧抽出 | `Arch-Microservice-ServiceIdentify` | docs/catalog/use-case-catalog.md, docs/domain-analytics.md, docs/catalog/app-catalog.md | docs/catalog/service-catalog.md | step-3.1 |
-| step-4 | データモデル | `Arch-DataModeling` | docs/domain-analytics.md, docs/catalog/service-catalog.md, docs/catalog/app-catalog.md | docs/catalog/data-model.md, src/data/sample-data.json | step-3.2 |
-| step-5 | データカタログ作成 | `Arch-DataCatalog` | docs/catalog/data-model.md, docs/domain-analytics.md, docs/catalog/app-catalog.md | docs/catalog/data-catalog.md | step-4 |
+| step-4.1 | データモデル設計 | `Arch-DataModeling` | docs/domain-analytics.md, docs/catalog/service-catalog.md, docs/catalog/app-catalog.md | docs/catalog/data-model.md | step-3.2 |
+| step-4.2 | サンプルデータ生成 | `Arch-DataModeling` | docs/catalog/data-model.md, docs/catalog/app-catalog.md | src/data/sample-data.json | step-4.1 |
+| step-5 | データカタログ作成 | `Arch-DataCatalog` | docs/catalog/data-model.md, docs/domain-analytics.md, docs/catalog/app-catalog.md | docs/catalog/data-catalog.md | step-4.1 |
 | step-6 | サービスカタログ | `Arch-Microservice-ServiceCatalog` | docs/catalog/service-catalog.md, docs/catalog/data-model.md, docs/domain-analytics.md, docs/catalog/app-catalog.md | docs/catalog/service-catalog-matrix.md | step-5 |
 | step-7 | テスト戦略書 | `Arch-TDD-TestStrategy` | docs/catalog/service-catalog-matrix.md, docs/catalog/data-model.md, docs/domain-analytics.md, docs/catalog/app-catalog.md | docs/test-strategy.md | step-6 |
+| step-8 | ペルソナカタログ | `Arch-PersonaCatalog` | docs/catalog/use-case-catalog.md, docs/catalog/app-catalog.md | docs/catalog/persona-catalog.md | step-7 |
+| step-9 | ペルソナ別共通画面カタログ | `Arch-UI-PersonaScreenList` | docs/catalog/persona-catalog.md, docs/catalog/app-catalog.md | docs/catalog/persona-screen-catalog.md | step-8 |
 
 ---
 
@@ -548,6 +552,44 @@ docs/ のドメイン分析からマイクロサービス候補を抽出し、se
 
 # 出力（必須）
 - `docs/test-strategy.md`
+```
+
+---
+
+### Step 8. ペルソナカタログの作成
+
+- 使用するカスタムエージェント
+  - Arch-PersonaCatalog
+
+```text
+# タスク
+ユースケース文書のアクター記述から APP-ID 横断のペルソナ一覧を抽出する
+
+# 入力
+- `docs/catalog/use-case-catalog.md`
+- `docs/catalog/app-catalog.md`
+
+# 出力（必須）
+- `docs/catalog/persona-catalog.md`
+```
+
+---
+
+### Step 9. ペルソナ別共通画面カタログの作成
+
+- 使用するカスタムエージェント
+  - Arch-UI-PersonaScreenList
+
+```text
+# タスク
+Step 8 のペルソナ一覧を前提に、複数 APP-ID で共通化できる画面骨格を抽出する
+
+# 入力
+- `docs/catalog/persona-catalog.md`（Step 8 の出力）
+- `docs/catalog/app-catalog.md`
+
+# 出力（必須）
+- `docs/catalog/persona-screen-catalog.md`
 ```
 
 ---

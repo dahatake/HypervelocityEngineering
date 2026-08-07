@@ -12,9 +12,10 @@ CLI ↔ GUI IPC フローでの責務:
 
 表形式 UI（C 仕様: 全質問を 1 つの表に並べる）:
     - 1 行 = 1 質問
-    - 列: [No.] [優先度] [分類] [質問文] [選択肢] [既定値候補] [理由] [回答]
+    - 列: [No.] [優先度] [分類] [質問文] [背景と根拠] [判断の観点] [選択肢] [既定値候補] [理由] [回答]
     - 選択肢列は各選択肢を「ラベル) 本文」形式で改行区切り表示（読み取り専用）
     - 回答列は QComboBox（ラベル記号のみ表示）または QLineEdit（自由記述）
+    - 選択肢付き質問では「その他」の選択時だけ自由記述欄を入力可能にする
     - 各行はダイアログ表示時に既定値候補で初期選択される
 """
 
@@ -58,11 +59,27 @@ _COL_NO = 0
 _COL_PRIORITY = 1
 _COL_CATEGORY = 2
 _COL_QUESTION = 3
-_COL_CHOICES = 4
-_COL_DEFAULT = 5
-_COL_REASON = 6
-_COL_ANSWER = 7
-_COL_HEADERS = ["No.", "優先度", "分類", "質問", "選択肢", "既定値候補", "理由", "回答"]
+_COL_BACKGROUND = 4
+_COL_VIEWPOINTS = 5
+_COL_CHOICES = 6
+_COL_DEFAULT = 7
+_COL_REASON = 8
+_COL_ANSWER = 9
+_COL_HEADERS = [
+    "No.", "優先度", "分類", "質問", "背景と根拠", "判断の観点",
+    "選択肢", "既定値候補", "理由", "回答",
+]
+_ANSWER_COLUMN_WIDTH = 320
+_OTHER_CHOICE_TEXT = "その他"
+_OTHER_CHOICE_DATA = "__hve_gui_other__"
+
+
+def _is_other_choice(choice: object) -> bool:
+    """質問票に既にある「その他」選択肢かを判定する。"""
+    return (
+        str(getattr(choice, "label", "")).strip() == _OTHER_CHOICE_TEXT
+        or str(getattr(choice, "text", "")).strip() == _OTHER_CHOICE_TEXT
+    )
 
 
 class _QuestionRow:
@@ -76,23 +93,36 @@ class _QuestionRow:
         self.question = question
         self.combo: Optional[QComboBox] = None
         self.line_edit: Optional[QLineEdit] = None
+        self.other_line_edit: Optional[QLineEdit] = None
 
     @property
     def is_free_text(self) -> bool:
         return not self.question.choices
 
     def selected_label(self) -> str:
-        """選択中の英字ラベルを返す。自由記述/未選択時は空文字。"""
+        """通常選択肢のラベルを返す。自由記述/その他/未選択時は空文字。"""
         if self.combo is None:
             return ""
         data = self.combo.currentData()
+        if data == _OTHER_CHOICE_DATA:
+            return ""
         return str(data) if data else ""
+
+    def is_other_selected(self) -> bool:
+        """選択肢付き質問で「その他」が選択されているかを返す。"""
+        return self.combo is not None and self.combo.currentData() == _OTHER_CHOICE_DATA
 
     def freetext_value(self) -> str:
         """自由記述の入力値を返す。選択肢式の場合は空文字。"""
         if self.line_edit is None:
             return ""
         return self.line_edit.text().strip()
+
+    def other_freetext_value(self) -> str:
+        """「その他」に入力された自由記述を返す。"""
+        if self.other_line_edit is None:
+            return ""
+        return self.other_line_edit.text().strip()
 
     def serialize(self) -> str:
         """Submit 用の 1 行テキストを返す。値が空なら空文字（呼び出し側で省略）。"""
@@ -101,6 +131,11 @@ class _QuestionRow:
             if not text:
                 return ""
             return f"{self.question.no}:: {text}"
+        if self.is_other_selected():
+            text = self.other_freetext_value()
+            if not text:
+                return ""
+            return f"{self.question.no}:: {_OTHER_CHOICE_TEXT}: {text}"
         label = self.selected_label()
         if not label:
             return ""
@@ -138,7 +173,7 @@ class QAAnswerDialog(QDialog):
         if step_id:
             title = f"{title} - Step {step_id}"
         self.setWindowTitle(title)
-        self.resize(1250, 600)
+        self.resize(1450, 600)
 
         outer = QVBoxLayout(self)
 
@@ -203,10 +238,13 @@ class QAAnswerDialog(QDialog):
         hh.setSectionResizeMode(_COL_PRIORITY, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(_COL_CATEGORY, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(_COL_QUESTION, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(_COL_BACKGROUND, QHeaderView.ResizeMode.Stretch)
+        hh.setSectionResizeMode(_COL_VIEWPOINTS, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(_COL_CHOICES, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(_COL_DEFAULT, QHeaderView.ResizeMode.Interactive)
         hh.setSectionResizeMode(_COL_REASON, QHeaderView.ResizeMode.Interactive)
         hh.setSectionResizeMode(_COL_ANSWER, QHeaderView.ResizeMode.Interactive)
+        table.setColumnWidth(_COL_ANSWER, _ANSWER_COLUMN_WIDTH)
 
         for row_idx, q in enumerate(questions):
             row = _QuestionRow(q)
@@ -224,7 +262,12 @@ class QAAnswerDialog(QDialog):
 
             table.setItem(row_idx, _COL_CATEGORY, QTableWidgetItem(q.category or ""))
             table.setItem(row_idx, _COL_QUESTION, QTableWidgetItem(q.question or ""))
-            choices_text = "\n".join(f"{c.label}) {c.text}" for c in q.choices)
+            table.setItem(row_idx, _COL_BACKGROUND, QTableWidgetItem(q.background or ""))
+            table.setItem(row_idx, _COL_VIEWPOINTS, QTableWidgetItem(q.viewpoints or ""))
+            choice_lines = [f"{c.label}) {c.text}" for c in q.choices]
+            if q.choices and not any(_is_other_choice(choice) for choice in q.choices):
+                choice_lines.append(f"{_OTHER_CHOICE_TEXT}) 自由記述")
+            choices_text = "\n".join(choice_lines)
             table.setItem(row_idx, _COL_CHOICES, QTableWidgetItem(choices_text))
             table.setItem(row_idx, _COL_DEFAULT, QTableWidgetItem(q.default_answer or ""))
             table.setItem(row_idx, _COL_REASON, QTableWidgetItem(q.reason or ""))
@@ -236,19 +279,56 @@ class QAAnswerDialog(QDialog):
         return table
 
     def _build_answer_widget(self, row: _QuestionRow) -> QWidget:
-        """回答セルの入力ウィジェットを作成する（QComboBox or QLineEdit）。"""
+        """回答セルの入力ウィジェットを作成する。"""
         q = row.question
         if q.choices:
             combo = QComboBox()
             default_label = self._extract_default_label(q)
+            default_is_other = q.default_answer.strip() == _OTHER_CHOICE_TEXT
             selected_index = 0
-            for i, choice in enumerate(q.choices):
+            has_other_choice = False
+            other_index = -1
+            for choice in q.choices:
+                if _is_other_choice(choice):
+                    if not has_other_choice:
+                        combo.addItem(_OTHER_CHOICE_TEXT, userData=_OTHER_CHOICE_DATA)
+                        has_other_choice = True
+                        other_index = combo.count() - 1
+                    if (
+                        default_is_other
+                        or (
+                            default_label
+                            and choice.label.upper() == default_label.upper()
+                        )
+                    ):
+                        selected_index = other_index
+                    continue
+
                 combo.addItem(choice.label, userData=choice.label.upper())
                 if default_label and choice.label.upper() == default_label.upper():
-                    selected_index = i
+                    selected_index = combo.count() - 1
+            if not has_other_choice:
+                combo.addItem(_OTHER_CHOICE_TEXT, userData=_OTHER_CHOICE_DATA)
+                if default_is_other:
+                    selected_index = combo.count() - 1
             combo.setCurrentIndex(selected_index)
             row.combo = combo
-            return combo
+
+            other_line_edit = QLineEdit()
+            other_line_edit.setPlaceholderText(self.tr("その他の内容を入力"))
+            other_line_edit.setEnabled(False)
+            row.other_line_edit = other_line_edit
+            combo.currentIndexChanged.connect(
+                lambda _index: other_line_edit.setEnabled(row.is_other_selected())
+            )
+            other_line_edit.setEnabled(row.is_other_selected())
+
+            container = QWidget()
+            layout = QHBoxLayout(container)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(combo, stretch=1)
+            layout.addWidget(other_line_edit, stretch=2)
+            return container
         # 自由記述（編集可）
         line_edit = QLineEdit()
         line_edit.setText(q.default_answer or "")

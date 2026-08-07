@@ -1,0 +1,20 @@
+# github-copilot-sdk のチーム既定版（唯一の情報源）。
+#
+# なぜ固定するか:
+#   SDK の生成イベントパーサ (copilot/generated/session_events.py) は、wheel ごとに
+#   pin される Copilot CLI ランタイム版のスキーマ専用に生成され、イベントの
+#   エンベロープ (id / timestamp / type) を assert で固めている。公開直後の
+#   リリースにパーサ不整合があると session.event の解析が AssertionError となり、
+#   当該イベントが黙って捨てられる（終端イベントを取り逃すと send_and_wait が
+#   タイムアウトまで返らない）。setup が毎回 --upgrade していると「セットアップ
+#   した日」で各マシンの版が変わり、特定の人だけ壊れる状態の再現・切り分けが
+#   できなくなるため、既定版をここで固定する。
+#
+# 更新手順:
+#   ./hve/setup-hve.sh --upgrade-sdk           (Linux / macOS)
+#   pwsh -File hve\setup-hve.ps1 -UpgradeSdk   (Windows)
+#   実行すると本ファイルが最新版で書き換わるので、差分をレビューしてコミットする。
+#   Copilot ランタイム版も同時に動くため、下記コメント行の変化も併せて確認すること。
+#
+# pinned Copilot CLI runtime: 1.0.73
+github-copilot-sdk==1.0.8

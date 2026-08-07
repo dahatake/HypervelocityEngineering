@@ -2,7 +2,7 @@ inputs:
 - path: docs/catalog/persona-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-PersonaCatalog--aas--9
+  producer: Arch-PersonaCatalog--aas--8
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact

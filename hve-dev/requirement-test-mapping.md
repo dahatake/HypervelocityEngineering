@@ -75,6 +75,7 @@
 - 直接対応テスト:
   - [hve/tests/test_fanout.py](hve/tests/test_fanout.py) :: `test_akm_has_fanout_21_keys`、`test_all_known_fanout_parsers_registered`、`test_all_workflows_fanout_parsers_are_known`、`test_akm_fanout_expander_produces_21_children`、`test_fanout_child_carries_fanout_meta`、`test_fanout_empty_parser_marks_skip`、`test_output_paths_template_resolves_with_key`、`test_output_paths_inherited_when_template_absent`、`test_dag_executor_expands_akm_to_21_parallel`、`test_dag_executor_runs_all_children`
   - [hve/tests/test_workflow_registry_ard.py](hve/tests/test_workflow_registry_ard.py) :: `TestBusinessCandidateParser`、`TestUseCaseSkeletonParser`、`TestNewParsersRegistered`
+  - [hve/tests/test_orchestrator_fanout_repo_root.py](hve/tests/test_orchestrator_fanout_repo_root.py) :: `TestFanoutRepoRootIsWorkingRepo` — 展開の基準ルートが作業ディレクトリであること。`monkeypatch.chdir` で作業ディレクトリとパッケージ設置ディレクトリを分離し、dry-run の fan-out 子が作業ディレクトリ側の skeleton だけから展開されることを固定。併せて事前展開・deferred 再展開・Fleet wave prompt の 3 経路へ `__file__` 由来のルートを渡していないことを AST で固定（RED: 4 failed → GREEN: 4 passed）
 
 ### FR-DAG-05 — `consumed_artifacts` / `output_paths` / `required_input_paths` 保持
 - 判定: ✓
@@ -1381,6 +1382,7 @@
 - 直接対応テスト:
   - [hve/gui/tests/test_workflow_requirements_all_steps.py](hve/gui/tests/test_workflow_requirements_all_steps.py) :: `TestSummarizeAllRequirements` — 全 active step 評価、fan-out 子 ID 正規化、既定値ありキーの非報告、autopilot 時のファイル要件非復活、重複排除
   - [hve/gui/tests/test_workflow_requirements_all_steps.py](hve/gui/tests/test_workflow_requirements_all_steps.py) :: `TestPrecheckRunnerUsesAllSteps` — `run_step1_precheck` が Step 1.3 のパラメータ不足を検出
+  - [hve/gui/tests/test_workflow_requirements_all_steps.py](hve/gui/tests/test_workflow_requirements_all_steps.py) :: `TestRequirementTableCoversRegistry` — `list_workflows()` の全ワークフローが `REQUIREMENT_TABLE` / `WORKFLOW_PRIORITY` に登録され、単独選択でも要件サマリーが 1 件以上返ること（RED: `aar` 欠落で 2 failed → GREEN: 22 passed / 12 subtests）
 
 ### FR-GUI-02 — 必須入力キーのレジストリ導出
 - 判定: ✓
@@ -1477,6 +1479,87 @@
   - 「収集済みイベントを削除」は不可逆なので確認ダイアログを挟む。テスト用 API `clear_events()` はダイアログを持たない。
 - 既知の制約:
   - `hve/gui/tests/test_settings_window_mdq_tabs.py` は本変更以前から単独実行でもプロセスが異常終了する（`MdqIndexSection` 単体構築で `QThread: Destroyed while thread '' is still running` を実測）。本要件の範囲外のため未修正。GUI 全体の実行結果は当該ファイルを除外して計測した。
+
+### FR-GUI-08 — GUI 質問票の「その他」回答
+
+- 判定: ✓（RED: `QAAnswerDialog` に「その他」がなく 5 failed。GREEN: ダイアログ、IPC、マージの対象 suite 27 passed）
+- 直接対応テスト:
+  - [hve/gui/tests/test_qa_answer_dialog.py](hve/gui/tests/test_qa_answer_dialog.py) :: `TestQAAnswerDialog.test_choice_question_appends_other_option`、`test_selecting_other_enables_freetext_and_serializes_it`、`test_answer_column_reserves_freetext_width`、`test_structured_other_default_is_editable`、`test_other_text_default_is_editable`、`test_switching_from_other_back_to_choice_uses_label_serialization`、`test_existing_other_choice_is_not_duplicated_and_serializes_freetext`、`test_choice_starting_with_other_remains_a_regular_choice`、`test_empty_other_freetext_is_omitted`
+  - [hve/gui/tests/test_qa_ipc_flow.py](hve/gui/tests/test_qa_ipc_flow.py) :: `TestQAIpcFlow.test_other_freetext_round_trip`
+  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestMergeOtherFreeText.test_other_freetext_is_persisted_in_output_file`、`test_empty_other_freetext_falls_back_to_default`
+
+### FR-GUI-09 — 通常セットアップによる `gh` / OS 別 PTY backend 構築
+
+- 判定: 要追加
+- 予定受入テスト:
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) :: `test_normal_gui_setup_installs_gh_and_platform_pty_backend`（予定）、`test_normal_gui_setup_fails_closed_when_gh_or_pty_is_missing`（予定）、`test_normal_gui_setup_repairs_existing_venv_without_force`（予定）、`test_no_gui_and_minimal_remain_explicit_opt_outs`（予定）、`test_setup_does_not_run_gh_auth_login_or_reject_unauthenticated_status`（予定）、`test_posix_setup_script_is_executable`（予定）
+  - [hve/tests/test_pty_backend.py](hve/tests/test_pty_backend.py) :: `test_missing_dependency_hint_recommends_platform_setup`（予定）、`test_platform_backend_is_available_for_normal_gui_setup`（予定）
+  - [hve/gui/tests/test_gh_login_dialog.py](hve/gui/tests/test_gh_login_dialog.py) :: 既存 `test_gh_missing_shows_guidance_and_no_spawn`（OS 別 setup 主案内の検証を追加予定）、`test_pty_unavailable_guidance_recommends_platform_setup`（予定）、既存 `test_available_path_spawns_gh_login`
+- 予定受入ケース:
+  - Windows の `hve/setup-hve.cmd` と macOS / Linux の `./hve/setup-hve.sh` をオプションなしで実行すると、`gh` を OS ツールとして解決でき、同一リポジトリの `.venv` で対象 OS の PTY backend が利用可能になる。
+  - 通常 GUI 構成で `gh` を解決できない場合、または GUI 共通 PTY 判定が利用不可の場合は非ゼロ終了する。`NoGui` / `Minimal` では明示的に opt-out できる。
+  - 未認証の `gh auth status` は失敗とせず、セットアップは `gh auth login` を実行しない。
+  - 既存の正常な `.venv` への再実行で不足依存を `Force` なしに追加または修復できる。
+  - PTY 不足または GitHub CLI ログイン事前検査失敗時は、対象 OS の通常セットアップを主復旧導線として案内する。
+
+### FR-MODEL-07 — Copilot SDK 版の固定とランタイム整合検証
+
+- 判定: 実装済み
+- 受入テスト:
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) :: `test_copilot_sdk_lock_pins_an_exact_version` — `hve/copilot-sdk.lock` が厳密版と CLI ランタイム記録行を持ち、LF / BOM なしであること
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) :: `test_setup_installs_copilot_sdk_from_the_lock_unless_upgrade_requested` — 既定は lock からの導入で、最新化が `--upgrade-sdk` / `-UpgradeSdk` の内側にだけ置かれていること
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) :: `test_setup_scripts_verify_copilot_runtime_pin_consistency` — pin 版の先読みと、pin 無効化環境変数 3 種の検出
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) :: `test_setup_scripts_read_copilot_version_only_with_no_auto_update` — 版突合が `--no-auto-update` を伴うこと
+- 受入ケース:
+  - 変更前の HEAD では上記 4 件の検出マーカーが 0 件で失敗する（RED 確認済み）。→ ✓
+  - SDK 1.0.9rc3 へドリフトさせた venv に対し `pip install --no-deps -r hve/copilot-sdk.lock` を実行すると 1.0.8 へ戻る（実測）。→ ✓
+  - lock 更新ロジックを一時コピーへ適用すると pin 行と CLI ランタイム記録行の双方が書き換わり、LF / BOM なしが維持される（実測）。→ ✓
+- 既知の制約:
+  - 本要件は「pin と実ランタイムの不整合」を検出するもので、SDK 自身の公開直後リリースにパーサ不整合がある場合の解析失敗そのものは防げない。lock による版固定が全員同時被弾を防ぐ唯一の手段であり、実行時のフェイルソフト（`AssertionError` をイベント欠落警告へ変換する asyncio 例外ハンドラ）は本要件の範囲外。
+  - `--check-only` / `-CheckOnly` は `.venv` 構築前に終了するため、これらの検証ステップは実行されない。
+  - `pip install -e .[extras]` が先に走るため、新規環境では一度最新版を取得してから lock 版へ入れ替わる（最終状態は lock 版で正しいが、wheel の二重取得が発生する）。
+
+### FR-QA-01 — QA 質問票プロンプトの必須説明項目
+
+- 判定: 実装済み
+- 受入テスト:
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestQaPromptV2.test_qa_prompt_v2_requires_background_field`、`test_qa_prompt_v2_requires_viewpoints_field`、`test_qa_prompt_v2_requires_depth_rules`
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestPreExecutionQaPromptV2.test_requires_background_field`、`test_requires_viewpoints_field`、`test_requires_depth_rules`
+- 受入ケース:
+  - 両プロンプトの `[Qxx]` 出力テンプレートが `- 背景と根拠:` と `- 判断の観点:` を含む。→ ✓
+  - 両プロンプトが「記述の深さ」の必須語（出典 / 未確認 / 評価軸 / 他の選択肢 / 1 行で記述）を指示する。→ ✓
+  - 実装前は上記 6 件が全件失敗する（RED 確認済み）。→ ✓
+- 実装後の判断:
+  - 深さルールの文面は [hve/prompts.py](hve/prompts.py) `QUESTIONNAIRE_DEPTH_RULES_TEXT` を単一定義とし、事前 QA / 事後 QA の両プロンプトから連結する（同一文面の 2 重管理を避けるため）。
+- 既知の制約:
+  - 各フィールドの値を 1 行に限定しているのは、[hve/qa_merger.py](hve/qa_merger.py) の行単位フィールド解析が継続行を取り込まないためである。複数行で出力された場合は 2 行目以降が無視される。プロンプト側の指示で担保しており、解析側の強制は行っていない。
+  - LLM が実際に十分な深さを出力するかはプロンプト遵守に依存する。本テストはプロンプトの指示内容を固定するものであり、生成結果の品質を検証するものではない。
+
+### FR-QA-02 — QA 質問票パイプラインでの説明項目の保持と提示
+
+- 判定: 実装済み
+- 受入テスト:
+  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestStructuredQuestionParsing.test_q1_background`、`test_q1_viewpoints`
+  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestQAQuestionNewFields.test_background_defaults_empty`、`test_viewpoints_defaults_empty`
+  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestRenderMergedDepthColumns.test_extended_header_includes_depth_columns`、`test_depth_values_are_rendered`、`test_depth_only_document_uses_extended_table`、`test_rendered_table_round_trips_depth_columns`、`test_legacy_document_leaves_depth_fields_empty`
+  - [hve/tests/test_questionnaire_ui.py](hve/tests/test_questionnaire_ui.py) :: `TestQuestionnaireDepthDetail.test_detail_block_is_printed_after_table`、`test_detail_block_omitted_when_no_depth_values`、`test_table_header_does_not_gain_depth_columns`
+  - [hve/gui/tests/test_qa_answer_dialog.py](hve/gui/tests/test_qa_answer_dialog.py) :: `TestQAAnswerDialogDepthColumns.test_table_has_background_and_viewpoints_columns`、`test_depth_values_are_displayed`
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestQuestionnaireSkillFieldParity.test_skill_templates_declare_same_depth_fields_as_prompts`
+- 受入ケース:
+  - 構造化質問票（`[Qxx]` 形式）から `背景と根拠` / `判断の観点` が `QAQuestion` へ取り込まれる。→ ✓
+  - `render_merged` の拡張テーブルが当該 2 列を出力し、その出力を再パースすると同じ値が復元される（GUI の IPC 往復で欠落しない）。→ ✓
+  - 当該 2 項目を持たない旧形式の質問票は空文字列としてパースされ、例外にならない。→ ✓
+  - CLI は既存テーブルの列を増やさず、テーブルの後に当該 2 項目の詳細ブロックを出力する。値が全問空の場合は詳細ブロックを出力しない。→ ✓
+  - GUI の回答ダイアログが当該 2 項目の列を持ち、値を表示する。→ ✓
+  - `.github/skills/task-questionnaire/` の SKILL.md および `references/` 配下の質問票テンプレートが、プロンプトと同一のフィールド名を宣言する。→ ✓
+  - 実装前は上記 14 件が全件失敗する（RED 確認済み。非 GUI 12 件は assert 失敗、GUI 2 件は `_COL_BACKGROUND` 未定義による collection error）。→ ✓
+- 実装後の判断（敵対的レビュー反映）:
+  - `render_merged` の出力全体に対する `assertIn` は、プレアンブルに元の `[Qxx]` 本文が保持されるため実装前でも PASS する（偽陰性）。テーブル行（`|` で始まる行）に限定して検証すること。
+  - CLI はテーブル列を増やさない。8 列の拡張表はすでに `_shrink_to_available` による幅圧縮が働く状態であり、長文 2 列を足すと既存列が読めなくなる。
+- 既知の制約:
+  - 拡張テーブルは最大 13 列（Work IQ 併用時）となる。Markdown の生テキストでは横に長い。Cloud 経路の利用者は、プロンプトが指示する Issue コメントの `[Qxx]` ブロック形式で参照することを想定している。
+  - CLI の詳細ブロックはセル内折り返しを行わず、長文は端末のソフトラップに任せる。NFR の表幅制約（`TestQuestionnaireTableWidth`）はテーブル行に対するものであり、詳細ブロックには適用されない。
+  - [hve/workiq.py](hve/workiq.py) の Work IQ 問い合わせメタには当該 2 項目を渡していない（本要件の範囲外）。
 
 ---
 
@@ -1715,10 +1798,24 @@
 | 5 データカタログ | ✓ | ✓ | 同上 |
 | 6 サービスカタログ統合 | ✓ | ✓ | 同上 |
 | 7 テスト戦略書 | ✓ | ✓ | 同上 |
+| 8 ペルソナカタログ | ✓ | ✓ | 同上 + [test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) |
+| 9 ペルソナ別共通画面カタログ | ✓ | ✓ | 同上 + [test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) |
 
 補助:
 - [hve/tests/test_dag_executor.py](hve/tests/test_dag_executor.py) :: `TestDAGExecutorAAS`（DAG 実行整合性）
 - [hve/tests/test_dag_parity.py](hve/tests/test_dag_parity.py) :: 全クラス（YAML ↔ registry parity）
+
+#### FR-WF-AAS-01 — Step 8/9 を成果物依存と同じ昇順で採番
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestRegistryContract`（Step 8=ペルソナカタログ / Step 9=ペルソナ別共通画面、宣言順・DAG wave・GUI rank の昇順）
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestIoContractFiles`（scoped contract のファイル名と producer、旧ファイル名の不在）
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestTemplatesAndPrompts`（Template の Custom Agent、Prompt と下流 consumer の Step 番号）
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestBashRegistryParity` / `TestPowerShellRegistryParity`（Bash / PowerShell registry の同期）
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestCloudWorkflow`（スキップ伝播方向、Issue タイトル、起動時の前提入力）
+  - [hve/tests/test_aas_persona_step_numbering_contract.py](hve/tests/test_aas_persona_step_numbering_contract.py) :: `TestIssueForm` / `TestUsersGuide`（Issue Form の依存表記とガイドの現行構成）
+- 間接対応テスト:
+  - [hve/tests/test_aas_template_parity.py](hve/tests/test_aas_template_parity.py) :: `TestAasTemplateDependencyStepNumbers`（Step 8/9 を含む `## 依存` の番号整合）
 
 ### §13.2 AAD-WEB — Web App Design
 
@@ -1979,6 +2076,11 @@
 横断:
 - [test_ard_recommendations.py](hve/tests/test_ard_recommendations.py)（全 11 関数） — `target_recommendation_id` 注釈ロジック
 - [test_main_ard.py](hve/tests/test_main_ard.py) — ARD CLI 引数全体
+
+#### FR-WF-ARD-02 — ユーザー提供資料の一次情報優先明示
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_ard_attached_docs_priority.py](hve/tests/test_ard_attached_docs_priority.py) :: `TestArdAttachedDocsPriority` — Untargeted Prompt の `## 2) 入力（必ず参照）` 節と `templates/ard/step-1.md` の `## 入力` 節に最優先参照規定があること、Untargeted 本文の `{添付資料}` プレースホルダが保持されていること、Targeted 側の既存規定と `templates/ard/step-2.md` の `{attached_docs}` / `{target_business}` が保たれていること（RED: 2 failed → GREEN: 5 passed）
 
 ### §13.12 ゲート条件
 

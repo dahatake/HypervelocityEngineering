@@ -130,9 +130,10 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
   - `WorkflowDef.max_parallel` 未指定 → DAGExecutor 既定値 **15**
   - 明示指定: `akm` = 21、`aqod` = 21、`ard` = 15
 - **FR-DAG-04**: Step に `fanout_static_keys` または `fanout_parser` が定義されている場合、子ステップへ動的展開する。展開後の `step_id` は `{base_id}/{key}` 形式。`fanout_parser` の取り得る値:
-  - `app_catalog` / `screen_catalog` / `service_catalog` / `batch_job_catalog` / `agent_catalog`
+  - `app_catalog` / `screen_catalog` / `service_catalog` / `dataflow_catalog` / `agent_catalog`
   - `business_candidate`（ARD Step 1.1）
-  - `use_case_skeleton`（ARD Step 4.2）
+  - `use_case_skeleton`（ARD Step 3.2）
+  - 展開キーを解決するカタログの探索基準ルートは、**実行プロセスの作業ディレクトリ（対象リポジトリのルート）**とする。HVE パッケージの設置ディレクトリを基準にしてはならない。基準は、DAG 構築前の事前展開（[hve/orchestrator.py](hve/orchestrator.py) `_expand_workflow_for_dag`）と、上流 Step 完了後の deferred 再展開（[hve/dag_executor.py](hve/dag_executor.py) `_try_dynamic_expand`）の双方で同一でなければならない。基準が対象リポジトリを指さない場合、カタログが実在しても展開キーが 0 件となり当該 Step が `fanout-empty` で無警告 skip される。
 - **FR-DAG-05**: Step ごとに `consumed_artifacts`（再利用コンテキスト用キー）と `output_paths` / `required_input_paths` を保持し、注入対象の絞り込みと事前チェックに用いる。
 - **FR-DAG-06**: ルート Step（`depends_on=[]` の非コンテナ）に対しては、開始前に前提成果物の存在チェックを行う。
   - `HVE_REQUIRE_INPUT_ARTIFACTS=true` → 不足は中断
@@ -172,6 +173,7 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 - **FR-MODEL-04**: HVE は GitHub Copilot SDK の `create_session(tool_search=...)`（ツール定義の遅延ロード）を CLI / GUI から設定可能とする。有効時は SDK へ `tool_search={"enabled": True}` を渡し、無効時は当該引数を渡さない。**既定は有効**とする。設定値は Step 実行経路のメインセッション、サブセッション（Pre-QA / Review）、Self-Improve セッションへ同一値を伝搬しなければならない。Fleet mode 親セッション（[hve/orchestrator.py](hve/orchestrator.py)）は意図的にツール公開を狭めた別系統であり、当該経路の実測根拠がないため本要件の対象外とする。`defer_threshold` は SDK 既定に委ね、設定として公開しない。本要件の `SDKConfig.tool_search` は、AAGD ワークフローのパラメータ `enable_tool_search`（生成する AI Agent の Foundry Toolbox 設定）とは別ドメインであり、HVE 自身の SDK セッションにだけ作用する。本要件はツール定義がコンテキストの大きな割合を占める実態（実測: 登録 171 ツール / 54,865 tokens のうち実使用は 10 種 / 9,108 tokens）を背景とするが、**削減効果は未測定のままであり本要件の受入対象外**とし、受入は設定の伝搬だけとする（[hve/config.py](hve/config.py)、[hve/runner.py](hve/runner.py)、[hve/self_improve.py](hve/self_improve.py)）。既定を無効から有効へ変更した根拠は利用者の適用方針決定であり、削減率の実測を根拠としてはならない。
 - **FR-MODEL-06**: FR-MODEL-04 の既定有効化は、利用者による明示的な無効化を上書きしてはならない。`--no-tool-search` と `HVE_TOOL_SEARCH` の falsy 値は無効として扱い、当該実行では SDK へ引数を渡さない。GUI では新規プロファイルの初期値だけを有効とし、**保存済み設定の値は移行・上書きしない**（保存済みの `false` が利用者の明示指定か旧既定かを区別できないため）。ランキング実装の既定（FR-TS-01 の `tool_search_ranking`）は本変更の対象外であり `sdk` のままとする。
 - **FR-MODEL-05**: SDK が `tool_search` 引数を未サポートの場合、Step 実行経路のセッション生成（[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback`）は `TypeError` を捕捉して当該引数を除外し再試行しなければならない。未サポートを理由に実行を停止してはならない（既存の `reasoning_effort` 縮退規則に従う）。
+- **FR-MODEL-07**: 開発環境セットアップ（[hve/setup-hve.sh](hve/setup-hve.sh) / [hve/setup-hve.ps1](hve/setup-hve.ps1)）は、`github-copilot-sdk` の導入版を単一の宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) で固定しなければならない。最新版への更新は明示フラグ（`--upgrade-sdk` / `-UpgradeSdk`）を指定したときにだけ行い、その際に当該ファイルの pin 行と Copilot CLI ランタイム版の記録行を書き換えなければならない。既定経路で `--upgrade` してはならない。あわせてセットアップは、SDK が pin する Copilot CLI ランタイム（`copilot/_cli_version.py` の `CLI_VERSION`）を先読みし、実際に解決されるランタイムの埋め込み版と突合して不一致を警告しなければならない。埋め込み版の取得には `--no-auto-update` を付与しなければならない（`--version` 単体はオンライン更新チェックの結果である「最新利用可能版」を返すため pin との突合に使えない。実測: 埋め込み 1.0.69 のバイナリが `--version` では 1.0.78 を返す）。pin を無効化する環境変数 `COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD` が設定されている場合は警告しなければならない。本要件は、SDK の生成イベントパーサ（`copilot/generated/session_events.py`）がイベントのエンベロープ（`id` / `timestamp` / `type`）を assert で固めており、pin と異なるランタイムを掴むと `session.event` の解析が `AssertionError` となって当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）ことへの予防である。`pyproject.toml` の下限指定は API 互換の床であり、導入版の情報源としてはならない。
 
 ### 3.5.1 Tool Search ランキングの HVE 実装（FR-TS）
 
@@ -359,6 +361,13 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-RTO-04**: 永続化する項目は allowlist 方式とし、状態、時刻、数値、モデル ID、Step / Workflow / APP 識別子、例外型名、リポジトリルート相対パスに限る。prompt 本文、応答本文、reasoning 本文、tool の引数・出力、環境変数、認証情報、認証 URL、生 SDK ペイロードを保存してはならない（NFR-SEC-01）。相対化の基準は実行プロセスの作業ディレクトリ（リポジトリルート）とし、当該ルート配下へ相対化できないパスは保存しない。
 - **FR-RTO-05**: 各実行面は同一のイベント列から同一の集計値を表示する。表示は instance 単位で分離し、run 単位で合算する。未取得値を推定で補わず、取得できない項目は `-` として表示する。
 - **FR-RTO-06**: 観測記録のライフサイクルは実行プロセスが所有し、`run_workflow` の終了時に確実にクローズする。GUI 親プロセスは観測ファイルを書き込まない。GUI セッション作業ディレクトリの後処理（`keep` / `archive` / `purge`）が観測ファイルに起因して失敗してはならない。
+
+### 3.12 QA 質問票の説明深度
+
+本節は、QA 質問票の各質問が利用者の意思決定に足る説明を伴うことを規定する。対象は [hve/prompts.py](hve/prompts.py) の質問票生成プロンプト（`PRE_EXECUTION_QA_PROMPT_V2` / `QA_PROMPT_V2`）と、その出力を保持・提示するパイプラインとする。質問の件数・重要度分類・既定値候補の採用ロジックは本節の対象外とする。
+
+- **FR-QA-01**: 質問票生成プロンプトは、各質問に「背景と根拠」と「判断の観点」を必須項目として出力させなければならない。「背景と根拠」は、判断材料として確認した対象（出典）、そこから確定した事項と確定していない事項、および当該未確定が質問に値する理由を含めなければならない。確認していない場合は「未確認」と記載させ、出典を推測で記載させてはならない。「判断の観点」は、回答によって結論が変わる評価軸を 2 つ以上挙げ、主要な選択肢が各軸で有利・不利のいずれとなるかを示さなければならない。「既定値候補の理由」は、当該選択を支持する根拠となる事実、優先した評価軸、および他の選択肢を既定値としなかった理由を含めなければならない。各項目の値は 1 行で記述させ、結論のみの記述を許してはならない。本要件は事前 QA（メインタスク実行前）と事後 QA（成果物に対する QA）の双方へ同一の項目定義で適用する。
+- **FR-QA-02**: QA 質問票のパイプラインは FR-QA-01 の 2 項目を欠落させてはならない。[hve/qa_merger.py](hve/qa_merger.py) は当該 2 項目を構造化質問票（`[Qxx]` 形式）およびマージ済みテーブル形式の双方で解析し、`render_merged` の出力へ列として保持しなければならない。当該 2 項目を持たない既存の質問票ファイルは空値として扱い、解析を失敗させてはならない。CLI は [hve/console.py](hve/console.py) の質問票表示で当該 2 項目を提示しなければならない。ただし既存の質問票テーブルへ列として追加してはならず、テーブルとは別の形式で提示する（列追加は既存列の可読幅を損なうため）。GUI の QA 回答ダイアログ（[hve/gui/qa_answer_dialog.py](hve/gui/qa_answer_dialog.py)）は当該 2 項目を回答入力前に参照できるよう表示しなければならない。質問票フォーマットを規定する Skill（[.github/skills/task-questionnaire/SKILL.md](.github/skills/task-questionnaire/SKILL.md) および `references/` 配下のテンプレート）は、プロンプトと同一の項目定義を保持しなければならない。経路によって項目定義が異なってはならない。
 
 ---
 
@@ -562,6 +571,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - `default_params` を持つキーは実行時に `apply_step_default_params` が補完するため、GUI 未入力でも不足としない。
   - 根拠: 従来は `summarize_requirements_for_selection` が常に 0〜1 件しか返さず、`pick_target_step` が自然順最小 Step のみを選ぶため、同一ワークフロー内の後続 Step が固有に必要とする入力は起動前に一切検査されなかった。
   - バナー（リアルタイム表示）は情報密度を保つため従来どおり代表 1 件のみを表示してよい。
+  - `REQUIREMENT_TABLE` と `WORKFLOW_PRIORITY`（[hve/gui/workflow_step_requirements.py](hve/gui/workflow_step_requirements.py)）は、`list_workflows()` が返す全ワークフローを網羅しなければならない。GUI のワークフロー一覧はレジストリから動的に構築される（[hve/gui/page_workflow_select.py](hve/gui/page_workflow_select.py) `_load_workflow_choices`）ため、未登録のワークフローは選択できるにもかかわらず `pick_target_step` が `WORKFLOW_PRIORITY` 順にしか走査せず、ファイル要件が 1 件も評価されないまま precheck が無警告で通過する。
 - **FR-GUI-02**: GUI の必須入力キー集合は `StepDef.required_params`（FR-DAG-07）から導出する。GUI 側で必須キーを二重管理してはならない。
   - `hve/gui/workflow_step_requirements.py` の `INPUT_FIELD_KEYS` は、静的定義に加えてレジストリ宣言由来のキーを含む。
   - `hve/gui/page_options.py` の監視対象ウィジェット表は `INPUT_FIELD_KEYS` を網羅しなければならない。
@@ -601,6 +611,19 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - `policy.json` は Tool Search の pin・検索語彙・重み設定の単一の情報源とし、GUI から書き換えてはならない。読み取り専用として表示し、編集はファイルの直接編集に委ねる。読み込みに失敗した場合は推測した既定値を表示せず、失敗した旨と対象パスを表示する。
   - 統計の集計と描画は [hve/toolsearch/stats.py](hve/toolsearch/stats.py) / [hve/toolsearch/dashboard.py](hve/toolsearch/dashboard.py) を単一の情報源とし、GUI 側で集計・整形を再実装してはならない（FR-MAINT-07）。
   - 収集済みイベントが無い指標を 0 や推定値で埋めて表示してはならない（FR-TS-10）。統計の読み込み・削除の失敗で GUI を異常終了させてはならない。
+
+### 6.6 GUI 質問票の「その他」回答
+
+- **FR-GUI-08**: GUI の QA 回答ダイアログは、選択肢を持つ各質問について、既存の選択肢を保持したまま「その他」を選択肢として 1 件表示しなければならない。質問票の選択肢に既に「その他」が含まれる場合も、画面上で重複表示してはならず、その既存選択肢を自由記述入力に用いなければならない。「その他」の選択時は自由記述欄を入力可能にし、空でない入力は既存の GUI ↔ CLI 回答形式 `N:: その他: <text>` で送信する。`QAMerger` は当該自由記述を選択肢ラベルへ変換せず、マージ済み質問票ファイルの「ユーザー回答」へ `その他: <text>` として保存しなければならない。通常の選択肢は既存の `N: <label>` 形式、選択肢を持たない質問は既存の自由記述入力、未入力の「その他」は当該質問の既定値採用、キャンセル、および IPC のファイル形式を維持する。
+
+### 6.7 GUI の GitHub CLI ログイン用セットアップ
+
+- **FR-GUI-09**: Windows の通常セットアップ入口 `hve/setup-hve.cmd` と macOS / Linux の通常セットアップ入口 `./hve/setup-hve.sh` は、オプションなしで実行したとき、HVE GUI の「GitHub CLIでログイン」が必要とする `gh` を OS ツールとして導入・解決し、同一リポジトリの `.venv` に OS 別 PTY backend（Windows: `pywinpty` が提供する `winpty`、macOS / Linux: `ptyprocess`）を導入し、セットアップ完了前に双方の利用可能性を検証しなければならない。
+  - 通常 GUI 構成では、`gh` バイナリを解決できない場合、または GUI 共通 PTY 判定（[hve/gui/pty_backend.py](hve/gui/pty_backend.py) `is_pty_available()`）が利用不可を返す場合、セットアップは非ゼロで終了する。
+  - `gh auth status` が未認証を返すことは、GUI で初回ログインを行う正常な開始状態であり、セットアップ失敗条件にしてはならない。セットアップ自身は `gh auth login` を実行してはならない。
+  - 既存の正常な `.venv` に通常セットアップを再実行した場合も、不足する `gh` / PTY 依存を追加または修復できなければならず、`Force` を要求してはならない。
+  - `NoGui` / `Minimal` は明示的な opt-out として維持し、上記 `gh` / PTY の構築・検証を要求しない。
+  - GUI の PTY 不足または GitHub CLI ログイン事前検査失敗からの復旧案内は、Windows では `hve\setup-hve.cmd`、macOS / Linux では `./hve/setup-hve.sh` を主導線としなければならない。手動の依存導入は補助情報に限り、唯一の復旧案内にしてはならない。
 
 ---
 
@@ -734,6 +757,11 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 2.4 | 2026-08-05 | **FR-MODEL-04 改訂 / FR-MODEL-06・FR-WF-AAG-01/02・FR-WF-AAGD-01〜04 新規**: HVE 自身の `tool_search` を既定有効へ変更し（利用者の適用方針決定。削減率は未測定のまま受入対象外）、明示的な無効化（`--no-tool-search` / `HVE_TOOL_SEARCH` falsy / GUI 保存済み値）を上書きしないことを規定。生成 AI Agent の Tool Search 方針を `auto` / `yes` / `no` の 3 値に固定し、全起動経路での同一値伝搬と、設計・実装・Deploy・評価・Cloud 完了判定の各成果物ゲートを必須化。§13.7 の Step 表へ Step 4（tool search 実測評価）を追記 |
 | 2.5 | 2026-08-05 | **FR-KIT-06 新規 / FR-KIT-04 改訂**: 配布パッケージの宣言単一化、版マニフェスト（配布版・エンジン版・上流 commit・ハッシュ）の生成、同版・降格同期の既定拒否、旧配布ファイルの削除と利用者所有ファイルの温存、コピー先単独での版・改変確認、上流 extras 相当の任意依存の同期宣言を必須化。併せて FR-KIT-04 へ「上流固有の名前（profile 名等）を手動で与えなければ成立しない状態を禁じる」条件を追加 |
 | 2.6 | 2026-08-06 | **FR-CQ-15 新規 / FR-GUI-04 改訂**: 索引統計へ言語別内訳（言語ごとのファイル数・シンボル数・チャンク数・パーサフィデリティ別ファイル数）の報告を必須化し、パーサ別集計だけの報告を禁止。同一パーサ名が複数言語で共有されるため言語別のフィデリティ低下を判別できないことを根拠として明記。言語の再判定禁止と CLI / GUI の単一実装（FR-MAINT-07）を規定し、GUI の提供範囲へ言語別内訳の表示を追加 |
+| 2.7 | 2026-08-07 | **FR-GUI-08 新規**: GUI 質問票の選択肢付き質問へ「その他」と自由記述入力を追加し、回答を既存の `N:: その他: <text>` 形式でマージ済み質問票ファイルへ保存する契約を追加 |
+| 2.8 | 2026-08-07 | **FR-MODEL-07 新規**: `github-copilot-sdk` の導入版を `hve/copilot-sdk.lock` で固定し、最新化を `--upgrade-sdk` / `-UpgradeSdk` 指定時のみに限定。SDK が pin する Copilot CLI ランタイムの先読みと埋め込み版突合（`--no-auto-update` 必須）、pin 無効化環境変数の警告を必須化。生成イベントパーサがエンベロープを assert で固めており、版ドリフト時に `session.event` が `AssertionError` で黙って捨てられることを根拠として明記 |
+| 2.9 | 2026-08-07 | **§3.12 新設（FR-QA-01 / 02）**: QA 質問票の各質問へ「背景と根拠」「判断の観点」を必須項目として追加し、「既定値候補の理由」に根拠事実・優先した評価軸・他選択肢を採らない理由の 3 要素を必須化。既定値候補の理由が結論のみの一語で終わり、なぜ不明点なのか・どの観点で判断が分かれるのかを利用者が読み取れなかったことを根拠として明記。プロンプト・`QAMerger`・CLI 表示・GUI ダイアログ・Skill テンプレートの全経路で同一項目定義を保持することを必須化 |
+| 2.10 | 2026-08-07 | **FR-DAG-04 改訂 / FR-GUI-01 改訂**: fan-out 展開のカタログ探索基準ルートを実行プロセスの作業ディレクトリ（対象リポジトリのルート）と規定し、事前展開と deferred 再展開の双方で同一基準とすることを必須化。HVE パッケージ設置ディレクトリを基準にすると、カタログが実在しても展開キーが 0 件となり `fanout-empty` で無警告 skip される事象を根拠として明記。併せて FR-DAG-04 の実在しない parser 名 `batch_job_catalog` を `dataflow_catalog` へ、`use_case_skeleton` の対応 Step を現行の ARD Step 3.2 へ是正。FR-GUI-01 へ `REQUIREMENT_TABLE` / `WORKFLOW_PRIORITY` が `list_workflows()` の全ワークフローを網羅する義務を追加。**FR-WF-ARD-02 新規**: ユーザー提供資料（`attached_docs` / パス指定の `target_business`）を一次情報として最優先参照することの Prompt / テンプレートへの明示を必須化（当該資料は `required_input_paths` 未宣言でパラメータ注入のみが到達経路であることを根拠として明記） |
+| 2.11 | 2026-08-07 | **§6.7 / FR-GUI-09 新規**: Windows の `hve/setup-hve.cmd` と macOS / Linux の `./hve/setup-hve.sh` の通常実行で、GUI の GitHub CLI ログイン用 `gh` を OS ツールとして導入・解決し、同一リポジトリの `.venv` に OS 別 PTY backend を導入・検証する契約を追加。通常 GUI 構成の依存欠落は非ゼロ終了、未認証の `gh auth status` は許容、`gh auth login` の自動実行は禁止、既存 venv の Force なし修復と `NoGui` / `Minimal` opt-out の維持、OS 別通常セットアップを主復旧導線とすることを規定 |
 
 ---
 
@@ -807,6 +835,13 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 5 | データカタログ | Arch-DataCatalog | 4.1 | `docs/catalog/data-catalog.md` |
 | 6 | サービスカタログ統合 | Arch-Microservice-ServiceCatalog | 5 | `docs/catalog/service-catalog-matrix.md` |
 | 7 | テスト戦略書 | Arch-TDD-TestStrategy | 6 | `docs/catalog/test-strategy.md` |
+| 8 | ペルソナカタログ | Arch-PersonaCatalog | 7 | `docs/catalog/persona-catalog.md` |
+| 9 | ペルソナ別共通画面カタログ | Arch-UI-PersonaScreenList | 8 | `docs/catalog/persona-screen-catalog.md` |
+
+- **FR-WF-AAS-01**: AAS 末尾 2 Step の Step ID は成果物依存と同じ昇順に採番しなければならない。Step 8 を `Arch-PersonaCatalog`（`depends_on=["7"]`、`docs/catalog/persona-catalog.md` を生成）、Step 9 を `Arch-UI-PersonaScreenList`（`depends_on=["8"]`、`docs/catalog/persona-screen-catalog.md` を生成）とする。Step 9 は Step 8 の出力を `required_input_paths` に持つため、依存と逆順の採番（Step 9 → Step 8）へ戻してはならない。
+  - 本契約は [hve/workflow_registry.py](hve/workflow_registry.py) を正本とし、[.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh)・[.github/scripts/powershell/lib/workflow-registry.ps1](.github/scripts/powershell/lib/workflow-registry.ps1)・[.github/workflows/auto-app-selection-reusable.yml](.github/workflows/auto-app-selection-reusable.yml)・[.github/ISSUE_TEMPLATE/app-architecture-design.yml](.github/ISSUE_TEMPLATE/app-architecture-design.yml)・`.github/prompts/`・`.github/scripts/templates/aas/`・`.github/io-contracts/` が同一の意味と順序を宣言すること。
+  - Cloud のスキップ伝播は Step 8 のスキップが Step 9 を強制スキップする方向のみとする（逆方向は Step 9 の入力欠落を招くため禁止）。
+  - Step ID は SDK セッション ID（`run_id × step_id`）の構成要素であり、同じ ID の意味が入れ替わる。透過的な旧 ID 変換は実装せず、再採番をまたぐ実行中 run は完了させるか、新しい run-id / Issue で再起動すること。
 
 ### 13.2 AAD-WEB — Web App Design
 
@@ -1005,6 +1040,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **目的**: 企業全体／対象事業の事業分析からユースケースカタログまでを自動生成する Workflow。ADR-0003 で 7 step 構成に再設計。
 - **Cloud Orchestrator 対応**: **非対応（確定）**。詳細は FR-WF-ARD-01（§12 TBD-06 解消）。
 - **FR-WF-ARD-01**: ARD は **CLI / GUI Orchestrator 専用**とする。[.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml) の `trigger_map` / `done_map` に ARD を登録してはならず、`auto-ard-reusable.yml` を新設してはならない。Cloud 対応が必要になった場合は、ARD 専用の Issue Template・state-transition・reusable workflow の新規作成（30+ ファイル規模）を伴う独立設計タスクとして起票すること。本制約は FR-CLOUD-06（registry と同期しない Cloud reusable workflow を dispatcher から外す）と同じ方針に立つ。
+- **FR-WF-ARD-02**: ARD がユーザー提供資料（`attached_docs` およびパス指定の `target_business`）を受け取る Step では、当該資料を **一次情報として最優先で参照する**ことを Prompt および Body テンプレートに明示しなければならない。根拠: ユーザー提供資料は ARD のどの Step の `required_input_paths` にも宣言されず、`{attached_docs}` / `{target_business}` のパラメータ注入だけが到達経路であるため、優先度の明示が無い Step では固定パスの既定入力に埋没する。対象は Step 1（[.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md) / [.github/scripts/templates/ard/step-1.md](.github/scripts/templates/ard/step-1.md)）と Step 2（[.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md) / [.github/scripts/templates/ard/step-2.md](.github/scripts/templates/ard/step-2.md)）とし、Step 2 は既に本規定を満たす。
 - **Step DAG と生成ファイル**:
 
 | Step | タイトル | 依存 | Fan-out | 生成ファイル |

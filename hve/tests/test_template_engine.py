@@ -592,7 +592,7 @@ class TestCollectParams:
 class TestResolveSelectedSteps:
     def test_empty_returns_all(self):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
-        # T2.2: AAS に Step.8 (ペルソナ別画面) / Step.9 (ペルソナカタログ) を追加
+        # T2.2: AAS に Step.8 (ペルソナカタログ) / Step.9 (ペルソナ別共通画面) を追加
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, [])
         assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8", "9"}
@@ -605,7 +605,7 @@ class TestResolveSelectedSteps:
 
     def test_unknown_steps_excluded(self, capsys):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
-        # T2.2: AAS に Step.8 / Step.9 を追加
+        # T2.2: AAS に Step.8 (ペルソナカタログ) / Step.9 (ペルソナ別共通画面) を追加
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, ["999"])
         captured = capsys.readouterr()

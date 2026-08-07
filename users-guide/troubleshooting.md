@@ -19,6 +19,7 @@
   - [6) MCP Servers / GitHub Copilot Skills](#6-mcp-servers--github-copilot-skills)
   - [7) Self-hosted runner（オプション）](#7-self-hosted-runnerオプション)
   - [8) HVE CLI Orchestrator Pythonアプリケーション](#8-hve-cli-orchestrator-pythonアプリケーション)
+  - [8-1) `ModuleNotFoundError: No module named 'cq'` / `'config'`](#8-1-modulenotfounderror-no-module-named-cq--config)
   - [9) `GH_TOKEN` / `REPO` / `gh auth login`](#9-gh_token--repo--gh-auth-login)
   - [10) Cloud preflight スクリプト](#10-cloud-preflight-スクリプト)
 - [Web UI 方式のトラブル](#web-ui-方式のトラブル)
@@ -163,6 +164,48 @@ Self-hosted runner は **オプション** です。GitHub-hosted runner を使�
 7. Work IQ を使う場合は Node.js / npx / `@microsoft/workiq` が利用可能か
 
 詳細は [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) も参照してください。
+
+---
+
+### 8-1) `ModuleNotFoundError: No module named 'cq'` / `'config'`
+
+**症状**: `hve` コマンドが以下で落ちる。
+
+```text
+File ".../hve/config.py", line 11, in <module>
+    from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEFAULT_DEBOUNCE_MS
+ModuleNotFoundError: No module named 'cq'
+```
+
+**原因**: グローバル Python に `pip install -e .` された **古い hve** が PATH 上で `.venv` を隠している。setuptools の editable install はインストール時点のパッケージ一覧を凍結するため、後から追加された `cq` を解決できない。
+
+**診断**:
+
+```powershell
+Get-Command hve -All | Format-List Name,Source
+```
+
+`Source` が `<repo>\.venv\Scripts\` 配下でなければ該当。
+
+**対処**: セットアップスクリプトが検出・除去します。
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1 -CheckOnly   # 検出のみ
+pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1              # 検出 + 除去
+```
+
+```bash
+./hve/setup-hve.sh --check-only
+./hve/setup-hve.sh
+```
+
+除去したくない場合は `-NoGlobalCleanup` / `--no-global-cleanup` を付けてください。
+
+**予防**:
+
+- **グローバル Python に対して `pip install -e .` を実行しない**。セットアップスクリプトは必ず `.venv` に導入します。
+- 起動はリポジトリ root の `.\hve.cmd`（Windows）/ `./hve.sh`（macOS / Linux）を使う。venv の activate 漏れに依存しません。
+- `PYTHONPATH` / `PYTHONHOME` / `PIP_TARGET` 等をシェルに設定しない。設定されているとセットアップが警告します。
 
 ---
 

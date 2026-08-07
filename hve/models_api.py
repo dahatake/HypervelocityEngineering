@@ -18,7 +18,7 @@ import os
 import sys
 import traceback
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 __all__ = [
     "ModelEntry",
@@ -26,47 +26,6 @@ __all__ = [
     "fetch_models",
     "fetch_model_entries",
 ]
-
-
-# ---------------------------------------------------------------------------
-# SDK 互換パッチ
-# ---------------------------------------------------------------------------
-# github-copilot-sdk 0.3.0 の `ModelBilling.from_dict` は `multiplier` フィールド
-# を必須としているが、現行の GitHub Copilot API の `models.list` レスポンスでは
-# `billing` から `multiplier` が削除されており、代わりに `token_prices` /
-# `restricted_to` を返す。このため `client.list_models()` が全モデルで
-# ValueError("Missing required field 'multiplier' in ModelBilling") を投げる。
-#
-# 本パッチは `multiplier` が無い場合に 0.0 を補って解析を継続する。`hve` 用途では
-# billing 値（multiplier）を表示・利用していないため実害は無い。SDK 側で修正版が
-# 出たら本パッチは削除可能。
-_SDK_PATCH_APPLIED = False
-
-
-def _apply_sdk_billing_patch() -> None:
-    global _SDK_PATCH_APPLIED
-    if _SDK_PATCH_APPLIED:
-        return
-    try:
-        from copilot import client as _copilot_client  # type: ignore[import-not-found]
-    except ImportError:  # pragma: no cover
-        return
-
-    ModelBilling = getattr(_copilot_client, "ModelBilling", None)
-    if ModelBilling is None:  # pragma: no cover
-        return
-
-    original_from_dict = ModelBilling.from_dict
-
-    def _patched_from_dict(obj):  # type: ignore[no-untyped-def]
-        if isinstance(obj, dict) and obj.get("multiplier") is None:
-            patched = dict(obj)
-            patched["multiplier"] = 0.0
-            return original_from_dict(patched)
-        return original_from_dict(obj)
-
-    ModelBilling.from_dict = staticmethod(_patched_from_dict)  # type: ignore[assignment]
-    _SDK_PATCH_APPLIED = True
 
 
 @dataclass(frozen=True)
@@ -82,13 +41,12 @@ class ModelEntry:
         max_context_window_tokens: コンテキストウィンドウの上限トークン数 (SDK 上限)
         input_price_usd_per_1m: 入力 1M トークンあたりの USD 単価 (None = 不明)
         output_price_usd_per_1m: 出力 1M トークンあたりの USD 単価 (None = 不明)
-        cache_price_usd_per_1m: キャッシュ 1M トークンあたりの USD 単価 (None = 不明)
+        cache_price_usd_per_1m: キャッシュ 1M トークンあたりの USD 単価 (None = 不明)。
+            SDK 上の非推奨フィールド `cache_price` ではなく `cache_read_price` から算出する。
 
     NOTE: token_prices の単位変換式 (GitHub Copilot models.list API 実測):
         usd_per_1m_tokens = raw_price / (batch_size * 1e5)
         例: input_price=300000000000, batch_size=1000000 → $3.00/1M (Claude Sonnet)
-    SDK 0.3.0 では `ModelBilling.multiplier` が常に欠落 (=0.0 パッチ) のため
-    Premium Request 倍率は提供しない。
     """
 
     id: str
@@ -117,44 +75,9 @@ async def _fetch_model_entries_async() -> List[ModelEntry]:
     except ImportError as e:  # pragma: no cover
         raise ModelsAPIError(f"github-copilot-sdk が import できません: {e}") from e
 
-    # SDK 0.3.0 互換パッチ（multiplier 必須化バグの回避）。冪等。
-    _apply_sdk_billing_patch()
-
     client = CopilotClient()
-    raw_billing_by_id: Dict[str, dict] = {}
-    # GitHub Copilot サーバの models.list レスポンスは reasoning effort 候補を 2 箇所に持つ:
-    #   1. トップレベル `supportedReasoningEfforts` (SDK が読む)
-    #   2. `capabilities.supports.reasoning_effort` (snake_case, list)
-    # claude-opus-4.7 系では (1) が ["medium"] に縮退する不具合があり、正しい一覧は (2) のみ。
-    # SDK は (2) を bool 型として誤マップし list を捨てるため、ここで raw から拾って優先採用する。
-    raw_supported_efforts_by_id: Dict[str, List[str]] = {}
     try:
         await client.start()
-        # token_prices は SDK dataclass で破棄されるため、低レベル RPC で raw 取得して
-        # billing を id でマップする。失敗しても致命ではないため握り潰し。
-        try:
-            low = getattr(client, "_client", None)
-            if low is not None:
-                raw = await low.request("models.list", {})
-                raw_models = raw.get("models") if isinstance(raw, dict) else raw
-                if isinstance(raw_models, list):
-                    for rm in raw_models:
-                        if isinstance(rm, dict):
-                            rid = rm.get("id")
-                            b = rm.get("billing")
-                            if isinstance(rid, str) and isinstance(b, dict):
-                                raw_billing_by_id[rid] = b
-                            # capabilities.supports.reasoning_effort (list) を捕捉
-                            if isinstance(rid, str):
-                                caps = rm.get("capabilities")
-                                sup = caps.get("supports") if isinstance(caps, dict) else None
-                                re_list = sup.get("reasoning_effort") if isinstance(sup, dict) else None
-                                if isinstance(re_list, list):
-                                    cleaned = [str(x) for x in re_list if isinstance(x, str) and x]
-                                    if cleaned:
-                                        raw_supported_efforts_by_id[rid] = cleaned
-        except Exception:
-            pass
         try:
             models = await client.list_models()
         except Exception as e:
@@ -218,16 +141,8 @@ async def _fetch_model_entries_async() -> List[ModelEntry]:
             sre = [str(x) for x in sre_raw if isinstance(x, str) and x]
             if not sre:
                 sre = None
-        # raw `capabilities.supports.reasoning_effort` を優先採用（SDK 経路がサーバ側の
-        # トップレベル supportedReasoningEfforts 縮退バグ (claude-opus-4.7 系等) で
-        # ["medium"] のみになるケースを救済）。
-        raw_sre = raw_supported_efforts_by_id.get(str(mid))
-        if raw_sre and (sre is None or len(raw_sre) > len(sre)):
-            sre = raw_sre
-            # raw list が存在＝サーバが reasoning effort 機能を提供している証拠
-            supports_re = True
 
-        # token_prices: raw RPC からモデル ID で引いて USD/1M tokens に変換
+        # token_prices: 公開 ModelInfo.billing.token_prices から USD/1M tokens に変換
         # 単位の根拠（実測クロスチェック済み）:
         #   - Claude Sonnet 4.6: input_price=3e11, batch_size=1e6 → $3.00/1M
         #   - Claude Opus 4.7:   input_price=5e11, batch_size=1e6 → $5.00/1M
@@ -238,24 +153,24 @@ async def _fetch_model_entries_async() -> List[ModelEntry]:
         in_price: Optional[float] = None
         out_price: Optional[float] = None
         cache_price: Optional[float] = None
-        b = raw_billing_by_id.get(str(mid))
-        if isinstance(b, dict):
-            tp = b.get("token_prices")
-            if isinstance(tp, dict):
-                batch = tp.get("batch_size")
-                if isinstance(batch, int) and not isinstance(batch, bool) and batch > 0:
-                    def _conv(v):
-                        # bool は int サブクラスのため明示除外
-                        if (
-                            isinstance(v, (int, float))
-                            and not isinstance(v, bool)
-                            and v >= 0
-                        ):
-                            return float(v) / (float(batch) * _GH_PRICE_TO_USD_PER_1M)
-                        return None
-                    in_price = _conv(tp.get("input_price"))
-                    out_price = _conv(tp.get("output_price"))
-                    cache_price = _conv(tp.get("cache_price"))
+        billing = getattr(m, "billing", None)
+        tp = getattr(billing, "token_prices", None) if billing is not None else None
+        if tp is not None:
+            batch = getattr(tp, "batch_size", None)
+            if isinstance(batch, int) and not isinstance(batch, bool) and batch > 0:
+                def _conv(v):
+                    # bool は int サブクラスのため明示除外
+                    if (
+                        isinstance(v, (int, float))
+                        and not isinstance(v, bool)
+                        and v >= 0
+                    ):
+                        return float(v) / (float(batch) * _GH_PRICE_TO_USD_PER_1M)
+                    return None
+                in_price = _conv(getattr(tp, "input_price", None))
+                out_price = _conv(getattr(tp, "output_price", None))
+                # cache_price は SDK で deprecated（cache_read_price へ移行済み）のため、後者を参照する
+                cache_price = _conv(getattr(tp, "cache_read_price", None))
 
         entries.append(
             ModelEntry(

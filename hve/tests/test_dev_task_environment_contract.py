@@ -1,10 +1,17 @@
 """Repository test dependency and VS Code task environment contract."""
 from __future__ import annotations
 
+from functools import lru_cache
 import json
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import sys
+import textwrap
 import tomllib
+from typing import NamedTuple
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +22,7 @@ _COPILOT_INSTRUCTIONS = _REPO_ROOT / ".github" / "copilot-instructions.md"
 _SETUP_CMD = _REPO_ROOT / "hve" / "setup-hve.cmd"
 _SETUP_PS1 = _REPO_ROOT / "hve" / "setup-hve.ps1"
 _SETUP_SH = _REPO_ROOT / "hve" / "setup-hve.sh"
+_COPILOT_SDK_LOCK = _REPO_ROOT / "hve" / "copilot-sdk.lock"
 _WORKSPACE_PYTHON = "${workspaceFolder}\\.venv\\Scripts\\python.exe"
 _PERMANENT_TASK_LABELS = {
     "Sub-17 Orchestrator RED contracts",
@@ -121,3 +129,769 @@ def test_vscode_python_tasks_use_workspace_venv_without_absolute_repo_path() -> 
         label.strip().casefold().startswith("temp ")
         for label in all_labels
     ), "temporary validation tasks must be removed after use"
+
+
+def test_setup_scripts_verify_copilot_runtime_pin_consistency() -> None:
+    """setup が SDK の pin する Copilot ランタイムとの整合を検証する契約。
+
+    github-copilot-sdk の生成イベントパーサはエンベロープ (id/timestamp/type) を
+    assert で固めているため、pin と異なるランタイムを掴むと session.event が
+    AssertionError となり当該イベントが黙って捨てられる。
+    """
+    for path in (_SETUP_PS1, _SETUP_SH):
+        script = path.read_text(encoding="utf-8")
+        assert "Verifying Copilot runtime consistency" in script, path.name
+        assert "download-runtime" in script, path.name
+        for bypass_var in (
+            "COPILOT_CLI_PATH",
+            "COPILOT_CLI_EXTRACT_DIR",
+            "COPILOT_SKIP_CLI_DOWNLOAD",
+        ):
+            assert bypass_var in script, f"{path.name}: {bypass_var}"
+
+
+def test_setup_scripts_read_copilot_version_only_with_no_auto_update() -> None:
+    """`copilot --version` 単体はオンライン更新チェックの結果 (最新利用可能版) を返す。
+
+    実測: `cli/1.0.69/copilot.exe --version` -> 1.0.78 /
+    `--no-auto-update --version` -> 1.0.69。pin との突合には後者が必須。
+    """
+    powershell = _SETUP_PS1.read_text(encoding="utf-8")
+    shell = _SETUP_SH.read_text(encoding="utf-8")
+
+    assert "function Get-CopilotCliVersion" in powershell
+    assert re.search(r"'--no-auto-update'\s*,?\s*'--version'", powershell)
+    assert "cli_embedded_version()" in shell
+    assert re.search(r"--no-auto-update\s+--version", shell)
+
+
+def test_copilot_sdk_lock_pins_an_exact_version() -> None:
+    """SDK 版は lock で固定する。setup 実行日でマシンごとに版が変わるのを防ぐため。"""
+    text = _COPILOT_SDK_LOCK.read_text(encoding="utf-8")
+
+    assert re.search(r"(?m)^github-copilot-sdk==\S+$", text)
+    assert re.search(r"(?m)^# pinned Copilot CLI runtime: \S+$", text)
+    assert not text.startswith("\ufeff")
+    assert "\r\n" not in _COPILOT_SDK_LOCK.read_text(encoding="utf-8", newline="")
+
+
+def test_setup_installs_copilot_sdk_from_the_lock_unless_upgrade_requested() -> None:
+    """既定は lock 版の導入で、最新化は明示フラグ指定時のみ。"""
+    powershell = _SETUP_PS1.read_text(encoding="utf-8")
+    shell = _SETUP_SH.read_text(encoding="utf-8")
+
+    assert "copilot-sdk.lock" in powershell
+    assert "copilot-sdk.lock" in shell
+    assert re.search(
+        r"'install'\s*,\s*'--no-deps'\s*,\s*'-r'\s*,\s*\$lockFile", powershell
+    )
+    assert re.search(r"pip install --no-deps -r \"\$LOCK_FILE\"", shell)
+
+    assert "[switch]$UpgradeSdk" in powershell
+    assert "--upgrade-sdk) UPGRADE_SDK=true" in shell
+    # 最新化は必ずフラグの内側に置く（既定経路で --upgrade させない）。
+    assert 'if ($UpgradeSdk) {' in powershell
+    assert 'if [[ "$UPGRADE_SDK" == true ]]; then' in shell
+
+
+_CALL_SEPARATOR = "\x1f"
+_PTY_PROBE_MARKER = "__HVE_TEST_PTY_PROBE__"
+_PTY_AST_PROBE = (
+    "import ast,os;"
+    "tree=ast.parse(os.environ.get('HVE_TEST_CODE',''));"
+    "raise SystemExit(0 if any("
+    "isinstance(node,ast.Call) and ("
+    "(isinstance(node.func,ast.Name) and node.func.id=='is_pty_available') or "
+    "(isinstance(node.func,ast.Attribute) and node.func.attr=='is_pty_available')"
+    ") for node in ast.walk(tree)) else 1)"
+)
+_SETUP_COMMON_SHELL_ARGS = (
+    "--no-install-tools",
+    "--no-global-cleanup",
+    "--skip-nltk-download",
+    "--yes",
+)
+_SETUP_COMMON_POWERSHELL_ARGS = (
+    "-NoInstallTools",
+    "-NoGlobalCleanup",
+    "-SkipNltkDownload",
+    "-Yes",
+)
+
+
+class _SetupRun(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+    calls: tuple[tuple[str, ...], ...]
+    gh_calls: tuple[str, ...]
+
+
+def _write_executable(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8", newline="\n")
+    path.chmod(path.stat().st_mode | 0o111)
+
+
+def _read_call_records(path: Path) -> tuple[tuple[str, ...], ...]:
+    if not path.exists():
+        return ()
+    return tuple(
+        tuple(line.split(_CALL_SEPARATOR))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    )
+
+
+def _read_lines(path: Path) -> tuple[str, ...]:
+    if not path.exists():
+        return ()
+    return tuple(line for line in path.read_text(encoding="utf-8").splitlines() if line)
+
+
+def _record_has(record: tuple[str, ...], *values: str) -> bool:
+    return all(any(value in field for field in record[1:]) for value in values)
+
+
+def _has_gui_pty_install(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(_record_has(record, "pip", "install", "gui-pty") for record in calls)
+
+
+def _has_shared_pty_probe(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(_PTY_PROBE_MARKER in record for record in calls)
+
+
+def _created_venv(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(
+        any(
+            record[index : index + 2] == ("-m", "venv")
+            for index in range(1, len(record) - 1)
+        )
+        for record in calls
+    )
+
+
+def _run_summary(label: str, run: _SetupRun) -> str:
+    stdout = "\n".join(run.stdout.splitlines()[-12:])
+    stderr = "\n".join(run.stderr.splitlines()[-12:])
+    return f"{label}: exit={run.returncode}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+
+
+@lru_cache(maxsize=1)
+def _bash_executable() -> str:
+    candidates: list[str | None] = []
+    if os.name == "nt":
+        for root_name in ("ProgramFiles", "ProgramW6432", "LOCALAPPDATA"):
+            root = os.environ.get(root_name)
+            if root:
+                candidates.append(str(Path(root) / "Git" / "bin" / "bash.exe"))
+    candidates.extend((shutil.which("bash.exe"), shutil.which("bash")))
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return str(Path(candidate).resolve())
+    raise AssertionError("bash is required to execute the isolated setup-hve.sh harness")
+
+
+@lru_cache(maxsize=1)
+def _pwsh7_executable() -> str | None:
+    if os.name != "nt":
+        return None
+    candidates = (shutil.which("pwsh.exe"), shutil.which("pwsh"))
+    for candidate in candidates:
+        if not candidate:
+            continue
+        probe = subprocess.run(
+            [
+                candidate,
+                "-NoLogo",
+                "-NoProfile",
+                "-Command",
+                "$PSVersionTable.PSEdition + ':' + $PSVersionTable.PSVersion.Major",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if probe.returncode == 0 and probe.stdout.strip().startswith("Core:"):
+            if int(probe.stdout.strip().split(":", 1)[1]) >= 7:
+                return str(Path(candidate).resolve())
+    return None
+
+
+def _shell_test_path(fake_bin: Path, bash: str) -> str:
+    paths = [fake_bin, Path(bash).parent]
+    if os.name == "nt":
+        git_root = Path(bash).parent.parent
+        paths.extend((git_root / "usr" / "bin", git_root / "mingw64" / "bin"))
+    else:
+        paths.extend((Path("/usr/bin"), Path("/bin")))
+    return os.pathsep.join(str(path) for path in dict.fromkeys(paths) if path.is_dir())
+
+
+def _powershell_test_path(fake_bin: Path) -> str:
+    """Preserve the pwsh runtime PATH while hiding test-owned external tools."""
+    paths = [fake_bin]
+    for raw_path in os.environ.get("PATH", "").split(os.pathsep):
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if any(
+            (path / name).is_file()
+            for name in (
+                "gh.exe",
+                "gh.cmd",
+                "gh.bat",
+                "copilot.exe",
+                "copilot.cmd",
+                "copilot.bat",
+            )
+        ):
+            continue
+        paths.append(path)
+    if Path(sys.executable).parent not in paths:
+        paths.insert(1, Path(sys.executable).parent)
+    return os.pathsep.join(str(path) for path in dict.fromkeys(paths))
+
+
+def _run_shell_setup(
+    root: Path,
+    *,
+    args: tuple[str, ...] = (),
+    gh_available: bool,
+    pty_available: bool,
+    gh_status_exit: int = 0,
+) -> _SetupRun:
+    repo = root / "repo"
+    setup = repo / "hve" / "setup-hve.sh"
+    fake_bin = root / "fake-bin"
+    calls = root / "python-calls.log"
+    gh_calls = root / "gh-calls.log"
+    venv_python = repo / ".venv" / "bin" / "python"
+    repo.joinpath("hve").mkdir(parents=True)
+    shutil.copyfile(_SETUP_SH, setup)
+    setup.chmod(setup.stat().st_mode | 0o111)
+    if _COPILOT_SDK_LOCK.exists():
+        shutil.copyfile(_COPILOT_SDK_LOCK, repo / "hve" / "copilot-sdk.lock")
+
+    fake_python = textwrap.dedent(
+        f"""\
+        #!/usr/bin/env bash
+        set -u
+        code=''
+        if [[ "${{1:-}}" == '-c' && $# -ge 2 ]]; then
+          code="$2"
+        elif [[ "${{1:-}}" == '-' ]]; then
+          code="$(cat)"
+        fi
+        pty_probe=false
+        if [[ "$code" == *is_pty_available* ]] &&
+           HVE_TEST_CODE="$code" "$HVE_TEST_HOST_PY" -c "$HVE_TEST_AST_PROBE" >/dev/null 2>&1; then
+          pty_probe=true
+        fi
+        {{
+          printf '%s' "${{0##*/}}"
+          for arg in "$@"; do
+            safe="${{arg//$'\\r'/\\\\r}}"
+            safe="${{safe//$'\\n'/\\\\n}}"
+            printf '\037%s' "$safe"
+          done
+          if [[ "${{1:-}}" == '-' ]]; then
+            safe="${{code//$'\\r'/\\\\r}}"
+            safe="${{safe//$'\\n'/\\\\n}}"
+            printf '\037stdin=%s' "$safe"
+          fi
+          if [[ "$pty_probe" == true ]]; then printf '\037%s' '{_PTY_PROBE_MARKER}'; fi
+          printf '\n'
+        }} >> "$HVE_TEST_CALL_LOG"
+        if [[ "$pty_probe" == true ]]; then exit "${{HVE_TEST_PTY_EXIT:-0}}"; fi
+        if [[ "${{1:-}}" == '--version' ]]; then printf 'Python 3.14.0\n'; fi
+        if [[ "${{1:-}}" == '-m' && "${{2:-}}" == 'pip' &&
+              "${{3:-}}" == 'show' && "${{4:-}}" == 'hve' ]]; then
+          exit 1
+        fi
+        exit 0
+        """
+    )
+    _write_executable(venv_python, fake_python)
+    _write_executable(fake_bin / "python3.14", fake_python)
+    _write_executable(
+        fake_bin / "uname",
+        "#!/usr/bin/env bash\nprintf 'Darwin\\n'\n",
+    )
+    if gh_available:
+        _write_executable(
+            fake_bin / "gh",
+            """#!/usr/bin/env bash
+set -u
+printf '%s\\n' "$*" >> "$HVE_TEST_GH_LOG"
+if [[ "${1:-}" == 'auth' && "${2:-}" == 'status' ]]; then
+  exit "${HVE_TEST_GH_STATUS_EXIT:-0}"
+fi
+exit 0
+""",
+        )
+
+    bash = _bash_executable()
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": _shell_test_path(fake_bin, bash),
+            "HVE_TEST_AST_PROBE": _PTY_AST_PROBE,
+            "HVE_TEST_CALL_LOG": calls.as_posix(),
+            "HVE_TEST_GH_LOG": gh_calls.as_posix(),
+            "HVE_TEST_GH_STATUS_EXIT": str(gh_status_exit),
+            "HVE_TEST_HOST_PY": Path(sys.executable).as_posix(),
+            "HVE_TEST_PTY_EXIT": "0" if pty_available else "1",
+        }
+    )
+    completed = subprocess.run(
+        [bash, setup.as_posix(), *_SETUP_COMMON_SHELL_ARGS, *args],
+        cwd=repo,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return _SetupRun(
+        completed.returncode,
+        completed.stdout,
+        completed.stderr,
+        _read_call_records(calls),
+        _read_lines(gh_calls),
+    )
+
+
+def _instrument_powershell_venv_python(source: str) -> str:
+    assignment = re.compile(
+        r"(?m)^\$venvPy\s*=\s*Join-Path\s+\$venvDir\s+"
+        r"(['\"])Scripts\\python\.exe\1\s*$"
+    )
+    replacement = textwrap.dedent(
+        f"""\
+        function Invoke-HveTestVenvPython {{
+            [CmdletBinding()]
+            param([Parameter(ValueFromRemainingArguments = $true)][object[]]$FakeArgs)
+
+            $code = ''
+            if ($FakeArgs.Count -ge 2 -and [string]$FakeArgs[0] -eq '-c') {{
+                $code = [string]$FakeArgs[1]
+            }}
+            $isPtyProbe = $false
+            if ($code.Contains('is_pty_available')) {{
+                $previousCode = [Environment]::GetEnvironmentVariable('HVE_TEST_CODE', 'Process')
+                try {{
+                    $env:HVE_TEST_CODE = $code
+                    & $env:HVE_TEST_HOST_PY -c $env:HVE_TEST_AST_PROBE *> $null
+                    $isPtyProbe = ($LASTEXITCODE -eq 0)
+                }} finally {{
+                    if ($null -eq $previousCode) {{
+                        Remove-Item Env:HVE_TEST_CODE -ErrorAction SilentlyContinue
+                    }} else {{
+                        $env:HVE_TEST_CODE = $previousCode
+                    }}
+                }}
+            }}
+
+            $parts = [System.Collections.Generic.List[string]]::new()
+            $parts.Add('venv-python')
+            foreach ($arg in @($FakeArgs)) {{
+                $text = ([string]$arg).Replace("`r", '\r').Replace("`n", '\n')
+                $parts.Add($text)
+            }}
+            if ($isPtyProbe) {{ $parts.Add('{_PTY_PROBE_MARKER}') }}
+            Add-Content -LiteralPath $env:HVE_TEST_CALL_LOG -Value ($parts -join [char]31)
+            $global:LASTEXITCODE = if ($isPtyProbe) {{ [int]$env:HVE_TEST_PTY_EXIT }} else {{ 0 }}
+        }}
+        $venvPy = 'Invoke-HveTestVenvPython'
+        """
+    )
+    instrumented, replacements = assignment.subn(lambda _: replacement, source)
+    assert replacements == 1, (
+        "PowerShell harness must instrument exactly one $venvPy assignment; "
+        f"found {replacements}"
+    )
+    return instrumented
+
+
+def _run_powershell_setup(
+    root: Path,
+    *,
+    args: tuple[str, ...] = (),
+    gh_available: bool,
+    pty_available: bool,
+    gh_status_exit: int = 0,
+) -> _SetupRun | None:
+    pwsh = _pwsh7_executable()
+    if pwsh is None:
+        return None
+
+    repo = root / "repo"
+    setup = repo / "hve" / "setup-hve.ps1"
+    fake_bin = root / "fake-bin"
+    calls = root / "python-calls.log"
+    gh_calls = root / "gh-calls.log"
+    repo.joinpath("hve").mkdir(parents=True)
+    fake_bin.mkdir(parents=True)
+    setup.write_text(
+        _instrument_powershell_venv_python(_SETUP_PS1.read_text(encoding="utf-8")),
+        encoding="utf-8",
+        newline="\n",
+    )
+    if _COPILOT_SDK_LOCK.exists():
+        shutil.copyfile(_COPILOT_SDK_LOCK, repo / "hve" / "copilot-sdk.lock")
+    repo.joinpath(".venv", "Scripts").mkdir(parents=True)
+    repo.joinpath("Invoke-HveTestVenvPython").write_text(
+        "existing venv marker\n", encoding="utf-8"
+    )
+
+    if gh_available:
+        (fake_bin / "gh.cmd").write_bytes(
+            (
+                "@echo off\r\n"
+                ">>\"%HVE_TEST_GH_LOG%\" echo %*\r\n"
+                "if /I \"%~1\"==\"auth\" if /I \"%~2\"==\"status\" "
+                "exit /b %HVE_TEST_GH_STATUS_EXIT%\r\n"
+                "exit /b 0\r\n"
+            ).encode("ascii")
+        )
+    fake_global_python = (
+        "@echo off\r\n"
+        "if \"%~1\"==\"-3.14\" shift\r\n"
+        "if \"%~1\"==\"--version\" (echo Python 3.14.0& exit /b 0)\r\n"
+        "if \"%~1\"==\"-m\" if \"%~2\"==\"pip\" "
+        "if \"%~3\"==\"show\" exit /b 1\r\n"
+        "if \"%~1\"==\"-c\" echo {\"site\":[],\"scripts\":[]}\r\n"
+        "exit /b 0\r\n"
+    ).encode("ascii")
+    (fake_bin / "py.cmd").write_bytes(fake_global_python)
+    (fake_bin / "python.cmd").write_bytes(fake_global_python)
+    (fake_bin / "python3.cmd").write_bytes(fake_global_python)
+    (fake_bin / "copilot.cmd").write_bytes(
+        b"@echo off\r\necho 1.0.0\r\nexit /b 0\r\n"
+    )
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": _powershell_test_path(fake_bin),
+            "HVE_TEST_AST_PROBE": _PTY_AST_PROBE,
+            "HVE_TEST_CALL_LOG": str(calls),
+            "HVE_TEST_GH_LOG": str(gh_calls),
+            "HVE_TEST_GH_STATUS_EXIT": str(gh_status_exit),
+            "HVE_TEST_HOST_PY": sys.executable,
+            "HVE_TEST_PTY_EXIT": "0" if pty_available else "1",
+        }
+    )
+    completed = subprocess.run(
+        [pwsh, "-NoLogo", "-NoProfile", "-File", str(setup),
+         *_SETUP_COMMON_POWERSHELL_ARGS, *args],
+        cwd=repo,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    return _SetupRun(
+        completed.returncode,
+        completed.stdout,
+        completed.stderr,
+        _read_call_records(calls),
+        _read_lines(gh_calls),
+    )
+
+
+def _cmd_executable_lines(script: str) -> list[str]:
+    return [
+        stripped
+        for line in script.splitlines()
+        if (stripped := line.strip())
+        and not stripped.upper().startswith("REM ")
+        and not stripped.startswith("::")
+    ]
+
+
+def _cmd_propagates_pwsh_exit(script: str) -> bool:
+    """Check executable cmd statements without fixing whitespace or ``@pwsh`` form."""
+    lines = _cmd_executable_lines(script)
+    for invoke_index, line in enumerate(lines):
+        if not re.search(r"(?i)(?:^|[\s@])pwsh(?:\.exe)?\b.*\s-File\b", line):
+            continue
+        for capture_index in range(invoke_index + 1, min(len(lines), invoke_index + 4)):
+            direct = re.search(
+                r"(?i)\bexit\s+/b\s+%ERRORLEVEL%(?:\s|$)", lines[capture_index]
+            )
+            if direct:
+                return True
+            captured = re.search(
+                r"(?i)^set\s+\"?([A-Z_][A-Z0-9_]*)=%ERRORLEVEL%\"?$",
+                lines[capture_index],
+            )
+            if not captured:
+                continue
+            variable = re.escape(captured.group(1))
+            return any(
+                re.search(rf"(?i)\bexit\s+/b\s+%{variable}%(?:\s|$)", later)
+                for later in lines[capture_index + 1 :]
+            )
+    return False
+
+
+def _run_cmd_exit_probe(root: Path, expected_exit: int) -> int | None:
+    pwsh = _pwsh7_executable()
+    cmd = shutil.which("cmd.exe") if os.name == "nt" else None
+    if pwsh is None or cmd is None:
+        return None
+    root.mkdir(parents=True, exist_ok=True)
+    wrapper = root / "setup-hve.cmd"
+    script = root / "setup-hve.ps1"
+    shutil.copyfile(_SETUP_CMD, wrapper)
+    script.write_text(f"exit {expected_exit}\n", encoding="utf-8", newline="\n")
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join((str(Path(pwsh).parent), env.get("PATH", "")))
+    completed = subprocess.run(
+        [cmd, "/d", "/c", str(wrapper), "sentinel"],
+        cwd=root,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    return completed.returncode
+
+
+def test_normal_gui_setup_installs_gh_and_platform_pty_backend(tmp_path: Path) -> None:
+    """FR-GUI-09: normal setup provisions and verifies each platform backend."""
+    project = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))["project"]
+    gui_pty = [
+        re.sub(r"\s+", "", requirement).casefold()
+        for requirement in project["optional-dependencies"]["gui-pty"]
+    ]
+    setup_cmd = _SETUP_CMD.read_text(encoding="utf-8")
+
+    assert any(
+        requirement.startswith("pywinpty") and "sys_platform=='win32'" in requirement
+        for requirement in gui_pty
+    )
+    assert any(
+        requirement.startswith("ptyprocess") and "sys_platform!='win32'" in requirement
+        for requirement in gui_pty
+    )
+
+    probe_env = os.environ.copy()
+    for source, expected in (
+        ("is_pty_available()", True),
+        ("# is_pty_available()", False),
+        ("payload = '''is_pty_available()'''", False),
+    ):
+        probe_env["HVE_TEST_CODE"] = source
+        probe = subprocess.run(
+            [sys.executable, "-c", _PTY_AST_PROBE],
+            env=probe_env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert (probe.returncode == 0) is expected, source
+
+    runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh normal GUI",
+            _run_shell_setup(
+                tmp_path / "shell-normal", gh_available=True, pty_available=True
+            ),
+        )
+    ]
+    powershell_run = _run_powershell_setup(
+        tmp_path / "powershell-normal", gh_available=True, pty_available=True
+    )
+    if powershell_run is not None:
+        runs.append(("setup-hve.ps1 normal GUI", powershell_run))
+
+    gaps: list[str] = []
+    for label, run in runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        if not _has_gui_pty_install(run.calls):
+            gaps.append(f"{label}: gui-pty was not installed by the existing venv Python")
+        if not _has_shared_pty_probe(run.calls):
+            gaps.append(f"{label}: shared is_pty_available() was not executed")
+
+    assert _cmd_propagates_pwsh_exit(setup_cmd)
+    assert not _cmd_propagates_pwsh_exit(
+        "REM pwsh -File setup.ps1\nREM set RC=%ERRORLEVEL%\nREM exit /b %RC%\n"
+    )
+    assert _cmd_propagates_pwsh_exit(
+        "@pwsh -NoProfile -File setup.ps1\nset RESULT=%ERRORLEVEL%\n"
+        "endlocal&exit /b %RESULT%\n"
+    )
+    cmd_exit = _run_cmd_exit_probe(tmp_path / "cmd-exit", expected_exit=37)
+    if cmd_exit is not None and cmd_exit != 37:
+        gaps.append(f"setup-hve.cmd returned {cmd_exit}, expected delegated pwsh exit 37")
+
+    assert not gaps, "FR-GUI-09 normal setup gaps:\n- " + "\n- ".join(gaps)
+
+
+def test_normal_gui_setup_fails_closed_when_gh_or_pty_is_missing(
+    tmp_path: Path,
+) -> None:
+    """FR-GUI-09: missing normal-GUI prerequisites must terminate non-zero."""
+    runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh missing gh",
+            _run_shell_setup(
+                tmp_path / "shell-gh-missing",
+                gh_available=False,
+                pty_available=True,
+            ),
+        ),
+        (
+            "setup-hve.sh unavailable PTY",
+            _run_shell_setup(
+                tmp_path / "shell-pty-missing",
+                gh_available=True,
+                pty_available=False,
+            ),
+        ),
+    ]
+    for label, root, gh_available, pty_available in (
+        ("setup-hve.ps1 missing gh", "powershell-gh-missing", False, True),
+        ("setup-hve.ps1 unavailable PTY", "powershell-pty-missing", True, False),
+    ):
+        run = _run_powershell_setup(
+            tmp_path / root,
+            gh_available=gh_available,
+            pty_available=pty_available,
+        )
+        if run is not None:
+            runs.append((label, run))
+
+    failures = [_run_summary(label, run) for label, run in runs if run.returncode == 0]
+    assert not failures, (
+        "normal GUI setup accepted a missing prerequisite:\n- " + "\n- ".join(failures)
+    )
+
+
+def test_normal_gui_setup_repairs_existing_venv_without_force(tmp_path: Path) -> None:
+    """FR-GUI-09: editable GUI extras install runs after reuse without Force."""
+    runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh existing venv",
+            _run_shell_setup(
+                tmp_path / "shell-existing", gh_available=True, pty_available=True
+            ),
+        )
+    ]
+    powershell_run = _run_powershell_setup(
+        tmp_path / "powershell-existing", gh_available=True, pty_available=True
+    )
+    if powershell_run is not None:
+        runs.append(("setup-hve.ps1 existing venv", powershell_run))
+
+    gaps: list[str] = []
+    for label, run in runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        # Git for Windows の Bash は、NTFS 上に Python で作成したテスト用
+        # shebang script を ``[[ -x ]]`` と認識しない。この場合だけ fake venv を
+        # 新規作成したように見える。実際の POSIX 実行ビット契約は Linux CI の同一
+        # harness で検証するため、Windows ではこの host 固有の誤検知を除外する。
+        if os.name != "nt" and _created_venv(run.calls):
+            gaps.append(f"{label}: recreated an already valid venv without Force")
+        if not _has_gui_pty_install(run.calls):
+            gaps.append(f"{label}: existing venv skipped the gui-pty install/repair")
+        if not _has_shared_pty_probe(run.calls):
+            gaps.append(f"{label}: existing venv skipped shared PTY verification")
+    assert not gaps, "FR-GUI-09 existing venv gaps:\n- " + "\n- ".join(gaps)
+
+
+def test_no_gui_and_minimal_remain_explicit_opt_outs(tmp_path: Path) -> None:
+    """FR-GUI-09: NoGui/Minimal disable normal-GUI prerequisite enforcement."""
+    runs: list[tuple[str, _SetupRun]] = []
+    for label, shell_arg, powershell_arg in (
+        ("NoGui", "--no-gui", "-NoGui"),
+        ("Minimal", "--minimal", "-Minimal"),
+    ):
+        runs.append(
+            (
+                f"setup-hve.sh {label}",
+                _run_shell_setup(
+                    tmp_path / f"shell-{label.casefold()}",
+                    args=(shell_arg,),
+                    gh_available=False,
+                    pty_available=False,
+                ),
+            )
+        )
+        powershell_run = _run_powershell_setup(
+            tmp_path / f"powershell-{label.casefold()}",
+            args=(powershell_arg,),
+            gh_available=False,
+            pty_available=False,
+        )
+        if powershell_run is not None:
+            runs.append((f"setup-hve.ps1 {label}", powershell_run))
+
+    gaps: list[str] = []
+    for label, run in runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        if _has_gui_pty_install(run.calls):
+            gaps.append(f"{label}: installed gui-pty despite explicit opt-out")
+        if _has_shared_pty_probe(run.calls):
+            gaps.append(f"{label}: ran shared PTY verification despite explicit opt-out")
+    assert not gaps, "FR-GUI-09 opt-out gaps:\n- " + "\n- ".join(gaps)
+
+
+def test_setup_does_not_run_gh_auth_login_or_reject_unauthenticated_status(
+    tmp_path: Path,
+) -> None:
+    """FR-GUI-09: authentication remains an interactive GUI responsibility."""
+    runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh unauthenticated gh",
+            _run_shell_setup(
+                tmp_path / "shell-auth",
+                gh_available=True,
+                pty_available=True,
+                gh_status_exit=1,
+            ),
+        )
+    ]
+    powershell_run = _run_powershell_setup(
+        tmp_path / "powershell-auth",
+        gh_available=True,
+        pty_available=True,
+        gh_status_exit=1,
+    )
+    if powershell_run is not None:
+        runs.append(("setup-hve.ps1 unauthenticated gh", powershell_run))
+
+    gaps: list[str] = []
+    for label, run in runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        normalized = [re.sub(r"\s+", " ", call.strip()).casefold() for call in run.gh_calls]
+        if not any(call.startswith("auth status") for call in normalized):
+            gaps.append(f"{label}: gh auth status was not observed through the fake gh")
+        if any(re.search(r"(?:^|\s)auth\s+login(?:\s|$)", call) for call in normalized):
+            gaps.append(f"{label}: setup invoked forbidden gh auth login: {run.gh_calls}")
+    assert not gaps, "FR-GUI-09 gh auth responsibility gaps:\n- " + "\n- ".join(gaps)
+
+
+def test_posix_setup_script_is_executable() -> None:
+    """FR-GUI-09: the documented ``./hve/setup-hve.sh`` entry point is runnable."""
+    result = subprocess.run(
+        ["git", "ls-files", "--stage", "--", "hve/setup-hve.sh"],
+        cwd=_REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    entries = [line for line in result.stdout.splitlines() if line.strip()]
+
+    assert len(entries) == 1
+    assert entries[0].split(maxsplit=1)[0] == "100755"

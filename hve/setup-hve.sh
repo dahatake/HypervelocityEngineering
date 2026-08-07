@@ -13,13 +13,16 @@
 #   git / gh / node (npm,npx) / az / shellcheck / @github/copilot (npm -g)
 #
 # 行うこと:
+#   - グローバル Python 環境からの遮断 (PYTHONPATH/PYTHONHOME/PIP_* の無効化、
+#     グローバルへ誤導入された hve の除去、隔離性の検証)
 #   - OS prereq 確認と不足ツールの自動導入 (brew / apt / dnf / pacman)
 #   - venv (stdlib モジュール) の利用可否確認と不足時の OS パッケージ導入
 #   - Linux で Qt/QtWebEngine 必須 system lib の検出と導入 (apt)
 #   - .venv 作成・検証
 #   - pip / setuptools / wheel アップグレード
 #   - editable install with extras
-#   - github-copilot-sdk を最新化
+#   - github-copilot-sdk を hve/copilot-sdk.lock 固定版で導入し、pin された
+#     Copilot ランタイムとの整合を検証 (--upgrade-sdk で最新化 + lock 更新)
 #   - nltk punkt_tab を事前 DL
 #   - Mermaid / KaTeX アセット DL
 #   - GUI 翻訳 .ts → .qm コンパイル
@@ -32,8 +35,10 @@
 #   ./hve/setup-hve.sh --force        .venv を再構築
 #   ./hve/setup-hve.sh --skip-nltk-download
 #   ./hve/setup-hve.sh --with-skills  microsoft/skills を npx で導入
+#   ./hve/setup-hve.sh --upgrade-sdk  github-copilot-sdk を最新化し lock を更新
 #   ./hve/setup-hve.sh -y             確認プロンプトをスキップ
 #   ./hve/setup-hve.sh --no-install-tools  OS ツールの自動導入を行わない
+#   ./hve/setup-hve.sh --no-global-cleanup グローバル Python の hve を除去しない
 # ============================================================
 set -u
 
@@ -43,13 +48,15 @@ MINIMAL=false
 FORCE=false
 SKIP_NLTK=false
 WITH_SKILLS=false
+UPGRADE_SDK=false
 ASSUME_YES=false
 NO_INSTALL_PYTHON=false
 NO_INSTALL_TOOLS=false
+NO_GLOBAL_CLEANUP=false
 WARN=0
 
 usage() {
-  sed -n '2,37p' "$0"
+  sed -n '2,41p' "$0"
   exit 0
 }
 
@@ -61,9 +68,11 @@ while [[ $# -gt 0 ]]; do
     --force)      FORCE=true ;;
     --skip-nltk-download) SKIP_NLTK=true ;;
     --with-skills) WITH_SKILLS=true ;;
+    --upgrade-sdk) UPGRADE_SDK=true ;;
     -y|--yes)     ASSUME_YES=true ;;
     --no-install-python) NO_INSTALL_PYTHON=true ;;
     --no-install-tools)  NO_INSTALL_TOOLS=true ;;
+    --no-global-cleanup) NO_GLOBAL_CLEANUP=true ;;
     -h|--help)    usage ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -80,6 +89,80 @@ try_run() { printf '  > %s\n' "$*"; "$@"; }
 
 probe() { "$@" >/dev/null 2>&1; }
 
+# グローバル Python に導入された hve を検出して除去する。
+# 古い editable install は MAPPING を導入時点で凍結するため、後から pyproject に
+# 追加されたトップレベルパッケージ (cq 等) を解決できず、PATH 上で .venv を
+# shadow して ModuleNotFoundError の原因になる。
+remove_global_hve() {
+  local py="$1"
+  local has_hve=false
+  local residue=()
+
+  probe "$py" -m pip show hve && has_hve=true
+
+  local dirs
+  dirs="$("$py" -c '
+import site, sysconfig
+paths = []
+try:
+    paths.extend(site.getsitepackages())
+except Exception:
+    pass
+p = sysconfig.get_paths().get("purelib")
+if p:
+    paths.append(p)
+try:
+    paths.append(site.getusersitepackages())
+except Exception:
+    pass
+s = sysconfig.get_paths().get("scripts")
+if s:
+    paths.append(s)
+for x in dict.fromkeys(paths):
+    if x:
+        print(x)
+' 2>/dev/null)"
+
+  local d f
+  while IFS= read -r d; do
+    [[ -d "$d" ]] || continue
+    for f in "$d"/__editable__*hve* "$d"/hve-*.dist-info "$d"/hve.egg-link "$d"/hve "$d"/hve-mdq "$d"/mdq; do
+      [[ -e "$f" ]] || continue
+      # リポジトリ配下（.venv を含む）は対象外。掃除するのはグローバル環境のみ。
+      case "$f" in "$REPO_ROOT"/*) continue ;; esac
+      residue+=("$f")
+    done
+  done <<< "$dirs"
+
+  if [[ "$has_hve" != true && ${#residue[@]} -eq 0 ]]; then
+    ok 'No hve installation in the global Python environment'
+    return 0
+  fi
+
+  warn 'hve is installed in the GLOBAL Python environment. It shadows .venv on PATH and a stale editable install cannot resolve packages added later (e.g. cq) -> ModuleNotFoundError.'
+  for f in "${residue[@]}"; do printf '    residue: %s\n' "$f"; done
+
+  if [[ "$CHECK_ONLY" == true ]]; then
+    echo '    Re-run without --check-only to remove it.'
+    return 0
+  fi
+  if [[ "$NO_GLOBAL_CLEANUP" == true ]]; then
+    echo '    --no-global-cleanup specified: leaving the global install in place.'
+    return 0
+  fi
+  if ! confirm 'Uninstall hve from the GLOBAL Python environment? (.venv keeps its own isolated copy)'; then
+    warn "Global hve left in place. The 'hve' command on PATH may keep resolving to it."
+    return 0
+  fi
+
+  [[ "$has_hve" == true ]] && try_run "$py" -m pip uninstall -y hve
+  for f in "${residue[@]}"; do
+    [[ -e "$f" ]] || continue
+    if rm -rf "$f"; then printf '    removed: %s\n' "$f"; else warn "Could not remove $f"; fi
+  done
+  ok 'Global hve installation removed'
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV_DIR="$REPO_ROOT/.venv"
@@ -93,8 +176,32 @@ INSTALL_GUI=true
 
 OS="$(uname -s)"
 echo "HVE setup ($OS)"
-echo "  check-only=$CHECK_ONLY no-gui=$NO_GUI minimal=$MINIMAL force=$FORCE no-install-tools=$NO_INSTALL_TOOLS"
+echo "  check-only=$CHECK_ONLY no-gui=$NO_GUI minimal=$MINIMAL force=$FORCE no-install-tools=$NO_INSTALL_TOOLS no-global-cleanup=$NO_GLOBAL_CLEANUP upgrade-sdk=$UPGRADE_SDK"
 echo "  repoRoot=$REPO_ROOT"
+
+# ---------- グローバル Python 環境の遮断 ----------
+# PYTHONPATH / PYTHONHOME / PIP_* が継承されていると .venv の python でも
+# グローバル環境の import 解決が混入し、.venv を作る意味が失われる。
+# 本プロセス内だけを無効化する（ユーザーの永続設定は変更しない）。
+step 'Isolating from the global Python environment'
+LEAKED_ENV=()
+for v in PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE \
+         PIP_TARGET PIP_PREFIX PIP_USER PIP_PYTHON PIP_REQUIRE_VIRTUALENV; do
+  if [[ -n "${!v:-}" ]]; then
+    LEAKED_ENV+=("$v=${!v}")
+    unset "$v"
+  fi
+done
+if [[ ${#LEAKED_ENV[@]} -gt 0 ]]; then
+  warn 'Inherited Python/pip environment variables were disabled for this setup process:'
+  for e in "${LEAKED_ENV[@]}"; do printf '    %s\n' "$e"; done
+  echo '    Remove them from your shell profile as well, otherwise .venv stays contaminated at runtime.'
+else
+  ok 'No PYTHONPATH / PYTHONHOME / PIP_* leakage from the shell'
+fi
+export PYTHONNOUSERSITE=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+ok 'PYTHONNOUSERSITE=1 (user site-packages disabled for every python invocation below)'
 
 # ---------- OS tool checks ----------
 step 'Checking Python'
@@ -395,6 +502,18 @@ install_os_tool az   'Azure CLI'   'Azure workflows (asdw-* / ADFD)' \
 install_os_tool shellcheck 'ShellCheck' 'ASDW Step 1.2 static verification' \
   'see https://github.com/koalaman/shellcheck#installing' || true
 
+if [[ "$INSTALL_GUI" == true && "$CHECK_ONLY" != true ]] && ! command -v gh >/dev/null 2>&1; then
+  die 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature. Re-run this setup without --no-install-tools, or install GitHub CLI and re-run this setup.'
+fi
+
+# ---------- グローバル hve の除去 ----------
+step 'Checking global Python for a stray hve installation'
+if [[ -n "${PYBIN:-}" ]]; then
+  remove_global_hve "$PYBIN"
+else
+  warn 'Python not found; skipping global hve check.'
+fi
+
 # ---------- venv module ----------
 step 'Checking Python venv module'
 if [[ -n "${PYBIN:-}" ]] && venv_module_ok "$PYBIN"; then
@@ -474,10 +593,21 @@ if [[ -x "$VENV_PY" ]]; then
     fi
   fi
 fi
+# `python -m venv --system-site-packages` で作られた .venv はグローバルの
+# site-packages を継承する。隔離を保証するため作り直す。
+if [[ -x "$VENV_PY" && -f "$VENV_DIR/pyvenv.cfg" ]] &&
+   grep -Eiq '^[[:space:]]*include-system-site-packages[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$VENV_DIR/pyvenv.cfg"; then
+  if [[ "$CHECK_ONLY" == true ]]; then
+    warn '.venv inherits global site-packages (include-system-site-packages = true). Re-run with --force to rebuild it isolated.'
+  else
+    warn '.venv inherits global site-packages (include-system-site-packages = true). Rebuilding it isolated.'
+    rm -rf "$VENV_DIR"
+  fi
+fi
 if [[ ! -x "$VENV_PY" && "$CHECK_ONLY" != true ]]; then
   [[ -n "${PYBIN:-}" ]] || die "Python 3.11+ is required to create .venv."
   run "$PYBIN" -m venv "$VENV_DIR"
-  ok ".venv created"
+  ok '.venv created (isolated: system site-packages excluded)'
 fi
 
 if [[ "$CHECK_ONLY" == true ]]; then
@@ -503,6 +633,14 @@ else
   run "$VENV_PY" -m pip install -e ".[$extras]"
 fi
 
+if [[ "$INSTALL_GUI" == true ]]; then
+  step 'Verifying embedded GitHub CLI terminal prerequisites'
+  if ! "$VENV_PY" -c 'from hve.gui.pty_backend import is_pty_available; raise SystemExit(0 if is_pty_available() else 1)'; then
+    die 'The PTY backend required by the GUI "GitHub CLI でログイン" feature is unavailable. Re-run this setup after resolving the GUI dependency installation failure.'
+  fi
+  ok 'PTY backend for the embedded GitHub CLI terminal'
+fi
+
 # ---------- code-query 用文法 (extras: code) ----------
 # tree-sitter 文法は platform ごとに wheel 有無が異なるため、本体インストールとは
 # 分離して警告止まりにする。未導入時は code-query が regex (lite) へ降格するだけ。
@@ -516,13 +654,46 @@ if [[ "$MINIMAL" != true ]]; then
   fi
 fi
 
-# ---------- copilot SDK 最新化 ----------
+# ---------- copilot SDK ----------
 # NOTE: --no-deps を付与し SDK 本体のみ更新する。これを付けないと pip resolver が
 #   pydantic-core を最新版 (例: 2.47.0) へ引き上げ、pydantic 2.13.4 が要求する
 #   pin (pydantic-core==2.46.4) と不整合になり GUI 起動時に例外となる。
 #   SDK の依存 (pydantic>=2.0 等) は editable install 時点で既に充足済み。
-step 'Upgrading github-copilot-sdk to latest (no-deps)'
-run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
+# 版は hve/copilot-sdk.lock で固定する。無条件に最新へ追従すると「セットアップ
+#   した日」でマシンごとに版が変わり、公開直後のリリースにパーサ不整合があった
+#   場合に特定の人だけ壊れて再現・切り分けが不能になるため。
+LOCK_FILE="$REPO_ROOT/hve/copilot-sdk.lock"
+LOCK_UPDATE_PY='
+import re, sys, pathlib
+import importlib.metadata as m
+import copilot._cli_version as v
+p = pathlib.Path(sys.argv[1])
+sdk = m.version("github-copilot-sdk")
+cli = v.CLI_VERSION or "unknown"
+t = p.read_text(encoding="utf-8")
+t = re.sub(r"(?m)^# pinned Copilot CLI runtime:.*$", "# pinned Copilot CLI runtime: " + cli, t)
+t = re.sub(r"(?m)^github-copilot-sdk==.*$", "github-copilot-sdk==" + sdk, t)
+p.write_text(t, encoding="utf-8", newline="\n")
+print(sdk)
+'
+if [[ "$UPGRADE_SDK" == true ]]; then
+  step 'Upgrading github-copilot-sdk to latest (no-deps) and refreshing the lock'
+  run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
+  if [[ ! -f "$LOCK_FILE" ]]; then
+    warn "Lock file not found: $LOCK_FILE"
+  elif NEW_SDK="$("$VENV_PY" -c "$LOCK_UPDATE_PY" "$LOCK_FILE")"; then
+    ok "hve/copilot-sdk.lock now pins $NEW_SDK. Review the diff and commit it so the whole team moves together."
+  else
+    warn 'Could not refresh hve/copilot-sdk.lock. Update it by hand.'
+  fi
+elif [[ -f "$LOCK_FILE" ]]; then
+  step 'Installing github-copilot-sdk from hve/copilot-sdk.lock (no-deps)'
+  run "$VENV_PY" -m pip install --no-deps -r "$LOCK_FILE"
+else
+  warn 'hve/copilot-sdk.lock not found. Falling back to the latest release; re-run with --upgrade-sdk to regenerate the lock.'
+  step 'Upgrading github-copilot-sdk to latest (no-deps)'
+  run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
+fi
 
 # ---------- 依存整合性チェック（pydantic / pydantic-core 等） ----------
 # github-copilot-sdk の --upgrade 時に pip resolver が pydantic-core を
@@ -534,6 +705,59 @@ step 'Verifying dependency consistency (pip check)'
 if ! "$VENV_PY" -m pip check >/dev/null 2>&1; then
   warn 'pip check detected inconsistencies. Reinstalling pydantic to re-pin pydantic-core.'
   run "$VENV_PY" -m pip install --upgrade --force-reinstall pydantic
+fi
+
+# ---------- Copilot ランタイム整合性 ----------
+# github-copilot-sdk は wheel ごとに Copilot CLI ランタイム版を pin し
+# (copilot/_cli_version.py の CLI_VERSION)、生成イベントパーサ
+# (copilot/generated/session_events.py) はその版のスキーマ専用に生成される。
+# パーサはイベント "種別" にしか前方互換が無く、エンベロープ (id/timestamp/type) は
+# assert で固めてあるため、pin と異なるランタイムを掴むと session.event の解析が
+# AssertionError となり当該イベントが黙って捨てられる。終端イベントを取り逃すと
+# send_and_wait がタイムアウトまで返らない。
+# 「最新化」では防げない (むしろ公開直後の版を掴むリスクを増やす) ため、
+# pin 版の先読みと、pin を無効化する環境変数・版不一致の検出をここで行う。
+step 'Verifying Copilot runtime consistency'
+
+warn_if_env_set() {
+  [[ -n "$2" ]] && warn "$1 is set ($2). It bypasses the runtime version pinned by github-copilot-sdk and leads to session.event parse failures (AssertionError). Unset it unless you know why."
+}
+warn_if_env_set COPILOT_CLI_PATH        "${COPILOT_CLI_PATH:-}"
+warn_if_env_set COPILOT_CLI_EXTRACT_DIR "${COPILOT_CLI_EXTRACT_DIR:-}"
+warn_if_env_set COPILOT_SKIP_CLI_DOWNLOAD "${COPILOT_SKIP_CLI_DOWNLOAD:-}"
+
+# `--version` 単体はオンライン更新チェックを走らせ "最新利用可能版" を表示するため
+# pin との突合に使えない。実際に動く埋め込み版を得るには --no-auto-update が必須。
+cli_embedded_version() {
+  "$1" --no-auto-update --version 2>/dev/null | head -n 1 \
+    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?' | head -n 1
+}
+
+SDK_VER="$("$VENV_PY" -c 'import importlib.metadata as m; print(m.version("github-copilot-sdk"))' 2>/dev/null)"
+PINNED_CLI="$("$VENV_PY" -c 'import copilot._cli_version as v; print(v.CLI_VERSION or "")' 2>/dev/null)"
+printf '    github-copilot-sdk=%s  pinned Copilot CLI=%s\n' "${SDK_VER:-unknown}" "${PINNED_CLI:-unknown}"
+
+if [[ -z "$PINNED_CLI" ]]; then
+  warn 'github-copilot-sdk pins no runtime version (development install). Skipping the runtime check.'
+else
+  if try_run "$VENV_PY" -m copilot download-runtime; then
+    ok "Copilot runtime v$PINNED_CLI is cached"
+  else
+    warn 'Copilot runtime prefetch failed. hve downloads it lazily on first run; re-run this setup once the network is available.'
+  fi
+  RUNTIME_PATH="$("$VENV_PY" -c 'import copilot._cli_download as d; print(d.get_cached_cli_path() or "")' 2>/dev/null)"
+  if [[ -z "$RUNTIME_PATH" || ! -x "$RUNTIME_PATH" ]]; then
+    warn 'Copilot runtime binary was not found in the SDK cache.'
+  else
+    ACTUAL_CLI="$(cli_embedded_version "$RUNTIME_PATH")"
+    if [[ -z "$ACTUAL_CLI" ]]; then
+      warn "Could not read the runtime version from $RUNTIME_PATH"
+    elif [[ "$ACTUAL_CLI" != "$PINNED_CLI" ]]; then
+      warn "Copilot runtime mismatch: pinned=$PINNED_CLI actual=$ACTUAL_CLI ($RUNTIME_PATH). session.event parse failures are likely."
+    else
+      ok "Copilot runtime matches the SDK pin (v$PINNED_CLI)"
+    fi
+  fi
 fi
 
 # ---------- nltk punkt_tab ----------
@@ -599,10 +823,23 @@ fi
 # ---------- GitHub Copilot CLI (外部 copilot コマンド) ----------
 # GUI の Copilot チャットパネルは外部 `copilot` コマンドが無いと無効化される
 # (hve/gui/copilot_chat_panel.py)。Step 実行自体は SDK 同梱のため本 CLI 不要。
+# WARNING: この CLI は SDK の pin とは独立に自己更新する。COPILOT_CLI_PATH /
+#   --cli-path でこの CLI を Step 実行に流用すると、上の整合検証で固定した
+#   ランタイム版から必ず乖離し session.event 解析エラーの原因になる。
 step 'Checking GitHub Copilot CLI (copilot)'
 COPILOT_HINT='npm install -g @github/copilot'
 if command -v copilot >/dev/null 2>&1; then
   ok "copilot: $(command -v copilot)"
+  COPILOT_CLI_VER="$(cli_embedded_version copilot)"
+  [[ -n "$COPILOT_CLI_VER" ]] && printf '    version: %s (independent of the SDK pin; do not point COPILOT_CLI_PATH here)\n' "$COPILOT_CLI_VER"
+  if [[ "$NO_INSTALL_TOOLS" != true ]] && command -v npm >/dev/null 2>&1 \
+     && npm ls -g --depth=0 @github/copilot >/dev/null 2>&1; then
+    if try_run npm install -g @github/copilot@latest; then
+      ok "copilot CLI updated to $(cli_embedded_version copilot)"
+    else
+      warn "copilot CLI update failed. Update manually: npm install -g @github/copilot@latest"
+    fi
+  fi
 elif [[ "$NO_INSTALL_TOOLS" == true ]]; then
   warn "copilot not found (GUI Copilot chat panel). Install: $COPILOT_HINT"
 elif ! command -v npm >/dev/null 2>&1; then
@@ -637,6 +874,7 @@ step 'Verifying installation'
 verify() { local name="$1"; shift; if "$VENV_PY" "$@" >/dev/null 2>&1; then ok "$name"; else warn "$name verification failed"; fi; }
 
 verify 'hve --help'     -m hve --help
+verify 'cq.watcher import' -c 'import cq.watcher'
 verify 'copilot import' -c 'import copilot'
 if [[ "$MINIMAL" != true ]]; then
   verify 'mdq --help'   -m mdq --help
@@ -676,17 +914,96 @@ else
   warn 'SQLite < 3.34: FTS5 trigram unavailable. Falls back to unicode61.'
 fi
 
+# ---------- 隔離性の検証 ----------
+# .venv がグローバル環境から完全に独立していることを実行時に確認する。
+if HVE_SETUP_REPO_ROOT="$REPO_ROOT" "$VENV_PY" - <<'PY'
+import importlib, os, site, sys
+
+repo = os.environ.get('HVE_SETUP_REPO_ROOT', '')
+
+
+def under(path, root):
+    if not path or not root:
+        return False
+    try:
+        p = os.path.normcase(os.path.realpath(path))
+        r = os.path.normcase(os.path.realpath(root))
+    except OSError:
+        return False
+    return p == r or p.startswith(r + os.sep)
+
+
+problems = []
+
+if sys.prefix == sys.base_prefix:
+    problems.append('not running inside a virtualenv (sys.prefix == sys.base_prefix)')
+
+if site.ENABLE_USER_SITE:
+    problems.append('user site-packages is enabled')
+
+leak_roots = [
+    os.path.join(sys.base_prefix, 'lib', 'python%d.%d' % sys.version_info[:2], 'site-packages'),
+    os.path.join(sys.base_prefix, 'lib', 'site-packages'),
+    os.path.join(sys.base_prefix, 'Lib', 'site-packages'),
+]
+try:
+    leak_roots.append(site.getusersitepackages())
+except Exception:
+    pass
+
+for entry in sys.path:
+    for root in leak_roots:
+        if under(entry, root):
+            problems.append('global site-packages on sys.path: ' + entry)
+
+for var in ('PYTHONPATH', 'PYTHONHOME'):
+    if os.environ.get(var):
+        problems.append(var + ' is set: ' + os.environ[var])
+
+for name in ('hve', 'cq', 'mdq'):
+    try:
+        mod = importlib.import_module(name)
+    except Exception as exc:
+        problems.append('import ' + name + ' failed: ' + type(exc).__name__ + ': ' + str(exc))
+        continue
+    origin = getattr(mod, '__file__', None) or ''
+    if repo and not under(origin, repo):
+        problems.append(name + ' resolves outside the repository: ' + origin)
+
+for p in problems:
+    sys.stderr.write('    - ' + p + '\n')
+sys.exit(1 if problems else 0)
+PY
+then
+  ok 'venv isolation (no global site-packages; hve/cq/mdq resolve inside the repository)'
+else
+  warn 'venv isolation check failed (details above).'
+fi
+
+# PATH 上の `hve` が .venv 以外を指していると、ユーザーが `hve` と打った時に
+# グローバル環境の古い実装が起動してしまう。
+if ! command -v hve >/dev/null 2>&1; then
+  ok "No 'hve' shim on PATH (use ./hve.sh from the repository root)"
+elif [[ "$(command -v hve)" == "$VENV_DIR/bin/hve" ]]; then
+  ok "'hve' on PATH resolves to .venv: $(command -v hve)"
+else
+  warn "'hve' on PATH resolves OUTSIDE .venv: $(command -v hve)"
+  echo '    Use ./hve.sh from the repository root, or remove that installation.'
+fi
+
 if command -v gh >/dev/null 2>&1; then
   if gh auth status >/dev/null 2>&1; then ok 'gh auth status'
   else warn 'gh not authenticated. Run: gh auth login'; fi
 fi
 
 step 'Next steps'
-echo "  CLI : $VENV_PY -m hve --help     (or ./hve.sh --help)"
+echo "  CLI : ./hve.sh --help          (recommended; always uses .venv)"
 if [[ "$INSTALL_GUI" == true ]]; then
-  echo "  GUI : $VENV_PY -m hve gui        (or ./hve.sh gui)"
+  echo "  GUI : ./hve.sh gui             (recommended; always uses .venv)"
 fi
+echo "  Direct: $VENV_PY -m hve --help"
 echo "  Activate venv: source $VENV_DIR/bin/activate"
+echo "  Do NOT run 'pip install -e .' against the global Python; it shadows .venv on PATH."
 
 printf '\nHVE setup completed with %s warning(s).\n' "$WARN"
 exit 0

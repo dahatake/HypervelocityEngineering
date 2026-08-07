@@ -1004,6 +1004,166 @@ class TestRunImprovementLoopRedContracts(unittest.TestCase):
             base_goal.get("criterion_definitions"),
         )
 
+    def test_llm_goal_discovery_waits_for_cloud_session_readiness(self) -> None:
+        """discover_task_goal_with_llm も orchestrator/runner と同じ Cloud Session readiness 待機を行う。"""
+        from self_improve import (
+            define_task_goal,
+            discover_task_goal_with_llm,
+        )
+
+        class _PermissionHandler:
+            approve_all = staticmethod(lambda request: True)
+
+        class _FakeCloud:
+            pass
+
+        class _Session:
+            async def send_and_wait(self, prompt: str, timeout: float):
+                return types.SimpleNamespace(
+                    data=types.SimpleNamespace(content=json.dumps({
+                        "goal_description": "LLM-refined AAG goal",
+                        "success_criteria": ["refined criterion"],
+                    }))
+                )
+
+            async def disconnect(self) -> None:
+                return None
+
+        class _Client:
+            async def start(self) -> None:
+                return None
+
+            async def create_session(self, **kwargs):
+                return _Session()
+
+            async def stop(self) -> None:
+                return None
+
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot_session = types.ModuleType("copilot.session")
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        waited_sessions: list[object] = []
+
+        async def fake_wait(session, **_kwargs):
+            waited_sessions.append(session)
+
+        with tempfile.TemporaryDirectory() as repo:
+            source = Path(repo, "docs", "agent", "source.md")
+            source.parent.mkdir(parents=True)
+            source.write_text("# AAG source\n", encoding="utf-8")
+            base_goal = define_task_goal("aag")
+            static_result = {
+                "task_goal": base_goal,
+                "sources": ["docs/agent/source.md"],
+            }
+            with patch.dict(
+                sys.modules,
+                {
+                    "copilot": fake_copilot,
+                    "copilot.session": fake_copilot_session,
+                },
+            ), patch(
+                "self_improve.discover_task_goal_from_docs",
+                return_value=static_result,
+            ), patch(
+                "copilot_client_factory.create_copilot_client",
+                return_value=_Client(),
+            ), patch(
+                "cloud_session.build_cloud_session_options",
+                return_value=_FakeCloud(),
+            ), patch(
+                "cloud_session.wait_for_cloud_session_ready",
+                new=fake_wait,
+            ):
+                asyncio.run(discover_task_goal_with_llm(
+                    workflow_id="aag",
+                    repo_root=repo,
+                ))
+
+        self.assertEqual(len(waited_sessions), 1)
+
+    def test_llm_goal_discovery_readiness_wait_uses_default_timeout(self) -> None:
+        """discover_task_goal_with_llm も timeout を明示せず既定値（60秒）に委ねる。"""
+        from self_improve import (
+            define_task_goal,
+            discover_task_goal_with_llm,
+        )
+
+        class _PermissionHandler:
+            approve_all = staticmethod(lambda request: True)
+
+        class _FakeCloud:
+            pass
+
+        class _Session:
+            async def send_and_wait(self, prompt: str, timeout: float):
+                return types.SimpleNamespace(
+                    data=types.SimpleNamespace(content=json.dumps({
+                        "goal_description": "LLM-refined AAG goal",
+                        "success_criteria": ["refined criterion"],
+                    }))
+                )
+
+            async def disconnect(self) -> None:
+                return None
+
+        class _Client:
+            async def start(self) -> None:
+                return None
+
+            async def create_session(self, **kwargs):
+                return _Session()
+
+            async def stop(self) -> None:
+                return None
+
+        fake_copilot = types.ModuleType("copilot")
+        fake_copilot_session = types.ModuleType("copilot.session")
+        fake_copilot_session.PermissionHandler = _PermissionHandler
+
+        calls: list[tuple[tuple, dict]] = []
+
+        async def fake_wait(*args, **kwargs):
+            calls.append((args, kwargs))
+
+        with tempfile.TemporaryDirectory() as repo:
+            source = Path(repo, "docs", "agent", "source.md")
+            source.parent.mkdir(parents=True)
+            source.write_text("# AAG source\n", encoding="utf-8")
+            base_goal = define_task_goal("aag")
+            static_result = {
+                "task_goal": base_goal,
+                "sources": ["docs/agent/source.md"],
+            }
+            with patch.dict(
+                sys.modules,
+                {
+                    "copilot": fake_copilot,
+                    "copilot.session": fake_copilot_session,
+                },
+            ), patch(
+                "self_improve.discover_task_goal_from_docs",
+                return_value=static_result,
+            ), patch(
+                "copilot_client_factory.create_copilot_client",
+                return_value=_Client(),
+            ), patch(
+                "cloud_session.build_cloud_session_options",
+                return_value=_FakeCloud(),
+            ), patch(
+                "cloud_session.wait_for_cloud_session_ready",
+                new=fake_wait,
+            ):
+                asyncio.run(discover_task_goal_with_llm(
+                    workflow_id="aag",
+                    repo_root=repo,
+                ))
+
+        self.assertEqual(len(calls), 1)
+        _args, kwargs = calls[0]
+        self.assertNotIn("timeout", kwargs)
+
     def test_explicit_scope_cannot_expand_workflow_output_ceiling(self) -> None:
         criterion = self._criterion("CRIT-LINT", metric="lint_errors")
         result, session = self._run(

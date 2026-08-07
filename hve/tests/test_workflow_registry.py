@@ -26,7 +26,7 @@ from hve.workflow_registry import (
 
 EXPECTED_STEP_COUNTS = {
     "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
-    "aas": 11,  # AAS に Step 8 (ペルソナ別共通画面カタログ) と Step 9 (ペルソナカタログ) 追加で 9 → 11
+    "aas": 11,  # AAS に Step 8 (ペルソナカタログ) と Step 9 (ペルソナ別共通画面カタログ) 追加で 9 → 11
     "aad-web": 8,  # Step 2.5 (追加 Azure サービス選定) で 6 → 7、Step 2.6 (Agentic Retrieval 機能要件詳細) で 7 → 8
     "asdw-web": 25,  # 5 containers + 20 real steps (Agentic Retrieval Step 2.5/2.6 追加で 23 → 25)
     # ADFDV が required_input_paths として要求していた 4 ドキュメントの producer Step
@@ -257,14 +257,14 @@ class TestGetNextSteps:
         assert [s.id for s in get_next_steps(
             "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6"]
         )] == ["7"]
-        # Step 7 完了後は Step 9 (ペルソナカタログ) が起動
+        # Step 7 完了後は Step 8 (ペルソナカタログ) が起動
         assert [s.id for s in get_next_steps(
             "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7"]
-        )] == ["9"]
-        # Step 9 完了後は Step 8 (ペルソナ別共通画面カタログ) が起動
-        assert [s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "9"]
         )] == ["8"]
+        # Step 8 完了後は Step 9 (ペルソナ別共通画面カタログ) が起動
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8"]
+        )] == ["9"]
 
     def test_aas_step42_and_step5_are_parallel(self):
         """Sub-5 (C-1 部分): Step 4.2 (サンプルデータ) と Step 5 (データカタログ) が

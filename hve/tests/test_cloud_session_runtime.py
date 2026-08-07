@@ -125,6 +125,89 @@ class TestRunnerCloudSessionRuntime(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("cloud", calls[1])
         self.assertTrue(console.warnings)
 
+    async def test_runner_helper_waits_for_readiness_before_returning(self) -> None:
+        class FakeSession:
+            pass
+
+        waited_sessions: list[object] = []
+
+        async def fake_wait(session, **_kwargs):
+            waited_sessions.append(session)
+
+        class Client:
+            async def create_session(self, **kwargs):
+                return FakeSession()
+
+        with unittest.mock.patch.object(runner, "build_cloud_session_options", return_value=_FakeCloud()), \
+                unittest.mock.patch.object(runner, "wait_for_cloud_session_ready", new=fake_wait):
+            result = await runner._create_session_with_auto_reasoning_fallback(
+                Client(),
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="1",
+                subtask_kind="main",
+            )
+
+        self.assertEqual(len(waited_sessions), 1)
+        self.assertIs(waited_sessions[0], result)
+
+    async def test_runner_helper_readiness_timeout_falls_back_to_local(self) -> None:
+        calls: list[dict] = []
+        console = _Console()
+
+        async def fake_wait_timeout(session, **_kwargs):
+            raise TimeoutError("readiness timeout")
+
+        class Client:
+            async def create_session(self, **kwargs):
+                calls.append(dict(kwargs))
+                return object()
+
+        with unittest.mock.patch.object(runner, "build_cloud_session_options", return_value=_FakeCloud()), \
+                unittest.mock.patch.object(runner, "wait_for_cloud_session_ready", new=fake_wait_timeout):
+            result = await runner._create_session_with_auto_reasoning_fallback(
+                Client(),
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="1",
+                subtask_kind="main",
+                console=console,
+            )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("cloud", calls[0])
+        self.assertNotIn("cloud", calls[1])
+        self.assertTrue(console.warnings)
+
+    async def test_runner_helper_readiness_wait_uses_default_timeout(self) -> None:
+        """呼び出し元は timeout を明示せず、wait_for_cloud_session_ready の既定値（60秒）に委ねる。"""
+        class FakeSession:
+            pass
+
+        calls: list[tuple[tuple, dict]] = []
+
+        async def fake_wait(*args, **kwargs):
+            calls.append((args, kwargs))
+
+        class Client:
+            async def create_session(self, **kwargs):
+                return FakeSession()
+
+        with unittest.mock.patch.object(runner, "build_cloud_session_options", return_value=_FakeCloud()), \
+                unittest.mock.patch.object(runner, "wait_for_cloud_session_ready", new=fake_wait):
+            await runner._create_session_with_auto_reasoning_fallback(
+                Client(),
+                {"model": "auto"},
+                config=SDKConfig(cloud_session_enabled=True),
+                step_id="1",
+                subtask_kind="main",
+            )
+
+        self.assertEqual(len(calls), 1)
+        _args, kwargs = calls[0]
+        self.assertNotIn("timeout", kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

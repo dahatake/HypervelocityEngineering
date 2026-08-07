@@ -56,12 +56,13 @@ class FileKindSpec:
 
 # --------------------------------------------------------------------------
 # ワークフロー登録順（Task A-2 の pick_target_step が参照する明示順）
-# 根拠: hve/gui/page_options.py の _WORKFLOW_CANONICAL_ORDER を踏襲。
+# 根拠: hve/gui/page_options.py の _WORKFLOW_CANONICAL_ORDER を踏襲し、同表に
+# 掲載の無い `aar` は workflow_registry.py の定義順に従って `aagd` の直後に置く。
 # --------------------------------------------------------------------------
 
 WORKFLOW_PRIORITY: Tuple[str, ...] = (
     "ard", "aas", "aad-web", "asdw-web",
-    "adfd", "adfdv", "aag", "aagd",
+    "adfd", "adfdv", "aag", "aagd", "aar",
     "akm", "aqod", "adoc",
 )
 
@@ -85,6 +86,7 @@ WORKFLOW_TO_SECTION: Dict[str, str] = {
     "aas": "OPTIONS_TOP",
     "aag": "OPTIONS_TOP",
     "aagd": "OPTIONS_TOP",
+    "aar": "OPTIONS_TOP",
     "autopilot": "OPTIONS_TOP",
 }
 
@@ -330,6 +332,18 @@ _add(StepRequirement(
         "AI Agent 実装・デプロイには Azure リソースグループ名と "
         "docs/catalog/app-catalog.md が必須です。"
         "対象 APP-ID / ユースケース ID は任意指定。"
+    ),
+))
+
+# ---- AAR ----
+_add(StepRequirement(
+    workflow_id="aar", step_id="1",
+    required_info_keys=(),
+    required_info_logic="none",
+    required_file_kind="app_catalog",
+    guidance_text=(
+        "Agentic Retrieval 機能要件詳細は docs/catalog/app-catalog.md を入力とします。"
+        "AAS ワークフローを先に実行するか、当該ファイルを配置してください。"
     ),
 ))
 

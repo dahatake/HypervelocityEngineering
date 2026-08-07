@@ -11,7 +11,7 @@ Describe 'workflow-registry.ps1' {
             $wf = Get-Workflow -WorkflowId 'aas'
             $wf.id | Should -Be 'aas'
             $wf.name | Should -Be 'App Architecture Design'
-            $wf.steps.Count | Should -Be 2
+            $wf.steps.Count | Should -Be 11
         }
 
         It 'retrieves ADFD workflow' {
@@ -65,6 +65,20 @@ Describe 'workflow-registry.ps1' {
             { Get-Step -WorkflowId 'aas' -StepId '999' } | Should -Throw "*not found*"
         }
 
+        It 'declares the AAS persona steps in dependency order' {
+            $personaCatalog = Get-Step -WorkflowId 'aas' -StepId '8'
+            $personaCatalog.title | Should -Be 'ペルソナカタログ'
+            $personaCatalog.custom_agent | Should -Be 'Arch-PersonaCatalog'
+            $personaCatalog.depends_on | Should -Contain '7'
+            $personaCatalog.body_template_path | Should -Be 'templates/aas/step-8.md'
+
+            $personaScreen = Get-Step -WorkflowId 'aas' -StepId '9'
+            $personaScreen.title | Should -Be 'ペルソナ別共通画面カタログ'
+            $personaScreen.custom_agent | Should -Be 'Arch-UI-PersonaScreenList'
+            $personaScreen.depends_on | Should -Contain '8'
+            $personaScreen.body_template_path | Should -Be 'templates/aas/step-9.md'
+        }
+
         It 'returns correct depends_on' {
             $step = Get-Step -WorkflowId 'adfd' -StepId '3'
             $step.depends_on | Should -Contain '1'
@@ -95,8 +109,22 @@ Describe 'workflow-registry.ps1' {
         }
 
         It 'returns empty when all steps completed in AAS' {
-            $next = Get-NextStep -WorkflowId 'aas' -Completed @('1', '2')
+            $next = Get-NextStep -WorkflowId 'aas' -Completed @('1', '2', '3.1', '3.2', '4.1', '4.2', '5', '6', '7', '8', '9')
             $next.Count | Should -Be 0
+        }
+
+        It 'advances from step 7 to the persona catalog step in AAS' {
+            $next = Get-NextStep -WorkflowId 'aas' -Completed @('1', '2', '3.1', '3.2', '4.1', '4.2', '5', '6', '7')
+            $next.Count | Should -Be 1
+            $next[0].id | Should -Be '8'
+            $next[0].custom_agent | Should -Be 'Arch-PersonaCatalog'
+        }
+
+        It 'advances from the persona catalog step to the persona screen step in AAS' {
+            $next = Get-NextStep -WorkflowId 'aas' -Completed @('1', '2', '3.1', '3.2', '4.1', '4.2', '5', '6', '7', '8')
+            $next.Count | Should -Be 1
+            $next[0].id | Should -Be '9'
+            $next[0].custom_agent | Should -Be 'Arch-UI-PersonaScreenList'
         }
 
         It 'advances with dependency resolution in ADFD' {

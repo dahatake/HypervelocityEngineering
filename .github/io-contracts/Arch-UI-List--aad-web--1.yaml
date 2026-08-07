@@ -18,7 +18,7 @@ inputs:
 - path: docs/catalog/persona-screen-catalog.md
   required: false
   kind: agent_artifact
-  producer: Arch-UI-PersonaScreenList--aas--8
+  producer: Arch-UI-PersonaScreenList--aas--9
 - path: knowledge/
   required: false
   kind: static

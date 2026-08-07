@@ -83,9 +83,13 @@ def is_pty_available() -> bool:
 def missing_dependency_hint() -> str:
     """未インストール時にユーザーへ案内する文字列を返す。"""
     pkg = "pywinpty" if sys.platform.startswith("win") else "ptyprocess"
+    setup_command = (
+        r"hve\setup-hve.cmd" if sys.platform.startswith("win") else "./hve/setup-hve.sh"
+    )
     return (
         f"PTY バックエンド '{pkg}' が見つかりません。"
-        "インストール: pip install -e .[gui,gui-pty]"
+        f"推奨: {setup_command} を実行してGUI依存を再セットアップしてください。"
+        "手動: pip install -e .[gui,gui-pty]"
     )
 
 

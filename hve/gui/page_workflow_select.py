@@ -43,7 +43,7 @@ from .workflow_display import format_workflow_label, format_workflow_label_html
 # --------------------------------------------------------------------------
 
 _WORKFLOW_DESCRIPTIONS = {
-    "aas": "Architecture Design — アプリケーション設計（Step.1〜Step.7）",
+    "aas": "Architecture Design — アプリケーション設計（Step.1〜Step.9）",
     "aad-web": "Web App Design — Web 画面定義書・サービス定義書・TDD テスト仕様書",
     "asdw-web": "Web App Dev & Deploy — Web アプリ開発とデプロイ（TDD RED/GREEN）",
     "adfd": "Dataflow Design — バッチドメイン分析・ジョブ設計",

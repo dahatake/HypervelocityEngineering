@@ -7,7 +7,7 @@
 ## 入力
 - `docs/catalog/screen-catalog-APP-*.md`（per-APP 分割された画面カタログ。Arch-UI-List Step 1 の per-APP fan-out 出力。全 APP 分を集約読みする）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `docs/catalog/persona-screen-catalog.md`（**存在すれば必読**。AAS Step.8 で生成されたペルソナ別共通画面カタログ。`screen-catalog-APP-*.md` の `notes` 列に `common_ref: PSC-XXX` が記載されている画面は本カタログから共通骨格を継承する）
+- `docs/catalog/persona-screen-catalog.md`（**存在すれば必読**。AAS Step.9 で生成されたペルソナ別共通画面カタログ。`screen-catalog-APP-*.md` の `notes` 列に `common_ref: PSC-XXX` が記載されている画面は本カタログから共通骨格を継承する）
 
 ## 出力
 - `docs/screen/<画面-ID>-<画面名>-description.md`（画面ごとに1ファイル）

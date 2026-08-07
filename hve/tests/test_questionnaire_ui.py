@@ -772,5 +772,62 @@ class TestQuestionnaireTableDynamicColumns(unittest.TestCase):
         self.assertNotIn("回答案の理由", output)
 
 
+class TestQuestionnaireDepthDetail(unittest.TestCase):
+    """FR-QA-02: 背景と根拠 / 判断の観点 の詳細ブロック表示テスト。"""
+
+    def setUp(self) -> None:
+        self.c = _make_console()
+
+    def _capture(self, questions: list[QAQuestion]) -> str:
+        buf = io.StringIO()
+        with unittest.mock.patch("sys.stdout", buf), \
+             unittest.mock.patch(
+                 "shutil.get_terminal_size",
+                 return_value=unittest.mock.MagicMock(columns=200),
+             ):
+            self.c.questionnaire_table(questions)
+        return buf.getvalue()
+
+    def _question_with_depth(self) -> QAQuestion:
+        return QAQuestion(
+            no=1,
+            question="分割方針",
+            choices=[Choice(label="A", text="分割維持"), Choice(label="B", text="統合")],
+            default_answer="A) 分割維持",
+            reason="根拠A",
+            priority="最重要",
+            category="設計",
+            impact_if_unanswered="未確定",
+            background="出典: 設計メモ / 未確定: 統合時の移行コスト",
+            viewpoints="変更容易性: A 有利 / 運用コスト: B 有利",
+        )
+
+    def test_detail_block_is_printed_after_table(self) -> None:
+        output = self._capture([self._question_with_depth()])
+        self.assertIn("背景と根拠", output)
+        self.assertIn("判断の観点", output)
+        self.assertIn("統合時の移行コスト", output)
+        self.assertIn("運用コスト: B 有利", output)
+        self.assertLess(output.index("分類項目"), output.index("背景と根拠"))
+
+    def test_detail_block_omitted_when_no_depth_values(self) -> None:
+        q = QAQuestion(
+            no=1, question="テスト", default_answer="A", reason="理由",
+            priority="高", category="設計",
+        )
+        output = self._capture([q])
+        self.assertNotIn("背景と根拠", output)
+        self.assertNotIn("判断の観点", output)
+
+    def test_table_header_does_not_gain_depth_columns(self) -> None:
+        output = self._capture([self._question_with_depth()])
+        header_line = next(
+            line for line in output.splitlines()
+            if "分類項目" in line and "選択肢" in line
+        )
+        self.assertNotIn("背景と根拠", header_line)
+        self.assertNotIn("判断の観点", header_line)
+
+
 if __name__ == "__main__":
     unittest.main()

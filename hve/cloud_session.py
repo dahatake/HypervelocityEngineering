@@ -298,6 +298,65 @@ def attach_cloud_session_event_logger(
         return
 
 
+async def wait_for_cloud_session_ready(
+    session: Any,
+    *,
+    timeout: float = 60.0,
+) -> None:
+    """Wait for the Cloud Session's remote ``copilot-agent`` worker to connect.
+
+    ``client.create_session(cloud=...)`` resolves as soon as Mission Control
+    reserves a task, but the remote worker takes another moment to connect and
+    emit ``session.start``. Sending a prompt before that event can be silently
+    dropped server-side (SDK docs: ``docs/features/cloud-sessions.md``
+    "Sending the first prompt"), so callers must await this once, right after
+    session creation, before the first ``send``/``send_and_wait`` call.
+
+    Raises:
+        TimeoutError: If no matching ``session.start`` event arrives within
+            ``timeout`` seconds. Callers should treat this the same as any
+            other Cloud Session creation failure (fall back to a local
+            session).
+
+    Known limitations:
+        If ``session.on`` itself raises, this function silently returns
+        without waiting (matching the existing defensive pattern used by
+        ``attach_cloud_session_event_logger``), which re-exposes the original
+        race in that rare case. On timeout, the abandoned session is not
+        explicitly disconnected, so the remote Mission Control task may keep
+        running even though the caller has already fallen back to a local
+        session.
+    """
+    on = getattr(session, "on", None)
+    if not callable(on):
+        return
+
+    ready = asyncio.Event()
+
+    def _handler(event: Any) -> None:
+        event_type = getattr(getattr(event, "type", None), "value", None)
+        if event_type is None:
+            event_type = getattr(event, "type", "")
+        if str(event_type) != "session.start":
+            return
+        data = getattr(event, "data", None)
+        if _get_attr(data, "producer") == "copilot-agent":
+            ready.set()
+
+    try:
+        unsubscribe = on(_handler)
+    except Exception:
+        return
+    try:
+        await asyncio.wait_for(ready.wait(), timeout=timeout)
+    finally:
+        if callable(unsubscribe):
+            try:
+                unsubscribe()
+            except Exception:
+                pass
+
+
 def get_cloud_session_limiter(config: Any) -> "CloudSessionLimiter":
     """Return a per-config CloudSessionLimiter for this process."""
     key = id(config)

@@ -43,7 +43,7 @@
 
 推奨（存在すれば読む）:
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 各画面の所属 APP-ID 確認に使用）
-- `docs/catalog/persona-screen-catalog.md`（AAS Step.8 で生成されたペルソナ別共通画面カタログ。screen-catalog の `notes` 列に `common_ref: PSC-XXX` が記載されている画面は、本カタログから共通骨格を継承する。存在しなければ参照不要）
+- `docs/catalog/persona-screen-catalog.md`（AAS Step.9 で生成されたペルソナ別共通画面カタログ。screen-catalog の `notes` 列に `common_ref: PSC-XXX` が記載されている画面は、本カタログから共通骨格を継承する。存在しなければ参照不要）
 - `docs/catalog/domain-analytics.md`
 - `docs/catalog/service-catalog.md`
 - `docs/catalog/data-model.md`

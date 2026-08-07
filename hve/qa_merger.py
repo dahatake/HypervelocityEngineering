@@ -62,6 +62,8 @@ class QAQuestion:
     priority: str = ""             # 重要度（最重要/高/中/低）
     category: str = ""             # 分類項目
     impact_if_unanswered: str = "" # 未回答のまま進めた場合の影響
+    background: str = ""           # 背景と根拠（なぜ不明点か）
+    viewpoints: str = ""           # 判断の観点（回答で結論が変わる評価軸）
     workiq_answer: str = ""        # Work IQ 調査結果に基づく回答案
     workiq_reason: str = ""        # Work IQ 回答案の理由・情報ソース
 
@@ -195,6 +197,8 @@ class QAMerger:
             idx_priority = col_map.get("重要度")
             idx_category = col_map.get("分類項目")
             idx_impact = _col_idx("未回答のまま進めた場合の影響", "未回答時の影響")
+            idx_background = col_map.get("背景と根拠")
+            idx_viewpoints = col_map.get("判断の観点")
 
             # Work IQ 列
             idx_workiq_answer = _col_idx("Work IQ 回答案", "WorkIQ回答案")
@@ -246,6 +250,8 @@ class QAMerger:
                         priority=_cell(idx_priority),
                         category=_cell(idx_category),
                         impact_if_unanswered=_cell(idx_impact),
+                        background=_cell(idx_background),
+                        viewpoints=_cell(idx_viewpoints),
                         workiq_answer=_cell(idx_workiq_answer),
                         workiq_reason=_cell(idx_workiq_reason),
                     ))
@@ -388,6 +394,18 @@ class QAMerger:
                 val = _match_field(stripped, "未回答のまま進めた場合の影響")
                 if val is not None:
                     q.impact_if_unanswered = val
+                    collecting_choices = False
+                    continue
+
+                val = _match_field(stripped, "背景と根拠")
+                if val is not None:
+                    q.background = val
+                    collecting_choices = False
+                    continue
+
+                val = _match_field(stripped, "判断の観点")
+                if val is not None:
+                    q.viewpoints = val
                     collecting_choices = False
                     continue
 
@@ -578,8 +596,9 @@ class QAMerger:
     def render_merged(doc: QADocument) -> str:
         """マージ済み QADocument を Markdown テーブルとして生成する。
 
-        新フィールド（priority, category, impact_if_unanswered）がある質問が
-        1つでもあれば9列テーブル、なければ6列テーブルを出力する。
+        拡張フィールド（priority, category, impact_if_unanswered, background,
+        viewpoints）を持つ質問が 1 つでもあれば拡張テーブルを、なければ
+        6 列テーブルを出力する。
 
         プレアンブル（ヘッダーフィールドと最初のセクション見出しの間の文章）を
         保持して出力する。
@@ -618,6 +637,7 @@ class QAMerger:
             # 新フィールドの有無に応じて列数を動的決定
             use_extended = any(
                 q.priority or q.category or q.impact_if_unanswered
+                or q.background or q.viewpoints
                 for q in doc.questions
             )
             has_workiq = any(
@@ -626,13 +646,13 @@ class QAMerger:
             )
 
             if use_extended and has_workiq:
-                # 11列テーブルヘッダー（Work IQ 列を含む）
-                lines.append("| No. | 重要度 | 分類項目 | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |")
-                lines.append("|-----|--------|----------|------|--------|-----------|----------------|------------------------------|----------------|--------------|------------|")
+                # 13列テーブルヘッダー（Work IQ 列を含む）
+                lines.append("| No. | 重要度 | 分類項目 | 質問 | 背景と根拠 | 判断の観点 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |")
+                lines.append("|-----|--------|----------|------|------------|------------|--------|-----------|----------------|------------------------------|----------------|--------------|------------|")
             elif use_extended:
-                # 9列テーブルヘッダー（未回答のまま進めた場合の影響を含む）
-                lines.append("| No. | 重要度 | 分類項目 | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | ユーザー回答 |")
-                lines.append("|-----|--------|----------|------|--------|-----------|----------------|------------------------------|------------|")
+                # 11列テーブルヘッダー
+                lines.append("| No. | 重要度 | 分類項目 | 質問 | 背景と根拠 | 判断の観点 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | ユーザー回答 |")
+                lines.append("|-----|--------|----------|------|------------|------------|--------|-----------|----------------|------------------------------|------------|")
             elif has_workiq:
                 # 8列テーブルヘッダー（Work IQ 列を含む）
                 lines.append("| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |")
@@ -668,15 +688,19 @@ class QAMerger:
                     priority = esc(q.priority)
                     category = esc(q.category)
                     impact = esc(q.impact_if_unanswered)
+                    background = esc(q.background)
+                    viewpoints = esc(q.viewpoints)
                     lines.append(
-                        f"| {no} | {priority} | {category} | {question} | {choices_str} | {default} | {reason} | {impact} | {wiq_answer} | {wiq_reason} | {user_ans} |"
+                        f"| {no} | {priority} | {category} | {question} | {background} | {viewpoints} | {choices_str} | {default} | {reason} | {impact} | {wiq_answer} | {wiq_reason} | {user_ans} |"
                     )
                 elif use_extended:
                     priority = esc(q.priority)
                     category = esc(q.category)
                     impact = esc(q.impact_if_unanswered)
+                    background = esc(q.background)
+                    viewpoints = esc(q.viewpoints)
                     lines.append(
-                        f"| {no} | {priority} | {category} | {question} | {choices_str} | {default} | {reason} | {impact} | {user_ans} |"
+                        f"| {no} | {priority} | {category} | {question} | {background} | {viewpoints} | {choices_str} | {default} | {reason} | {impact} | {user_ans} |"
                     )
                 elif has_workiq:
                     lines.append(

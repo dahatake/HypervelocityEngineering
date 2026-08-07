@@ -24,11 +24,15 @@
 #   - @github/copilot     : GUI の Copilot チャットパネル (npm -g、Node.js 導入後)
 #
 # 追加で行うこと:
+#   - グローバル Python 環境からの遮断 (PYTHONPATH/PYTHONHOME/PIP_* の無効化、
+#     グローバルへ誤導入された hve の除去、隔離性の検証)
 #   - venv (stdlib モジュール) の利用可否確認と不足時の修復案内
 #   - .venv 作成 / 検証 (Python 3.11+ 必須)
 #   - pip / setuptools / wheel をアップグレード
 #   - editable install: pip install -e .
-#   - github-copilot-sdk を最新化 (--no-deps で pydantic-core 不整合を回避)
+#   - github-copilot-sdk を hve\copilot-sdk.lock 固定版で導入 (--no-deps で
+#     pydantic-core 不整合を回避) し、pin された Copilot ランタイムを
+#     先読みして版の整合を検証 (-UpgradeSdk で最新化 + lock 更新)
 #   - nltk punkt_tab を事前ダウンロード (semantic 初回ビルドのオフライン安定化)
 #   - Mermaid / KaTeX アセット DL (Markdown プレビュー)
 #   - GUI 翻訳 .ts → .qm コンパイル (pyside6-lrelease)
@@ -43,10 +47,12 @@
 #   ... -Force             .venv を無条件削除し再構築
 #   ... -SkipNltkDownload  nltk punkt_tab の事前 DL をスキップ
 #   ... -WithSkills        microsoft/skills を npx で .github/skills/azure-skills/ に導入
+#   ... -UpgradeSdk        github-copilot-sdk を最新化し hve\copilot-sdk.lock を更新
 #   ... -Yes               確認プロンプトをスキップ (Python の winget 自動導入を含む)
 #   ... -NoInstallPython   Python の winget 自動導入を行わない
 #   ... -NoInstallTools    git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI の
 #                          自動導入を行わない (検出と手動導入手順の案内のみ)
+#   ... -NoGlobalCleanup   グローバル Python に導入された hve を除去しない (検出と警告のみ)
 # ============================================================
 [CmdletBinding()]
 param(
@@ -56,9 +62,11 @@ param(
     [switch]$Force,
     [switch]$SkipNltkDownload,
     [switch]$WithSkills,
+    [switch]$UpgradeSdk,
     [switch]$Yes,
     [switch]$NoInstallPython,
-    [switch]$NoInstallTools
+    [switch]$NoInstallTools,
+    [switch]$NoGlobalCleanup
 )
 
 $ErrorActionPreference = 'Stop'
@@ -196,6 +204,134 @@ function Install-OsTool {
     else { Write-Warn2 "$Label installed but '$Command' is not on PATH yet. Open a new terminal and re-run." }
 }
 
+# ---------- グローバル Python 環境からの遮断 ----------
+function Clear-InheritedPythonEnv {
+    # PYTHONPATH / PYTHONHOME / PIP_* が継承されていると .venv の python でも
+    # グローバル環境の import 解決が混入し、.venv を作る意味が失われる。
+    # 本プロセス内だけを無効化する（ユーザーの永続環境変数は変更しない）。
+    $vars = @(
+        'PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP', 'PYTHONUSERBASE',
+        'PIP_TARGET', 'PIP_PREFIX', 'PIP_USER', 'PIP_PYTHON', 'PIP_REQUIRE_VIRTUALENV'
+    )
+    $cleared = @()
+    foreach ($v in $vars) {
+        $cur = [Environment]::GetEnvironmentVariable($v, 'Process')
+        if (-not [string]::IsNullOrEmpty($cur)) {
+            $cleared += "$v=$cur"
+            Remove-Item -LiteralPath "Env:$v" -ErrorAction SilentlyContinue
+        }
+    }
+    $env:PYTHONNOUSERSITE = '1'
+    $env:PIP_DISABLE_PIP_VERSION_CHECK = '1'
+    return $cleared
+}
+
+function Get-PythonEnvPaths {
+    # 指定 Python の site-packages / Scripts ディレクトリを JSON で取得する。
+    param([Parameter(Mandatory)][pscustomobject]$Python)
+    $code = @'
+import json, site, sys, sysconfig
+sites = []
+try:
+    sites.extend(site.getsitepackages())
+except Exception:
+    pass
+purelib = sysconfig.get_paths().get('purelib')
+if purelib:
+    sites.append(purelib)
+try:
+    sites.append(site.getusersitepackages())
+except Exception:
+    pass
+scripts = []
+s = sysconfig.get_paths().get('scripts')
+if s:
+    scripts.append(s)
+try:
+    scripts.append(sysconfig.get_path('scripts', 'nt_user' if sys.platform == 'win32' else 'posix_user'))
+except Exception:
+    pass
+print(json.dumps({
+    'site': [p for p in dict.fromkeys(sites) if p],
+    'scripts': [p for p in dict.fromkeys(scripts) if p],
+}))
+'@
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $out = & $Python.Exe @($Python.ExtraArgs + @('-c', $code)) 2>$null
+    } finally { $ErrorActionPreference = $prev }
+    if ($LASTEXITCODE -ne 0 -or -not $out) {
+        return [pscustomobject]@{ site = @(); scripts = @() }
+    }
+    try { return (($out | Out-String).Trim() | ConvertFrom-Json) }
+    catch { return [pscustomobject]@{ site = @(); scripts = @() } }
+}
+
+function Remove-GlobalHveInstall {
+    # グローバル Python に導入された hve を検出して除去する。
+    # 古い editable install は MAPPING を導入時点で凍結するため、後から
+    # pyproject に追加されたトップレベルパッケージ (cq 等) を解決できず、
+    # PATH 上で .venv を shadow して ModuleNotFoundError の原因になる。
+    param([Parameter(Mandatory)][pscustomobject]$Python)
+
+    $hasHve = (Invoke-Probe -Exe $Python.Exe -ArgList ($Python.ExtraArgs + @('-m','pip','show','hve'))) -eq 0
+
+    $paths = Get-PythonEnvPaths -Python $Python
+    $residue = @()
+    foreach ($sp in @($paths.site)) {
+        if (-not (Test-Path -LiteralPath $sp)) { continue }
+        $residue += @(Get-ChildItem -LiteralPath $sp -Force -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -like '__editable__*hve*' -or $_.Name -like 'hve-*.dist-info' -or $_.Name -eq 'hve.egg-link'
+        })
+    }
+    foreach ($sd in @($paths.scripts)) {
+        if (-not (Test-Path -LiteralPath $sd)) { continue }
+        $residue += @(Get-ChildItem -LiteralPath $sd -Force -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name -in @('hve.exe','hve-script.py','hve-mdq.exe','mdq.exe')
+        })
+    }
+
+    if (-not $hasHve -and $residue.Count -eq 0) {
+        Write-Ok 'No hve installation in the global Python environment'
+        return
+    }
+
+    Write-Warn2 'hve is installed in the GLOBAL Python environment. It shadows .venv on PATH and a stale editable install cannot resolve packages added later (e.g. cq) -> ModuleNotFoundError.'
+    foreach ($r in $residue) { Write-Host "    residue: $($r.FullName)" -ForegroundColor DarkGray }
+
+    if ($CheckOnly) { Write-Host '    Re-run without -CheckOnly to remove it.'; return }
+    if ($NoGlobalCleanup) { Write-Host '    -NoGlobalCleanup specified: leaving the global install in place.'; return }
+
+    $proceed = $Yes
+    if (-not $proceed) {
+        $resp = Read-Host 'Uninstall hve from the GLOBAL Python environment? (.venv keeps its own isolated copy) [Y/n]'
+        $proceed = ($resp -notmatch '^[Nn]')
+    }
+    if (-not $proceed) {
+        Write-Warn2 "Global hve left in place. The 'hve' command on PATH may keep resolving to it."
+        return
+    }
+
+    if ($hasHve) {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { & $Python.Exe @($Python.ExtraArgs + @('-m','pip','uninstall','-y','hve')) | Out-Host }
+        finally { $ErrorActionPreference = $prev }
+    }
+    foreach ($r in $residue) {
+        if (-not (Test-Path -LiteralPath $r.FullName)) { continue }
+        try {
+            Remove-Item -LiteralPath $r.FullName -Recurse -Force -ErrorAction Stop
+            Write-Host "    removed: $($r.FullName)" -ForegroundColor DarkGray
+        } catch {
+            Write-Warn2 "Could not remove $($r.FullName): $($_.Exception.Message)"
+        }
+    }
+    Update-PathFromRegistry
+    Write-Ok 'Global hve installation removed'
+}
+
 # ---------- パス解決 ----------
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot  = Resolve-Path (Join-Path $scriptDir '..')
@@ -210,8 +346,20 @@ if ($Minimal -and ($Force -or $WithSkills)) {
 $installGui = -not $NoGui -and -not $Minimal
 
 Write-Host "HVE setup (Windows / PowerShell)"
-Write-Host "  CheckOnly=$CheckOnly  NoGui=$NoGui  Minimal=$Minimal  Force=$Force  SkipNltkDownload=$SkipNltkDownload  WithSkills=$WithSkills  NoInstallTools=$NoInstallTools"
+Write-Host "  CheckOnly=$CheckOnly  NoGui=$NoGui  Minimal=$Minimal  Force=$Force  SkipNltkDownload=$SkipNltkDownload  WithSkills=$WithSkills  NoInstallTools=$NoInstallTools  NoGlobalCleanup=$NoGlobalCleanup  UpgradeSdk=$UpgradeSdk"
 Write-Host "  repoRoot=$repoRoot"
+
+# ---------- グローバル Python 環境の遮断 ----------
+Write-Step 'Isolating from the global Python environment'
+$clearedEnv = Clear-InheritedPythonEnv
+if ($clearedEnv.Count -gt 0) {
+    Write-Warn2 "Inherited Python/pip environment variables were disabled for this setup process:"
+    foreach ($e in $clearedEnv) { Write-Host "    $e" -ForegroundColor DarkGray }
+    Write-Host '    Remove them from your user environment as well, otherwise .venv stays contaminated at runtime.'
+} else {
+    Write-Ok 'No PYTHONPATH / PYTHONHOME / PIP_* leakage from the shell'
+}
+Write-Ok 'PYTHONNOUSERSITE=1 (user site-packages disabled for every python invocation below)'
 
 # ---------- 必須ツール ----------
 Write-Step 'Checking OS tools'
@@ -227,6 +375,11 @@ Install-OsTool -Command 'shellcheck' -WingetId 'koalaman.shellcheck' -Label 'She
 $git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $git) { Write-Warn2 'git is unavailable. Repository operations and git diff will fail.' }
 $gh  = Get-Command gh  -ErrorAction SilentlyContinue
+if ($installGui -and -not $CheckOnly -and -not $gh) {
+    Write-ErrLine 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature.'
+    Write-Host '    Re-run this setup without -NoInstallTools, or install GitHub CLI and re-run this setup.'
+    exit 1
+}
 
 $python = Find-Python311
 if (-not $python -and -not $NoInstallPython -and -not $CheckOnly) {
@@ -262,6 +415,10 @@ if ($python) {
     Write-Host "      https://www.python.org/downloads/  (check 'Add python.exe to PATH')"
     if (-not $CheckOnly) { exit 1 }
 }
+
+# ---------- グローバル hve の除去 ----------
+Write-Step 'Checking global Python for a stray hve installation'
+if ($python) { Remove-GlobalHveInstall -Python $python }
 
 # ---------- venv モジュール ----------
 # Windows の CPython は venv/ensurepip を同梱するが、embeddable 版 / Microsoft Store の
@@ -329,10 +486,23 @@ if (Test-Path $venvPy) {
         Write-Ok ".venv exists and is Python 3.11+"
     }
 }
+# `python -m venv --system-site-packages` で作られた .venv はグローバルの
+# site-packages を継承する。隔離を保証するため作り直す。
+$venvCfg = Join-Path $venvDir 'pyvenv.cfg'
+if ((Test-Path $venvPy) -and (Test-Path -LiteralPath $venvCfg)) {
+    if ((Get-Content -LiteralPath $venvCfg -Raw) -match '(?im)^\s*include-system-site-packages\s*=\s*true\s*$') {
+        if ($CheckOnly) {
+            Write-Warn2 '.venv inherits global site-packages (include-system-site-packages = true). Re-run with -Force to rebuild it isolated.'
+        } else {
+            Write-Warn2 '.venv inherits global site-packages (include-system-site-packages = true). Rebuilding it isolated.'
+            Remove-Item -Recurse -Force $venvDir
+        }
+    }
+}
 if (-not (Test-Path $venvPy) -and -not $CheckOnly) {
     if (-not $python) { throw 'Python 3.11+ is required to create .venv.' }
     Invoke-Checked -Exe $python.Exe -ArgList ($python.ExtraArgs + @('-m','venv',$venvDir))
-    Write-Ok ".venv created"
+    Write-Ok ".venv created (isolated: system site-packages excluded)"
 }
 
 if ($CheckOnly) {
@@ -357,6 +527,20 @@ if ($Minimal) {
     Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e',$target)
 }
 
+if ($installGui) {
+    Write-Step 'Verifying embedded GitHub CLI terminal prerequisites'
+    $ptyProbe = Invoke-Probe -Exe $venvPy -ArgList @(
+        '-c',
+        'from hve.gui.pty_backend import is_pty_available; raise SystemExit(0 if is_pty_available() else 1)'
+    )
+    if ($ptyProbe -ne 0) {
+        Write-ErrLine 'The PTY backend required by the GUI "GitHub CLI でログイン" feature is unavailable.'
+        Write-Host '    Re-run this setup after resolving the GUI dependency installation failure.'
+        exit 1
+    }
+    Write-Ok 'PTY backend for the embedded GitHub CLI terminal'
+}
+
 # ---------- code-query 用文法 (extras: code) ----------
 # tree-sitter 文法は platform ごとに wheel 有無が異なるため、本体インストールとは
 # 分離して警告止まりにする。未導入時は code-query が regex (lite) へ降格するだけ。
@@ -371,13 +555,55 @@ if (-not $Minimal) {
     }
 }
 
-# ---------- github-copilot-sdk: 最新へ ----------
+# ---------- github-copilot-sdk ----------
 # NOTE: --no-deps を付与し SDK 本体のみ更新する。これを付けないと pip resolver が
 #   pydantic-core を最新版 (例: 2.47.0) へ引き上げ、pydantic 2.13.4 が要求する
 #   pin (pydantic-core==2.46.4) と不整合になり GUI 起動時に例外となる。
 #   SDK の依存 (pydantic>=2.0 等) は editable install 時点で既に充足済み。
-Write-Step 'Upgrading github-copilot-sdk to latest (no-deps)'
-Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+# 版は hve\copilot-sdk.lock で固定する。無条件に最新へ追従すると「セットアップ
+#   した日」でマシンごとに版が変わり、公開直後のリリースにパーサ不整合があった
+#   場合に特定の人だけ壊れて再現・切り分けが不能になるため。
+$lockFile = Join-Path $repoRoot 'hve\copilot-sdk.lock'
+# NOTE: Python ソース内は単一引用符のみ使用（PowerShell のネイティブコマンド
+#       引数渡しで二重引用符が剥がれる問題を回避するため）。
+$lockUpdatePy = @'
+import re, sys, pathlib
+import importlib.metadata as m
+import copilot._cli_version as v
+p = pathlib.Path(sys.argv[1])
+sdk = m.version('github-copilot-sdk')
+cli = v.CLI_VERSION or 'unknown'
+t = p.read_text(encoding='utf-8')
+t = re.sub(r'(?m)^# pinned Copilot CLI runtime:.*$', '# pinned Copilot CLI runtime: ' + cli, t)
+t = re.sub(r'(?m)^github-copilot-sdk==.*$', 'github-copilot-sdk==' + sdk, t)
+p.write_text(t, encoding='utf-8', newline='\n')
+print(sdk)
+'@
+
+if ($UpgradeSdk) {
+    Write-Step 'Upgrading github-copilot-sdk to latest (no-deps) and refreshing the lock'
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+    if (-not (Test-Path -LiteralPath $lockFile)) {
+        Write-Warn2 "Lock file not found: $lockFile"
+    } else {
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $newSdk = (& $venvPy -c $lockUpdatePy $lockFile 2>$null | Select-Object -First 1 | Out-String).Trim() }
+        finally { $ErrorActionPreference = $prev }
+        if ($newSdk) {
+            Write-Ok "hve\copilot-sdk.lock now pins $newSdk. Review the diff and commit it so the whole team moves together."
+        } else {
+            Write-Warn2 'Could not refresh hve\copilot-sdk.lock. Update it by hand.'
+        }
+    }
+} elseif (Test-Path -LiteralPath $lockFile) {
+    Write-Step 'Installing github-copilot-sdk from hve\copilot-sdk.lock (no-deps)'
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--no-deps','-r',$lockFile)
+} else {
+    Write-Warn2 'hve\copilot-sdk.lock not found. Falling back to the latest release; re-run with -UpgradeSdk to regenerate the lock.'
+    Write-Step 'Upgrading github-copilot-sdk to latest (no-deps)'
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+}
 
 # ---------- 依存整合性チェック（pydantic / pydantic-core 等） ----------
 # github-copilot-sdk の --upgrade 時に pip resolver が pydantic-core を
@@ -389,6 +615,95 @@ Write-Step 'Verifying dependency consistency (pip check)'
 if ($LASTEXITCODE -ne 0) {
     Write-Warn2 'pip check detected inconsistencies. Reinstalling pydantic to re-pin pydantic-core.'
     Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--force-reinstall','pydantic')
+}
+
+# ---------- Copilot ランタイム整合性 ----------
+# github-copilot-sdk は wheel ごとに Copilot CLI ランタイム版を pin し
+# (copilot/_cli_version.py の CLI_VERSION)、生成イベントパーサ
+# (copilot/generated/session_events.py) はその版のスキーマ専用に生成される。
+# パーサはイベント "種別" にしか前方互換が無く、エンベロープ (id/timestamp/type) は
+# assert で固めてあるため、pin と異なるランタイムを掴むと session.event の解析が
+# AssertionError となり当該イベントが黙って捨てられる。終端イベントを取り逃すと
+# send_and_wait がタイムアウトまで返らない。
+# 「最新化」では防げない (むしろ公開直後の版を掴むリスクを増やす) ため、
+# pin 版の先読みと、pin を無効化する環境変数・版不一致の検出をここで行う。
+Write-Step 'Verifying Copilot runtime consistency'
+
+foreach ($bypassVar in 'COPILOT_CLI_PATH','COPILOT_CLI_EXTRACT_DIR','COPILOT_SKIP_CLI_DOWNLOAD') {
+    $bypassValue = [Environment]::GetEnvironmentVariable($bypassVar)
+    if ($bypassValue) {
+        Write-Warn2 "$bypassVar is set ($bypassValue). It bypasses the runtime version pinned by github-copilot-sdk and leads to session.event parse failures (AssertionError). Unset it unless you know why."
+    }
+}
+
+function Get-CopilotCliVersion {
+    # `--version` 単体はオンライン更新チェックを走らせ "最新利用可能版" を表示するため
+    # pin との突合に使えない。実際に動く埋め込み版を得るには --no-auto-update が必須。
+    param([Parameter(Mandatory)][string]$Exe)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $raw = (& $Exe '--no-auto-update' '--version' 2>$null | Select-Object -First 1 | Out-String) }
+    catch { return '' }
+    finally { $ErrorActionPreference = $prev }
+    if ($raw -match '(\d+\.\d+\.\d+(?:-\d+)?)') { return $Matches[1] }
+    return ''
+}
+
+# NOTE: Python ソース内は単一引用符のみ使用（PowerShell のネイティブコマンド
+#       引数渡しで二重引用符が剥がれる問題を回避するため）。
+$sdkProbe = @'
+import importlib.metadata as m
+try:
+    print(m.version('github-copilot-sdk'))
+except Exception:
+    print('')
+try:
+    import copilot._cli_version as v
+    print(v.CLI_VERSION or '')
+except Exception:
+    print('')
+'@
+$prev = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try { $probeOut = @(& $venvPy -c $sdkProbe 2>$null) } finally { $ErrorActionPreference = $prev }
+$sdkVer    = if ($probeOut.Count -ge 1) { "$($probeOut[0])".Trim() } else { '' }
+$pinnedCli = if ($probeOut.Count -ge 2) { "$($probeOut[1])".Trim() } else { '' }
+$sdkLabel  = if ($sdkVer) { $sdkVer } else { 'unknown' }
+$pinLabel  = if ($pinnedCli) { $pinnedCli } else { 'unknown' }
+Write-Host "    github-copilot-sdk=$sdkLabel  pinned Copilot CLI=$pinLabel" -ForegroundColor DarkGray
+
+if (-not $pinnedCli) {
+    Write-Warn2 'github-copilot-sdk pins no runtime version (development install). Skipping the runtime check.'
+} else {
+    try {
+        Invoke-Checked -Exe $venvPy -ArgList @('-m','copilot','download-runtime')
+        Write-Ok "Copilot runtime v$pinnedCli is cached"
+    } catch {
+        Write-Warn2 "Copilot runtime prefetch failed: $($_.Exception.Message). hve downloads it lazily on first run; re-run this setup once the network is available."
+    }
+    $cacheProbe = @'
+try:
+    import copilot._cli_download as d
+    print(d.get_cached_cli_path() or '')
+except Exception:
+    print('')
+'@
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $runtimePath = (& $venvPy -c $cacheProbe 2>$null | Select-Object -First 1 | Out-String).Trim() }
+    finally { $ErrorActionPreference = $prev }
+    if (-not $runtimePath -or -not (Test-Path -LiteralPath $runtimePath)) {
+        Write-Warn2 'Copilot runtime binary was not found in the SDK cache.'
+    } else {
+        $actualCli = Get-CopilotCliVersion -Exe $runtimePath
+        if (-not $actualCli) {
+            Write-Warn2 "Could not read the runtime version from $runtimePath"
+        } elseif ($actualCli -ne $pinnedCli) {
+            Write-Warn2 "Copilot runtime mismatch: pinned=$pinnedCli actual=$actualCli ($runtimePath). session.event parse failures are likely."
+        } else {
+            Write-Ok "Copilot runtime matches the SDK pin (v$pinnedCli)"
+        }
+    }
 }
 
 # ---------- NLTK punkt_tab 事前 DL ----------
@@ -458,11 +773,28 @@ if ($installGui) {
 # ---------- GitHub Copilot CLI (外部 copilot コマンド) ----------
 # GUI の Copilot チャットパネルは外部 `copilot` コマンドが無いと無効化される
 # (hve/gui/copilot_chat_panel.py)。Step 実行自体は SDK 同梱のため本 CLI 不要。
+# WARNING: この CLI は SDK の pin とは独立に自己更新する。COPILOT_CLI_PATH /
+#   --cli-path でこの CLI を Step 実行に流用すると、上の整合検証で固定した
+#   ランタイム版から必ず乖離し session.event 解析エラーの原因になる。
 Write-Step 'Checking GitHub Copilot CLI (copilot)'
 $copilotHint = 'npm install -g @github/copilot'
 $copilot = Get-Command copilot -ErrorAction SilentlyContinue
 if ($copilot) {
     Write-Ok "copilot: $($copilot.Source)"
+    $copilotVer = Get-CopilotCliVersion -Exe $copilot.Source
+    if ($copilotVer) {
+        Write-Host "    version: $copilotVer (independent of the SDK pin; do not point COPILOT_CLI_PATH here)" -ForegroundColor DarkGray
+    }
+    $npmForUpdate = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $NoInstallTools -and $npmForUpdate -and
+        (Invoke-Probe -Exe $npmForUpdate.Source -ArgList @('ls','-g','--depth=0','@github/copilot')) -eq 0) {
+        try {
+            Invoke-Checked -Exe $npmForUpdate.Source -ArgList @('install','-g','@github/copilot@latest')
+            Write-Ok "copilot CLI updated to $(Get-CopilotCliVersion -Exe $copilot.Source)"
+        } catch {
+            Write-Warn2 "copilot CLI update failed: $($_.Exception.Message). Update manually: $copilotHint@latest"
+        }
+    }
 } elseif ($NoInstallTools) {
     Write-Warn2 "copilot not found (GUI Copilot chat panel). Install: $copilotHint"
 } else {
@@ -510,6 +842,7 @@ Write-Step 'Verifying installation'
 
 $checks = @(
     @{ Name='hve --help';     Args=@('-m','hve','--help') },
+    @{ Name='cq.watcher import'; Args=@('-c','import cq.watcher') },
     @{ Name='copilot import'; Args=@('-c','import copilot') }
 )
 if (-not $Minimal) {
@@ -540,6 +873,89 @@ foreach ($c in $checks) {
     else { Write-Warn2 "$($c.Name) verification failed" }
 }
 
+# ---------- 隔離性の検証 ----------
+# .venv がグローバル環境から完全に独立していることを実行時に確認する。
+$isolationCode = @'
+import importlib, os, site, sys
+
+repo = os.environ.get('HVE_SETUP_REPO_ROOT', '')
+
+
+def under(path, root):
+    if not path or not root:
+        return False
+    try:
+        p = os.path.normcase(os.path.realpath(path))
+        r = os.path.normcase(os.path.realpath(root))
+    except OSError:
+        return False
+    return p == r or p.startswith(r + os.sep)
+
+
+problems = []
+
+if sys.prefix == sys.base_prefix:
+    problems.append('not running inside a virtualenv (sys.prefix == sys.base_prefix)')
+
+if site.ENABLE_USER_SITE:
+    problems.append('user site-packages is enabled')
+
+leak_roots = [
+    os.path.join(sys.base_prefix, 'Lib', 'site-packages'),
+    os.path.join(sys.base_prefix, 'lib', 'site-packages'),
+    os.path.join(sys.base_prefix, 'lib', 'python%d.%d' % sys.version_info[:2], 'site-packages'),
+]
+try:
+    leak_roots.append(site.getusersitepackages())
+except Exception:
+    pass
+
+for entry in sys.path:
+    for root in leak_roots:
+        if under(entry, root):
+            problems.append('global site-packages on sys.path: ' + entry)
+
+for var in ('PYTHONPATH', 'PYTHONHOME'):
+    if os.environ.get(var):
+        problems.append(var + ' is set: ' + os.environ[var])
+
+for name in ('hve', 'cq', 'mdq'):
+    try:
+        mod = importlib.import_module(name)
+    except Exception as exc:
+        problems.append('import ' + name + ' failed: ' + type(exc).__name__ + ': ' + str(exc))
+        continue
+    origin = getattr(mod, '__file__', None) or ''
+    if repo and not under(origin, repo):
+        problems.append(name + ' resolves outside the repository: ' + origin)
+
+for p in problems:
+    sys.stderr.write('    - ' + p + '\n')
+sys.exit(1 if problems else 0)
+'@
+$env:HVE_SETUP_REPO_ROOT = "$repoRoot"
+$prev = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try { & $venvPy -c $isolationCode } finally { $ErrorActionPreference = $prev }
+if ($LASTEXITCODE -eq 0) {
+    Write-Ok 'venv isolation (no global site-packages; hve/cq/mdq resolve inside the repository)'
+} else {
+    Write-Warn2 'venv isolation check failed (details above).'
+}
+
+# PATH 上の `hve` が .venv 以外を指していると、ユーザーが `hve` と打った時に
+# グローバル環境の古い実装が起動してしまう。
+$venvScripts = Join-Path $venvDir 'Scripts'
+$hveOnPath = Get-Command hve -ErrorAction SilentlyContinue
+if (-not $hveOnPath) {
+    Write-Ok "No 'hve' shim on PATH (use .\hve.cmd from the repository root)"
+} elseif ($hveOnPath.Source -and $hveOnPath.Source.StartsWith($venvScripts, [StringComparison]::OrdinalIgnoreCase)) {
+    Write-Ok "'hve' on PATH resolves to .venv: $($hveOnPath.Source)"
+} else {
+    Write-Warn2 "'hve' on PATH resolves OUTSIDE .venv: $($hveOnPath.Source)"
+    Write-Host "    Use .\hve.cmd from the repository root, or remove that installation."
+}
+
 # FTS5 trigram (ja-jp)
 $trigramCode = @'
 import sqlite3, sys
@@ -564,11 +980,13 @@ if ($gh) {
 
 # ---------- まとめ ----------
 Write-Step 'Next steps'
-Write-Host "  CLI : $venvPy -m hve --help     (or .\hve.cmd --help)"
+Write-Host "  CLI : .\hve.cmd --help          (recommended; always uses .venv)"
 if ($installGui) {
-    Write-Host "  GUI : $venvPy -m hve gui        (or .\hve.cmd gui)"
+    Write-Host "  GUI : .\hve.cmd gui             (recommended; always uses .venv)"
 }
+Write-Host "  Direct: $venvPy -m hve --help"
 Write-Host "  Activate venv: . $venvDir\Scripts\Activate.ps1"
+Write-Host "  Do NOT run 'pip install -e .' against the global Python; it shadows .venv on PATH."
 
 Write-Host "`nHVE setup completed with $script:WarningCount warning(s)."
 exit 0

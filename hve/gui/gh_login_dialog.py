@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
@@ -81,9 +82,17 @@ class GhLoginDialog(QDialog):
     def _precheck(self) -> Optional[str]:
         """端末ログインの前提を検査し、満たさない場合は案内文を返す。"""
         if gh_cli.find_gh_binary() is None:
+            setup_command = (
+                r"hve\setup-hve.cmd"
+                if sys.platform.startswith("win")
+                else "./hve/setup-hve.sh"
+            )
             return self.tr(
-                "GitHub CLI (gh) が見つかりません。インストール後に再試行してください: "
-                "https://cli.github.com/"
+                "GitHub CLI (gh) が見つかりません。"
+                "推奨: {setup} を実行してGUI依存を再セットアップしてください。"
+                "手動インストール: https://cli.github.com/"
+            ).format(
+                setup=setup_command
             )
         if not pty_backend.is_pty_available():
             return pty_backend.missing_dependency_hint()
@@ -94,7 +103,7 @@ class GhLoginDialog(QDialog):
     # ------------------------------------------------------------
     def _build_guidance_ui(self, message: str) -> None:
         intro = QLabel(
-            self.tr("埋め込み端末でのログインは利用できません。ターミナルで `gh auth login` を実行してください。")
+            self.tr("埋め込み端末でのログインは利用できません。以下の案内に従ってください。")
         )
         intro.setWordWrap(True)
         self._layout.addWidget(intro)

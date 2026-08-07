@@ -26,7 +26,7 @@ from PySide6.QtWidgets import QApplication
 
 from hve.config import SDKConfig
 from hve.console import Console
-from hve.qa_merger import Choice, QADocument, QAQuestion
+from hve.qa_merger import Choice, QADocument, QAMerger, QAQuestion
 from hve.runner import _collect_qa_answers_via_ipc
 from hve.gui.qa_ipc_manager import QAIpcManager
 
@@ -55,7 +55,11 @@ def _make_doc() -> QADocument:
             QAQuestion(
                 no=1,
                 question="Q1?",
-                choices=[Choice(label="A", text="OK"), Choice(label="B", text="NG")],
+                choices=[
+                    Choice(label="A", text="OK"),
+                    Choice(label="B", text="NG"),
+                    Choice(label="C", text="その他"),
+                ],
                 default_answer="A) OK",
             ),
         ]
@@ -123,6 +127,54 @@ class TestQAIpcFlow(unittest.TestCase):
         self.assertIn("raw", result)
         self.assertFalse(result["skip"])
         self.assertIn("1: A", result["raw"])
+
+    def test_other_freetext_round_trip(self) -> None:
+        """「その他」の自由記述が IPC を経由して変更されずに返る。"""
+        cfg = SDKConfig()
+        cfg.qa_answer_mode = "gui-file"
+        cfg.qa_ipc_dir = str(self.ipc_dir)
+        cfg.qa_gui_input_timeout_seconds = 10.0
+
+        doc = _make_doc()
+        result = {}
+
+        def _cli_worker():
+            raw, skip = asyncio.run(
+                _collect_qa_answers_via_ipc(
+                    Console(verbose=False, quiet=True), doc, "2.1", cfg
+                )
+            )
+            result["raw"] = raw
+            result["skip"] = skip
+
+        t = threading.Thread(target=_cli_worker, daemon=True)
+        t.start()
+        mgr = QAIpcManager(self.ipc_dir)
+        triggered = []
+        mgr.questionnaire_ready.connect(
+            lambda s, p, i: triggered.append((s, p, i))
+        )
+        end = time.monotonic() + 5.0
+        while time.monotonic() < end and not triggered:
+            _process_events_for(200)
+        self.assertTrue(triggered, "questionnaire_ready が発火していない")
+        request_doc = QAMerger.parse_qa_file(Path(triggered[0][1]))
+        self.assertEqual(
+            [(choice.label, choice.text) for choice in request_doc.questions[0].choices],
+            [("A", "OK"), ("B", "NG"), ("C", "その他")],
+        )
+
+        mgr.write_answers("2.1", "1:: その他: GUI 固有の回答\n")
+        t.join(timeout=5.0)
+        self.assertFalse(t.is_alive(), "CLI スレッドが時間内に完了しなかった")
+        mgr.stop_and_cleanup()
+
+        self.assertFalse(result["skip"])
+        self.assertEqual(result["raw"], "1:: その他: GUI 固有の回答\n")
+        self.assertEqual(
+            QAMerger.parse_answers(result["raw"]),
+            {1: "その他: GUI 固有の回答"},
+        )
 
     def test_cancel_round_trip(self) -> None:
         """GUI が cancel を書く → CLI が RuntimeError。"""

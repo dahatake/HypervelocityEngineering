@@ -100,3 +100,56 @@ def test_reexec_spawns_venv_python(monkeypatch):
     assert captured["argv"][3:] == ["gui"]
     # 再帰防止フラグが注入されていること。
     assert captured["env"]["HVE_NO_VENV_REEXEC"] == "1"
+
+
+def test_console_main_invokes_reexec_guard(monkeypatch):
+    """console script (`hve`) 経路でも再 exec ガードを先に通すこと。"""
+    calls: list[str] = []
+    monkeypatch.setattr(m, "_reexec_in_venv_if_needed", lambda: calls.append("guard"))
+    monkeypatch.setattr(m, "main", lambda: (calls.append("main"), 0)[1])
+
+    assert m._console_main() == 0
+    assert calls == ["guard", "main"]
+
+
+def test_console_script_entry_point_targets_console_main():
+    """pyproject の console script が `main` ではなく `_console_main` を指すこと。
+
+    `main` を直接指すと `hve` コマンド経路で再 exec ガードが発火しない。
+    """
+    import tomllib
+
+    pyproject = Path(m.__file__).resolve().parent.parent / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    assert data["project"]["scripts"]["hve"] == "hve.__main__:_console_main"
+
+
+def test_reexec_guard_precedes_heavy_imports():
+    """`python -m hve` 経路で重い依存 import より前にガードを呼ぶこと。
+
+    module level の `from .config import ...`（-> `cq`）はファイル末尾の
+    `if __name__ == "__main__":` ブロックより先に評価される。ガードを末尾に
+    しか置かないと、.venv 外の Python 起動時に依存欠落で先に落ちる。
+    """
+    import ast
+
+    tree = ast.parse(Path(m.__file__).resolve().read_text(encoding="utf-8"))
+
+    guard_line: int | None = None
+    config_import_line: int | None = None
+    for node in tree.body:
+        if guard_line is None and isinstance(node, ast.If) and any(
+            isinstance(child, ast.Expr)
+            and isinstance(child.value, ast.Call)
+            and getattr(child.value.func, "id", None) == "_reexec_in_venv_if_needed"
+            for child in node.body
+        ):
+            guard_line = node.lineno
+        if config_import_line is None and isinstance(node, ast.Try):
+            for child in node.body:
+                if isinstance(child, ast.ImportFrom) and child.module == "config":
+                    config_import_line = child.lineno
+
+    assert guard_line is not None, "module level guard call not found"
+    assert config_import_line is not None, "module level `from .config import ...` not found"
+    assert guard_line < config_import_line
