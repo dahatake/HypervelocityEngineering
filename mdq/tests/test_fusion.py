@@ -111,6 +111,22 @@ def test_fusion_falls_back_when_provider_unavailable(tmp_path, monkeypatch):
     assert hits[0].chunk_id == "c_a"
 
 
+def test_fusion_falls_back_on_dimension_mismatch(tmp_path, monkeypatch, capsys):
+    """A search-time model different from the index-time model must not crash.
+
+    The index stores no model name or dimension, so a mismatch is only
+    detectable at blend time. `_maybe_apply_fusion` documents fail-soft
+    behaviour, so it must degrade to BM25 instead of raising.
+    """
+    conn = _setup_store(tmp_path)  # vectors were written with dim=16
+    monkeypatch.setattr(emb, "get_provider",
+                        lambda *a, **kw: emb.NullProvider(dim=32))
+    hits = searcher.search(conn, "alpha topic", fusion_alpha=0.5)
+    assert hits
+    assert hits[0].chunk_id == "c_a"
+    assert "dim" in capsys.readouterr().err.lower()
+
+
 def _fusion_alpha_action() -> argparse.Action:
     """The ``--fusion-alpha`` action declared on the ``search`` subcommand."""
     # argparse exposes no public accessor for a subcommand's actions.

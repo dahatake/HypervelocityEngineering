@@ -546,6 +546,31 @@ Database: {db}</translation>
         <translation>Benchmark failed:
 {message}</translation>
     </message>
+    <message>
+        <location filename="../../../cq/gui/settings_section.py" line="284"/>
+        <source>&lt;b&gt;言語別インデックス統計&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Per-language index statistics&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../../../cq/gui/settings_section.py" line="286"/>
+        <source>同じパーサ名を複数の言語が共有するため、上のパーサ内訳だけでは言語ごとのフィデリティを判別できません。この表は選択中の profile の内訳です。</source>
+        <translation>One parser name is shared by several languages, so the parser split above cannot show which language lost fidelity. This table covers the selected profile.</translation>
+    </message>
+    <message>
+        <location filename="../../../cq/gui/settings_section.py" line="292"/>
+        <source>言語</source>
+        <translation>Language</translation>
+    </message>
+    <message>
+        <location filename="../../../cq/gui/settings_section.py" line="293"/>
+        <source>Chunks</source>
+        <translation>Chunks</translation>
+    </message>
+    <message>
+        <location filename="../../../cq/gui/settings_section.py" line="293"/>
+        <source>パーサ内訳</source>
+        <translation>Parsers</translation>
+    </message>
 </context>
 <context>
     <name>FileTreePanel</name>

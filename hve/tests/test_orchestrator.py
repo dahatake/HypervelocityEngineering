@@ -3928,6 +3928,7 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                     f"docs/test-specs/{agent_key}-test-spec.md",
                     f"src/test/agent/{agent_key}.Tests",
                     f"src/agent/{agent_key}",
+                    f"docs/agent/tool-search-eval/{agent_key}-eval-report.md",
                 },
             }
             catalog = Path(

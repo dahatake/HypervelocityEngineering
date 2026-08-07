@@ -26,6 +26,8 @@
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 - `task-questionnaire` — 詳細設計時の不明点確認
 - `ai-agent-capability-contract` — AG-CAP-01〜06 の詳細設計・N/A・完了判定契約
+- `agentic-retrieval-contract` — Section 7.0 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の AR-CAP-01〜05 契約
+- `foundry-toolbox-contract` — Tool 総数が 10〜15 を超えた場合の TB-CAP-01〜05 契約（Toolbox / tool search）
 
 ## 1) 目的と非目的
 - 対象：指定されたユースケースに対する **AI Agent の設計 Step 3（詳細設計）** を実施し、Agent 一覧を出力する。
@@ -103,15 +105,33 @@
   - Section 2.1 `Goal Contract` に Mission / Mutation Intent / Criterion / Evaluator / Evidence / Failure・Partial・Handoff を確定する
   - Section 6.1 `Runtime Goal Loop` に有限のPLAN / ACT / OBSERVE / EVALUATE / REPLAN、反復上限、deadline、budget、停止条件を確定する
   - Section 7.0 `Knowledge & Structured Data Routing` にRequest class、Preferred / Fallback / Blocked、runtime probe、permission、citationを確定する
+  - Section 7.0 のPreferredまたはFallbackに **Foundry IQ / Azure AI Search Agentic Retrieval** を選んだ場合は、Skill `agentic-retrieval-contract` に従い次の見出しを Section 7.0 の直後へ追加する。選ばなかった場合は追加しない。**12セクションの番号・順序は変えない**
+    - `7.0.1 Knowledge Base Contract (AR-CAP-01)` / `7.0.2 Knowledge Source Matrix (AR-CAP-02)` / `7.0.3 Retrieval Budget (AR-CAP-03)` / `7.0.4 Evidence & Observability (AR-CAP-04)` / `7.0.5 MCP Exposure (AR-CAP-05)`
+    - **見出しレベルは Section 7.0 と同じレベルにする**（子レベルにしない）。子レベルにすると Section 7.0 の範囲が後続ブロックを取り込み、AG-CAP-03 の判定が壊れる
+    - 同 Skill の整合ルール R1〜R12 を自己検査する。`Retrieval reasoning effort` の正本は AR-CAP-01 だけとし、AR-CAP-03 へ重複記載しない
+    - SKU / API version / model / region / tier 上限は本文へ確定値として埋めず、`Design status` と `Checked at` を記録する
   - Section 7.1 `REST CRUD Matrix` にC/R/U/D、REST method/path、HITL、RBAC、冪等性、error、auditを確定する。C/U/Dのprimary経路はREST Function Toolだけにする
   - Section 7.3 `MCP Integration Plan` にclient利用、Tool allowlist、auth、failure behavior、Remote adapter ownerを確定し、REST mutationを迂回させない
   - Section 7.4 `Skill Packaging Decision` をrequired / not-requiredで確定する。required時だけ配置先・resources・明示load・validationを記載する
+  - **Tool 総数を数える**。`Section 7.1 の Required: yes 行数` + `Section 7.3 の Tool allowlist に列挙した Tool 名数（重複排除）` + `Section 7.0 の異なる検索経路数（Preferred と Fallback。同じ経路が複数行にあっても 1 と数える）`
+  - **Tool Search 方針（`auto` / `yes` / `no`）に従う**。方針は Prompt 冒頭に注入される。注入が無ければ `auto` とし、**3 値以外は推測で丸めず blocked とする**
+    - `auto`: 総数が **15 を超える**場合だけ TB-CAP-01〜05 を追加する（超えない場合は追加しない）
+    - `yes`: **Tool 総数に関係なく** TB-CAP-01〜05 を追加し、TB-CAP-02 の `Tool search` は `enabled` にする
+    - `no`: **Tool 総数に関係なく** Toolbox を採用しない。TB-CAP-01 / TB-CAP-02 だけを追加して `Tool search` は `disabled` とし、TB-CAP-03〜05 は `Status: N/A` + `Reason` / `Decision source` / `Recheck condition` を持つ**理由付き N/A** とする
+  - TB-CAP を追加する場合は、Skill `foundry-toolbox-contract` に従い次の見出しを Section 7.4 の直後へ追加する。**12セクションの番号・順序は変えない**
+    - `7.5.1 Tool Inventory (TB-CAP-01)` / `7.5.2 Toolbox Decision (TB-CAP-02)` / `7.5.3 Pinning Policy (TB-CAP-03)` / `7.5.4 Search Metadata (TB-CAP-04)` / `7.5.5 Discovery Budget (TB-CAP-05)`
+    - **見出しレベルは Section 7.0〜7.4 と同じレベルにする**（子レベルにしない）。子レベルにすると前のセクションの範囲が TB-CAP ブロックを取り込み、判定が壊れる
+    - 同 Skill の整合ルール R1〜R10 を自己検査する。TB-CAP-01 の `Total tools` は上記の算出値と一致させる
+    - **TB-CAP-04 の Tool 表は、上記で数えた Tool ID を過不足なく 1 行 1 件で列挙する**。欠落・余剰・重複を作らない。`Pinned` 列は **TB-CAP-03 の pin 一覧と一致**させる
+    - 中核 Tool（ポリシー・頻用データアクセス）は TB-CAP-03 で pin し、検索に依存させない
+    - 未 pin Tool の `additional_search_text` は、語彙が自明なものだけ埋め、残りは `deferred（実測後に追加）` と記す。行自体を省略しない
+    - SDK シンボル名はプレビューで変動するため本文へ確定値を埋めず、`Checked at` と SDK パッケージ名を記録する
   - 各AG-CAPが非該当の場合は Contract ID / 理由 / Decision source / 再判定条件を持つN/Aとし、単語だけのN/Aを禁止する
   - Step 1 / 2から引き継いだMutation Intent、Required flag、Request class、owner、MCP、SkillのTBDを解消する。provider固有値を確認できない場合は`Design status: unknown`、確認日、確認した公式根拠、runtime probe、Blocked条件を確定し、値自体は推測しない
   - 完成判定チェック（15項目）を実施する
   - `docs/agent/agent-detail-{key}.md`（`{key}` = `AG-*`、Agent 名はファイル名に含めない）を作成する
 - **量が多い場合の分割**: Agent 数が多い場合は Skill task-dag-planning の分割ルールに従い、Agent ごとに Sub Issue に分割する
-- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / `users-guide/08-ai-agent.md` の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Step 1・2由来TBDが残っていない
+- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / `users-guide/08-ai-agent.md` の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Foundry IQ経路を選んだAgentはAR-CAP-01〜05が揃っている / Tool Search 方針に応じて TB-CAP-01〜05 が揃っている（`auto` は Tool 総数 15 超のとき、`yes` は常時、`no` は TB-CAP-01/02 と理由付き N/A の TB-CAP-03〜05） / Step 1・2由来TBDが残っていない
 
 ### 5.2 Agent 一覧の出力
 - Step 2 と Step 3 の成果物を元に、`docs/ai-agent-catalog.md` を作成/更新する。

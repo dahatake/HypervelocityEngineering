@@ -1399,10 +1399,18 @@ def test_addservice_fail(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# AgenticRetrieval: AC4B-1
+# AgenticRetrieval: AC4B-1 / AC4B-14 / AC4B-15 / AC4B-18
 # ---------------------------------------------------------------------------
+_AGENTIC_RETRIEVAL_GREEN_ROWS = (
+    "| AC4B-1 | リソース存在 | ✅ | ok |\n"
+    "| AC4B-14 | reasoning effort 一致 | ✅ | live 設定と設計値が一致 |\n"
+    "| AC4B-15 | Knowledge Source 一致 | ✅ | 2 件とも名前・alwaysQuery が一致 |\n"
+    "| AC4B-18 | smoke retrieve | ✅ | 全 Knowledge Source が検索対象 |\n"
+)
+
+
 def test_agentic_retrieval_pass(tmp_path: Path) -> None:
-    p = _write_report(tmp_path, "| AC4B-1 | リソース存在 | ✅ | ok |\n")
+    p = _write_report(tmp_path, _AGENTIC_RETRIEVAL_GREEN_ROWS)
     assert (
         validate_deploy_ac_verification(
             p, "Dev-Microservice-Azure-AgenticRetrievalDeploy"
@@ -1940,12 +1948,45 @@ def test_adfdv_functions_deploy_registry_ac2_ac3_validation(tmp_path: Path) -> N
 
 
 def test_agentic_retrieval_fail(tmp_path: Path) -> None:
-    p = _write_report(tmp_path, "| AC4B-1 | リソース存在 | ⏳ | pending |\n")
+    rows = _AGENTIC_RETRIEVAL_GREEN_ROWS.replace(
+        "| AC4B-1 | リソース存在 | ✅ | ok |",
+        "| AC4B-1 | リソース存在 | ⏳ | pending |",
+    )
+    p = _write_report(tmp_path, rows)
     errs = validate_deploy_ac_verification(
         p, "Dev-Microservice-Azure-AgenticRetrievalDeploy"
     )
     assert len(errs) == 1
     assert "AC4B-1" in errs[0]
+
+
+def test_agentic_retrieval_smoke_retrieve_must_be_green(tmp_path: Path) -> None:
+    """AC4B-18（全 Knowledge Source を横断した smoke retrieve）は実在系。"""
+    rows = _AGENTIC_RETRIEVAL_GREEN_ROWS.replace(
+        "| AC4B-18 | smoke retrieve | ✅ | 全 Knowledge Source が検索対象 |",
+        "| AC4B-18 | smoke retrieve | ❌ | 未実行 |",
+    )
+    p = _write_report(tmp_path, rows)
+    errs = validate_deploy_ac_verification(
+        p, "Dev-Microservice-Azure-AgenticRetrievalDeploy"
+    )
+    assert len(errs) == 1
+    assert "AC4B-18" in errs[0]
+
+
+def test_agentic_retrieval_missing_knowledge_source_row_is_rejected(tmp_path: Path) -> None:
+    """AC4B-15 の行ごと削除した場合も gate が発火する。"""
+    rows = "".join(
+        line + "\n"
+        for line in _AGENTIC_RETRIEVAL_GREEN_ROWS.splitlines()
+        if "AC4B-15" not in line
+    )
+    p = _write_report(tmp_path, rows)
+    errs = validate_deploy_ac_verification(
+        p, "Dev-Microservice-Azure-AgenticRetrievalDeploy"
+    )
+    assert len(errs) == 1
+    assert "AC4B-15" in errs[0]
 
 
 # ---------------------------------------------------------------------------

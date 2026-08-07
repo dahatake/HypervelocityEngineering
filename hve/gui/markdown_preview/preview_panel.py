@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..theme import token
 from .code_highlighter import CodeHighlighter, get_style_css
 from .markdown_html_renderer import MarkdownHtmlRenderer
 from .markdown_loader import LoaderKind, MarkdownLoader
@@ -71,7 +72,8 @@ class MarkdownPreviewPanel(QDockWidget):
 
         self._path_label = QLabel(self.tr("（ファイル未選択）"), header)
         self._path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self._path_label.setStyleSheet("color: #555; font-size: 9pt;")
+        self._path_label.setProperty("hveRole", "description")
+        self._path_label.setStyleSheet("font-size: 9pt;")
         header_layout.addWidget(self._path_label, 1)
 
         self._btn_copy = QToolButton(header)
@@ -89,7 +91,7 @@ class MarkdownPreviewPanel(QDockWidget):
             self._view_stack,
         )
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: #888;")
+        self._placeholder.setProperty("hveRole", "muted")
         self._view_stack.addWidget(self._placeholder)
         layout.addWidget(self._view_stack, 1)
 
@@ -134,7 +136,8 @@ class MarkdownPreviewPanel(QDockWidget):
         self._view_stack.setCurrentWidget(view)
         # 初期表示
         self._set_inner_html(
-            "<p style='color:#888;'>（左のツリーからファイルを選択するとプレビューを表示します）</p>"
+            f"<p style='color:{token('disabledForeground')};'>"
+            "（左のツリーからファイルを選択するとプレビューを表示します）</p>"
         )
         # pending されていたファイルがあれば load
         if self._pending_path is not None:
@@ -198,7 +201,7 @@ class MarkdownPreviewPanel(QDockWidget):
         else:
             # MISSING / OVERSIZE / BINARY / ERROR
             msg = _html.escape(result.error or f"表示できません ({result.kind.value})")
-            inner = f"<p style='color:#a33;'>⚠ {msg}</p>"
+            inner = f"<p style='color:{token('errorForeground')};'>⚠ {msg}</p>"
             html = self._md_renderer.wrap_html_in_template(inner)
 
         base_url = QUrl.fromLocalFile(str(_ASSETS_DIR) + "/")

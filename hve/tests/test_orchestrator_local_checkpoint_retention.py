@@ -42,15 +42,17 @@ def test_asdw_web_declares_local_generation_checkpoint() -> None:
 
 def test_local_phase_covers_checkpoint_and_its_dependencies() -> None:
     """local フェーズは checkpoint とその推移的依存で構成される。"""
+    # 2.5（Agentic Retrieval 実装設計）は local 生成で、checkpoint 4.2 の依存。
     assert get_local_phase_step_ids("asdw-web") == frozenset(
-        {"1.1", "1.2", "2.1", "2.3", "3.1", "3.2", "3.3", "4.1", "4.2"}
+        {"1.1", "1.2", "2.1", "2.3", "2.5", "3.1", "3.2", "3.3", "4.1", "4.2"}
     )
 
 
 def test_live_phase_is_the_complement_of_the_local_phase() -> None:
     """live フェーズは local フェーズの補集合（非コンテナ Step）である。"""
+    # 2.6（Agentic Retrieval Deploy）は live deploy。
     assert get_live_phase_step_ids("asdw-web") == frozenset(
-        {"1.3", "2.2", "2.4", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2"}
+        {"1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2"}
     )
 
 

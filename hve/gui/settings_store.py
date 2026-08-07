@@ -183,7 +183,13 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # SDK 自動コンテキスト圧縮（infinite_sessions）をサブステップ実行で有効化するか。
             # False（既定）: 無効。True: --auto-compaction を subprocess に伝播し SDK に圧縮を委ねる。
             "auto_compaction": False,
-            # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
+            # SDK のツール定義遅延ロード（tool_search）を有効化するか。
+            # True（既定）: 有効。False: `--no-tool-search` を subprocess へ伝搬する。
+            # FR-MODEL-06: 保存済みの false は load() のマージで保持される。
+            "tool_search": True,
+            # 上記を有効にしたときのランキング実装（FR-TS-01）。
+            # "sdk"（既定）: SDK 組み込み。"hve": HVE 実装へ差し替え、統計も収集する。
+            "tool_search_ranking": "sdk",            # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
             # SPLIT_REQUIRED ではなく、複数 Step の DAG wave を対象にする。
             "fleet_mode_enabled": "",
             # Cloud Sessions（GitHub Copilot SDK 1.0.0+）。既定 OFF。

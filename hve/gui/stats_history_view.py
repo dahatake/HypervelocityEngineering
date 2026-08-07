@@ -436,7 +436,8 @@ class StatsHistoryView(QWidget):
                 "並列実行時、Step の消費分には他 Step 消費分が混ざることがあります。"
             )
         )
-        legend.setStyleSheet("color: #8a8f97; font-size: 8pt;")
+        legend.setStyleSheet("font-size: 8pt;")
+        legend.setProperty("hveRole", "muted")
         legend.setWordWrap(True)
         header_bar.addWidget(legend, 1)
         self._csv_copy_btn = CopyButton(

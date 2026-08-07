@@ -7,6 +7,10 @@ Two tokenization layers exist in mdq:
 2. **BM25 fallback tokenizer** — pure-Python regex used when ``rank_bm25``
    is unavailable or when callers explicitly request BM25 ranking outside
    FTS5 (see :mod:`mdq.search`).
+3. **Scoring tokenizer** — :func:`scoring_terms`, the unit the default search
+   path matches on (FR-MDQ-08). CJK runs become adjacent bigrams, mirroring
+   Lucene's ``CJKBigramFilter``. It feeds ranking only; excerpt selection
+   keeps using layer 2 so the returned excerpt and line range are unaffected.
 
 We support two language codes:
 
@@ -20,6 +24,7 @@ should fall back to ``unicode61`` and log a warning.
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Literal
 
@@ -27,6 +32,35 @@ Lang = Literal["ja-jp", "en-us"]
 
 ALL_LANGS: tuple[Lang, ...] = ("ja-jp", "en-us")
 DEFAULT_LANG: Lang = "ja-jp"
+
+# FR-MDQ-08 (1): the single published definition of "CJK character".
+CJK_CHAR_RANGES: tuple[tuple[str, str], ...] = (
+    ("\u3040", "\u30ff"),  # hiragana + katakana (incl. the ー prolonged mark)
+    ("\u4e00", "\u9fff"),  # CJK unified ideographs
+)
+
+_CJK_CLASS = "".join(f"{low}-{high}" for low, high in CJK_CHAR_RANGES)
+_ASCII_RUN = r"[A-Za-z0-9_]+"
+_SEGMENT_RE = re.compile(rf"{_ASCII_RUN}|[{_CJK_CLASS}]+")
+_ASCII_RE = re.compile(_ASCII_RUN)
+
+
+def scoring_terms(text: str) -> list[str]:
+    """Return the terms the default search path matches on (FR-MDQ-08).
+
+    A run of CJK characters yields its adjacent bigrams; a CJK character with
+    no adjacent CJK neighbour yields itself. ASCII runs are never split. The
+    same span never contributes both a bigram and a unigram.
+    """
+    terms: list[str] = []
+    for segment in _SEGMENT_RE.findall(text):
+        if _ASCII_RE.fullmatch(segment):
+            terms.append(segment.lower())
+        elif len(segment) == 1:
+            terms.append(segment)
+        else:
+            terms.extend(segment[i:i + 2] for i in range(len(segment) - 1))
+    return terms
 
 
 def normalize(lang: str | None) -> Lang:

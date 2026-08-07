@@ -31,14 +31,17 @@ python -m cq index --profile hve --rebuild  # 全再構築
 python -m cq stats --profile app
 ```
 
-`files` / `symbols` / `chunks` / `refs` / `imports` / `traces` / `by_parser` / `schema_version` / `db` を返す。
+`files` / `symbols` / `chunks` / `refs` / `imports` / `traces` / `by_parser` / `by_lang` / `schema_version` / `db` を返す。
 `by_parser` に `lite` が多い場合、その言語は定義行しか取れていない。
+`by_lang` は言語ごとの `files` / `symbols` / `chunks` / `by_parser`。**1 つのパーサ名を複数の言語が共有する**
+（C# と Java はどちらも `tree-sitter`）ため、`by_parser` だけではどの言語のフィデリティが落ちたか判別できない。
 
 ## `cq search`
 
 ```sh
 python -m cq search --profile hve --q "run_journal"
-python -m cq search --profile hve --q "fan-out の親子関係" --mode bm25
+python -m cq search --profile hve --q "how does the orchestrator decide fan out"   # 自然文
+python -m cq search --profile hve --q "test_search_recall"                          # パスで引く
 python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 ```
 
@@ -48,7 +51,7 @@ python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 | `--re` | — | 正規表現（指定すると regex 経路に固定） |
 | `--mode` | `auto` | `auto` / `trace` / `symbol` / `substr` / `regex` / `bm25` |
 | `--top-k` | 5 | 返す件数 |
-| `--max-tokens` | 800 | 応答全体のトークン上限。超えた分は打ち切る |
+| `--max-tokens` | 800 | 応答全体のトークン上限。**1 ヒットごとの返却 JSON 全体**（抜粋 + メタデータ）の文字数 ÷ 4 で見積もる。超えた分は打ち切る（先頭 1 件は必ず返す） |
 | `--snippet-radius` | 2 | ヒット行の前後何行を含めるか（`--return-unit line` のときのみ効く） |
 | `--return-unit {line\|chunk}` | `line` | 抜粋の単位。`line` はヒット行 ±`--snippet-radius` 行、`chunk` はヒットを含む構造チャンク（関数・クラス等）の本文全体。`chunk` では `lines` も当該チャンクの行範囲へ広がる。単位を変えても `route` / `score` / 順位は変わらないが、抜粋が長い分だけ同じ `--max-tokens` で返る件数は減る |
 | `--regex-max-candidates` | 500 | trigram 前段で絞った候補の上限。超えたら打ち切って報告する |
@@ -58,8 +61,18 @@ python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 各ヒットの主なフィールド: `path` / `lines` / `qualname` / `kind` / `signature` / `snippet` / `parser` / `route` / `score` / `match` / `chunk_id`。
 どの経路で引けたかは各ヒットの `route` フィールドで判別する（経路をまとめた要約行は出力されない）。
 
+**0 件時の fallback は 2 段階**。
+
+1. 自然文（`bm25`）が 0 件のとき、語の連言を選言へ 1 回だけ緩和して再試行する。緩和ヒットは `route` が `bm25` のままで
+   `match` が **`or-fallback`** になる。全語を含むヒットではないので確度は低い。語が 1 つのときと
+   CJK（仮名・漢字・ハングル）を含むクエリでは緩和しない。
+2. すべての経路が 0 件のとき、リポジトリ相対パスの部分一致で引く（`route` が **`path`**）。ファイルごとに
+   先頭チャンク 1 件を返す。並びはテストパスを後ろへ回し、次にパス長の昇順。`--mode path` は存在しない（連鎖専用）。
+
 **鮮度**: 差分が `--auto-reindex-limit` を超えると、結果を返した上で最終行に
 `{"warning":"stale","changed":N}` を出す。この行が出たら結果は古い可能性がある。
+**一度も索引されていない新規ファイルはこの差分突合の対象外**で、警告にも現れない。
+新規ファイルを引きたいときは `cq index` か `cq watch` を先に実行すること。
 
 ## `cq def`
 
@@ -111,6 +124,8 @@ python -m cq map --profile app --max-tokens 400 --format json
 
 被参照数でランク付けした俯瞰マップ。本文は出さず定義行だけを畳み込み表現（`⋮...`）で並べる。
 予算を超えた分は下位から落とし、末尾に `# dropped N lower-ranked symbols to fit the token budget` を出す。
+**予算は定義行だけでなく、ファイル見出し・折り畳み記号・空行・除外通知を含めた実出力全体**に対して判定する。
+その分、同じ予算で掲載される件数は従前より少ない。`--format json` は別形式なので予算の対象外。
 ランキングはテストコードを除外し、同名定義数で減衰させる（名前衝突で汎用名が上位を占めるのを防ぐため）。
 
 ## `cq watch`

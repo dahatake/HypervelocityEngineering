@@ -22,7 +22,7 @@ Markdown 側の対応物は [`../markdown_query/`](../markdown_query/README.md)�
 | Python | 3.11 以上 | 標準ライブラリのみで動作する |
 | git | 必須 | `git ls-files --cached --others --exclude-standard` でファイルを列挙するため |
 | 対象リポジトリ | git 初期化済み | 未初期化だと索引時にエラー終了する |
-| サードパーティ依存 | CLI は **不要** | GUI のみ `PySide6`、`watchdog` と `tiktoken` は任意（§6） |
+| サードパーティ依存 | CLI は **不要** | 解析フィデリティ・GUI・監視・トークン計数はいずれも任意（§6）。未導入でも索引と検索は成功する |
 
 > `cq` は SQLite（Python 標準の `sqlite3`）だけで索引を作る。埋め込みモデルも文法ファイルも
 > ダウンロードしない。オフライン環境でそのまま動く。
@@ -179,14 +179,68 @@ roots = ["src", "scripts"]
 
 ## 6. 任意依存
 
+索引と検索そのものに追加パッケージは要らない。以下は**あれば効く**もので、未導入でもコマンドは
+成功する（該当機能だけが縮退する）。
+
+### 6.1 解析フィデリティ
+
+| パッケージ | 何が有効になるか | 未導入時の挙動 |
+|---|---|---|
+| `tree-sitter` と言語別文法（`tree-sitter-java` / `-go` / `-rust` / `-c` / `-cpp` / `-bash` / `-powershell` / `-batch` / `-scala`） | 対象言語の定義・参照・構造チャンクの抽出 | **その言語のファイルだけ** `lite`（正規表現で定義行のみ）へ降格。索引全体は成功する |
+| `sqlglot` | `.sql` の `CREATE` 対象とテーブル参照の抽出、文単位の構造チャンク | `.sql` だけ `lite` へ降格 |
+| `tree-sitter-sql` | PostgreSQL の `$tag$ ... $tag$` ルーチン本体に含まれる参照 | 本体が 1 トークン扱いのままになり、内側の参照を拾えない |
+| `sqlfluff` | `sqlglot` が構造化できない Oracle PL/SQL・BigQuery スクリプトの本体 | 当該ファイルだけ `lite` へ降格 |
+
+tree-sitter の文法は wheel に同梱されており、`sqlglot` / `sqlfluff` は pure Python である。いずれも
+実行時に何もダウンロードしない（オフラインで動く）。
+降格したかどうかは応答の `parser` フィールドに現れるので、`lite` の結果を全文解析の結果と
+誤認しないこと。
+
+### 6.2 ツール
+
 | パッケージ | 何が有効になるか | 未導入時の挙動 |
 |---|---|---|
 | `PySide6` | 別リポジトリ対応の独立管理画面 | 起動時に `setup` の `--with-gui` を案内して exit 2 |
 | `watchdog` | `cq watch`（保存を即座に索引へ反映） | `error: watching needs the optional 'watchdog' dependency` で exit 2 |
-| `tiktoken` | `cq.benchmark` の正確なトークン計数 | `chars/4-approx` による近似計数にフォールバック |
+| `tiktoken` | `cq map` の予算計算と `cq.benchmark` の正確なトークン計数 | `chars/4-approx` の近似計数にフォールバックする。同じ `--max-tokens` でも `cq map` が落とす件数が変わる |
 
-`setup` の `--with-gui` / `--with-watch` / `--with-tokenizer` を付けると `.venv-cq` を作って導入する。
-**通常の検索・索引には不要**。`cq search` は保存後の差分を自前の鮮度ガードで吸収する。
+`setup` の `--with-gui` / `--with-watch` / `--with-tokenizer` が導入するのは §6.2 だけである。
+§6.1 には対応する導入オプションが無いため、`setup` が作った `.venv-cq`（`--no-venv` 運用なら
+使用中のインタプリタ）へ直接入れる。
+
+```powershell
+.venv-cq\Scripts\python.exe -m pip install "tree-sitter>=0.23" `
+  "tree-sitter-java>=0.23" "tree-sitter-go>=0.25" "tree-sitter-rust>=0.24" `
+  "tree-sitter-c>=0.24" "tree-sitter-cpp>=0.23" "tree-sitter-bash>=0.25" `
+  "tree-sitter-powershell>=0.26" "tree-sitter-batch>=0.11" "tree-sitter-scala>=0.26" `
+  "sqlglot>=30" "tree-sitter-sql>=0.3"
+```
+
+```bash
+.venv-cq/bin/python -m pip install "tree-sitter>=0.23" \
+  "tree-sitter-java>=0.23" "tree-sitter-go>=0.25" "tree-sitter-rust>=0.24" \
+  "tree-sitter-c>=0.24" "tree-sitter-cpp>=0.23" "tree-sitter-bash>=0.25" \
+  "tree-sitter-powershell>=0.26" "tree-sitter-batch>=0.11" "tree-sitter-scala>=0.26" \
+  "sqlglot>=30" "tree-sitter-sql>=0.3"
+```
+
+入れた文法だけが高フィデリティになる。一部だけ入れても良いが、外した言語は `lite` のままになる。
+
+`sqlfluff` だけは扱いが異なる。`click<8.4.0` を pin するため、`click>=8.4.2` を要求する
+パッケージ（`huggingface-hub` 等）と同じ環境に入れると `pip check` が
+`huggingface-hub ... has requirement click<9.0.0,>=8.4.2, but you have click 8.3.3.` で失敗する。
+専用の `.venv-cq` にはそれらが居ないため通常は衝突しない。Oracle PL/SQL や BigQuery
+スクリプトの本体まで構造化したい場合にだけ追加する。
+
+```powershell
+.venv-cq\Scripts\python.exe -m pip install "sqlfluff>=4.2"
+```
+
+```bash
+.venv-cq/bin/python -m pip install "sqlfluff>=4.2"
+```
+
+**通常の検索・索引には §6.1 / §6.2 とも不要**。`cq search` は保存後の差分を自前の鮮度ガードで吸収する。
 
 ---
 
@@ -197,9 +251,12 @@ roots = ["src", "scripts"]
 | `--profile` の既定値が `hve` | 上流リポジトリ由来の既定値がそのまま残っている。他リポジトリでは毎回指定が必要 | `cq.ps1` / `cq.sh` を使い `CQ_PROFILE` を設定する。または profile 名を `hve` にする |
 | ベンチマークの profile 名が固定 | `cq.benchmark` の `--profile` は `{hve,app}` に、`golden_eval` の検証も同じ 2 値に限定されている | 品質実測を行う場合のみ profile 名を `hve` または `app` にする。通常運用には影響しない |
 | リポジトリ直下のファイル | roots はサブディレクトリのみ。直下のファイルは索引されない | 対象ファイルをサブディレクトリへ移すか、索引対象外と割り切る |
-| 対応拡張子 | `.py` `.cs` `.js` `.mjs` `.cjs` `.jsx` `.ts` `.tsx` `.sh` `.bash` `.ps1` `.psm1` のみ | 上表以外は索引されない。`.md` / CSV / TSV は `markdown-query` の担当 |
+| 対応拡張子 | `.py` `.cs` `.js` `.mjs` `.cjs` `.jsx` `.ts` `.tsx` `.java` `.go` `.rs` `.c` `.cc` `.cpp` `.cxx` `.hpp` `.hh` `.h` `.sh` `.bash` `.ps1` `.psm1` `.cmd` `.bat` `.scala` `.sql` のみ | 上表以外は索引されない。`.md` / CSV / TSV は `markdown-query` の担当 |
 | 新規ファイルの自動検知 | 検索時の鮮度ガードは索引済みパスしか `stat()` しない | 新規追加後は `cq index` を実行するか `cq watch` を併走させる |
-| 構文ベースのチャンク分割 | cAST は Python のみ。C# / JS / TS はチャンク境界が行ウィンドウ | シンボル検索（`cq def` / symbol 経路）は全対応言語で利用できる |
+| 構文ベースのチャンク分割 | 構造チャンクを持つのは Python（cAST）と tree-sitter / SQL 系の言語。C# / JS / TS はチャンク境界が行ウィンドウ | シンボル検索（`cq def` / symbol 経路）は全対応言語で利用できる |
+| PL/pgSQL の手続き構文 | `IF` / `LOOP` / `PERFORM` は構造化されない。`$tag$` 本体の再パースで拾えるのは埋め込み SQL 文のテーブル参照まで | 手続きロジック自体を追う場合は本文を読む |
+| PowerShell の定義数が環境で変わる | 文法の回復ノードが残ったファイルは `pwsh` の公式パーサへエスカレーションするため、`pwsh` の有無で抽出される定義数が変わる。`parser` 値はどちらも `tree-sitter` でエスカレーションの有無を区別できない | 結果を環境間で比較する場合は `pwsh` の有無を揃える |
+| Windows batch に関数の概念が無い | 文法上、取れるのはラベル定義と `call` / コマンドの参照だけ | ラベル単位で追う |
 
 ---
 

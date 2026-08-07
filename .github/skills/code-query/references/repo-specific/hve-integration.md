@@ -33,18 +33,40 @@ python -m cq watch  --profile hve                                # 保存を即�
 
 ## 検索品質の実測値
 
-ゴールデン 21 問。数値は本リポジトリのコードベースに対するものであり、他リポジトリへは外挿できない。
+**計測日: 2026-08-04。** ゴールデン 21 問 × 2 profile / `--top-k 5` / トークン計数は `tiktoken/cl100k_base`。
+`cq` 側は索引を最新化した状態（`hve` 830 files / `app` 154 files）。数値は本リポジトリのコードベースに対する
+ものであり、他リポジトリへは外挿できない。
 
-| profile | 手法 | top-1 | 平均トークン | 平均レイテンシ |
-|---|---|---|---|---|
-| `hve` | `grep` 対照群 | 9.5% | 1,083 | 2,196 ms |
-| `hve` | 全文読み込み対照群 | — | 187,854 | — |
-| `hve` | **`cq search`** | **95.2%** | **84.8** | **9.6 ms** |
-| `app` | `grep` 対照群 | 71.4% | — | — |
-| `app` | **`cq search`** | **95.2%** | **73.5** | **12.3 ms** |
+| profile | 手法 | 探索空間 | top-1 | 平均トークン |
+|---|---|---:|---:|---:|
+| `hve` | **`cq search`** | 索引 830 files | **95.2%** | **280.9** |
+| `hve` | `grep` 対照群（全リポジトリ） | 3,182 files | 14.3% | 2,115.3 |
+| `hve` | `grep` 対照群（profile roots 限定） | 1,184 files | 28.6% | 1,386.5 |
+| `app` | **`cq search`** | 索引 154 files | **95.2%** | **236.0** |
+| `app` | `grep` 対照群（全リポジトリ） | 3,182 files | 0.0% | 854.0 |
+| `app` | `grep` 対照群（`src/` 限定） | 227 files | 71.4% | 148.8 |
+
+- **`app` profile では、探索空間を揃えると `grep` の方がトークンが少ない**（148.8 対 236.0）。`cq` の優位は
+  正解率（71.4% → 95.2%）と、頻出語で出力が爆発しないことにある（実測: `validate_asdw_data_verify_script` は
+  `git grep` が 186,941 字を返す場面で `cq` は 211 tokens）。
+- **レイテンシは計測していない。** 本環境では同一コマンドの所要時間が 6 倍以上ばらつくため（`pytest cq/tests`
+  が 431.83 s と 69.85 s、`cq search` が 292 ms と 842 ms）、比較指標として使えない。
+- 旧版に記載していた「`hve` 84.8 トークン / 9.6 ms」は**当時のコーパスと計測条件での値**であり、現在の
+  コーパスでは再現しない（[hve-dev/requirement-test-mapping.md](hve-dev/requirement-test-mapping.md) の
+  FR-CQ-06 にも同旨の注記がある）。
 
 ## 索引運用
 
 - 編集が頻繁な場合は `python -m cq watch --profile hve` を並走させる。
 - GUI からの索引運用は `hve/gui/settings_window.py` の Code-Query セクション（FR-GUI-04）を使う。
-- 配布キットは [tools/skills/code_query/](../../../../tools/skills/code_query/)。
+- 配布キットは [tools/skills/code_query/](../../../../../tools/skills/code_query/)。
+
+## 利用ログ（FR-CQ-14）
+
+- `＜repo-root＞/.cq/usage.jsonl`: `cq` CLI がサブコマンド実行ごとに自動追記する利用ログ（gitignore 済み）。
+- 追記モジュール: [cq/usage_log.py](../../../../../cq/usage_log.py)。呼び出し元は `cq/cli.py` の `_record_usage`。
+- 1 行 1 レコードで `ts` / `command` / `args` / `elapsed_ms` / `result` / `exit_code` を持ち、
+  Orchestrator が伝播した `HVE_RUN_ID` / `HVE_WORKFLOW_ID` / `HVE_STEP_ID` / `HVE_AGENT_ID` のうち
+  設定済みのものだけを `context` へ入れる。
+- `watch` は長時間常駐するため記録しない。書き込みに失敗しても CLI の終了コードと標準出力は変わらない。
+- `markdown-query` の利用ログ（`.mdq/usage.jsonl`）とは**別ファイル**。混在させない。

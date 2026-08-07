@@ -4076,6 +4076,165 @@ async def _resolve_target_business_paths(params: dict, console: Console) -> None
 
 
 
+def _resolve_config_disabled_steps(
+    wf: Any,
+    workflow_id: str,
+    config: Any,
+) -> FrozenSet[str]:
+    """`StepDef.disabled_when_config` と設定値から無効化 Step ID を解決する。
+
+    宣言されたキーだけを設定オブジェクトから読み、値が一致する Step を返す。
+    宣言が無い workflow では設定を一切参照しない。
+
+    Args:
+        wf: WorkflowDef。
+        workflow_id: ワークフロー ID（後方互換エイリアス可）。
+        config: SDKConfig 等の設定オブジェクト。
+
+    Returns:
+        無効化する Step ID の集合。該当なしなら空集合。
+    """
+    declared_keys = {
+        key
+        for step in getattr(wf, "steps", [])
+        for key in (getattr(step, "disabled_when_config", None) or {})
+    }
+    if not declared_keys or config is None:
+        return frozenset()
+    try:
+        from .workflow_registry import resolve_disabled_step_ids
+    except ImportError:  # pragma: no cover - script execution
+        from workflow_registry import resolve_disabled_step_ids  # type: ignore[no-redef]
+    config_values = {
+        key: getattr(config, key) for key in declared_keys if hasattr(config, key)
+    }
+    if not config_values:
+        return frozenset()
+    return resolve_disabled_step_ids(workflow_id, config_values)
+
+
+def _should_use_statusline(console: Any, config: SDKConfig) -> bool:
+    """FR-RTO-02: Workbench を使わない実行で 1 行ステータスラインを使うか判定する。
+
+    `quiet` / `final_only` では追加表示をしない（NFR-OBS-03 と矛盾させない）。
+    """
+    if getattr(config, "quiet", False) or getattr(console, "quiet", False):
+        return False
+    if getattr(config, "final_only", False) or getattr(console, "final_only", False):
+        return False
+    if not getattr(config, "pricing_statusline_enabled", True):
+        return False
+    workbench_active = getattr(console, "workbench_enabled", False) and not getattr(
+        config, "no_workbench", False
+    )
+    return not workbench_active
+
+
+def _build_statusline_state(metrics: Any, *, workflow_started_at: float) -> Any:
+    """FR-RTO-05: 集計から StatusLine 表示状態を作る（未取得値は埋めない）。"""
+    try:
+        from .statusline import StatusLineState
+    except ImportError:  # pragma: no cover - script 実行経路
+        from statusline import StatusLineState  # type: ignore[no-redef]
+
+    return StatusLineState(
+        workflow_started_at=workflow_started_at,
+        context_current=metrics.context_current,
+        context_limit=metrics.context_limit,
+        tokens_in=metrics.input_tokens_total,
+        tokens_out=metrics.output_tokens_total,
+        aiu_total=metrics.aiu_total if metrics.aiu_nano_total > 0 else None,
+        premium_requests_total=metrics.display_reqs,
+    )
+
+
+def _attach_runtime_statusline(console: Any, config: SDKConfig, *, workflow_started_at: float) -> Any:
+    """Workbench 無効時の TTY で 1Hz ステータスラインを開始する。"""
+    if not _should_use_statusline(console, config):
+        return None
+    try:
+        from .statusline import StatusLine
+    except ImportError:  # pragma: no cover - script 実行経路
+        from statusline import StatusLine  # type: ignore[no-redef]
+
+    registry = console.runtime_metrics()
+    status_line = StatusLine(
+        state_provider=lambda: _build_statusline_state(
+            registry.totals(), workflow_started_at=workflow_started_at
+        )
+    )
+    if not status_line.enabled:
+        return None
+    status_line.start()
+    return status_line
+
+
+def _format_runtime_summary(metrics: Any) -> str:
+    """FR-RTO-05: 実行終了時の 1 行サマリー（整形は core 実装に単一化）。"""
+    try:
+        from .runtime_observability import format_runtime_summary
+    except ImportError:  # pragma: no cover - script 実行経路
+        from runtime_observability import format_runtime_summary  # type: ignore[no-redef]
+
+    return format_runtime_summary(metrics)
+
+
+def _emit_runtime_summary(console: Any, config: SDKConfig) -> None:
+    """非 TTY 実行の終了時にだけ、集計を 1 回出力する（FR-RTO-02）。"""
+    if getattr(config, "quiet", False) or getattr(console, "quiet", False):
+        return
+    if getattr(config, "final_only", False) or getattr(console, "final_only", False):
+        return
+    if getattr(console, "_is_tty", False):
+        return
+    try:
+        metrics = console.runtime_metrics().totals()
+    except Exception:
+        return
+    try:
+        console.status(_format_runtime_summary(metrics))
+    except Exception:
+        pass
+
+
+def _attach_runtime_observability(
+    console: Console,
+    config: SDKConfig,
+    workflow_id: str,
+    *,
+    app_ids: Optional[List[str]] = None,
+) -> Optional[Any]:
+    """FR-RTO-03 / FR-RTO-06: 観測イベントの記録器を生成し Console へ接続する。
+
+    `HVE_WORK_ROOT` 未設定時と dry-run では記録せず ``None`` を返す。
+    """
+    try:
+        from .runtime_observability import RuntimeEventRecorder, make_instance_id
+    except ImportError:  # pragma: no cover - script 実行経路
+        from runtime_observability import RuntimeEventRecorder, make_instance_id  # type: ignore[no-redef]
+
+    # APP スコープが 1 件に確定しているときだけ instance を APP 単位へ細分化する。
+    single_app_id = app_ids[0] if app_ids and len(app_ids) == 1 else None
+    try:
+        console.set_runtime_identity(
+            workflow_id=workflow_id,
+            instance_id=make_instance_id(workflow_id, single_app_id),
+        )
+    except AttributeError:  # pragma: no cover - 旧 Console 互換
+        pass
+
+    recorder = RuntimeEventRecorder.from_env(
+        dry_run=bool(getattr(config, "dry_run", False)),
+        repo_root=Path.cwd(),
+        warn=getattr(console, "warning", None),
+    )
+    if not recorder.enabled:
+        recorder.close()
+        return None
+    console.attach_event_recorder(recorder)
+    return recorder
+
+
 async def run_workflow(
     workflow_id: str,
     params: Optional[dict] = None,
@@ -4171,7 +4330,22 @@ async def run_workflow(
         console.set_run_id(config.run_id)
     except Exception:
         pass
+
+    # FR-RTO-03 / FR-RTO-06: 実行時観測イベントの記録器を接続する。
+    # 早期 return が多い関数のため、mdq / cq watcher と同じく atexit でも閉じる。
+    _rt_recorder = _attach_runtime_observability(
+        console,
+        config,
+        workflow_id,
+        app_ids=(params or {}).get("app_ids"),
+    )
+    if _rt_recorder is not None:
+        import atexit as _atexit
+
+        _atexit.register(_rt_recorder.close)
+
     start_total = time.time()
+    _start_monotonic = time.monotonic()
 
     # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
     # ファイル追加・更新・削除を OS イベントで検知し .mdq/index.sqlite を逐次更新する。
@@ -4472,6 +4646,17 @@ async def run_workflow(
             _seen.add(step_id)
             selected_step_ids.append(step_id)
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
+
+    # 設定値による Step 無効化: `StepDef.disabled_when_config` の宣言に一致する Step を
+    # 実行対象から外す。外された Step は DAG 上 skip 扱いとなり、依存先としては解決済みと
+    # みなされるため下流 Step は到達不能にならない。
+    _config_disabled = _resolve_config_disabled_steps(wf, workflow_id, config)
+    _disabled_active = sorted(active_steps & _config_disabled)
+    if _disabled_active:
+        active_steps -= _config_disabled
+        console.event(
+            "設定により無効化したステップ: " + ", ".join(_disabled_active)
+        )
 
     # --- FR-DAG-07 / FR-DAG-08: Step パラメータ契約の既定値適用と pre-flight ---
     # DAG 実行はもちろん dry-run 計画表示よりも前に判定する。判定材料は起動時点で
@@ -5592,6 +5777,16 @@ async def run_workflow(
                 pass
             _wb = None
 
+    # Workbench を使わない TTY 実行では 1Hz ステータスラインを主表示とする。
+    _status_line = None
+    if _wb is None:
+        try:
+            _status_line = _attach_runtime_statusline(
+                console, config, workflow_started_at=_start_monotonic
+            )
+        except Exception:
+            _status_line = None
+
     try:
         # T4: continue_on_error=True かつ executor 側で fatal 例外が発生した場合は
         # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
@@ -5677,6 +5872,12 @@ async def run_workflow(
             else:
                 raise
     finally:
+        # StatusLine を先に止め、後続の確定行と描画が衝突しないようにする。
+        if _status_line is not None:
+            try:
+                _status_line.stop()
+            except Exception:
+                pass
         # Workbench UI を停止し Console から detach
         if _wb is not None:
             # 全タスク完了を宣言し、useractions レポートを保存（冪等）。
@@ -6138,6 +6339,10 @@ async def run_workflow(
         )
     elif failed_ids and (working_branch or step_scoped_cicd_branches):
         console.event("失敗 Step があるため PR 作成をスキップしました。auto-approve-ready ラベルは付与されません。")
+
+    _emit_runtime_summary(console, config)
+    if _rt_recorder is not None:
+        _rt_recorder.close()
 
     return {
         "workflow_id": workflow_id,

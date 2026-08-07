@@ -24,6 +24,7 @@
 - `.github/skills/task-dag-planning/SKILL.md`
 - `.github/skills/work-artifacts-layout/SKILL.md`
 - `.github/skills/app-scope-resolution/SKILL.md`
+- `.github/skills/agentic-retrieval-contract/SKILL.md` — AR-CAP-01〜05 の固定契約と整合ルール R1〜R12
 - `.github/skills/mcp-server-design/SKILL.md`
 - `.github/skills/architecture-questionnaire/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
@@ -131,7 +132,24 @@ Phase 3 の `docs/services/{serviceId}-agentic-retrieval-spec.md` を入力と�
 #### 7. API バージョン
 - **実行時 Microsoft Learn MCP で取得**と明記し、確定値を本文に埋め込まない
 
-#### 8. 未決事項（最大 10）
+#### 8. 検索契約（AR-CAP-01〜05・必須）
+Skill `agentic-retrieval-contract` に従い、次の固定見出しをこの順で記載する。
+
+- `Knowledge Base Contract (AR-CAP-01)`
+- `Knowledge Source Matrix (AR-CAP-02)`
+- `Retrieval Budget (AR-CAP-03)`
+- `Evidence & Observability (AR-CAP-04)`
+- `MCP Exposure (AR-CAP-05)`
+
+制約:
+
+- **見出しレベルは本章（`#### 8.`）と同じレベル**にし、`#### 8.1`〜`#### 8.5` の番号で従属関係を表す。子レベルにすると validator がセクション境界を誤る（Skill の「見出しレベル規約」参照）。
+- 同 Skill の整合ルール **R1〜R12** を自己検査し、結果を完了報告の検証結果へ含める。
+- `Retrieval reasoning effort` の正本は AR-CAP-01 だけ。AR-CAP-03 へ別値を重複記載しない。
+- この章でも SKU / model / API version / region / tier 上限を確定値として埋めない。`Design status` と `Checked at` を記録し、根拠は `{WORK}artifacts/cli-evidence.md` へ残す。
+- Knowledge Source を複数束ねる場合は「なぜ 1 つの Knowledge Base に束ねたか」を、分割する場合は「なぜ分けたか」を根拠付きで記録する。
+
+#### 9. 未決事項（最大 10）
 
 ### 3) Microsoft Learn 根拠（必須）
 既存 `Dev-Microservice-Azure-AddServiceDesign.agent.md` と同じ運用で、各構成要素の根拠を必ず記録する。
@@ -152,13 +170,13 @@ Phase 3 の `docs/services/{serviceId}-agentic-retrieval-spec.md` を入力と�
 
 以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
-- **機能完全性**：1〜8章、1 service = 1 Search、Index / Vector / Semantic / data source / Skillset / Knowledge Source / Knowledge Base、条件付きFoundry、投入方式、RBAC、API version、全ACが揃うか。
+- **機能完全性**：1〜9章、1 service = 1 Search、Index / Vector / Semantic / data source / Skillset / Knowledge Source / Knowledge Base、条件付きFoundry、投入方式、RBAC、API version、AR-CAP-01〜05、全ACが揃うか。
 - **ユーザー視点**：入力flagとPhase 3仕様に沿う選択、第一案/代替案、未決事項、Microsoft Learn根拠から実装担当が判断を追跡できるか。
 - **保守性**：SKU / model / API version / Indexer sourceをハードコードせず、追加サービス一覧を非破壊更新し、IaCや実RBACを本Agentへ持ち込んでいないか。
 - 問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
 
 ## 受け入れ条件（AC）
-- **AC4A-1**: `{serviceId}-design.md` の章立て（1〜8）が完備
+- **AC4A-1**: `{serviceId}-design.md` の章立て（1〜9）が完備
 - **AC4A-2**: SKU / モデル名 / API バージョン / Indexer 対応データソースを本文でハードコードしない
 - **AC4A-3**: MCP 接続方針を「第一案 / 代替案」で明記
 - **AC4A-4**: Foundry 章は Q3=`する` の場合のみ出力する条件を明記
@@ -166,6 +184,8 @@ Phase 3 の `docs/services/{serviceId}-agentic-retrieval-spec.md` を入力と�
 - **AC4A-6**: Skill 依存がフルパスで列挙される
 - **AC4A-7**: 既存 `Dev-Microservice-Azure-AddServiceDesign.agent.md` の構造（frontmatter/共通ルール/Skills/Inputs/Outputs/Workflow/禁止事項）を踏襲
 - **AC4A-8**: ルート `/README.md` を変更しない
+- **AC4A-9**: AR-CAP-01〜05 の固定見出しがすべて存在し、各必須ラベルが埋まっている（未確定は `TBD` ではなく理由付きで記載）
+- **AC4A-10**: Skill `agentic-retrieval-contract` の整合ルール R1〜R12 を自己検査し、違反 0 件であることを完了報告へ記録している
 
 ## 禁止事項（Agent 固有）
 - SKU / モデル名 / API バージョン / Indexer 対応データソースを推測で確定値記載すること

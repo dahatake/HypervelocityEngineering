@@ -459,53 +459,24 @@ class TestReusableWorkflowSelfImprove(unittest.TestCase):
                         "exec",
                     )
                     python_heredocs += 1
-        self.assertGreaterEqual(python_heredocs, 25)
+        self.assertGreaterEqual(python_heredocs, 24)
 
-    def test_auto_ai_agent_dev_step4_completion_requires_both_named_steps(self) -> None:
+    def test_auto_ai_agent_dev_final_step_marks_self_improve_ready(self) -> None:
+        """AAGD の最終 Step（Step.4）が Root を Self-Improve 待ちへ渡すこと。
+
+        旧構成の Step.4.1/4.2（アーキテクチャレビュー）は ASDW-WEB の担当として
+        AAGD から除去済み。最終 Step が Root を閉じないと Self-Improve が走らない。
+        """
         content = self._read("auto-ai-agent-dev-reusable.yml")
         document = yaml.safe_load(content)
         transition = next(
             step["run"] for step in document["jobs"]["orchestrate"]["steps"]
             if step.get("name") == "状態遷移処理"
         )
-        block = re.search(
-            r"BOTH_DONE=.*?<<'PY'\n(?P<code>.*?)\nPY",
-            transition,
-            re.DOTALL,
-        )
-        if block is None:
-            self.fail("AAGD Step 4.1/4.2 completion gate was not found")
-        code = compile(
-            textwrap.dedent(block.group("code")),
-            "auto-ai-agent-dev-reusable.yml:step4-both-done",
-            "exec",
-        )
-
-        def evaluate(issues: list[dict[str, object]]) -> str:
-            original_stdin = sys.stdin
-            output = io.StringIO()
-            try:
-                sys.stdin = io.StringIO(json.dumps(issues))
-                with redirect_stdout(output):
-                    exec(code, {})
-            finally:
-                sys.stdin = original_stdin
-            return output.getvalue().strip()
-
-        step_41: dict[str, object] = {
-            "title": "[AAGD] Step.4.1: WAF architecture review",
-            "labels": [{"name": "aagd:done"}],
-        }
-        step_42: dict[str, object] = {
-            "title": "[AAGD] Step.4.2: dependency review",
-            "labels": [{"name": "aagd:done"}],
-        }
-        self.assertEqual(evaluate([step_41, step_42]), "true")
-        self.assertEqual(evaluate([step_41]), "false")
-        self.assertEqual(
-            evaluate([step_41, {"title": "unrelated", "labels": [{"name": "aagd:done"}]}]),
-            "false",
-        )
+        # YAML ブロックスカラーは共通インデントを剥がすので空白量に依存しない
+        match = re.search(r'^\s*"4"\)\n(?P<body>.*?)^\s*;;', transition, re.M | re.S)
+        self.assertIsNotNone(match, "Step.4 の遷移分岐が見つからない")
+        self.assertIn("mark_root_self_improve_ready", match.group("body"))
 
     def test_auto_app_documentation_reusable(self) -> None:
         self._assert_workflow_has_self_improve("auto-app-documentation-reusable.yml")

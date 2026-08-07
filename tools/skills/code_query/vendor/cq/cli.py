@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Sequence
 
-from cq import config, discovery, indexer, search, store, traces
+from cq import config, discovery, indexer, search, store, traces, usage_log
 from cq.search import get_chunk
 
 # `hve` は上流リポジトリの profile 名。他リポジトリへコピーした場合は
@@ -27,8 +27,27 @@ def default_profile() -> str:
     return os.environ.get(DEFAULT_PROFILE_ENV) or _FALLBACK_PROFILE
 
 
+def resolve_default_profile(repo_root: Path) -> str:
+    """``--profile`` 省略時の profile を決める（FR-KIT-04）。
+
+    宣言された profile が 1 つだけならそれを使う。他リポジトリでは上流の
+    profile 名を知りえないためで、複数宣言されている場合は推測せず従来の
+    fallback のままにする。環境変数の明示指定は常に優先する。
+    """
+    override = os.environ.get(DEFAULT_PROFILE_ENV)
+    if override:
+        return override
+    try:
+        declared = config.resolve_profiles(repo_root)
+    except config.ConfigError:
+        return _FALLBACK_PROFILE
+    if len(declared) == 1:
+        return next(iter(declared))
+    return _FALLBACK_PROFILE
+
+
 def _add_common(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--profile", default=default_profile())
+    parser.add_argument("--profile", default=None)
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--db", default=None, help="override the index path")
 
@@ -124,25 +143,58 @@ def main(argv: Sequence[str] | None = None) -> int:
     _force_utf8_output()
     args = build_parser().parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
+    if getattr(args, "profile", None) is None:
+        args.profile = resolve_default_profile(repo_root)
+    result: dict[str, object] = {}
+    started = time.perf_counter()
     try:
-        return _dispatch(args, repo_root)
+        code = _dispatch(args, repo_root, result)
     except (config.ConfigError, store.StoreError, search.SearchError,
             discovery.DiscoveryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 2
+        result["error"] = type(exc).__name__
+        code = 2
+    _record_usage(args, repo_root, result, started, code)
+    return code
 
 
-def _dispatch(args: argparse.Namespace, repo_root: Path) -> int:
+def _record_usage(
+    args: argparse.Namespace,
+    repo_root: Path,
+    result: dict[str, object],
+    started: float,
+    exit_code: int,
+) -> None:
+    """FR-CQ-14: 1 サブコマンド = 1 レコードを `.cq/usage.jsonl` へ追記する。"""
+    # `watch` は長時間常駐するため記録対象外（FR-CQ-14）。
+    if args.command == "watch":
+        return
+    usage_log.append_record(
+        command=args.command,
+        args={key: value for key, value in vars(args).items() if key != "command"},
+        elapsed_ms=int((time.perf_counter() - started) * 1000),
+        result=result,
+        exit_code=exit_code,
+        repo_root=repo_root,
+    )
+
+
+def _dispatch(
+    args: argparse.Namespace, repo_root: Path, result: dict[str, object]
+) -> int:
     if args.command == "index":
         profile = config.resolve_profile(repo_root, args.profile)
         report = indexer.build_index(
             repo_root, profile, db_path=_db_path(args, repo_root), rebuild=args.rebuild
         )
+        result.update(report.to_dict())
         _emit(report.to_dict())
         return 0
 
     if args.command == "stats":
-        _emit(store.index_stats(_db_path(args, repo_root)))
+        stats_report = store.index_stats(_db_path(args, repo_root))
+        result.update(stats_report)
+        _emit(stats_report)
         return 0
 
     if args.command == "search":
@@ -160,6 +212,7 @@ def _dispatch(args: argparse.Namespace, repo_root: Path) -> int:
         staleness = search.last_staleness()
         if staleness is not None:
             _emit_line(staleness)
+        result["hit_count"] = len(hits)
         return 0
 
     if args.command == "def":
@@ -171,29 +224,37 @@ def _dispatch(args: argparse.Namespace, repo_root: Path) -> int:
             payload = hit.to_dict()
             payload.pop("snippet", None)
             _emit_line(payload)
+        result["hit_count"] = len(hits)
         return 0
 
     if args.command == "get":
         chunk = get_chunk(_db_path(args, repo_root), args.chunk_id)
         if chunk is None:
+            result["found"] = False
             print(f"error: unknown chunk id: {args.chunk_id}", file=sys.stderr)
             return 2
         start_line, end_line = chunk["lines"]
         print(f"# {chunk['path']}:{start_line}-{end_line}")
         print(chunk["text"])
+        result["found"] = True
+        result["body_chars"] = len(chunk["text"])
         return 0
 
     if args.command == "refs":
-        for row in traces.references(
+        rows = list(traces.references(
             _db_path(args, repo_root), args.symbol, top_k=args.top_k
-        ):
+        ))
+        for row in rows:
             _emit_line(row)
+        result["count"] = len(rows)
         return 0
 
     if args.command == "trace":
         if args.by_path:
-            for row in traces.for_path(_db_path(args, repo_root), args.by_path):
+            rows = list(traces.for_path(_db_path(args, repo_root), args.by_path))
+            for row in rows:
                 _emit_line(row)
+            result["count"] = len(rows)
             return 0
         hits = search.search(
             repo_root, args.profile, query=args.trace_id, mode="trace",
@@ -201,6 +262,7 @@ def _dispatch(args: argparse.Namespace, repo_root: Path) -> int:
         )
         for hit in hits:
             _emit_line(hit.to_dict())
+        result["hit_count"] = len(hits)
         return 0
 
     if args.command == "watch":
@@ -232,6 +294,9 @@ def _dispatch(args: argparse.Namespace, repo_root: Path) -> int:
             max_tokens=args.max_tokens or repomap.DEFAULT_MAX_TOKENS,
             paths=args.paths,
         )
+        result["entries"] = len(built.entries)
+        result["dropped"] = built.dropped
+        result["tokens"] = built.tokens
         if args.format == "json":
             _emit(repomap.to_dict(built))
         else:

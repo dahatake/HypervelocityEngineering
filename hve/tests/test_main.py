@@ -631,6 +631,23 @@ class TestBuildParams(unittest.TestCase):
         config = _build_config(args)
         self.assertFalse(config.auto_compaction)
 
+    def test_tool_search_default_true(self) -> None:
+        """FR-MODEL-04: 未指定時は既定 (True) のまま。"""
+        args = _parse(["orchestrate", "-w", "aas"])
+        config = _build_config(args)
+        self.assertTrue(config.tool_search)
+
+    def test_tool_search_cli_enabled(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--tool-search"])
+        config = _build_config(args)
+        self.assertTrue(config.tool_search)
+
+    def test_tool_search_cli_disabled(self) -> None:
+        """FR-MODEL-06: --no-tool-search は既定有効化で上書きされない。"""
+        args = _parse(["orchestrate", "-w", "aas", "--no-tool-search"])
+        config = _build_config(args)
+        self.assertFalse(config.tool_search)
+
     def test_build_config_enable_auto_merge(self) -> None:
         """--enable-auto-merge が cfg.enable_auto_merge に反映され、未指定時は False。"""
         cfg_on = _build_config(_parse(["orchestrate", "-w", "aas", "--enable-auto-merge"]))

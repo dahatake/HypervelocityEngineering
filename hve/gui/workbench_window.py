@@ -33,6 +33,11 @@ from .state_bridge import SubprocessReader, launch_orchestrator
 from .widgets.wrap_helpers import apply_cjk_wrap
 from .wizard import WizardResult
 
+try:
+    from .. import runtime_observability as _rto
+except ImportError:  # pragma: no cover - script 実行経路
+    from hve import runtime_observability as _rto  # type: ignore[no-redef]
+
 
 # ログ最大行数（メモリ節約のため QPlainTextEdit の上限を設定）
 _MAX_LOG_BLOCK_COUNT = 50_000
@@ -170,6 +175,8 @@ class WorkbenchWindow(QMainWindow):
         self._session_index = session_index
         self._reader: Optional[SubprocessReader] = None
         self._is_running = False
+        # FR-RTO-05: 互換ウィンドウでも同一の集計を保持する。
+        self.runtime_metrics = _rto.RuntimeMetricsRegistry()
         # Issue-gui-session-workdir-isolation T5c:
         # GUI セッション work_root を子プロセスに伝搬するための env。
         self._env_overrides: Optional[Dict[str, str]] = (
@@ -227,7 +234,8 @@ class WorkbenchWindow(QMainWindow):
         self._cloud_session_label = QLabel("")
         self._cloud_session_label.setOpenExternalLinks(True)
         self._cloud_session_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        self._cloud_session_label.setStyleSheet("color: #0969da; padding: 2px;")
+        self._cloud_session_label.setProperty("hveRole", "accent")
+        self._cloud_session_label.setStyleSheet("padding: 2px;")
         self._cloud_session_label.hide()
 
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -298,6 +306,10 @@ class WorkbenchWindow(QMainWindow):
             self._cloud_session_label.show()
             self._set_status(self.tr("Cloud Session: Mission Control URL を取得しました"))
         if is_stats_line(line):
+            payload = _rto.parse_stats_line(line)
+            if payload is not None:
+                self.runtime_metrics.apply(payload)
+                self._set_status(_rto.format_runtime_summary(self.runtime_metrics.totals()))
             return
         self._log_pane.append_line(line)
 

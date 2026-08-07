@@ -1,0 +1,19 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/catalog/service-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+- path: docs/services/{serviceId}-agentic-retrieval-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-AgenticRetrieval-Detail--aar--1
+outputs:
+# fan-out するためサービス別設計書のみを宣言する。
+# 共通カタログへの追記は並列子間で競合するため含めない。
+- path: docs/azure/agentic-retrieval/{serviceId}-design.md
+  required: true
+  mode: create

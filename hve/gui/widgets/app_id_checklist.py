@@ -77,7 +77,7 @@ class AppIdChecklist(QWidget):
         self._empty_label = QLabel(
             self.tr("（候補が見つかりません。空のまま実行すると「全て実行」と解釈されます）")
         )
-        self._empty_label.setStyleSheet("color: #6a737d;")
+        self._empty_label.setProperty("hveRole", "description")
         self._empty_label.setVisible(False)
         layout.addWidget(self._empty_label)
 

@@ -66,8 +66,8 @@ class PageIndexOptionsWidget(QWidget):
         self._banner = QLabel(_BANNER_HTML)
         self._banner.setWordWrap(True)
         self._banner.setStyleSheet(
-            "QLabel { color: #0066CC; background: #e3f2fd; "
-            "border: 1px solid #90caf9; padding: 6px; }"
+            "QLabel { color: palette(link); background: palette(alternate-base); "
+            "border: 1px solid palette(mid); padding: 6px; }"
         )
         layout.addWidget(self._banner)
 

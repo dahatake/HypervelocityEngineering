@@ -95,6 +95,29 @@ BEGIN
 END;
 """
 
+MYSQL = """\
+CREATE TABLE `member` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(50),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+"""
+
+SQLITE = """\
+CREATE TABLE member (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT
+);
+"""
+
+DUCKDB = """\
+CREATE TABLE member (id INT, tags VARCHAR[]);
+"""
+
+# `data:name::string` の `:` セミ構造化パス表記は Snowflake 固有。既存 5 方言は
+# もちろん方言無指定（全方言のスーパーセット）でも解析できない（実測確認済み）。
+SNOWFLAKE = "SELECT data:name::string AS member_name FROM member;\n"
+
 
 class TestTsql:
     def test_batch_separators_do_not_hide_later_statements(self) -> None:
@@ -139,6 +162,51 @@ class TestOtherDialects:
         assert [(s.kind, s.qualname) for s in symbols] == [("function", "settle_royalty")]
         assert (symbols[0].start_line, symbols[0].end_line) == (1, 11)
         assert sql.extract_graph(ORACLE_ROUTINE)[0] == ((4, "royalty_rate"), (5, "sales"))
+
+
+class TestDialectOrder:
+    """Phase 6: 追加した 4 方言は既存 5 方言の後ろに固定順で並ぶ（決定性の維持）。"""
+
+    def test_new_dialects_are_appended_after_the_existing_five(self) -> None:
+        assert sql._DIALECTS[:5] == ("tsql", "oracle", "postgres", "bigquery", "spark")
+        assert sql._DIALECTS[5:] == ("mysql", "sqlite", "snowflake", "duckdb")
+
+
+class TestMysql:
+    def test_engine_and_charset_clauses_are_structured(self) -> None:
+        assert [(s.kind, s.qualname) for s in sql.extract(MYSQL)] == [("struct", "member")]
+
+
+class TestSqlite:
+    def test_autoincrement_table_is_structured(self) -> None:
+        assert [(s.kind, s.qualname) for s in sql.extract(SQLITE)] == [("struct", "member")]
+
+
+class TestDuckdb:
+    def test_array_typed_column_is_structured(self) -> None:
+        assert [(s.kind, s.qualname) for s in sql.extract(DUCKDB)] == [("struct", "member")]
+
+
+class TestSnowflake:
+    def test_semi_structured_path_syntax_is_structured(self) -> None:
+        refs, _imports = sql.extract_graph(SNOWFLAKE)
+        assert refs == ((1, "member"),)
+
+    def test_the_existing_five_dialects_alone_cannot_structure_it(self, monkeypatch) -> None:
+        """Phase 6 前の `_DIALECTS` 相当では、方言無指定フォールバックを足しても解析できない
+        （sqlfluff エスカレーションが介入しないよう無効化して sqlglot 層だけを見る）。"""
+        monkeypatch.setattr(sql, "_DIALECTS", ("tsql", "oracle", "postgres", "bigquery", "spark"))
+        monkeypatch.setattr(sql, "_by_sqlfluff", lambda source: None)
+        with pytest.raises(ExtractionError):
+            sql.extract_graph(SNOWFLAKE)
+
+
+class TestDialectlessFallback:
+    def test_used_only_when_no_fixed_dialect_matches(self, monkeypatch) -> None:
+        """個別方言がいずれも通らないときだけ、方言無指定のスーパーセット解析へ落ちる。"""
+        monkeypatch.setattr(sql, "_DIALECTS", ())
+        symbols = sql.extract("CREATE TABLE dbo.member (id BIGINT);\n")
+        assert [(s.kind, s.qualname) for s in symbols] == [("struct", "dbo.member")]
 
 
 class TestPostgres:

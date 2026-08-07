@@ -117,13 +117,17 @@ class TestDegradation:
             ("with_bom",)
         ]
 
-    def test_unparsable_file_is_kept_with_a_lite_parser(self, repo: Path) -> None:
+    def test_unparsable_file_recovers_via_tree_sitter_instead_of_lite(self, repo: Path) -> None:
+        """Phase 5 (FR-CQ-11): `ast` failing no longer counts as `degraded` when
+        the optional tree-sitter-python grammar recovers the file instead."""
         (repo / "pkg" / "broken.py").write_text(
             "def broken(:\n    pass\n\nclass Half:\n    pass\n", encoding="utf-8"
         )
         report = _index(repo)
-        assert report.degraded == 1
-        assert _rows(repo, "SELECT parser FROM files WHERE path='pkg/broken.py'") == [("lite",)]
+        assert report.degraded == 0
+        assert _rows(repo, "SELECT parser FROM files WHERE path='pkg/broken.py'") == [
+            ("tree-sitter-partial",)
+        ]
 
     def test_degraded_file_still_yields_symbols(self, repo: Path) -> None:
         (repo / "pkg" / "broken.py").write_text(

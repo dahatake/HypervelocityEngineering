@@ -913,6 +913,65 @@ def _build_parser() -> argparse.ArgumentParser:
         help="--autopilot-chain の APP 並列度（既定: 4、1〜16 にクリップ）。",
     )
 
+    orch.add_argument(
+        "--enable-agentic-retrieval",
+        choices=["auto", "yes", "no"],
+        default=None,
+        help=(
+            "Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。"
+            "no を指定すると当該 Step を実行対象から外す。"
+            "省略時はウィザード回答、それも無ければ auto。"
+        ),
+    )
+
+    orch.add_argument(
+        "--agentic-data-source-modes",
+        nargs="+",
+        choices=["indexer", "push"],
+        default=None,
+        metavar="MODE",
+        help="Agentic Retrieval のデータソース投入方式（indexer / push、複数指定可。既定: indexer）。",
+    )
+    orch.add_argument(
+        "--foundry-mcp-integration",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Microsoft Foundry 連携（Remote MCP Server）の有無（既定: 有効）。",
+    )
+    orch.add_argument(
+        "--agentic-data-sources-hint",
+        default=None,
+        metavar="TEXT",
+        help="想定データソースのヒント（自由記述）。Knowledge Source 選定の根拠に使う。",
+    )
+    orch.add_argument(
+        "--agentic-existing-design-diff-only",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="既存の Agentic Retrieval 設計を上書きせず差分更新する（既定: 無効）。",
+    )
+    orch.add_argument(
+        "--foundry-sku-fallback-policy",
+        choices=["standard_allowed", "global_required"],
+        default=None,
+        help=(
+            "Foundry モデル SKU のフォールバック方針。"
+            "standard_allowed = Standard へのフォールバックを許容（既定）、"
+            "global_required = Global Standard 必須。"
+        ),
+    )
+
+    orch.add_argument(
+        "--enable-tool-search",
+        choices=["auto", "yes", "no"],
+        default=None,
+        help=(
+            "Foundry Toolbox の tool search（Tool 定義の遅延公開）の使用方針。"
+            "auto = Tool 総数が 15 を超えたら有効化（既定）、"
+            "yes = 常に有効、no = 使わない。"
+        ),
+    )
+
     # モデル
     orch.add_argument(
         "--model", "-m",
@@ -1071,6 +1130,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "サブステップ実行で SDK の自動コンテキスト圧縮（infinite_sessions）を有効化する "
             "(--auto-compaction: 有効, --no-auto-compaction: 無効, 省略時: HVEConfig.auto_compaction を継承)"
+        ),
+    )
+    orch.add_argument(
+        "--tool-search",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        dest="tool_search",
+        help=(
+            "SDK のツール定義遅延ロード（tool_search）を有効化する "
+            "(--tool-search: 有効, --no-tool-search: 無効, 省略時: HVEConfig.tool_search を継承)"
+        ),
+    )
+    orch.add_argument(
+        "--tool-search-ranking",
+        choices=["sdk", "hve"],
+        default=None,
+        dest="tool_search_ranking",
+        help=(
+            "tool_search 有効時のランキング実装。"
+            "sdk: SDK 組み込みのまま（既定）/ "
+            "hve: `tool_search_tool` を HVE 実装へ差し替え、日本語対応 BM25・pin ポリシー・"
+            "Skill のカタログ合流を使う。--tool-search とは直交する"
         ),
     )
     orch.add_argument(
@@ -1976,6 +2057,58 @@ def _build_parser() -> argparse.ArgumentParser:
         help="HTTP タイムアウト秒（デフォルト: 10.0）",
     )
 
+    # --- toolsearch サブコマンド ---
+    # FR-TS-09 / FR-TS-10: 差し替えたランカーの実行時統計を集計して表示する。
+    toolsearch_parser = sub.add_parser(
+        "toolsearch",
+        help="Tool Search ランキング（HVE 実装）の統計を表示する",
+    )
+    toolsearch_sub = toolsearch_parser.add_subparsers(dest="toolsearch_command")
+    ts_dashboard = toolsearch_sub.add_parser(
+        "dashboard",
+        help="収集済みイベントからダッシュボードを描画する",
+    )
+    ts_dashboard.add_argument(
+        "--events",
+        default=None,
+        help="イベントログのパス（既定: <repo-root>/.toolsearch/events.jsonl、HVE_TOOLSEARCH_EVENTS）",
+    )
+    ts_dashboard.add_argument(
+        "--usage",
+        default=None,
+        help="利用履歴のパス（既定: <repo-root>/.toolsearch/usage.jsonl、HVE_TOOLSEARCH_USAGE）",
+    )
+    ts_dashboard.add_argument(
+        "--since",
+        default=None,
+        help="この ISO8601 時刻（UTC）以降のイベントだけを集計する 例: 2026-08-01T00:00:00Z",
+    )
+    ts_dashboard.add_argument(
+        "--top",
+        type=int,
+        default=10,
+        help="上位一覧の表示件数（デフォルト: 10）",
+    )
+    ts_dashboard.add_argument("--json", action="store_true", help="JSON 形式で出力する")
+    ts_dashboard.add_argument(
+        "--html",
+        default=None,
+        help="自己完結 HTML をこのパスへ書き出す（外部ネットワークへ接続しない）",
+    )
+    ts_mode = ts_dashboard.add_mutually_exclusive_group()
+    ts_mode.add_argument(
+        "--follow",
+        action="store_true",
+        help="一定間隔で再集計して表示を更新する（Ctrl+C で終了）",
+    )
+    ts_mode.add_argument("--once", action="store_true", help="1 回だけ描画して終了する（既定）")
+    ts_dashboard.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="--follow のときの更新間隔秒（デフォルト: 2.0）",
+    )
+
     return parser
 
 
@@ -2014,6 +2147,27 @@ def _load_mcp_config(mcp_config_path: Optional[str]) -> Optional[dict]:
 # -----------------------------------------------------------------------
 # SDKConfig 構築
 # -----------------------------------------------------------------------
+
+def _apply_agentic_retrieval_cli_overrides(config, args: argparse.Namespace) -> None:
+    """Agentic Retrieval 関連の CLI フラグを config へ反映する。
+
+    優先順位は CLI フラグ > ウィザード回答 > 既定値。
+    CLI 未指定（None）のときは config を変更しないので、ウィザードで
+    収集した値がそのまま残る。
+    """
+    for attr in (
+        "enable_agentic_retrieval",
+        "agentic_data_source_modes",
+        "foundry_mcp_integration",
+        "agentic_data_sources_hint",
+        "agentic_existing_design_diff_only",
+        "foundry_sku_fallback_policy",
+        "enable_tool_search",
+    ):
+        value = getattr(args, attr, None)
+        if value is not None:
+            setattr(config, attr, value)
+
 
 def _build_config(args: argparse.Namespace):
     """argparse の Namespace から SDKConfig を構築する。"""
@@ -2239,6 +2393,10 @@ def _build_config(args: argparse.Namespace):
         cfg.workiq_enabled = cfg.is_workiq_qa_enabled() or cfg.is_workiq_akm_review_enabled()
     if getattr(args, "auto_compaction", None) is not None:
         cfg.auto_compaction = bool(args.auto_compaction)
+    if getattr(args, "tool_search", None) is not None:
+        cfg.tool_search = bool(args.tool_search)
+    if getattr(args, "tool_search_ranking", None):
+        cfg.tool_search_ranking = str(args.tool_search_ranking)
     # AKM 入力ソースとしての Work IQ（独立フラグ）。
     # 明示指定（--workiq-akm-ingest / --no-workiq-akm-ingest）優先。
     # 未指定時は --sources に 'workiq' が含まれているかで自動判定する。
@@ -2508,6 +2666,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "pricing":
         return _cmd_pricing(args)
+
+    if args.command == "toolsearch":
+        return _cmd_toolsearch(args)
 
     # 引数なし → GUI を既定として起動。PySide6 未導入時は CLI 対話ウィザードへ自動フォールバック。
     if args.command is None:
@@ -2815,6 +2976,67 @@ def _cmd_pricing(args: argparse.Namespace) -> int:
         print(
             f"  - {p.plan_id:<22} monthly={monthly:<8} "
             f"included={p.included_premium_requests} additional={addl}"
+        )
+    return 0
+
+
+def _cmd_toolsearch(args: argparse.Namespace) -> int:
+    """`hve toolsearch dashboard` ハンドラー（FR-TS-10）。
+
+    収集済みイベント（FR-TS-09）と利用履歴（FR-TS-07）だけから集計する。
+    ネットワークへは接続しない。
+    """
+    try:
+        from .toolsearch import dashboard as ts_dashboard
+    except ImportError:
+        from toolsearch import dashboard as ts_dashboard  # type: ignore[no-redef]
+
+    sub = getattr(args, "toolsearch_command", None) or "dashboard"
+    if sub != "dashboard":
+        print(f"❌ 未知のサブコマンドです: {sub}", file=sys.stderr)
+        return 2
+
+    events_path = getattr(args, "events", None)
+    usage_path = getattr(args, "usage", None)
+    since = getattr(args, "since", None)
+
+    if getattr(args, "follow", False):
+        return ts_dashboard.run_live(
+            events_path=events_path,
+            usage_path=usage_path,
+            since=since,
+            interval=float(getattr(args, "interval", 2.0)),
+            width=ts_dashboard.terminal_width(),
+        )
+
+    snapshot = ts_dashboard.build_dashboard(
+        events_path=events_path,
+        usage_path=usage_path,
+        since=since,
+        top=int(getattr(args, "top", 10)),
+    )
+
+    html_out = getattr(args, "html", None)
+    if html_out:
+        target = Path(html_out)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(ts_dashboard.render_html(snapshot), encoding="utf-8")
+        except OSError as exc:
+            print(f"❌ HTML を書き出せませんでした: {exc}", file=sys.stderr)
+            return 1
+        print(f"✅ {target}")
+
+    if getattr(args, "json", False):
+        print(ts_dashboard.render_json(snapshot))
+    elif not html_out:
+        print(ts_dashboard.render_text(snapshot, width=ts_dashboard.terminal_width()))
+
+    if snapshot.queries == 0:
+        print(
+            "\nℹ️  イベントがまだありません。"
+            " `--tool-search --tool-search-ranking hve` を付けて実行すると収集が始まります。",
+            file=sys.stderr,
         )
     return 0
 
@@ -3746,6 +3968,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         }
         cfg.foundry_sku_fallback_policy = _fskp_map.get(_fskp_raw, "standard_allowed")
 
+    # CLI フラグはウィザード回答より優先する（非対話実行での明示指定を成立させる）。
+    _apply_agentic_retrieval_cli_overrides(cfg, args)
+
     # params dict 構築
     params: dict = {
         "branch": branch,
@@ -4192,6 +4417,7 @@ def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
         f"{_ts()} Autopilot result: completed={summary.completed_apps}/{summary.total_apps}"
         f" aborted={len(summary.aborted_apps)}"
     )
+    print(f"{_ts()} {runner.runtime_summary()}")
     if summary.aborted_apps:
         for app_id in summary.aborted_apps:
             print(

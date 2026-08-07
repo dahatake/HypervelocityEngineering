@@ -22,6 +22,7 @@ from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
+from .theme import token
 from .workflow_step_requirements import RequirementsSummary
 
 
@@ -32,11 +33,11 @@ _STATUS_ICON = {
     "info": "—",
 }
 
-# 全体ステータス → 補助色（境界線色のみに利用、テキストは黒）
-_OVERALL_BORDER_COLOR = {
-    "ok": "#2e7d32",    # 緑
-    "warn": "#ed6c02",  # 橙
-    "none": "#9e9e9e",  # 灰
+# 全体ステータス → 補助色トークン名（境界線色のみに利用）
+_OVERALL_BORDER_TOKEN = {
+    "ok": "successForeground",
+    "warn": "warningForeground",
+    "none": "disabledForeground",
 }
 
 
@@ -62,7 +63,7 @@ class WorkflowRequirementsBanner(QFrame):
         # ガイダンステキスト（折り返し有）
         self._guidance = QLabel("")
         self._guidance.setWordWrap(True)
-        self._guidance.setStyleSheet("color: #444;")
+        self._guidance.setProperty("hveRole", "description")
         self._layout.addWidget(self._guidance)
 
         # 項目リスト（動的生成）
@@ -107,7 +108,7 @@ class WorkflowRequirementsBanner(QFrame):
         # 項目をリスト表示
         if not summary.items:
             blank = QLabel(self.tr("  （必須要件なし）"))
-            blank.setStyleSheet("color: #666;")
+            blank.setProperty("hveRole", "description")
             self._items_layout.addWidget(blank)
         else:
             for item in summary.items:
@@ -118,11 +119,11 @@ class WorkflowRequirementsBanner(QFrame):
                 lbl = QLabel(text)
                 lbl.setWordWrap(True)
                 if item.status == "warn":
-                    lbl.setStyleSheet("color: #b00020;")  # 補助色（赤系）
+                    lbl.setProperty("hveRole", "error")
                 elif item.status == "ok":
-                    lbl.setStyleSheet("color: #1b5e20;")  # 補助色（緑系）
+                    lbl.setProperty("hveRole", "success")
                 else:
-                    lbl.setStyleSheet("color: #555;")
+                    lbl.setProperty("hveRole", "description")
                 self._items_layout.addWidget(lbl)
 
         self._apply_border(summary.overall_status)
@@ -133,11 +134,11 @@ class WorkflowRequirementsBanner(QFrame):
 
     def _apply_border(self, status: str) -> None:
         """全体ステータスに応じた境界線色を適用。"""
-        color = _OVERALL_BORDER_COLOR.get(status, "#9e9e9e")
+        color = token(_OVERALL_BORDER_TOKEN.get(status, "disabledForeground"))
         self.setStyleSheet(
             f"QFrame#WorkflowRequirementsBanner {{"
             f"  border: 2px solid {color};"
             f"  border-radius: 4px;"
-            f"  background: #fafafa;"
+            f"  background: {token('panel.background')};"
             f"}}"
         )

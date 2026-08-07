@@ -58,8 +58,8 @@ class SemanticOptionsWidget(QWidget):
         self._banner = QLabel("")
         self._banner.setWordWrap(True)
         self._banner.setStyleSheet(
-            "QLabel { color: #b00020; background: #fff3e0; "
-            "border: 1px solid #ffb74d; padding: 6px; }"
+            "QLabel { background: palette(alternate-base); "
+            "border: 1px solid palette(mid); padding: 6px; }"
         )
         self._banner.setVisible(False)
         layout.addWidget(self._banner)

@@ -13,6 +13,8 @@ metadata:
 
 `.github/copilot-instructions.md` §0 を最優先で遵守する。本 Skill は全 Agent 共通の参照先を集約する。
 
+- **一時作業ファイルは `work/` 配下に作る（絶対）**: 調査スクリプト・デバッグ出力・ログ・実験結果をリポジトリルート直下（`/`）へ作成してはならない。配置先の対応表は Skill `work-artifacts-layout`「一時作業ファイルの配置先」を参照。
+
 特に Windows 環境で作業する Agent は、§0 の以下 2 項目を必読:
 
 - **ripgrep (rg) 利用ガイドライン（絶対）**: `-g` / `--glob` には `/` 区切りを使い、`\` 区切りや brace-glob のエスケープは禁止（`unopened alternate group; missing '{'` エラー回避）。

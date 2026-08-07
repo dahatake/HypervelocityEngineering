@@ -17,6 +17,11 @@ from .workbench_state import (
     _extract_inline_ctx,
 )
 
+try:
+    from .. import runtime_observability as _rto
+except ImportError:  # pragma: no cover - script 実行経路
+    from hve import runtime_observability as _rto  # type: ignore[no-redef]
+
 
 # ログ行の標準形式: [HH:MM:SS] {step_id}: {level}: {message}
 _LOG_PATTERN = re.compile(
@@ -236,22 +241,8 @@ def is_stats_line(line: str) -> bool:
     return bool(_STATS_PREFIX_PATTERN.match(line))
 
 
-def parse_stats_event(line: str) -> Optional[dict]:
-    """`[hve:stats] {...}` ログ行をパースして payload dict を返す。
-
-    マッチしない / JSON 解析失敗 / dict でない場合は None。副作用なし。
-    GUI 側で複数の経路から同じ payload を参照したい場合に使う。
-    """
-    m = _STATS_PREFIX_PATTERN.match(line)
-    if not m:
-        return None
-    try:
-        payload = json.loads(m.group("json"))
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return payload
+# FR-MAINT-07: 観測イベントの解析は core 実装を単一の正本とする。
+parse_stats_event = _rto.parse_stats_line
 
 
 def _try_consume_stats_event(state: WorkbenchState, line: str) -> bool:
@@ -263,6 +254,12 @@ def _try_consume_stats_event(state: WorkbenchState, line: str) -> bool:
     payload = parse_stats_event(line)
     if payload is None:
         return False
+
+    # FR-RTO-05: instance 単位の集計を core reducer で保持する。
+    try:
+        state.apply_runtime_event(payload)
+    except AttributeError:
+        pass
 
     kind = payload.get("kind") or ""
     if kind == "session_usage_detail":

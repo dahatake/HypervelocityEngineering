@@ -41,14 +41,18 @@ def wrap_nowrap_unit(label: str, value: str, *, label_color: str, value_color: s
     )
 
 
-def join_items(items: Iterable[str], *, separator_color: str = "#999999") -> str:
+def join_items(items: Iterable[str], *, separator_color: Optional[str] = None) -> str:
     """nowrap な単位 HTML 群を区切り ``|`` で結合する。
 
     区切りの前後に ZWSP を挿入し、長くなった場合に区切り位置で自然に折り返される
-    ようにする。
+    ようにする。``separator_color`` 省略時は現在テーマのトークンを呼び出し時に解決する。
     """
+    # モジュール import を Qt 非依存に保つため theme はここで遅延 import する。
+    from .theme import token
+
+    color = separator_color or token("disabledForeground")
     sep = (
-        f"{ZWSP}<span style='color:{separator_color};'>{NBSP}|{NBSP}</span>{ZWSP}"
+        f"{ZWSP}<span style='color:{color};'>{NBSP}|{NBSP}</span>{ZWSP}"
     )
     return sep.join(items)
 

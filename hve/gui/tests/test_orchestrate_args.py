@@ -57,6 +57,24 @@ class TestSteeringIpcDirToArgv:
         assert argv[argv.index("--steering-ipc-dir") + 1] == "/tmp/steering"
 
 
+class TestToolSearchToArgv:
+    """FR-MODEL-04: tool_search → --tool-search / --no-tool-search 変換テスト。"""
+
+    def test_default_emits_no_flag(self) -> None:
+        """既定（None = CLI 既定を継承）ではどちらのフラグも出力しない。"""
+        argv = OrchestrateArgs(workflow="aas").to_argv()
+        assert "--tool-search" not in argv
+        assert "--no-tool-search" not in argv
+
+    def test_on_emits_flag(self) -> None:
+        argv = OrchestrateArgs(workflow="aas", tool_search=True).to_argv()
+        assert "--tool-search" in argv
+
+    def test_off_emits_negative_flag(self) -> None:
+        argv = OrchestrateArgs(workflow="aas", tool_search=False).to_argv()
+        assert "--no-tool-search" in argv
+
+
 class TestAppIdToArgv:
     def test_app_id_is_not_duplicated(self) -> None:
         argv = OrchestrateArgs(workflow="asdw-web", app_id="APP-009").to_argv()

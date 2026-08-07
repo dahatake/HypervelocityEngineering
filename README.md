@@ -350,6 +350,30 @@ git commit -m "chore: mark hve.sh as executable"
 - 日常運用: [tools/skills/code_query/USAGE.md](tools/skills/code_query/USAGE.md)
 - 仕様・GUI 操作: [users-guide/skills-code-query.md](users-guide/skills-code-query.md)
 
+### Tool Search（HVE ランタイムのツール検索）
+
+`hve/toolsearch/` は、HVE 自身の Copilot SDK セッションに対して
+**ツール定義を毎ターン全件渡すのをやめ、必要なものだけをその場で発見させる**仕組みです。
+SDK 組み込みの `tool_search_tool` を HVE 実装で差し替え、ランキングを HVE が所有します。
+
+- 日本語で機能する検索（`mdq` の CJK バイグラムトークナイザを再利用したフィールド重み付き BM25）
+- MCP ツール・HVE 自作ツールに加えて **Skill もカタログへ合流**させ、
+  普段使わない Skill も必要な場面で発見できるようにする
+- Core は常時公開、long-tail は検索、という振り分けを `hve/toolsearch/policy.json` で調整できる
+- 検索専用語彙（`additional_search_text`）は索引にだけ載り、モデルへ渡る定義は増えない
+- Recall@k とトークン削減率を golden クエリで計測できる
+- 実行時の検索状況を収集し、`hve toolsearch dashboard` で可視化できる
+
+> **注意**: `users-guide/tool-search-guide.md` は HVE が**生成する AI Agent** 側の
+> Microsoft Foundry Toolbox 設定を扱う別ガイドです。本機能は Foundry を使いません。
+>
+> **有効化**: 既定では無効です。`--tool-search` と `--tool-search-ranking hve` の
+> 両方を指定したときにだけ動作します。GUI は設定画面の **skills → Tool-Search** で
+> 設定・ポリシー確認・統計表示を行えます。
+
+- 設計・カスタマイズ・図解: [users-guide/tool-search.md](users-guide/tool-search.md)
+- ダッシュボードと統計の見方: [users-guide/tool-search-dashboard.md](users-guide/tool-search-dashboard.md)
+
 ## リポジトリ構造
 
 README では、実在確認できた主要ディレクトリだけを掲載します。

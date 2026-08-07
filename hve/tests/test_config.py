@@ -767,5 +767,42 @@ class TestSDKConfigToolListFromEnv(unittest.TestCase):
         self.assertEqual(cfg.excluded_tools, ["web_search", "fetch"])
 
 
+# ---------------------------------------------------------------------------
+# FR-MODEL-04: SDK tool_search (ツール定義の遅延ロード) の設定
+# ---------------------------------------------------------------------------
+
+class TestSDKConfigToolSearch(unittest.TestCase):
+    """tool_search の既定値と HVE_TOOL_SEARCH env 読み取りを検証する。"""
+
+    def test_default_is_true(self) -> None:
+        """FR-MODEL-04: 既定は有効。"""
+        self.assertTrue(SDKConfig().tool_search)
+
+    def test_env_unset_is_true(self) -> None:
+        """FR-MODEL-04: env 未指定でも有効。"""
+        import os
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("HVE_TOOL_SEARCH", None)
+            cfg = SDKConfig.from_env()
+        self.assertTrue(cfg.tool_search)
+
+    def test_env_truthy_values(self) -> None:
+        import os
+        for raw in ("1", "true", "True", "yes"):
+            with self.subTest(raw=raw):
+                with unittest.mock.patch.dict(os.environ, {"HVE_TOOL_SEARCH": raw}):
+                    cfg = SDKConfig.from_env()
+                self.assertTrue(cfg.tool_search)
+
+    def test_env_falsy_values(self) -> None:
+        """FR-MODEL-06: 明示的な無効化は既定有効化で上書きされない。"""
+        import os
+        for raw in ("0", "false", "no", ""):
+            with self.subTest(raw=raw):
+                with unittest.mock.patch.dict(os.environ, {"HVE_TOOL_SEARCH": raw}):
+                    cfg = SDKConfig.from_env()
+                self.assertFalse(cfg.tool_search)
+
+
 if __name__ == "__main__":
     unittest.main()

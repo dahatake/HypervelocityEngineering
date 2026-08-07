@@ -155,8 +155,11 @@ def scan_file_semantic_paragraph(
         line_cursor = hc.start_line
         for i, body in enumerate(sub_bodies):
             line_count = body.count("\n") + 1
-            sub_start = line_cursor
-            sub_end = min(hc.end_line, line_cursor + line_count - 1)
+            # Several sentences can share one physical line, so the cursor
+            # outruns the parent's span. Clamping start too keeps the
+            # start <= end invariant every consumer relies on.
+            sub_start = min(line_cursor, hc.end_line)
+            sub_end = min(hc.end_line, sub_start + line_count - 1)
             line_cursor = sub_end + 1
 
             # Contextualization template (Q11=B, default ON).

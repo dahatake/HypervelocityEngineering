@@ -113,9 +113,11 @@
 
 ## 3.6 Agentic Retrieval への委譲（任意）
 - 機能要件に Chat-Bot / AI Agent / RAG / 対話型応答が含まれる場合、
-  当該サービスの Agentic Retrieval 機能要件詳細は `Arch-AgenticRetrieval-Detail` Custom Agent に委譲する。
-- 出力先: `docs/services/{serviceId}-agentic-retrieval-spec.md`
+  当該サービスの Agentic Retrieval 機能要件詳細は **AAD-WEB Step.2.6**（`Arch-AgenticRetrieval-Detail`）へ委譲する。
+- 出力先: `docs/services/{serviceId}-agentic-retrieval-spec.md`（委譲先 Step が生成）
 - 本 Agent（Arch-Microservice-ServiceDetail）は委譲した旨を `{WORK}work-status.md` に 1 行記録するのみで、spec.md は作らない。
+- 記録形式: `委譲: {serviceId} → aad-web Step.2.6 (Arch-AgenticRetrieval-Detail) / 根拠: <判定キーワードと抜粋>`
+- サービス定義書本体には、委譲したことを示す 1 行を「外部依存・統合」へ残し、Azure 固有名は書かない。
 
 # 4) 品質チェック（軽量・必須）
 - すべての処理済みサービスについて:

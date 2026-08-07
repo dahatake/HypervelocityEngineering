@@ -90,6 +90,35 @@ class TestIncludeAuto:
         result = hve_config.get_model_choices(include_auto=True)
         assert result == [hve_config.MODEL_AUTO_VALUE, "m1", "m2"]
 
+    def test_include_auto_collapses_wire_auto_from_cache(self, isolated_cache):
+        models_cache.save(["auto", "m1"], path=isolated_cache, now=time.time())
+
+        result = hve_config.get_model_choices(include_auto=True)
+
+        assert result == [hve_config.MODEL_AUTO_VALUE, "m1"]
+        cached = models_cache.load(path=isolated_cache)
+        assert cached is not None
+        assert cached.models == ["auto", "m1"]
+
+    def test_without_include_auto_preserves_wire_auto_from_cache(self, isolated_cache):
+        models_cache.save(["auto", "m1"], path=isolated_cache, now=time.time())
+
+        result = hve_config.get_model_choices()
+
+        assert result == ["auto", "m1"]
+
+    def test_include_auto_collapses_wire_auto_from_sdk(self, isolated_cache):
+        with patch(
+            "hve.models_api.fetch_model_entries",
+            return_value=_entries("auto", "m1"),
+        ):
+            result = hve_config.get_model_choices(include_auto=True)
+
+        assert result == [hve_config.MODEL_AUTO_VALUE, "m1"]
+        cached = models_cache.load(path=isolated_cache)
+        assert cached is not None
+        assert cached.models == ["auto", "m1"]
+
     def test_include_auto_with_fallback(self, isolated_cache):
         from hve.models_api import ModelsAPIError
 

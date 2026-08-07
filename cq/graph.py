@@ -27,7 +27,16 @@ def extract(source: str, lang: str) -> tuple[tuple[Reference, ...], tuple[Import
     extractor = languages.graph_extractor_for(lang)
     if extractor is None:
         return (), ()
-    raw_refs, raw_imports = extractor(source)
+    try:
+        raw_refs, raw_imports = extractor(source)
+    except (languages.ExtractionError, ImportError):
+        # Same degradation as `indexer._extract` (FR-CQ-11): an absent optional
+        # grammar must cost the graph rows for this file, not the whole index.
+        return (), ()
+    return _normalise(raw_refs, raw_imports)
+
+
+def _normalise(raw_refs, raw_imports) -> tuple[tuple[Reference, ...], tuple[Import, ...]]:
     refs = tuple(sorted(
         (Reference(line, name) for line, name in raw_refs),
         key=lambda r: (r.line, r.name),
@@ -43,7 +52,7 @@ def extract_python(source: str) -> tuple[tuple[Reference, ...], tuple[Import, ..
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError, RecursionError):
-        return (), ()
+        return _extract_python_fallback(source)
 
     refs: list[Reference] = []
     imports: list[Import] = []
@@ -63,6 +72,20 @@ def extract_python(source: str) -> tuple[tuple[Reference, ...], tuple[Import, ..
     refs.sort(key=lambda r: (r.line, r.name))
     imports.sort(key=lambda i: (i.line, i.module))
     return tuple(refs), tuple(imports)
+
+
+def _extract_python_fallback(source: str) -> tuple[tuple[Reference, ...], tuple[Import, ...]]:
+    """FR-CQ-11 Phase 5: a file `ast` cannot parse still gets refs/imports
+    through the optional tree-sitter-python grammar instead of losing the
+    graph rows outright, mirroring the degradation contract in :func:`extract`."""
+    extractor = languages.graph_extractor_for("python")
+    if extractor is None:
+        return (), ()
+    try:
+        raw_refs, raw_imports = extractor(source)
+    except (languages.ExtractionError, ImportError):
+        return (), ()
+    return _normalise(raw_refs, raw_imports)
 
 
 def _called_name(node: ast.expr) -> str | None:

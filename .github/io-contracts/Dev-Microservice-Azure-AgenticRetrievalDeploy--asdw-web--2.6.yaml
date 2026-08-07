@@ -1,0 +1,21 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/azure/agentic-retrieval/{serviceId}-design.md
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-AgenticRetrievalDesign--asdw-web--2.5
+outputs:
+- path: src/infra/azure/create-azure-agentic-retrieval/prep.sh
+  required: true
+  mode: create
+- path: src/infra/azure/create-azure-agentic-retrieval/create.sh
+  required: true
+  mode: create
+# サービス別スクリプトは 1 回の実行で全件生成する（fan-out しない）ため、
+# {serviceId} ではなくディレクトリ単位で宣言する。
+- path: src/infra/azure/create-azure-agentic-retrieval/services/
+  required: true
+  mode: create

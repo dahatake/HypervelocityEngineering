@@ -125,18 +125,19 @@ class SettingsPricingTab(QWidget):
 
         # --- 料金表 取得状況 ---
         info_title = QLabel(self.tr("料金表キャッシュ"))
-        info_title.setStyleSheet("font-weight: bold; color: #222;")
+        info_title.setStyleSheet("font-weight: bold;")
         root.addWidget(info_title)
 
         self._fetched_label = QLabel(_DASH)
-        self._fetched_label.setStyleSheet("color: #555;")
+        self._fetched_label.setProperty("hveRole", "description")
         self._fetched_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self._counts_label = QLabel(_DASH)
-        self._counts_label.setStyleSheet("color: #555;")
+        self._counts_label.setProperty("hveRole", "description")
 
         self._cache_path_label = QLabel(_DASH)
-        self._cache_path_label.setStyleSheet("color: #888; font-size: 8pt;")
+        self._cache_path_label.setProperty("hveRole", "muted")
+        self._cache_path_label.setStyleSheet("font-size: 8pt;")
         self._cache_path_label.setWordWrap(True)
         self._cache_path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
@@ -153,7 +154,7 @@ class SettingsPricingTab(QWidget):
         btn_row.addWidget(self._refresh_btn)
         btn_row.addStretch(1)
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: #5a6473;")
+        self._status_label.setProperty("hveRole", "description")
         btn_row.addWidget(self._status_label)
         root.addLayout(btn_row)
 
@@ -235,5 +236,5 @@ def _hline() -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.Shape.HLine)
     f.setFrameShadow(QFrame.Shadow.Sunken)
-    f.setStyleSheet("color: #e0e3e8;")
+    f.setProperty("hveRole", "separator")
     return f

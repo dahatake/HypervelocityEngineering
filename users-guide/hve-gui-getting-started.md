@@ -62,7 +62,7 @@ GitHub Copilot SDK へのログインは、上記のとおり CLI（`python -m h
 
 > **GUI 設定画面からのログイン（任意）**
 >
-> 端末で `gh auth login` を実行する代わりに、GUI の **設定 → 連携 → GitHub** にある
+> 端末で `gh auth login` を実行する代わりに、GUI の **設定 → 各サービス連携 → GitHub** にある
 > **「GitHub CLI でログイン」** ボタンからも認証できます。押下すると埋め込み端末で
 > `gh auth login` を実行し、完了後に `gh auth token` で取得したトークンを
 > **このセッション限り** `GH_TOKEN` 環境変数へ設定します。これにより「ブランチ取得」や

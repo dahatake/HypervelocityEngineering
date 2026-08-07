@@ -63,9 +63,12 @@ class TestScala2Symbols:
             ("class", "RoyaltyJob"),
             ("method", "RoyaltyJob.loadSales"),
             ("class", "Royalty"),
+            ("property", "Royalty.memberId"),
+            ("property", "Royalty.total"),
             ("interface", "Sink"),
             ("method", "Sink.write"),
             ("class", "DeltaSink"),
+            ("property", "DeltaSink.table"),
             ("method", "DeltaSink.write"),
         ])
 
@@ -83,10 +86,28 @@ class TestScala2Symbols:
         alias = next(s for s in scala.extract(SCALA2) if s.name == "MemberId")
         assert (alias.kind, alias.parent) == ("type", None)
 
-    def test_val_definition_is_out_of_scope(self) -> None:
-        """`val` は Rust の `const` / `static` と同じく最小 kind 語彙の対象外。"""
-        symbols = scala.extract("object A {\n  val total: Int = 1\n}\n")
-        assert [s.qualname for s in symbols] == ["A"]
+    def test_class_level_val_and_var_are_indexed_as_variables(self) -> None:
+        """Phase 3 (FR-CQ-11): a class/trait/object member `val`/`var`/`given`
+        closes the gap tags.scm identifies (previously out of the vocabulary)."""
+        symbols = scala.extract(
+            "object A {\n  val total: Int = 1\n  var counter: Int = 0\n}\n"
+        )
+        by_qualname = {s.qualname: s for s in symbols}
+        assert by_qualname["A.total"].kind == "variable"
+        assert by_qualname["A.counter"].kind == "variable"
+
+    def test_local_val_inside_a_def_is_still_out_of_scope(self) -> None:
+        """A local binding is not a class member; indexing it would flood the
+        symbol table with noise unrelated to the file's public surface."""
+        symbols = scala.extract(
+            "object A {\n  def run(): Unit = {\n    val x = 1\n    println(x)\n  }\n}\n"
+        )
+        assert [s.qualname for s in symbols] == ["A", "A.run"]
+
+    def test_given_definition_is_indexed_as_a_variable(self) -> None:
+        source = "object A {\n  given intOrdering: Ordering[Int] = Ordering.Int\n}\n"
+        given = next(s for s in scala.extract(source) if s.name == "intOrdering")
+        assert (given.kind, given.qualname) == ("variable", "A.intOrdering")
 
     def test_scaladoc_becomes_the_doc_head(self) -> None:
         job = next(s for s in scala.extract(SCALA2) if s.name == "RoyaltyJob")
@@ -162,7 +183,9 @@ class TestDegradation:
     def test_absent_grammar_raises_extraction_error(self, monkeypatch) -> None:
         """文法未導入の環境では indexer が lite へ降格できる形で失敗する。"""
         monkeypatch.setitem(
-            ts._PARSERS, "scala", languages.ExtractionError("simulated missing grammar")
+            ts._PARSERS,
+            ts.cache_key(scala.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
         )
         with pytest.raises(languages.ExtractionError):
             scala.extract(SCALA2)

@@ -1,0 +1,40 @@
+{
+  "name": "royalty-service-ui-tests",
+  "version": "0.1.0",
+  "description": "TDD RED phase UI tests for APP-07-S010 応対品質サンプリング確認",
+  "private": true,
+  "scripts": {
+    "test": "jest --testPathPattern=\"src/test/ui/APP-07-S010\" --testPathIgnorePatterns=\"e2e\"",
+    "test:e2e": "playwright test \"src/test/ui/APP-07-S010/e2e\"",
+    "test:all": "npm test && npm run test:e2e",
+    "test:APP-07-S004": "jest --testPathPattern=\"src/test/ui/APP-07-S004\" --testPathIgnorePatterns=\"e2e\"",
+    "test:e2e:APP-07-S004": "playwright test \"src/test/ui/APP-07-S004/e2e\"",
+    "test:APP-009": "jest --testPathPattern=\"src/test/ui/APP-009\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S007": "node node_modules/jest/bin/jest.js --env=jsdom --runInBand --runTestsByPath src/test/ui/APP-009-S007/APP-009-S007.test.js",
+    "test:APP-009-S005": "node node_modules/jest/bin/jest.js --env=jsdom --testPathPattern=\"src/test/ui/APP-009-S005\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S012": "jest --testPathPattern=\"src/test/ui/APP-009-S012\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S013": "jest --env=jsdom --testPathPattern=\"src/test/ui/APP-009-S013\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S001": "jest --testPathPattern=\"src/test/ui/APP-009-S001\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S004": "node node_modules/jest/bin/jest.js --env=jsdom --testPathPattern=\"src/test/ui/APP-009-S004\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S011": "npx --yes --package jest@29.7.0 --package jest-environment-jsdom@29.7.0 jest --config src/test/ui/APP-009-S011/jest.red.config.js",
+    "test:APP-009-S010": "jest --testPathPattern=\"src/test/ui/APP-009-S010\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009-S008": "jest --testPathPattern=\"src/test/ui/APP-009-S008\" --testPathIgnorePatterns=\"e2e\"",
+    "test:APP-009:green": "npm run test:APP-009"
+  },
+  "devDependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "@babel/preset-react": "^8.0.1",
+    "@playwright/test": "^1.49.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.5.2",
+    "babel-jest": "^30.4.1",
+    "jest": "^29.7.0",
+    "jest-axe": "^10.0.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "msw": "^2.7.0",
+    "whatwg-fetch": "^3.6.20"
+  }
+}

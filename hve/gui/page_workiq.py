@@ -109,7 +109,8 @@ class WorkIQWizardPage(QWizardPage):
             )
         )
         notice.setWordWrap(True)
-        notice.setStyleSheet("color: #6a737d; padding: 4px;")
+        notice.setProperty("hveRole", "description")
+        notice.setStyleSheet("padding: 4px;")
         notice.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
 
         layout = QVBoxLayout(self)

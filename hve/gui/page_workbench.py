@@ -18,7 +18,7 @@ import sys
 from html import escape
 from pathlib import Path
 from types import MappingProxyType
-from typing import Dict, List, Mapping, Optional, TYPE_CHECKING
+from typing import Dict, List, Mapping, Optional, TextIO, TYPE_CHECKING
 from urllib.parse import urlparse
 
 from PySide6.QtCore import Qt, QTimer, Signal, Slot
@@ -145,7 +145,11 @@ def _is_safe_cloud_session_url(url: str) -> bool:
 
 
 class _LogPane(QWidget):
-    """ログ出力ペイン（QPlainTextEdit + コピーボタン）。"""
+    """ログのファイル永続化ペイン。
+
+    画面表示は ``LogTabsWidget`` が担うため、``append_line`` は保持する
+    ``log_view`` へ追記せずローテーションファイルのみへ書き出す（NFR-OBS-09 (2)）。
+    """
 
     def __init__(self, title: str = "ログ", parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -170,6 +174,8 @@ class _LogPane(QWidget):
         self._rotate_index = 0
         self._log_dir: Optional[Path] = None
         self._log_file_path: Optional[Path] = None
+        # 追記ハンドルを保持し、1 行ごとの open/close を避ける（NFR-OBS-09 (1)）。
+        self._log_file: Optional[TextIO] = None
         # ログ永続化先。set_log_base_dir() で注入されるまで None（未注入時は永続化しない）。
         self._log_base_dir: Optional[Path] = None
 
@@ -194,6 +200,7 @@ class _LogPane(QWidget):
         ``run_dir`` が ``None`` の場合は永続化を無効化する。
         """
         if run_dir is None:
+            self._close_log_file()
             self._log_base_dir = None
             self._log_dir = None
             self._log_file_path = None
@@ -201,12 +208,24 @@ class _LogPane(QWidget):
         self._log_base_dir = run_dir / "gui-logs"
         self._open_new_log_file()
 
+    def _close_log_file(self) -> None:
+        """保持中の追記ハンドルを閉じる（未保持なら no-op）。"""
+        handle = self._log_file
+        self._log_file = None
+        if handle is None:
+            return
+        try:
+            handle.close()
+        except OSError:
+            pass
+
     def _open_new_log_file(self) -> None:
         """新しいログファイルを準備する（10,000 行ごとにローテーション）。
 
         ``set_log_base_dir()`` で出力先が未注入（``_log_base_dir is None``）の
         場合は何もしない（ファイル永続化しない）。
         """
+        self._close_log_file()
         if self._log_base_dir is None:
             self._log_dir = None
             self._log_file_path = None
@@ -217,32 +236,31 @@ class _LogPane(QWidget):
             self._log_dir = base
             self._rotate_index += 1
             self._log_file_path = base / f"log-{self._rotate_index:04d}.log"
-            # ファイルを空で作成（存在確認のため）
-            self._log_file_path.touch(exist_ok=True)
+            self._log_file = self._log_file_path.open(
+                "a", encoding="utf-8", errors="replace"
+            )
         except OSError:
             # 書き込み不可な場合はファイル保存を諦める（GUI 動作は継続）
+            self._close_log_file()
             self._log_dir = None
             self._log_file_path = None
 
     def _persist_line(self, line: str) -> None:
-        if self._log_file_path is None:
+        if self._log_file is None:
             return
         try:
-            with self._log_file_path.open("a", encoding="utf-8", errors="replace") as f:
-                f.write(line)
-                if not line.endswith("\n"):
-                    f.write("\n")
-        except OSError:
+            self._log_file.write(line)
+            if not line.endswith("\n"):
+                self._log_file.write("\n")
+            # 追記直後に外部から読めるようにする（NFR-OBS-09 (1)）。
+            self._log_file.flush()
+        except (OSError, ValueError):
             # 一度失敗したら以降は書き込みを停止
+            self._close_log_file()
             self._log_file_path = None
 
     def append_line(self, line: str) -> None:
-        self.log_view.appendPlainText(line)
-        scrollbar = self.log_view.verticalScrollBar()
-        if scrollbar is not None:
-            scrollbar.setValue(scrollbar.maximum())
-
-        # ファイルへ永続化（10,000 行ごとにローテーション）
+        # 画面表示は LogTabsWidget が担うため、非表示の log_view へは追記しない（NFR-OBS-09 (2)）。
         self._persist_line(line)
         self._line_count += 1
         if self._line_count % _LOG_ROTATE_LINES == 0:
@@ -262,6 +280,8 @@ class _EnhancedUserActionsPane(QWidget):
         self.view.setReadOnly(True)
         apply_cjk_wrap(self.view)
         self.view.setFont(preferred_log_font(9))
+        # 直前に描画した表示テキスト。同一内容の再描画を避ける（NFR-OBS-09 (4)）。
+        self._rendered_text: Optional[str] = None
 
         copy_btn = CopyButton(
             get_text=lambda: self.view.toPlainText(),
@@ -293,7 +313,12 @@ class _EnhancedUserActionsPane(QWidget):
             line = f"[{action.timestamp}] {step}: {cat}: {action.message}"
             lines.append(line)
 
-        self.view.setPlainText("\n".join(lines))
+        text = "\n".join(lines)
+        # 表示テキストが変わらないときは再描画しない（NFR-OBS-09 (4)）。
+        if text == self._rendered_text:
+            return
+        self._rendered_text = text
+        self.view.setPlainText(text)
         scrollbar = self.view.verticalScrollBar()
         if scrollbar is not None:
             scrollbar.setValue(scrollbar.maximum())
@@ -829,7 +854,8 @@ class WorkbenchPage(QWidget):
         self._cloud_session_label = QLabel("")
         self._cloud_session_label.setOpenExternalLinks(True)
         self._cloud_session_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        self._cloud_session_label.setStyleSheet("color: #0969da; padding: 2px;")
+        self._cloud_session_label.setProperty("hveRole", "accent")
+        self._cloud_session_label.setStyleSheet("padding: 2px;")
         self._cloud_session_label.hide()
 
         # 2.5: 作業状況（Workflow/Step/Subtask の進捗ツリー）
@@ -2495,12 +2521,14 @@ class WorkbenchPage(QWidget):
             event.accept()
             return
         if text == "g":
-            self._log_pane.log_view.verticalScrollBar().setValue(0)
+            sb = self._log_tabs.global_scroll_bar()
+            if sb is not None:
+                sb.setValue(0)
             self._user_actions_pane.scroll_top()
             event.accept()
             return
         if text == "G":
-            sb = self._log_pane.log_view.verticalScrollBar()
+            sb = self._log_tabs.global_scroll_bar()
             if sb is not None:
                 sb.setValue(sb.maximum())
             self._user_actions_pane.scroll_bottom()
@@ -2510,7 +2538,7 @@ class WorkbenchPage(QWidget):
         super().keyPressEvent(event)
 
     def _scroll_log(self, delta: int) -> None:
-        sb = self._log_pane.log_view.verticalScrollBar()
+        sb = self._log_tabs.global_scroll_bar()
         if sb is not None:
             sb.setValue(sb.value() + delta)
 
@@ -2524,6 +2552,9 @@ class WorkbenchPage(QWidget):
             self._update_timer.stop()
         if hasattr(self, "_progress_widget"):
             self._progress_widget.stop()
+        if hasattr(self, "_log_pane"):
+            # 保持中のログファイルハンドルを閉じる（NFR-OBS-09 (1)）。
+            self._log_pane.set_log_base_dir(None)
         self.stop_orchestrator()
 
     def apply_theme_from_settings(self) -> None:

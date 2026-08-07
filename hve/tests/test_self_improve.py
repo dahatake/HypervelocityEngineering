@@ -410,6 +410,7 @@ class TestRunImprovementLoopRedContracts(unittest.TestCase):
             self.prompts: list[str] = []
             self.timeouts: list[float | None] = []
             self.create_count = 0
+            self.create_session_kwargs: list[dict[str, Any]] = []
             self.client_start_count = 0
             self.client_stop_count = 0
             self.disconnect_count = 0
@@ -491,6 +492,7 @@ class TestRunImprovementLoopRedContracts(unittest.TestCase):
 
         async def create_session(self, **kwargs):
             self.session.create_count += 1
+            self.session.create_session_kwargs.append(dict(kwargs))
             if self.create_session_error is not None:
                 raise self.create_session_error
             return self.session
@@ -575,8 +577,11 @@ class TestRunImprovementLoopRedContracts(unittest.TestCase):
         scope_precondition_error: str = "",
         events: list[str] | None = None,
         preexisting_action: Callable[[], Any] | None = None,
+        tool_search: bool | None = None,
     ):
         cfg = self._active_config(max_iterations=max_iterations)
+        if tool_search is not None:
+            cfg.tool_search = tool_search
         if workflow_id is not None:
             cfg.workflow_id = workflow_id  # type: ignore[attr-defined]
         if max_requests is not None:
@@ -739,6 +744,45 @@ class TestRunImprovementLoopRedContracts(unittest.TestCase):
         self.assertEqual(session.disconnect_count, 1)
         self.assertEqual(session.client_stop_count, 1)
         session.release_lock_mock.assert_called_once()
+
+    def test_mutation_session_includes_tool_search_when_enabled(self) -> None:
+        """FR-MODEL-04: Self-Improve セッションへも tool_search を伝搬する。"""
+        before = _make_scan_result(quality_score=80, lint_errors=1)
+        after = _make_scan_result(quality_score=100, lint_errors=0)
+        criterion = self._criterion("CRIT-LINT", metric="lint_errors")
+        _result, session = self._run(
+            [before, after],
+            goal=self._goal(criterion),
+            tool_search=True,
+        )
+        self.assertTrue(session.create_session_kwargs)
+        self.assertEqual(
+            session.create_session_kwargs[0].get("tool_search"), {"enabled": True}
+        )
+
+    def test_mutation_session_includes_tool_search_by_default(self) -> None:
+        """FR-MODEL-04: 既定（有効）で Self-Improve セッションへも伝搬する。"""
+        before = _make_scan_result(quality_score=80, lint_errors=1)
+        after = _make_scan_result(quality_score=100, lint_errors=0)
+        criterion = self._criterion("CRIT-LINT", metric="lint_errors")
+        _result, session = self._run([before, after], goal=self._goal(criterion))
+        self.assertTrue(session.create_session_kwargs)
+        self.assertEqual(
+            session.create_session_kwargs[0].get("tool_search"), {"enabled": True}
+        )
+
+    def test_mutation_session_omits_tool_search_when_disabled(self) -> None:
+        """FR-MODEL-06: 明示的な無効化は Self-Improve セッションへも渡さない。"""
+        before = _make_scan_result(quality_score=80, lint_errors=1)
+        after = _make_scan_result(quality_score=100, lint_errors=0)
+        criterion = self._criterion("CRIT-LINT", metric="lint_errors")
+        _result, session = self._run(
+            [before, after],
+            goal=self._goal(criterion),
+            tool_search=False,
+        )
+        self.assertTrue(session.create_session_kwargs)
+        self.assertNotIn("tool_search", session.create_session_kwargs[0])
 
     def test_threshold_requires_required_criterion_evidence(self) -> None:
         perfect_scan = _make_scan_result(quality_score=100)

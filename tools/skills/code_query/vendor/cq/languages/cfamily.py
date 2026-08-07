@@ -177,6 +177,10 @@ def extract_c(source: str) -> tuple[RawSymbol, ...]:
     return ts.extract(C_GRAMMAR, source)
 
 
+def extract_ex_c(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    return ts.extract_with_fidelity(C_GRAMMAR, source)
+
+
 def chunk_spans_c(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:
     return ts.chunk_spans(C_GRAMMAR, source, lines, max_chars)
 
@@ -187,6 +191,10 @@ def extract_graph_c(source: str):
 
 def extract_cpp(source: str) -> tuple[RawSymbol, ...]:
     return ts.extract(CPP_GRAMMAR, source)
+
+
+def extract_ex_cpp(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    return ts.extract_with_fidelity(CPP_GRAMMAR, source)
 
 
 def chunk_spans_cpp(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:

@@ -186,7 +186,17 @@ class TestDegradation:
         assert parser == "lite"
         assert {s.name for s in symbols} >= {"a"}
 
-    def test_fidelity_is_reported_per_file(self, tmp_path: Path) -> None:
+    def test_fidelity_is_reported_per_file(self, tmp_path: Path, monkeypatch) -> None:
+        """FR-CQ-04: different fidelities coexist in the same index. C# is
+        forced onto its regex fallback here, since Phase 2 made tree-sitter
+        its default whenever the grammar is installed (as it is in dev/CI)."""
+        from cq.languages import csharp, treesitter as ts
+
+        monkeypatch.setitem(
+            ts._PARSERS,
+            ts.cache_key(csharp.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
+        )
         subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
         (tmp_path / "cq.toml").write_text("[profiles.test]\nroots = ['pkg']\n", encoding="utf-8")
         (tmp_path / "pkg").mkdir()
@@ -201,6 +211,12 @@ class TestDegradation:
         assert parsers["pkg/a.py"] == "ast"
         assert parsers["pkg/b.cs"] == "regex"
         assert parsers["pkg/c.sh"] == "tree-sitter"
+
+    def test_csharp_uses_tree_sitter_when_the_grammar_is_installed(self) -> None:
+        """Phase 2 (FR-CQ-11): the grammar is preferred whenever it is available."""
+        symbols, parser = indexer._extract("csharp", CSHARP)
+        assert parser == "tree-sitter"
+        assert symbols
 
     def test_python_only_environment_still_works(self) -> None:
         """任意依存が未導入でも標準ライブラリだけで成立する言語は動く。"""
@@ -250,6 +266,37 @@ class TestGraphExtraction:
 
         assert graph.extract("echo hi\n", "nothing-registered") == ((), ())
 
+    def test_python_syntax_error_still_yields_refs_via_tree_sitter(self) -> None:
+        """Phase 5 (FR-CQ-11): `ast.parse` failing must not cost the graph rows
+        outright when the optional tree-sitter-python grammar can recover them."""
+        from cq import graph
+
+        refs, imports = graph.extract(
+            "import os\n\ndef broken(:\n    return os.getenv('X')\n", "python"
+        )
+        assert any(imp.line == 1 and imp.module == "os" for imp in imports)
+        assert any(ref.name == "getenv" for ref in refs)
+
+    def test_python_clean_source_still_uses_the_ast_path(self, monkeypatch) -> None:
+        """The tree-sitter fallback must not run when `ast` already succeeded."""
+        from cq import graph
+        from cq.languages import python as python_lang
+
+        calls = []
+        monkeypatch.setattr(python_lang, "extract_graph", lambda source: calls.append(source))
+        graph.extract("def f():\n    return g()\n", "python")
+        assert calls == []
+
+    def test_python_syntax_error_degrades_when_the_grammar_is_absent(self, monkeypatch) -> None:
+        """The graph fallback must degrade like the symbol extractor, not raise
+        (FR-CQ-11), when the optional tree-sitter-python grammar is unavailable."""
+        from cq import graph
+        from cq.languages import python as python_lang, treesitter as ts
+
+        key = ts.cache_key(python_lang.GRAMMAR)
+        monkeypatch.setitem(ts._PARSERS, key, ts.ExtractionError("simulated missing grammar"))
+        assert graph.extract("def broken(:\n    return g()\n", "python") == ((), ())
+
 
 class TestRealSources:
     def test_csharp_services_yield_symbols(self) -> None:
@@ -265,3 +312,139 @@ class TestRealSources:
             target.read_text(encoding="utf-8-sig")
         )}
         assert {"isResolvedCaseConsistent", "redactInvalidCaseIdentity"} <= symbols
+
+
+class TestPhase2TreeSitterUpgrade:
+    """FR-CQ-11 Phase 2: C# / JavaScript / TypeScript gain end_line, doc_head,
+    references and structure chunks through tree-sitter, none of which the
+    regex tier (still the fallback) ever produced."""
+
+    CSHARP_DOC = """\
+namespace Svc;
+
+public sealed class RewardService
+{
+    /// <summary>Grants points to a member.</summary>
+    public GrantResult Grant(
+        GrantCommand command)
+    {
+        return Helper.Compute(command);
+    }
+}
+"""
+
+    JAVASCRIPT_DOC = """\
+/**
+ * Grants reward points.
+ */
+export class RewardService {
+  grant(
+    command
+  ) {
+    return helper.compute(command);
+  }
+}
+"""
+
+    TYPESCRIPT_DOC = """\
+export interface Ledger {
+  grant(id: string): boolean;
+}
+
+export class RewardService implements Ledger {
+  /**
+   * Grants points to a member.
+   */
+  grant(
+    id: string
+  ): boolean {
+    return helper.compute(id);
+  }
+}
+"""
+
+    def test_csharp_multiline_signature_and_doc_are_recovered(self) -> None:
+        from cq.languages import csharp
+
+        symbols, parser = csharp.extract_ex(self.CSHARP_DOC)
+        method = next(s for s in symbols if s.name == "Grant")
+        assert parser == "tree-sitter"
+        assert (method.start_line, method.end_line) == (6, 10)
+        assert method.doc_head == "Grants points to a member."
+        refs, _imports = csharp.extract_graph(self.CSHARP_DOC)
+        assert any(name == "Compute" for _line, name in refs)
+        assert csharp.chunk_spans(self.CSHARP_DOC, self.CSHARP_DOC.splitlines(), 40)
+
+    def test_javascript_multiline_signature_and_doc_are_recovered(self) -> None:
+        from cq.languages import javascript
+
+        symbols, parser = javascript.extract_ex(self.JAVASCRIPT_DOC)
+        method = next(s for s in symbols if s.name == "grant")
+        assert parser == "tree-sitter"
+        assert method.end_line > method.start_line
+        refs, _imports = javascript.extract_graph(self.JAVASCRIPT_DOC)
+        assert any(name == "compute" for _line, name in refs)
+        assert javascript.chunk_spans(self.JAVASCRIPT_DOC, self.JAVASCRIPT_DOC.splitlines(), 40)
+
+    def test_typescript_multiline_signature_and_doc_are_recovered(self) -> None:
+        from cq.languages import typescript
+
+        symbols, parser = typescript.extract_ex(self.TYPESCRIPT_DOC)
+        by_qualname = {s.qualname: s for s in symbols}
+        assert parser == "tree-sitter"
+        assert by_qualname["Ledger.grant"].kind == "method"
+        method = by_qualname["RewardService.grant"]
+        assert method.end_line > method.start_line
+        assert method.doc_head == "Grants points to a member."
+        refs, _imports = typescript.extract_graph(self.TYPESCRIPT_DOC)
+        assert any(name == "compute" for _line, name in refs)
+        assert typescript.chunk_spans(self.TYPESCRIPT_DOC, self.TYPESCRIPT_DOC.splitlines(), 40)
+
+    def test_tsx_suffix_resolves_to_its_own_language(self) -> None:
+        assert languages.LANGUAGE_BY_SUFFIX[".tsx"] == "tsx"
+        support = languages.support_for("tsx")
+        assert support is not None and support.parser == "regex"
+
+    def test_tsx_grammar_uses_the_tsx_factory(self) -> None:
+        from cq.languages import typescript
+
+        assert typescript.GRAMMAR.lang == "typescript"
+        assert typescript.GRAMMAR.language_func == "language_typescript"
+        assert typescript.TSX_GRAMMAR.lang == "tsx"
+        assert typescript.TSX_GRAMMAR.language_func == "language_tsx"
+
+    def test_tsx_extracts_symbols_through_its_own_grammar(self) -> None:
+        from cq.languages import typescript
+
+        source = "export function Widget(props: { id: string }) {\n  return null;\n}\n"
+        symbols, parser = typescript.extract_ex_tsx(source)
+        assert parser == "tree-sitter"
+        assert {s.name for s in symbols} == {"Widget"}
+
+    def test_javascript_falls_back_to_regex_when_the_grammar_is_absent(self, monkeypatch) -> None:
+        """The regex tier can only match a method signature that fits on one
+        line, so this uses a single-line fixture rather than `JAVASCRIPT_DOC`
+        (whose whole point is exercising tree-sitter's multi-line recovery)."""
+        from cq.languages import javascript, treesitter as ts
+
+        monkeypatch.setitem(
+            ts._PARSERS,
+            ts.cache_key(javascript.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
+        )
+        source = "class RewardService {\n  grant(command) {\n    return helper.compute(command);\n  }\n}\n"
+        symbols, parser = javascript.extract_ex(source)
+        assert parser == "regex"
+        assert {s.name for s in symbols} == {"RewardService", "grant"}
+
+    def test_typescript_falls_back_to_regex_when_the_grammar_is_absent(self, monkeypatch) -> None:
+        from cq.languages import typescript, treesitter as ts
+
+        monkeypatch.setitem(
+            ts._PARSERS,
+            ts.cache_key(typescript.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
+        )
+        symbols, parser = typescript.extract_ex(self.TYPESCRIPT_DOC)
+        assert parser == "regex"
+        assert {s.name for s in symbols} >= {"Ledger", "RewardService"}

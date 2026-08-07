@@ -7,7 +7,7 @@ python -m hve で実行可能な Python パッケージです。
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 try:
     from .config import SDKConfig

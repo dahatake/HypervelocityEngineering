@@ -277,7 +277,7 @@ def render_user_actions(state: "WorkbenchState") -> Panel:
 
 # userinteraction ペインの待機時ヘルプ文（`/session-store` 削除済み）。
 _USER_INTERACTION_HELP = (
-    "Press `:` to enter command  |  /help  "
+    "Press `:` to enter command  |  /help  |  /stats  "
     "|  Esc to cancel  |  Scroll: ↑↓ ログ, [ ] 課題, { } ツリー, g/G top/bottom, マウスホイール=ツリー"
 )
 
@@ -322,6 +322,32 @@ def render_footer(state: "WorkbenchState") -> Text:
     t.append("   ｜   ", style="dim")
     t.append("elapsed: ", style="dim")
     t.append(f"{hh:02d}:{mm:02d}:{ss:02d}", style="bold white")
+
+    # FR-RTO-05: 実行時観測の集計。未取得値は `-`。
+    metrics = state.metrics_snapshot()
+    if metrics is not None:
+        from ..runtime_observability import format_counts_topn
+
+        t.append("   ｜   ", style="dim")
+        t.append("tokens: ", style="dim")
+        t.append(
+            f"in {metrics.input_tokens_total:,} / out {metrics.output_tokens_total:,}",
+            style="white",
+        )
+        t.append("   ｜   ", style="dim")
+        t.append("AI Credit: ", style="dim")
+        credit = f"{metrics.aiu_total:.4f} AIU" if metrics.aiu_nano_total > 0 else "-"
+        t.append(credit, style="white")
+        t.append("   ｜   ", style="dim")
+        t.append("Reqs: ", style="dim")
+        reqs = metrics.display_reqs
+        t.append(str(reqs) if reqs > 0 else "-", style="white")
+        t.append("   ｜   ", style="dim")
+        t.append("Tools: ", style="dim")
+        t.append(format_counts_topn(metrics.current_tool_counts()), style="white")
+        t.append("   ｜   ", style="dim")
+        t.append("Skills: ", style="dim")
+        t.append(format_counts_topn(metrics.current_skill_counts()), style="white")
     return t
 
 

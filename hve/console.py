@@ -36,6 +36,11 @@ try:
 except ImportError:
     from qa_merger import QAQuestion  # type: ignore[no-redef]
 
+try:
+    from . import runtime_observability as _rto
+except ImportError:  # pragma: no cover - script 実行経路
+    import runtime_observability as _rto  # type: ignore[no-redef]
+
 
 def timestamp_prefix() -> str:
     """現在時刻のプレフィックス文字列を返す。"""
@@ -243,6 +248,15 @@ class Console:
         # また非 TTY のためスピナーが起動せず、compact/normal で spinner 経路へ
         # 振られる進捗を確定行へフォールバックさせる必要がある。
         self._gui_subprocess = bool(os.environ.get("HVE_GUI_SESSION_ID", "").strip())
+
+        # FR-RTO-02: 収集 / 保存 / 子プロセス配信 / 人間向け表示を分離する。
+        # stdout へ `[hve:stats]` を流すのは GUI 子プロセスと、親が明示した子プロセスだけ。
+        self._rt_context = _rto.RuntimeContext()
+        self._rt_registry = _rto.RuntimeMetricsRegistry()
+        self._rt_recorder: Optional[Any] = None
+        self._stats_stream = self._gui_subprocess or os.environ.get(
+            _rto.STATS_STREAM_ENV, ""
+        ).strip() in ("1", "true", "True")
 
         # F5: final_only モード
         self.final_only = final_only
@@ -910,13 +924,11 @@ class Console:
         """
         s = self.s
         agent_str = f" {s.DIM}(Agent: {agent}){s.RESET}" if agent else ""
-        # ① GUI 向け構造化 stats イベント（stdout）を先に発火。
-        # quiet/final_only 時は stdout 抑制要件を守るためスキップ。
-        if not (self.quiet or self.final_only):
-            try:
-                self.stats_event("step_status", step_id=step_id, status="running", title=title)
-            except Exception:
-                pass
+        # ① 観測イベントを先に発火する（FR-RTO-02: quiet / final_only でも収集を継続）。
+        try:
+            self.stats_event("step_status", step_id=step_id, status="running", title=title)
+        except Exception:
+            pass
         # ② ContextVar に step_id をセット（後続 _emit のインラインマーカーに使用）。
         # set() は同一 context スコープ内で上書き。fanout child では各 child の
         # スコープで独立に set されるため、本書き込みは「直列実行の現ステップ」用。
@@ -985,18 +997,17 @@ class Console:
             status=status,
             elapsed=elapsed,
         )
-        # GUI 向け構造化 stats イベント（stdout）。quiet/final_only 時はスキップ。
-        if not (self.quiet or self.final_only):
-            try:
-                mapped_status = _wb_status_map.get(status, "done")
-                self.stats_event(
-                    "step_status",
-                    step_id=step_id,
-                    status=mapped_status,
-                    elapsed=float(elapsed),
-                )
-            except Exception:
-                pass
+        # 観測イベント（FR-RTO-02: quiet / final_only でも収集を継続）。
+        try:
+            mapped_status = _wb_status_map.get(status, "done")
+            self.stats_event(
+                "step_status",
+                step_id=step_id,
+                status=mapped_status,
+                elapsed=float(elapsed),
+            )
+        except Exception:
+            pass
         # クリーンアップ
         self._step_usage.pop(step_id, None)
         self._step_tool_count.pop(step_id, None)
@@ -1049,6 +1060,30 @@ class Console:
     def set_run_id(self, run_id: Optional[str]) -> None:
         """構造化ログに含める run_id を設定する。"""
         self._run_id = run_id
+        self._rt_context.run_id = str(run_id or "")
+
+    def set_runtime_identity(
+        self,
+        *,
+        workflow_id: Optional[str] = None,
+        instance_id: Optional[str] = None,
+    ) -> None:
+        """FR-RTO-01: 観測イベントに付与する workflow / instance 識別子を設定する。"""
+        if workflow_id is not None:
+            self._rt_context.workflow_id = str(workflow_id)
+        if instance_id is not None:
+            self._rt_context.instance_id = str(instance_id)
+
+    def runtime_metrics(self) -> Any:
+        """FR-RTO-05: 実行面が参照する集計レジストリ。"""
+        return self._rt_registry
+
+    def attach_event_recorder(self, recorder: Any) -> None:
+        """FR-RTO-03: 観測イベントの記録器を接続する。"""
+        self._rt_recorder = recorder
+
+    def detach_event_recorder(self) -> None:
+        self._rt_recorder = None
 
     def token_chunk(self, step_id: str, text: str, *, kind: str = "delta") -> None:
         """Streaming トークン断片を可視化する（E-1）。
@@ -1569,12 +1604,11 @@ class Console:
 
     def skill_invoked(self, step_id: str, name: str) -> None:
         """Skill 読み込み。Level 3 で確定行、Level 1-2 でスピナー更新。"""
-        # GUI 用構造化イベント（verbosity に依存せず発火、quiet/final_only 時は除く）
-        if not (self.quiet or self.final_only):
-            try:
-                self.stats_event("skill_invoked", step_id=step_id, name=str(name or ""))
-            except Exception:
-                pass
+        # 観測イベント（FR-RTO-02: quiet / final_only でも収集を継続）。
+        try:
+            self.stats_event("skill_invoked", step_id=step_id, name=str(name or ""))
+        except Exception:
+            pass
         if self._verbosity == 0:
             return
         prefix = f"[{step_id}] " if step_id else ""
@@ -1608,10 +1642,10 @@ class Console:
                 pass
 
     def stats_event(self, kind: str, step_id: str = "", **fields: object) -> None:
-        """構造化統計ログ行を stdout へ 1 行 JSON で出力する。
+        """構造化統計イベントを収集・保存し、子プロセス実行時だけ stdout へ配信する。
 
-        GUI 側 (workbench_logger) が解析してポップアップの詳細統計を構築する。
-        emoji の人間可読ログは別途出力されるため、ここでは機械可読のみ。
+        FR-RTO-02: `quiet` / `final_only` でも収集・保存・子プロセス配信は継続し、
+        人間向けの追加表示だけを抑止する。CUI Workbench の本文へは流さない。
 
         フォーマット:
             ``[hve:stats] {"kind":"<kind>","step":"<step_id>", ...}``
@@ -1622,21 +1656,26 @@ class Console:
             step_id: ステップ ID（空可）。
             **fields: 任意の JSON シリアライズ可能なフィールド。
         """
-        if self.final_only:
-            return
-        import json as _json
-
-        payload: dict = {"kind": kind, "step": step_id or ""}
-        for k, v in fields.items():
-            if v is None:
-                continue
-            payload[k] = v
+        payload = _rto.build_event(kind, step_id, self._rt_context, **fields)
         try:
-            line = "[hve:stats] " + _json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            self._rt_registry.apply(payload)
+        except Exception:
+            pass
+        recorder = self._rt_recorder
+        if recorder is not None:
+            try:
+                recorder.record(payload)
+            except Exception:
+                pass
+
+        if not self._stats_stream:
+            return
+        try:
+            line = _rto.format_stats_line(payload)
         except (TypeError, ValueError):
             return
-        # always=True で stdout へ確定出力（spinner や verbosity の影響を受けない）
-        self._emit(line, always=True, ts=False)
+        with self._output_lock:
+            print(line, flush=True)
 
     def compaction(self, step_id: str, phase: str, pre_tokens: int = 0, post_tokens: int = 0) -> None:
         """コンテキスト圧縮。Level 3 で確定行、Level 1-2 でスピナー更新。"""

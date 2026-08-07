@@ -17,10 +17,10 @@ import sys
 from pathlib import Path
 from typing import List
 
-from PySide6.QtWidgets import QApplication
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtWidgets import QApplication, QStyleFactory
 from PySide6.QtCore import QLoggingCategory
 
+from . import theme as _theme
 from .fonts import preferred_ui_font
 from .i18n import install_translator, resolve_language
 from .main_window import MainWindow
@@ -30,32 +30,22 @@ from .settings_store import get_option
 # ---------------------------------------------------------------------------
 # テーマ適用（全画面）
 # ---------------------------------------------------------------------------
-_LIGHT_PALETTE_COLORS = {
-    QPalette.Window: "#f3f3f3",
-    QPalette.WindowText: "#1f2328",
-    QPalette.Base: "#ffffff",
-    QPalette.AlternateBase: "#f6f8fa",
-    QPalette.Text: "#1f2328",
-    QPalette.Button: "#f3f3f3",
-    QPalette.ButtonText: "#1f2328",
-    QPalette.Highlight: "#0969da",
-    QPalette.HighlightedText: "#ffffff",
-    QPalette.ToolTipBase: "#ffffff",
-    QPalette.ToolTipText: "#1f2328",
-}
-_DARK_PALETTE_COLORS = {
-    QPalette.Window: "#1f2328",
-    QPalette.WindowText: "#e6edf3",
-    QPalette.Base: "#0d1117",
-    QPalette.AlternateBase: "#161b22",
-    QPalette.Text: "#e6edf3",
-    QPalette.Button: "#21262d",
-    QPalette.ButtonText: "#e6edf3",
-    QPalette.Highlight: "#58a6ff",
-    QPalette.HighlightedText: "#0d1117",
-    QPalette.ToolTipBase: "#21262d",
-    QPalette.ToolTipText: "#e6edf3",
-}
+# Windows / macOS の既定スタイルはネイティブテーマエンジンで描画するため
+# QPalette を全描画には使わない（Qt 公式ドキュメントの警告どおり）。実測では
+# ダークパレット適用下でも QLineEdit の背景が windows11 で #bcbdbf、
+# windowsvista で #ffffff となり、文字とのコントラストが 1.2〜1.6:1 まで落ちた。
+# Qt 同梱スタイルでパレットをそのまま反映するのは Fusion だけなので固定する。
+_STYLE_NAME = "Fusion"
+
+
+def apply_style_to_application() -> None:
+    """アプリのスタイルを :data:`_STYLE_NAME` に固定する。"""
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    style = QStyleFactory.create(_STYLE_NAME)
+    if style is not None:
+        app.setStyle(style)
 
 
 def apply_theme_to_application(theme: str) -> None:
@@ -64,16 +54,15 @@ def apply_theme_to_application(theme: str) -> None:
     Args:
         theme: "dark" | "light"
 
-    QPalette ベースで安全に切り替え、全 Top-Level Window に反映される。
+    パレット（全 ColorRole）とアプリ全体スタイルシートの双方を差し替えるため、
+    ``hveRole`` プロパティで配色されたウィジェットも再起動なしで追随する。
     """
     app = QApplication.instance()
-    if app is None:
+    if not isinstance(app, QApplication):
         return
-    palette = QPalette()
-    colors = _DARK_PALETTE_COLORS if theme == "dark" else _LIGHT_PALETTE_COLORS
-    for role, hexstr in colors.items():
-        palette.setColor(role, QColor(hexstr))
-    app.setPalette(palette)
+    resolved = _theme.set_current_theme(theme)
+    app.setPalette(_theme.build_palette(resolved))
+    app.setStyleSheet(_theme.build_stylesheet(resolved))
 
 
 # モジュールレベルで生存ウィンドウを保持し、参照切れによる予期しない解放を防ぐ
@@ -149,6 +138,8 @@ def run_app(args=None) -> int:
 
     app.setApplicationName("HVE GUI Orchestrator")
     app.setApplicationDisplayName("HVE GUI Orchestrator")
+
+    apply_style_to_application()
 
     try:
         stored_lang = get_option("language")

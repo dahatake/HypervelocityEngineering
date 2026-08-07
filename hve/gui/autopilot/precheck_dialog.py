@@ -30,6 +30,8 @@ from hve.autopilot.precheck_model import (
     PrecheckItem,
 )
 
+from ..theme import token
+
 
 _CATEGORY_LABEL = {
     PrecheckCategory.FILE: "📄 必須ファイル",
@@ -68,7 +70,8 @@ class Step1PrecheckDialog(QDialog):
         outer.addWidget(header)
 
         total_lbl = QLabel(self.tr("不足項目: {n} 件").format(n=result.count()))
-        total_lbl.setStyleSheet("color: #c00; padding-left: 4px;")
+        total_lbl.setProperty("hveRole", "error")
+        total_lbl.setStyleSheet("padding-left: 4px;")
         outer.addWidget(total_lbl)
 
         content = QWidget()
@@ -108,8 +111,9 @@ class Step1PrecheckDialog(QDialog):
     ) -> QGroupBox:
         label = _CATEGORY_LABEL.get(category, str(category))
         group = QGroupBox(f"{label} — {len(items)} 件")
+        group.setProperty("hveRole", "bordered")
         group.setStyleSheet(
-            "QGroupBox { font-weight: bold; border: 1px solid #d0d7de; "
+            "QGroupBox { font-weight: bold; "
             "border-radius: 4px; margin-top: 8px; padding: 8px; }"
             " QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }"
         )
@@ -128,13 +132,15 @@ class Step1PrecheckDialog(QDialog):
         hint = item.remediation_hint or ""
         text = f"<b>{head}</b><br>{body}"
         if hint:
-            text += f"<br><span style='color:#0969da;'>→ {hint}</span>"
+            text += f"<br><span style='color:{token('accentForeground')};'>→ {hint}</span>"
         lbl = QLabel(text)
+        lbl.setProperty("hveRole", "panel")
         lbl.setWordWrap(True)
         lbl.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextBrowserInteraction
         )
-        lbl.setStyleSheet("padding: 4px; background: #fafbfc; border-radius: 3px;")
+        # 枠付き QGroupBox の中に入るため、地色だけ使い枠線は出さない。
+        lbl.setStyleSheet("padding: 4px; border-radius: 3px; border: none;")
         return lbl
 
     def result_data(self) -> AutopilotPrecheckResult:

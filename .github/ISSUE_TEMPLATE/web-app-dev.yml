@@ -236,7 +236,8 @@ body:
       description: |
         Chat-Bot / AI Agent を機能要件に含むアプリ向け。
         `Arch-AgenticRetrieval-Detail` Custom Agent の自動判定結果に従います。明示的な上書きも可能です。
-        「しない」を選ぶと AAD-WEB / ASDW-WEB の Agentic Retrieval 関連ステップは生成されません。
+        「しない」を選ぶと Step.2.9（実装設計）/ Step.2.10（Deploy）の Issue を生成しません。
+        既存アプリへ後付けする場合は CLI / GUI の `aar` ワークフローも使えます。
       options:
         - する
         - しない

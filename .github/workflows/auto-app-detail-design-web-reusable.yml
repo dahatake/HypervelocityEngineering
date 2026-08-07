@@ -781,6 +781,7 @@ jobs:
           S72_NUM="" S72_ID=""
           S73_NUM="" S73_ID=""
           S74_NUM="" S74_ID=""
+          S75_NUM="" S75_ID=""
           S8_NUM="" S8_ID=""
           S81_NUM="" S81_ID=""
           S82_NUM="" S82_ID=""
@@ -1095,6 +1096,25 @@ jobs:
               else
                 post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7.4: TDDテスト仕様書（画面） (ワークフローログを確認し、再実行または手動対応してください)" || true
                 echo "ERROR: create_issue failed for: [AAD-WEB] Step.7.4: TDDテスト仕様書（画面）" >&2
+              fi
+            fi
+
+            # Step.7.5 (Agentic Retrieval 機能要件詳細)
+            # enable_agentic_retrieval が no のときは Issue 自体を作らない。
+            if ! skip_step "7.5" && [[ "${ENABLE_AGENTIC_RETRIEVAL}" != "no" ]]; then
+              BODY_S75=$(printf '%s\n## 目的\n機能要件に Chat-Bot / AI Agent / RAG を含むサービスについて、**製品非依存**の Agentic Retrieval 機能要件詳細を作成する。\n\n## 入力\n- `docs/catalog/service-catalog.md`\n- `docs/services/{serviceId}-{serviceNameSlug}-description.md`\n- `docs/catalog/domain-analytics.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/services/{serviceId}-agentic-retrieval-spec.md`（対象サービスごとに1ファイル）\n\n## 検索契約（AR-CAP-01〜05・必須）\nSkill `agentic-retrieval-contract` に従うこと。\n- **複数データソース横断**は 1 つの Knowledge Base に複数 Knowledge Source を束ねて表現する。Knowledge Source ごとに別 Tool を作って Agent に複数回呼ばせる設計にしない。\n- **クエリ回数とトークンの最小化**の根拠を残す。\n- 見出しレベルは親章と同じにする（子レベルにしない）。\n\n## Custom Agent\n`Arch-AgenticRetrieval-Detail` を使用\n\n## 依存\n- Step.7.2（マイクロサービス定義書）が `aad-web:done` であること\n\n## 完了条件\n- 判定にヒットしたサービスごとに `docs/services/{serviceId}-agentic-retrieval-spec.md` が作成されている\n- 対象サービスが 0 件の場合は、その事実を作業ログへ記録して成果物なしで完了する\n- 完了時に自身に `aad-web:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+              if RESP=$(create_issue \
+                "[AAD-WEB] Step.7.5: Agentic Retrieval 機能要件詳細" \
+                "${BODY_S75}" \
+                "${STEP_LABELS}"); then
+                S75_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+                S75_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+                echo "Step.7.5 作成: #${S75_NUM}"
+                sleep 3
+              else
+                post_comment "${ROOT_ISSUE}" "⚠️ Step Issue 生成失敗: [AAD-WEB] Step.7.5: Agentic Retrieval 機能要件詳細 (ワークフローログを確認し、再実行または手動対応してください)" || true
+                echo "ERROR: create_issue failed for: [AAD-WEB] Step.7.5: Agentic Retrieval 機能要件詳細" >&2
               fi
             fi
           fi
@@ -1672,12 +1692,18 @@ jobs:
               (i for i in issues if re.search(r'\] Step\.7\.4:', i.get('title', ''))),
               None
           )
+          s75_issue = next(
+              (i for i in issues if re.search(r'\] Step\.7\.5:', i.get('title', ''))),
+              None
+          )
           if s71_done and s72_done:
               targets = []
               if s73_issue:
                   targets.append(f"73:{s73_issue['number']}")
               if s74_issue:
                   targets.append(f"74:{s74_issue['number']}")
+              if s75_issue:
+                  targets.append(f"75:{s75_issue['number']}")
               if targets:
                   print("activate:" + ",".join(targets))
               else:
@@ -1757,8 +1783,8 @@ jobs:
               fi
               ;;
 
-            "7.3"|"7.4")
-              # Step.7.3 または 7.4 完了 → 両方完了確認後に Step.7 コンテナに aad-web:done + Step.8.1 を起動
+            "7.3"|"7.4"|"7.5")
+              # Step.7.3 / 7.4 / 7.5 完了 → 全て完了確認後に Step.7 コンテナに aad-web:done + Step.8.1 を起動
               S7_NUM=$(get_sub_issue_number '\] Step\.7:')
               S7_READY="true"
               if [[ -n "${S7_NUM}" ]]; then
@@ -1769,16 +1795,18 @@ jobs:
           issues = json.load(sys.stdin)
           s73 = next((i for i in issues if re.search(r'\] Step\.7\.3:', i.get('title', ''))), None)
           s74 = next((i for i in issues if re.search(r'\] Step\.7\.4:', i.get('title', ''))), None)
+          s75 = next((i for i in issues if re.search(r'\] Step\.7\.5:', i.get('title', ''))), None)
           def is_done(i):
               return i is not None and 'aad-web:done' in [l['name'] for l in i.get('labels', [])]
           s73_ok = (s73 is None) or is_done(s73)
           s74_ok = (s74 is None) or is_done(s74)
-          print("true" if (s73_ok and s74_ok) else "false")
+          s75_ok = (s75 is None) or is_done(s75)
+          print("true" if (s73_ok and s74_ok and s75_ok) else "false")
           PY
                 )
               fi
               if [[ "${S7_READY}" != "true" ]]; then
-                echo "Step.7.3/7.4 のもう片方の完了を待機中です。"
+                echo "Step.7.3/7.4/7.5 の他の Step の完了を待機中です。"
               else
                 if [[ -n "${S7_NUM}" ]]; then
                   add_label "${S7_NUM}" "aad-web:done"

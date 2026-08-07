@@ -24,7 +24,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import IO, Optional
+from typing import IO, Any, Optional
 
 # text_kinsoku は Qt 非依存のため CUI からも安全に import 可
 from .gui.text_kinsoku import format_cost, format_elapsed
@@ -48,6 +48,10 @@ class StatusLineState:
     cost_usd_total: Optional[float] = None
     cost_jpy_total: Optional[float] = None
     premium_requests_total: int = 0
+    # 実行時観測（FR-RTO-05）。未取得は 0 / None のまま推定しない。
+    tokens_in: int = 0
+    tokens_out: int = 0
+    aiu_total: Optional[float] = None
     currency: str = "auto"
     locale: str = "ja"
 
@@ -87,6 +91,14 @@ def format_status_line(state: StatusLineState, *, now: Optional[float] = None) -
         pct = (cur / lim * 100.0) if lim > 0 else 0.0
         parts.append(f"ctx {cur:,}/{lim:,} ({pct:.0f}%)")
 
+    # Tokens
+    if state.tokens_in or state.tokens_out:
+        parts.append(f"tok {int(state.tokens_in):,}/{int(state.tokens_out):,}")
+
+    # AI Credit（SDK 実値のみ。未取得はセグメントごと非表示）
+    if state.aiu_total:
+        parts.append(f"{float(state.aiu_total):.4f} AIU")
+
     # Cost
     parts.append(
         f"cost {format_cost(state.cost_usd_total, state.cost_jpy_total, currency=state.currency, locale=state.locale)}"
@@ -114,10 +126,13 @@ class StatusLine:
         stream: Optional[IO[str]] = None,
         enabled: Optional[bool] = None,
         interval: float = 1.0,
+        state_provider: Optional[Any] = None,
     ) -> None:
         self._stream: IO[str] = stream if stream is not None else sys.stderr
         self._interval = max(0.1, float(interval))
         self._state = StatusLineState()
+        # 1Hz 描画時に最新集計を pull する（FR-RTO-05）。
+        self._state_provider = state_provider
         self._state_lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -198,6 +213,14 @@ class StatusLine:
 
         ``enabled=False`` の場合は何も出力せず空文字を返す。
         """
+        provider = self._state_provider
+        if provider is not None:
+            try:
+                provided = provider()
+            except Exception:
+                provided = None
+            if provided is not None:
+                self.update_state(provided)
         with self._state_lock:
             state = self._state
             line = format_status_line(state)

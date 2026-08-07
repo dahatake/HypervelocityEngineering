@@ -18,7 +18,7 @@ description: >
   be minimized.
 metadata:
   origin: user
-  version: 0.5.0
+  version: 0.6.0
 category: planning
 ---
 
@@ -80,10 +80,11 @@ python -m mdq get --chunk-id <返ってきた ID>
    - **重要**: 索引ファイル（既定 `.mdq/index-<lang>-<strategy>.sqlite`）は gitignore 推奨でセッション間で共有されない前提。Cloud Agent セッションでもセッション毎に再ビルドが必要。
 2. **検索**: `python -m mdq search --q "クエリ" --top-k 5 --max-tokens 800`
    - 既定モード: `bm25`、出力: JSONL（1 行 = 1 ヒット）
-   - ランキングはチャンク本文に加えて **見出し経路も照合対象**にするので、見出しにだけ現れる語でも到達できる（抜粋と行範囲は本文のまま）。`--mode grep` は本文だけを照合する。
+   - ランキングの照合単位は **CJK が隣接 2 文字（bigram）**、ASCII 語は分割しない。照合対象はチャンク本文に加えて **リポジトリ相対パスと見出し経路**で、見出し経路をより重く扱う。パスや見出しにだけ現れる語でも到達できる（抜粋と行範囲は本文のまま）。`--mode grep` と FTS5 経路は本規定の対象外で、本文だけを照合する。
+   - **索引の乖離を自動検知する**。索引済みファイルのサイズと更新時刻だけを見て（実測 162 ファイルで 4.7 ms）、乖離していれば `{"warning":"stale","changed":N,"hint":"..."}` を **stderr** へ出す。この警告が出たら `python -m mdq index` を実行してから再検索する。不要なら `--no-freshness-check`。
    - **`--strategy` 既定は `auto`**。Skill 側 `mdq.query_router` がクエリから最適 strategy を選択し、不在時はフォールバックする（[references/query-routing.md](references/query-routing.md)）。手動で選びたい場合のみ `--strategy heading|heading_recursive|fixed_window|semantic_paragraph|pageindex` を明示。
    - `--paths` / `--tags` / `--snippet-radius` で絞り込み、`--mode grep` で完全一致検索に切替
-   - `--return-unit chunk` でヒットを含むチャンクの本文全体を返す（既定 `line` は ±`--snippet-radius` 行）
+   - `--return-unit chunk` でヒットを含むチャンクの本文全体を返す（既定 `line` は ±`--snippet-radius` 行）。**「どこに書くか」を探すときは `--return-unit locations`** を使うと本文を返さず所在だけを返すので、同じ予算でより多くの候補を見られる
    - **`index` は `--strategy` を明示する（既定 `heading`）。`auto` は `search` 専用**。深さを上げた親チェーン取得は `--with-parent-depth N` を使う
    - 大規模コーパスは `--engine fts5` または環境変数 `MDQ_FTS5=1`（旧名 `HVE_MDQ_FTS5` も引き続き有効だが deprecated）で FTS5 検索に切替可能。日本語クエリもヒットする（3 文字未満の語は trigram 索引で表現できないため in-memory BM25 へ自動フォールバックする）
 3. **本文取得（必要時のみ）**: `python -m mdq get --chunk-id <ID>`
@@ -106,6 +107,7 @@ python -m mdq search --q "業務要件 概要" --paths "docs/*" --top-k 3 --max-
 - まず `--format compact` で目視確認 → 必要な `chunk_id` だけ `get` で詳細取得。
 - `--max-tokens` は **実際に返す JSON 1 行分の実トークン数**で判定される（抜粋だけではなく path / heading_path / score 等の metadata も含む）。日本語文書では **800 tokens で 2〜3 件**、**5 件必要なら 1,600 前後**が目安。
 - `--top-k` を 3〜5 に保ち、件数が足りないときは `--top-k` ではなく `--max-tokens` を上げる。
+- **候補を多く見たいだけなら、予算を上げるより `--return-unit locations` が安い**。本リポジトリ実測（ゴールデン 60 問）: `--top-k 5 --max-tokens 1600` が平均 4.5〜4.8 件 / 1,234〜1,316 tokens なのに対し、`--top-k 20 --max-tokens 800 --return-unit locations` は平均 6.7〜7.1 件 / 714〜756 tokens で、期待箇所への到達率は 4 スライスすべてで同等以上だった。所在を絞ってから `get` で本文を取る。
 - `--paths` でディレクトリを絞ると BM25 精度も向上する。
 - 文脈拡張が必要なら `--include-parent` / `--with-parent-depth N` / `--expand-neighbors 1` を併用。
 

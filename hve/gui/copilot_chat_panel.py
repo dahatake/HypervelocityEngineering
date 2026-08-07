@@ -108,7 +108,7 @@ class CopilotChatPanel(QDockWidget):
         layout.setSpacing(6)
 
         self._status = QLabel()
-        self._status.setStyleSheet("color: #424242;")
+        self._status.setProperty("hveRole", "description")
         self._status.setWordWrap(True)
         layout.addWidget(self._status)
 

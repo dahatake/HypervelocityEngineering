@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .theme import token
 from .workbench_state import WorkbenchState
 
 
@@ -32,13 +33,14 @@ _STATUS_GLYPH = {
     "blocked": "⏸️",      # blocked (user intervention required)
 }
 
-_STATUS_COLOR = {
-    "pending": "#888888",      # dim white
-    "running": "#ffff00",      # bold yellow
-    "done": "#00ff00",         # bold green
-    "failed": "#ff0000",       # bold red
-    "skipped": "#00ffff",      # dim cyan
-    "blocked": "#b07ed5",      # purple (matches dag_status_widget)
+# 値は theme.TOKENS のキー。色は描画時に token() で解決する（テーマ追従のため）。
+_STATUS_TOKEN = {
+    "pending": "status.pending",
+    "running": "status.running",
+    "done": "status.done",
+    "failed": "status.failed",
+    "skipped": "status.skipped",
+    "blocked": "status.blocked",
 }
 
 
@@ -61,7 +63,7 @@ class Header2Widget(QWidget):
         text_html = ""
         for s in self.state.steps:
             glyph = _STATUS_GLYPH.get(s.status, "?")
-            color = _STATUS_COLOR.get(s.status, "#ffffff")
+            color = token(_STATUS_TOKEN.get(s.status, "foreground"))
 
             # ステップラベル
             label = f"{s.id}.{s.title}"
@@ -97,11 +99,10 @@ class FooterWidget(QWidget):
     - Cost / Premium Requests を常時表示 (未取得値は ``-``、捏造禁止)
     """
 
-    # 項目名（濃色 bold）と値（中間色）の配色。
-    _LABEL_COLOR = "#222222"
-    _VALUE_COLOR = "#666666"
-    _WARN_COLOR = "#ff6600"
-    _SEP_COLOR = "#bdbdbd"
+    # 項目名（濃色 bold）と値（中間色）の配色。値は theme.TOKENS のキー。
+    _LABEL_TOKEN = "foreground"
+    _VALUE_TOKEN = "descriptionForeground"
+    _WARN_TOKEN = "warningForeground"
     _TOPN = 5  # Tools / Skills 表示上限件数
 
     # 「📊 詳細」ボタンクリック時に emit。page_workbench がポップアップを開く。
@@ -122,16 +123,13 @@ class FooterWidget(QWidget):
             self.tr("現在の統計スナップショットと「今回の実行履歴」をタブで表示します。")
         )
         self._detail_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._detail_btn.setProperty("hveRole", "toolToggle")
         self._detail_btn.setStyleSheet(
             "QToolButton {"
-            f" color: {self._LABEL_COLOR};"
-            " background: transparent;"
-            " border: 1px solid #cfd3da;"
             " border-radius: 3px;"
             " padding: 1px 6px;"
             " font-size: 9pt;"
             "}"
-            "QToolButton:hover { background: #eef2f7; }"
         )
         self._detail_btn.clicked.connect(self.detail_clicked)
 
@@ -178,9 +176,9 @@ class FooterWidget(QWidget):
     def _fmt_item(cls, label: str, value: str, *, value_color: Optional[str] = None) -> str:
         # NOTE: 既存テスト互換のため、内部 HTML 構造は維持 (font-weight:bold span 等)。
         # text_kinsoku.wrap_nowrap_unit は新規 Cost/Reqs 行で利用する。
-        vc = value_color or cls._VALUE_COLOR
+        vc = value_color or token(cls._VALUE_TOKEN)
         return (
-            f"<span style='color:{cls._LABEL_COLOR}; font-weight:bold;'>{label}:</span> "
+            f"<span style='color:{token(cls._LABEL_TOKEN)}; font-weight:bold;'>{label}:</span> "
             f"<span style='color:{vc};'>{value}</span>"
         )
 
@@ -205,7 +203,7 @@ class FooterWidget(QWidget):
             value = (
                 f"{self.state.context_current:,} / {self.state.context_limit:,} ({pct}%)"
             )
-            value_color = self._WARN_COLOR if pct >= 80 else None
+            value_color = token(self._WARN_TOKEN) if pct >= 80 else None
             parts.append(self._fmt_item("Context", value, value_color=value_color))
 
         # Model
@@ -362,7 +360,7 @@ class FooterWidget(QWidget):
         # 区切りに ZWSP を入れて自然な折り返しを促す (text_kinsoku.join_items と同等の形)
         sep = (
             "\u200b"
-            f"<span style='color:{self._VALUE_COLOR};'> | </span>"
+            f"<span style='color:{token(self._VALUE_TOKEN)};'> | </span>"
             "\u200b"
         )
         html = sep.join(parts)

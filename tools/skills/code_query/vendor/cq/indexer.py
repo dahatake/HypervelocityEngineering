@@ -113,6 +113,8 @@ def _extract(lang: str, source: str) -> tuple[tuple[RawSymbol, ...], str]:
     support = support_for(lang)
     if support is not None:
         try:
+            if support.extract_ex is not None:
+                return support.extract_ex(source)
             return support.extract(source), support.parser
         except (ExtractionError, ImportError):
             # An absent optional grammar degrades exactly like a parse failure

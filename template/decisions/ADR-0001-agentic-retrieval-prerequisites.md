@@ -9,6 +9,10 @@
 | **対象** | AAD-WEB（Web App Design）/ ASDW-WEB（Web App Dev & Deploy）|
 | **Phase** | Phase 1 — 前提整備（コード/ロジック変更なし） |
 
+> [!IMPORTANT]
+> 本 ADR は 2026-05-07 時点の決定記録である。§3.3 / §4.2 / §4.4 / §7 の一部の「実在」記述は現況と一致しない。
+> 参照前に必ず [§9 現況注記](#9-現況注記2026-08-04-追記) を読むこと。
+
 ---
 
 ## 1. 背景
@@ -116,9 +120,13 @@ find .github/skills -name "SKILL.md" | sort
 
 ### 4.4 全 SKILL.md 一覧（Annex）
 
+> [!WARNING]
+> 本 Annex は 2026-05-07 時点の調査ログである。**現況では本表の `azure-skills/` エントリの大半がリポジトリ内に存在しない**。
+> 実在する SKILL.md の現況は [§9.1](#91-skill-実在状況の訂正) を参照すること。
+
 | パス | name | 説明（先頭） |
 |---|---|---|
-| `.github/skills/_routing/SKILL.md` | `_routing` | Skills 参照先のルーティング表 |
+| `.github/skills/_routing/README.md` | `_routing` | Skills 参照先のルーティング表 |
 | `.github/skills/azure-skills/airunway-aks-setup/SKILL.md` | `airunway-aks-setup` | Set up AI Runway on AKS |
 | `.github/skills/observability/appinsights-instrumentation/SKILL.md` | `appinsights-instrumentation` | Instrumentation for Azure App Insights |
 | `.github/skills/azure-skills/azure-ai/SKILL.md` | `azure-ai` | Azure AI services（Search / Speech / OpenAI 等） |
@@ -260,10 +268,13 @@ child_id.startswith(step.id + ".")
 
 ## 7. 後続 Phase への影響
 
+> [!WARNING]
+> 本表は 2026-05-07 時点の見通しである。各 Phase の**実際の到達状況**は [§9.2](#92-phase-到達状況の実測2026-08-04) を参照すること。
+
 | Phase | 内容 | 本 ADR での決定の影響 |
 |---|---|---|
 | **Phase 2** | Issue Form + hve ウィザードへの Agentic Retrieval 選択肢追加 | Step ID 命名規約（英字サフィックス方式）を前提に設計。Microsoft Learn MCP 追加済み |
-| **Phase 3** | Arch Agent（AAD-WEB）への Agentic Retrieval 機能要件追加 | `.github/skills/azure-skills/azure-ai/SKILL.md` / `microsoft-foundry/SKILL.md` が実在することを確認済み |
+| **Phase 3** | Arch Agent（AAD-WEB）への Agentic Retrieval 機能要件追加 | `.github/skills/azure-skills/azure-ai/SKILL.md` / `microsoft-foundry/SKILL.md` が実在することを確認済み（**§9.1 で訂正**） |
 | **Phase 4** | Dev Agents（ASDW-WEB）への Azure AI Search 実装追加 | `azure-cli-deploy-scripts` / `azure-ac-verification` が不在。`Dev-Microservice-Azure-AddServiceDeploy.agent.md` は Skill 名参照のみで仕様未展開。Phase 4 着手時に §4.3 の 3 択（Skill 新設 / agent.md インライン化 / 既存 Skill 差し替え）から 1 案を決定する |
 | **Phase 5** | `workflow_registry.py` への Step 追加 | 英字サフィックス方式（例: `2.2A`）を採用。3 階層（`2.2.1`）は採用しない |
 | **Phase 6** | reusable workflows | 本 ADR 直接影響なし |
@@ -280,6 +291,9 @@ child_id.startswith(step.id + ".")
 ### AC1-2: Skill パス確認
 ✅ `find .github/skills -name "SKILL.md" | sort` の出力（55件）と §4.4 の一覧が一致することを確認済み。
 
+> [!WARNING]
+> 上記の「55 件」は 2026-05-07 時点の値であり、追記時点の実測値（33 件）と一致しない。[§9.1](#91-skill-実在状況の訂正) を参照。
+
 ### AC1-3: Step ID 命名検証
 ✅ `grep -E 'id="[0-9]+\.[0-9]+\.[0-9]+"' hve/workflow_registry.py` → 0件（3階層 ID なし）を確認済み。
 
@@ -288,6 +302,87 @@ child_id.startswith(step.id + ".")
 
 ### AC1-5: 捏造なし
 ✅ 確認できない事項は `要確認` と明記。実在しない Skill / パス・MCP パッケージへの言及なし。
+
+---
+
+## 9. 現況注記（2026-08-04 追記）
+
+本 ADR は 2026-05-07 時点の決定記録であり、原文は履歴として保持する。以下は**追記時点の実測**による差分注記である。
+
+### 9.1 Skill 実在状況の訂正
+
+`.github/skills/**/SKILL.md` の実測件数は **33 件**（§4.4 Annex および §8 AC1-2 の「55 件」は追記時点と一致しない）。
+
+`.github/skills/azure-skills/` 配下に実在するのは次の 3 件のみ:
+
+| パス | 状態 |
+|---|---|
+| `.github/skills/azure-skills/azure-region-policy/SKILL.md` | 実在 |
+| `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md` | 実在（§4.2 の記述と一致） |
+| `.github/skills/azure-skills/azure-ac-verification/SKILL.md` | 実在（§4.2 の記述と一致） |
+
+§4.4 Annex が列挙する `azure-ai` / `microsoft-foundry` / `azure-deploy` / `azure-validate` / `azure-rbac` / `azure-prepare` 等は **リポジトリ内に存在しない**。これらはユーザー環境の `~/.agents/skills/` 配下へ導入される外部 Skill であり、`.github/prompts/Dev-Microservice-Azure-AgenticRetrievalDesign.prompt.md` の「外部 Skill（ユーザー環境）」節も「リポジトリ内には存在しない」「未配備時は本 prompt 本文の指示のみで動作する」と明記している。
+
+したがって **§7 の Phase 3 行「`azure-ai` / `microsoft-foundry` が実在することを確認済み」は誤り**である。Phase 3 以降の Agent は、これら外部 Skill を必須依存として扱ってはならない。
+
+> 補足: 外部 Skill `~/.agents/skills/azure-ai/` を確認したところ、`SKILL.md` 本文には Agentic Retrieval / Knowledge Base / Foundry IQ の記述はなく、full-text / vector / hybrid search までにとどまる。`references/sdk/azure-search-documents-py.md` には Agentic Retrieval への言及があるが、クライアント名の列挙と「完全なパターンは別 plugin skill 側にある」という注記にとどまり、**retrieval reasoning effort / `alwaysQuery` / `retrievalInstructions` / `outputMode` などの検索挙動を決めるパラメータは含まれない**。よって Foundry IQ の設計契約をリポジトリ側で担保する必要がある。
+
+### 9.2 Phase 到達状況の実測（2026-08-04）
+
+| Phase | 実測 | 根拠 |
+|---|---|---|
+| Phase 1 | 完了（本 ADR）。ただし §4.4 / §7 / §8 に §9.1 の齟齬あり | 本注記 |
+| Phase 2 | 完了。Issue Form 6 項目 + CLI ウィザードが実装済み | `.github/ISSUE_TEMPLATE/web-app-{design,dev}.yml`, `hve/template_engine.py` `_AGENTIC_RETRIEVAL_QUESTIONS`, `hve/__main__.py` `_collect_agentic_retrieval_wizard_answers` |
+| Phase 3 | Prompt のみ作成。ワークフロー未配線 | `.github/prompts/Arch-AgenticRetrieval-Detail.prompt.md` は実在するが `hve/workflow_registry.py` に登録なし |
+| Phase 4 | Prompt のみ作成。ワークフロー未配線 | `.github/prompts/Dev-Microservice-Azure-AgenticRetrieval{Design,Deploy}.prompt.md` は実在するが同上 |
+| **Phase 5** | **未実施** | `hve/workflow_registry.py` に文字列 `AgenticRetrieval` が 0 件 |
+| Phase 6 | 入力受領のみ。Root Issue body への HTML コメント埋め込みまで | `.github/workflows/auto-app-{detail-design,dev-microservice}-web-reusable.yml`。埋め込んだタグの読み手はリポジトリ内に存在しない |
+| Phase 7 | テストは存在するが「既存 Step で代替されている」前提の確認にとどまる | `hve/tests/test_workflow_registry_agentic.py` の docstring が自認 |
+| Phase 8 | `users-guide/agentic-retrieval-guide.md` 作成済み | 同ファイル |
+
+### 9.3 Phase 5 未実施による帰結
+
+Phase 5 が未実施であるため、Phase 2 / 6 で収集した 6 項目（`enable_agentic_retrieval` 他）を消費する実行経路が存在しない。`hve/config.py` の対応フィールドは書き込みのみで、読み取り箇所が無い。
+
+### 9.4 Step ID 命名規約（§5）の根拠消失
+
+§5.3 は英字サフィックス方式（例: `2.2A`）を採択し、その第 1 根拠を「既存コードベースに `2.3T` / `2.3TC` / `3.0T` / `3.0TC` のパターンが確立されている」ことに置いている。
+
+**追記時点の実測では、英字サフィックスを持つ Step ID は `hve/workflow_registry.py` 全体で 0 件**（正規表現 `id="[0-9]+(\.[0-9]+)*[A-Za-z]+"` が 0 マッチ）。§5.1 に記録された ASDW-WEB の `2.3T` / `2.3TC` / `3.0T` / `3.0TC` は現行定義に存在しない（現行は `1.1`〜`1.3` / `2.1`〜`2.4` / `3.1`〜`3.5` / `4.1`〜`4.4` / `5.1`〜`5.2` とコンテナ `1`〜`5`）。
+
+よって §5.3 の採択理由 1（一貫性）は成立しない。採択理由 2（三階層 ID は実績ゼロで副作用リスクがある）は引き続き成立する（三階層 ID も実測 0 件）。
+
+**Phase 5 着手時の必須手続き**: 英字サフィックスを採用する場合は、本項の根拠消失を踏まえたうえで改めて判断を記録すること。少なくとも次の 2 点を確認する:
+
+1. `hve/workflow_registry.py` の `WorkflowDef._validate()` は重複 ID 検査のみで、ID 形式の正規表現検査を持たない（§5.2 の調査は追記時点でも有効）。
+2. コンテナ判定は `child_id.startswith(step.id + ".")` の前方一致であるため、`2.2A` はコンテナ `2` の子として拾われない。ASDW-WEB のようにコンテナを持つワークフローへ追加する場合は、`2.5` のような通常の 2 階層 ID の方が既存グループ化と整合する可能性がある。
+
+### 9.5 Phase 5 実施時の Step ID 再決定（2026-08-04）
+
+§9.4 の根拠消失を受け、Phase 5 実施時に改めて次を決定した。
+
+| 項目 | 決定 |
+|---|---|
+| 採用方式 | **通常の 2 階層数値 ID**（英字サフィックスを採用しない） |
+| AAD-WEB | `2.6` = `Arch-AgenticRetrieval-Detail`（`depends_on: ["2.2"]`） |
+| ASDW-WEB | `2.5` = `Dev-Microservice-Azure-AgenticRetrievalDesign`（`depends_on: ["2.1"]`）<br>`2.6` = `Dev-Microservice-Azure-AgenticRetrievalDeploy`（`depends_on: ["2.2", "2.5"]`） |
+
+採択理由:
+
+1. 英字サフィックスの実績は現行 registry に **0 件**（§9.4）。一方で 2 階層数値 ID は全 86 件の StepDef が採用しており、一貫性の根拠はこちらにある。
+2. Step ID は実行順序を表さない（順序は `depends_on` が決める）ため、`2.2` の直後で実行する Step に `2.6` を割り当てても矛盾しない。
+3. ASDW-WEB のコンテナ判定（`child_id.startswith(step.id + ".")`）で、`2.5` / `2.6` はコンテナ `2` の子として正しく拾われる。
+
+### 9.6 Phase 5 実施内容（2026-08-04）
+
+| 対象 | 内容 |
+|---|---|
+| `hve/workflow_registry.py` | AAD-WEB `2.6` / ASDW-WEB `2.5` `2.6` の StepDef を追加 |
+| `.github/io-contracts/` | `Arch-AgenticRetrieval-Detail--aad-web--2.6.yaml` / `Dev-Microservice-Azure-AgenticRetrievalDesign--asdw-web--2.5.yaml` / `Dev-Microservice-Azure-AgenticRetrievalDeploy--asdw-web--2.6.yaml` を新規作成 |
+| `.github/scripts/templates/` | `aad-web/step-2.6.md` / `asdw-web/step-2.5.md` / `asdw-web/step-2.6.md` を新規作成 |
+| 成果物のゲート方針 | 3 Step とも対象サービス数に依存する条件付き成果物のため `output_paths` ではゲートせず、Deploy は `reality_gate_acs`（AC4B-1 / 14 / 15 / 18）で実在検証する |
+
+詳細な影響分析と改修プランは `work/analysis/2026-08-03-agentic-retrieval-gap-analysis.md` に記録した。
 
 ### AC1-6: スコープ外ファイル未変更
 ✅ ルート `/README.md`、既存 ADR、SKILL.md、Custom Agent ファイル、`hve/` コード、Issue Template、GitHub Workflows は変更していない。

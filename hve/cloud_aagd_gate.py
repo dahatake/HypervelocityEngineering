@@ -13,10 +13,53 @@ import os
 import urllib.parse
 import urllib.request
 from collections import deque
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List
 
 _BLOCKING_LABELS = frozenset({"aagd:blocked", "aagd:test-failed"})
 _DONE_LABEL = "aagd:done"
+
+
+def _validate_aagd_artifacts(repo_root: Path, tool_search_policy: str) -> List[str]:
+    """checkout 済み repo の AI Agent 成果物を Tool Search 方針で再検証する。
+
+    Azure へは一切接続せず、既存の artifact validator を Agent ごとに適用する。
+    """
+    from hve.artifact_validation import (
+        validate_ai_agent_deploy_artifacts,
+        validate_ai_agent_implementation_artifacts,
+        validate_tool_search_eval_report,
+    )
+
+    designs = sorted((repo_root / "docs" / "agent").glob("agent-detail-*.md"))
+    if not designs:
+        return [f"{repo_root}:no-agent-detail-artifacts"]
+
+    violations: List[str] = []
+    for design in designs:
+        key = design.stem[len("agent-detail-"):]
+        errors = validate_ai_agent_implementation_artifacts(
+            design,
+            repo_root / "src" / "agent" / key,
+            repo_root / "docs" / "test-specs" / f"{key}-test-spec.md",
+            tool_search_policy,
+        )
+        errors += validate_ai_agent_deploy_artifacts(
+            design,
+            repo_root / "src" / "infra" / "azure",
+            tool_search_policy,
+        )
+        errors += validate_tool_search_eval_report(
+            design,
+            repo_root
+            / "docs"
+            / "agent"
+            / "tool-search-eval"
+            / f"{key}-eval-report.md",
+            tool_search_policy,
+        )
+        violations.extend(f"{key}:{error}" for error in errors)
+    return violations
 
 
 def validate_aagd_issue_tree(
@@ -25,6 +68,8 @@ def validate_aagd_issue_tree(
     fetch_children: Callable[[int], Iterable[Dict[str, Any]]],
     *,
     allow_root_self_improve_blocked: bool = False,
+    repo_root: "Path | str | None" = None,
+    tool_search_policy: str = "auto",
 ) -> List[str]:
     """Return deterministic violations for an AAGD Root and all descendants.
 
@@ -33,6 +78,9 @@ def validate_aagd_issue_tree(
     appear in the tree. The Root may retain ``aagd:blocked`` only while retrying
     a previously failed Post-DAG Self-Improve run; descendants never receive
     that exception.
+
+    When ``repo_root`` is given, the checked out AI Agent artifacts are
+    revalidated as well, so an all-green label tree alone cannot pass the gate.
     """
 
     violations: List[str] = []
@@ -73,6 +121,8 @@ def validate_aagd_issue_tree(
 
     if descendant_count == 0:
         violations.append(f"#{root_issue}:no-descendant-issues")
+    if repo_root is not None:
+        violations.extend(_validate_aagd_artifacts(Path(repo_root), tool_search_policy))
     return violations
 
 
@@ -129,6 +179,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow Root aagd:blocked while retrying Post-DAG Self-Improve",
     )
+    parser.add_argument(
+        "--repo-root",
+        type=Path,
+        help="Checked out repository root; enables AI Agent artifact revalidation",
+    )
+    parser.add_argument(
+        "--tool-search-policy",
+        choices=("auto", "yes", "no"),
+        default="auto",
+        help="Tool search policy for the generated Agent.",
+    )
     args = parser.parse_args(argv)
     token = os.environ.get("GH_TOKEN", "").strip()
     if not token:
@@ -140,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
         reader.fetch_issue,
         reader.fetch_children,
         allow_root_self_improve_blocked=args.allow_root_self_improve_blocked,
+        repo_root=args.repo_root,
+        tool_search_policy=args.tool_search_policy,
     )
     if violations:
         print(

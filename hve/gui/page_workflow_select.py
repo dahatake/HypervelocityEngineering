@@ -168,7 +168,7 @@ class _WorkflowStepsGroup(QWidget):
         header = QLabel(
             f"<b>{format_workflow_label_html(self._workflow_id, workflow_name)}</b> のステップ"
         )
-        header.setStyleSheet("color: #333; padding: 2px 0;")
+        header.setStyleSheet("padding: 2px 0;")
         layout.addWidget(header)
 
         # ARD: 4 グループ体系の説明
@@ -177,16 +177,15 @@ class _WorkflowStepsGroup(QWidget):
                 self.tr("ℹ️ ARD は 4 グループ構成です。各グループは内部で複数の実 Step を順次実行します。\n"
                 "Step 2（要求定義書作成）は Step 1 の出力があれば参考にしますが、無くても実行できます。")
             )
-            note.setStyleSheet(
-                "color: #555; background: #f5f5f5; "
-                "padding: 4px 8px; border-left: 3px solid #888;"
-            )
+            note.setProperty("hveRole", "noteBox")
+            note.setStyleSheet("padding: 4px 8px;")
             note.setWordWrap(True)
             layout.addWidget(note)
 
         if not self._steps:
             empty = QLabel(self.tr("（ステップ情報が取得できませんでした）"))
-            empty.setStyleSheet("color: #888; padding-left: 8px;")
+            empty.setProperty("hveRole", "muted")
+            empty.setStyleSheet("padding-left: 8px;")
             layout.addWidget(empty)
             return
 
@@ -410,7 +409,8 @@ class WorkflowSelectPage(QWidget):
             self.tr("実行するワークフローを 1 つ以上選択してください。"
             "選択後、実行するステップをチェックボックスで調整できます。")
         )
-        desc.setStyleSheet("color: #555; padding-left: 4px;")
+        desc.setProperty("hveRole", "description")
+        desc.setStyleSheet("padding-left: 4px;")
         desc.setWordWrap(True)
 
         # --- ワークフロー チェックボックス群（カテゴリー別） ---
@@ -441,10 +441,8 @@ class WorkflowSelectPage(QWidget):
 
         for cat_name, items in categories:
             header = QLabel(f"<b>{cat_name}</b>")
-            header.setStyleSheet(
-                "color: #222; padding: 6px 0 2px 0; "
-                "border-bottom: 1px solid #ccc;"
-            )
+            header.setProperty("hveRole", "sectionHeader")
+            header.setStyleSheet("padding: 6px 0 2px 0;")
             wf_layout.addWidget(header)
 
             for wf_id, wf_name in items:
@@ -478,7 +476,8 @@ class WorkflowSelectPage(QWidget):
         self._steps_placeholder = QLabel(
             self.tr("（ワークフローを選択するとステップが表示されます）")
         )
-        self._steps_placeholder.setStyleSheet("color: #888; padding: 8px;")
+        self._steps_placeholder.setProperty("hveRole", "muted")
+        self._steps_placeholder.setStyleSheet("padding: 8px;")
         self._steps_layout.addWidget(self._steps_placeholder)
         self._steps_layout.addStretch()
 
@@ -526,7 +525,8 @@ class WorkflowSelectPage(QWidget):
         else:
             # 単体テスト互換: options_page 未指定時はプレースホルダを使う
             placeholder = QLabel(self.tr("（オプションページ未指定）"))
-            placeholder.setStyleSheet("color: #888; padding: 16px;")
+            placeholder.setProperty("hveRole", "muted")
+            placeholder.setStyleSheet("padding: 16px;")
             right_pane = placeholder
 
         # --- QSplitter で左右分割 ---
@@ -581,10 +581,8 @@ class WorkflowSelectPage(QWidget):
     def _build_autopilot_section(self) -> QWidget:
         frame = QFrame()
         frame.setFrameShape(QFrame.Shape.StyledPanel)
-        frame.setStyleSheet(
-            "QFrame { background: #f6f8fa; border: 1px solid #d0d7de;"
-            " border-radius: 4px; padding: 6px; }"
-        )
+        frame.setProperty("hveRole", "panel")
+        frame.setStyleSheet("QFrame { padding: 6px; }")
         vbox = QVBoxLayout(frame)
         vbox.setContentsMargins(8, 6, 8, 6)
         vbox.setSpacing(4)
@@ -602,7 +600,8 @@ class WorkflowSelectPage(QWidget):
                     "下のワークフロー/ステップ選択は無効化されます。")
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #555; padding-left: 24px;")
+        note.setProperty("hveRole", "description")
+        note.setStyleSheet("padding-left: 24px;")
         vbox.addWidget(note)
 
         row = QHBoxLayout()

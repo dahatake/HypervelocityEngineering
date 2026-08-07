@@ -25,6 +25,8 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 - `azure-region-policy`：Azure リージョン優先順位ポリシー（§1 標準リージョン）を参照する。
 - `azure-ac-verification`：AC 検証フレームワークの共通仕様（§1 `ac-verification.md` テンプレート・§2 PASS/NEEDS-VERIFICATION/FAIL 完了判定基準・§3 Azure リソース存在確認パターン・§4 Azure CLI 利用不可時フォールバック）を参照する。
 - `ai-agent-capability-contract`：Section 7.0 / 7.3で選択されたsearch / MCP providerだけを接続し、理由付きN/A、権限、data boundary、fallback、smoke testを検証する。
+- `agentic-retrieval-contract`：Foundry IQ / Azure AI Search Agentic Retrieval を選択した場合に、AR-CAP-01〜05 の設計値と実 knowledge base 設定の一致を検証する。
+- `foundry-toolbox-contract`：詳細設計に TB-CAP-01〜05 がある場合に、実 Toolbox の tool search / pin / limit / version が設計値と一致することを検証する。
 
 ## Azure 公式情報参照（Microsoft Learn MCP 必須）
 
@@ -118,7 +120,7 @@ Agent詳細設計のSection 7.0 / 7.3を行単位で読み、`Preferred route`�
 
 | 選択route | 条件付きPre-flight |
 |---|---|
-| Azure AI Search Agentic Retrieval / Foundry IQ knowledge base | knowledge baseと選択Knowledge Source、必要なProject connection定義、実行identityのread権限、設計したTool allowlistを確認する。Foundry Agent Service接続では`knowledge_base_retrieve`以外を無断追加しない。ユーザー単位permissionが必要なのに対象runtimeで安全に伝播できない場合はblockedにする。 |
+| Azure AI Search Agentic Retrieval / Foundry IQ knowledge base | knowledge baseと選択Knowledge Source、必要なProject connection定義、実行identityのread権限、設計したTool allowlistを確認する。Foundry Agent Service接続では`knowledge_base_retrieve`以外を無断追加しない。ユーザー単位permissionが必要なのに対象runtimeで安全に伝播できない場合はblockedにする。加えてSkill `agentic-retrieval-contract` に従い、詳細設計のAR-CAP-01〜05と実knowledge base設定（reasoning effort / output mode / Knowledge Source件数とalways query / references・activity logの有効化）の一致を確認する。 |
 | Work IQ | tenant有効化、MCP tenant policy、選択したread-only Tool / relative path、delegated consent、signed-in test userの権限を確認する。`ask`やmutation Toolをread-only fallbackとして有効化しない。未同意・policy拒否・ユーザー境界不明はblockedにする。 |
 | Fabric IQ | Preview状態、Fabric license、対応region、対象itemの公開状態、必要なFoundry project connection定義、OBO/delegated permissionと必要なadmin consentを確認する。application-onlyへ置換しない。workspace / Foundry間のdata residencyを確認する。 |
 | Web IQ | limited accessの利用承認と対象環境でのTool公開を確認する。利用不可なら接続を作成せず、Section 7.0で明示承認されたFallbackだけを検査する。未承認providerへの自動切替、queryへのsecret / PII / internal URL混入、citationなしの成功扱いを禁止する。 |
@@ -156,6 +158,22 @@ A-cap-planの結果は作業ログへ記録し、A-cap-verifyが固定テーブ�
 
 選択routeは`SELECTED-PASS`だけを完了状態とし、各証跡列と`Inventory delta: expected-only; evidence=<relative-json-path>`を必須にする。非選択routeは理由付き`N/A: ...`、実在する`Decision source`、`Inventory delta: zero; evidence=<relative-json-path>`を必須にする。`SELECTED-FAIL`、理由/根拠のないN/A、重複/欠落route、inventory証跡不一致、未確認redactionが1件でもあればデプロイを完了扱いにしない。この固定表はHVE Deploy gateが機械検証する。
 
+## Toolbox 検証（詳細設計に TB-CAP-01〜05 がある場合のみ）
+
+Toolbox は managed resource であり、Agent コードを変えずに Tool の追加・削除・更新ができる。
+そのため「実 Toolbox の設定」と「設計書」の乖離が起きやすい。デプロイ時に照合すること。
+
+| 確認項目 | 方法 | 失敗時 |
+|---|---|---|
+| tool search が設計どおり有効か | `tools/list` に `tool_search` / `call_tool` と pin 済み Tool だけが出る | デプロイを完了扱いにしない |
+| pin が TB-CAP-03 と一致するか | `tools/list` の Tool 名集合 = pin 一覧 | 同上 |
+| 隠れた Tool が発見・実行できるか | `tool_search` で発見 → `call_tool` で実行 | 同上 |
+| `limit` が TB-CAP-05 と一致するか | `tool_search` の応答件数 | 同上 |
+| 既定 version が意図した version か | toolbox version を照会 | 同上 |
+
+検証にはプレビューヘッダー `Foundry-Features: Toolboxes=V1Preview` と、
+スコープ `https://ai.azure.com/.default` のトークンが必要。RBAC は Foundry プロジェクトへ **Foundry User** ロール。
+
 # 5) Azure CLI スクリプト要件
 
 > **共通仕様**: `azure-cli-deploy-scripts` Skill の「3点セットテンプレート」および「冪等性パターン」に従う。
@@ -173,12 +191,23 @@ A-cap-planの結果は作業ログへ記録し、A-cap-verifyが固定テーブ�
 - Project 不在時は、account / Project 名を含めて「ASDW-WEB Step.2.2 (AddServiceDeploy) を先に実行してください。AAGD は Foundry Project を作成しません」と報告し、`aagd:blocked` で停止する。
 - Project endpoint は `docs/azure/azure-services-additional.md`、明示された `AZURE_AI_FOUNDRY_ENDPOINT`、または Microsoft Learn の Project connection details（https://learn.microsoft.com/azure/foundry/how-to/create-projects#view-project-settings）で確認できる Project 値から取得する。**親 account endpoint を Project endpoint の代用にしない**。取得不能なら値を推測・合成せず `aagd:blocked` で停止する。
 - Agent の登録またはデプロイ（Agent Service API を使用）
+- **Toolbox の作成（詳細設計に TB-CAP-01〜05 がある場合のみ）**: Agent 登録の**前に** toolbox version を作成する（Agent が toolbox エンドポイントを参照するため）。
+  - pin 対象・`additional_search_text`・`limit`・`tool search` の有効否は、**Agent config（`agent-config.json` / `appsettings.json`）を正本として読み取る**。同じ値を script へ二重にハードコードしない（config を更新しても script が古い値を保持する事故を防ぐ）。
+  - TB-CAP-02 が `Tool search: enabled` なら tools へ `{"type": "toolbox_search"}` を含める。
+  - TB-CAP-03 の pin 対象と TB-CAP-04 の `additional_search_text` を `tool_configs` へ反映する。設計値を変えない。
+  - プレビューヘッダー `Foundry-Features: Toolboxes=V1Preview` を付与し、トークンスコープは `https://ai.azure.com/.default` を使う。
+  - SDK シンボル名は変動するため、**実装前に Microsoft Learn MCP で API 形式を確定**してから書く。REST は `POST {project_endpoint}/toolboxes/{name}/versions` で安定しているため、SDK が不確実な段階では REST を使ってもよい。
+  - 冪等にする（同名 version があれば再作成せず参照する）。
+  - TB-CAP が無い設計では toolbox を作成しない。
 - Section 7.0 / 7.3で選択され、A-cap-planをPASSしたprovider connectionだけを作成または参照する。N/A / not-selected providerを作成・接続しない。
 
 ## verify-agent-resources.sh（検証）
 - `az cognitiveservices account project show --name <account> --resource-group <rg> --project-name <project>` を実行し、Project 子リソースの `provisioningState` が `Succeeded` であることを確認する（AC-1）。親 account の `account show` で代用しない。
 - Azure AI Foundry エンドポイントへのヘルスチェック（HTTP 200 応答確認）
 - Agent が正常に登録されていることの確認
+- **Toolbox の確認（TB-CAP ありの場合のみ）**: `tools/list` を取得し、`§Toolbox 検証` の 5 項目（tool search 有効 / pin 一致 / 隠れた Tool の発見・実行 / `limit` / 既定 version）を検証し、結果を AC 証跡へ記録する。
+  - 期待値はハードコードせず、`PINNED_TOOLS` / `TOOL_SEARCH_LIMIT` / `TOOLBOX_VERSION` の環境変数で注入する（値の出所は Agent config）。
+  - 検証が 1 項目でも失敗したら非 0 で終了する（`set -euo pipefail` を前提に fail-closed にする）。
 - 代表クエリ（簡単なテストメッセージ）の送信と応答確認
 - 選択した各providerのsmoke queryを実行し、Tool / route、permission境界、citation / query evidence、fallback有無を確認する。FallbackはPreferredの失敗を決定的に再現できるtest doubleまたは非破壊probeで検証し、未承認routeへ切り替えない。
 - NFR（性能）として `/health` の応答時間を計測し、しきい値は `NFR_P95_MAX_MS` / `NFR_P99_MAX_MS` / `NFR_SAMPLE_COUNT` 等の環境変数で管理する（ハードコード禁止）

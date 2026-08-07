@@ -143,6 +143,38 @@ def schema_version(conn: sqlite3.Connection) -> int:
     return int(row[0]) if row else 0
 
 
+def _language_breakdown(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Per-language counts (FR-CQ-15).
+
+    `by_parser` alone cannot show where fidelity dropped, because one parser
+    name is shared by several languages (C# and JavaScript are both `regex`).
+    The language is read from the index as-is and never re-derived here.
+    """
+    parsers: dict[str, dict[str, int]] = {}
+    for lang, parser, count in conn.execute(
+        "SELECT lang, parser, count(*) FROM files"
+        " GROUP BY lang, parser ORDER BY lang, parser"
+    ):
+        parsers.setdefault(lang, {})[parser] = count
+    totals = {
+        table: dict(conn.execute(
+            f"SELECT f.lang, count(*) FROM {table} t"
+            f" JOIN files f ON f.path = t.path GROUP BY f.lang"
+        ))
+        for table in ("symbols", "chunks")
+    }
+    return {
+        lang: {
+            "files": sum(by_parser.values()),
+            # A language can index files yet expose no symbol (batch has no functions).
+            "symbols": totals["symbols"].get(lang, 0),
+            "chunks": totals["chunks"].get(lang, 0),
+            "by_parser": by_parser,
+        }
+        for lang, by_parser in parsers.items()
+    }
+
+
 def index_stats(db_path: Path | str) -> dict[str, object]:
     """Row counts per table, parser fidelity split and schema version.
 
@@ -159,6 +191,7 @@ def index_stats(db_path: Path | str) -> dict[str, object]:
         counts["by_parser"] = dict(
             conn.execute("SELECT parser, count(*) FROM files GROUP BY parser")
         )
+        counts["by_lang"] = _language_breakdown(conn)
         counts["schema_version"] = schema_version(conn)
     counts["db"] = str(db_path)
     return counts

@@ -1,5 +1,5 @@
 name: "AI Agent Dev & Deploy"
-description: "Issue から AI Agent 実装・デプロイワークフロー (Step.1〜Step.3) を自動起動します"
+description: "Issue から AI Agent 実装・デプロイワークフロー (Step.1〜Step.4) を自動起動します"
 title: "[AI Agent Dev] "
 labels:
   - "auto-ai-agent-dev"
@@ -16,6 +16,7 @@ body:
         | **Step.2.2** | AI Agent テストコード生成 (TDD RED) |
         | **Step.2.3** | AI Agent 実装 (TDD GREEN) |
         | **Step.3** | AI Agent Deploy |
+        | **Step.4** | tool search 実測評価 |
 
         全実装・テスト・Deployステップ完了後、AAGD成果物を対象とするPost-DAG Self-Improveが必ず実行されます。
         TDD GREENのリトライ上限とPost-DAG Self-Improveのイテレーション上限は別々に管理されます。
@@ -92,10 +93,12 @@ body:
       description: |
         実行したいステップにチェックを入れてください。
         ✅ **デフォルト（全チェックなし）: 全 Step が実行されます。**
-        📋 **依存関係**: Step.1 → Step.2 → Step.3
+        📋 **依存関係**: Step.1 → Step.2 → Step.3 → Step.4
       options:
         - label: "Step.1 — AI Agent 構成設計"
         - label: "Step.2 — AI Agent 実装 (Step.2.1 テスト仕様書 / Step.2.2 テストコード生成 / Step.2.3 実装)"
+        - label: "Step.3 — AI Agent Deploy ※ Step.2 が必須"
+        - label: "Step.4 — tool search 実測評価 ※ Step.3 が必須"
         - label: "Step.3 — AI Agent Deploy ※ Step.2 が必須"
 
   - type: dropdown
@@ -225,6 +228,22 @@ body:
       options:
         - "有効にする"
         - "無効にする"
+      default: 0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: enable_tool_search
+    attributes:
+      label: "生成する AI Agent の Tool Search 方針"
+      description: |
+        生成される AI Agent 自身が Foundry Toolbox の tool search を使うかどうかを指定します。
+        HVE 自身の Tool Search 設定とは別項目です。
+        auto は Tool 総数（15 超）で自動判定します。no を選ぶと Step.4（tool search 実測評価）は作成されません。
+      options:
+        - "auto（Tool 総数で自動判定）"
+        - "yes（必ず使用する）"
+        - "no（使用しない）"
       default: 0
     validations:
       required: false

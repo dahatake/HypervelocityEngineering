@@ -1044,6 +1044,8 @@ jobs:
           S27TC_NUM="" S27TC_ID=""
           S27_NUM="" S27_ID=""
           S28_NUM="" S28_ID=""
+          S29_NUM="" S29_ID=""
+          S210_NUM="" S210_ID=""
           S3_NUM=""  S3_ID=""
           S30TC_NUM="" S30TC_ID=""
           S31_NUM="" S31_ID=""
@@ -1247,6 +1249,33 @@ jobs:
             S28_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
             echo "Step.2.8 作成: #${S28_NUM}"
             sleep 3
+
+            # ---- Step.2.9 (Agentic Retrieval 実装設計) ----
+            # enable_agentic_retrieval が no のときは Issue 自体を作らない。
+            if [[ "${ENABLE_AGENTIC_RETRIEVAL}" != "no" ]]; then
+              BODY_S29=$(printf '%s\n## 目的\nAAD-WEB Step.7.5 の製品非依存 Agentic Retrieval 仕様を入力に、サービス単位の **Azure 実装設計書**を作成する（APP-ID 指定時はスコープ内のサービスのみ）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/catalog/service-catalog.md`\n- `docs/services/{serviceId}-agentic-retrieval-spec.md`（AAD-WEB Step.7.5 出力）\n- `docs/azure/azure-services-additional.md`\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `docs/azure/agentic-retrieval/{serviceId}-design.md`\n- `docs/azure/azure-services-additional.md`（Agentic Retrieval 実装セクションの追記。既存内容は削除しない）\n\n## 検索契約（AR-CAP-01〜05・必須）\nSkill `agentic-retrieval-contract` に従い、設計書の第 8 章に AR-CAP-01〜05 を固定見出しで記載する。\n- 見出しレベルは第 8 章と同じにする（子レベルにしない）。\n- 整合ルール R1〜R12 を自己検査し、結果を完了報告の検証結果へ含める。\n- **複数データソース横断**は 1 つの Knowledge Base に複数 Knowledge Source を束ねて表現する。Knowledge Source ごとに別 Tool を作って Agent に複数回呼ばせる設計にしない。\n- **クエリ回数とトークンの最小化**は `Retrieval reasoning effort` と `alwaysQuery` / `retrievalInstructions` で制御し、根拠を AR-CAP-01 / AR-CAP-03 に残す。\n\n## Custom Agent\n`Dev-Microservice-Azure-AgenticRetrievalDesign` を使用\n\n## 依存\n- Step.2.2（追加 Azure サービス選定）が `asdw-web:done` であること\n\n## 完了条件\n- 対象サービスごとに `docs/azure/agentic-retrieval/{serviceId}-design.md` が作成されている\n- `docs/services/{serviceId}-agentic-retrieval-spec.md` が 1 件も存在しない場合は、その事実を作業ログへ記録して成果物なしで完了する\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+              RESP=$(create_issue \
+                "[ASDW-WEB] Step.2.9: Agentic Retrieval 実装設計${APP_ID_SUFFIX}" \
+                "${BODY_S29}" \
+                "${STEP_LABELS}")
+              S29_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+              S29_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+              echo "Step.2.9 作成: #${S29_NUM}"
+              sleep 3
+
+              # ---- Step.2.10 (Agentic Retrieval Deploy) ----
+              BODY_S210=$(printf '%s\n## 目的\nStep.2.9 の設計書どおりに Knowledge Base / Knowledge Source を Azure CLI で作成する（冪等・検証付き）。\n\n## 入力\n- リソースグループ名: `%s`\n- `docs/azure/agentic-retrieval/{serviceId}-design.md`（Step.2.9 出力）\n- `docs/catalog/app-catalog.md`（アプリケーション一覧）\n\n## 出力\n- `src/infra/azure/create-azure-agentic-retrieval/prep.sh`\n- `src/infra/azure/create-azure-agentic-retrieval/create.sh`\n- `src/infra/azure/create-azure-agentic-retrieval/services/{serviceId}.sh`\n\n## 実装の必須条件\n- 設計書の AR-CAP-01（KB 名 / reasoning effort / outputMode）を**そのまま**反映する。値を勝手に変えない。\n- AR-CAP-02 の Knowledge Source を過不足なく作成する。\n- Foundry resource / Project / モデル deployment は Step.2.3（追加 Azure サービス Deploy）が作成済みであり、本 Step の責務外。\n\n## AC 検証（必須）\n- `AC4B-1`: 全リソースが `Succeeded`\n- `AC4B-14`: 実 KB の reasoning effort が設計値と一致\n- `AC4B-15`: 実 KB の Knowledge Source 集合が設計値と一致\n- `AC4B-18`: 全 Knowledge Source を横断する smoke retrieve が成功\n\n## Custom Agent\n`Dev-Microservice-Azure-AgenticRetrievalDeploy` を使用\n\n## 依存\n- Step.2.3（追加 Azure サービス Deploy）が `asdw-web:done` であること\n- Step.2.9（Agentic Retrieval 実装設計）が `asdw-web:done` であること\n\n## 完了条件\n- 出力スクリプトが作成され、実行が成功している\n- AC4B-1 / AC4B-14 / AC4B-15 / AC4B-18 の検証証跡が記録されている\n- 対象設計書が 1 件も存在しない場合は、その事実を作業ログへ記録して成果物なしで完了する\n- 完了時に自身に `asdw-web:done` ラベルを付与すること%s%s' \
+                "${ROOT_REF}" "${RESOURCE_GROUP}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+              RESP=$(create_issue \
+                "[ASDW-WEB] Step.2.10: Agentic Retrieval Deploy${APP_ID_SUFFIX}" \
+                "${BODY_S210}" \
+                "${STEP_LABELS}")
+              S210_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+              S210_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+              echo "Step.2.10 作成: #${S210_NUM}"
+              sleep 3
+            fi
           else
             echo "Step.2 はスキップされました。"
           fi
@@ -1803,19 +1832,58 @@ jobs:
               ;;
 
             "2.3")
-              # Step.2.3 完了 → Step.2.3TC (TDD RED テストコード生成) を起動
+              # Step.2.3 完了 → Agentic Retrieval（Step.2.9）があれば先に起動。
+              # AI Agent 系（2.6〜2.8）が Knowledge Base を利用できるよう、先に KB を作る。
+              # 無ければ従来どおり Step.2.3TC（TDD RED テストコード生成）へ進む。
               S2_NUM=$(get_sub_issue_number '\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
-                S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3TC:')
-                if [[ -n "${S23TC_NUM}" ]]; then
-                  activate_issue "${S23TC_NUM}"
+                S29_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.9:')
+                if [[ -n "${S29_NUM}" ]]; then
+                  activate_issue "${S29_NUM}"
+                  echo "Step.2.3 完了: Step.2.9 (#${S29_NUM}) を起動しました。"
                 else
-                  echo "WARNING: Step.2.3TC が見つかりません。Step.2.4 にフォールバック。"
-                  S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.4:')
-                  if [[ -n "${S24_NUM}" ]]; then
-                    activate_issue "${S24_NUM}"
+                  S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3TC:')
+                  if [[ -n "${S23TC_NUM}" ]]; then
+                    activate_issue "${S23TC_NUM}"
                   else
-                    echo "WARNING: Step.2.4 も見つかりません。"
+                    echo "WARNING: Step.2.3TC が見つかりません。Step.2.4 にフォールバック。"
+                    S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.4:')
+                    if [[ -n "${S24_NUM}" ]]; then
+                      activate_issue "${S24_NUM}"
+                    else
+                      echo "WARNING: Step.2.4 も見つかりません。"
+                    fi
+                  fi
+                fi
+              else
+                echo "WARNING: Step.2 コンテナが見つかりません。"
+              fi
+              ;;
+
+            "2.9"|"2.10")
+              # Agentic Retrieval: 2.9（実装設計）→ 2.10（Deploy）→ Step.2.3TC へ戻る。
+              S2_NUM=$(get_sub_issue_number '\] Step\.2:')
+              if [[ -n "${S2_NUM}" ]]; then
+                NEXT_AR_NUM=""
+                if [[ "${STEP_MATCH}" == "2.9" ]]; then
+                  NEXT_AR_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.10:')
+                fi
+                if [[ -n "${NEXT_AR_NUM}" ]]; then
+                  activate_issue "${NEXT_AR_NUM}"
+                  echo "Step.2.9 完了: Step.2.10 (#${NEXT_AR_NUM}) を起動しました。"
+                else
+                  S23TC_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.3TC:')
+                  if [[ -n "${S23TC_NUM}" ]]; then
+                    activate_issue "${S23TC_NUM}"
+                    echo "Step.${STEP_MATCH} 完了: Step.2.3TC (#${S23TC_NUM}) を起動しました。"
+                  else
+                    echo "WARNING: Step.2.3TC が見つかりません。Step.2.4 にフォールバック。"
+                    S24_NUM=$(get_sub_issue_number_from_parent "${S2_NUM}" '\] Step\.2\.4:')
+                    if [[ -n "${S24_NUM}" ]]; then
+                      activate_issue "${S24_NUM}"
+                    else
+                      echo "WARNING: Step.2.4 も見つかりません。"
+                    fi
                   fi
                 fi
               else
@@ -1992,6 +2060,7 @@ jobs:
 
             "2.8")
               # Step.2.8 完了 → Step.2 コンテナに asdw-web:done → Step.3.0TC (TDD RED テストコード生成) を起動
+              # Agentic Retrieval（2.9 / 2.10）は Step.2.3 の直後に実行済みのため、ここでは待たない。
               S2_NUM=$(get_sub_issue_number '\] Step\.2:')
               if [[ -n "${S2_NUM}" ]]; then
                 add_label "${S2_NUM}" "asdw-web:done"

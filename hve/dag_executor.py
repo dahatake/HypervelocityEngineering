@@ -410,6 +410,7 @@ class DAGExecutor:
                 )
                 self._results[base_id] = _empty_result
                 self._emit_step_complete(_empty_result)
+                self._emit_step_status_event(base_id, "skipped")
                 if self.console is not None:
                     try:
                         self.console.warning(
@@ -533,6 +534,7 @@ class DAGExecutor:
             )
             self._results[empty_id] = _result
             self._emit_step_complete(_result)
+            self._emit_step_status_event(empty_id, "skipped")
             if self.console is not None:
                 try:
                     self.console.warning(
@@ -585,6 +587,7 @@ class DAGExecutor:
                     self._results[s.id] = _skip_result
                     # skip もフックで通知する
                     self._emit_step_complete(_skip_result)
+                    self._emit_step_status_event(s.id, "skipped", title=getattr(s, "title", None))
                     newly_skipped = True
 
             # 失敗ステップの後続を除外し、起動可能なステップを絞り込む
@@ -1133,6 +1136,7 @@ class DAGExecutor:
             self._results[step_id] = _blocked_result
             # blocked もフックで通知する
             self._emit_step_complete(_blocked_result)
+            self._emit_step_status_event(step_id, "blocked", title=getattr(node, "title", None))
 
     def _blocked_reason(self, node: Any) -> str:
         if any(dep in self.failed for dep in getattr(node, "depends_on", ())):

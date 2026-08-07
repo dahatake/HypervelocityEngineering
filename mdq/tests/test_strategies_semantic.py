@@ -123,3 +123,53 @@ def test_fallback_to_heading_recursive_when_provider_unavailable(
     assert len(chunks) >= 1
     for c in chunks:
         assert not c.text.startswith("[Context]")
+
+
+# --- line-range invariant --------------------------------------------------
+# Every consumer (mdq.golden_eval._hit_fields, snippet rendering, the store)
+# assumes start_line <= end_line. Sub-chunks are derived by advancing a cursor
+# through the parent heading chunk, so when several sentences share ONE
+# physical line each sub-chunk still claims at least one line and the cursor
+# overruns the parent's end_line.
+
+_PACKED_MD = "# Head\n\n" + " ".join(
+    f"Sentence number {i} about a distinct topic {i}." for i in range(1, 61)
+) + "\n"
+
+_PACKED_TWO_HEADINGS_MD = (
+    "# A\n\n"
+    + " ".join(f"Alpha {i} sentence content here." for i in range(1, 41))
+    + "\n\n## B\n\n"
+    + " ".join(f"Beta {i} sentence content here." for i in range(1, 41))
+    + "\n"
+)
+
+
+@pytest.mark.parametrize("content", [SAMPLE_MD, _PACKED_MD,
+                                     _PACKED_TWO_HEADINGS_MD])
+@pytest.mark.parametrize("max_chars", [60, 120, 300])
+def test_sub_chunk_line_range_is_never_inverted(tmp_path, monkeypatch,
+                                                content, max_chars):
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    f = _write(tmp_path, content)
+    _, chunks = sem.scan_file_semantic_paragraph(
+        tmp_path, f, max_chars=max_chars, min_chars=10,
+    )
+    assert chunks
+    inverted = [(c.start_line, c.end_line) for c in chunks
+                if c.start_line > c.end_line]
+    assert inverted == []
+
+
+@pytest.mark.parametrize("content", [SAMPLE_MD, _PACKED_MD,
+                                     _PACKED_TWO_HEADINGS_MD])
+def test_sub_chunk_lines_stay_inside_the_file(tmp_path, monkeypatch, content):
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    f = _write(tmp_path, content)
+    total_lines = len(content.splitlines())
+    _, chunks = sem.scan_file_semantic_paragraph(
+        tmp_path, f, max_chars=120, min_chars=10,
+    )
+    for c in chunks:
+        assert 1 <= c.start_line <= total_lines
+        assert 1 <= c.end_line <= total_lines

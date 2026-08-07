@@ -1,16 +1,103 @@
-"""JavaScript symbol extraction without third-party parsers (FR-CQ-11).
+"""JavaScript symbol extraction (FR-CQ-04 / FR-CQ-11).
 
-Brace-aware so that methods are attributed to their enclosing class rather than
-reported as free functions. TypeScript reuses :func:`scan` with its own pattern
-table (see :mod:`cq.languages.typescript`).
+The primary extractor is the official `tree-sitter-javascript` grammar
+(optional dependency, `pip install -e .[code]`). A brace-aware regex
+extractor — `extract_regex` / `extract_graph_regex` below, also shared with
+TypeScript's own fallback via `scan()` — is kept for environments without the
+grammar installed. `require(...)` (CommonJS) calls are not recognised as
+imports by the tree-sitter tier, only ECMAScript `import` statements; the
+regex tier still recognises both.
 """
 
 from __future__ import annotations
 
 import re
 
-from cq.languages import RawSymbol
+from cq.languages import ChunkSpan, ExtractionError, RawSymbol, treesitter as ts
 from cq.languages.linescan import brace_delta
+
+# --------------------------------------------------------------------------
+# tree-sitter tier (primary)
+# --------------------------------------------------------------------------
+
+_FUNCTION_VALUED = frozenset({"function_expression", "arrow_function", "generator_function"})
+
+
+def _name_of(node, src) -> str:
+    """`variable_declarator` covers every `const/let/var` binding, so only a
+    function-valued, non-destructured one is a symbol (`const x = 5` and
+    `const { a } = obj` are not)."""
+    if node.type != "variable_declarator":
+        return ts.field_name(node, src)
+    value = node.child_by_field_name("value")
+    if value is None or value.type not in _FUNCTION_VALUED:
+        return ""
+    target = node.child_by_field_name("name")
+    return ts.text(target, src) if target is not None and target.type == "identifier" else ""
+
+
+def _is_test(node, src, name: str) -> bool:
+    return name.startswith("test") or name.startswith("Test")
+
+
+def _import_of(node, src) -> str:
+    target = node.child_by_field_name("source")
+    return ts.text(target, src).strip("'\"") if target is not None else ""
+
+
+GRAMMAR = ts.Grammar(
+    lang="javascript",
+    module="tree_sitter_javascript",
+    kinds={
+        "class_declaration": "class",
+        "function_declaration": "function",
+        "generator_function_declaration": "function",
+        # A class/object-literal method either way, so this maps directly to
+        # "method" rather than relying on the class-scope promotion.
+        "method_definition": "method",
+        "variable_declarator": "function",  # only fires per `_name_of` above
+    },
+    scopes={"class_declaration": "class"},
+    name_of=_name_of,
+    scope_name_of=lambda n, s: ts.field_name(n, s),
+    doc_markers=("/**",),
+    is_test_of=_is_test,
+    call_nodes=frozenset({"call_expression"}),
+    import_nodes=frozenset({"import_statement"}),
+    import_of=_import_of,
+)
+
+
+def extract_ex(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    """`(symbols, parser)`. Falls back to the regex extractor when the
+    optional `tree-sitter-javascript` grammar is unavailable (FR-CQ-11)."""
+    try:
+        return ts.extract_with_fidelity(GRAMMAR, source)
+    except (ExtractionError, ImportError):
+        return extract_regex(source), "regex"
+
+
+def extract(source: str) -> tuple[RawSymbol, ...]:
+    return extract_ex(source)[0]
+
+
+def chunk_spans(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:
+    """Structural chunks (FR-CQ-05); only available through tree-sitter. The
+    regex tier never had a chunker, so an absent grammar still degrades
+    exactly like before Phase 2 (line-window chunks)."""
+    return ts.chunk_spans(GRAMMAR, source, lines, max_chars)
+
+
+def extract_graph(source: str):
+    try:
+        return ts.extract_graph(GRAMMAR, source)
+    except (ExtractionError, ImportError):
+        return extract_graph_regex(source)
+
+
+# --------------------------------------------------------------------------
+# regex tier (fallback)
+# --------------------------------------------------------------------------
 
 _CLASS_RE = re.compile(r"^\s*(?:export\s+)?(?:default\s+)?class\s+(?P<name>\w+)")
 _FUNCTION_RE = re.compile(
@@ -39,7 +126,7 @@ JS_RULES: tuple[Rule, ...] = (
 )
 
 
-def extract(source: str) -> tuple[RawSymbol, ...]:
+def extract_regex(source: str) -> tuple[RawSymbol, ...]:
     return scan(source, JS_RULES)
 
 
@@ -101,9 +188,9 @@ _CALL_RE = re.compile(r"(?<![\w$])(?P<name>[A-Za-z_$][\w$]*)\s*\(")
 _DECL_KEYWORDS = _CONTROL_KEYWORDS | {"new", "typeof", "await", "throw", "import", "require"}
 
 
-def extract_graph(source: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+def extract_graph_regex(source: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
     """Return ``(references, imports)`` as ``(line, name)`` pairs."""
-    declaration_lines = {s.start_line for s in extract(source)}
+    declaration_lines = {s.start_line for s in extract_regex(source)}
     refs: list[tuple[int, str]] = []
     imports: list[tuple[int, str]] = []
     for number, line in enumerate(source.splitlines(), start=1):

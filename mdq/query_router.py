@@ -332,11 +332,21 @@ def discover_available_strategies(repo_root) -> set[str]:
 
     Filename convention is ``index-<lang>-<strategy>.sqlite`` where
     ``<lang>`` itself may contain hyphens (e.g. ``ja-jp``). We therefore
-    match by KNOWN strategy suffix (``heading`` / ``heading_recursive`` /
-    ``fixed_window``) rather than naive split.
+    match by KNOWN strategy suffix rather than naive split. The known set is
+    derived from :data:`mdq.strategies.ALL_STRATEGIES` so a newly added
+    strategy is discoverable without editing this function; ``graphrag`` is
+    excluded because it never writes to the SQLite store.
     """
     from pathlib import Path as _P
-    known = ("heading_recursive", "heading", "fixed_window")
+
+    from . import strategies as _strategies
+
+    # Longest suffix first so ``heading_recursive`` is not shadowed by ``heading``.
+    known = sorted(
+        (s for s in _strategies.ALL_STRATEGIES if s != "graphrag"),
+        key=len,
+        reverse=True,
+    )
     out: set[str] = set()
     base = _P(repo_root) / ".mdq"
     if not base.exists():

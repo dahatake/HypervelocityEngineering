@@ -1,19 +1,116 @@
-"""C# symbol extraction without third-party parsers (FR-CQ-11).
+"""C# symbol extraction (FR-CQ-04 / FR-CQ-11).
 
-`tree-sitter-language-pack` was evaluated and rejected: it downloads grammars
-over the network on first use, which breaks the local-only guarantee this Skill
-inherits from `markdown-query` and fails closed in offline agent environments.
-
-This extractor is brace-aware rather than line-based, so multi-line signatures
-and nested types resolve correctly.
+The primary extractor is the official `tree-sitter-c-sharp` grammar (optional
+dependency, `pip install -e .[code]`). A brace-aware regex extractor —
+`extract_regex` / `extract_graph_regex` below — is kept as the fallback for
+environments without the grammar installed, so this Skill still works without
+it. `tree-sitter-language-pack` was evaluated and rejected: it downloads
+grammars over the network on first use, which breaks the local-only guarantee
+this Skill inherits from `markdown-query` and fails closed in offline agent
+environments.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
 
-from cq.languages import RawSymbol
+from cq.languages import ChunkSpan, ExtractionError, RawSymbol, treesitter as ts
 from cq.languages.linescan import brace_delta
+
+# --------------------------------------------------------------------------
+# tree-sitter tier (primary)
+# --------------------------------------------------------------------------
+
+# `record` has no kind of its own in the shared vocabulary (matches the regex
+# tier's convention below), so it stays a class.
+_TYPES = {
+    "class_declaration": "class",
+    "struct_declaration": "struct",
+    "interface_declaration": "interface",
+    "enum_declaration": "enum",
+    "record_declaration": "class",
+}
+
+_XML_DOC_TAG = re.compile(r"</?summary>")
+
+
+def _is_test(node, src, name: str) -> bool:
+    return name.startswith("Test") or name.endswith("Tests")
+
+
+def _import_of(node, src) -> str:
+    """The last named child is always the actual imported path: a plain or
+    `static` using has exactly one, an aliased `using X = Y;` has two (the
+    alias name first, the target last)."""
+    if not node.named_children:
+        return ""
+    target = node.named_children[-1]
+    return ts.text(target, src).split(".")[0]
+
+
+GRAMMAR = ts.Grammar(
+    lang="csharp",
+    module="tree_sitter_c_sharp",
+    kinds={
+        **_TYPES,
+        "method_declaration": "function",  # promoted to "method" when bound to a type
+        "constructor_declaration": "constructor",
+    },
+    scopes=_TYPES,
+    name_of=lambda n, s: ts.field_name(n, s),
+    scope_name_of=lambda n, s: ts.field_name(n, s),
+    doc_markers=("///",),
+    is_test_of=_is_test,
+    call_nodes=frozenset({"invocation_expression"}),
+    import_nodes=frozenset({"using_directive"}),
+    import_of=_import_of,
+)
+
+
+def _clean_doc(symbol: RawSymbol) -> RawSymbol:
+    """Strip the `<summary>` / `</summary>` XML doc tags the shared tree-sitter
+    `doc_head()` helper does not know about (it only trims comment markers)."""
+    if not symbol.doc_head:
+        return symbol
+    cleaned = _XML_DOC_TAG.sub("", symbol.doc_head).strip()
+    if cleaned == symbol.doc_head:
+        return symbol
+    return dataclasses.replace(symbol, doc_head=cleaned or None)
+
+
+def extract_ex(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    """`(symbols, parser)`. Falls back to the regex extractor when the
+    optional `tree-sitter-c-sharp` grammar is unavailable (FR-CQ-11)."""
+    try:
+        symbols, parser = ts.extract_with_fidelity(GRAMMAR, source)
+    except (ExtractionError, ImportError):
+        return extract_regex(source), "regex"
+    return tuple(_clean_doc(s) for s in symbols), parser
+
+
+def extract(source: str) -> tuple[RawSymbol, ...]:
+    return extract_ex(source)[0]
+
+
+def chunk_spans(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:
+    """Structural chunks (FR-CQ-05); only available through tree-sitter. The
+    regex tier never had a chunker (window chunks only), so an absent grammar
+    still degrades exactly like before Phase 2 — the `ExtractionError`
+    propagates and the core falls back to line-window chunks."""
+    return ts.chunk_spans(GRAMMAR, source, lines, max_chars)
+
+
+def extract_graph(source: str):
+    try:
+        return ts.extract_graph(GRAMMAR, source)
+    except (ExtractionError, ImportError):
+        return extract_graph_regex(source)
+
+
+# --------------------------------------------------------------------------
+# regex tier (fallback)
+# --------------------------------------------------------------------------
 
 _TYPE_RE = re.compile(
     r"^\s*(?:\[[^\]]*\]\s*)*"
@@ -44,7 +141,7 @@ _KIND_BY_KEYWORD = {
 _TYPE_KINDS = frozenset(_KIND_BY_KEYWORD.values())
 
 
-def extract(source: str) -> tuple[RawSymbol, ...]:
+def extract_regex(source: str) -> tuple[RawSymbol, ...]:
     lines = source.splitlines()
     found: list[RawSymbol] = []
     # (qualname, 宣言時の深さ, 本体の `{` を見たか)
@@ -122,9 +219,9 @@ _CALL_RE = re.compile(r"(?<![\w])(?P<name>[A-Za-z_]\w*)\s*\(")
 _DECL_KEYWORDS = _CONTROL_KEYWORDS | {"new", "typeof", "nameof", "sizeof", "await", "throw"}
 
 
-def extract_graph(source: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+def extract_graph_regex(source: str) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
     """Return ``(references, imports)`` as ``(line, name)`` pairs."""
-    declaration_lines = {s.start_line for s in extract(source)}
+    declaration_lines = {s.start_line for s in extract_regex(source)}
     refs: list[tuple[int, str]] = []
     imports: list[tuple[int, str]] = []
     for number, line in enumerate(source.splitlines(), start=1):

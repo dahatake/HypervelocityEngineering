@@ -43,6 +43,10 @@ def extract(source: str) -> tuple[RawSymbol, ...]:
     return ts.extract(GRAMMAR, source)
 
 
+def extract_ex(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    return ts.extract_with_fidelity(GRAMMAR, source)
+
+
 def chunk_spans(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:
     return ts.chunk_spans(GRAMMAR, source, lines, max_chars)
 

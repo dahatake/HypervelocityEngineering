@@ -27,6 +27,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--agent-dir", type=Path)
     parser.add_argument("--test-spec", type=Path)
     parser.add_argument(
+        "--tool-search-policy",
+        choices=("auto", "yes", "no"),
+        default="auto",
+        help="Tool search policy for the generated Agent.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         dest="json_output",
@@ -42,6 +48,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.design,
         agent_dir=args.agent_dir,
         test_spec_path=args.test_spec,
+        tool_search_policy=args.tool_search_policy,
     )
     payload = {
         "workflow": args.workflow,

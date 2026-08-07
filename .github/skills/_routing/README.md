@@ -22,7 +22,7 @@ metadata:
 | APP-ID スコープ解決 | `app-scope-resolution` | `.github/skills/app-scope-resolution/SKILL.md` | APP-ID からサービス/画面/エンティティ特定 |
 | タスク開始 / 不明点あり | `task-questionnaire` | `.github/skills/task-questionnaire/SKILL.md` | 選択式質問票で要件を明確化 |
 | 計画 / DAG / 見積 | `task-dag-planning` | `.github/skills/task-dag-planning/SKILL.md` | 依存関係分解・粒度/コンテキスト分割判定 |
-| work/ 配下の構造設計 | `work-artifacts-layout` | `.github/skills/work-artifacts-layout/SKILL.md` | 入口 README + contracts/artifacts |
+| work/ 配下の構造設計 / 一時ファイルの置き場所 | `work-artifacts-layout` | `.github/skills/work-artifacts-layout/SKILL.md` | 入口 README + contracts/artifacts、ルート直下作成禁止 |
 | リポジトリ初見 | `repo-onboarding-fast` | `.github/skills/repo-onboarding-fast/SKILL.md` | 高速オンボーディング（構造把握・規約確認） |
 | Karpathy ガイドライン参照 | `karpathy-guidelines` | `.github/skills/karpathy-guidelines/SKILL.md` | Karpathy の実装原則（最小変更・仮説明示・検証重視） |
 
@@ -35,6 +35,8 @@ metadata:
 | タスク実行中に業務要件が不明瞭 | `knowledge-lookup` | `.github/skills/knowledge-lookup/SKILL.md` | knowledge/ D01〜D21 の条件付き参照ルール |
 | MCP Server 設計 | `mcp-server-design` | `.github/skills/mcp-server-design/SKILL.md` | Skills と MCP Server の責務分離・API設計 |
 | AAG / AAGD の AI Agent 設計・実装 | `ai-agent-capability-contract` | `.github/skills/ai-agent-capability-contract/SKILL.md` | Goal Loop・検索・REST Tool・MCP・Agent Skill の共通契約 |
+| Agentic Retrieval 設計・検証 | `agentic-retrieval-contract` | `.github/skills/agentic-retrieval-contract/SKILL.md` | Foundry IQ / Azure AI Search の Knowledge Base・Knowledge Source・検索予算・証跡・MCP 公開（AR-CAP-01〜05） |
+| Toolbox / tool search 設計・検証 | `foundry-toolbox-contract` | `.github/skills/foundry-toolbox-contract/SKILL.md` | Tool 総数の算出と閾値判定、Toolbox 採否、pin、検索メタデータ、探索予算（TB-CAP-01〜05） |
 | データフロー処理設計 | `dataflow-design-guide` | `.github/skills/dataflow-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
 | マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
 | original-docs/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | original-docs/ → D01〜D21 分類・矛盾検出 |

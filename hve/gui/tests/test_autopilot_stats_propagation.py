@@ -84,16 +84,18 @@ def test_t1_stats_step_status_running_via_append_log(qapp):
     assert step.started_at is not None
 
 
-def test_t2_stats_line_not_mirrored_to_log_tabs(qapp):
-    """T2: stats 行は UI 全体タブと ``_log_pane`` に**書き込まれない**。
+def test_t2_stats_line_not_mirrored_to_log_tabs(qapp, tmp_path):
+    """T2: stats 行は UI 全体タブとファイル永続化経路に**書き込まれない**。
 
     F1' では `append_log` 内で `is_stats_line` ガードをかけているため、
-    ファイル永続化用 `_log_pane` と UI 表示用 `_log_tabs` の両方で
-    ノイズの有無を検証する。
+    UI 表示用 `_log_tabs` とファイル永続化経路の両方でノイズの有無を検証する。
+    NFR-OBS-09 (2) により `_log_pane` は画面へ追記しないため、永続化経路は
+    ローテーションログの内容で検証する。
     """
     from hve.gui.page_workbench import WorkbenchPage
 
     page = WorkbenchPage()
+    page.set_session_work_root(tmp_path)
     _seed_instance(page, "wf-y")
     stats_line = _stats_step_status_line("1", "running")
     human_line = "hello human readable"
@@ -107,10 +109,10 @@ def test_t2_stats_line_not_mirrored_to_log_tabs(qapp):
     assert "hello human readable" in text
     assert "[hve:stats]" not in text
 
-    # _log_pane （ファイル永続化用）にも混入しない
-    log_pane_text = page._log_pane.log_view.toPlainText()
-    assert "hello human readable" in log_pane_text
-    assert "[hve:stats]" not in log_pane_text
+    # ファイル永続化経路にも混入しない
+    persisted = (tmp_path / "gui-logs" / "log-0001.log").read_text(encoding="utf-8")
+    assert "hello human readable" in persisted
+    assert "[hve:stats]" not in persisted
 
 
 def test_t3_stats_tool_invoked_updates_footer_state(qapp):

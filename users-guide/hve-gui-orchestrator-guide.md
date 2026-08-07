@@ -122,7 +122,7 @@ pip install -e ".[gui]"
 pip install -e ".[gui,gui-docconvert]"   # 内部依存は markitdown[all] のみ
 ```
 
-> **`.cmd` vs `.ps1`**: `.cmd` は `.ps1` を呼ぶ薄ラッパとなり、同一のオプション（`-CheckOnly` / `-NoGui` / `-Minimal` / `-Force` / `-SkipNltkDownload` / `-WithSkills`）をサポートします。詳細は [hve-cli-orchestrator-guide.md - セットアップスクリプト](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照。
+> **`.cmd` vs `.ps1`**: `.cmd` は `.ps1` を呼ぶ薄ラッパとなり、同一のオプション（`-CheckOnly` / `-NoGui` / `-Minimal` / `-Force` / `-SkipNltkDownload` / `-WithSkills` / `-Yes` / `-NoInstallPython` / `-NoInstallTools`）をサポートします。既定では不足している OS ツール（Git / gh / Node.js / Azure CLI / ShellCheck / 外部 Copilot CLI、Linux では Qt system lib）も自動導入します。詳細は [hve-cli-orchestrator-guide.md - セットアップスクリプト](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照。
 
 ---
 
@@ -362,7 +362,7 @@ GUI Orchestrator は、GitHub Copilot / GitHub CLI / Work IQ の認証導線を 
 
 - CLI: `python -m hve login` — GitHub Copilot SDK へのログインを行います（GUI に専用ボタンはありません）。
 - ステータスバー / 設定 → 基本設定: **「利用できるモデルの取得」** — ログイン済みの GitHub Copilot SDK からモデル一覧を取得しキャッシュを更新します（ログイン自体は行いません）。取得結果は隣接する **「使用するモデル」** 表示にも反映されます。
-- 設定 → 連携 → GitHub: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
+- 設定 → 各サービス連携 → GitHub: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
 - Work IQ 設定: **「Work IQ 認証確認」** — `@microsoft/workiq` の EULA / Microsoft 365 認証を確認します。
 
 ### 対象とする認証先

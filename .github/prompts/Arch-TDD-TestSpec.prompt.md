@@ -107,6 +107,8 @@
   - AI Agent別:
     1) 概要 1.5) ATDD(AI Agent)（必要情報は同様方針で記載）
     - テストケース表には `実行環境` / `外部サービス要否` / `必要設定` 列を含め、Azure AI Foundry 等の実呼び出しが必要なケースと mock/stub ケースを区別する。
+    - `docs/agent/agent-detail-{key}.md` の設計に TB-CAP がある場合だけ、TB-CAP-01〜05 の各契約へ Test Case ID と Evidence を対応付けた行を追加する。設計に TB-CAP が無い Agent へ Toolbox / tool search のケースを作らない。
+    - TB-CAP-02 が `Tool search: disabled` の場合は、有効時の期待を書かず、Toolbox 設定と tool_search 呼出が存在しないことを検証するケースにする。
 - 必須ルール:
   - 出典（ファイル#見出し）を可能な限り表に付与
   - テストケース表には `実行環境` / `外部サービス要否` / `必要設定` を含める

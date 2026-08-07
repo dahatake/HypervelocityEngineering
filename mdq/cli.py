@@ -438,6 +438,14 @@ def cmd_search(args: argparse.Namespace) -> int:
         db_path = str(store.db_path_for(args.lang, effective_strategy))
     conn = store.open_store(db_path, lang=args.lang)
 
+    # FR-MDQ-09: 応答を返す前に索引と作業ツリーの乖離を知らせる。
+    stale_files = 0
+    if getattr(args, "freshness_check", True):
+        from . import freshness as _freshness
+        report = _freshness.check(repo_root, conn)
+        stale_files = len(report.changed)
+        _freshness.emit_warning(report.warning())
+
     # --include-parent is shorthand for --with-parent-depth 1.
     with_parent_depth = int(getattr(args, "with_parent_depth", 0) or 0)
     if args.include_parent and with_parent_depth <= 0:
@@ -493,7 +501,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         for h in hits:
             print(f"{h.path}:{h.start_line}-{h.end_line}  "
                   f"[{h.heading_path}]  score={h.score:.2f}")
-            for ln in h.snippet.splitlines():
+            for ln in (h.snippet or "").splitlines():
                 print(f"  | {ln}")
     else:
         for h in hits:
@@ -503,6 +511,8 @@ def cmd_search(args: argparse.Namespace) -> int:
         "snippet_chars": snippet_chars,
         "source_file_chars": source_file_chars,
     }
+    if stale_files:
+        result["stale_files"] = stale_files
     if score_top is not None:
         result["score_top"] = score_top
     if score_2nd is not None:
@@ -530,6 +540,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         "return_unit": args.return_unit,
         "strategy": args.strategy,
         "effective_strategy": effective_strategy,
+        "freshness_check": bool(getattr(args, "freshness_check", True)),
     }
     if router_decision is not None:
         log_args["router_reason"] = router_decision.reason
@@ -817,6 +828,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_s.add_argument("--paths", nargs="*", help="Path glob filters (fnmatch)")
     p_s.add_argument("--tags", nargs="*", help="Frontmatter tag filters (AND)")
     p_s.add_argument("--snippet-radius", type=int, default=2)
+    p_s.add_argument("--no-freshness-check", dest="freshness_check",
+                     action="store_false", default=True,
+                     help="Skip the index staleness check (FR-MDQ-09). The "
+                          "check compares stat metadata only and writes its "
+                          "warning to stderr.")
     p_s.add_argument("--include-parent", action="store_true",
                      help="Include the nearest ancestor heading chunk in "
                           "expansion. Equivalent to --with-parent-depth 1.")
@@ -829,12 +845,14 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Include N adjacent chunks (before/after) per hit.")
     p_s.add_argument("--merge-parts", action="store_true",
                      help="Include sibling parts (part_total>1) of the hit.")
-    p_s.add_argument("--return-unit", choices=["line", "chunk"],
+    p_s.add_argument("--return-unit", choices=["line", "chunk", "locations"],
                      default="line",
                      help="Excerpt granularity. 'line' (default) keeps the "
                           "--snippet-radius window; 'chunk' returns the whole "
                           "matching chunk body, which fills --max-tokens "
-                          "faster and therefore returns fewer hits.")
+                          "faster and therefore returns fewer hits; "
+                          "'locations' omits the body entirely and returns "
+                          "only where each hit is (FR-MDQ-10).")
     p_s.add_argument("--engine", choices=["auto", "bm25", "fts5"],
                      default="auto",
                      help="Search engine. 'auto' uses FTS5 when MDQ_FTS5 "

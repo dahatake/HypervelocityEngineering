@@ -8,6 +8,7 @@
 
 - [対象読者・前提・次のステップ](#対象読者前提次のステップ)
 - [概要](#概要)
+- [実装状況](#実装状況)
 - [どのワークフローで何が追加されたか](#どのワークフローで何が追加されたか)
 - [入力項目（Q1〜Q6）](#入力項目q1q6)
 - [Indexer と Push API の選び方](#indexer-と-push-api-の選び方)
@@ -34,25 +35,87 @@
   - AAD-WEB: 製品非依存の機能要件詳細を作成
   - ASDW-WEB: Azure 実装設計と実 Azure デプロイを実施
 
+## 実装状況
+
+| 要素 | 状態 | 備考 |
+| --- | --- | --- |
+| 入力項目（Issue Form / CLI ウィザード） | 実装済み | AAD-WEB は Q1・Q3、ASDW-WEB は Q1〜Q6 |
+| Custom Agent（Prompt） 3 本 | 実装済み | `Arch-AgenticRetrieval-Detail` / `Dev-Microservice-Azure-AgenticRetrievalDesign` / `...Deploy` |
+| ワークフローへの Step 登録 | 実装済み | AAD-WEB `2.6` / ASDW-WEB `2.5` `2.6`（ADR-0001 Phase 5） |
+| Knowledge Base / Knowledge Source の作成 | 実装済み | ASDW-WEB `2.6` が担当。実在検証は AC4B-1 / 14 / 15 / 18 |
+| 検索契約（AR-CAP-01〜05）の自動検査 | 実装済み | `hve.artifact_validation` が設計・実装・Deploy の各段で検査 |
+| GUI の入力項目 | 実装済み | 設定画面の「Agentic Retrieval」セレクタ（3 状態） |
+| `enable_agentic_retrieval` による Step 無効化 | 実装済み（CLI / GUI / Cloud） | CLI / GUI は `StepDef.disabled_when_config` で実行対象から除外。Cloud はワークフロー内の条件分岐で Sub-Issue を作成しない |
+
 ## どのワークフローで何が追加されたか
 
 ### AAD-WEB
 
-- 既存 Step.2.2 の後段観点として
-  `Arch-AgenticRetrieval-Detail`（Step.2.2.1 相当）を扱います。
-- 実装上は Step.2.2（`Arch-Microservice-ServiceDetail`）内で
-  Agentic Retrieval 要件を委譲・反映します。
+- **Step.2.6**（`Arch-AgenticRetrieval-Detail`）が、**製品非依存**の機能要件詳細を作成します。
+  - 依存: Step.2.2（マイクロサービス定義書）
+  - 出力: `docs/services/{serviceId}-agentic-retrieval-spec.md`（対象サービスのみ）
+- Step.2.2（`Arch-Microservice-ServiceDetail`）は委譲を 1 行記録するのみで、spec.md は作成しません。
 
 ### ASDW-WEB
 
-- Step.2.2 は `Dev-Microservice-Azure-AddServiceDesign`
-  （AgenticRetrievalDesign 相当）で扱います。
-- Step.2.3 は `Dev-Microservice-Azure-AddServiceDeploy`
-  （AgenticRetrievalDeploy 相当）で扱います。
+- **Step.2.5**（`Dev-Microservice-Azure-AgenticRetrievalDesign`）が Azure 実装設計を作成します。
+  - 依存: Step.2.1（追加 Azure サービス選定）
+  - 出力: `docs/azure/agentic-retrieval/{serviceId}-design.md`。第 8 章に AR-CAP-01〜05 を記載
+  - local 生成 Step であり、local generation checkpoint（Step.4.2）の前に完了します
+- **Step.2.6**（`Dev-Microservice-Azure-AgenticRetrievalDeploy`）が Knowledge Source / Knowledge Base を作成します。
+  - 依存: Step.2.2（追加 Azure サービス Deploy）、Step.2.5
+  - Foundry resource / Project / モデル deployment は Step.2.2 が作成します（本 Step の責務外）
+
+### AAR（Agentic Retrieval Add-on）
+
+既に API / データ資産が動いているアプリへ、**Agentic Retrieval 部分だけ**を後付けするための単独ワークフローです。
+AAD-WEB / ASDW-WEB を最初から流し直す必要がありません。
+
+```
+hve orchestrate --workflow aar --resource-group <RG> --app-ids APP-001
+```
+
+| Step | Custom Agent | 出力 |
+|---|---|---|
+| 1 | `Arch-AgenticRetrieval-Detail` | `docs/services/{serviceId}-agentic-retrieval-spec.md` |
+| 2 | `Dev-Microservice-Azure-AgenticRetrievalDesign` | `docs/azure/agentic-retrieval/{serviceId}-design.md` |
+| 3 | `Arch-TDD-TestSpec` | `docs/test-specs/{serviceId}-agentic-retrieval-test-spec.md` |
+| 4 | `Dev-Microservice-Azure-AgenticRetrievalTestCoding` | `src/test/integration/agentic-retrieval/`（TDD RED） |
+| 5 | `Dev-Microservice-Azure-AgenticRetrievalDeploy` | `src/infra/azure/create-azure-agentic-retrieval/` |
+| 6 | `QA-AgenticRetrievalEval` | `docs/azure/agentic-retrieval/{serviceId}-eval-report.md` |
+
+- Step 1・2・5 は AAD-WEB / ASDW-WEB と同じ Custom Agent を再利用します。
+- **Step.6 が本ワークフロー固有の価値**です。`minimal` と `low` を同一クエリ集合で実測比較し、
+  「複数データソース横断」「最小限のクエリ回数」を推測ではなく測定で裏付けます。
+  reasoning effort は recall・token・レイテンシのトレードオフであり、測定なしに正しい値は決められません。
+- 既存の API / データストアは変更せず、接続設定のみを追加します。
+
+### AAGD（AI Agent）
+
+- Step.3（`Dev-Microservice-Azure-AgentDeploy`）は Knowledge Base / Knowledge Source を**作成せず**、存在と接続を確認します。未作成の場合は blocked として ASDW-WEB Step.2.6 へフィードバックします。
 
 ### スキップ条件
 
-- `enable_agentic_retrieval=no` の場合、関連 Step はスキップされます。
+- **CLI**: `--enable-agentic-retrieval no`（またはウィザードで「使用しない」）のとき、AAD-WEB `2.6` / ASDW-WEB `2.5` `2.6` は実行対象から除外されます。
+  指定できる値は `auto` / `yes` / `no` の 3 つで、CLI フラグがウィザード回答より優先されます。
+  除外された Step は DAG 上 skip 扱いになり、依存先としては解決済みとみなされるため、下流 Step（例: `4.2`）は影響を受けません。
+- **GUI**: 設定画面の「Agentic Retrieval」で「使用しない」を選ぶと、CLI の `--enable-agentic-retrieval no` と同じ動作になります。既定の「自動判定に従う」ではフラグを付与しません。
+- **Cloud（Issue Form）**: 「しない」を選ぶと、Agentic Retrieval の Sub-Issue が**生成されません**。
+  Cloud は `python -m hve orchestrate` を起動せず GitHub Issue を作成して Copilot Cloud Agent が処理する方式のため、
+  Python 側の `StepDef.disabled_when_config` ではなく、ワークフロー内の条件分岐で Issue 作成を抑止します。
+  - **Cloud と CLI / GUI は Step 採番が別体系**です。同じ番号が別の Step を指すため読み替えてください。
+
+    | 役割 | Cloud | CLI / GUI |
+    |---|---|---|
+    | 機能要件詳細 | AAD-WEB `Step.7.5` | AAD-WEB `2.6` |
+    | Azure 実装設計 | ASDW-WEB `Step.2.9` | ASDW-WEB `2.5` |
+    | Deploy | ASDW-WEB `Step.2.10` | ASDW-WEB `2.6` |
+
+  - Cloud では `Step.2.3`（追加 Azure サービス Deploy）→ `2.9`（実装設計）→ `2.10`（Deploy）→ `2.3TC` の順に進みます。
+    AI Agent 系（`2.6`〜`2.8`）より**前**に Knowledge Base を作るため、Agent が KB を利用できます。
+    無効時は `2.3` 完了で従来どおり `2.3TC` へ進みます。
+- 対象サービスが 0 件の場合、各 Step は「対象なし」を作業ログへ記録して成果物なしで完了します。
+- 実行 Step を限定したい場合は CLI の `--steps` で明示指定してください。
 
 <a id="入力項目q1q6"></a>
 
@@ -98,13 +161,14 @@
 
 ## 生成される成果物
 
-- `docs/services/{serviceId}-agentic-retrieval-spec.md`
-- `docs/azure/agentic-retrieval/{serviceId}-design.md`
-- `src/infra/azure/create-azure-agentic-retrieval/...`
-  （Agent 実行時に生成）
+- `docs/services/{serviceId}-agentic-retrieval-spec.md`（AAD-WEB Step.2.6）
+- `docs/azure/agentic-retrieval/{serviceId}-design.md`（ASDW-WEB Step.2.5）
+- `src/infra/azure/create-azure-agentic-retrieval/prep.sh` / `create.sh` / `services/{serviceId}.sh`（ASDW-WEB Step.2.6）
 - `work/.../artifacts/cli-evidence.md`
 - `work/.../artifacts/created-resources.json`
 - `work/.../artifacts/ac-verification.md`
+
+いずれも**対象サービスが存在する場合のみ**生成されます。
 
 ## 用語表
 
@@ -118,10 +182,25 @@
 | Semantic Search | セマンティック検索 | 意味ベースのランキング |
 | MCP | Model Context Protocol | 外部ツール／知識ベース連携のためのプロトコル |
 | Foundry | Microsoft Foundry | モデル・エージェント・接続管理基盤 |
+| Connection topology | 接続トポロジ | Agent が Knowledge Base へ到達する経路。`direct-kb` / `via-toolbox` |
+
+## Knowledge Base への接続トポロジ
+
+AR-CAP-05 は接続経路によって制約が変わる。設計書には必ず `Connection topology` を宣言する。
+
+| 値 | 接続先 | Tool 制約 |
+| --- | --- | --- |
+| `direct-kb` | Knowledge Base 自身の MCP エンドポイント | `knowledge_base_retrieve` **のみ**（Foundry Agent Service の制約） |
+| `via-toolbox` | Toolbox の MCP エンドポイント | Knowledge Base を含む複数 Tool を同居可。tool search / pin が使える |
+
+`via-toolbox` を選ぶ場合は TB-CAP-01〜05 も併せて宣言する。
+AR-CAP 側と TB-CAP 側で `Connection topology` が食い違うと検証で FAIL する。
+
+詳細は [tool-search-guide.md](tool-search-guide.md) を参照。
 
 ## 注意事項
 
 - SKU / モデル名 / API バージョン / 対応データソース一覧は固定値を書かない
 - Microsoft Learn MCP / 公式 Learn URL を都度参照する
-- `enable_agentic_retrieval=no` の場合、関連 Step は生成されない
+- 入力項目 Q1〜Q6 は収集されるが、現時点では実行に影響しない
 - 参照導線としてのみ利用し、ルート `/README.md` は変更していません

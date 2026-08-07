@@ -9,6 +9,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
 
 from .help_content import guide_url, step_intro
+from .theme import token
 
 
 class StepIntroBanner(QFrame):
@@ -19,14 +20,7 @@ class StepIntroBanner(QFrame):
         entry = step_intro(step_index)
         self.setObjectName("StepIntroBanner")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(
-            "#StepIntroBanner {"
-            " background-color: #e3f2fd;"
-            " border: 1px solid #90caf9;"
-            " border-radius: 6px;"
-            "}"
-            " QLabel { color: #0d47a1; }"
-        )
+        self.setProperty("hveRole", "infoBanner")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 6)
@@ -57,7 +51,7 @@ class StepIntroBanner(QFrame):
         url = guide_url(entry.guide_path)
         if url:
             link = QLabel(
-                f'<a href="{url}" style="color:#1565c0;">'
+                f'<a href="{url}" style="color:{token("accentForeground")};">'
                 + self.tr("📖 詳しいガイド: users-guide/{path}").format(path=entry.guide_path)
                 + "</a>"
             )

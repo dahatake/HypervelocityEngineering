@@ -3457,6 +3457,9 @@ def run_improvement_loop(
             session_options["available_tools"] = config.available_tools
         if getattr(config, "excluded_tools", None) is not None:
             session_options["excluded_tools"] = config.excluded_tools
+        # FR-MODEL-04: ツール定義遅延ロードを Self-Improve セッションへも伝搬する。
+        if getattr(config, "tool_search", False):
+            session_options["tool_search"] = {"enabled": True}
         mutation_session = _run_async(
             mutation_client.create_session(**session_options),
             timeout,

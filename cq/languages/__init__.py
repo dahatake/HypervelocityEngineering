@@ -55,6 +55,13 @@ class LanguageSupport:
     extract: Callable[[str], tuple[RawSymbol, ...]]
     chunk: Callable[[str, list[str], int], tuple[ChunkSpan, ...]] | None = None
     graph: Callable[[str], tuple] | None = None
+    # Optional: for languages whose fidelity varies per file (a grammar that
+    # recovered from an ERROR node, or a hybrid extractor that fell back to a
+    # weaker parser), this reports the ``(symbols, parser)`` pair actually
+    # reached for THIS source instead of the single static ``parser`` name
+    # above. `indexer._extract` prefers this when present; languages that
+    # always run the same parser do not need it.
+    extract_ex: Callable[[str], tuple[tuple[RawSymbol, ...], str]] | None = None
 
 
 # 拡張子 → 言語。`.md` と CSV / TSV は mdq の担当（FR-CQ-01）なので載せてはならない。
@@ -66,7 +73,7 @@ LANGUAGE_BY_SUFFIX: dict[str, str] = {
     ".cjs": "javascript",
     ".jsx": "javascript",
     ".ts": "typescript",
-    ".tsx": "typescript",
+    ".tsx": "tsx",
     ".java": "java",
     ".go": "go",
     ".rs": "rust",
@@ -109,75 +116,99 @@ def _registry() -> dict[str, LanguageSupport]:
             parser="ast",
             extract=python.extract,
             chunk=python.chunk_spans,
+            graph=python.extract_graph,
+            extract_ex=python.extract_ex,
         ),
         "csharp": LanguageSupport(
             parser="regex",
             extract=csharp.extract,
+            chunk=csharp.chunk_spans,
             graph=csharp.extract_graph,
+            extract_ex=csharp.extract_ex,
         ),
         "javascript": LanguageSupport(
             parser="regex",
             extract=javascript.extract,
+            chunk=javascript.chunk_spans,
             graph=javascript.extract_graph,
+            extract_ex=javascript.extract_ex,
         ),
         "typescript": LanguageSupport(
             parser="regex",
             extract=typescript.extract,
+            chunk=typescript.chunk_spans,
             graph=typescript.extract_graph,
+            extract_ex=typescript.extract_ex,
+        ),
+        "tsx": LanguageSupport(
+            parser="regex",
+            extract=typescript.extract_tsx,
+            chunk=typescript.chunk_spans_tsx,
+            graph=typescript.extract_graph_tsx,
+            extract_ex=typescript.extract_ex_tsx,
         ),
         "java": LanguageSupport(
             parser="tree-sitter",
             extract=java.extract,
             chunk=java.chunk_spans,
             graph=java.extract_graph,
+            extract_ex=java.extract_ex,
         ),
         "go": LanguageSupport(
             parser="tree-sitter",
             extract=go.extract,
             chunk=go.chunk_spans,
             graph=go.extract_graph,
+            extract_ex=go.extract_ex,
         ),
         "rust": LanguageSupport(
             parser="tree-sitter",
             extract=rust.extract,
             chunk=rust.chunk_spans,
             graph=rust.extract_graph,
+            extract_ex=rust.extract_ex,
         ),
         "c": LanguageSupport(
             parser="tree-sitter",
             extract=cfamily.extract_c,
             chunk=cfamily.chunk_spans_c,
             graph=cfamily.extract_graph_c,
+            extract_ex=cfamily.extract_ex_c,
         ),
         "cpp": LanguageSupport(
             parser="tree-sitter",
             extract=cfamily.extract_cpp,
             chunk=cfamily.chunk_spans_cpp,
             graph=cfamily.extract_graph_cpp,
+            extract_ex=cfamily.extract_ex_cpp,
         ),
         "shell": LanguageSupport(
             parser="tree-sitter",
             extract=shell.extract,
             chunk=shell.chunk_spans,
             graph=shell.extract_graph,
+            extract_ex=shell.extract_ex,
         ),
         "powershell": LanguageSupport(
             parser="tree-sitter",
             extract=powershell.extract,
             chunk=powershell.chunk_spans,
             graph=powershell.extract_graph,
+            extract_ex=powershell.extract_ex,
         ),
         "batch": LanguageSupport(
             parser="tree-sitter",
             extract=batch.extract,
             chunk=batch.chunk_spans,
             graph=batch.extract_graph,
+            extract_ex=batch.extract_ex,
         ),
         "scala": LanguageSupport(
             parser="tree-sitter",
             extract=scala.extract,
             chunk=scala.chunk_spans,
             graph=scala.extract_graph,
+            extract_ex=scala.extract_ex,
         ),
         # sqlglot 主、本体を構造化できないときだけ sqlfluff。どちらが走ったかで
         # フィデリティは変わらないので、`tree-sitter` と同じ粒度で `sql` と記録する。

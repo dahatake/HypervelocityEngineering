@@ -169,24 +169,34 @@ def _official_symbols(source: str, parsed) -> tuple[RawSymbol, ...]:
 
 @functools.lru_cache(maxsize=1)
 def _analyse(source: str):
-    """`(symbols, refs, escalated)`. Cached because the indexer asks three times."""
+    """`(symbols, refs, escalated, has_error)`. Cached because the indexer asks three times."""
     symbols = ts.extract(GRAMMAR, source)
     refs, _ = ts.extract_graph(GRAMMAR, source)
-    if not ts.parse(GRAMMAR, source).root_node.has_error:
-        return symbols, refs, False
+    has_error = ts.parse(GRAMMAR, source).root_node.has_error
+    if not has_error:
+        return symbols, refs, False, False
     parsed = _official_ast(source)
     if parsed is None:
-        return symbols, refs, False
+        return symbols, refs, False, True
     official_refs = tuple((row["line"], row["name"]) for row in parsed["refs"])
-    return _official_symbols(source, parsed), official_refs, True
+    return _official_symbols(source, parsed), official_refs, True, True
 
 
 def extract(source: str) -> tuple[RawSymbol, ...]:
     return _analyse(source)[0]
 
 
+def extract_ex(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    symbols, _refs, escalated, has_error = _analyse(source)
+    # A successful `pwsh` escalation replaces the tree-sitter result outright
+    # (the official parser has no ERROR nodes of its own), so only a
+    # non-escalated ERROR recovery counts as partial fidelity.
+    parser = "tree-sitter-partial" if has_error and not escalated else "tree-sitter"
+    return symbols, parser
+
+
 def chunk_spans(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpan, ...]:
-    symbols, _, escalated = _analyse(source)
+    symbols, _, escalated, _has_error = _analyse(source)
     if not escalated:
         return ts.chunk_spans(GRAMMAR, source, lines, max_chars)
     # 公式パーサ経路は構文木を返さないので、定義の範囲を span にして core に隙間を埋めさせる。

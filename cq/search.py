@@ -7,6 +7,7 @@ whole index (NFR-CQ-01).
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from contextlib import closing
@@ -30,6 +31,11 @@ _TRACE_RE = re.compile(r"^(?:(?:FR|NFR|UT|TEST)-[A-Z0-9]+(?:-[A-Z0-9]+)*|APP-\d{
 _SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 _BAREWORD_RE = re.compile(r"[^\W_]+[\w$]*|[\w$]+")
 _PLAIN_RE = re.compile(r"^[A-Za-z0-9_ ]+$")
+# 仮名・漢字・ハングル・全角記号。連言を選言へ緩和しない判定に使う（FR-CQ-06）。
+_CJK_RE = re.compile(
+    r"[\u1100-\u11ff\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff"
+    r"\uac00-\ud7af\uf900-\ufaff\uff65-\uff9f]"
+)
 # BM25 の重み: 名前 > シグネチャ > 識別子展開 > 本文
 _BM25_WEIGHTS = "10.0, 5.0, 3.0, 1.0"
 
@@ -223,11 +229,12 @@ def _guard_freshness(
 
 
 def _fallback_order(route: str) -> list[str]:
+    # `path` は連鎖の末尾だけに置く。`ROUTES` へは入れないので `--mode path` は選べない。
     chains = {
-        "symbol": ["symbol", "substr", "bm25"],
-        "substr": ["substr", "bm25", "symbol"],
-        "bm25": ["bm25", "substr", "symbol"],
-        "trace": ["trace", "symbol", "substr", "bm25"],
+        "symbol": ["symbol", "substr", "bm25", "path"],
+        "substr": ["substr", "bm25", "symbol", "path"],
+        "bm25": ["bm25", "substr", "symbol", "path"],
+        "trace": ["trace", "symbol", "substr", "bm25", "path"],
         "regex": ["regex"],
     }
     return chains[route]
@@ -242,6 +249,8 @@ def _run(conn, route, query, regex, top_k, radius, regex_max, paths, *, explicit
         return _symbol(conn, query, top_k, radius, paths)
     if route == "substr":
         return _substr(conn, query, top_k, radius, paths, explicit=explicit)
+    if route == "path":
+        return _path(conn, query, top_k, radius, paths)
     return _bm25(conn, query, top_k, radius, paths)
 
 
@@ -336,13 +345,56 @@ def _substr(conn, query, top_k, radius, paths, *, explicit: bool = True) -> list
     return [_chunk_hit(r, "substr", 1.0, text, radius) for r in rows]
 
 
+def _path(conn, query, top_k, radius, paths) -> list[Hit]:
+    """Match the repository-relative path itself (FR-CQ-06, last resort).
+
+    `chunks_fts` indexes the body, the name, the signature and the split
+    identifiers, but never the path, so a test module name coming out of a
+    stack trace is otherwise unreachable. One hit per file: `min(start_line)`
+    makes SQLite take the remaining bare columns from that same row.
+    """
+    text = (query or "").strip()
+    if len(text) < MIN_SUBSTRING_CHARS:
+        return []  # trigram 層と同じ最小長。連鎖の末尾なのでエラーにはしない。
+    clause, params = _path_clause(paths, "f.path")
+    # 絞り込みは `files`（実測 821 行）側で行う。`chunks`（14,055 行）を走査すると
+    # 同じ結果に 6〜17 倍の時間がかかる。
+    rows = conn.execute(
+        "SELECT c.chunk_id, c.path, min(c.start_line) AS start_line, c.end_line,"
+        " c.text, c.name, c.signature, f.parser"
+        " FROM files f JOIN chunks c ON c.path = f.path"
+        " WHERE f.path LIKE ?" + clause +
+        f" GROUP BY f.path ORDER BY {_test_rank('f.path')}, length(f.path), f.path"
+        " LIMIT ?",
+        [f"%{text}%", *params, top_k],
+    ).fetchall()
+    return [_chunk_hit(r, "path", 1.0, text, radius) for r in rows]
+
+
 def _bm25(conn, query, top_k, radius, paths) -> list[Hit]:
     match = sanitize_match(query or "")
     if not match:
         return []
+    terms = match.split()
+    rows = _bm25_rows(conn, match, top_k, paths)
+    if rows:
+        return [_chunk_hit(r, "bm25", -float(r["score"]), terms[0], radius) for r in rows]
+    # 連言が 0 件のときだけ選言へ 1 回緩和する。CJK を含むクエリは、誤った上位ヒットを
+    # 返すより 0 件を返す既存方針を維持するため対象外にする（FR-CQ-06）。
+    if len(terms) < 2 or _CJK_RE.search(match):
+        return []
+    rows = _bm25_rows(conn, " OR ".join(terms), top_k, paths)
+    return [
+        _chunk_hit(r, "bm25", -float(r["score"]), terms[0], radius,
+                   extra={"match": "or-fallback"})
+        for r in rows
+    ]
+
+
+def _bm25_rows(conn, match: str, top_k: int, paths):
     clause, params = _path_clause(paths, "c.path")
     try:
-        rows = conn.execute(
+        return conn.execute(
             "SELECT c.chunk_id, c.path, c.start_line, c.end_line, c.text, c.name,"
             f" c.signature, f.parser, bm25(chunks_fts, {_BM25_WEIGHTS}) AS score"
             " FROM chunks_fts f2 JOIN chunks c ON c.rowid = f2.rowid"
@@ -352,7 +404,6 @@ def _bm25(conn, query, top_k, radius, paths) -> list[Hit]:
         ).fetchall()
     except sqlite3.OperationalError:
         return []
-    return [_chunk_hit(r, "bm25", -float(r["score"]), match.split()[0], radius) for r in rows]
 
 
 def _regex(conn, regex, top_k, radius, regex_max, paths) -> list[Hit]:
@@ -399,13 +450,14 @@ def _longest_literal(regex: str) -> str:
     return max(re.split(r"[\\^$.|?*+()\[\]{}]+", regex), key=len, default="")
 
 
-def _chunk_hit(row, route: str, score: float, needle: str, radius: int) -> Hit:
+def _chunk_hit(row, route: str, score: float, needle: str, radius: int,
+               extra: dict[str, Any] | None = None) -> Hit:
     number = _best_line(row["text"], row["start_line"], needle)
     return Hit(
         path=row["path"], lines=[row["start_line"], row["end_line"]], route=route,
         score=score, snippet=_window(row["text"], row["start_line"], number, radius),
         parser=row["parser"], chunk_id=row["chunk_id"],
-        signature=row["signature"] or None,
+        signature=row["signature"] or None, extra=dict(extra or {}),
     )
 
 
@@ -439,7 +491,9 @@ def _cap_tokens(hits: Sequence[Hit], max_tokens: int) -> list[Hit]:
     kept: list[Hit] = []
     used = 0
     for hit in hits:
-        cost = max(1, len(hit.snippet) // 4)
+        # 予算は抜粋だけでなく「実際に返す 1 ヒット分の機械可読表現の全体」で見積もる
+        # （NFR-CQ-01）。CLI は `ensure_ascii=True` で出力するのでその形で数える。
+        cost = max(1, len(json.dumps(hit.to_dict(), ensure_ascii=True)) // 4)
         if kept and used + cost > max_tokens:
             break
         kept.append(hit)

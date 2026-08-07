@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from .help_content import HelpEntry, guide_url
+from .theme import token
 
 
 _POPUP_MAX_WIDTH = 380
@@ -46,16 +47,9 @@ class _HelpPopup(QFrame):
     def __init__(self, entry: HelpEntry, anchor: QWidget) -> None:
         # 親を anchor にすると anchor が消えたとき自動で消える
         super().__init__(anchor, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setProperty("hveRole", "hintPopup")
         self.setObjectName("HelpPopup")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(
-            "#HelpPopup {"
-            " background-color: #fffde7;"
-            " border: 1px solid #fbc02d;"
-            " border-radius: 6px;"
-            "}"
-            " QLabel { color: #424242; }"
-        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
@@ -69,7 +63,7 @@ class _HelpPopup(QFrame):
         url = guide_url(entry.guide_path, entry.guide_anchor)
         if url:
             link = QLabel(
-                f'<a href="{url}" style="color:#1565c0;">'
+                f'<a href="{url}" style="color:{token("accentForeground")};">'
                 f"📖 詳しいガイド: {entry.guide_path}</a>"
             )
             link.setOpenExternalLinks(False)

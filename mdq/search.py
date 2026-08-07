@@ -19,7 +19,15 @@ try:
 except Exception:
     HAS_RANK_BM25 = False
 
-_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+|[\u3040-\u30ff\u4e00-\u9fff]")
+from . import tokenize as _tokenize
+
+# Excerpt-selection tokenizer (layer 2). The CJK range is owned by
+# mdq.tokenize so that it cannot drift from the scoring tokenizer.
+_TOKEN_RE = re.compile(
+    r"[A-Za-z0-9_]+|["
+    + "".join(f"{low}-{high}" for low, high in _tokenize.CJK_CHAR_RANGES)
+    + "]"
+)
 
 # SQLite の trigram トークナイザは 3 文字未満の語を索引しない。
 _MIN_TRIGRAM_CHARS = 3
@@ -28,6 +36,10 @@ _MIN_TRIGRAM_CHARS = 3
 # 0.2 は、開発用とホールドアウトの 2 つのゴールデン集で filtered / broad の
 # いずれも従来値 0.75 を下回らなかった唯一の候補（FR-MDQ-04 の計測による）。
 LENGTH_NORM_B = 0.2
+
+# FR-MDQ-08 (3): 見出し経路を本文より重く扱う倍率。
+# 暫定値。FR-MDQ-08 (6) の 4 スライス計測で確定するまでは 3 を用いる。
+HEADING_WEIGHT = 3
 
 
 def tokenize(text: str) -> list[str]:
@@ -42,18 +54,19 @@ class Hit:
     start_line: int
     end_line: int
     score: float
-    snippet: str
+    snippet: str | None
     expansion: dict | None = None
 
     def to_dict(self) -> dict:
-        d = {
+        d: dict = {
             "chunk_id": self.chunk_id,
             "path": self.path,
             "heading_path": self.heading_path,
             "lines": [self.start_line, self.end_line],
             "score": round(self.score, 4),
-            "snippet": self.snippet,
         }
+        if self.snippet is not None:
+            d["snippet"] = self.snippet
         if self.expansion is not None:
             d["expansion"] = self.expansion
         return d
@@ -122,8 +135,10 @@ def _make_snippet(text: str, query_tokens: list[str], radius: int = 2,
 
 
 def _excerpt(text: str, query_tokens: list[str], radius: int,
-             return_unit: str) -> str:
-    """Return the hit excerpt at the requested granularity (FR-MDQ-03)."""
+             return_unit: str) -> str | None:
+    """Return the hit excerpt at the requested granularity (FR-MDQ-03 / FR-MDQ-10)."""
+    if return_unit == "locations":
+        return None
     if return_unit == "chunk":
         return text
     return _make_snippet(text, query_tokens, radius=radius)
@@ -207,7 +222,9 @@ def _maybe_apply_fusion(rows, bm25_scores, query: str,
         for rows that have an embedding (0.0 for rows that don't), then
         return ``alpha * bm25_norm + (1 - alpha) * cosine_sim`` row-wise.
     Logs a one-line stderr warning if the embedding provider is
-    unavailable; falls back to bm25_scores in that case.
+    unavailable, or if the stored vectors have a different dimension than
+    the query vector (i.e. the index was built with another embedding
+    model); falls back to bm25_scores in both cases.
     """
     if fusion_alpha is None:
         return bm25_scores
@@ -243,6 +260,17 @@ def _maybe_apply_fusion(rows, bm25_scores, query: str,
         if not emb_bytes:
             continue
         v = np.frombuffer(emb_bytes, dtype=np.float32)
+        if v.shape[0] != len(q_vec):
+            # The index records no model name, so a model change is only
+            # detectable here. Degrade rather than raise (see docstring).
+            import sys as _sys
+            print(
+                f"[mdq:search] fusion disabled (embedding dim mismatch: "
+                f"query={len(q_vec)} index={v.shape[0]}; the index was "
+                f"built with a different MDQ_EMBED_MODEL)",
+                file=_sys.stderr,
+            )
+            return bm25_scores
         n = float(np.linalg.norm(v))
         if n == 0:
             continue
@@ -268,14 +296,19 @@ def _row_get(row, key: str):
 
 
 def _scoring_text(row) -> str:
-    """Text used for ranking only (FR-MDQ-05).
+    """Text used for ranking only (FR-MDQ-05 / FR-MDQ-08).
 
     The heading path carries the terms that identify a section, so matching it
-    is what lets a heading-only term reach its chunk. It must never reach the
+    is what lets a heading-only term reach its chunk. The repository path does
+    the same for terms that only appear in a file name. Neither may reach the
     excerpt, which stays anchored to the body and its line range.
     """
     heading = row["heading_path"] or ""
-    return f"{heading}\n{row['text']}" if heading else row["text"]
+    parts = [row["path"]]
+    if heading:
+        parts.extend([heading] * HEADING_WEIGHT)
+    parts.append(row["text"])
+    return "\n".join(parts)
 
 
 def _budget_cost(hit: Hit) -> int:
@@ -402,13 +435,14 @@ def search(conn, query: str, *, mode: str = "bm25",
                 scored.append((float(n), r))
         _sort_scored(scored, query)
     else:
-        corpus = [tokenize(_scoring_text(r)) for r in rows]
+        corpus = [_tokenize.scoring_terms(_scoring_text(r)) for r in rows]
+        q_terms = _tokenize.scoring_terms(query)
         if HAS_RANK_BM25:
             bm25 = BM25Okapi(corpus, b=LENGTH_NORM_B)
-            scores = bm25.get_scores(q_tokens)
+            scores = bm25.get_scores(q_terms)
         else:
             bm25 = _MiniBM25(corpus, b=LENGTH_NORM_B)
-            scores = bm25.get_scores(q_tokens)
+            scores = bm25.get_scores(q_terms)
         # Late-chunking fusion (Q9=B). Applies only when:
         #   1. The caller provided fusion_alpha (not None).
         #   2. The DB has at least one row with a non-NULL chunk_embedding.
@@ -446,7 +480,7 @@ def search(conn, query: str, *, mode: str = "bm25",
 
     # T04: expansion (parent / neighbors / parts)
     _apply_expansion(conn, hits, include_parent, parent_depth,
-                     expand_neighbors, merge_parts)
+                     expand_neighbors, merge_parts, return_unit)
     if pageindex_tree_depth > 0:
         _apply_tree_path(conn, hits, pageindex_tree_depth)
     return hits
@@ -454,7 +488,8 @@ def search(conn, query: str, *, mode: str = "bm25",
 
 def _apply_expansion(conn, hits: list[Hit], include_parent: bool,
                      parent_depth: int,
-                     expand_neighbors: int, merge_parts: bool) -> None:
+                     expand_neighbors: int, merge_parts: bool,
+                     return_unit: str = "line") -> None:
     if not (include_parent or expand_neighbors > 0 or merge_parts):
         return
     for h in hits:
@@ -482,7 +517,17 @@ def _apply_expansion(conn, hits: list[Hit], include_parent: bool,
             if parts:
                 exp["parts"] = parts
         if exp:
-            h.expansion = exp
+            h.expansion = _strip_bodies(exp) if return_unit == "locations" else exp
+
+
+def _strip_bodies(expansion: dict) -> dict:
+    """Drop the body from every expanded row (FR-MDQ-10 (6))."""
+    stripped: dict = {}
+    for key, value in expansion.items():
+        rows = value if isinstance(value, list) else [value]
+        cleaned = [{k: v for k, v in row.items() if k != "text"} for row in rows]
+        stripped[key] = cleaned if isinstance(value, list) else cleaned[0]
+    return stripped
 
 
 def _build_fts5_query(q_tokens: list[str]) -> str:
@@ -627,7 +672,7 @@ def _search_fts5(conn, query: str, *, top_k: int, max_tokens: int,
         if len(hits) >= top_k:
             break
     _apply_expansion(conn, hits, include_parent, parent_depth,
-                     expand_neighbors, merge_parts)
+                     expand_neighbors, merge_parts, return_unit)
     return hits
 
 

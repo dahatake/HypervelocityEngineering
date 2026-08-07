@@ -2970,6 +2970,30 @@ class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
                 _FakeClient(), {"reasoning_effort": "high"}
             )
 
+    async def test_strips_tool_search_on_typeerror(self) -> None:
+        """FR-MODEL-05: SDK 未サポート時は tool_search を剥がして再試行する。"""
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                if "tool_search" in kwargs:
+                    raise TypeError(
+                        "create_session() got an unexpected keyword argument 'tool_search'"
+                    )
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(),
+            {"model": "Auto", "tool_search": {"enabled": True}, "streaming": True},
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("tool_search", calls[0])
+        self.assertNotIn("tool_search", calls[1])
+
 
 class TestWorkIQCalledToolsTracking(unittest.TestCase):
     """Phase 2: _workiq_called_tools 履歴が _handle_session_event で蓄積されることを確認。"""
@@ -3745,6 +3769,48 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
         self.assertEqual(opts.get("available_tools"), ["bash"])
         self.assertEqual(opts.get("excluded_tools"), ["web_search"])
 
+    def _fake_permission_module(self):
+        import types
+        mod = types.ModuleType("copilot.session")
+
+        class _PH:
+            @staticmethod
+            async def approve_all(*a, **kw):
+                return True
+
+        mod.PermissionHandler = _PH
+        return mod
+
+    def test_sub_session_opts_includes_tool_search(self) -> None:
+        """FR-MODEL-04: サブセッション opts へも tool_search を伝搬する。"""
+        cfg = SDKConfig(model="claude-opus-4.7", tool_search=True)
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": self._fake_permission_module()}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertEqual(opts.get("tool_search"), {"enabled": True})
+
+    def test_sub_session_opts_includes_tool_search_by_default(self) -> None:
+        """FR-MODEL-04: 既定（有効）でサブセッションへも伝搬する。"""
+        cfg = SDKConfig(model="claude-opus-4.7")
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": self._fake_permission_module()}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertEqual(opts.get("tool_search"), {"enabled": True})
+
+    def test_sub_session_opts_omits_tool_search_when_disabled(self) -> None:
+        """FR-MODEL-06: 明示的な無効化はサブセッションへも渡さない。"""
+        cfg = SDKConfig(model="claude-opus-4.7", tool_search=False)
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": self._fake_permission_module()}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertNotIn("tool_search", opts)
+
     def test_main_session_includes_infinite_sessions_when_auto_compaction(self) -> None:
         cfg = SDKConfig(
             dry_run=False,
@@ -3785,6 +3851,71 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
         self.assertTrue(ok)
         kw = fake_client.create_session_kwargs[0]
         self.assertNotIn("infinite_sessions", kw)
+
+    def test_main_session_includes_tool_search_when_enabled(self) -> None:
+        """FR-MODEL-04: tool_search=True でメインセッションへ enabled を渡す。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-toolsearch01",
+            tool_search=True,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertEqual(kw.get("tool_search"), {"enabled": True})
+
+    def test_main_session_includes_tool_search_by_default(self) -> None:
+        """FR-MODEL-04: 既定（有効）でメインセッションへ enabled を渡す。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-toolsearch02",
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertEqual(kw.get("tool_search"), {"enabled": True})
+
+    def test_main_session_omits_tool_search_when_disabled(self) -> None:
+        """FR-MODEL-06: 明示的な無効化時は SDK へ渡さない。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            auto_self_improve=False,
+            run_id="20260507T100000-toolsearch03",
+            tool_search=False,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertNotIn("tool_search", kw)
 
 
 # ---------------------------------------------------------------------------

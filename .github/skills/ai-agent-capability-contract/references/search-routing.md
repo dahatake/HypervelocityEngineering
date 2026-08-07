@@ -40,6 +40,14 @@ Agent詳細設計は、使用する経路ごとに次の1行を記録する。
 
 複数データ種別が必要な問い合わせは、種別ごとに行を分ける。単一の曖昧な「全検索」Toolへ統合しない。
 
+### 行を分けた結果 Tool が増える場合
+
+本ルールは検索品質のために統合を禁止するため、データ種別が増えるほど Tool 数は増える。
+Tool 総数が 10〜15 を超える見込みなら、**統合ではなく公開方式で解く**。
+`foundry-toolbox-contract`（TB-CAP-01〜05）で Toolbox / tool search の採否を決めること。
+
+**同じ経路が複数行に現れても Tool としては 1 つ**である（TB-CAP-01 の総数を数えるときに二重計上しない）。
+
 ## 4. 検索ルーティング決定表
 
 | Request class | 判定条件 | Preferred route | Fallback | Permission / data boundary | Evidence |
@@ -58,6 +66,19 @@ Agent詳細設計は、使用する経路ごとに次の1行を記録する。
 - 複雑な質問をsubqueryへ分解し、複数Knowledge Sourceを検索・rerankする必要がある。
 - Knowledge Baseと少なくとも1つのKnowledge Sourceを設計できる。
 - source referencesまたは同等の根拠を応答へ渡せる。
+
+### AR-CAP契約の必須化
+
+`enterprise-unstructured` のPreferred routeとしてFoundry IQ / Azure AI Search Agentic Retrievalを選んだ場合、Agent詳細設計にSkill `agentic-retrieval-contract` のAR-CAP-01〜05を**必須で含める**。
+
+| 本節の記述 | 正本となるAR-CAP |
+|---|---|
+| どのKnowledge Sourceを束ねるか、取り込み方式、鮮度、権限境界 | AR-CAP-02 `Knowledge Source Matrix` |
+| どの程度LLM処理を行うか（subquery本数・cost・latencyのトレードオフ） | AR-CAP-01 `Knowledge Base Contract` / AR-CAP-03 `Retrieval Budget` |
+| source referencesとactivity logを有効化するか | AR-CAP-04 `Evidence & Observability` |
+| Knowledge BaseのMCPをどこへ公開し、どのToolを許可するか | AR-CAP-05 `MCP Exposure` |
+
+本AG-CAP-03はroute選択とCitation requirementの正本であり、Foundry IQの**構成値**を重複記載しない。
 
 ### データソースの接続
 
@@ -80,6 +101,8 @@ Remote MCPを選ぶ場合は、少なくとも次を設計・テストする。
 Knowledge BaseのMCP endpointをAgentから使う場合はAG-CAP-05にも記録する。これはRead-only retrievalの接続であり、AG-CAP-04のREST mutationを置き換えない。
 
 複数Knowledge Sourceを検索する場合、rerank後も各evidence itemにsource class、source identifier、pathまたはURL、取得日時を保持する。値が提供されない項目を推測で補わない。
+
+許可するToolのallowlistとper-user権限の伝播可否はAR-CAP-05を正本とする。
 
 ## 6. Web IQ / Web Search
 

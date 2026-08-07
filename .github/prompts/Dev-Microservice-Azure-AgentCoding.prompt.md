@@ -68,6 +68,8 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 - `ai-agent-capability-contract` — AG-CAP-01〜06 の選択能力、実装境界、GREEN判定
+- `agentic-retrieval-contract` — Section 7.0 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の AR-CAP-01〜05 実装境界
+- `foundry-toolbox-contract` — Tool 総数が 15 を超える場合の TB-CAP-01〜05 実装境界（Toolbox / tool search）
 
 ## 生成テストの実行環境
 
@@ -190,7 +192,22 @@ Issue body または追加コメントにプログラミング言語の指定が
 ## 5.1) AG-CAP実装境界
 - **AG-CAP-01 / 02**: Criterion evaluatorとEvidenceを実装し、各ACT前にUSER_CANCELLED、POLICY_STOP、deadline、cost、Tool budget、Max iterationsを短絡評価する。Action fingerprintとrequest内attempted setで、新Evidenceなしの同一action反復を拒否する。System Prompt、policy、RBAC、production code、testをruntimeで自己変更しない。
 - **AG-CAP-03**: Web IQ / Foundry Web Search / Work IQ / Fabric IQ / Foundry IQ / Azure AI Search / SELECT-only SQL / operational REST GETのうち、Section 7.0のPreferred / Fallbackに選択されたrouteだけを実装する。未選択providerのpackage、client、設定flag、mockを追加しない。
-- **Work IQ read-only境界**: Work IQ MCPを検索経路に選択した場合も、本リポジトリの「mutationは既存REST Function Toolのみ」を優先する。`create_entity` / `update_entity` / `delete_entity` / `do_action`と、その他の副作用operationをTool allowlistから除外する。`WorkIQAgent.Ask` delegated permissionはMicrosoft 365 resourceへのread/write accessを含み、`ask`は`agentId`で別Agentへ委譲できるため、本契約のread-only経路には登録しない。`fetch` / `call_function`はSection 7.0 / 7.3で承認されたread-only operationとrelative pathだけ、`get_schema`は`operationType=fetch`だけを許可する。Tool・operation・relative pathをAgent初期化時と呼出直前の両方で検査し、未承認`agentId`、任意Agentへの委譲、read-onlyを証明できないoperationは実行せずblocked / Handoffにする。
+- **AR-CAP実装境界（Foundry IQ / Azure AI Search Agentic Retrievalを選んだ場合のみ）**: 詳細設計のAR-CAP-01〜05を正本とし、Skill `agentic-retrieval-contract` に従う。
+  - Knowledge Baseへの問い合わせは**1リクエストに集約**する。Knowledge Sourceごとに別のToolを作ってAgentに複数回呼ばせる実装にしない。
+  - `Retrieval reasoning effort` / Knowledge Base名 / Knowledge Source一覧 / `Output mode` / `Retrieval instructions` は**設定から読み込む**。コードへハードコードしない。
+  - Foundry Agent Service経由で接続する場合、Tool allowlistは`knowledge_base_retrieve`だけにする。
+  - AR-CAP-03のtoken / latency / 最大実行時間を超えた場合の縮退を実装する。`Required for Done: yes` のKnowledge Sourceが取得できない場合はblockedとし、他sourceの内容で補完しない。
+  - AR-CAP-04で`enabled`としたsource references / activity log を実際に取得し、citationに必須項目を保持する。引用を提供できない場合はAgentの回答として確定させない。
+  - per-user権限が必須なのに対象runtimeで安全に伝播できない場合はblockedにする。application権限へ置換しない。- **TB-CAP実装境界（詳細設計に Section 7.5.1〜7.5.5 がある場合のみ）**: 詳細設計の TB-CAP-01〜05 を正本とし、Skill `foundry-toolbox-contract` に従う。
+  - Toolbox の version 作成と tool search 有効化は **設定ファイルから読み込む**。pin 対象・`additional_search_text`・`limit` をコードへハードコードしない。
+  - この Step の責務は **設定ファイル・client 初期化・System Prompt** に限る。Toolbox の Azure リソース作成・version 登録・実接続検証は `Dev-Microservice-Azure-AgentDeploy` に一本化し、ここでは行わない。
+  - 設定ファイル（`agent-config.json` / `appsettings.json`）の `toolbox` ブロックに、設計値と一致する `tool_search`（enabled / disabled）、`connection_topology`、`tool_search_limit`、`pinned_tools`、`additional_search_text` を持たせる。新しい独自フラグを増やさない。
+  - TB-CAP-02 が `Tool search: disabled` のときは `toolbox` ブロック自体を作らない。有効時の設定を残さない。
+  - TB-CAP-02 が `Tool search: enabled` のとき、`"*"` による全 Tool pin を実装しない（tool search を無効化してしまう）。
+  - `additional_search_text` は検索専用でありモデルへ渡らない。モデルに見せたい説明は Tool の description へ書く。
+  - Agent の System Prompt に「能力が存在しないと結論する前に必ず `tool_search` を呼ぶ」を明記する。
+  - SDK シンボル名（`ToolSearchToolboxTool` 等）はプレビューで変動するため、**実装前に Microsoft Learn MCP と package manager で確定**し、確認日・version・URL を作業ログへ記録する。Prompt の静的例から推測しない。
+  - プレビューヘッダー `Foundry-Features: Toolboxes=V1Preview` と RBAC（Foundry User ロール）の前提を設定へ含める。- **Work IQ read-only境界**: Work IQ MCPを検索経路に選択した場合も、本リポジトリの「mutationは既存REST Function Toolのみ」を優先する。`create_entity` / `update_entity` / `delete_entity` / `do_action`と、その他の副作用operationをTool allowlistから除外する。`WorkIQAgent.Ask` delegated permissionはMicrosoft 365 resourceへのread/write accessを含み、`ask`は`agentId`で別Agentへ委譲できるため、本契約のread-only経路には登録しない。`fetch` / `call_function`はSection 7.0 / 7.3で承認されたread-only operationとrelative pathだけ、`get_schema`は`operationType=fetch`だけを許可する。Tool・operation・relative pathをAgent初期化時と呼出直前の両方で検査し、未承認`agentId`、任意Agentへの委譲、read-onlyを証明できないoperationは実行せずblocked / Handoffにする。
 - **SELECT-only SQL**: 選択時だけ、単一SELECT、parameterization、table/view/column allowlist、read-only identity、row limit、timeout、構文検査を実装する。INSERT / UPDATE / DELETE / MERGE / DDL / stored procedure、複文、検査不能queryを実行しない。監査証跡には正規化・redact済みquery識別情報、対象source、実行時刻、返却行数を残し、token、secret、parameter値、結果本文、過剰な機微値を保存しない。
 - **AG-CAP-04**: Create / Update / Deleteは既存API契約に対応するREST Function Toolだけをprimary経路にする。method / path / schema、認証、RBAC、HITL、冪等性、有限retry、error class、audit evidenceを実装し、SQL/direct DB writeやMCP mutation迂回を禁止する。
 - **AG-CAP-05**: Agentは選択されたMCP Serverのclientとして接続する。Tool allowlist、auth、untrusted result、timeout、有限retry、failure behaviorを実装し、Agent自身のRemote MCP Server化を既定で行わない。adapterが必要な場合はSection 7.3記載のowner serviceを参照し、`src/agent/`へ複製しない。

@@ -1159,16 +1159,32 @@ class TestFileIO(unittest.TestCase):
         self.assertIn("← [1] docs/file.md", cap.stdout)
 
     def test_emits_stats_event_file_io(self) -> None:
-        """file_io 呼び出しで `[hve:stats] {"kind":"file_io",...}` 行が常時発火する。
+        """file_io の観測イベントは常に収集され、子プロセス実行時だけ stdout へ流れる。
 
-        verbosity=0 でも GUI 用構造化イベントは出力される（人間向けの表示行とは独立）。
+        FR-RTO-02: 通常 CLI では `[hve:stats]` を stdout へ出さない。収集は継続する。
         """
         import json as _json
+        import os as _os
+        from unittest import mock as _mock
 
-        c = Console(verbosity=0)
-        with _CaptureOutput() as cap:
-            c.file_io("step-1", "docs/file.md", "write")
-        # stats_event は stdout に書かれる
+        env_without_marker = {
+            k: v
+            for k, v in _os.environ.items()
+            if k not in ("HVE_GUI_SESSION_ID", "HVE_STATS_STREAM")
+        }
+        with _mock.patch.dict(_os.environ, env_without_marker, clear=True):
+            c = Console(verbosity=0)
+            with _CaptureOutput() as cap:
+                c.file_io("step-1", "docs/file.md", "write")
+        self.assertEqual(
+            [ln for ln in cap.stdout.splitlines() if ln.startswith("[hve:stats] ")],
+            [],
+        )
+
+        with _mock.patch.dict(_os.environ, {"HVE_STATS_STREAM": "1"}):
+            c = Console(verbosity=0)
+            with _CaptureOutput() as cap:
+                c.file_io("step-1", "docs/file.md", "write")
         stats_lines = [
             ln for ln in cap.stdout.splitlines() if ln.startswith("[hve:stats] ")
         ]

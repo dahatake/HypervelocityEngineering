@@ -30,8 +30,10 @@
 - **質問方針**：質問なしで進められる場合は質問しない。必要な質問は分類項目・重要度（最重要/高/中/低）付きで過不足なく行う。「最重要」「高」は回答を優先的に求め、「中」「低」は既定値で進行可能とする。タスク定義書（GitHub Issue body / CLI 起動時メタデータ）に `<!-- auto-context-review: true -->` が記載されている時は、コンテキストが十分な場合でも設計判断・技術選定・スコープの確認を目的として質問する。
 - **推論許可**：「推論で進めてください」の意思表示を以降「**推論許可**」と呼ぶ。
 - **書き込み失敗対策**：edit 後に read で空でないことを確認。空なら小チャンク（2,000〜5,000文字）に分割して再試行（最大3回）。
+- **一時作業ファイルは `work/` 配下に限定（絶対）**：調査スクリプト・デバッグ出力・ログ・プローブ・実験結果などの一時作業ファイルを **リポジトリルート直下（`/`）に作成してはならない**。必ず `work/run/<run-id>/.../artifacts/` 配下に作成する（Skill `work-artifacts-layout`）。`_tmp_*.py` / `tmp*` / `debug_*` / `*.out.txt` / `MagicMock/` 等をルート直下へ置くことも禁止し、`.gitignore` 済みかどうかは免罪符にならない。ルート直下へ新規追加してよいのは許可リスト（`.github/workflows/protect-readonly-paths.yml` の `ROOT_FILE_ALLOWLIST` / `ROOT_DIR_ALLOWLIST`）に載るリポジトリ標準ファイルのみで、追加が必要な場合は同じ PR で許可リストも更新する。違反は `protect-readonly-paths.yml` の `check-root-temp-files` ジョブが PR で fail させる。
 - **work/ および qa/ 書き込みルール（絶対）**：`work/` または `qa/` 配下へのファイル書き込みは Skill `work-artifacts-layout` §4.1 準拠。例外なし。
 - **work/run 横断参照の禁止（絶対）**：標準ワークフロー Step は、他 Step の `work/run/<run-id>/...` 配下の作業成果物（`plan.md` / `contracts/` / `artifacts/` / `completion-report.md` 等）を入力として読まないこと。Step 間のデータ受け渡しは `## 入力` に列挙された `docs/` 成果物経由のみとする。SPLIT / Fleet サブタスクが依存完了報告を参照する場合は、コードが明示注入する `dependency_completion_reports` の絶対パスのみを用い、パスを自力推測しないこと。詳細は Skill `work-artifacts-layout` 参照。
+- **恒久成果物からの work/ 出典引用の禁止（絶対）**：`docs/` `knowledge/` `qa/` `src/` 等の恒久成果物は使い捨ての `work/` 配下パスをリンク／コードスパンで出典引用してはならない。唯一の例外は `CHANGELOG.md` で、そこでもパス／リンクは禁止し要約文字列のみ許可する。詳細は Skill `work-artifacts-layout` 参照。
 - **knowledge/ 書き込みルール（絶対）**：`knowledge/` 配下へのファイル書き込みも Skill `work-artifacts-layout` §4.1 準拠（削除→新規作成）。例外なし。
 - **knowledge/ 同時更新防止（LOCK）**: `knowledge/` 本体ファイルへ LOCK 情報を埋め込んではならない。LOCK が必要な場合は `work/` 配下のロックファイル、または Issue ラベル等、`knowledge/` の「削除→新規作成」ルールと両立する方式を用いる。他の Agent により対象 D{NN} の LOCK が取得済みであることを検知した場合、後続 Agent は当該 `knowledge/` ファイルを **読み取り専用** とし、書き込みを中止して再実行に回す。
 - **original-docs/ 読み取り専用（絶対）**: `original-docs/` 配下のファイルは全 Agent から **読み取り専用**。変更・削除・追記を禁止。

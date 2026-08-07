@@ -267,8 +267,22 @@ C1〜C3 (Context 削減率)、H1 (Strategy 分布)、H2 (parent 展開率) な�
 
 ## 独立 GUI ランチャー（他リポジトリでも利用可能）
 
-`tools/skills/markdown_query/` を別リポジトリへフォルダごとコピーすると、HVE 本体に
-依存せずに同じ設定画面を起動できる。詳細は以下を参照:
+他リポジトリへ持ち出す場合は **[tools/for-other-repo/](../tools/for-other-repo/README.md) の
+コピー script を使う**（版マニフェストと OS ブートストラップ付き。FR-KIT-06）。
+
+```pwsh
+python tools/for-other-repo/copy_to_repo.py D:\other-repo\tools\kits -p markdown-query
+# コピー先リポジトリのルートで
+pwsh -NoLogo -NoProfile -File D:\other-repo\tools\kits\markdown-query\install.ps1 -WithGui
+pwsh -NoLogo -NoProfile -File D:\other-repo\tools\kits\markdown-query\launch-gui.ps1
+```
+
+`install.ps1` / `install.sh` は Python 3.11+ と git が無ければ OS のパッケージマネージャ
+（winget / choco / Homebrew / apt / dnf / yum / zypper / pacman / apk）で導入してから
+`kit/kit_setup.py` へ委譲する。
+
+`tools/skills/markdown_query/` をフォルダごと手でコピーしても同じ設定画面は起動するが、
+版の追跡と旧ファイルの削除は行われない。詳細は以下を参照:
 
 - セットアップ手順: `tools/skills/markdown_query/README.md`<!-- TBD: SETUP.md は不在、README.md にセットアップスクリプトと使い方が集約されている -->
 - 画面の使い方: [tools/skills/markdown_query/USAGE.md](../tools/skills/markdown_query/USAGE.md)
@@ -635,6 +649,10 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 ### 移植に必要なファイル一式
 
+> **手で集めないこと**。[tools/for-other-repo/copy_to_repo.py](../tools/for-other-repo/copy_to_repo.py) が
+> 下表の必須分をすべて集めてコピーし、版マニフェスト（`KIT-VERSION.json`）を生成する。
+> 本表は「何が入っているか」を把握するための参考として残す。
+
 | 区分 | パス | 必須/任意 | 役割 |
 |---|---|---|---|
 | 必須 | `mdq/` パッケージ一式（`__init__.py`, `__main__.py`, `cli.py`, `indexer.py`, `search.py`, `store.py`, `strategies.py`, `tokenize.py`, `usage_log.py`, `watcher.py`） | 必須 | CLI 本体 |
@@ -647,10 +665,13 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 #### 1. Windows 文字コード起因の exit 1 を解消する
 
-[mdq/cli.py](../mdq/cli.py) の `main()` は標準出力を再構成しないため、Windows の cp932 ロケールでヒットに絵文字が含まれると `UnicodeEncodeError` で **exit code 1** を返す。これが起きると Agent はツールを「壊れている」と判断して回避するため、最初に解消する。
+**本リポジトリでは解消済み**。[mdq/cli.py](../mdq/cli.py) の `main()` が冒頭で
+`sys.stdout.reconfigure(encoding='utf-8', errors='replace')` を呼ぶため、cp932 ロケールで
+ヒットに絵文字が含まれても `UnicodeEncodeError` にならない。配布キットの `vendor/mdq/` にも
+同じ実装が入っている。
 
-- 恒久対策（推奨）: `main()` の冒頭で `sys.stdout.reconfigure(encoding='utf-8', errors='replace')` を呼ぶ。
-- 暫定回避: 環境変数 `PYTHONIOENCODING=utf-8` を設定する（本リポジトリで動作実証済）。
+自前で `mdq/` だけを移植した場合はこの処理が欠けていないかを確認すること。欠けていると
+Agent はツールを「壊れている」と判断して回避する。暫定回避は環境変数 `PYTHONIOENCODING=utf-8`。
 
 #### 2. 最上位ルール（copilot-instructions.md 相当）に優先順位を明記する
 

@@ -273,4 +273,11 @@ def test_scoped_io_registry_and_runner_paths_are_identical() -> None:
     assert targets == {
         ("aag", "3", "Arch-AIAgentDesign-Step3"): "design",
         ("aagd", "2.3", "Dev-Microservice-Azure-AgentCoding"): "implementation",
+        ("aagd", "3", "Dev-Microservice-Azure-AgentDeploy"): "deploy",
+        ("aagd", "4", "QA-ToolSearchEval"): "eval",
     }
+    aagd_step4 = aagd.get_step("4")
+    assert aagd_step4 is not None
+    assert aagd_step4.output_paths_template == [
+        "docs/agent/tool-search-eval/{key}-eval-report.md"
+    ]

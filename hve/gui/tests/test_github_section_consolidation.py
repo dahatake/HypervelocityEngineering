@@ -82,7 +82,7 @@ def test_settings_window_tree_labels_c5_as_github() -> None:
     """設定画面ツリーの C5 ノードラベルが「GitHub」であること。"""
     from hve.gui.settings_window import _CATEGORY_TREE
 
-    renkei_items = [items for label, items in _CATEGORY_TREE if label == "連携"][0]
+    renkei_items = [items for label, items in _CATEGORY_TREE if label == "各サービス連携"][0]
     label_by_key = {key: name for name, key in renkei_items}
     assert label_by_key.get("C5") == "GitHub", (
         f"C5 のラベルが GitHub でない: {label_by_key.get('C5')!r}"

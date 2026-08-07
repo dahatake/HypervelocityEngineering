@@ -82,6 +82,7 @@ def _empty_stats(profile_name: str, db_path: Path | None, error: str | None) -> 
         "db_mtime": _NOT_BUILT,
         "schema_version": None,
         "by_parser": {},
+        "by_lang": {},
         "error": error,
     }
     stats.update({table: 0 for table in cq_store.STATS_TABLES})

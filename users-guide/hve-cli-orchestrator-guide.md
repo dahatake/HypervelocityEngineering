@@ -159,7 +159,13 @@ GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分
 
 ## セットアップスクリプトを使った環境構築（Windows / macOS / Linux）
 
-HVE の基本実行環境は、`hve/` 直下のセットアップスクリプトで構築できます。どちらのスクリプトも既定では Work IQ と外部 Copilot CLI を導入せず、Python 3.11+ の確認、`.venv` 作成、`github-copilot-sdk` のインストール、`python -m hve --help` の確認、および repository検証用`[test]`（pytest）、`markdown-query` 用任意依存（`[mdq-watch,mdq-ja,semantic]` = `rank_bm25` + `tiktoken` + `watchdog` + `fastembed` + `nltk` + `numpy`）と GUI 用任意依存（`[gui,gui-pty,gui-docconvert]` = `PySide6` + `pywinpty`/`ptyprocess` + `markitdown`）の導入、`python -m mdq --help` の確認までを行います。`--no-gui` 指定で GUI 系を、`--minimal` 指定で全 extras（pytestを含む）をスキップできます。
+HVE の基本実行環境は、`hve/` 直下のセットアップスクリプトで構築できます。どちらのスクリプトも、OS しか入っていない PC から CLI / GUI を動かせる状態までを一括で整えます。
+
+- **OS ツールの自動導入**（未導入時のみ、`-NoInstallTools` / `--no-install-tools` で抑止）: Python 3.11+、Python の `venv` / `ensurepip` モジュール、Git、GitHub CLI（`gh`）、Node.js（`npm` / `npx`）、Azure CLI（`az`）、ShellCheck、外部 GitHub Copilot CLI（`npm install -g @github/copilot`。GUI の Copilot チャットパネルで使用）。Windows は winget、macOS は Homebrew、Linux は apt / dnf / pacman を使います。Linux では GUI に必須の Qt / QtWebEngine system lib も検出して導入を試みます（apt のみ）。
+- **Python 依存の導入**: `.venv` 作成、`github-copilot-sdk` 、repository 検証用 `[test]`（pytest）、`markdown-query` 用任意依存（`[mdq-watch,mdq-ja,semantic]` = `rank_bm25` + `tiktoken` + `watchdog` + `fastembed` + `nltk` + `numpy`）、GUI 用任意依存（`[gui,gui-pty,gui-docconvert]` = `PySide6` + `pywinpty`/`ptyprocess` + `markitdown`）、`code-query` 用任意依存（`[code]` = tree-sitter 文法 + `sqlglot`。失敗しても警告のみで継続し、regex 解析へ降格）。
+- **動作確認**: `python -m hve --help` / `python -m mdq --help` / `python -m cq --help` の実行確認。
+
+`--no-gui` 指定で GUI 系を、`--minimal` 指定で全 extras（pytestを含む）をスキップできます。各ツールの導入前に確認プロンプトが出ます。無人実行したい場合は `-Yes` / `-y` を付けてください。
 
 ### Windows 初心者向け（`.cmd` ダブルクリック）
 
@@ -169,13 +175,16 @@ HVE の基本実行環境は、`hve/` 直下のセットアップスクリプト
 
 | 引数 | 動作 |
 |---|---|
-| なし（既定） | venv 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert`）を導入 |
+| なし（既定） | 不足している OS ツール（Python / venv / Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI）を winget ・npm で導入 + venv 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert` / `code`）を導入 |
 | `-CheckOnly` | 環境状態のみ表示（変更なし） |
 | `-NoGui` | GUI 関連 extras（gui / gui-pty / gui-docconvert）をスキップ（CLI 専用） |
 | `-Minimal` | runtime base のみインストール（extras / pytest なし） |
 | `-Force` | 既存 `.venv` を削除して再作成 |
 | `-SkipNltkDownload` | `nltk punkt_tab` の事前 DL をスキップ |
 | `-WithSkills` | `microsoft/skills` を npx で `.github/skills/azure-skills/` に導入（Node.js 20+ 必須） |
+| `-Yes` | 確認プロンプトをすべてスキップ（無人実行向け） |
+| `-NoInstallPython` | Python の自動導入を行わない |
+| `-NoInstallTools` | Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI の自動導入を行わない（検出と手動導入手順の案内のみ） |
 | `-Help` | 使い方表示 |
 
 ### PowerShell 7+
@@ -232,8 +241,11 @@ chmod +x hve/setup-hve.sh
 | venv 再作成 | `-Force` | `--force` | false | 既存 `.venv` を削除して作り直す |
 | nltk DL スキップ | `-SkipNltkDownload` | `--skip-nltk-download` | false | `nltk punkt_tab` の事前 DL をスキップ（オフライン環境向け） |
 | 外部 Skills | `-WithSkills` | `--with-skills` | false | `microsoft/skills` を npx で `.github/skills/azure-skills/` に導入（Node.js 20+ 必須） |
+| 確認省略 | `-Yes` | `-y` / `--yes` | false | 全確認プロンプトをスキップする（無人実行向け） |
+| Python 自動導入を抑止 | `-NoInstallPython` | `--no-install-python` | false | Python 3.11+ が無い場合も自動導入しない |
+| OS ツール自動導入を抑止 | `-NoInstallTools` | `--no-install-tools` | false | Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI / Qt system lib の自動導入を行わない（検出と手動導入手順の案内のみ） |
 
-> **旧フラグは廃止されました** (v0.1.x): `--with-gui` / `-WithGui` (既定 ON のため不要) / `--with-workiq` / `-WithWorkIQ` / `--install-external-copilot-cli` / `-InstallExternalCopilotCli` / `--force-recreate-venv` / `-ForceRecreateVenv` / `--skip-mdq` / `-SkipMdq` / `--skip-mdq-watch` / `-SkipMdqWatch`。Work IQ / 外部 Copilot CLI は OS 標準のパッケージマネージャ（winget / brew / apt-get / dnf）から個別に導入してください。
+> **旧フラグは廃止されました** (v0.1.x): `--with-gui` / `-WithGui` (既定 ON のため不要) / `--with-workiq` / `-WithWorkIQ` / `--install-external-copilot-cli` / `-InstallExternalCopilotCli` / `--force-recreate-venv` / `-ForceRecreateVenv` / `--skip-mdq` / `-SkipMdq` / `--skip-mdq-watch` / `-SkipMdqWatch`。外部 Copilot CLI は既定で自動導入されます（`-NoInstallTools` で抑止）。Work IQ は OS 標準のパッケージマネージャ（winget / brew / apt-get / dnf）から個別に導入してください。
 
 ### 再実行時の挙動
 

@@ -1,4 +1,4 @@
-# mdq.ps1 — Run the vendored markdown-query CLI from any repository (Windows).
+# mdq.ps1 - Run the vendored markdown-query CLI from any repository (Windows).
 #
 # Resolves the interpreter, puts vendor/ on the import path, and forwards every
 # argument to `python -m mdq`.

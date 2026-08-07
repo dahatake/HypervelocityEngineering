@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from cq import config
+from cq import cli, config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -111,3 +111,40 @@ class TestRepositoryConfiguration:
 
     def test_app_profile_covers_generated_sources_only(self) -> None:
         assert config.resolve_profile(REPO_ROOT, "app").roots == ("src/",)
+
+
+class TestDefaultProfile:
+    """FR-KIT-04: 配布先は上流の profile 名を知らない。"""
+
+    def test_single_declared_profile_becomes_the_default(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.delenv(cli.DEFAULT_PROFILE_ENV, raising=False)
+        _write_config(tmp_path, "[profiles.main]\nroots = ['src']\n")
+        assert cli.resolve_default_profile(tmp_path) == "main"
+
+    def test_multiple_profiles_keep_the_upstream_fallback(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.delenv(cli.DEFAULT_PROFILE_ENV, raising=False)
+        _write_config(tmp_path, MINIMAL)
+        assert cli.resolve_default_profile(tmp_path) == cli._FALLBACK_PROFILE
+
+    def test_missing_config_keeps_the_upstream_fallback(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.delenv(cli.DEFAULT_PROFILE_ENV, raising=False)
+        assert cli.resolve_default_profile(tmp_path) == cli._FALLBACK_PROFILE
+
+    def test_environment_override_wins_over_the_declaration(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        monkeypatch.setenv(cli.DEFAULT_PROFILE_ENV, "chosen")
+        _write_config(tmp_path, "[profiles.main]\nroots = ['src']\n")
+        assert cli.resolve_default_profile(tmp_path) == "chosen"
+
+    def test_explicit_flag_is_not_overwritten(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.delenv(cli.DEFAULT_PROFILE_ENV, raising=False)
+        _write_config(tmp_path, "[profiles.main]\nroots = ['src']\n")
+        args = cli.build_parser().parse_args(["stats", "--profile", "app"])
+        assert args.profile == "app"

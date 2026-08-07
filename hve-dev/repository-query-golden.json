@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "queries": [
+    {
+      "id": "RQ-CS-01",
+      "category": "cross_source",
+      "scenario": "design",
+      "question": "code-query が Git の追跡・ignore 規則を迂回せず、言語判定や stat に失敗したファイルを索引しない fail-closed 境界は、要件と実装のどこで担保されているか。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-definition.md",
+          "anchor": "- **FR-CQ-03**: `cq` の索引対象ファイル列挙は、リポジトリの ignore 設定に従う既存の追跡ファイル列挙"
+        },
+        {
+          "source": "code",
+          "path": "cq/discovery.py",
+          "anchor": "GIT_LIST_COMMAND = (\"git\", \"ls-files\", \"--cached\", \"--others\", \"--exclude-standard\")"
+        },
+        {
+          "source": "code",
+          "path": "cq/discovery.py",
+          "anchor": "continue  # 判定できないものは索引しない（fail-closed）"
+        }
+      ]
+    },
+    {
+      "id": "RQ-CS-02",
+      "category": "cross_source",
+      "scenario": "maintenance",
+      "question": "HVE に新しい判定・生成・検証ロジックを追加する前の面横断再利用確認はどの順序で行い、surface inventory の抽出をどの共有実装へ委譲して重複実装を防ぐか。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-definition.md",
+          "anchor": "確認は規範リテラル一致 → 振る舞い要約 → シンボル名の順に行う。"
+        },
+        {
+          "source": "code",
+          "path": "hve-dev/generate_tdd_inventory.py",
+          "anchor": "def collect_surface_symbols(files: list[str]) -> list[dict[str, object]]:"
+        },
+        {
+          "source": "code",
+          "path": "hve-dev/generate_tdd_inventory.py",
+          "anchor": "return surface_export.collect(ROOT, files, policy)"
+        }
+      ]
+    },
+    {
+      "id": "RQ-CS-03",
+      "category": "cross_source",
+      "scenario": "incident_response",
+      "question": "ASDW-WEB Step 1.2 の製品 run が許可するオフライン検査を実行順に説明し、リポジトリ自身の回帰テストや Azure 実測を行っていない状態を、成功済みと誤認させない証跡値まで示せ。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-definition.md",
+          "anchor": "- **FR-CLI-72**: HVE は製品 run の実行中に、HVE 自身のテストスイート"
+        },
+        {
+          "source": "code",
+          "path": "hve/asdw_step12_verification.py",
+          "anchor": "# Fixed order: bash -n, ShellCheck, artifact validator, LF/BOM. A missing"
+        },
+        {
+          "source": "code",
+          "path": "hve/asdw_step12_verification.py",
+          "anchor": "live_red_status: str = \"NOT_RUN\","
+        }
+      ]
+    },
+    {
+      "id": "RQ-CS-04",
+      "category": "cross_source",
+      "scenario": "development",
+      "question": "Windows でローカル Copilot SDK runtime を起動する前に、HVE は利用可能な shell host をどの条件で検査し、実行ファイル不在と互換性不成立をそれぞれどう fail-closed にするか。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": ".github/copilot-instructions.md",
+          "anchor": "- **PowerShell は最新 `pwsh` 固定**: Windows の PowerShell 実行は `pwsh.exe`"
+        },
+        {
+          "source": "code",
+          "path": "hve/copilot_client_factory.py",
+          "anchor": "HVE on Windows requires PowerShell 7+ (pwsh.exe);"
+        },
+        {
+          "source": "code",
+          "path": "hve/copilot_client_factory.py",
+          "anchor": "HVE resolved a non-Core or pre-7 PowerShell executable;"
+        }
+      ]
+    },
+    {
+      "id": "RQ-MD-01",
+      "category": "multi_document",
+      "scenario": "maintenance",
+      "question": "対象パスが未特定の repository Q&A で、仕様文書とソースコードを混同せずに検索面を選ぶ基準を比較し、各検索面で結果が得られない場合の段階的フォールバックと、索引自体が無い場合の挙動の違いを説明せよ。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": ".github/skills/markdown-query/SKILL.md",
+          "anchor": "1. `python -m mdq search` のヒットが 0 件 → 異なるキーワードで 1〜2 回再試行"
+        },
+        {
+          "source": "markdown",
+          "path": ".github/skills/code-query/SKILL.md",
+          "anchor": "- 索引が存在しない場合、`cq` は 0 件を返さず**エラーで停止**して `cq index` を案内する。黙って空振りしない。"
+        }
+      ]
+    },
+    {
+      "id": "RQ-MD-02",
+      "category": "multi_document",
+      "scenario": "development",
+      "question": "Repository Query の新規 feature は、active 要件から RED、inventory 照合、実装、GREEN、mapping 確定までどの順で進み、今回の分割タスクでは各段階をどの Sub が担当するか。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-definition.md",
+          "anchor": "- **FR-MAINT-03**: `feature` 変更は、要求定義への active 要件追加または改訂"
+        },
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-test-mapping.md",
+          "anchor": "> **bootstrap 状態**: 以下は active 要件と予定テストだけを確定した状態であり"
+        }
+      ]
+    },
+    {
+      "id": "RQ-MD-03",
+      "category": "multi_document",
+      "scenario": "design",
+      "question": "APP-009 のセルフサービス問い合わせについて、画面定義が担う利用者フロー、UI RED が Stub で先に固定する失敗表示と有人引継ぎ、SVC-09 の service AC が担う正本非更新と依存先鮮度判定を区別し、物理 API 契約未確定のため何を GREEN 必須にできないか説明せよ。",
+      "profile": "app",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "docs/screen/APP-009-S003.md",
+          "anchor": "* **目的**: 会員が問い合わせを入力し、認可範囲の会員情報と承認済みナレッジに基づく回答を確認する。"
+        },
+        {
+          "source": "markdown",
+          "path": "docs/test-specs/APP-009-S003-test-spec.md",
+          "anchor": "| TEST-APP-009-S003-004 | Unit/Component / Jest | AC-APP-009-S003-04 |"
+        },
+        {
+          "source": "markdown",
+          "path": "docs/test-specs/SVC-09-test-spec.md",
+          "anchor": "| AC-SVC-09-02 | 会員参照 / API ID・物理契約 `TBD（要確認）` |"
+        },
+        {
+          "source": "markdown",
+          "path": "docs/test-specs/SVC-09-test-spec.md",
+          "anchor": "会員、ポイント、特典の正本は更新しない。"
+        }
+      ]
+    },
+    {
+      "id": "RQ-MD-04",
+      "category": "multi_document",
+      "scenario": "development",
+      "question": "HVE の Auto モデル選択について、runtime に委ねる項目と利用者の明示指定を優先する項目を内部契約から整理し、CLI ガイドが利用者へ示す選択条件とプレミアム要求の計上方法を対比せよ。",
+      "profile": "hve",
+      "answerable": true,
+      "expected_status": "answered",
+      "required_evidence": [
+        {
+          "source": "markdown",
+          "path": "hve-dev/requirement-definition.md",
+          "anchor": "- **FR-MODEL-02**: `Auto` 指定時は SDK へ `model=\"auto\"`"
+        },
+        {
+          "source": "markdown",
+          "path": "users-guide/hve-cli-orchestrator-guide.md",
+          "anchor": "> **Auto を選択した場合**: GitHub が最適モデルを動的に選択します。"
+        }
+      ]
+    },
+    {
+      "id": "RQ-UA-01",
+      "category": "unanswerable",
+      "scenario": "incident_response",
+      "question": "2026-07-31 16:00〜17:00 UTC に本番 APP-009 で発生した最新 HTTP 503 の trace ID、失敗した依存先、確定した根本原因は何か。",
+      "profile": "app",
+      "answerable": false,
+      "expected_status": "insufficient_evidence",
+      "required_evidence": []
+    },
+    {
+      "id": "RQ-UA-02",
+      "category": "unanswerable",
+      "scenario": "development",
+      "question": "まだ実行していない Repository Query network benchmark で、Arm A・C・D の required-evidence recall、平均 total Token、95パーセンタイル latency は最終的にいくつになるか。",
+      "profile": "hve",
+      "answerable": false,
+      "expected_status": "insufficient_evidence",
+      "required_evidence": []
+    },
+    {
+      "id": "RQ-UA-03",
+      "category": "unanswerable",
+      "scenario": "maintenance",
+      "question": "現在ログイン中の GitHub Copilot アカウントに残っている AI credit の正確な残高、次回リセット日時、組織ポリシーによる上限はいくつか。",
+      "profile": "hve",
+      "answerable": false,
+      "expected_status": "insufficient_evidence",
+      "required_evidence": []
+    },
+    {
+      "id": "RQ-UA-04",
+      "category": "unanswerable",
+      "scenario": "design",
+      "question": "SupportCase の正式な Source of Record を既存 CS と SVC-09 のどちらに確定するかについて、最終承認者、承認会議の日付、発効日、承認済み ADR 番号は何か。",
+      "profile": "app",
+      "answerable": false,
+      "expected_status": "insufficient_evidence",
+      "required_evidence": []
+    }
+  ]
+}

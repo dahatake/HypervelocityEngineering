@@ -120,11 +120,12 @@ def get_model_choices(
 
     Args:
         force_refresh: True で 1. をスキップし強制再取得する。
-        include_auto: True で先頭に MODEL_AUTO_VALUE ("Auto") を付加する。
+        include_auto: True で表示用の MODEL_AUTO_VALUE ("Auto") を先頭に付加し、
+            SDK由来の同じAuto wire値は重複表示しない。
         timeout: SDK 取得タイムアウト秒。
 
     Returns:
-        モデル ID のリスト（include_auto=True 時は "Auto" が先頭）。
+        モデル ID のリスト（include_auto=True 時は表示用 "Auto" が1件だけ先頭）。
     """
     from hve import models_api, models_cache
 
@@ -161,7 +162,10 @@ def get_model_choices(
         ids = list(FALLBACK_MODEL_CHOICES)
 
     if include_auto:
-        return [MODEL_AUTO_VALUE, *ids]
+        return [
+            MODEL_AUTO_VALUE,
+            *(model_id for model_id in ids if model_id.casefold() != MODEL_AUTO_WIRE_VALUE),
+        ]
     return ids
 
 
@@ -452,6 +456,24 @@ class SDKConfig:
     # を渡し、SDK 側の自動コンテキスト圧縮（compaction）を有効化する。既定 OFF。
     auto_compaction: bool = False
 
+    # --- Tool Search (FR-MODEL-04) ---
+    # True 時: create_session に tool_search={"enabled": True} を渡し、SDK 側の
+    # ツール定義遅延ロードを有効化する。既定 ON。
+    # FR-MODEL-06: `--no-tool-search` / `HVE_TOOL_SEARCH` の falsy 値による明示的な
+    # 無効化は既定 ON で上書きしない。
+    # 注: AAGD ワークフローの `enable_tool_search`（生成する AI Agent の
+    # Foundry Toolbox 設定）とは別ドメイン。本フィールドは HVE 自身の
+    # Copilot SDK セッションにだけ作用する。
+    tool_search: bool = True
+
+    # --- Tool Search のランキング実装 (FR-TS-01) ---
+    # "sdk": SDK 組み込みのランキングをそのまま使う（既定）
+    # "hve": `tool_search_tool` を HVE 実装（hve/toolsearch/）へ差し替える。
+    #        日本語対応 BM25 / pin ポリシー / Skill のカタログ合流が有効になる。
+    # 上の `tool_search` とは直交する。`tool_search` が False のとき SDK は
+    # `tool_search_tool` を呼ばないため、差し替えても何も起きない。
+    tool_search_ranking: str = "sdk"
+
     # --- Fleet mode (GitHub Copilot SDK 1.0.0+) ---
     # True 時: 複数 Step の DAG wave を Copilot SDK Fleet mode に委譲する。
     # 既定 OFF。SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out / DAG wave が対象。
@@ -640,6 +662,12 @@ class SDKConfig:
     foundry_sku_fallback_policy: str = "standard_allowed"
     # "standard_allowed" : Standard SKU へのフォールバックを許容（既定）
     # "global_required"  : Global Standard 必須（Standard 拒否）
+
+    # --- Foundry Toolbox / tool search ---
+    enable_tool_search: str = "auto"
+    # "auto": Tool 総数が 15 を超えたら有効化する（既定。Learn / ブログが示す 10〜15 の閾値）
+    # "yes" : Tool 数に関係なく Toolbox と tool search を使う
+    # "no"  : tool search を使わない（全 Tool を毎ターン渡す）
 
     def __post_init__(self) -> None:
         # SDKConfig は from_env() 以外（直接コンストラクタ呼び出し）でも利用されるため、
@@ -835,6 +863,10 @@ class SDKConfig:
             context_injection_max_chars=env_context_injection_max_chars,
             available_tools=_parse_tool_list(os.environ.get("HVE_AVAILABLE_TOOLS", "")),
             excluded_tools=_parse_tool_list(os.environ.get("HVE_EXCLUDED_TOOLS", "")),
+            tool_search=_env_bool("HVE_TOOL_SEARCH", default=True),
+            tool_search_ranking=(
+                os.environ.get("HVE_TOOL_SEARCH_RANKING", "").strip().lower() or "sdk"
+            ),
             reuse_context_filtering=_env_bool("HVE_REUSE_CONTEXT_FILTERING", default=True),
             model_override=_normalize_model_with_warning(os.environ.get("HVE_MODEL_OVERRIDE") or None),
             apply_qa_improvements_to_main=_env_bool("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", default=False),

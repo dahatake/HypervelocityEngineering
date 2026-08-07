@@ -280,6 +280,33 @@ class CqIndexSection(QWidget):
         self._profile_stats_table.setMinimumHeight(120)
         layout.addWidget(self._profile_stats_table)
 
+        layout.addSpacing(12)
+        layout.addWidget(QLabel(self.tr("<b>言語別インデックス統計</b>")))
+        layout.addWidget(QLabel(self.tr(
+            "同じパーサ名を複数の言語が共有するため、上のパーサ内訳だけでは言語ごとの"
+            "フィデリティを判別できません。この表は選択中の profile の内訳です。"
+        )))
+        self._language_stats_table = QTableWidget()
+        self._language_stats_table.setColumnCount(5)
+        self._language_stats_table.setHorizontalHeaderLabels([
+            self.tr("言語"), self.tr("Files"), self.tr("Symbols"),
+            self.tr("Chunks"), self.tr("パーサ内訳"),
+        ])
+        self._language_stats_table.verticalHeader().setVisible(False)
+        self._language_stats_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self._language_stats_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.NoSelection
+        )
+        language_header = self._language_stats_table.horizontalHeader()
+        language_header.setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        language_header.setStretchLastSection(True)
+        self._language_stats_table.setMinimumHeight(120)
+        layout.addWidget(self._language_stats_table)
+
         layout.addSpacing(16)
         layout.addWidget(QLabel(self.tr("<b>リアルタイム更新</b>")))
         self.cq_watch = TriStateCombo()
@@ -455,9 +482,31 @@ class CqIndexSection(QWidget):
     def _load_stats(self) -> None:
         if not self._profile:
             self._stats_label.setText(self.tr("profile が未解決です。"))
+            self._language_stats_table.setRowCount(0)
             return
         stats = index_service.get_index_stats(self._repo_root, self._profile)
         self._stats_label.setText(self._format_stats(stats))
+        self._fill_language_stats(stats)
+
+    def _fill_language_stats(self, stats: dict) -> None:
+        rows = sorted((stats.get("by_lang") or {}).items())
+        self._language_stats_table.setRowCount(len(rows))
+        for row, (lang, entry) in enumerate(rows):
+            by_parser = ", ".join(
+                f"{name}={count}"
+                for name, count in sorted(entry["by_parser"].items())
+            )
+            values = [
+                lang,
+                f"{entry['files']:,}",
+                f"{entry['symbols']:,}",
+                f"{entry['chunks']:,}",
+                by_parser,
+            ]
+            for column, value in enumerate(values):
+                self._language_stats_table.setItem(
+                    row, column, QTableWidgetItem(value)
+                )
 
     def _format_stats(self, stats: dict) -> str:
         if stats.get("error"):

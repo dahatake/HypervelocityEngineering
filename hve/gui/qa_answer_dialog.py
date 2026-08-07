@@ -39,17 +39,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .theme import token
+
 try:
     from ..qa_merger import QADocument, QAQuestion
 except ImportError:  # pragma: no cover
     from qa_merger import QADocument, QAQuestion  # type: ignore[no-redef]
 
 
-_PRIORITY_COLORS = {
-    "最重要": "#d32f2f",
-    "高": "#f57c00",
-    "中": "#1976d2",
-    "低": "#757575",
+_PRIORITY_TOKENS = {
+    "最重要": "errorForeground",
+    "高": "warningForeground",
+    "中": "accentForeground",
+    "低": "disabledForeground",
 }
 
 _COL_NO = 0
@@ -213,9 +215,11 @@ class QAAnswerDialog(QDialog):
             table.setItem(row_idx, _COL_NO, QTableWidgetItem(f"Q{q.no}"))
 
             priority_item = QTableWidgetItem(q.priority or "")
-            if q.priority and q.priority in _PRIORITY_COLORS:
-                priority_item.setForeground(QColor("white"))
-                priority_item.setBackground(QColor(_PRIORITY_COLORS[q.priority]))
+            if q.priority and q.priority in _PRIORITY_TOKENS:
+                # 塗りつぶした重要度バッジの上に載る文字。ライトでは白、ダークでは
+                # 濃色になり、いずれのバッジ色に対してもコントラストを確保する。
+                priority_item.setForeground(QColor(token("palette.highlightedText")))
+                priority_item.setBackground(QColor(token(_PRIORITY_TOKENS[q.priority])))
             table.setItem(row_idx, _COL_PRIORITY, priority_item)
 
             table.setItem(row_idx, _COL_CATEGORY, QTableWidgetItem(q.category or ""))

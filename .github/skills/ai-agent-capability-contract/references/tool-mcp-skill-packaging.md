@@ -41,6 +41,15 @@ Agent詳細設計は、業務操作ごとに次を記録する。
 - Read-only検索、SQL、IQ経路はAG-CAP-03を正本とする。
 - operational REST GETだけを本MatrixのRead行に置く。
 
+### 2.2 Tool 総数の集計
+
+`Required: yes` の行数が、この Matrix から生じる Tool 数である。
+AG-CAP-05 の allowlist Tool 数、AG-CAP-03 の異なる検索経路数と合算した総数が
+**10〜15 を超える**場合、全 Tool 定義を毎ターン渡す方式ではトークンと選択精度の両方が劣化する。
+
+その場合は `foundry-toolbox-contract`（TB-CAP-01〜05）で Toolbox / tool search の採否を決める。
+**Tool を統合して数を減らしてはならない**（AG-CAP-03 の統合禁止と衝突する）。
+
 ## 3. REST Function Tool 実装契約
 
 ### 3.1 MUST
@@ -109,6 +118,15 @@ Remote MCP adapterの実装主体がAAGD外の既存APIサービスである場�
 - 検索・業務Toolの代替経路。
 - Remote MCP公開対象となる業務APIがない、または別サービスが所有する根拠。
 - 後からMCPが必要になる条件。
+
+### 4.4 allowlist Tool 数の集計
+
+`Tool allowlist` に列挙した Tool 名の総数を数える（サーバー数ではない）。
+AG-CAP-04 の `Required: yes` 行数、AG-CAP-03 の異なる検索経路数と合算し、
+`foundry-toolbox-contract` の TB-CAP-01 へ記録する。
+
+MCP server を Toolbox に載せると、tool search / pin をサーバー横断で適用できる。
+その場合の接続方式は TB-CAP-02 の `Connection topology` で確定する。
 
 ## 5. RESTとMCPの経路規則
 

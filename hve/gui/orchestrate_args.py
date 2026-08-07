@@ -57,6 +57,21 @@ class OrchestrateArgs:
     # "default" | "long_context"。GUI 既定は long_context（設定画面の既定要件）。
     context_tier: Optional[str] = "long_context"
 
+    # Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。
+    # "auto" | "yes" | "no"。None は CLI へ渡さない（hve 既定の auto に委ねる）。
+    enable_agentic_retrieval: Optional[str] = None
+
+    # 以下 5 つは Step の実行可否ではなく、生成される設計内容に影響する。
+    # いずれも None のときは CLI へ渡さず hve 側の既定値に任せる。
+    agentic_data_source_modes: Optional[List[str]] = None
+    foundry_mcp_integration: Optional[bool] = None
+    agentic_data_sources_hint: Optional[str] = None
+    agentic_existing_design_diff_only: Optional[bool] = None
+    foundry_sku_fallback_policy: Optional[str] = None
+
+    # Foundry Toolbox の tool search。"auto" | "yes" | "no"。None は CLI へ渡さない。
+    enable_tool_search: Optional[str] = None
+
     # ------------------------------------------------------------------
     # C2: 並列実行 (L702-L708)
     # ------------------------------------------------------------------
@@ -233,6 +248,9 @@ class OrchestrateArgs:
     cq_watch: TriState = None  # BooleanOptionalAction (--cq-watch / --no-cq-watch)
     cq_watch_debounce_ms: Optional[int] = None
     auto_compaction: TriState = None  # BooleanOptionalAction (--auto-compaction / --no-auto-compaction)
+    tool_search: TriState = None  # BooleanOptionalAction (--tool-search / --no-tool-search)
+    # tool_search 有効時のランキング実装。"sdk" | "hve"。None は CLI へ渡さない。
+    tool_search_ranking: Optional[str] = None
 
     # ------------------------------------------------------------------
     # GUI 内部利用（CLI には渡らない）
@@ -275,6 +293,28 @@ class OrchestrateArgs:
             argv += ["--qa-reasoning-effort", self.qa_reasoning_effort]
         if self.context_tier:
             argv += ["--context-tier", self.context_tier]
+        if self.enable_agentic_retrieval:
+            argv += ["--enable-agentic-retrieval", self.enable_agentic_retrieval]
+        if self.agentic_data_source_modes:
+            argv += ["--agentic-data-source-modes", *self.agentic_data_source_modes]
+        if self.foundry_mcp_integration is not None:
+            argv.append(
+                "--foundry-mcp-integration"
+                if self.foundry_mcp_integration
+                else "--no-foundry-mcp-integration"
+            )
+        if self.agentic_data_sources_hint:
+            argv += ["--agentic-data-sources-hint", self.agentic_data_sources_hint]
+        if self.agentic_existing_design_diff_only is not None:
+            argv.append(
+                "--agentic-existing-design-diff-only"
+                if self.agentic_existing_design_diff_only
+                else "--no-agentic-existing-design-diff-only"
+            )
+        if self.foundry_sku_fallback_policy:
+            argv += ["--foundry-sku-fallback-policy", self.foundry_sku_fallback_policy]
+        if self.enable_tool_search:
+            argv += ["--enable-tool-search", self.enable_tool_search]
 
         # --- C2 ---
         if self.max_parallel != 15:
@@ -499,6 +539,9 @@ class OrchestrateArgs:
         if self.cq_watch_debounce_ms is not None:
             argv += ["--cq-watch-debounce-ms", str(self.cq_watch_debounce_ms)]
         _append_tristate(argv, "--auto-compaction", "--no-auto-compaction", self.auto_compaction)
+        _append_tristate(argv, "--tool-search", "--no-tool-search", self.tool_search)
+        if self.tool_search_ranking:
+            argv += ["--tool-search-ranking", self.tool_search_ranking]
 
         # --- GUI 強制 (設計書 §8.3) ---
         # GUI モードでは Rich Live のターミナル Workbench を無効化する。

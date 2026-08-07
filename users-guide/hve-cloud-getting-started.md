@@ -186,13 +186,16 @@ HVE CLI Orchestrator または HVE GUI Orchestrator を **Windows で初めて�
 
 | 引数 | 動作 |
 |---|---|
-| なし（既定） | venv 作成 + SDK + 全 extras（test / mdq-watch / mdq-ja / semantic / gui / gui-pty / gui-docconvert）を導入 |
+| なし（既定） | 不足 OS ツール（Python / venv / Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI）の導入 + venv 作成 + SDK + 全 extras（test / mdq-watch / mdq-ja / semantic / gui / gui-pty / gui-docconvert / code）を導入 |
 | `-CheckOnly` | 状態確認のみ（変更なし） |
 | `-NoGui` | GUI extras をスキップ（CLI のみ） |
 | `-Minimal` | base のみインストール（extras 全スキップ） |
 | `-Force` | `.venv` を削除して再作成 |
 | `-SkipNltkDownload` | `nltk punkt_tab` の事前 DL をスキップ |
 | `-WithSkills` | `microsoft/skills` を npx で導入（Node.js 20+ 必須） |
+| `-Yes` | 確認プロンプトをすべてスキップ（無人実行向け） |
+| `-NoInstallPython` | Python の自動導入を行わない |
+| `-NoInstallTools` | Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI の自動導入を行わない |
 | `-Help` | 使い方表示 |
 
 > **`.cmd` は `.ps1` を呼び出す薄ラッパ**です（v0.1.x 以降）。`.ps1` の実行には PowerShell 7+（`pwsh.exe`）が必要で、`.cmd` は未導入時にwingetによる導入を案内または試行します。

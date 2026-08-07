@@ -109,6 +109,10 @@ class WorkbenchState:
     # --- TaskTree ---
     task_tree: TaskTree = field(default_factory=TaskTree)
 
+    # --- 実行時観測（FR-RTO-05）---
+    # `hve.runtime_observability.RuntimeMetricsRegistry`。未接続時は None。
+    runtime_metrics: Optional[object] = None
+
     # 自動 all_done フォールバック用
     _last_status_change_at: float = field(default_factory=time.monotonic)
 
@@ -188,6 +192,20 @@ class WorkbenchState:
 
     def set_model(self, name: str) -> None:
         self.model = name
+
+    def set_runtime_metrics(self, registry: object) -> None:
+        """FR-RTO-05: 実行時集計レジストリを接続する。"""
+        self.runtime_metrics = registry
+
+    def metrics_snapshot(self):
+        """run 全体の集計を返す。未接続・取得失敗時は None（NFR-RTO-03）。"""
+        registry = self.runtime_metrics
+        if registry is None:
+            return None
+        try:
+            return registry.totals()
+        except Exception:
+            return None
 
     def expand_steps(self, parent_id: str, child_keys: List[str]) -> None:
         for s in self.steps:

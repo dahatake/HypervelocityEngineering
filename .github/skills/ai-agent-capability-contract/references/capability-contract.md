@@ -64,6 +64,7 @@ HVE の AAG / AAGD で設計・実装するアプリケーション AI Agent が
 | 条件 | 必須となる能力 |
 |---|---|
 | 非構造化データを検索する | Read-only search routing、引用、fallback、権限境界 |
+| **Foundry IQ / Azure AI Search Agentic RetrievalをPreferredまたはFallbackに選ぶ** | **Skill `agentic-retrieval-contract` のAR-CAP-01〜05** |
 | 公開Webを検索する | Web経路のavailability判定と承認済みfallback |
 | Microsoft 365を検索する | Work IQ経路とユーザー権限境界 |
 | Fabricを利用できる | Fabric IQ経路の適合判定 |
@@ -148,6 +149,7 @@ N/Aには次の全項目を記録する。
 - REST C/U/Dと直接DB更新が混在しない。
 - AG-CAP-01に反復上限を重複記載せず、AG-CAP-02に正本がある。
 - AG-CAP-03のDesign status、Runtime probe、Preferred、Fallback、Blockedが揃う。
+- AG-CAP-03でFoundry IQ / Azure AI Search Agentic Retrievalを選んだ場合、AR-CAP-01〜05が揃い、Skill `agentic-retrieval-contract` の整合ルールR1〜R12を満たす。
 - AG-CAP-04のmutationがREST Function Toolへ一意に対応し、MCPが迂回経路になっていない。
 
 ### 8.2 実装gate

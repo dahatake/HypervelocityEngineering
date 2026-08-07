@@ -18,6 +18,7 @@ import json
 import os
 import re
 import subprocess
+from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -294,7 +295,7 @@ class _LabeledField(QWidget):
             title_text = f"{title}  *必須"
         title_label = QLabel(title_text)
         title_label.setStyleSheet(
-            "font-weight: bold; color: #1f2328; padding: 0; font-size: 10pt;"
+            "font-weight: bold; padding: 0; font-size: 10pt;"
         )
         # 長い日本語タイトル（例: "Code Review Agent 完了待ちタイムアウト（秒）"）が
         # 横に押し広がって水平スクロールを誘発するのを防ぐため、折り返しを許可する。
@@ -574,6 +575,26 @@ class _C1Basic(QWidget):
             input_widget=self.context_tier,
         ))
 
+        # --enable-tool-search: Tool 定義を毎ターン渡さず検索させるか。
+        # 既定 auto（Tool 総数 15 超で有効化）のときは CLI へ渡さない。
+        self.enable_tool_search = QComboBox()
+        self.enable_tool_search.setEditable(False)
+        self.enable_tool_search.addItem(self.tr("自動判定に従う"), userData="auto")
+        self.enable_tool_search.addItem(self.tr("使用する"), userData="yes")
+        self.enable_tool_search.addItem(self.tr("使用しない"), userData="no")
+        layout.addWidget(_LabeledField(
+            title=self.tr("Foundry Toolbox: tool search"),
+            description=self.tr(
+                "Tool 定義を毎ターン全件渡さず、モデルに検索させます。"
+                "Tool が 15 を超えるとトークンと選択精度の両方が劣化するため、"
+                "既定の「自動判定に従う」では総数 15 超で有効化します。"
+            ),
+            input_widget=self.enable_tool_search,
+        ))
+
+        # HVE 自身の tool_search / tool_search_ranking は設定画面の
+        # skills > Tool-Search が単独で所有する（FR-GUI-07）。
+
         # --review-model: 先頭に「継承」項目を追加
         self.review_model = QComboBox()
         self.review_model.setEditable(False)
@@ -766,13 +787,15 @@ class _C1Basic(QWidget):
             pass
 
         effort_label = QLabel(self.tr("Effort"))
-        effort_label.setStyleSheet("color: #1f2328; font-size: 10pt; padding: 0 4px;")
+        effort_label.setStyleSheet("font-size: 10pt; padding: 0 4px;")
         effort_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        context_label.setStyleSheet("color: #57606a; font-size: 9pt;")
+        context_label.setProperty("hveRole", "description")
+        context_label.setStyleSheet("font-size: 9pt;")
         context_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        cost_label.setStyleSheet("color: #57606a; font-size: 9pt;")
+        cost_label.setProperty("hveRole", "description")
+        cost_label.setStyleSheet("font-size: 9pt;")
         cost_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         try:
             cost_label.setToolTip(self.tr(
@@ -962,6 +985,9 @@ class _C1Basic(QWidget):
         args.qa_reasoning_effort = _effort_value(self.qa_effort)
         # context_tier: 選択中の userData（"default" | "long_context"）をそのまま渡す
         args.context_tier = self.context_tier.currentData()
+        # enable_tool_search: auto は hve 既定と同じなので CLI へ渡さない
+        _ts = self.enable_tool_search.currentData()
+        args.enable_tool_search = _ts if _ts in ("yes", "no") else None
 
         # 旧 _C2Parallel / _C8Timeout から移動した項目
         args.max_parallel = self.max_parallel.value()
@@ -1170,7 +1196,8 @@ class _C4WorkIQ(QWidget):
         notice = QLabel(
             self.tr("Work IQ 経由の M365 データ参照設定。")
         )
-        notice.setStyleSheet("color: #6a737d; padding: 4px;")
+        notice.setProperty("hveRole", "description")
+        notice.setStyleSheet("padding: 4px;")
         notice.setWordWrap(True)
         layout.addWidget(notice)
 
@@ -1182,7 +1209,8 @@ class _C4WorkIQ(QWidget):
         )
         self.workiq_auth_button.clicked.connect(self._on_workiq_auth_clicked)
         self.workiq_auth_status = QLabel(self.tr("未確認"))
-        self.workiq_auth_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        self.workiq_auth_status.setProperty("hveRole", "description")
+        self.workiq_auth_status.setStyleSheet("font-size: 9pt;")
         auth_row.addWidget(self.workiq_auth_button, 0)
         auth_row.addWidget(self.workiq_auth_status, 1)
         layout.addLayout(auth_row)
@@ -1442,7 +1470,8 @@ class _GitHubCliLoginGroup(QGroupBox):
         self.gh_login_button.clicked.connect(self._on_gh_login_clicked)
         self.gh_login_status = QLabel(self._gh_login_initial_status())
         self.gh_login_status.setWordWrap(True)
-        self.gh_login_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        self.gh_login_status.setProperty("hveRole", "description")
+        self.gh_login_status.setStyleSheet("font-size: 9pt;")
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(self.gh_login_button, 0)
@@ -1574,7 +1603,8 @@ class _C5IssuePR(QWidget):
         self.fetch_repo_button.clicked.connect(self._on_fetch_repo_clicked)
         self.repo_fetch_status = QLabel("")
         self.repo_fetch_status.setWordWrap(True)
-        self.repo_fetch_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        self.repo_fetch_status.setProperty("hveRole", "description")
+        self.repo_fetch_status.setStyleSheet("font-size: 9pt;")
         _repo_fetch_row = QHBoxLayout()
         _repo_fetch_row.setContentsMargins(0, 0, 0, 0)
         _repo_fetch_row.addWidget(self.fetch_repo_button, 0)
@@ -1613,7 +1643,8 @@ class _C5IssuePR(QWidget):
         self.fetch_branches_button = QPushButton(self.tr("ブランチ取得"))
         self.fetch_branches_button.clicked.connect(self._on_fetch_branches_clicked)
         self.branch_fetch_status = QLabel("")
-        self.branch_fetch_status.setStyleSheet("color: #57606a; font-size: 9pt;")
+        self.branch_fetch_status.setProperty("hveRole", "description")
+        self.branch_fetch_status.setStyleSheet("font-size: 9pt;")
         _branch_fetch_row = QHBoxLayout()
         _branch_fetch_row.setContentsMargins(0, 0, 0, 0)
         _branch_fetch_row.addWidget(self.fetch_branches_button, 0)
@@ -2100,7 +2131,8 @@ class _C7Connection(QWidget):
         self._refresh_btn.clicked.connect(self._on_refresh_clicked)
         refresh_row.addWidget(self._refresh_btn)
         self._refresh_status = QLabel("")
-        self._refresh_status.setStyleSheet("color: #6a737d; padding-left: 8px;")
+        self._refresh_status.setProperty("hveRole", "description")
+        self._refresh_status.setStyleSheet("padding-left: 8px;")
         refresh_row.addWidget(self._refresh_status)
         refresh_row.addStretch(1)
         layout.addLayout(refresh_row)
@@ -2111,7 +2143,8 @@ class _C7Connection(QWidget):
         self._mcp_section_label = QLabel(
             self.tr("登録済み MCP Server 一覧（実行で使用する場合は --mcp-config を指定）")
         )
-        self._mcp_section_label.setStyleSheet("color: #6a737d; padding: 6px 0 2px 0;")
+        self._mcp_section_label.setProperty("hveRole", "description")
+        self._mcp_section_label.setStyleSheet("padding: 6px 0 2px 0;")
         layout.addWidget(self._mcp_section_label)
 
         self._mcp_container = QWidget(self)
@@ -2131,7 +2164,8 @@ class _C7Connection(QWidget):
         self._plugin_section_label = QLabel(
             self.tr("Plugin 一覧（`copilot plugin list`）— Plugin は OAuth 認証不要（インストール時の GitHub 認証を利用）")
         )
-        self._plugin_section_label.setStyleSheet("color: #6a737d; padding: 6px 0 2px 0;")
+        self._plugin_section_label.setProperty("hveRole", "description")
+        self._plugin_section_label.setStyleSheet("padding: 6px 0 2px 0;")
         layout.addWidget(self._plugin_section_label)
 
         self._plugin_container = QWidget(self)
@@ -2167,7 +2201,8 @@ class _C7Connection(QWidget):
             self._mcp_empty_label = QLabel(
                 self.tr("MCP Server が登録されていません（`copilot mcp add` 後に「再列挙」ボタンを押してください）。")
             )
-            self._mcp_empty_label.setStyleSheet("color: #888; padding: 2px;")
+            self._mcp_empty_label.setProperty("hveRole", "muted")
+            self._mcp_empty_label.setStyleSheet("padding: 2px;")
             self._mcp_container_layout.addWidget(self._mcp_empty_label)
             return
 
@@ -2210,7 +2245,8 @@ class _C7Connection(QWidget):
             self._plugin_empty_label = QLabel(
                 self.tr("Plugin が登録されていません（`copilot plugin install <name>` 後に再列挙してください）。")
             )
-            self._plugin_empty_label.setStyleSheet("color: #888; padding: 2px;")
+            self._plugin_empty_label.setProperty("hveRole", "muted")
+            self._plugin_empty_label.setStyleSheet("padding: 2px;")
             self._plugin_container_layout.addWidget(self._plugin_empty_label)
             return
 
@@ -2412,7 +2448,7 @@ _DATA_DEPLOY_HELP_ACI_SUBNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
 )
 
 class _CAzure(QWidget):
-    """連携 / Azure：Azure 連携設定。"""
+    """各サービス連携 / Azure：Azure 連携設定。"""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -2473,6 +2509,121 @@ class _CAzure(QWidget):
             self.data_private_endpoint_subnet_cidr.text().strip() or None
         )
         args.data_aci_subnet_cidr = self.data_aci_subnet_cidr.text().strip() or None
+
+
+class _CAgenticRetrieval(QWidget):
+    """各サービス連携 / Agentic Retrieval：Foundry IQ / Azure AI Search 連携設定。"""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        # --enable-agentic-retrieval: Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。
+        # 既定 auto（hve 側の既定と同じ）。auto のときは CLI へ渡さない。
+        self.enable_agentic_retrieval = QComboBox()
+        self.enable_agentic_retrieval.setEditable(False)
+        self.enable_agentic_retrieval.addItem(self.tr("自動判定に従う"), userData="auto")
+        self.enable_agentic_retrieval.addItem(self.tr("使用する"), userData="yes")
+        self.enable_agentic_retrieval.addItem(self.tr("使用しない"), userData="no")
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval"),
+            description=(
+                self.tr("Foundry IQ / Azure AI Search の Agentic Retrieval Step を有効化します。"
+                "「使用しない」を選ぶと AAD-WEB Step.2.6 / ASDW-WEB Step.2.5・2.6 を実行対象から外します"
+                "（既定: 自動判定に従う）。")
+            ),
+            input_widget=self.enable_agentic_retrieval,
+        ))
+
+        # 以下 5 つは Step の実行可否ではなく生成される設計内容に影響する。
+        # 先頭の「既定に従う」を選んだときは CLI へ渡さない。
+        self.agentic_data_source_modes = QComboBox()
+        self.agentic_data_source_modes.setEditable(False)
+        self.agentic_data_source_modes.addItem(self.tr("既定に従う"), userData=None)
+        self.agentic_data_source_modes.addItem(self.tr("Indexer (Pull)"), userData=["indexer"])
+        self.agentic_data_source_modes.addItem(self.tr("Push API"), userData=["push"])
+        self.agentic_data_source_modes.addItem(
+            self.tr("Indexer + Push"), userData=["indexer", "push"]
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval: データ投入方式"),
+            description=self.tr("Knowledge Source へのデータ投入方式（既定: Indexer）。"),
+            input_widget=self.agentic_data_source_modes,
+        ))
+
+        self.foundry_mcp_integration = QComboBox()
+        self.foundry_mcp_integration.setEditable(False)
+        self.foundry_mcp_integration.addItem(self.tr("既定に従う"), userData=None)
+        self.foundry_mcp_integration.addItem(self.tr("連携する"), userData=True)
+        self.foundry_mcp_integration.addItem(self.tr("連携しない"), userData=False)
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval: Foundry 連携"),
+            description=self.tr(
+                "Knowledge Base を Remote MCP Server として Microsoft Foundry へ公開します"
+                "（既定: 連携する）。"
+            ),
+            input_widget=self.foundry_mcp_integration,
+        ))
+
+        self.agentic_data_sources_hint = QLineEdit()
+        self.agentic_data_sources_hint.setPlaceholderText(
+            self.tr("例: 社内規程 PDF (Blob), 商品マスタ (Azure SQL)")
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval: データソースのヒント"),
+            description=self.tr(
+                "想定するデータソースを自由記述で伝えます。Knowledge Source 選定の根拠になります。"
+            ),
+            input_widget=self.agentic_data_sources_hint,
+        ))
+
+        self.agentic_existing_design_diff_only = QComboBox()
+        self.agentic_existing_design_diff_only.setEditable(False)
+        self.agentic_existing_design_diff_only.addItem(self.tr("既定に従う"), userData=None)
+        self.agentic_existing_design_diff_only.addItem(self.tr("差分更新のみ"), userData=True)
+        self.agentic_existing_design_diff_only.addItem(self.tr("全体を再生成"), userData=False)
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval: 既存設計の扱い"),
+            description=self.tr(
+                "既存の Agentic Retrieval 設計があるときの更新方針（既定: 全体を再生成）。"
+            ),
+            input_widget=self.agentic_existing_design_diff_only,
+        ))
+
+        self.foundry_sku_fallback_policy = QComboBox()
+        self.foundry_sku_fallback_policy.setEditable(False)
+        self.foundry_sku_fallback_policy.addItem(self.tr("既定に従う"), userData=None)
+        self.foundry_sku_fallback_policy.addItem(
+            self.tr("Standard 許容"), userData="standard_allowed"
+        )
+        self.foundry_sku_fallback_policy.addItem(
+            self.tr("Global 必須（Standard 拒否）"), userData="global_required"
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("Agentic Retrieval: Foundry SKU 方針"),
+            description=self.tr(
+                "希望モデルが Global Standard で入手できないときのフォールバック方針"
+                "（既定: Standard 許容）。"
+            ),
+            input_widget=self.foundry_sku_fallback_policy,
+        ))
+
+    def to_args(self, args: OrchestrateArgs) -> None:
+        # enable_agentic_retrieval: auto は hve 既定と同じので CLI へ渡さない
+        _agentic = self.enable_agentic_retrieval.currentData()
+        args.enable_agentic_retrieval = _agentic if _agentic in ("yes", "no") else None
+        # 以下 5 つは userData=None（「既定に従う」）のとき CLI へ渡さない
+        args.agentic_data_source_modes = self.agentic_data_source_modes.currentData()
+        args.foundry_mcp_integration = self.foundry_mcp_integration.currentData()
+        args.agentic_data_sources_hint = (
+            self.agentic_data_sources_hint.text().strip() or None
+        )
+        args.agentic_existing_design_diff_only = (
+            self.agentic_existing_design_diff_only.currentData()
+        )
+        args.foundry_sku_fallback_policy = self.foundry_sku_fallback_policy.currentData()
 
 
 class _C10AppId(QWidget):
@@ -2847,6 +2998,7 @@ class _C14ARD(QWidget):
 # `aas` は空。`追加プロンプト` (C15) は全ワークフロー共通で最下段に表示。
 _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "ard": [
+        ("c14", "対象企業名"),
         ("c14", "業務エリア"),
         ("c4", "Work IQ 回答ドラフト作成"),
     ],
@@ -2862,7 +3014,6 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c_azure", "DataDeploy VNet CIDR"),
         ("c_azure", "DataDeploy private endpoint subnet CIDR"),
         ("c_azure", "DataDeploy ACI subnet CIDR"),
-        ("c_azure", "DataDeploy verify ACI image"),
         ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
         ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
@@ -2871,9 +3022,13 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     ],
     "adfdv": [
         ("c10", "対象アプリケーション (APP-ID)"),
-        ("c10", "Azure リソースグループ名"),
+        ("c_azure", "Azure リソースグループ名"),
         ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
         ("c10", "マージ後にローカル作業ブランチを削除"),
+    ],
+    # aagd は resource_group 以外の固有入力欄を持たないが、必須キーがあるため枠を生成する。
+    "aagd": [
+        ("c_azure", "Azure リソースグループ名"),
     ],
     "akm": [
         ("c4", "Work IQ 回答ドラフト作成"),
@@ -2922,7 +3077,7 @@ _STEP2_COMMON_FIELDS: List[Tuple[str, str]] = []
 # C3（自動プロンプト）はカテゴリ全体としては非表示扱いだが、
 # 内包する「追加プロンプト」`_LabeledField` のみ最上部に常時表示する例外処理を
 # `_refresh_specific_categories` で行う。
-_STEP2_HIDDEN_CATEGORIES = {"C1", "C3", "C5", "C6", "C7", "AZURE"}
+_STEP2_HIDDEN_CATEGORIES = {"C1", "C3", "C5", "C6", "C7", "AZURE", "AGENTIC"}
 
 # C3 カテゴリ内で「追加プロンプト」以外のフィールド（タイトル文字列）。
 # Step 1 右ペインでは C3 内の他フィールドを表示しないため明示的に hide する。
@@ -2951,10 +3106,9 @@ _WORKFLOW_CANONICAL_ORDER: List[str] = [
 # `_setup_ui` の (常時非表示の) カテゴリ枠初期生成時 / `_refresh_specific_categories` の動的生成枠で共有する。
 _WORKFLOW_GROUP_STYLE = (
     "QGroupBox { font-size: 11pt; font-weight: bold; "
-    "border: 1px solid #d0d7de; border-radius: 6px; "
-    "margin-top: 12px; padding: 12px 8px 8px 8px; background: #f6f8fa; }"
-    " QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; "
-    " color: #1f2328; }"
+    "border-radius: 6px; "
+    "margin-top: 12px; padding: 12px 8px 8px 8px; }"
+    " QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 6px; }"
 )
 
 
@@ -2992,6 +3146,7 @@ class OptionsPage(QWidget):
         self.c6 = _C6Output()
         self.c7 = _C7Connection()
         self.c_azure = _CAzure()
+        self.c_agentic = _CAgenticRetrieval()
         self.c10 = _C10AppId()
         self.c11 = _C11AKM()
         self.c12 = _C12AQOD()
@@ -3111,6 +3266,7 @@ class OptionsPage(QWidget):
             self.c6,
             self.c7,
             self.c_azure,
+            self.c_agentic,
             self.c10,
             self.c11,
             self.c12,
@@ -3128,6 +3284,11 @@ class OptionsPage(QWidget):
             apply_watch_settings(args, _opts)
             if "auto_compaction" in _opts:
                 args.auto_compaction = bool(_opts["auto_compaction"])
+            if "tool_search" in _opts:
+                args.tool_search = bool(_opts["tool_search"])
+            # sdk は CLI 既定と同じなので引数を増やさない。
+            if _opts.get("tool_search_ranking") == "hve":
+                args.tool_search_ranking = "hve"
         except Exception:
             pass
 
@@ -3210,16 +3371,32 @@ class OptionsPage(QWidget):
         }
 
     def _wire_requirements_banner_listeners(self) -> None:
-        """監視対象フィールドの textChanged にバナー更新を接続する。
+        """監視対象フィールドの textChanged にバナー更新と設定保存を接続する。
 
         `_FilePickerWidget` は内部 QLineEdit `_edit` を持つため両対応する。
         """
-        for w in self._banner_input_widgets().values():
+        for key, w in self._banner_input_widgets().items():
             inner = getattr(w, "_edit", None)
             sig_owner = inner if inner is not None else w
             sig = getattr(sig_owner, "textChanged", None)
             if sig is not None:
                 sig.connect(self._on_banner_input_changed)
+                sig.connect(partial(self._persist_required_input, key))
+
+    def _persist_required_input(self, key: str, value: str) -> None:
+        """必須入力キーの値を設定ストアへ永続化する（FR-GUI-06）。
+
+        起動時の `apply_to_widgets` でも textChanged が発火するため、
+        現在の保存値と同値なら書き込まない。
+        """
+        from . import settings_store
+
+        settings = settings_store.load()
+        options = settings.setdefault("options", {})
+        if options.get(key) == value:
+            return
+        options[key] = value
+        settings_store.save(settings)
 
     def _on_banner_input_changed(self, *_args) -> None:
         # 現在の選択状態を維持して再描画する。
@@ -3420,6 +3597,7 @@ class OptionsPage(QWidget):
             from .help_popup import HelpPopupButton
 
             group = QGroupBox(title)
+            group.setProperty("hveRole", "panel")
             group.setStyleSheet(group_style)
             inner = QVBoxLayout(group)
             inner.setContentsMargins(8, 8, 8, 8)
@@ -3448,6 +3626,7 @@ class OptionsPage(QWidget):
         _add("C6", "出力制御", self.c6)
         _add("C7", "MCP / CLI 接続", self.c7)
         _add("AZURE", "Azure", self.c_azure)
+        _add("AGENTIC", "Agentic Retrieval", self.c_agentic)
         _add("C10", "アプリケーションID", self.c10)
         _add("C11", "AKM 固有", self.c11)
         _add("C12", "AQOD 固有", self.c12)
@@ -3669,6 +3848,7 @@ class OptionsPage(QWidget):
         else:
             title = format_workflow_label(wf_id, wf_name)
         box = QGroupBox(title)
+        box.setProperty("hveRole", "panel")
         box.setStyleSheet(_WORKFLOW_GROUP_STYLE)
         inner = QVBoxLayout(box)
         inner.setContentsMargins(8, 8, 8, 8)
@@ -3891,7 +4071,7 @@ class OptionsPage(QWidget):
             v.setContentsMargins(8, 8, 8, 8)
             v.setSpacing(8)
             label = QLabel(self.tr("オプションは、[設定] メニューで行ってください。"))
-            label.setStyleSheet("color: #1f2328; font-size: 11pt; padding: 8px;")
+            label.setStyleSheet("font-size: 11pt; padding: 8px;")
             label.setWordWrap(True)
             btn = QPushButton(self.tr("設定を開く"))
             btn.setMaximumWidth(160)

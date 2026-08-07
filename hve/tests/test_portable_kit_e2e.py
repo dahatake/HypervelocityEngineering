@@ -26,7 +26,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _KITS = (
     pytest.param(
         "code_query", "cq", "code-query", "cq.toml",
-        ["search", "--q", "deploy_pipeline"], {"CQ_PROFILE": "main"},
+        # CQ_PROFILE を渡さない。生成された cq.toml が単一 profile なので、
+        # コピーしただけで検索が成立しなければならない（FR-KIT-04）。
+        ["search", "--q", "deploy_pipeline"], {},
         id="code-query",
     ),
     pytest.param(

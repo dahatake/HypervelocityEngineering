@@ -22,7 +22,7 @@ Step ID スコープ規則:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional
+from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional
 
 
 # ASDW-WEB Step 1.3 はこの 1 つの APP スコープに固定されている。
@@ -194,6 +194,16 @@ class StepDef:
     キーは `required_params` の部分集合でなければならない（`WorkflowDef._validate` が検証）。
     推測で既定値を作らないこと。環境固有値や承認が必要な値は既定値を持たず、
     pre-flight で利用者に入力を求める。
+    """
+
+    disabled_when_config: Dict[str, List[str]] = field(default_factory=dict)
+    """設定値による Step 無効化条件。キー = `SDKConfig` の属性名、値 = 無効化する値のリスト。
+
+    例: `{"enable_agentic_retrieval": ["no"]}` は `enable_agentic_retrieval` が `no` のとき
+    当該 Step を実行対象から外す。無効化された Step は DAG 上で skip 扱いになり、
+    依存先としては解決済みとみなされるため、下流 Step は到達不能にならない。
+
+    空の場合は無条件に実行対象となる。
     """
 
 
@@ -555,7 +565,23 @@ AAD_WEB = WorkflowDef(
                 body_template_path="templates/aad-web/step-2.5.md",
                 output_paths=["docs/azure/azure-services-additional.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
-        # Sub-7 (C-4): 2.1/2.2/2.3/2.4 fan-out 完了後の横断整合性レビュー join step
+        # Step.2.6: 機能要件に Chat-Bot / AI Agent / RAG を含むサービスだけを対象に、
+        # 製品非依存の Agentic Retrieval 機能要件詳細を作る（ADR-0001 Phase 5）。
+        # Arch-Microservice-ServiceDetail.prompt.md §3.6 の委譲先。
+        StepDef(id="2.6", title="Agentic Retrieval 機能要件詳細",
+                custom_agent="Arch-AgenticRetrieval-Detail",
+                depends_on=["2.2"],
+                consumed_artifacts=["service_catalog", "service_specs", "domain_analytics", "app_catalog"],
+                body_template_path="templates/aad-web/step-2.6.md",
+                # サービス単位の成果物しか持たないため fan-out する。
+                # AR 適用外のサービスでも spec を作り「適用外の理由」を記録することで
+                # 成果物ゲートを決定的にし、除外判断のトレーサビリティも確保する。
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                output_paths_template=["docs/services/{serviceId}-agentic-retrieval-spec.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         StepDef(id="3", title="画面 ↔ サービス整合性レビュー",
                 custom_agent="QA-DocConsistency",
                 depends_on=["2.1", "2.2", "2.3", "2.4"],
@@ -697,6 +723,49 @@ ASDW_WEB = WorkflowDef(
                 # （`mode: append` = Step 2.3 が生成したテストツリーへの追記）。
                 output_paths_template=["src/test/integration/add-service/"],
                 required_input_paths=["docs/azure/azure-services-additional.md", "docs/catalog/app-catalog.md", "src/test/integration/add-service/"]),
+        # ---- コンテナ 2: Agentic Retrieval（ADR-0001 Phase 5）----
+        # Step.2.5 は local 生成、Step.2.6 は live deploy。
+        # local-first / live-last の規約に従い、2.6 は live 済みの 2.2 に依存させる。
+        StepDef(id="2.5", title="Agentic Retrieval Azure 実装設計",
+                custom_agent="Dev-Microservice-Azure-AgenticRetrievalDesign",
+                depends_on=["2.1"],
+                consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
+                body_template_path="templates/asdw-web/step-2.5.md",
+                # 根拠: Dev-Microservice-Azure-AgenticRetrievalDesign.prompt.md `## Outputs`。
+                # 成果物がサービス単位の設計書のため fan-out する（AAD-WEB Step.2.6 と同形）。
+                # 共通カタログへの追記は並列子間で競合するため宣言しない。
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
+                output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-design.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/azure/azure-services-additional.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog.md", "docs/services/{serviceId}-agentic-retrieval-spec.md"]),
+        StepDef(id="2.6", title="Agentic Retrieval Deploy",
+                custom_agent="Dev-Microservice-Azure-AgenticRetrievalDeploy",
+                depends_on=["2.2", "2.5"],
+                skip_fallback_deps=["2.5"],
+                consumed_artifacts=["app_catalog"],
+                body_template_path="templates/asdw-web/step-2.6.md",
+                # 根拠: Dev-Microservice-Azure-AgenticRetrievalDeploy.prompt.md §3。
+                # 本 Step は 1 回の実行で全サービス分を生成するため fan-out しない。
+                # サービス別スクリプトは {serviceId} ではなくディレクトリ単位で宣言する。
+                output_paths_template=[
+                    "src/infra/azure/create-azure-agentic-retrieval/prep.sh",
+                    "src/infra/azure/create-azure-agentic-retrieval/create.sh",
+                    "src/infra/azure/create-azure-agentic-retrieval/services/",
+                ],
+                required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md"],
+                required_skills=[
+                    "agentic-retrieval-contract",
+                    "azure-cli-deploy-scripts",
+                    "azure-ac-verification",
+                    "azure-region-policy",
+                ],
+                # AC4B-1: 全リソースが Succeeded / AC4B-14: reasoning effort 一致 /
+                # AC4B-15: Knowledge Source 一致 / AC4B-18: 全 KS を横断する smoke retrieve。
+                reality_gate_acs=["AC4B-1", "AC4B-14", "AC4B-15", "AC4B-18"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                requires_remote_cicd=False),
         # ---- コンテナ 3: Compute ----
         StepDef(id="3.1", title="Azure コンピュート選定",
                 custom_agent="Dev-Microservice-Azure-ComputeDesign",
@@ -796,8 +865,9 @@ ASDW_WEB = WorkflowDef(
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/test-strategy.md", "docs/screen/{screenId}-{screenNameSlug}-description.md", "docs/test-specs/{screenId}-test-spec.md", "src/test/ui/"]),
         StepDef(id="4.2", title="UI 実装 (TDD GREEN)",
                 custom_agent="Dev-Microservice-Azure-UICoding",
-                # local generation checkpoint の直前 Step。データ検証テスト（1.2）も揃った状態で実行する。
-                depends_on=["1.2", "4.1"],
+                # local generation checkpoint の直前 Step。データ検証テスト（1.2）と
+                # Agentic Retrieval 実装設計（2.5）も揃った状態で実行する。
+                depends_on=["1.2", "2.5", "4.1"],
                 skip_fallback_deps=["4.1"],
                 consumed_artifacts=["screen_specs", "screen_catalog", "service_catalog_matrix", "use_case_catalog", "app_catalog", "src_files", "test_files", "test_specs"],
                 body_template_path="templates/asdw-web/step-4.2.md",
@@ -1004,6 +1074,10 @@ AAG = WorkflowDef(
                 body_template_path="templates/aag/step-3.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aag/_common.md",
+                # AG-CAP-03 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の
+                # AR-CAP-01〜05 契約を確定させるため、repo Skill を required 宣言で公開する。
+                # TB-CAP-01〜05 は Tool 総数が閾値を超えたときの公開方式を確定させる。
+                required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
                 output_paths=["docs/ai-agent-catalog.md"],
                 output_paths_template=["docs/agent/agent-detail-{key}.md"],
                 required_input_paths=["docs/agent/agent-application-definition.md", "docs/agent/agent-architecture.md", "docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/screen/{screenId}-*.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
@@ -1070,6 +1144,9 @@ AAGD = WorkflowDef(
                 body_template_path="templates/aagd/step-2.3.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                # 設計で Foundry IQ 経路を選んだ場合の実装境界（Tool allowlist / per-user 権限）を揃える。
+                # Toolbox / tool search を選んだ場合の実装境界（pin / 検索メタデータ）も揃える。
+                required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
                 # 根拠: templates/aagd/step-2.3.md `## 出力` と
                 # Dev-Microservice-Azure-AgentCoding.prompt.md `## 出力`。
                 output_paths_template=[
@@ -1086,6 +1163,9 @@ AAGD = WorkflowDef(
                 body_template_path="templates/aagd/step-3.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                # 選択 provider の事前審査・接続検証で AR-CAP-05 の allowlist / 権限境界を照合する。
+                # 実 Toolbox の tool search / pin 設定と TB-CAP 設計値の一致も照合する。
+                required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
                 # 根拠: templates/aagd/step-3.md `## 出力` と
                 # Dev-Microservice-Azure-AgentDeploy.prompt.md `## 出力`。
                 # `.github/workflows/` をディレクトリ成果物として宣言することで、
@@ -1102,6 +1182,116 @@ AAGD = WorkflowDef(
                     "docs/azure/azure-service-catalog.md",
                 ],
                 required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/azure/azure-services-additional.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/agent/{key}/"]),
+        # Step.4: tool search の on/off を実測比較する。
+        # 公開ベンチマークの削減率は自社カタログの Tool 記述品質に依存するため、
+        # TB-CAP-02 の判定は測定でしか裏付けられない。
+        # enable_tool_search=no のときは Toolbox 自体を作らないので実測対象がない。
+        StepDef(id="4", title="tool search 実測評価",
+                custom_agent="QA-ToolSearchEval",
+                depends_on=["3"],
+                consumed_artifacts=["agent_specs", "app_catalog"],
+                body_template_path="templates/aagd/step-4.md",
+                fanout_parser="agent_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                output_paths_template=["docs/agent/tool-search-eval/{key}-eval-report.md"],
+                required_skills=["foundry-toolbox-contract"],
+                disabled_when_config={"enable_tool_search": ["no"]},
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/catalog/app-catalog.md", "src/agent/{key}/"]),
+    ],
+)
+
+# --- AAR: Agentic Retrieval Add-on ---
+# 既に API / データ資産があるアプリへ、Agentic Retrieval 部分「だけ」を後付けするための
+# 単独ワークフロー。AAD-WEB / ASDW-WEB を最初から流し直す必要をなくす。
+#
+# Step 1 / 2 / 5 は AAD-WEB Step.2.6・ASDW-WEB Step.2.5/2.6 と同じ Custom Agent を使う。
+# AAR 固有の新規 Agent は Step 4（TestCoding）と Step 6（Eval）のみ。
+#
+# Step 6 の存在理由: reasoning effort（minimal / low / medium）の選択は
+# recall・token・latency のトレードオフであり、測定なしには決められない。
+# 「最小限のクエリ回数で返す」という要件を裏付ける唯一の Step。
+AAR = WorkflowDef(
+    id="aar",
+    name="Agentic Retrieval Add-on",
+    label_prefix="aar",
+    state_labels=_make_state_labels("aar"),
+    params=["app_ids", "app_id", "resource_group", "usecase_id"],
+    # local 生成（1/2/3/4）を先に終え、live deploy（5）とその実測（6）を後段に置く。
+    local_checkpoint_step_id="4",
+    steps=[
+        StepDef(id="1", title="Agentic Retrieval 機能要件詳細",
+                custom_agent="Arch-AgenticRetrieval-Detail",
+                consumed_artifacts=["service_catalog", "service_specs", "domain_analytics", "app_catalog"],
+                body_template_path="templates/aar/step-1.md",
+                # サービス単位の成果物しか持たないため fan-out する。
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                output_paths_template=["docs/services/{serviceId}-agentic-retrieval-spec.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
+        StepDef(id="2", title="Agentic Retrieval Azure 実装設計",
+                custom_agent="Dev-Microservice-Azure-AgenticRetrievalDesign",
+                depends_on=["1"],
+                consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
+                body_template_path="templates/aar/step-2.md",
+                # 共通カタログへの追記は並列子間で競合するため宣言しない。
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-design.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog.md", "docs/services/{serviceId}-agentic-retrieval-spec.md"]),
+        StepDef(id="3", title="Agentic Retrieval テスト仕様",
+                custom_agent="Arch-TDD-TestSpec",
+                depends_on=["2"],
+                consumed_artifacts=["service_specs", "app_catalog"],
+                body_template_path="templates/aar/step-3.md",
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                output_paths_template=["docs/test-specs/{serviceId}-agentic-retrieval-test-spec.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md"]),
+        StepDef(id="4", title="Agentic Retrieval テストコード（TDD RED）",
+                custom_agent="Dev-Microservice-Azure-AgenticRetrievalTestCoding",
+                depends_on=["3"],
+                consumed_artifacts=["app_catalog"],
+                body_template_path="templates/aar/step-4.md",
+                output_paths_template=["src/test/integration/agentic-retrieval/"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/test-specs/{serviceId}-agentic-retrieval-test-spec.md"]),
+        StepDef(id="5", title="Agentic Retrieval Deploy",
+                custom_agent="Dev-Microservice-Azure-AgenticRetrievalDeploy",
+                depends_on=["4"],
+                consumed_artifacts=["app_catalog"],
+                body_template_path="templates/aar/step-5.md",
+                output_paths_template=[
+                    "src/infra/azure/create-azure-agentic-retrieval/prep.sh",
+                    "src/infra/azure/create-azure-agentic-retrieval/create.sh",
+                    "src/infra/azure/create-azure-agentic-retrieval/services/",
+                ],
+                required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md"],
+                required_skills=[
+                    "agentic-retrieval-contract",
+                    "azure-cli-deploy-scripts",
+                    "azure-ac-verification",
+                    "azure-region-policy",
+                ],
+                reality_gate_acs=["AC4B-1", "AC4B-14", "AC4B-15", "AC4B-18"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]}),
+        StepDef(id="6", title="Retrieval 実測評価（reasoning effort 比較）",
+                custom_agent="QA-AgenticRetrievalEval",
+                depends_on=["5"],
+                consumed_artifacts=["app_catalog"],
+                body_template_path="templates/aar/step-6.md",
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-eval-report.md"],
+                required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md", "src/test/integration/agentic-retrieval/"]),
     ],
 )
 
@@ -1459,7 +1649,7 @@ FULL_PIPELINE = MetaWorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AKM, AQOD, ADOC]
+    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AAR, AKM, AQOD, ADOC]
 }
 
 _META_REGISTRY: Dict[str, MetaWorkflowDef] = {
@@ -1670,6 +1860,51 @@ def get_live_phase_step_ids(workflow_id: str) -> FrozenSet[str]:
 def list_workflows() -> List[WorkflowDef]:
     """登録済みワークフロー定義をすべて返す。"""
     return list(_REGISTRY.values())
+
+
+# Issue Form / ウィザードの UI 表示値がそのまま config へ入る経路があるため、
+# `disabled_when_config` の照合前に内部値へ寄せる（template_engine と同じ対応関係）。
+_DISABLED_WHEN_VALUE_ALIASES: Dict[str, str] = {
+    "する": "yes",
+    "しない": "no",
+    "自動判定に従う": "auto",
+}
+
+
+def _normalize_disabled_when_value(value: Any) -> str:
+    text = str(value).strip()
+    return _DISABLED_WHEN_VALUE_ALIASES.get(text, text).casefold()
+
+
+def resolve_disabled_step_ids(
+    workflow_id: str,
+    config_values: Mapping[str, Any],
+) -> FrozenSet[str]:
+    """設定値により無効化される Step ID 集合を返す。
+
+    `StepDef.disabled_when_config` の宣言と `config_values` を突き合わせる。
+    宣言キーが `config_values` に無い場合、その Step は無効化しない。
+
+    Args:
+        workflow_id: ワークフロー ID（後方互換エイリアス可）。
+        config_values: `SDKConfig` 属性名 → 値のマッピング。
+
+    Returns:
+        無効化する Step ID の集合。該当なしなら空集合。
+    """
+    wf = get_workflow(workflow_id)
+    if wf is None:
+        return frozenset()
+    disabled: set = set()
+    for step in wf.steps:
+        for key, values in (step.disabled_when_config or {}).items():
+            if key not in config_values:
+                continue
+            actual = _normalize_disabled_when_value(config_values[key])
+            if any(actual == _normalize_disabled_when_value(v) for v in values):
+                disabled.add(step.id)
+                break
+    return frozenset(disabled)
 
 
 # ---------------------------------------------------------------------------

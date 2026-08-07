@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cq.languages import ExtractionError, python
+from cq.languages import python
 
 SOURCE = '''\
 """Module docstring."""
@@ -102,9 +102,32 @@ class TestTestDetection:
 
 
 class TestRobustness:
-    def test_syntax_error_is_reported_for_degradation(self) -> None:
-        with pytest.raises(ExtractionError):
-            python.extract("def broken(:\n")
+    def test_syntax_error_falls_back_to_tree_sitter_instead_of_degrading(self) -> None:
+        """Phase 5 (FR-CQ-11): a file `ast` cannot parse still gets tree-sitter
+        fidelity — the recovered declaration, its line range — rather than
+        dropping straight past it to the line-window `lite` degradation."""
+        symbols, parser = python.extract_ex("def broken(:\n")
+        assert parser == "tree-sitter-partial"
+        assert [(s.name, s.kind) for s in symbols] == [("broken", "function")]
+
+    def test_extract_delegates_to_the_same_fallback(self) -> None:
+        assert [s.name for s in python.extract("def broken(:\n")] == ["broken"]
+
+    def test_clean_source_is_reported_as_ast(self) -> None:
+        _symbols, parser = python.extract_ex(SOURCE)
+        assert parser == "ast"
+
+    def test_syntax_error_degrades_to_lite_when_the_grammar_is_absent(self, monkeypatch) -> None:
+        """Both fallback tiers must degrade, not raise, when the optional
+        `tree-sitter-python` grammar is unavailable (FR-CQ-11)."""
+        from cq import indexer
+        from cq.languages import treesitter as ts
+
+        key = ts.cache_key(python.GRAMMAR)
+        monkeypatch.setitem(ts._PARSERS, key, ts.ExtractionError("simulated missing grammar"))
+        symbols, parser = indexer._extract("python", "def broken(:\n    pass\n\nclass Half:\n    pass\n")
+        assert parser == "lite"
+        assert {"broken", "Half"} <= {s.name for s in symbols}
 
     def test_extraction_is_deterministic(self) -> None:
         first = python.extract(SOURCE)

@@ -48,6 +48,7 @@ TDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しな�
 ## 依存
 - Step.4.1（UI テストコード生成）が `asdw-web:done` であること
 - Step.1.2（データストア検証テスト生成）が `asdw-web:done` であること（本 Step 完了で local generation checkpoint に到達する）
+- Step.2.5（Agentic Retrieval Azure 実装設計）が `asdw-web:done` であること（local 生成をすべて揃えてから checkpoint に到達させる）
 
 ## 完了条件
 - `src/app/` 配下にUI実装が完成している

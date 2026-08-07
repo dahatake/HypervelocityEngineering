@@ -141,7 +141,9 @@ class TestDegradation:
     def test_absent_grammar_raises_extraction_error(self, monkeypatch) -> None:
         """文法未導入の環境では indexer が lite へ降格できる形で失敗する。"""
         monkeypatch.setitem(
-            ts._PARSERS, "powershell", languages.ExtractionError("simulated missing grammar")
+            ts._PARSERS,
+            ts.cache_key(powershell.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
         )
         with pytest.raises(languages.ExtractionError):
             powershell.extract(SOURCE)
@@ -199,3 +201,22 @@ class TestOfficialParserEscalation:
         total = len(BROKEN.splitlines())
         for span in powershell.chunk_spans(BROKEN, BROKEN.splitlines(), 1600):
             assert 1 <= span.start <= span.end <= total
+
+    def test_unescalated_error_recovery_is_reported_as_partial(self, monkeypatch) -> None:
+        """`pwsh` 不在で tree-sitter の回復ノード付き結果をそのまま使う場合は
+        `tree-sitter-partial` として報告する（Phase 4 / FR-CQ-11）。"""
+        monkeypatch.setattr(powershell, "_official_ast", lambda source: None)
+        _symbols, parser = powershell.extract_ex(BROKEN)
+        assert parser == "tree-sitter-partial"
+
+    @needs_pwsh
+    def test_successful_escalation_is_not_reported_as_partial(self) -> None:
+        """公式パーサへのエスカレーションが成功した場合は ERROR ノードの回復ではなく
+        クリーンな解析結果なので、`tree-sitter-partial` にしない。"""
+        _symbols, parser = powershell.extract_ex(BROKEN)
+        assert parser == "tree-sitter"
+
+    def test_clean_source_is_not_reported_as_partial(self) -> None:
+        _symbols, parser = powershell.extract_ex(SOURCE)
+        assert parser == "tree-sitter"
+

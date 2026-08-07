@@ -113,6 +113,74 @@ def test_user_actions_pane_header_shows_total_count(page):
     assert header.text() == "実行中の課題 (1)"
 
 
+class _UserActionsViewProbe:
+    """``setPlainText`` 呼び出しを記録する差し替え用スタブ。"""
+
+    def __init__(self) -> None:
+        self.set_calls: list[str] = []
+
+    def setPlainText(self, text: str) -> None:
+        self.set_calls.append(text)
+
+    def verticalScrollBar(self):
+        return None
+
+
+def test_user_actions_pane_skips_redundant_set_plain_text(qapp):
+    """NFR-OBS-09 (4): 表示テキストが不変なら setPlainText を実行しない。"""
+    from hve.gui.page_workbench import _EnhancedUserActionsPane
+    from hve.gui.workbench_state import WorkbenchState
+
+    pane = _EnhancedUserActionsPane()
+    try:
+        state = WorkbenchState("wf", "run", "model")
+        state.add_user_action(
+            timestamp="12:00:00",
+            level="ERROR",
+            message="cache-check",
+            step_id="step-1",
+            category="ツール失敗",
+        )
+        probe = _UserActionsViewProbe()
+        pane.view = probe
+
+        pane.update_from_state(state)
+        pane.update_from_state(state)
+
+        assert len(probe.set_calls) == 1
+    finally:
+        pane.deleteLater()
+
+
+def test_user_actions_pane_reflects_downgraded_message(qapp):
+    """NFR-OBS-09 (4): NFR-OBS-07 の降格はテキスト変化として反映される。"""
+    from hve.gui.page_workbench import _EnhancedUserActionsPane
+    from hve.gui.workbench_state import WorkbenchState
+
+    pane = _EnhancedUserActionsPane()
+    try:
+        state = WorkbenchState("wf", "run", "model")
+        state.add_user_action(
+            timestamp="12:00:00",
+            level="ERROR",
+            message="tool: boom",
+            step_id="step-1",
+            category="ツール失敗",
+        )
+        probe = _UserActionsViewProbe()
+        pane.view = probe
+
+        pane.update_from_state(state)
+        state.user_actions[0].level = "INFO"
+        state.user_actions[0].message = "[回復済み] tool: boom"
+        pane.update_from_state(state)
+
+        assert len(probe.set_calls) == 2
+        assert "[回復済み] tool: boom" in probe.set_calls[-1]
+    finally:
+        pane.deleteLater()
+
+
 def test_left_pane_is_activity_widget(page):
     sp = page._splitter
     assert sp.widget(0) is page._progress_widget

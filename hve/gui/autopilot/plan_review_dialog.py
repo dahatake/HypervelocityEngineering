@@ -89,18 +89,17 @@ class Step1PlanReviewDialog(QDialog):
         outer.addWidget(header)
 
         summary = QLabel(self._format_summary())
-        summary.setStyleSheet("padding: 2px 4px; color: #444;")
+        summary.setProperty("hveRole", "description")
+        summary.setStyleSheet("padding: 2px 4px;")
         outer.addWidget(summary)
 
         # E=2: 実行順序の表示（pre_phases → app_chains → main_workflows）
         if review.execution_order:
             order_text = " → ".join(wf.upper() for wf in review.execution_order)
             exec_order_label = QLabel(self.tr("実行順序: {order}").format(order=order_text))
+            exec_order_label.setProperty("hveRole", "panel")
             exec_order_label.setWordWrap(True)
-            exec_order_label.setStyleSheet(
-                "padding: 4px 6px; background: #f4f7fb; "
-                "border: 1px solid #d3dbe6; border-radius: 3px; color: #1f3a5f;"
-            )
+            exec_order_label.setStyleSheet("padding: 4px 6px; border-radius: 3px;")
             outer.addWidget(exec_order_label)
 
         tabs = QTabWidget()

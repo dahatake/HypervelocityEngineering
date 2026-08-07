@@ -36,8 +36,13 @@ def test_mdq_section_has_three_tabs(qapp, tmp_path: Path, monkeypatch):
         settings_store, "settings_path", lambda: tmp_path / ".settings.txt"
     )
 
-    # 自動再生成スレッドの起動を抑止するため、latest.md を新鮮な状態で配置
-    report_dir = tmp_path / "tools" / "skills" / "markdown_query" / "usage-report"
+    # 自動再生成スレッドの起動を抑止するため、latest.md を新鮮な状態で配置する。
+    # 出力先はセクションと同じ `usage_report.default_output_dir` から解決する
+    # （パスを直書きするとレポート出力先の変更に追随できず、スレッドが起動して
+    #  ウィジェット破棄と競合しプロセスが異常終了する）。
+    from mdq import usage_report
+
+    report_dir = usage_report.default_output_dir(tmp_path)
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "latest.md").write_text("# dummy\n", encoding="utf-8")
 
@@ -93,7 +98,9 @@ def test_bulk_build_ui_moved_to_index_tab_db_group(qapp, tmp_path: Path, monkeyp
     monkeypatch.setattr(
         settings_store, "settings_path", lambda: tmp_path / ".settings.txt"
     )
-    report_dir = tmp_path / "tools" / "skills" / "markdown_query" / "usage-report"
+    from mdq import usage_report
+
+    report_dir = usage_report.default_output_dir(tmp_path)
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "latest.md").write_text("# dummy\n", encoding="utf-8")
 

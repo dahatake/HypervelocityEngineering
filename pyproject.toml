@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hve"
-version = "0.2.0"
+version = "0.3.0"
 description = "HVE CLI Orchestrator package"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -62,6 +62,17 @@ code = [
   "tree-sitter-powershell>=0.26",
   "tree-sitter-batch>=0.11",
   "tree-sitter-scala>=0.26",
+  # C# / JavaScript / TypeScript の高フィデリティ抽出（FR-CQ-11 Phase 2）。未導入
+  # なら brace 深度追跡の regex 抽出へ自動降格する（`csharp.py` / `javascript.py` /
+  # `typescript.py` の `extract_regex`）。実測確認済み: wheel に文法を同梱、
+  # ネットワーク遮断下での import と parse に成功。
+  "tree-sitter-c-sharp>=0.23",
+  "tree-sitter-javascript>=0.25",
+  "tree-sitter-typescript>=0.23",
+  # Python の高フィデリティ抽出は標準ライブラリ `ast` が主で、`tree-sitter-python`
+  # は `ast.parse` が失敗するファイル（編集中で構文が一時的に不正な場合等）だけの
+  # 任意フォールバック（FR-CQ-11 Phase 5）。未導入なら `lite` へ降格する。
+  "tree-sitter-python>=0.25",
   # SQL は tree-sitter ではなく方言対応のパーサを使う（pure Python、追加の実行時依存なし）。
   "sqlglot>=30",
   # PostgreSQL の `$tag$ ... $tag$` ルーチン本体だけは sqlglot / sqlfluff とも 1 トークン
@@ -70,8 +81,8 @@ code = [
 ]
 # code-sql: sqlglot が解析できないストアド本体（Oracle PL/SQL・BigQuery スクリプト）を
 # 構造化するための追加パーサ。`code` から分離するのは、sqlfluff 4.2.2 が `click<8.4.0` を
-# pin しており、既定 extras の `semantic`（fastembed → huggingface-hub >= 1.18 は
-# `click>=8.4.0` を要求）と同時導入すると `pip check` が失敗するため。
+# pin しており、既定 extras の `semantic`（fastembed → huggingface-hub 1.22.0 は
+# `click<9.0.0,>=8.4.2` を要求）と同時導入すると `pip check` が失敗するため（実測）。
 # 未導入時は当該ファイルだけが lite へ降格する（FR-CQ-11）。
 # 手動インストール: pip install -e .[code,code-sql]
 code-sql = [
@@ -192,10 +203,10 @@ exclude = ["hve.tests*"]
 # bump-my-version 設定（バージョンアップ自動化）
 # 使い方は hve-dev/hve-app-tools.md を参照。
 # 対象: pyproject.toml (本ファイル) / hve/__init__.py / CHANGELOG.md
-# 連動対象外: mdq/__init__.py（独立ライフサイクル）
+# 連動対象外: cq / mdq engine、各 Skill / GUI / 移植用キット（独立ライフサイクル）
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.2.0"
+current_version = "0.3.0"
 commit = true
 tag = true
 tag_name = "v{new_version}"

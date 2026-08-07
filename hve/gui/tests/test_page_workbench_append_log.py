@@ -57,3 +57,75 @@ def test_append_log_empty_instance_id_uses_fallback(qapp):
     # 空 instance_id は "_global"、空 step_id は "main" にフォールバックし
     # `[_GLOBAL] [main] ` プリフィックスが付与される。
     assert state.workflows["_global"].log_buffer[-1] == "[_GLOBAL] [main] fallback line"
+
+
+class _ScrollBarStub:
+    """スクロール操作の到達を許容するための最小スタブ。"""
+
+    def value(self) -> int:
+        return 0
+
+    def maximum(self) -> int:
+        return 0
+
+    def setValue(self, value: int) -> None:
+        return None
+
+
+class _ScrollBarProbe:
+    """``verticalScrollBar`` 呼び出しを検出するための差し替え用スタブ。"""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def verticalScrollBar(self) -> _ScrollBarStub:
+        self.calls += 1
+        return _ScrollBarStub()
+
+
+def test_append_line_does_not_write_to_hidden_view(qapp, tmp_path):
+    """NFR-OBS-09 (2): 非表示 _LogPane の QPlainTextEdit へ追記しない。"""
+    from hve.gui.page_workbench import _LogPane
+
+    pane = _LogPane("ログ")
+    run_dir = tmp_path / "run-hidden"
+    run_dir.mkdir()
+    try:
+        pane.set_log_base_dir(run_dir)
+        pane.append_line("hidden-view-check")
+        assert pane.log_view.toPlainText() == ""
+        content = (run_dir / "gui-logs" / "log-0001.log").read_text(encoding="utf-8")
+        assert "hidden-view-check" in content
+    finally:
+        pane.deleteLater()
+
+
+def test_scroll_log_does_not_touch_hidden_view(qapp):
+    """NFR-OBS-09 (2): ログのスクロール操作が非表示ウィジェットを対象にしない。"""
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    probe = _ScrollBarProbe()
+    page._log_pane.log_view = probe
+    page._scroll_log(3)
+    assert probe.calls == 0
+
+
+def test_key_scroll_does_not_touch_hidden_view(qapp):
+    """NFR-OBS-09 (2): `g` / `G` キーが非表示ウィジェットを対象にしない。"""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    from hve.gui.page_workbench import WorkbenchPage
+
+    page = WorkbenchPage()
+    probe = _ScrollBarProbe()
+    page._log_pane.log_view = probe
+
+    for key, text in ((Qt.Key.Key_G, "g"), (Qt.Key.Key_G, "G")):
+        event = QKeyEvent(
+            QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier, text
+        )
+        page.keyPressEvent(event)
+
+    assert probe.calls == 0

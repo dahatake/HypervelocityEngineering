@@ -557,11 +557,11 @@ class MainWindow(QMainWindow):
         self._btn_back = QPushButton(self.tr("← 戻る"))
         self._btn_back.clicked.connect(self._on_back_clicked)
         self._btn_next = QPushButton(self.tr("次へ →"))
+        self._btn_next.setProperty("hveRole", "primaryButton")
         # 次へボタンに以前の「実行」スタイルを付与（precheck PASS でそのまま実行開始）。
+        # 配色はアプリ全体 QSS の hveRole="primaryButton" が供給する。
         self._btn_next.setStyleSheet(
-            "QPushButton { background-color: #1976d2; color: white; "
-            "padding: 6px 16px; font-weight: bold; } "
-            "QPushButton:disabled { background-color: #ccc; }"
+            "QPushButton { padding: 6px 16px; font-weight: bold; }"
         )
         self._btn_next.clicked.connect(self._on_next_clicked)
         # 後方互換保持用のダミー参照。UI には追加しない。
@@ -772,10 +772,10 @@ class MainWindow(QMainWindow):
                     "C11": self._page_options.c11,
                     "C12": self._page_options.c12,
                     "C13": self._page_options.c13,
-                    # C14 (ARD) は設定画面から削除済み。Step 1 右ペインの
-                    # OptionsPage.c14 のみが SSOT となるため、ここで
-                    # apply_to_widgets に渡すと「設定画面側の空値」で Step 1 の
-                    # 入力（company_name 等）が上書きされてしまう。
+                    # C14 は設定画面のカテゴリツリーに無く collect_from_widgets が
+                    # 空値を書き戻さないため、復元のみを行う（値の出所は FR-GUI-06
+                    # による Step 1 右ペインの自己保存）。
+                    "C14": self._page_options.c14,
                 },
                 _settings or settings_store.load(),
                 # C10.app_ids は Step 1 右ペインの AppIdChecklist を SSOT として

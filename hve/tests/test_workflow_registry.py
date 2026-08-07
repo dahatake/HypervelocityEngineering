@@ -27,14 +27,15 @@ from hve.workflow_registry import (
 EXPECTED_STEP_COUNTS = {
     "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
     "aas": 11,  # AAS に Step 8 (ペルソナ別共通画面カタログ) と Step 9 (ペルソナカタログ) 追加で 9 → 11
-    "aad-web": 7,  # Step 2.5 (追加 Azure サービス選定) 追加で 6 → 7
-    "asdw-web": 23,  # 5 containers + 18 real steps (コンテナ再編 + 追加 Step 2.3/2.4/3.5 + データコンテナ Step 1.2 TDD RED で 18→23)
+    "aad-web": 8,  # Step 2.5 (追加 Azure サービス選定) で 6 → 7、Step 2.6 (Agentic Retrieval 機能要件詳細) で 7 → 8
+    "asdw-web": 25,  # 5 containers + 20 real steps (Agentic Retrieval Step 2.5/2.6 追加で 23 → 25)
     # ADFDV が required_input_paths として要求していた 4 ドキュメントの producer Step
     # (0.1 / 0.2 / 4 / 5) を追加して 3 → 7。
     "adfd": 7,
     "adfdv": 7,
     "aag": 3,
-    "aagd": 5,
+    "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
+    "aar": 6,  # Agentic Retrieval Add-on: 6 real steps (コンテナなし)
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
     "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
     "adoc": 23,  # 4 containers + 19 real steps
@@ -43,12 +44,13 @@ EXPECTED_STEP_COUNTS = {
 EXPECTED_NON_CONTAINER_COUNTS = {
     "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
     "aas": 11,  # 同上
-    "aad-web": 7,  # Step 2.5 (追加 Azure サービス選定) 追加で 6 → 7
-    "asdw-web": 18,  # 追加 Step 2.3/2.4/3.5 で 14 → 17、データコンテナ Step 1.2 (DataTestCoding TDD RED) 追加で 17 → 18
+    "aad-web": 8,  # Step 2.5 (追加 Azure サービス選定) で 6 → 7、Step 2.6 (Agentic Retrieval 機能要件詳細) で 7 → 8
+    "asdw-web": 20,  # Agentic Retrieval Step 2.5/2.6 追加で 18 → 20
     "adfd": 7,  # 同上（ADFD はコンテナ Step を持たないため総数と一致）
     "adfdv": 7,
     "aag": 3,
-    "aagd": 5,
+    "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
+    "aar": 6,
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
     "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
     "adoc": 19,
@@ -320,13 +322,14 @@ class TestGetNextSteps:
         assert sorted(s.id for s in nexts) == ["2.2", "2.4"]
 
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2"])
-        assert sorted(s.id for s in nexts) == ["2.3", "2.4", "2.5"]
+        assert sorted(s.id for s in nexts) == ["2.3", "2.4", "2.5", "2.6"]
 
         # Sub-7 (C-4): 2.1/2.2/2.3/2.4 完了後に Step 3（整合性レビュー join）が起動可能。
-        # Step 2.5 (追加 Azure サービス選定) は depends_on=["2.2"] のため 2.3/2.4 と並列で
-        # 2.2 完了後にも起動可能であり、この段階では未完了として並ぶ。
+        # Step 2.5 (追加 Azure サービス選定) と Step 2.6 (Agentic Retrieval 機能要件詳細) は
+        # depends_on=["2.2"] のため 2.3/2.4 と並列で 2.2 完了後にも起動可能であり、
+        # この段階では未完了として並ぶ。
         nexts = get_next_steps("aad-web", completed_step_ids=["1", "2.1", "2.2", "2.3", "2.4"])
-        assert sorted(s.id for s in nexts) == ["2.5", "3"]
+        assert sorted(s.id for s in nexts) == ["2.5", "2.6", "3"]
 
     def test_aad_web_step3_is_consistency_review_join(self):
         """Sub-7 (C-4): AAD-WEB Step 3 が screen ↔ service 整合性レビュー join step として
@@ -354,9 +357,11 @@ class TestGetNextSteps:
         assert get_step("asdw-web", "5.2").depends_on == ["4.4"]
 
         # AI Agent step は registry 未採用（reusable YAML 側にのみ存在）
-        assert get_step("asdw-web", "2.6") is None
         assert get_step("asdw-web", "2.7") is None
         assert get_step("asdw-web", "2.8") is None
+        # Agentic Retrieval step は ADR-0001 Phase 5 で採用済み
+        assert get_step("asdw-web", "2.5").custom_agent == "Dev-Microservice-Azure-AgenticRetrievalDesign"
+        assert get_step("asdw-web", "2.6").custom_agent == "Dev-Microservice-Azure-AgenticRetrievalDeploy"
         # 旧 step ID も未採用であること
         assert get_step("asdw-web", "2.3TC") is None
         assert get_step("asdw-web", "3.0TC") is None
@@ -370,11 +375,11 @@ class TestGetNextSteps:
         assert sorted(
             s.id for s in get_next_steps("asdw-web", completed_step_ids=["1.1"])
         ) == ["1.2", "2.1"]
-        assert [
+        assert sorted(
             s.id for s in get_next_steps("asdw-web", completed_step_ids=["1.1", "1.2", "2.1"])
-        ] == ["2.3"]
+        ) == ["2.3", "2.5"]
 
-        local_completed = ["1.1", "1.2", "2.1", "2.3", "3.1", "3.2", "3.3", "4.1"]
+        local_completed = ["1.1", "1.2", "2.1", "2.3", "2.5", "3.1", "3.2", "3.3", "4.1"]
         assert [
             s.id for s in get_next_steps("asdw-web", completed_step_ids=local_completed)
         ] == ["4.2"]
@@ -386,11 +391,13 @@ class TestGetNextSteps:
         ] == ["1.3"]
 
         live_completed = after_checkpoint + ["1.3", "2.2", "2.4", "3.3"]
-        assert [
+        # Step 2.6（Agentic Retrieval Deploy）は depends_on=["2.2", "2.5"] を満たすため
+        # 3.4 と並列で ready になる。
+        assert sorted(
             s.id for s in get_next_steps("asdw-web", completed_step_ids=live_completed)
-        ] == ["3.4"]
+        ) == ["2.6", "3.4"]
 
-        completed_ui = live_completed + ["3.4", "3.5", "4.3", "4.4"]
+        completed_ui = live_completed + ["2.6", "3.4", "3.5", "4.3", "4.4"]
         nexts = get_next_steps("asdw-web", completed_step_ids=completed_ui)
         assert sorted(s.id for s in nexts) == ["5.1", "5.2"]
 
@@ -775,10 +782,14 @@ class TestOutputPathsExplicit:
 # ---------------------------------------------------------------------------
 
 # local generation checkpoint より前に完了する Step（Azure live 操作を伴わない）。
-ASDW_WEB_LOCAL_STEP_IDS = ["1.1", "1.2", "2.1", "2.3", "3.1", "3.2", "3.3", "4.1", "4.2"]
+ASDW_WEB_LOCAL_STEP_IDS = [
+    "1.1", "1.2", "2.1", "2.3", "2.5", "3.1", "3.2", "3.3", "4.1", "4.2",
+]
 
 # local generation checkpoint より後に実行する Step（Azure live 操作またはその結果に依存）。
-ASDW_WEB_LIVE_STEP_IDS = ["1.3", "2.2", "2.4", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2"]
+ASDW_WEB_LIVE_STEP_IDS = [
+    "1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2",
+]
 
 ASDW_WEB_EXPECTED_DEPENDS_ON = {
     # --- local ---
@@ -786,16 +797,18 @@ ASDW_WEB_EXPECTED_DEPENDS_ON = {
     "1.2": ["1.1"],
     "2.1": ["1.1"],
     "2.3": ["2.1"],
+    "2.5": ["2.1"],
     "3.1": ["2.3"],
     "3.2": ["3.1"],
     "3.3": ["3.2"],
     "4.1": ["3.3"],
-    "4.2": ["1.2", "4.1"],
+    "4.2": ["1.2", "2.5", "4.1"],
     # --- local generation checkpoint ---
     # --- live ---
     "1.3": ["1.2", "4.2"],
     "2.2": ["1.3", "2.1"],
     "2.4": ["2.2", "2.3"],
+    "2.6": ["2.2", "2.5"],
     "3.4": ["2.4", "3.3"],
     "3.5": ["3.4"],
     "4.3": ["3.5", "4.2"],

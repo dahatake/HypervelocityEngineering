@@ -17,18 +17,11 @@ from PySide6.QtWidgets import QDockWidget, QHBoxLayout, QToolButton, QWidget
 from .panel_toggle.dock_toggle_actions import DockToggleBinder, bind as bind_dock_toggle
 
 
+# 配色（transparent 背景 / 枠 / hover / checked）はアプリ全体 QSS の
+# hveRole="toolToggle" が供給するため、ここには色以外のみを残す。
 _QSS = """
 QToolButton {
-    background: transparent;
-    border: 1px solid transparent;
     padding: 2px 8px;
-}
-QToolButton:hover {
-    background: rgba(0, 0, 0, 0.08);
-}
-QToolButton:checked {
-    background: rgba(0, 0, 0, 0.12);
-    border: 1px solid rgba(0, 0, 0, 0.20);
 }
 """
 
@@ -66,6 +59,7 @@ class TopFileTogglesBar(QWidget):
 
     def _make_button(self, *, text: str, tooltip: str) -> QToolButton:
         btn = QToolButton(self)
+        btn.setProperty("hveRole", "toolToggle")
         btn.setText(text)
         btn.setToolTip(tooltip)
         btn.setCheckable(True)

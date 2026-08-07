@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 from cq import discovery, store, tokens
 
@@ -75,19 +76,32 @@ def build(
     kept: list[MapEntry] = []
     used = 0
     for entry in ranked:
-        cost = tokens.count_tokens(_line(entry))
+        cost = tokens.count_tokens(f"{FOLD_MARKER}\n{_line(entry)}")
+        if not kept or entry.path != kept[-1].path:
+            cost += tokens.count_tokens(f"{entry.path}:\n{FOLD_MARKER}\n")
         if kept and used + cost > max_tokens:
             break
         kept.append(entry)
         used += cost
-    return RepoMap(tuple(kept), len(ranked) - len(kept), used)
+    # トークナイズは連結に対して加法的でなく、見出し行の共有も上の見積りでは捉えきれない。
+    # FR-CQ-09 は「実際に出力する文字列の全体」での判定を求めるので、描画結果を実測して詰める。
+    while len(kept) > 1 and tokens.count_tokens(
+        _render(kept, len(ranked) - len(kept))
+    ) > max_tokens:
+        kept.pop()
+    total = tokens.count_tokens(_render(kept, len(ranked) - len(kept)))
+    return RepoMap(tuple(kept), len(ranked) - len(kept), total)
 
 
 def render(repo_map: RepoMap) -> str:
     """Group by file, print definition lines only — never bodies."""
+    return _render(repo_map.entries, repo_map.dropped)
+
+
+def _render(entries: Sequence[MapEntry], dropped: int) -> str:
     lines: list[str] = []
     by_path: dict[str, list[MapEntry]] = {}
-    for entry in repo_map.entries:
+    for entry in entries:
         by_path.setdefault(entry.path, []).append(entry)
     for path in sorted(by_path):
         lines.append(f"{path}:")
@@ -96,8 +110,8 @@ def render(repo_map: RepoMap) -> str:
             lines.append(f"│{entry.signature}  # callers={entry.callers} L{entry.line}")
         lines.append(FOLD_MARKER)
         lines.append("")
-    if repo_map.dropped:
-        lines.append(f"# dropped {repo_map.dropped} lower-ranked symbols to fit the token budget")
+    if dropped:
+        lines.append(f"# dropped {dropped} lower-ranked symbols to fit the token budget")
     return "\n".join(lines)
 
 

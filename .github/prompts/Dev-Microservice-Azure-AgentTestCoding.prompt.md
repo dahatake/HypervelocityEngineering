@@ -152,6 +152,8 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - **AG-CAP-04**: REST Function Toolのmethod / path / request mapping、HITL、RBAC、冪等性、retry/error/auditを検証する。C/U/Dの直接DB更新、MCP迂回、REST/MCP二重登録を失敗ケースにする。
 - **AG-CAP-05**: 選択されたMCP clientのTool schema / allowlist、untrusted result、認証、timeout、有限retry、server failure時のfallback / partial / blocked / Handoffを検証する。理由付きN/AならMCP mockを生成しない。
 - **AG-CAP-06**: `Decision` / `Repeated procedure count` / `Reuse evidence` / `Location` / `Decision source`を検証する。`required`なら共有能力契約の3条件のいずれかを証跡で満たし、Section 7.4 の恒久的な `Decision source` で承認された `src/agent/{key}/skills/{skill-name}/` にだけSKILL.mdと設計で選択されたresourceが生成され、明示loadingと発動正負ケースが成立することを検証する。承認根拠がないLocationは拒否する。`not-required`ならSkill artifact / loader / hook / flagが存在しないことを検証する。`TBD`は依存未完了として停止する。
+- **TB-CAP-01〜05**: Agent 詳細設計に TB-CAP がある場合だけ生成する。`Tool search: enabled` なら、Tool Search の有効化と TB-CAP-02 の接続 topology、System Prompt が「能力なし判断前に tool_search を呼ぶ」ことを指示していること、TB-CAP-03 の pin 一覧と一致する pin 設定、TB-CAP-04 の additional search text、TB-CAP-05 の limit が 1〜10 であること、wildcard pin の拒否、未知能力を求められたとき tool_search を呼んでから結論することを検証する。`Tool search: disabled` なら、Toolbox 設定と toolbox source と tool_search 呼出が存在しないことを検証し、有効時の期待を混在させない。
+- TB-CAP の Tool 呼出は全て mock/stub とし、Foundry Toolbox / Azure AI Foundry への実接続を RED の失敗理由にしない。
 - REDは未実装のproduction behaviorに対して失敗させる。恒真式、無条件`fail`、存在しない外部接続、秘密情報不足を失敗理由にしない。
 
 # 5) 依存確認（必須・最初に実行）
@@ -207,6 +209,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - build/collectionが成功し、未実装production behaviorに対応するテストが1件以上FAILしてsuite全体がREDである。既に成立する契約テストのPASSは許容する。
 - Azure AI Foundry Agent Service の呼び出しがモック化されている。
 - AG-CAP-01〜06の選択能力が、Contract ID付きの決定的なtest doubleへトレースされている。
+- 設計に TB-CAP がある Agent は、TB-CAP-01〜05 が Contract ID 付きのテストへトレースされている。TB-CAP が無い Agent には Toolbox / tool search のテストを生成していない。
 - 理由付きN/Aまたは`not-required`はContract ID付きの判定・不在検証へトレースされ、非該当providerのmock / fixtureを生成していない。
 - SQL validator、REST method/path、MCP Tool schema、Skill artifact判定は対象Agentの設計で必要なものだけが検証されている。
 - 公開Web、Microsoft 365、Fabric、Search、SQL、REST、MCPを含む外部サービスへ実接続していない。

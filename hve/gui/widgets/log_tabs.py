@@ -6,7 +6,8 @@ WorkbenchPage の右ペインに配置される。
 - "選択中" タブ: ツリーで選択中の Workflow Instance のログ全文を差し替え表示。
 
 API:
-- :meth:`append_global` 1 行を全体タブへ追記し、末尾追従する。
+- :meth:`append_global` 1 行を全体タブへ追記する。末尾追従は次のイベントループで
+  1 回だけ行い、同一イベントループ内の連続追記を合体する（NFR-OBS-09 (3)）。
 - :meth:`set_selected_content` 選択中タブへ複数行を差し替え反映する。
 - :meth:`clear` 両タブをクリアする。
 """
@@ -14,7 +15,7 @@ from __future__ import annotations
 
 from typing import Iterable, List, Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -49,6 +50,12 @@ class LogTabsWidget(QWidget):
 
         self._global_view = _make_log_view()
         self._selected_view = _make_log_view()
+        # 末尾追従の保留フラグ。同一イベントループ内の連続追記を 1 回へ合体する。
+        self._tail_pending = False
+        # 親を self にすることで、ウィジェット破棄後に保留中の追従が発火しない。
+        self._tail_timer = QTimer(self)
+        self._tail_timer.setSingleShot(True)
+        self._tail_timer.timeout.connect(self._follow_tail_now)
         # "選択中" 初期表示メッセージ
         self._selected_placeholder = "（ツリーで Workflow を選択するとログを表示します）"
         # 選択済みだが該当ログが 0 行のときの表示（未選択と区別する）
@@ -82,8 +89,15 @@ class LogTabsWidget(QWidget):
     # ---------- 公開 API ----------
 
     def append_global(self, line: str) -> None:
-        """全体タブに 1 行追記し、末尾追従する。"""
+        """全体タブに 1 行追記する。末尾追従は次のイベントループで 1 回だけ行う。"""
         self._global_view.appendPlainText(line)
+        if not self._tail_pending:
+            self._tail_pending = True
+            self._tail_timer.start(0)
+
+    def _follow_tail_now(self) -> None:
+        """保留中の末尾追従を実行する（NFR-OBS-09 (3)）。"""
+        self._tail_pending = False
         sb = self._global_view.verticalScrollBar()
         if sb is not None:
             sb.setValue(sb.maximum())
@@ -116,6 +130,10 @@ class LogTabsWidget(QWidget):
 
     def global_text(self) -> str:
         return self._global_view.toPlainText()
+
+    def global_scroll_bar(self):
+        """全体タブの垂直スクロールバーを返す（未生成時は ``None``）。"""
+        return self._global_view.verticalScrollBar()
 
     def selected_text(self) -> str:
         return self._selected_view.toPlainText()

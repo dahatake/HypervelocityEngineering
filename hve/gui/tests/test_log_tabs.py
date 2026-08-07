@@ -30,10 +30,39 @@ def test_append_global_appends_and_tail_follows(qapp):
     try:
         w.append_global("line-1")
         w.append_global("line-2")
+        qapp.processEvents()
         text = w.global_text()
         assert "line-1" in text and "line-2" in text
         sb = w._global_view.verticalScrollBar()
         # 末尾追従: 最大値に到達
+        assert sb is None or sb.value() == sb.maximum()
+    finally:
+        w.deleteLater()
+
+
+def test_append_global_coalesces_tail_follow(qapp, monkeypatch):
+    """NFR-OBS-09 (3): 同一イベントループ内の連続追記の末尾追従を 1 回へ合体する。"""
+    calls: list[int] = []
+    original = LogTabsWidget._follow_tail_now
+
+    def counting(self) -> None:
+        calls.append(1)
+        original(self)
+
+    monkeypatch.setattr(LogTabsWidget, "_follow_tail_now", counting)
+
+    w = LogTabsWidget()
+    try:
+        for i in range(5):
+            w.append_global(f"coalesce-{i}")
+        # 追記中は末尾追従を実行せず保留する
+        assert calls == []
+        assert w._tail_pending is True
+        qapp.processEvents()
+        # 5 回の追記に対し末尾追従は 1 回だけ実行される
+        assert len(calls) == 1
+        assert w._tail_pending is False
+        sb = w._global_view.verticalScrollBar()
         assert sb is None or sb.value() == sb.maximum()
     finally:
         w.deleteLater()

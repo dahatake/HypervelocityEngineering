@@ -62,6 +62,24 @@ def _make_section(repo_root: Path):
     return CqIndexSection(repo_root=repo_root)
 
 
+@pytest.fixture()
+def indexed_repo(repo: Path) -> Path:
+    """JavaScript と C# はどちらも `regex` パーサなので、パーサ別表示では区別できない。"""
+    from cq import config, indexer, store
+
+    (repo / "pkg" / "c.js").write_text(
+        "function gamma() {\n    return 3;\n}\n", encoding="utf-8"
+    )
+    (repo / "pkg" / "d.cs").write_text(
+        "class Delta\n{\n    void Run()\n    {\n    }\n}\n", encoding="utf-8"
+    )
+    profile = config.resolve_profile(repo, "main")
+    indexer.build_index(
+        repo, profile, db_path=repo / store.db_path_for("main")
+    )
+    return repo
+
+
 class TestLayout:
     def test_section_has_three_tabs(self, qapp, repo: Path, patched_settings: Path) -> None:
         section = _make_section(repo)
@@ -256,3 +274,56 @@ class TestFailClosedWithoutConfig:
         _make_section(tmp_path)
 
         assert not (tmp_path / ".cq").exists()
+
+
+class TestLanguageStats:
+    """FR-CQ-15 / FR-GUI-04: パーサ別集計だけを表示しないこと。"""
+
+    @staticmethod
+    def _rows(section) -> dict[str, tuple[str, ...]]:
+        table = section._language_stats_table
+        return {
+            table.item(row, 0).text(): tuple(
+                table.item(row, column).text()
+                for column in range(1, table.columnCount())
+            )
+            for row in range(table.rowCount())
+        }
+
+    def test_table_exposes_the_language_columns(
+        self, qapp, indexed_repo: Path, patched_settings: Path
+    ) -> None:
+        section = _make_section(indexed_repo)
+
+        table = section._language_stats_table
+        headers = [
+            table.horizontalHeaderItem(column).text()
+            for column in range(table.columnCount())
+        ]
+        assert headers == ["言語", "Files", "Symbols", "Chunks", "パーサ内訳"]
+
+    def test_lists_every_indexed_language(
+        self, qapp, indexed_repo: Path, patched_settings: Path
+    ) -> None:
+        section = _make_section(indexed_repo)
+
+        assert set(self._rows(section)) == {"python", "javascript", "csharp"}
+
+    def test_languages_sharing_a_parser_stay_separate(
+        self, qapp, indexed_repo: Path, patched_settings: Path
+    ) -> None:
+        section = _make_section(indexed_repo)
+
+        rows = self._rows(section)
+        assert rows["javascript"][0] == "1"
+        assert rows["csharp"][0] == "1"
+        assert "regex" in rows["javascript"][-1]
+        assert "regex" in rows["csharp"][-1]
+
+    def test_missing_index_leaves_the_table_empty_without_creating_files(
+        self, qapp, repo: Path, patched_settings: Path
+    ) -> None:
+        section = _make_section(repo)
+
+        assert section._language_stats_table.rowCount() == 0
+        assert not (repo / ".cq").exists()

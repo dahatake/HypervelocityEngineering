@@ -25,6 +25,10 @@
 - `.github/skills/task-dag-planning/SKILL.md`
 - `.github/skills/work-artifacts-layout/SKILL.md`
 - `.github/skills/app-scope-resolution/SKILL.md`
+- `.github/skills/agentic-retrieval-contract/SKILL.md` — AR-CAP-01〜05 の設計値と実リソース設定の照合
+- `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md`
+- `.github/skills/azure-skills/azure-ac-verification/SKILL.md`
+- `.github/skills/azure-skills/azure-region-policy/SKILL.md`
 - `.github/skills/output/large-output-chunking/SKILL.md`
 - `.github/skills/harness/harness-verification-loop/SKILL.md`
 
@@ -110,6 +114,12 @@
 | AC4B-11 | Q6 フォールバック方針に従って Global / Standard SKU を選択し、選択結果と理由を `cli-evidence.md` に記録 | 必須 |
 | AC4B-12 | MS Learn MCP 障害時は `要確認（要：Microsoft Learn 確認）` を記録し、停止せず暫定値（直近 `cli-evidence` があれば）で継続 | 必須 |
 | AC4B-13 | SKU / モデル名 / API バージョンをスクリプトにハードコードせず、MS Learn MCP 取得値を変数として利用 | 必須 |
+| AC4B-14 | Knowledge Base の `retrievalReasoningEffort` が AR-CAP-01 の設計値と一致する（実リソースを取得して照合） | 必須 |
+| AC4B-15 | Knowledge Base に紐づく Knowledge Source の**件数と名前**が AR-CAP-02 の行と一致し、各 KS の `alwaysQuery` が設計値と一致する | 必須 |
+| AC4B-16 | AR-CAP-01 の `Output mode` が `extractiveData` / `answerSynthesis` の設計値と一致し、`minimal` 選択時は `extractiveData` である | 必須 |
+| AC4B-17 | AR-CAP-04 で `enabled` とした source references / activity log が実際に有効化されている（`disabled` とした項目は有効化されていないことを確認） | 必須 |
+| AC4B-18 | 非破壊的な smoke retrieve を 1 回実行し、AR-CAP-02 の全 Knowledge Source が検索対象となったことを確認する。確認手段は AR-CAP-04 の設定に従う：source references が `enabled` なら reference の source 内訳で、`disabled` で activity log が `enabled` なら activity log で、両方 `disabled` なら Knowledge Base 定義上の Knowledge Source 参照の完全一致で代替する。**応答本文・raw URL・query 本文は証跡へ保存せず**、provider / 件数 / status / 取得日時だけを記録する | 必須 |
+| AC4B-19 | AR-CAP-05 で Foundry Agent Service へ接続する場合、Tool allowlist が `knowledge_base_retrieve` だけである | 必須 |
 
 AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ）。
 
@@ -148,6 +158,21 @@ AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ�
 
 - 破壊的変更（削除/置換）は行わない
 - create 系のみ指数バックオフ最大 3 回
+
+#### 4.3.3 Knowledge Source / Knowledge Base の作成手段（固定）
+
+- **`az search` に Knowledge Source / Knowledge Base の作成コマンドは存在しない**。
+  `az search knowledge-source ...` のようなコマンドを探しても無く、推測で書けば実行時に失敗する。
+- 作成は **`az rest` による Search Service REST API** で行う。
+  例: `PUT {search-endpoint}/knowledgesources/{name}?api-version=<preview>`
+- **preview 種別の KS は preview api-version でしか作成できない**。
+  GA の api-version を使うと種別が認識されない。api-version は本 Prompt に固定値を書かず、
+  Microsoft Learn MCP で確認した値を設計書と `created-resources.json` に記録する。
+- 必要権限は `Search Service Contributor`。indexer パイプラインを生成する KS では
+  `Search Index Data Contributor` も必要。
+- 対応手段（portal / Foundry portal / REST / 各 SDK）は **KS 種別ごとに異なる**。
+  選んだ種別の `Usage support` を Microsoft Learn MCP で確認し、REST が非対応なら
+  自己判断で代替せず blocked にする。
 
 ### 4.4 Document 更新
 - `docs/catalog/service-catalog-matrix.md`（重複行を作らない）

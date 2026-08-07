@@ -21,7 +21,7 @@ from cq.languages import ChunkSpan, ExtractionError, RawSymbol
 # promote, so a Rust `mod` function stays a function.
 TYPE_SCOPE_KINDS = frozenset({"class", "struct", "interface", "enum", "impl", "type"})
 
-_PARSERS: dict[str, object] = {}
+_PARSERS: dict[tuple[str, str], object] = {}
 
 
 def _no_decorators(node, src) -> tuple[str, ...]:
@@ -50,6 +50,11 @@ class Grammar:
     name_of: Callable
     scope_name_of: Callable
     doc_markers: tuple[str, ...]
+    # Most grammar packages expose a single `language()` factory, but
+    # `tree_sitter_typescript` exposes `language_typescript()` and
+    # `language_tsx()` instead (no plain `language`), so the factory name is
+    # configurable per declaration.
+    language_func: str = "language"
     skip: frozenset[str] = frozenset()
     decorators_of: Callable = _no_decorators
     is_test_of: Callable = _not_test
@@ -67,13 +72,25 @@ class Grammar:
 # --------------------------------------------------------------------------
 
 
+def cache_key(grammar: Grammar) -> tuple[str, str]:
+    """Identity of the compiled parser: the module plus the factory it calls.
+
+    Not ``grammar.lang``: TypeScript and TSX are two ``lang`` identities backed
+    by the same module (``tree_sitter_typescript``) but a different factory
+    (``language_typescript`` / ``language_tsx``), so keying on ``lang`` alone
+    would either collide or fail to distinguish them.
+    """
+    return (grammar.module, grammar.language_func)
+
+
 def parser_for(grammar: Grammar):
     """Return a cached parser, importing the optional grammar on first use.
 
     A failure is cached too: without the optional extra, every file of that
     language would otherwise retry the same failing import.
     """
-    cached = _PARSERS.get(grammar.lang)
+    key = cache_key(grammar)
+    cached = _PARSERS.get(key)
     if isinstance(cached, ExtractionError):
         raise cached
     if cached is not None:
@@ -82,14 +99,15 @@ def parser_for(grammar: Grammar):
         from tree_sitter import Language, Parser
 
         module = importlib.import_module(grammar.module)
-        parser = Parser(Language(module.language()))
-    except Exception as exc:  # ImportError, ValueError (ABI), OSError (loader)
+        language_of = getattr(module, grammar.language_func)
+        parser = Parser(Language(language_of()))
+    except Exception as exc:  # ImportError, AttributeError, ValueError (ABI), OSError (loader)
         failure = ExtractionError(
             f"tree-sitter grammar unavailable for {grammar.lang}: {exc}"
         )
-        _PARSERS[grammar.lang] = failure
+        _PARSERS[key] = failure
         raise failure from exc
-    _PARSERS[grammar.lang] = parser
+    _PARSERS[key] = parser
     return parser
 
 
@@ -203,8 +221,26 @@ def _declared_type_names(grammar: Grammar, node, src, acc: set[str]) -> None:
 
 
 def extract(grammar: Grammar, source: str) -> tuple[RawSymbol, ...]:
-    src = source.encode("utf-8")
+    return _symbols_from_tree(grammar, source, parse(grammar, source))
+
+
+def extract_with_fidelity(grammar: Grammar, source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    """Like :func:`extract`, but also names the fidelity that was actually reached.
+
+    ``tree-sitter-partial`` means the grammar produced at least one ``ERROR`` /
+    missing node while parsing; declarations near the error may be missing or
+    truncated even though the file did not degrade all the way to ``lite``
+    (FR-CQ-11: the reduced fidelity must be visible to callers, not silently
+    absorbed).
+    """
     tree = parse(grammar, source)
+    symbols = _symbols_from_tree(grammar, source, tree)
+    parser = "tree-sitter-partial" if tree.root_node.has_error else "tree-sitter"
+    return symbols, parser
+
+
+def _symbols_from_tree(grammar: Grammar, source: str, tree) -> tuple[RawSymbol, ...]:
+    src = source.encode("utf-8")
     last_line = max(len(source.splitlines()), 1)
     out: list[RawSymbol] = []
     local_types: set[str] = set()

@@ -1,0 +1,13 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/test-specs/{serviceId}-agentic-retrieval-test-spec.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-TDD-TestSpec--aar--3
+outputs:
+- path: src/test/integration/agentic-retrieval/
+  required: true
+  mode: create

@@ -1,7 +1,9 @@
 """SQL symbol extraction (FR-CQ-04 / FR-CQ-05 / FR-CQ-11).
 
 主エンジンは sqlglot。方言は固定順で試し、全文を構造化できた最初の方言を採用する
-ので同一入力に対する結果は決定的になる。
+ので同一入力に対する結果は決定的になる。個別方言がいずれも構造化できない場合だけ、
+最後に方言を指定しない解析を 1 回試す（sqlglot は方言無指定を全方言のスーパーセット
+として扱う。公式 FAQ）。
 
 sqlglot がファイルを構造化できない場合と、ストアド／関数の本体を構造化できていない
 場合だけ sqlfluff へエスカレーションする。sqlglot はどの方言でも Oracle PL/SQL の
@@ -35,7 +37,11 @@ _KINDS = {
     "SCHEMA": "namespace",
 }
 
-_DIALECTS = ("tsql", "oracle", "postgres", "bigquery", "spark")
+# 順序は固定（同一入力に対する結果を決定的にするため）。既存 5 方言の後ろに追加する。
+_DIALECTS = (
+    "tsql", "oracle", "postgres", "bigquery", "spark",
+    "mysql", "sqlite", "snowflake", "duckdb",
+)
 _FLUFF_DIALECTS = ("tsql", "oracle", "postgres", "bigquery", "sparksql")
 
 _FLUFF_KINDS = {
@@ -119,7 +125,7 @@ def _table_line(table, fallback: int) -> int:
     return (identifier.meta.get("line") if identifier is not None else None) or fallback
 
 
-def _glot_unit(node, start: int, end: int, dialect: str) -> _Unit:
+def _glot_unit(node, start: int, end: int, dialect: str | None) -> _Unit:
     from sqlglot import exp
 
     created = _created(node) if isinstance(node, exp.Create) else None
@@ -140,32 +146,42 @@ def _glot_unit(node, start: int, end: int, dialect: str) -> _Unit:
     return _Unit(start, end, kind, name, qualname, signature, refs)
 
 
-def _by_sqlglot(source: str) -> tuple[_Unit, ...]:
+def _try_dialect(neutralised: str, dialect: str | None) -> tuple[_Unit, ...] | None:
+    """One parse attempt; ``None`` when ``dialect`` cannot structure the whole input."""
     import sqlglot
     from sqlglot import exp
 
+    try:
+        with _quiet():
+            statements = sqlglot.parse(neutralised, dialect=dialect)
+    except Exception:  # noqa: BLE001  tokenizer / parser errors are dialect specific
+        return None
+    units: list[_Unit] = []
+    for node in statements:
+        if node is None:
+            continue
+        if isinstance(node, exp.Command):
+            # 未対応構文は Command へ退避される。構造化できていないので
+            # 「この方言で解析できた」とは扱わない。
+            return None
+        span = _span(node)
+        if span is not None:
+            units.append(_glot_unit(node, span[0], span[1], dialect))
+    return tuple(units) if units else None
+
+
+def _by_sqlglot(source: str) -> tuple[_Unit, ...]:
     neutralised = _BATCH.sub(lambda m: f"{m.group(1)}; {m.group(2)}", source)
     for dialect in _DIALECTS:
-        try:
-            with _quiet():
-                statements = sqlglot.parse(neutralised, dialect=dialect)
-        except Exception:  # noqa: BLE001  tokenizer / parser errors are dialect specific
-            continue
-        units: list[_Unit] = []
-        failed = False
-        for node in statements:
-            if node is None:
-                continue
-            if isinstance(node, exp.Command):
-                # 未対応構文は Command へ退避される。構造化できていないので
-                # 「この方言で解析できた」とは扱わない。
-                failed = True
-                break
-            span = _span(node)
-            if span is not None:
-                units.append(_glot_unit(node, span[0], span[1], dialect))
-        if not failed and units:
-            return tuple(units)
+        units = _try_dialect(neutralised, dialect)
+        if units is not None:
+            return units
+    # 個別方言がいずれも通らないときだけ、全方言のスーパーセットである sqlglot 既定
+    # （方言無指定）でもう一度だけ試す（sqlglot 公式 FAQ: 方言無指定は全方言の
+    # スーパーセットとして解析される）。試行順は固定なので結果は決定的なまま。
+    units = _try_dialect(neutralised, None)
+    if units is not None:
+        return units
     raise ExtractionError("no sqlglot dialect could structure this SQL")
 
 

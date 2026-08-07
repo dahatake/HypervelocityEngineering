@@ -10,11 +10,15 @@ CLI から `python -m hve orchestrate --autopilot-chain <wfA,wfB,...>` で
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+
+from hve import runtime_observability as rto
 
 from .chain_runner import ChainState
 from .plan_model import AutopilotPlan
@@ -55,12 +59,18 @@ class CliAutopilotRunner:
         popen_factory: Optional[Callable[[List[str]], subprocess.Popen]] = None,
         poll_interval_sec: float = 0.1,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        echo: Optional[Callable[[str], None]] = None,
     ) -> None:
         self._plan = plan
         self._argv_factory = argv_factory
         self._popen_factory = popen_factory or self._default_popen
         self._poll_interval = poll_interval_sec
         self._progress_cb = progress_callback
+        # 子の通常ログは親の stdout へ再出力する（既定）。
+        self._echo = echo if echo is not None else print
+        # FR-RTO-05: instance = workflow_id#app_id 単位で集計する。
+        self.runtime_metrics = rto.RuntimeMetricsRegistry()
+        self._readers: Dict[str, threading.Thread] = {}
         self._states: Dict[str, ChainState] = {
             c.app_id: ChainState(chain=list(c.workflows))
             for c in plan.app_chains
@@ -70,13 +80,52 @@ class CliAutopilotRunner:
         self._done = 0
         self._summary = CliRunSummary(total_apps=len(self._states))
 
+    def _child_env(self) -> dict:
+        """FR-RTO-02: 子プロセスにだけ stats 配信を許可する。"""
+        env = os.environ.copy()
+        env[rto.STATS_STREAM_ENV] = "1"
+        return env
+
     def _default_popen(self, argv: List[str]) -> subprocess.Popen:
         return subprocess.Popen(
             [sys.executable, "-m", "hve", *argv],
-            stdout=None,
-            stderr=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=self._child_env(),
             **_detached_popen_kwargs(),
         )
+
+    def _consume_child_line(self, app_id: str, workflow_id: str, line: str) -> None:
+        """子 1 行を集計へ反映し、観測行以外を再出力する。"""
+        payload = rto.parse_stats_line(line)
+        if payload is not None:
+            instance_id = rto.make_instance_id(workflow_id, app_id)
+            self.runtime_metrics.for_instance(instance_id).apply(payload)
+            return
+        if self._echo is None:
+            return
+        try:
+            self._echo(f"[{app_id}][{workflow_id}] {line}")
+        except Exception:
+            pass
+
+    def _drain_child(self, app_id: str, workflow_id: str, proc: subprocess.Popen) -> None:
+        stream = getattr(proc, "stdout", None)
+        if stream is None:
+            return
+        try:
+            for raw in stream:
+                self._consume_child_line(app_id, workflow_id, raw.rstrip("\r\n"))
+        except (OSError, ValueError):
+            pass
+
+    def runtime_summary(self) -> str:
+        """FR-RTO-05: run 全体の集計サマリー。"""
+        return rto.format_runtime_summary(self.runtime_metrics.totals())
 
     def _build_argv(self, app_id: str, workflow_id: str) -> List[str]:
         if self._argv_factory is not None:
@@ -99,7 +148,17 @@ class CliAutopilotRunner:
             self._notify_progress()
             return
         argv = self._build_argv(app_id, wf)
-        self._running[app_id] = self._popen_factory(argv)
+        proc = self._popen_factory(argv)
+        self._running[app_id] = proc
+        if getattr(proc, "stdout", None) is not None:
+            reader = threading.Thread(
+                target=self._drain_child,
+                args=(app_id, wf, proc),
+                name=f"autopilot-drain-{app_id}",
+                daemon=True,
+            )
+            self._readers[app_id] = reader
+            reader.start()
 
     def _fill_slots(self) -> None:
         while self._pending and len(self._running) < self._plan.max_parallel:
@@ -131,6 +190,9 @@ class CliAutopilotRunner:
 
         for app_id in completed:
             self._running.pop(app_id, None)
+            reader = self._readers.pop(app_id, None)
+            if reader is not None:
+                reader.join(timeout=2.0)
             self._done += 1
             state = self._states[app_id]
             if state.aborted_code is not None:
@@ -142,6 +204,9 @@ class CliAutopilotRunner:
 
         for app_id in relaunch:
             self._running.pop(app_id, None)
+            reader = self._readers.pop(app_id, None)
+            if reader is not None:
+                reader.join(timeout=2.0)
             self._spawn_app_stage(app_id)
 
         self._fill_slots()

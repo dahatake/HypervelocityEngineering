@@ -122,6 +122,7 @@ def test_runner_gate_resolves_aag_fanout_target(
         *,
         agent_dir: Path | None = None,
         test_spec_path: Path | None = None,
+        tool_search_policy: str = "auto",
     ) -> list[str]:
         calls.append(
             {
@@ -166,6 +167,7 @@ def test_runner_gate_resolves_aagd_fanout_target(
         *,
         agent_dir: Path | None = None,
         test_spec_path: Path | None = None,
+        tool_search_policy: str = "auto",
     ) -> list[str]:
         calls.append((workflow_id, design_path, agent_dir, test_spec_path))
         return []
@@ -186,6 +188,74 @@ def test_runner_gate_resolves_aagd_fanout_target(
             tmp_path / "docs" / "agent" / "agent-detail-AG-02.md",
             tmp_path / "src" / "agent" / "AG-02",
             tmp_path / "docs" / "test-specs" / "AG-02-test-spec.md",
+        )
+    ]
+
+
+def test_runner_gate_resolves_aagd_deploy_target(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    calls: list[tuple[object, ...]] = []
+
+    def fake_deploy_validator(
+        design_path: Path,
+        infra_dir: Path,
+        tool_search_policy: str = "auto",
+    ) -> list[str]:
+        calls.append((design_path, infra_dir, tool_search_policy))
+        return []
+
+    monkeypatch.setattr(
+        "hve.artifact_validation.validate_ai_agent_deploy_artifacts",
+        fake_deploy_validator,
+    )
+    errors = _runner()._run_ai_agent_capability_gate(
+        "3/AG-03",
+        "Dev-Microservice-Azure-AgentDeploy",
+        "aagd",
+    )
+    assert errors == []
+    assert calls == [
+        (
+            tmp_path / "docs" / "agent" / "agent-detail-AG-03.md",
+            tmp_path / "src" / "infra" / "azure",
+            "auto",
+        )
+    ]
+
+
+def test_runner_gate_resolves_aagd_eval_target(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    calls: list[tuple[object, ...]] = []
+
+    def fake_eval_validator(
+        design_path: Path,
+        report_path: Path,
+        tool_search_policy: str = "auto",
+    ) -> list[str]:
+        calls.append((design_path, report_path, tool_search_policy))
+        return []
+
+    monkeypatch.setattr(
+        "hve.artifact_validation.validate_tool_search_eval_report",
+        fake_eval_validator,
+    )
+    errors = _runner()._run_ai_agent_capability_gate(
+        "4/AG-04",
+        "QA-ToolSearchEval",
+        "aagd",
+    )
+    assert errors == []
+    assert calls == [
+        (
+            tmp_path / "docs" / "agent" / "agent-detail-AG-04.md",
+            tmp_path / "docs" / "agent" / "tool-search-eval" / "AG-04-eval-report.md",
+            "auto",
         )
     ]
 

@@ -188,6 +188,34 @@ def _combine_additional_prompt_with_mdq(base: Optional[str]) -> Optional[str]:
     return block + "\n\n" + base
 
 
+# FR-WF-AAG-01: 生成する AI Agent の Tool Search 方針を注入する Step。
+_TOOL_SEARCH_POLICY_STEPS: Dict[str, Tuple[str, ...]] = {
+    "aag": ("3",),
+    "aagd": ("2.3", "3", "4"),
+}
+
+
+def _tool_search_policy_prefix(
+    workflow_id: Optional[str],
+    step_id: str,
+    policy: str,
+) -> str:
+    """対象 Step の Prompt へ生成 AI Agent の Tool Search 方針を注入する。
+
+    利用者が指定した値をそのまま渡し、Agent 側で既定へ丸めさせない。
+    非対象 Step には何も足さない（Prompt を変えない）。
+    """
+    steps = _TOOL_SEARCH_POLICY_STEPS.get((workflow_id or "").strip().casefold())
+    if not steps or str(step_id).split("/", 1)[0] not in steps:
+        return ""
+    return (
+        "## 生成する AI Agent の Tool Search 方針\n"
+        f"- 方針: `{policy}`\n"
+        "- これは利用者指定であり、Agent の判断・追加コメントで上書きしない。\n"
+        "- `auto` / `yes` / `no` 以外なら推測せず、blocked として停止する。"
+    )
+
+
 def _repository_skill_directories(
     skill_names: Optional[List[str]] = None,
 ) -> List[str]:
@@ -1322,7 +1350,7 @@ async def _create_session_with_auto_reasoning_fallback(
             msg = str(exc)
             if "unexpected keyword argument" not in msg:
                 raise
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier", "tool_search"):
                 if _kw in msg and _kw in opts:
                     if (
                         _kw == "skill_directories"
@@ -1343,6 +1371,15 @@ async def _create_session_with_auto_reasoning_fallback(
                         try:
                             console.warning(
                                 "Cloud Session は現在の Copilot SDK で未サポートのため、ローカルセッションにフォールバックします。"
+                            )
+                        except Exception:
+                            pass
+                    elif console is not None:
+                        # 無言で引数を剥ぐと、当該機能が無効化されたことに気付けない。
+                        try:
+                            console.warning(
+                                f"Copilot SDK が create_session({_kw}=...) を未サポートのため、"
+                                f"当該引数を除外して再試行します（{_kw} の機能は無効になります）。"
                             )
                         except Exception:
                             pass
@@ -1947,6 +1984,9 @@ class StepRunner:
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
+        # FR-TS-07: 自動 pin の学習材料。Step 終了時に id へ解決して記録する。
+        self._toolsearch_called_tools: List[str] = []
+        self._toolsearch_context: Any = None
         # Phase 6: サブセッション作成回数カウンター（observability）。
         # run_step() 開始時にリセットされる。テストから参照可能。
         self._sub_sessions_created: int = 0
@@ -2138,6 +2178,10 @@ class StepRunner:
             opts["available_tools"] = list(self.config.available_tools)
         if self.config.excluded_tools:
             opts["excluded_tools"] = list(self.config.excluded_tools)
+
+        # FR-MODEL-04: ツール定義遅延ロードもメインと同一値をサブへ伝搬する。
+        if self.config.tool_search:
+            opts["tool_search"] = {"enabled": True}
 
         # Phase 2: 決定論的 session_id を付与（step_id + suffix が指定された場合のみ）
         if step_id:
@@ -2551,10 +2595,46 @@ class StepRunner:
     # ファイル I/O 追跡ヘルパー
     # ------------------------------------------------------------------
 
+    def _resolve_run_id_safely(self) -> str:
+        """run_id を取得する。解決できなくても呼び出し元を落とさない。"""
+        try:
+            from .split_fork import resolve_run_id
+        except ImportError:  # pragma: no cover - script execution
+            from split_fork import resolve_run_id  # type: ignore[no-redef]
+        try:
+            return str(resolve_run_id())
+        except Exception:
+            return ""
+
+    def _record_toolsearch_usage(self, step_id: str) -> None:
+        """FR-TS-07: Step で呼ばれたツールを利用履歴へ記録し、蓄積をクリアする。"""
+        called = self._toolsearch_called_tools
+        self._toolsearch_called_tools = []
+        context = self._toolsearch_context
+        self._toolsearch_context = None
+        if not called or context is None:
+            return
+        try:
+            from .toolsearch.session import record_session_usage, resolve_called_tool_ids
+        except ImportError:  # pragma: no cover - script execution
+            return
+        try:
+            record_session_usage(
+                resolve_called_tool_ids(context, called),
+                # run_id を混ぜる。`_make_step_session_id` は決定論なのでそのまま使うと
+                # 同じ Step を何回実行しても session 数が 1 のままで、
+                # 自動 pin のウォームアップ（FR-TS-07）に到達しない。
+                session_id=f"{self._resolve_run_id_safely()}:{step_id}",
+                workflow_id=getattr(context, "workflow_id", None),
+                step_id=getattr(context, "step_id", None),
+            )
+        except Exception:
+            # 履歴記録の失敗で Step を落とさない。
+            pass
+
     def _track_tool_files(self, step_id: str, tool_name: str, args: dict) -> None:
         """ツール実行イベントからファイルパスを抽出し Console に記録・表示する。"""
         import os
-
         if tool_name in _SKIP_TOOLS:
             return
 
@@ -4049,6 +4129,56 @@ class StepRunner:
             if self.config.auto_compaction:
                 session_opts["infinite_sessions"] = {"enabled": True}
 
+            # FR-MODEL-04: SDK のツール定義遅延ロードをメインセッションへ伝搬する。
+            if self.config.tool_search:
+                session_opts["tool_search"] = {"enabled": True}
+
+                # FR-TS-01 / 06 / 07: tool_search_ranking="hve" のときだけ
+                # `tool_search_tool` を HVE 実装へ差し替え、Skill もカタログへ合流させる。
+                try:
+                    from .toolsearch.session import build_session_toolset
+                    from .toolsearch.stats import StatsCollector
+                except ImportError:  # pragma: no cover - script execution
+                    from toolsearch.session import (  # type: ignore[no-redef]
+                        build_session_toolset,
+                    )
+                    from toolsearch.stats import StatsCollector  # type: ignore[no-redef]
+                try:
+                    _ts_tools, self._toolsearch_context = build_session_toolset(
+                        self.config,
+                        repo_root=Path.cwd(),
+                        workflow_id=workflow_id,
+                        step_id=step_id,
+                        # FR-TS-09: 検索イベントを追記専用 JSONL へ流し、
+                        # `hve toolsearch dashboard` から観測できるようにする。
+                        on_event=StatsCollector(
+                            run_id=self._resolve_run_id_safely(),
+                            workflow_id=workflow_id,
+                            step_id=step_id,
+                        ),
+                        # G4 未実測: Cloud Session でカスタム tools が有効か確認できていないため
+                        # 当面 Cloud 経路では差し替えを行わない（SDK 既定のまま動かす）。
+                        enabled=not should_use_cloud_session(self.config, step_id=step_id),
+                    )
+                except Exception as _ts_exc:  # 検索の組立失敗で Step を落とさない
+                    _ts_tools = []
+                    self._toolsearch_context = None
+                    try:
+                        self.console.warning(
+                            f"  ⚠️ [{step_id}] Tool Search のランキング差し替えをスキップします: {_ts_exc}"
+                        )
+                    except Exception:
+                        pass
+                if _ts_tools:
+                    session_opts["tools"] = list(session_opts.get("tools") or []) + _ts_tools
+                    try:
+                        self.console.event(
+                            f"  🔎 [{step_id}] Tool Search ランキングを HVE 実装へ差し替え "
+                            f"(tools={len(_ts_tools)})"
+                        )
+                    except Exception:
+                        pass
+
             # Custom Agent 廃止後 (Q1=C / Q3=a):
             # `custom_agents` / `agent` キーは SDK に渡さない。
             # 代わりに `.github/prompts/<custom_agent>.prompt.md` を読み込み、
@@ -4189,6 +4319,13 @@ class StepRunner:
                 _prompt_prefix_parts.append(_agent_prompt_body.strip())
             if _skill_guard_text:
                 _prompt_prefix_parts.append(_skill_guard_text)
+            _tool_search_policy_text = _tool_search_policy_prefix(
+                workflow_id,
+                step_id,
+                self.config.enable_tool_search,
+            )
+            if _tool_search_policy_text:
+                _prompt_prefix_parts.append(_tool_search_policy_text)
             if _additional_suffix:
                 _prompt_prefix_parts.append(_additional_suffix)
             _agent_prefix = "\n\n".join(_prompt_prefix_parts).strip()
@@ -4658,6 +4795,7 @@ class StepRunner:
             return False
         finally:
             self._clear_tool_start_state(step_id)
+            self._record_toolsearch_usage(step_id)
             try:
                 try:
                     if session is not None:
@@ -4996,6 +5134,8 @@ class StepRunner:
     _AI_AGENT_CAPABILITY_GATE_TARGETS: Dict[Tuple[str, str, str], str] = {
         ("aag", "3", "Arch-AIAgentDesign-Step3"): "design",
         ("aagd", "2.3", "Dev-Microservice-Azure-AgentCoding"): "implementation",
+        ("aagd", "3", "Dev-Microservice-Azure-AgentDeploy"): "deploy",
+        ("aagd", "4", "QA-ToolSearchEval"): "eval",
     }
 
     def _run_ai_agent_capability_gate(
@@ -5032,6 +5172,8 @@ class StepRunner:
         try:
             from hve.artifact_validation import (
                 validate_ai_agent_capability_artifacts,
+                validate_ai_agent_deploy_artifacts,
+                validate_tool_search_eval_report,
             )
         except Exception as exc:
             return [
@@ -5051,6 +5193,23 @@ class StepRunner:
                 validation_errors = validate_ai_agent_capability_artifacts(
                     workflow,
                     design_path,
+                    tool_search_policy=self.config.enable_tool_search,
+                )
+            elif mode == "deploy":
+                validation_errors = validate_ai_agent_deploy_artifacts(
+                    design_path,
+                    repo_root / "src" / "infra" / "azure",
+                    self.config.enable_tool_search,
+                )
+            elif mode == "eval":
+                validation_errors = validate_tool_search_eval_report(
+                    design_path,
+                    repo_root
+                    / "docs"
+                    / "agent"
+                    / "tool-search-eval"
+                    / f"{target_key}-eval-report.md",
+                    self.config.enable_tool_search,
                 )
             else:
                 validation_errors = validate_ai_agent_capability_artifacts(
@@ -5063,6 +5222,7 @@ class StepRunner:
                         / "test-specs"
                         / f"{target_key}-test-spec.md"
                     ),
+                    tool_search_policy=self.config.enable_tool_search,
                 )
         except Exception as exc:
             return [
@@ -6010,6 +6170,9 @@ class StepRunner:
             if args and isinstance(args, dict):
                 # 既存のファイル I/O 追跡ロジックは維持
                 self._track_tool_files(step_id, tool_name, args)
+            if tool_name:
+                # FR-TS-07: 自動 pin の学習材料。id への解決は Step 終了時に行う。
+                self._toolsearch_called_tools.append(str(tool_name))
             workiq_tool_name = extract_workiq_tool_name_from_event(event)
             if workiq_tool_name:
                 self._workiq_called_tools.append(workiq_tool_name)
@@ -6120,6 +6283,16 @@ class StepRunner:
                 args_summary = self._build_failed_tool_args_summary(args_tool_name, last_args)
                 if args_summary:
                     error_msg = f"{error_msg} ({args_summary})" if error_msg else args_summary
+                # 失敗も観測対象とする。引数・エラー本文は送らない（FR-RTO-04）。
+                try:
+                    self.console.stats_event(
+                        "tool_result",
+                        step_id=step_id or "",
+                        tool_name=str(effective_tool_name or ""),
+                        success=False,
+                    )
+                except Exception:
+                    pass
                 self.console.tool_result(step_id, False, error_msg=error_msg)
             return
 
@@ -6701,11 +6874,12 @@ class StepRunner:
             # GUI 詳細ポップアップ用に累計数を通知
             self._permission_count += 1
             try:
+                # `kind` は stats_event の位置引数名と衝突するため別キーで送る。
                 self.console.stats_event(
                     "permission_count",
                     step_id=step_id,
                     count=self._permission_count,
-                    kind=kind_str,
+                    permission_kind=kind_str,
                 )
             except Exception:
                 pass

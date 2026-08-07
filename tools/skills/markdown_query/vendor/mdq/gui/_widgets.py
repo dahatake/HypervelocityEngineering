@@ -37,15 +37,13 @@ class LabeledField(QWidget):
         outer.setSpacing(2)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            "font-weight: bold; color: #1f2328; font-size: 10pt;"
-        )
+        title_label.setStyleSheet("font-weight: bold; font-size: 10pt;")
         outer.addWidget(title_label)
 
         if description:
             desc = QLabel(description)
             desc.setWordWrap(True)
-            desc.setStyleSheet("color: #57606a; font-size: 9pt;")
+            desc.setStyleSheet("font-size: 9pt;")
             outer.addWidget(desc)
             input_widget.setToolTip(description)
 

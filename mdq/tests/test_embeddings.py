@@ -97,3 +97,45 @@ def test_fastembed_unavailable_when_extra_missing():
             emb.get_provider(name="fastembed")
         return
     pytest.skip("fastembed is installed; skipping unavailability check")
+
+
+# --- provider reuse --------------------------------------------------------
+# `scan_file_semantic_paragraph` calls get_provider once per FILE, so building
+# a provider per call makes indexing pay the ONNX session construction N times.
+
+
+def test_get_provider_reuses_the_same_instance(monkeypatch):
+    emb.clear_provider_cache()
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    assert emb.get_provider() is emb.get_provider()
+
+
+def test_get_provider_distinguishes_models(monkeypatch):
+    emb.clear_provider_cache()
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    assert emb.get_provider(model="model-a") is not emb.get_provider(model="model-b")
+
+
+def test_get_provider_follows_env_model_changes(monkeypatch):
+    emb.clear_provider_cache()
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    monkeypatch.setenv("MDQ_EMBED_MODEL", "model-a")
+    first = emb.get_provider()
+    monkeypatch.setenv("MDQ_EMBED_MODEL", "model-b")
+    assert emb.get_provider() is not first
+
+
+def test_clear_provider_cache_forces_a_rebuild(monkeypatch):
+    emb.clear_provider_cache()
+    monkeypatch.setenv("MDQ_EMBED_PROVIDER", "null")
+    first = emb.get_provider()
+    emb.clear_provider_cache()
+    assert emb.get_provider() is not first
+
+
+def test_failed_construction_is_not_cached(monkeypatch):
+    emb.clear_provider_cache()
+    with pytest.raises(emb.EmbeddingsUnavailable):
+        emb.get_provider(name="does-not-exist")
+    with pytest.raises(emb.EmbeddingsUnavailable):
+        emb.get_provider(name="does-not-exist")

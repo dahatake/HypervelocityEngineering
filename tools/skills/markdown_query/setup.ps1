@@ -1,4 +1,4 @@
-# setup.ps1 — Windows launcher for the shared kit setup (FR-KIT-03).
+# setup.ps1 - Windows launcher for the shared kit setup (FR-KIT-03).
 #
 # Every decision (dependency resolution, path decisions, configuration
 # scaffolding, Skill placement) lives in kit/kit_setup.py. This file only

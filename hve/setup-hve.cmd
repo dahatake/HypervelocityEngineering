@@ -26,9 +26,12 @@ REM   hve\setup-hve.cmd -SkipNltkDownload
 REM   hve\setup-hve.cmd -WithSkills
 REM   hve\setup-hve.cmd -Yes               (skip confirmation prompts incl. Python auto-install)
 REM   hve\setup-hve.cmd -NoInstallPython   (do not auto-install Python via winget)
+REM   hve\setup-hve.cmd -NoInstallTools    (do not auto-install git/gh/Node.js/Azure CLI/ShellCheck/Copilot CLI)
 REM
 REM Prerequisites detected by the PowerShell script (with hints):
 REM   - git, GitHub CLI (gh), Python 3.11+ (auto-installs latest 3.14 via winget when missing)
+REM   - Python venv/ensurepip module (repairs via winget when missing)
+REM   - Node.js LTS, Azure CLI, ShellCheck, GitHub Copilot CLI (auto-installed when missing)
 REM ============================================================
 
 setlocal

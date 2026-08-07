@@ -50,7 +50,7 @@ python -m mdq search --q "..." [--lang ...] [--strategy auto|heading|heading_rec
 | `--paths` | なし | `fnmatch` 形式の path glob（例: `docs/*` `users-guide/**`） |
 | `--tags` | なし | frontmatter `tags` で AND 絞り込み |
 | `--snippet-radius` | `2` | マッチ行の前後何行を snippet に含めるか（`--return-unit line` のときのみ効く） |
-| `--return-unit {line\|chunk}` | `line` | 抜粋の単位。`line` はマッチ行 ±`--snippet-radius` 行（最大 400 字で切り詰め）、`chunk` はヒットを含むチャンクの本文全体。単位を変えても strategy 選定・ヒット対象・順位は変わらないが、抜粋が長い分だけ同じ `--max-tokens` で返る件数は減る。`expansion`（parent / neighbors / parts）の抜粋には適用されない。`semantic_paragraph` 索引では contextualize 後の本文（`[Context] ...` を前置した `text`）が返る |
+| `--return-unit {line\|chunk\|locations}` | `line` | 抜粋の単位。`line` はマッチ行 ±`--snippet-radius` 行（最大 400 字で切り詰め）、`chunk` はヒットを含むチャンクの本文全体、`locations` は本文を一切返さず所在（`chunk_id` / `path` / `heading_path` / `lines` / `score`）だけを返す。単位を変えても strategy 選定・ヒット対象・順位は変わらないが、抜粋が長い分だけ同じ `--max-tokens` で返る件数は減る（逆に `locations` は増える）。`chunk` の拡張は `expansion` へ適用されないが、`locations` は `expansion` からも本文を除く。`semantic_paragraph` 索引では contextualize 後の本文（`[Context] ...` を前置した `text`）が返る |
 | `--include-parent` | off | ヒットの直近親見出しチャンクを `expansion.parent` に追加（`--with-parent-depth 1` と等価） |
 | `--with-parent-depth N` | `0` | N 階層上までの祖先見出しチェーンを取得。`expansion.parent` は **常に直近親 1 件の dict**（後方互換）、N≥2 のときのみ `expansion.parents` に祖先列（先頭=直近親、末尾=最上位先祖）を追加。`parent_chunk_id` 列を優先、未設定なら `heading_path` rsplit にフォールバック |
 | `--expand-neighbors N` | `0` | 同一ファイル内で `start_line` 前後 N 件を `expansion.neighbors` に追加 |
@@ -58,6 +58,7 @@ python -m mdq search --q "..." [--lang ...] [--strategy auto|heading|heading_rec
 | `--engine {auto\|bm25\|fts5}` | `auto` | `auto` は環境変数 `MDQ_FTS5`（旧名 `HVE_MDQ_FTS5` も deprecated alias）が truthy かつ FTS5 サポート時に FTS5、それ以外は in-memory BM25。詳細は [language-and-strategy.md](language-and-strategy.md) |
 | `--fusion-alpha F` | なし | 未指定ではベクトル統合を行わない。`chunk_embedding` を持つ index (`--late-chunking`) かつ FTS5 経路でない場合のみ有効（`--engine fts5` では無視）。`final_score = alpha * bm25_norm + (1 - alpha) * cosine_sim`。`1.0` で BM25 単独、`0.0` で cosine 単独 |
 | `--format` | `jsonl` | `jsonl` または `compact`（人間可読） |
+| `--no-freshness-check` | off（検知は既定で有効） | 索引と作業ツリーの乖離検知を無効化する。検知は索引済みファイルのサイズと更新時刻だけを見る（内容ハッシュは読まない）。乖離を検知すると `{"warning":"stale","changed":N,"hint":"..."}` を **stderr** へ出力する。stdout の JSONL（1 ヒット 1 行）は変わらない |
 
 JSONL 1 行スキーマ:
 ```json

@@ -142,10 +142,7 @@ class _DropZone(QWidget):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setMinimumHeight(80)
-        self.setStyleSheet(
-            "border: 2px dashed #90caf9; background: #e3f2fd; "
-            "color: #1565c0; border-radius: 6px;"
-        )
+        self.setProperty("hveRole", "dropArea")
         layout = QVBoxLayout(self)
         label = QLabel(self.tr("📥 ここにファイルをドロップ\n"
                        "（.md / .txt / .csv / .html / .docx / .pdf / .xlsx）"))
@@ -264,7 +261,8 @@ class AttachmentPane(QWidget):
         self._status_label = QLabel(
             self.tr("★ = business_requirement-input.md の起点として採用")
         )
-        self._status_label.setStyleSheet("color: #666; padding: 4px;")
+        self._status_label.setProperty("hveRole", "description")
+        self._status_label.setStyleSheet("padding: 4px;")
 
         # 要求定義書生成ボタン（取り込み済みファイルが1件以上ある時のみ有効化）
         # ラベルは短く保ち、生成先パス等の詳細はツールチップで案内する。
@@ -287,7 +285,8 @@ class AttachmentPane(QWidget):
         generate_row.addStretch()
 
         self._br_progress_label = QLabel("")
-        self._br_progress_label.setStyleSheet("color: #444; padding: 4px;")
+        self._br_progress_label.setProperty("hveRole", "description")
+        self._br_progress_label.setStyleSheet("padding: 4px;")
         self._br_progress_label.setVisible(False)
 
         layout = QVBoxLayout(self)

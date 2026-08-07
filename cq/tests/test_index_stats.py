@@ -39,6 +39,28 @@ def _db(repo: Path) -> Path:
     return repo / ".cq" / "index-test.sqlite"
 
 
+@pytest.fixture()
+def polyglot_repo(tmp_path: Path) -> Path:
+    """C# と Java はどちらも `tree-sitter` パーサだから、パーサ別集計では区別できない。"""
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "cq.toml").write_text(
+        "[profiles.test]\nroots = ['pkg']\n", encoding="utf-8"
+    )
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "a.py").write_text(
+        "def alpha():\n    return 1\n", encoding="utf-8"
+    )
+    (tmp_path / "pkg" / "b.cs").write_text(
+        "class Beta\n{\n    void Run()\n    {\n    }\n}\n", encoding="utf-8"
+    )
+    (tmp_path / "pkg" / "c.java").write_text(
+        "class Gamma {\n    void run() {\n    }\n}\n", encoding="utf-8"
+    )
+    profile = config.resolve_profile(tmp_path, "test")
+    indexer.build_index(tmp_path, profile, db_path=_db(tmp_path))
+    return tmp_path
+
+
 class TestIndexStats:
     def test_reports_every_table_and_the_schema_version(self, repo: Path) -> None:
         report = store.index_stats(_db(repo))
@@ -89,3 +111,51 @@ class TestCliDelegates:
         assert not hasattr(cli, "_stats"), (
             "cq/cli.py に統計集計の第2実装が残っている（FR-MAINT-07）"
         )
+
+
+class TestLanguageBreakdown:
+    """FR-CQ-15: パーサ別集計だけでは言語ごとのフィデリティを判別できない。"""
+
+    def test_reports_a_language_breakdown(self, polyglot_repo: Path) -> None:
+        report = store.index_stats(_db(polyglot_repo))
+
+        python = report["by_lang"]["python"]
+        assert python["files"] == 1
+        assert python["symbols"] == 1
+        assert python["chunks"] >= 1
+        assert python["by_parser"] == {"ast": 1}
+
+    def test_separates_languages_that_share_a_parser(
+        self, polyglot_repo: Path
+    ) -> None:
+        report = store.index_stats(_db(polyglot_repo))
+
+        assert report["by_parser"]["tree-sitter"] == 2
+        assert report["by_lang"]["csharp"]["by_parser"] == {"tree-sitter": 1}
+        assert report["by_lang"]["java"]["by_parser"] == {"tree-sitter": 1}
+
+    def test_language_totals_match_the_overall_totals(
+        self, polyglot_repo: Path
+    ) -> None:
+        """言語別の合計が全体合計と一致しない場合、集計が行を重複または欠落させている。"""
+        report = store.index_stats(_db(polyglot_repo))
+
+        for key in ("files", "symbols", "chunks"):
+            assert sum(
+                entry[key] for entry in report["by_lang"].values()
+            ) == report[key], key
+
+    def test_uses_the_indexed_language_without_reclassifying(
+        self, polyglot_repo: Path
+    ) -> None:
+        """統計側で拡張子から言語を再判定してはならない。"""
+        with closing(store.open_store(_db(polyglot_repo), create=False)) as conn:
+            conn.execute(
+                "UPDATE files SET lang = 'renamed' WHERE path = 'pkg/a.py'"
+            )
+            conn.commit()
+
+        report = store.index_stats(_db(polyglot_repo))
+
+        assert "renamed" in report["by_lang"]
+        assert "python" not in report["by_lang"]

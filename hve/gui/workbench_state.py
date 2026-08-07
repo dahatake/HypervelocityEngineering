@@ -14,6 +14,11 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from PySide6.QtCore import QObject, Signal
 
+try:
+    from .. import runtime_observability as _rto
+except ImportError:  # pragma: no cover - script 実行経路
+    from hve import runtime_observability as _rto  # type: ignore[no-redef]
+
 StepStatus = Literal["pending", "running", "done", "failed", "skipped", "blocked"]
 ActionLevel = Literal["INFO", "WARN", "ERROR"]
 StepKind = Literal["step", "container", "fanout_child", "subagent"]
@@ -477,6 +482,11 @@ class WorkbenchState:
     # 永続化コールバック（T3で設定）: callable(workflow_snapshot) -> None
     _history_store: Optional[object] = None
 
+    # 実行時観測の instance 別集計（FR-RTO-05）。GUI 既存集計と並行して保持する。
+    runtime_metrics: "_rto.RuntimeMetricsRegistry" = field(
+        default_factory=lambda: _rto.RuntimeMetricsRegistry()
+    )
+
     user_actions: List[UserAction] = field(default_factory=list)
     user_actions_scroll: int = 0
 
@@ -511,6 +521,18 @@ class WorkbenchState:
     def signals(self) -> WorkbenchStateSignals:
         """Signal emitter を取得。"""
         return self._signals
+
+    def apply_runtime_event(self, payload: dict) -> bool:
+        """FR-RTO-05: 観測イベントを instance 別集計へ反映する。"""
+        return self.runtime_metrics.apply(payload)
+
+    def instance_metrics(self, instance_id: str):
+        """instance 単位の集計を返す。"""
+        return self.runtime_metrics.for_instance(instance_id)
+
+    def runtime_totals(self):
+        """run 全体の合算を返す。"""
+        return self.runtime_metrics.totals()
 
     def append_body(self, line: str) -> None:
         self.body.append(line)

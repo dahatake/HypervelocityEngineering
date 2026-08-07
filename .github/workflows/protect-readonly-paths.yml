@@ -3,6 +3,8 @@ name: Protect Read-Only Paths
 # PR で以下のパスへの変更を禁止する:
 #   - ルート README.md (.github/copilot-instructions.md §0「ルート README.md 変更禁止」)
 #   - original-docs/ 配下のファイル (.github/copilot-instructions.md §0「original-docs/ 読み取り専用（絶対）」)
+#   - リポジトリルート直下への新規ファイル／ディレクトリ追加
+#     (.github/copilot-instructions.md §0「一時作業ファイルは work/ 配下に限定（絶対）」)
 #
 # 注: paths フィルタを使うと違反のない PR ではチェック自体が実行されず、
 #     ブランチ保護の必須チェックとして機能しない。全 PR で実行し、
@@ -63,3 +65,95 @@ jobs:
           fi
 
           echo "✅ original-docs/ への変更はありません。"
+
+  check-root-temp-files:
+    name: ルート直下 一時ファイル作成禁止チェック
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: ルート直下への新規追加を許可リストと突合
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # ルート直下へ新規追加してよいファイル（リポジトリ標準の設定ファイル等）。
+          ROOT_FILE_ALLOWLIST=$(cat <<'EOF'
+          .editorconfig
+          .gitattributes
+          .gitignore
+          babel.config.js
+          CHANGELOG.md
+          cq.toml
+          hve.cmd
+          hve.sh
+          jest.config.js
+          LICENSE
+          mdq.toml
+          package-lock.json
+          package.json
+          playwright.config.js
+          pyproject.toml
+          README.md
+          EOF
+          )
+
+          # ルート直下へ新規追加してよいディレクトリ。
+          ROOT_DIR_ALLOWLIST=$(cat <<'EOF'
+          .github
+          .vscode
+          cq
+          docs
+          docs-generated
+          hve
+          hve-dev
+          knowledge
+          mdq
+          original-docs
+          qa
+          sample
+          src
+          template
+          tests
+          tools
+          users-guide
+          work
+          EOF
+          )
+
+          if ! ADDED_FILES=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/files" --paginate --jq '.[] | select(.status == "added") | .filename'); then
+            echo "::error::PR のファイル一覧取得に失敗しました（PR: #${PR_NUMBER}）"
+            exit 1
+          fi
+
+          VIOLATIONS=""
+          while IFS= read -r path; do
+            [ -z "${path}" ] && continue
+            top="${path%%/*}"
+            if [ "${top}" = "${path}" ]; then
+              ALLOWLIST="${ROOT_FILE_ALLOWLIST}"
+            else
+              ALLOWLIST="${ROOT_DIR_ALLOWLIST}"
+            fi
+            if ! printf '%s\n' "${ALLOWLIST}" | grep -qxF -- "${top}"; then
+              VIOLATIONS="${VIOLATIONS}  - ${path}"$'\n'
+            fi
+          done <<< "${ADDED_FILES}"
+
+          if [ -n "${VIOLATIONS}" ]; then
+            echo "::error::リポジトリルート直下への新規ファイル／ディレクトリ追加が検出されました。"
+            echo ""
+            echo ".github/copilot-instructions.md §0 ルール:"
+            echo "  「一時作業ファイルは work/ 配下に限定（絶対）: 一時作業ファイルをリポジトリルート直下（/）に作成してはならない。」"
+            echo ""
+            echo "検出されたパス:"
+            printf '%s' "${VIOLATIONS}"
+            echo "対処:"
+            echo "  - 一時作業ファイルであれば work/run/<run-id>/<task>/artifacts/ 配下へ移動する。"
+            echo "  - 恒久的に必要なファイルであれば、本ワークフローの ROOT_FILE_ALLOWLIST / ROOT_DIR_ALLOWLIST を同じ PR で更新する。"
+            exit 1
+          fi
+
+          echo "✅ ルート直下への不正な新規追加はありません。"

@@ -26,14 +26,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .theme import token
 from .workbench_state import WorkbenchState
 
 
-# 配色（VS Code Light を踏襲した穏やかな寒色系）
-_LABEL_COLOR = "#222222"   # 項目名（濃色・太字）
-_VALUE_COLOR = "#5a6473"   # 値（中間色）
-_SECTION_COLOR = "#0b6bcb"  # セクション見出し
-_MUTED_COLOR = "#8a8f97"   # 補助テキスト
+# 配色トークン名。色は描画のたびに token() で解決し、テーマ切替へ追従させる。
+_LABEL_COLOR = "foreground"             # 項目名（濃色・太字）
+_VALUE_COLOR = "descriptionForeground"  # 値（中間色）
+_SECTION_COLOR = "accentForeground"     # セクション見出し
+_MUTED_COLOR = "disabledForeground"     # 補助テキスト
 _DASH = "-"  # SDK 未取得値の表示
 
 
@@ -379,11 +380,6 @@ class StatsDetailPopup(QWidget):
         self.setWindowFlags(Qt.WindowType.Tool)
         self.setWindowTitle(self.tr("統計情報"))
         self.setObjectName("StatsDetailPopup")
-        self.setStyleSheet(
-            "#StatsDetailPopup {"
-            " background-color: #ffffff;"
-            "}"
-        )
         self._state = state
         self._tabs: Optional[QTabWidget] = None
         self._build_ui(state)
@@ -495,7 +491,7 @@ class StatsDetailPopup(QWidget):
 
         # --- ヘッダ ---
         title = QLabel(self.tr("コンテキスト ウィンドウ"))
-        title.setStyleSheet(f"font-weight: bold; color: {_LABEL_COLOR}; font-size: 11pt;")
+        title.setStyleSheet("font-weight: bold; font-size: 11pt;")
         layout.addWidget(title)
 
         cur = int(header.get("current", 0) or 0)
@@ -503,10 +499,10 @@ class StatsDetailPopup(QWidget):
         pct = float(header.get("pct", 0.0) or 0.0)
 
         usage_text = QLabel(
-            f"<span style='color:{_VALUE_COLOR};'>{cur:,} / {lim:,} 個のトークン</span>"
-            f"&nbsp;&nbsp;<span style='color:{_LABEL_COLOR}; font-weight:bold;'>{pct:.1f}%</span>"
+            f"<span style='color:{token(_VALUE_COLOR)};'>{cur:,} / {lim:,} 個のトークン</span>"
+            f"&nbsp;&nbsp;<span style='color:{token(_LABEL_COLOR)}; font-weight:bold;'>{pct:.1f}%</span>"
             if lim > 0
-            else f"<span style='color:{_MUTED_COLOR};'>未取得</span>"
+            else f"<span style='color:{token(_MUTED_COLOR)};'>未取得</span>"
         )
         usage_text.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(usage_text)
@@ -524,9 +520,8 @@ class StatsDetailPopup(QWidget):
         # --- カテゴリブロック ---
         for sec in sections:
             sec_title = QLabel(sec.title)
-            sec_title.setStyleSheet(
-                f"color: {_SECTION_COLOR}; font-weight: bold; font-size: 9pt;"
-            )
+            sec_title.setProperty("hveRole", "accent")
+            sec_title.setStyleSheet("font-weight: bold; font-size: 9pt;")
             layout.addWidget(sec_title)
             for item in sec.items:
                 layout.addWidget(_item_row(item))
@@ -534,7 +529,7 @@ class StatsDetailPopup(QWidget):
 
         # フッタ補助
         note = QLabel(
-            "<span style='color:" + _MUTED_COLOR + "; font-size: 8pt;'>"
+            "<span style='color:" + token(_MUTED_COLOR) + "; font-size: 8pt;'>"
             "スナップショット（再オープンで再取得）／"
             "SDK 未取得値は '-' で表示／"
             "Messages と Tool Results は SDK 仕様により分離不可"
@@ -558,8 +553,8 @@ def _item_row(item: StatItem) -> QWidget:
     label = QLabel(
         f"<table width='100%' cellspacing='0' cellpadding='0'>"
         f"<tr>"
-        f"<td align='left'><span style='color:{_LABEL_COLOR}; font-weight:bold;'>{_escape(item.label)}</span></td>"
-        f"<td align='right'><span style='color:{_VALUE_COLOR};'>{_escape(item.value)}</span></td>"
+        f"<td align='left'><span style='color:{token(_LABEL_COLOR)}; font-weight:bold;'>{_escape(item.label)}</span></td>"
+        f"<td align='right'><span style='color:{token(_VALUE_COLOR)};'>{_escape(item.value)}</span></td>"
         f"</tr></table>"
     )
     label.setTextFormat(Qt.TextFormat.RichText)
@@ -569,9 +564,9 @@ def _item_row(item: StatItem) -> QWidget:
 
 def _hline() -> QFrame:
     f = QFrame()
+    f.setProperty("hveRole", "separator")
     f.setFrameShape(QFrame.Shape.HLine)
     f.setFrameShadow(QFrame.Shadow.Sunken)
-    f.setStyleSheet("color: #e0e3e8;")
     return f
 
 

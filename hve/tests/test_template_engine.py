@@ -790,30 +790,42 @@ class TestExistingArtifactPolicyIntegration:
             assert "## 既存成果物がある場合の更新方針" in body
 
     def test_yaml_inline_bodies_include_existing_artifact_policy_keywords(self):
-        def _extract_printf_body(content: str, var_name: str) -> str:
-            prefix = f"{var_name}=$(printf '"
-            start = content.find(prefix)
-            assert start != -1, f"{var_name} の printf 開始を検出できませんでした"
-            start += len(prefix)
-            end = content.find("' \\", start)
-            assert end != -1, f"{var_name} の printf 終端を検出できませんでした"
-            return content[start:end]
+        """成果物を出力する inline body に既存成果物ポリシーが入っていること。
+
+        変数名（BODY_S11 等）に固定すると Step 構成の変更で腐るため、
+        「ポリシーを持つ body の数」と「その body が出力を宣言していること」で見る。
+        """
+        import re as _re
+
+        def _printf_bodies(content: str) -> dict[str, str]:
+            bodies: dict[str, str] = {}
+            for m in _re.finditer(r"(BODY_\w+)=\$\(printf '", content):
+                start = m.end()
+                end = content.find("' \\", start)
+                assert end != -1, f"{m.group(1)} の printf 終端を検出できませんでした"
+                bodies[m.group(1)] = content[start:end]
+            return bodies
 
         repo_root = Path(__file__).resolve().parents[2]
         workflow_expectations = {
             ".github/workflows/auto-app-dev-microservice-web-reusable.yml": 2,
             ".github/workflows/auto-app-detail-design-web-reusable.yml": 2,
-            ".github/workflows/auto-ai-agent-design-reusable.yml": 2,
-            ".github/workflows/auto-ai-agent-dev-reusable.yml": 2,
+            ".github/workflows/auto-ai-agent-design-reusable.yml": 3,
+            ".github/workflows/auto-ai-agent-dev-reusable.yml": 1,
         }
+        policy = "## 既存成果物がある場合の更新方針"
         for rel_path, expected_count in workflow_expectations.items():
             content = (repo_root / rel_path).read_text(encoding="utf-8")
-            assert content.count("## 既存成果物がある場合の更新方針") == expected_count
+            assert content.count(policy) == expected_count, rel_path
             assert "メインタスク本体を必ず実行する" in content
-            body_s11 = _extract_printf_body(content, "BODY_S11")
-            body_s12 = _extract_printf_body(content, "BODY_S12")
-            assert "## 既存成果物がある場合の更新方針" in body_s11
-            assert "## 既存成果物がある場合の更新方針" in body_s12
+            with_policy = {
+                name: body
+                for name, body in _printf_bodies(content).items()
+                if policy in body
+            }
+            assert len(with_policy) == expected_count, rel_path
+            for name, body in with_policy.items():
+                assert "## 出力" in body or "## 成果物" in body, f"{rel_path}:{name}"
 
 
 # ---------------------------------------------------------------------------

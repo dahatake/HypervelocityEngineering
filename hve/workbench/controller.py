@@ -148,6 +148,11 @@ class WorkbenchController:
             self.state.set_model(name)
             self._refresh_layout()
 
+    def set_runtime_metrics(self, registry: object) -> None:
+        with self._lock:
+            self.state.set_runtime_metrics(registry)
+            self._refresh_layout()
+
     def expand_steps(self, parent_id: str, child_keys: List[str]) -> None:
         with self._lock:
             self.state.expand_steps(parent_id, child_keys)
@@ -332,6 +337,8 @@ class WorkbenchController:
         cmd = text.split()[0] if text else ""
         if cmd == "/help":
             self._cmd_help()
+        elif cmd == "/stats":
+            self._cmd_stats()
         elif cmd == "/exit":
             self._cmd_exit()
         else:
@@ -340,16 +347,53 @@ class WorkbenchController:
     def _cmd_help(self) -> None:
         if self.state.all_done:
             msg = (
-                "commands: /exit (終了), /help  ｜ "
+                "commands: /exit (終了), /stats (統計), /help  ｜ "
                 "keys: ↑↓ body, [ ] actions, g/G top/bottom"
             )
         else:
             msg = (
-                "commands: /help  ｜ "
+                "commands: /stats (統計), /help  ｜ "
                 "keys: ↑↓ body, [ ] actions, g/G top/bottom, q detach  ｜ "
                 "(全タスク完了後に /exit で終了)"
             )
         self.append_user_action("INFO", msg)
+
+    def _cmd_stats(self) -> None:
+        """FR-RTO-05: 実行時観測のスナップショットを表示する。未取得値は推定しない。"""
+        metrics = self.state.metrics_snapshot()
+        if metrics is None:
+            self.append_user_action("INFO", "/stats: 実行時統計は未取得です")
+            return
+
+        from ..runtime_observability import format_counts_topn
+
+        credit = f"{metrics.aiu_total:.4f} AIU" if metrics.aiu_nano_total > 0 else "-"
+        reqs = metrics.display_reqs
+        context = (
+            f"{metrics.context_current:,}/{metrics.context_limit:,}"
+            if metrics.context_limit > 0
+            else "-/-"
+        )
+        self.append_user_action(
+            "INFO",
+            "/stats: "
+            f"tokens in={metrics.input_tokens_total:,} out={metrics.output_tokens_total:,} "
+            f"reasoning={metrics.reasoning_tokens_total:,} "
+            f"cache r/w={metrics.cache_read_total:,}/{metrics.cache_write_total:,}"
+            f"  ｜  AI Credit {credit}"
+            f"  ｜  Reqs {reqs if reqs > 0 else '-'}"
+            f"  ｜  Context {context}",
+        )
+        self.append_user_action(
+            "INFO",
+            "/stats: "
+            f"Tools {format_counts_topn(metrics.current_tool_counts(), top=5)}"
+            f"  ｜  Skills {format_counts_topn(metrics.current_skill_counts(), top=5)}"
+            f"  ｜  compaction {metrics.compaction_count}"
+            f"  ｜  permission {metrics.permission_count}"
+            f"  ｜  tool 失敗 {metrics.tool_failures}"
+            f"  ｜  model 失敗 {metrics.model_call_failures}",
+        )
 
     def _cmd_exit(self) -> None:
         if not self.state.all_done:

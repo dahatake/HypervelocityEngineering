@@ -237,8 +237,10 @@ Issue Template の **「使用するモデル」** で Copilot cloud agent の�
   - Q4: 想定データソース
   - Q5: 既存設計の差分更新
   - Q6: Foundry モデル SKU フォールバック
-- `Agentic Retrieval を使用する = しない`（内部値: `no`）の場合、
-  関連 Sub-issue は生成されません。
+- 回答値は Root Issue 本文へタグとして埋め込まれますが、
+  **現時点で `enable_agentic_retrieval` による Sub-issue の自動スキップは実装されていません**。
+  Agentic Retrieval の Step（AAD-WEB `2.6` / ASDW-WEB `2.5` `2.6`）は常に生成され、
+  対象サービスが 0 件の場合は成果物なしで完了します。
 - 詳細は
   [agentic-retrieval-guide.md](./agentic-retrieval-guide.md) を参照してください。
 

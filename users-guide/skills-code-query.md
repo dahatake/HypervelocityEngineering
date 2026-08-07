@@ -113,13 +113,13 @@ flowchart LR
 - **索引は検索のたびに自己修復**: `cq search` は応答前に `stat()` だけで差分を突合し、既定 50 件以下なら自動で再索引する。超過時は結果を返しつつ最終行に `{"warning":"stale","changed":N}` を出す。
 - **必須の外部依存はゼロ**: 標準ライブラリ + SQLite + git だけで動く。`tiktoken`（正確なトークン計数）と `watchdog`（`cq watch`）は任意で、遅延 import される。GUI（§11）は `PySide6` を要するが、`cq.gui` は CLI から import されないため CLI の軽量性を損なわない。
 - **Windows の文字化け対策済み**: [cq/cli.py](../cq/cli.py) の `_force_utf8_output()` が stdout/stderr を UTF-8 へ再構成するため、cp932 環境でも日本語 snippet や折り畳み記号 `⋮...` で落ちない。
-- **tree-sitter は公式の言語別文法だけを採用**: Java / Go / Rust / C / C++ / Scala / shell / PowerShell / batch は `pip install -e ".[code]"` の任意依存で解析する。文法は wheel に同梱されており実行時にネットワーク取得しない。文法をダウンロードする `tree-sitter-language-pack` は不採用。未導入環境では当該言語だけが `lite` へ降格する。SQL は tree-sitter ではなく sqlglot（`code` extra）を主とし、本体を構造化できないときだけ sqlfluff（`code-sql` extra）へエスカレーションする。C# / JavaScript / TypeScript は標準ライブラリのみの brace 深度追跡で解析する。
+- **tree-sitter は公式の言語別文法だけを採用**: Java / Go / Rust / C / C++ / Scala / shell / PowerShell / batch / C# / JavaScript / TypeScript / Python（構文エラー時のフォールバックのみ）は `pip install -e ".[code]"` の任意依存で解析する。文法は wheel に同梱されており実行時にネットワーク取得しない。文法をダウンロードする `tree-sitter-language-pack` は不採用。未導入環境では当該言語だけが低フィデリティへ降格する（C# / JavaScript / TypeScript は標準ライブラリのみの brace 深度追跡、Python は `ast` が既定なので降格しない、それ以外は `lite`）。SQL は tree-sitter ではなく sqlglot（`code` extra）を主とし、本体を構造化できないときだけ sqlfluff（`code-sql` extra）へエスカレーションする。
 
 ### 1.3 SoT (Source of Truth) ファイル一覧
 
 | 機能 | SoT ファイル | 主要シンボル |
 |---|---|---|
-| サブコマンド振り分け | [cq/cli.py](../cq/cli.py) | `build_parser`, `_dispatch`, `_stats`, `_force_utf8_output` |
+| サブコマンド振り分け | [cq/cli.py](../cq/cli.py) | `build_parser`, `_dispatch`, `_record_usage`, `_force_utf8_output` |
 | profile 解決 | [cq/config.py](../cq/config.py) | `Profile`, `resolve_profile`, `BUILTIN_EXCLUDES`, `DEFAULT_MAX_FILE_BYTES` |
 | ファイル列挙・除外 | [cq/discovery.py](../cq/discovery.py) | `iter_files`, `git_lister`, `is_excluded`, `test_path_sql` |
 | 索引ビルド | [cq/indexer.py](../cq/indexer.py) | `build_index`, `IndexReport`, `symbol_id`, `_extract` |
@@ -228,7 +228,8 @@ sequenceDiagram
 
 - **ランキングは SQLite 内で完結**する。`mdq` のように全チャンクを Python 側へロードしない。BM25 の列重みは `name, signature, ident_text, text = 10.0, 5.0, 3.0, 1.0`。
 - **テストコードは第 2 ソートキーで降格**する。判定は [cq/discovery.py](../cq/discovery.py) の `test_path_sql()` に単一定義され、検索と俯瞰マップが共有する。
-- **トークン上限**: `--max-tokens`（既定 800）に収まる件数まででヒットを打ち切る（先頭 1 件は上限を超えても必ず返す）。見積りは snippet 長 ÷ 4 の概算で、`tiktoken` は使わない。
+- **トークン上限**: `--max-tokens`（既定 800）に収まる件数まででヒットを打ち切る（先頭 1 件は上限を超えても必ず返す）。見積りは **1 ヒットごとの返却 JSON 全体（抜粋 + メタデータ）の文字数 ÷ 4** の概算で、`tiktoken` は使わない（検索経路に任意依存を持ち込まないため）。メタデータは実測で 1 ヒットあたり約 101 tokens を占めるため、抜粋だけで数えると予算が空洞化する。
+- **0 件時の fallback は 2 段階**。(1) 自然文（`bm25`）が 0 件のとき、語の連言（暗黙 AND）を選言へ 1 回だけ緩和して再試行する（`match` が `or-fallback`。CJK を含むクエリは対象外）。(2) 全経路が 0 件のとき、リポジトリ相対パスの部分一致で引く（`route` が `path`。ファイルごとに先頭チャンク 1 件）。
 - **鮮度ガードは既定で「新規ファイル」を見ない**。`freshness.check()` は索引済みパスだけを `stat()` する（`include_new=False`）。新規追加ファイルを拾うには `cq index` か `cq watch` が必要（§12 参照）。
 
 ### 2.3 監視シーケンス — `python -m cq watch`
@@ -262,12 +263,11 @@ sequenceDiagram
 
 | 言語 | シンボル抽出 | チャンク境界 |
 |---|---|---|
-| Python | `ast`（完全） | **cAST**（構文木ベースの split-then-merge） |
+| Python | `ast`（完全）。構文エラー時は任意依存 `tree-sitter-python` へフォールバック（docstring は回復しない） | **cAST**（構文木ベースの split-then-merge） |
 | Java / Go / Rust / C / C++ / Scala | tree-sitter 公式文法（任意依存） | **cAST** |
 | shell / PowerShell / batch | tree-sitter 公式文法（任意依存） | **cAST** |
+| C# / JavaScript / TypeScript | tree-sitter 公式文法（任意依存）。未導入時は brace 深度追跡へ降格 | **cAST**（tree-sitter 時）/ 行ウィンドウ（`_window_chunks`、regex 降格時） |
 | SQL | sqlglot（必要時のみ sqlfluff） | **文単位**（core が間の行を埋める） |
-| C# | brace 深度追跡 | 行ウィンドウ（`_window_chunks`） |
-| JavaScript / TypeScript | brace 深度追跡 | 行ウィンドウ |
 
 ### 3.1 cAST（構造チャンカを登録した言語）
 
@@ -338,27 +338,27 @@ Russ Cox の trigram 方式。
 | `cq.toml`（コミット対象） | profile 定義・除外・`max_file_bytes` | 対象ツリーの構成変更時 | 低 |
 | `.cq-gui-settings.txt`（コミットしない） | 独立 GUI の profile / 一括ビルド選択 / watch 設定。HVE ツリーでは `hve/.settings.txt` を使う（§11） | GUI での設定変更時 | 低 |
 
-### 4.2 実測値（2026-08-03、本リポジトリ）
+### 4.2 実測値（2026-08-07、本リポジトリ）
 
 | 指標 | profile=hve | profile=app |
 |---|---|---|
-| files | 816 | 154 |
-| symbols | 14,178 | 1,404 |
-| chunks | 14,049 | 524 |
-| refs | 77,263 | 6,090 |
-| imports | 6,264 | 279 |
-| parser 内訳 | `ast` 743 / `tree-sitter` 72 / `regex` 1 | `regex` 150 / `tree-sitter` 4 |
+| files | 903 | 154 |
+| symbols | 16,195 | 1,559 |
+| chunks | 15,586 | 1,554 |
+| refs | 85,398 | 5,487 |
+| imports | 7,021 | 142 |
+| parser 内訳 | `ast` 823 / `tree-sitter` 78 / `tree-sitter-partial` 2 | `tree-sitter` 153 / `tree-sitter-partial` 1 |
 
-`tree-sitter` の内訳は hve が shell 40 / powershell 26 / batch 6、app が shell 4。
-**両 profileとも `lite` は 0 件**（2026-07-30 時点は hve 64 / app 4）。
+`tree-sitter` の内訳は hve が shell 41(+partial 2) / powershell 29 / batch 7 / javascript 1、app が csharp 74 / javascript 76 / shell 3(+partial 1)。
+**両 profile とも `lite` / `regex` は 0 件**（C# / JavaScript が tree-sitter 主に昇格したため、`profile=app` の `regex` 150 件は解消した）。
 
-shell を `lite` から tree-sitter へ昇格しても **profile=app の symbols は 1,404 のまま変わらない**。
-実コーパスでの比較（`.sh` 45 件）で両者のシンボル名集合が完全に一致したためで、定義数は増えない。
-増えるのは **終了行（0 → 158 件が複数行範囲）・doc（0 → 76）・参照（app +279 / hve +6,718）・構造チャンク** である。
+C# / JavaScript を brace 深度追跡から tree-sitter へ昇格したことで **profile=app の symbols は 1,404 → 1,559 へ増加**した
+（tree-sitter は record のプロパティ・ジェネリックメソッド・インターフェースメンバ等、regex が取りこぼしていた宣言も拾うため）。
+増えるのは定義数だけでなく、**終了行（複数行範囲）・doc・参照・構造チャンク（cAST）** も同様に改善する。
 
-`by_parser` に `lite` が多い言語は定義行しか取れていない。C# / JS のチャンクが行ウィンドウである点（§3）と併せて、`profile=app` の chunks 数が files 数に対して少ない理由になる。
+`by_parser` に `lite` が多い言語は定義行しか取れていない。
 
-本リポジトリには Java / Go / Rust / C / C++ / Scala / SQL のソースが存在しないため、この表に実績は現れない。当該言語の索引経路は temp corpus を用いた統合テスト（[cq/tests/test_treesitter_languages.py](../cq/tests/test_treesitter_languages.py) と [cq/tests/test_language_registry_contract.py](../cq/tests/test_language_registry_contract.py) の `TestNewLanguageIndexIntegration`）で検証している。
+本リポジトリには Java / Go / Rust / C / C++ / TypeScript / Scala / SQL のソースが存在しないため、この表に実績は現れない。当該言語の索引経路は temp corpus を用いた統合テスト（[cq/tests/test_treesitter_languages.py](../cq/tests/test_treesitter_languages.py) と [cq/tests/test_language_registry_contract.py](../cq/tests/test_language_registry_contract.py) の `TestNewLanguageIndexIntegration`）で検証している。
 
 ### 4.3 索引整合性の前提と運用 Tips
 
@@ -420,13 +420,15 @@ python -m cq index --profile hve --rebuild  # 全再構築
 python -m cq stats --profile app
 ```
 
-`files` / `symbols` / `chunks` / `refs` / `imports` / `traces` / `by_parser` / `schema_version` / `db` を返す。
+`files` / `symbols` / `chunks` / `refs` / `imports` / `traces` / `by_parser` / `by_lang` / `schema_version` / `db` を返す。
+`by_lang` は言語ごとの `files` / `symbols` / `chunks` / `by_parser`。**1 つのパーサ名を複数の言語が共有する**（C# と Java はどちらも `tree-sitter`）ため、`by_parser` だけではどの言語のフィデリティが落ちたか判別できない（FR-CQ-15）。
 
 #### `cq search`
 
 ```sh
 python -m cq search --profile hve --q "resolve_run_id"
-python -m cq search --profile hve --q "fan-out の親子関係" --mode bm25
+python -m cq search --profile hve --q "how does the orchestrator decide fan out"
+python -m cq search --profile hve --q "test_search_recall"
 python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 ```
 
@@ -434,7 +436,7 @@ python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 |---|---|---|
 | `--q` | — | 検索語 |
 | `--re` | — | 正規表現（指定すると regex 経路に固定） |
-| `--mode` | `auto` | `auto` / `trace` / `symbol` / `substr` / `regex` / `bm25` |
+| `--mode` | `auto` | `auto` / `trace` / `symbol` / `substr` / `regex` / `bm25`。**`path` は fallback 連鎖専用で明示指定できない** |
 | `--top-k` | 5 | 返す件数 |
 | `--max-tokens` | 800 | 応答全体のトークン上限 |
 | `--snippet-radius` | 2 | ヒット行の前後何行を含めるか（`--return-unit line` のときのみ効く） |
@@ -515,20 +517,21 @@ python -m cq map --profile hve --paths "cq/*" --max-tokens 150
 python -m cq map --profile app --max-tokens 400 --format json
 ```
 
-出力例（`--paths "cq/*" --max-tokens 150` の抜粋）:
+出力例（`--paths "cq/*" --max-tokens 150` の実出力、2026-08-04）:
 
 ```text
 cq/search.py:
 ⋮...
-│def search(repo_root: Path, profile: str, *, query: str | None=None, ...) -> list[Hit]  # callers=310 L108
+│def search(repo_root: Path, profile: str, *, query: str | None=None, ...) -> list[Hit]  # callers=315 L142
 ⋮...
 
-# dropped 159 lower-ranked symbols to fit the token budget
+# dropped 362 lower-ranked symbols to fit the token budget
 ```
 
 - スコアは「**他ファイルからの被参照数 ÷ 同名の定義数**」。自ファイル内の参照は数えず、`get` / `run` のような汎用名が名前衝突で上位を占めるのを防ぐ。
 - テストコードは参照側・定義側の双方から除外する。
 - 予算（既定 1,200 tokens）を超えた分は下位から落とし、末尾に件数を報告する。
+- **予算の判定は「実際に出力する文字列の全体」**に対して行う。定義行だけでなく、ファイル見出し・折り畳み記号（`⋮...`）・区切りの空行・除外件数の通知行を含める。その分、**同じ予算で掲載される件数は従前より少ない**（実測: `--paths "hve/gui/*" --max-tokens 400` で 20 件 → 11 件）。代わりに実出力が予算を超えなくなった（同条件で 657 tokens = 予算の 1.64 倍 → 386 tokens = 0.96 倍）。`--format json` は別形式なので予算の対象外。
 
 #### `cq watch`
 
@@ -586,16 +589,17 @@ python -m cq watch --profile hve --debounce-ms 300
 
 | 言語 | 拡張子 | パーサ | 抽出できるもの |
 |---|---|---|---|
-| Python | `.py` | 標準ライブラリ `ast` | 定義・シグネチャ・デコレータ・docstring 先頭・参照・import |
+| Python | `.py` | 標準ライブラリ `ast`。構文エラー時は任意依存 `tree-sitter-python` へフォールバック | 定義・シグネチャ・デコレータ・docstring 先頭（tree-sitter フォールバック時は非対応）・参照・import |
 | Java | `.java` | tree-sitter（任意依存） | class / interface / enum / メソッド / コンストラクタ・Javadoc・annotation・参照・import・構造チャンク |
 | Go | `.go` | 同上 | function / method / struct / interface / type・レシーバの基底型解決・doc comment・参照・import・構造チャンク |
 | Rust | `.rs` | 同上 | struct / union / enum / trait / type / mod / function / impl メソッド / macro・属性・参照・use・構造チャンク |
 | C | `.c` （`.h` は内容判定） | 同上 | function / prototype / struct / union / enum / typedef / macro・include・構造チャンク |
 | C++ | `.cc` / `.cpp` / `.cxx` / `.hpp` / `.hh`（`.h` は内容判定） | 同上 | C に加えて class / namespace / メソッド / コンストラクタ / デストラクタ / operator / using alias |
-| C# | `.cs` | brace 深度追跡（標準ライブラリのみ） | 型（class / interface / struct / enum）・メソッド・コンストラクタ・参照・using |
-| JavaScript | `.js` / `.mjs` / `.cjs` / `.jsx` | 同上 | class・function・メソッド・代入関数・参照・import |
-| TypeScript | `.ts` / `.tsx` | 同上 | JavaScript に加えて interface / type / enum / abstract class / 戻り型付きメソッド |
-| Scala | `.scala` | tree-sitter（任意依存） | object / class / trait / enum / type / def（Scala 2 と 3 の両方。`given` と `val` は対象外）・Scaladoc・呼び出し・import・構造チャンク |
+| C# | `.cs` | tree-sitter（任意依存）。未導入時は brace 深度追跡（標準ライブラリのみ）へ降格 | 型（class / interface / struct / enum / record）・メソッド・コンストラクタ・参照・using・構造チャンク（tree-sitter時） |
+| JavaScript | `.js` / `.mjs` / `.cjs` / `.jsx` | 同上 | class・function・メソッド・代入関数（`const x = () => {}` 等）・参照・import（`require(...)` は regex 降格時のみ）・構造チャンク（tree-sitter時） |
+| TypeScript | `.ts` | 同上 | JavaScript に加えて interface / type / enum / abstract class / 戻り型付きメソッド |
+| `.tsx`（独立言語 `tsx`） | `.tsx` | tree-sitter の `language_tsx()` 文法（任意依存）。未導入時は TypeScript と同じ regex 降格 | TypeScript と同じ |
+| Scala | `.scala` | tree-sitter（任意依存） | object / class / trait / enum / type / def（Scala 2 と 3 の両方）・class/trait/object 直下の `val` / `var` / `given`・クラスパラメータ・Scaladoc・呼び出し・import・構造チャンク |
 | shell | `.sh` / `.bash` | 同上 | 関数定義の行範囲・シグネチャ・doc・コマンド呼び出し・構造チャンク（`source` は文法上ただの command なので import ではなく参照になる） |
 | PowerShell | `.ps1` / `.psm1` | 同上（回復ノードが残ったファイルは `pwsh` 公式パーサへエスカレーション） | function / filter / class / enum / メソッド（`script:Name` のスコープ付き名を切らない）・doc・コマンド呼び出し・構造チャンク |
 | Windows batch | `.cmd` / `.bat` | 同上 | ラベル定義と `call` / コマンドの参照のみ（この文法に関数の概念は無い） |
@@ -605,13 +609,15 @@ python -m cq watch --profile hve --debounce-ms 300
 
 `.h` は拡張子だけでは C / C++ を判別できないため、内容を parse して C++ 固有ノード型の有無で振り分ける。
 
-SQL の方言（T-SQL / Oracle / PostgreSQL / BigQuery / Spark）は固定順で試し、全文を構造化できた最初の方言を採用する。
+SQL の方言（T-SQL / Oracle / PostgreSQL / BigQuery / Spark / MySQL / SQLite / Snowflake / DuckDB）は固定順で試し、全文を構造化できた最初の方言を採用する。すべての方言が構造化できない場合だけ、最後に方言を指定しない解析（全方言のスーパーセット）を 1 回試す。
 `GO` は T-SQL のバッチ区切りとして扱う。**PostgreSQL の `$tag$ ... $tag$` 本体（PL/pgSQL）はどちらのエンジンでも 1 トークンになる**ため、tree-sitter の SQL 文法で本体だけを再パースしてテーブル参照を拾う。手続き構文（`IF` / `LOOP` / `PERFORM`）自体は依然として構造化されない。
 
 PowerShell は文法が 5 / 27 ファイルで誤って ERROR ノードを作るため、回復ノードが残ったファイルに限り `pwsh` の公式パーサ（`Parser.ParseInput`）へエスカレーションする。ソースは stdin からデータとして渡すだけでスクリプトは実行しない。
-**`pwsh` が無い環境では tree-sitter の結果をそのまま使うため、同じファイルでも環境によって定義数が変わる**。`parser` 値はどちらの経路でも `tree-sitter` のままで、エスカレーションの有無は区別されない。
+**`pwsh` が無い環境では tree-sitter の結果をそのまま使うため、同じファイルでも環境によって定義数が変わる**。公式パーサへのエスカレーションが成功した場合は `parser` が `tree-sitter` のままになる（回復ノードの影響を受けていないため）。エスカレーションが起きない場合は、他の tree-sitter 言語と同じく `tree-sitter-partial` になる（次段落参照）。
 
-tree-sitter 文法と SQL エンジンは **任意依存**（`pip install -e ".[code]"` / `".[code,code-sql]"`）で、未導入の環境では当該言語だけが `lite` へ降格する。他の言語の索引と検索は影響を受けない。
+tree-sitter 文法と SQL エンジンは **任意依存**（`pip install -e ".[code]"` / `".[code,code-sql]"`）で、未導入の環境では当該言語だけが低フィデリティへ降格する（C# / JavaScript / TypeScript / `tsx` は brace 深度追跡の `regex` へ、Python は `ast` が既定なので降格しない、それ以外は `lite`）。他の言語の索引と検索は影響を受けない。
+
+tree-sitter 系言語は、文法が `ERROR` ノードから部分的に回復した場合（構文エラーを含むファイル等）、`parser` が `tree-sitter` ではなく **`tree-sitter-partial`** になる。解析自体は成功しているが該当ファイル内の一部の定義が欠落・不正確な可能性があることを示す。
 
 解析に失敗したファイルは `lite` へ自動降格し、索引からは落とさない。降格は応答の `parser` フィールドに必ず現れるので、**フィデリティが落ちた結果を全文解析済みと誤認しない**こと。
 
@@ -628,7 +634,7 @@ tree-sitter 文法と SQL エンジンは **任意依存**（`pip install -e ".[
 | 索引未作成時 | 0 件を返す | **エラー終了**して `cq index` を案内 |
 | 検索の自動選択 | `--strategy auto`（7 ルール） | `--mode auto`（5 経路 + フォールバック） |
 | 鮮度維持 | watcher（任意） | 検索時の自動再索引 + watcher（任意） |
-| 利用統計 | `.mdq/usage.jsonl` + 15 指標レポート | **なし** |
+| 利用統計 | `.mdq/usage.jsonl` + 15 指標レポート | `.cq/usage.jsonl`（ログのみ。集計レポートと GUI 表示は無し） |
 | 相互 import | しない | しない（独立パッケージ） |
 
 **標準的な連携経路（コード → 設計文書）**:
@@ -683,18 +689,23 @@ python -m mdq search --q "SVC-02 3.1" --paths "docs/services/*"
 
 ### 9.3 参考実測値
 
-[hve-dev/requirement-test-mapping.md](../hve-dev/requirement-test-mapping.md) の FR-CQ-02 / FR-CQ-12 節に記録された実測（ゴールデン 21 問、top-k=5）:
+**計測日: 2026-08-04**。ゴールデン 21 問 × 2 profile / `--top-k 5` / トークン計数は `tiktoken/cl100k_base`。
+`cq` は索引を最新化した状態（`hve` 830 files / `app` 154 files）。
 
-| profile | 手法 | top-1 | 平均トークン | 平均レイテンシ |
-|---|---|---|---|---|
-| hve | `grep` 対照群 | 9.5% | 1,083.0 | 2,196 ms |
-| hve | 全文読み込み対照群 | 14.3% | 187,854.4 | 769 ms |
-| hve | **`cq search`** | **95.2%** | **84.8** | **9.6 ms** |
-| app | `grep` 対照群 | 71.4% | 148.8 | 出典に記録なし |
-| app | 全文読み込み対照群 | 76.2% | 2,808.4 | 出典に記録なし |
-| app | **`cq search`** | **95.2%** | **70.6** | **5.2 ms** |
+| profile | 手法 | 探索空間 | top-1 | 平均トークン |
+|---|---|---:|---:|---:|
+| hve | **`cq search`** | 索引 830 files | **95.2%** | **280.9** |
+| hve | `grep` 対照群（全リポジトリ） | 3,182 files | 14.3% | 2,115.3 |
+| hve | `grep` 対照群（profile roots 限定） | 1,184 files | 28.6% | 1,386.5 |
+| app | **`cq search`** | 索引 154 files | **95.2%** | **236.0** |
+| app | `grep` 対照群（全リポジトリ） | 3,182 files | 0.0% | 854.0 |
+| app | `grep` 対照群（`src/` 限定） | 227 files | 71.4% | 148.8 |
 
-数値はデータ規模とクエリ分布に強く依存する。**絶対値ではなく、同一ベンチを改善前後で 2 回実行した相対変化**で判断すること。実行時期の異なる別計測（同ファイルの FR-CQ-12 節）では絶対値が変動しており、環境やコーパスの状態で数倍の差が出る。
+- **`app` profile では、探索空間を揃えると `grep` の方がトークンが少ない**（148.8 対 236.0）。`cq` の優位は正解率（71.4% → 95.2%）と、頻出語で出力が爆発しないことにある。
+- **レイテンシは掲載しない**。本環境では同一コマンドの所要時間が 6 倍以上ばらつくため（`pytest cq/tests` が 431.83 s と 69.85 s、`cq search` が 292 ms と 842 ms）、比較指標に使えない。
+- 旧版に記載していた「hve 84.8 トークン / 9.6 ms」は**当時のコーパスと計測条件での値**であり、現在のコーパスでは再現しない。
+
+数値はデータ規模とクエリ分布に強く依存する。**絶対値ではなく、同一ベンチを改善前後で 2 回実行した相対変化**で判断すること。
 
 ### 9.4 回帰テスト
 
@@ -735,7 +746,7 @@ CLI を打たずに索引を運用できる（FR-GUI-04）。画面の実体は 
 | タブ | 内容 |
 |---|---|
 | **基本** | profile 選択、索引ルート / 除外パターン / 最大ファイルサイズの**読み取り専用**表示、設定ファイルのパス表示 |
-| **インデックス管理** | 統計情報、差分更新 / 完全再ビルド / DB 削除、一括ビルド（profile チェックリスト）、profile 別統計表、リアルタイム更新設定、試し検索 |
+| **インデックス管理** | 統計情報、差分更新 / 完全再ビルド / DB 削除、一括ビルド（profile チェックリスト）、profile 別統計表、**言語別統計表**、リアルタイム更新設定、試し検索 |
 | **検索品質** | `python -m cq.benchmark` を子プロセスで実行し、結果 JSON をそのまま表示する。対象リポジトリに `cq/golden-queries.json` が無い場合や profile 名が `hve` / `app` 以外の場合は、実行ボタンを**無効化して理由を表示**する（§14） |
 
 ### 11.2 設定ファイルが単一の情報源
@@ -786,7 +797,7 @@ CLI を打たずに索引を運用できる（FR-GUI-04）。画面の実体は 
 | `SchemaVersionError` | DB が別スキーマ版 | `python -m cq index --profile <name> --rebuild` |
 | **新規追加したファイルが検索に出ない** | 検索時の鮮度ガードは索引済みパスしか `stat()` しない | `python -m cq index` を実行するか `cq watch` を併走させる |
 | 最終行に `{"warning":"stale","changed":N}` | 差分が `--auto-reindex-limit`（既定 50）を超えた | `python -m cq index` を実行してから再検索する |
-| 検索が 0 件 | クエリ語彙がコード上の識別子と一致しない | ① `--mode bm25` を明示して識別子寄りの語で再試行 ② `cq map --paths "<dir>/*"` で俯瞰 ③ それでも駄目なら grep へフォールバック |
+| 検索が 0 件 | クエリ語彙がコード上の識別子と一致しない | ① `--mode bm25` を明示して識別子寄りの語で再試行 ② `cq map --paths "<dir>/*"` で俯瞰 ③ それでも駄目なら grep へフォールバック。**新規作成したファイルは索引されていないので `cq index` を先に実行する**（鮮度ガードは新規ファイルを見ない） |
 | `cq def` の結果が別ファイルの同名関数 | `match="name-fallback"`（score 0.5） | `qualname` を確認し、必要なら完全な qualname で再実行 |
 | 正規表現検索が遅い / 打ち切られる | リテラル部分列が無く trigram 前段が効かない | `--paths` で範囲を絞る、またはリテラルを含むパターンに書き換える |
 | `parser` が `lite` ばかり | その言語に専用抽出器が無い、または解析失敗 | 定義行しか取れていない前提で読む（§7） |
@@ -800,11 +811,54 @@ CLI を打たずに索引を運用できる（FR-GUI-04）。画面の実体は 
 
 ## 13. 他リポジトリへの導入
 
-導入キットが [tools/skills/code_query/](../tools/skills/code_query/README.md) に用意されている。
-手順・制約・トラブルシューティングは同ディレクトリの [README.md](../tools/skills/code_query/README.md)、
-導入後の運用は [USAGE.md](../tools/skills/code_query/USAGE.md) を参照する。
+**推奨経路は [tools/for-other-repo/](../tools/for-other-repo/README.md) のコピー script**（FR-KIT-06）。
+版マニフェスト（`KIT-VERSION.json`）を生成し、同版・降格の同期を既定で拒否し、旧配布ファイルを
+削除して利用者所有ファイルを温存する。OS だけの状態からセットアップできる `install.ps1` /
+`install.sh` も同梱される。
 
-### 最短手順
+```pwsh
+# 1) 上流リポジトリでコピー（引数はコピー先パス）
+python tools/for-other-repo/copy_to_repo.py D:\other-repo\tools\kits -p code-query
+
+# 2) コピー先リポジトリのルートでセットアップ
+#    Python 3.11+ / git が無ければ winget / choco で導入してから venv・cq.toml・Skill 配置・初回索引まで行う
+pwsh -NoLogo -NoProfile -File D:\other-repo\tools\kits\code-query\install.ps1
+```
+
+```bash
+python tools/for-other-repo/copy_to_repo.py /path/to/other-repo/tools/kits -p code-query
+bash /path/to/other-repo/tools/kits/code-query/install.sh
+```
+
+導入後の確認・更新:
+
+```pwsh
+# コピー先だけで版と改変を見る
+python D:\other-repo\tools\kits\code-query\install.py --kit-dir D:\other-repo\tools\kits\code-query --version
+python D:\other-repo\tools\kits\code-query\install.py --kit-dir D:\other-repo\tools\kits\code-query --verify
+
+# 上流から差分を確認して更新
+python tools/for-other-repo/copy_to_repo.py D:\other-repo\tools\kits -p code-query --check
+python tools/for-other-repo/copy_to_repo.py D:\other-repo\tools\kits -p code-query
+```
+
+### profile 名について
+
+`cq` の fallback profile 名は上流リポジトリの `hve` だが、**`cq.toml` に profile が 1 つしか
+無ければそれが既定になる**（[cq/cli.py](../cq/cli.py) の `resolve_default_profile`）。
+`init_config.py` が生成する `cq.toml` は profile 1 つなので、導入先で `CQ_PROFILE` を
+設定する必要は無い。複数宣言した場合だけ `--profile <名>` か `CQ_PROFILE` で選ぶ。
+
+### tree-sitter 文法について
+
+配布キットは `install-extras.json` 経由で tree-sitter 文法群と `sqlglot` を既定で導入する。
+未導入でも索引は成立する（該当言語だけ lite へ降格し `degraded` に計上）が、終了行・doc・参照・
+構造チャンクを失う。wheel が無い環境では `-NoExtras` / `--no-extras` で省略できる。
+
+### 手動フォルダコピー（旧手順）
+
+導入キットの実体は [tools/skills/code_query/](../tools/skills/code_query/README.md) にある。
+版管理が不要ならフォルダごとコピーしてもよい。
 
 ```powershell
 # 1) 本リポジトリでエンジンを vendor/ へ展開
@@ -870,7 +924,7 @@ python -m cq stats --profile <name>          # 2. files / symbols が想定規�
 python -m cq map   --profile <name> --max-tokens 400   # 3. 俯瞰が意味を成すか確認
 ```
 
-`by_parser` の `lite` 比率が高ければ、その言語は定義行しか取れていない。専用抽出器の追加（§3.5）を検討する。
+`by_parser` の `lite` 比率が高ければ、その言語は定義行しか取れていない。どの言語かは `by_lang` の言語別 `by_parser` で特定する（パーサ名は複数言語で共有される）。専用抽出器の追加（§3.5）を検討する。
 
 ---
 
@@ -883,7 +937,7 @@ python -m cq map   --profile <name> --max-tokens 400   # 3. 俯瞰が意味を�
 - 2 MiB を超えるファイルは索引しない（`[index].max_file_bytes`）。
 - 検索時の鮮度ガードは**新規ファイルを検知しない**。`git ls-files` サブプロセス（本リポジトリで約 250 ms）が毎クエリのレイテンシを支配するのを避けるため、作業ツリー全体の列挙を既定で行わない設計（[cq/freshness.py](../cq/freshness.py) の `include_new`）。
 - C# / JavaScript / TypeScript のチャンク境界は行ウィンドウであり、構文単位ではない（§3）。シンボル表は brace 追跡で作られる。
-- `cq` には `mdq` のような利用統計（`usage.jsonl` / レポート）機構が無い。採用率の確認は Agent のタスク完了報告や `.cq` の更新状況から間接的に行う。
+- `cq` は `.cq/usage.jsonl` へ CLI サブコマンドの利用ログを記録する（FR-CQ-14）が、`mdq` のような集計レポート生成と GUI 表示の仕組みは無い。また GUI の管理画面からの操作は CLI を経由しないため、同ログには原則として現れない。
 
 ### 他リポジトリ運用に影響する固有制約（2026-07-29 実測）
 

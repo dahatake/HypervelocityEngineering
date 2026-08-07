@@ -243,6 +243,12 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "autopilot_app_id_picker_timeout_sec": "autopilot_app_id_picker_timeout_sec",
         "auto_compaction": "auto_compaction",
     },
+    # TOOLSEARCH: FR-GUI-07。この 2 キーの入力欄は本セクションが単独で所有する
+    # （Step 1 右ペインと二重に持たない。FR-MAINT-07）。
+    "TOOLSEARCH": {
+        "tool_search": "tool_search",
+        "tool_search_ranking": "tool_search_ranking",
+    },
     # EXPLORER: 値は ";" 区切り文字列。QListWidget との同期は
     # ``_CExplorerSection`` 内部で完結し、settings_apply 経由では QLineEdit
     # ``explorer_roots`` の text だけを読み書きする。

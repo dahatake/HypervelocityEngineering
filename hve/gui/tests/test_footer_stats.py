@@ -19,6 +19,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from hve.gui.theme import token  # noqa: E402
 from hve.gui.workbench_state import WorkbenchState  # noqa: E402
 from hve.gui.workbench_logger import process_log_line  # noqa: E402
 from hve.gui.workbench_widgets import FooterWidget  # noqa: E402
@@ -179,8 +180,8 @@ def test_footer_widget_renders_label_and_value(qapp):
     assert "Tools (Step)" in html
     assert "Skills (Step)" in html
     assert "font-weight:bold" in html
-    assert FooterWidget._LABEL_COLOR in html
-    assert FooterWidget._VALUE_COLOR in html
+    assert token(FooterWidget._LABEL_TOKEN) in html
+    assert token(FooterWidget._VALUE_TOKEN) in html
 
     # Top-N 集計表現
     assert "edit_file×2" in html

@@ -76,7 +76,9 @@ class TestDegradation:
     def test_absent_grammar_raises_extraction_error(self, monkeypatch) -> None:
         """文法未導入の環境では indexer が lite へ降格できる形で失敗する。"""
         monkeypatch.setitem(
-            ts._PARSERS, "batch", languages.ExtractionError("simulated missing grammar")
+            ts._PARSERS,
+            ts.cache_key(batch.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
         )
         with pytest.raises(languages.ExtractionError):
             batch.extract(SOURCE)

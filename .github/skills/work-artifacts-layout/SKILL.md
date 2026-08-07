@@ -1,10 +1,10 @@
 ---
 name: work-artifacts-layout
 description: >
-  work/ 配下の作業ディレクトリ構造を、後続タスクが確実に参照できるよう整備するスキル。 USE FOR: work/ structure, artifacts path, qa/ structure. DO NOT USE FOR: docs/ format (use docs-output-format). WHEN: work/ 配下にファイルを作成したい、作業ディレクトリを整備したい。
+  work/ 配下の作業ディレクトリ構造を、後続タスクが確実に参照できるよう整備するスキル。 USE FOR: work/ structure, artifacts path, qa/ structure, temporary file location, scratch script placement, debug output placement. DO NOT USE FOR: docs/ format (use docs-output-format). WHEN: work/ 配下にファイルを作成したい、作業ディレクトリを整備したい、一時ファイルや調査スクリプトの置き場所を決めたい。
 metadata:
   origin: user
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # work-artifacts-layout
@@ -77,6 +77,37 @@ metadata:
 - **例外**: SPLIT / Fleet サブタスクは、コードが明示注入する `dependency_completion_reports` の絶対パスのみを参照する（パスの自力推測は禁止）。
 
 根拠: `.github/copilot-instructions.md` §0「work/run 横断参照の禁止（絶対）」。
+
+---
+
+## 一時作業ファイルの配置先（ルート直下作成の禁止）
+
+一時作業ファイル（調査スクリプト・デバッグ出力・コマンドログ・プローブ・実験の中間データ・退避コピー）は
+**リポジトリルート直下（`/`）に作成してはならない**。必ず `work/` 配下に作成する。
+
+| 用途 | 禁止される配置 | 正しい配置 |
+|---|---|---|
+| 使い捨ての調査・検証スクリプト | `/_tmp_probe.py` | `work/run/<run-id>/<task>/artifacts/probe.py` |
+| コマンド出力・テストログの退避 | `/pytest_out.txt` | `work/run/<run-id>/<task>/artifacts/pytest.log` |
+| 実験・比較の中間データ | `/tmp/` `/MagicMock/` | `work/run/<run-id>/<task>/artifacts/` |
+| 調査メモ・決定事項 | `/notes.md` | `work/run/<run-id>/<task>/contracts/` |
+
+- **`.gitignore` 済みかどうかは判断基準にならない**。ignore されていても作業ツリーは汚れ、後続 Agent の探索コストになるため禁止対象。
+- ルート直下へ新規ファイル／ディレクトリを追加してよいのは、許可リストに載るリポジトリ標準ファイルのみ。許可リストの正本は `.github/workflows/protect-readonly-paths.yml` の `ROOT_FILE_ALLOWLIST` / `ROOT_DIR_ALLOWLIST` で、`check-root-temp-files` ジョブが PR で違反を fail させる。正当な追加が必要な場合は同じ PR で許可リストも更新する。
+- テストやツールが cwd 依存でファイルを書く場合は、`tmp_path` 等で出力先を明示し、ルート直下へ書かせないこと（`unittest.mock` の `MagicMock` をパスとして扱うと `MagicMock/` ディレクトリが生成される事故が起きる）。
+
+根拠: `.github/copilot-instructions.md` §0「一時作業ファイルは `work/` 配下に限定（絶対）」。
+
+---
+
+## 恒久成果物からの work/ 出典引用の禁止（2026-08-05 追加）
+
+`work/` はジョブ完了後に削除されてよい使い捨て領域である。恒久的な成果物（`docs/**`, `knowledge/**`, `qa/**`, `src/**`, `docs-generated/**`, `hve-dev/**`, `users-guide/**` 等）が `work/` 配下のパスをリンクやコードスパンで出典として引用すると、`work/` 削除後にリンク切れ・再現不能な事実が残る。
+
+- **禁止**: 上記の恒久成果物から `work/` 配下のパスへの出典引用（Markdown リンク・コードスパン中のパス文字列を問わない）。
+- **唯一の例外**: `CHANGELOG.md`。ただし `work/` へのパス／リンクは禁止し、伝えたい内容は要約文字列として本文に直接記載すること。
+- **対象外**（禁止しない）: `work/` 自体の構造・ライフサイクル・パス規約そのものを説明する記述（本 Skill や `copilot-instructions.md` の記述など）。これは「`work/` を出典として使う」のではなく「`work/` という仕組みを説明する」ものであるため区別する。
+- **修正方針**: 引用元がリンク切れなら捏造せず消失の事実を明記する。引用元が現存し、かつ引用先の周辺に同等の内容が既に文章化されていれば、パス参照だけを削除する（内容の重複追加はしない）。周辺に内容がなく要約が必要な場合は、引用元を読み実在する事実だけを短く要約してその場に記載する。
 
 ---
 

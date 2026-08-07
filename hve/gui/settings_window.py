@@ -55,6 +55,7 @@ from .page_options import (
     _C12AQOD,
     _C13ADOC,
     _C14ARD,
+    _CAgenticRetrieval,
     _CAzure,
     _LabeledField,
 )
@@ -68,6 +69,7 @@ from .page_options import (
 # ``hve.gui.mdq_settings_section`` の adapter を import し、HVE の設定ストアを
 # 注入した状態で ``_MdqIndexSection`` エイリアスとして公開する。
 from .mdq_settings_section import MdqIndexSection as _MdqIndexSection
+from .toolsearch_settings_section import ToolSearchSection
 # ---------------------------------------------------------------------------
 # Language セクション
 # ---------------------------------------------------------------------------
@@ -179,6 +181,8 @@ class _CAutopilotSection(QWidget):
             input_widget=self.auto_compaction,
         ))
 
+        # SDK ツール定義遅延ロード（tool_search）は skills > Tool-Search へ移した。
+
         # APP-ID 選択ダイアログ ON/OFF（AAS 完了後・downstream 起動前）
         self.autopilot_show_app_id_picker = QCheckBox(
             self.tr("APP-ID 選択画面の表示")
@@ -259,7 +263,7 @@ class _CExplorerSection(QWidget):
             )
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #6a737d;")
+        desc.setProperty("hveRole", "description")
         layout.addWidget(desc)
 
         self._list = QListWidget()
@@ -359,10 +363,11 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
         ],
     ),
     (
-        "連携",
+        "各サービス連携",
         [
             ("GitHub", "C5"),
             ("Azure", "AZURE"),
+            ("Agentic Retrieval", "AGENTIC"),
             ("MCP / CLI 接続", "C7"),
             ("Work IQ", "C4"),
         ],
@@ -504,7 +509,8 @@ class SettingsWindow(QMainWindow):
 
         # ステータス: 自動保存表示
         self._status_label = QLabel(self.tr("変更は自動的に保存されます"))
-        self._status_label.setStyleSheet("color: #6a737d; padding: 4px;")
+        self._status_label.setProperty("hveRole", "description")
+        self._status_label.setStyleSheet("padding: 4px;")
         root.addWidget(self._status_label)
 
     def _build_section_widget(self, key: str) -> QWidget:
@@ -520,6 +526,8 @@ class SettingsWindow(QMainWindow):
             return _C7Connection()
         if key == "AZURE":
             return _CAzure()
+        if key == "AGENTIC":
+            return _CAgenticRetrieval()
         if key == "C10":
             return _C10AppId()
         if key == "C11":
@@ -657,6 +665,13 @@ skill_sections.register_skill_section(
     key="CQ",
     label="Code-Query",
     section_factory=lambda repo_root, parent: CqIndexSection(
+        repo_root=repo_root, parent=parent
+    ),
+)
+skill_sections.register_skill_section(
+    key="TOOLSEARCH",
+    label="Tool-Search",
+    section_factory=lambda repo_root, parent: ToolSearchSection(
         repo_root=repo_root, parent=parent
     ),
 )

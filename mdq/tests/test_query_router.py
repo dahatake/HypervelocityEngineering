@@ -4,9 +4,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from mdq import query_router as qr
+from mdq import strategies as _strategies
 
 
 def test_id_lookup_single_token() -> None:
@@ -109,3 +112,70 @@ def test_no_fallback_when_chosen_available() -> None:
     d = qr.classify_query("D03", available_strategies={"heading"})
     assert d.fallback_used is False
     assert d.strategy == "heading"
+
+
+# --- discover_available_strategies -----------------------------------------
+# The function's contract is "the set of strategies whose per-(lang, strategy)
+# DB exists". It must therefore recognise every SQLite-backed strategy in
+# mdq.strategies.ALL_STRATEGIES, not a hardcoded subset.
+
+# graphrag is excluded on purpose: it does not use the SQLite store at all.
+_SQLITE_STRATEGIES = tuple(
+    s for s in _strategies.ALL_STRATEGIES if s != "graphrag"
+)
+
+
+def _make_index(root: Path, lang: str, strategy: str) -> None:
+    base = root / ".mdq"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / f"index-{lang}-{strategy}.sqlite").write_bytes(b"")
+
+
+@pytest.mark.parametrize("strategy", _SQLITE_STRATEGIES)
+def test_discover_recognises_every_sqlite_strategy(tmp_path: Path,
+                                                   strategy: str) -> None:
+    _make_index(tmp_path, "ja-jp", strategy)
+    assert qr.discover_available_strategies(tmp_path) == {strategy}
+
+
+def test_discover_does_not_confuse_heading_with_heading_recursive(
+    tmp_path: Path,
+) -> None:
+    _make_index(tmp_path, "ja-jp", "heading_recursive")
+    assert qr.discover_available_strategies(tmp_path) == {"heading_recursive"}
+
+
+def test_discover_returns_all_present_strategies(tmp_path: Path) -> None:
+    for strategy in _SQLITE_STRATEGIES:
+        _make_index(tmp_path, "en-us", strategy)
+    assert qr.discover_available_strategies(tmp_path) == set(_SQLITE_STRATEGIES)
+
+
+def test_discover_ignores_graphrag(tmp_path: Path) -> None:
+    """graphrag never writes to the SQLite store, so it must not be reported."""
+    _make_index(tmp_path, "ja-jp", "graphrag")
+    _make_index(tmp_path, "ja-jp", "heading")
+    assert qr.discover_available_strategies(tmp_path) == {"heading"}
+
+
+def test_narrative_query_reaches_semantic_paragraph_when_indexed(
+    tmp_path: Path,
+) -> None:
+    """A built semantic_paragraph index must be reachable via --strategy auto."""
+    _make_index(tmp_path, "ja-jp", "semantic_paragraph")
+    available = qr.discover_available_strategies(tmp_path)
+    # Deliberately free of CONCEPT_TERMS so rule 4 does not pre-empt rule 5.
+    d = qr.classify_query("なぜこの挙動になるのか教えてほしい",
+                          available_strategies=available)
+    assert d.reason == "narrative_query"
+    assert d.strategy == "semantic_paragraph"
+    assert d.fallback_used is False
+
+
+def test_concept_overview_reaches_pageindex_when_indexed(tmp_path: Path) -> None:
+    _make_index(tmp_path, "ja-jp", "pageindex")
+    available = qr.discover_available_strategies(tmp_path)
+    d = qr.classify_query("アーキテクチャの概要", available_strategies=available)
+    assert d.reason == "concept_overview"
+    assert d.strategy == "pageindex"
+    assert d.fallback_used is False

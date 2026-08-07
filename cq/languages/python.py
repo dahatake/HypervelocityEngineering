@@ -1,28 +1,43 @@
 """Python symbol extraction via the standard library `ast` (FR-CQ-04).
 
-No third-party parser is involved, so the HVE application itself — 644 tracked
-Python files — is always indexable at full fidelity.
+The HVE application itself — 644 tracked Python files — is always indexable at
+full fidelity through `ast`, so no third-party parser is required for it.
+
+A file that does not parse with `ast` (typically one being edited and
+momentarily invalid) falls back to the optional `tree-sitter-python` grammar
+(FR-CQ-11) instead of dropping straight to the line-window `lite` fidelity.
+The fallback cannot recover Python's docstrings — they are a body statement,
+not a comment the shared tree-sitter `doc_head()` helper looks for — so `doc_head`
+is unavailable for this tier; declarations, line ranges, decorators and
+references still are.
 """
 
 from __future__ import annotations
 
 import ast
 
-from cq.languages import ChunkSpan, ExtractionError, RawSymbol
+from cq.languages import ChunkSpan, ExtractionError, RawSymbol, treesitter as ts
 
 _DEF_NODES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
 
 
 def extract(source: str) -> tuple[RawSymbol, ...]:
+    return extract_ex(source)[0]
+
+
+def extract_ex(source: str) -> tuple[tuple[RawSymbol, ...], str]:
+    """`(symbols, parser)`. Falls back to tree-sitter when `ast` cannot parse
+    ``source`` instead of raising straight to the `lite` degradation (FR-CQ-11).
+    """
     try:
         tree = ast.parse(source)
-    except (SyntaxError, ValueError, RecursionError) as exc:
-        raise ExtractionError(f"cannot parse python source: {exc}") from exc
+    except (SyntaxError, ValueError, RecursionError):
+        return ts.extract_with_fidelity(GRAMMAR, source)
 
     found: list[RawSymbol] = []
     _walk(tree.body, parent=None, in_class=False, inherited_test=False, out=found)
-    found.sort(key=lambda s: (s.start_line, s.qualname))
-    return tuple(found)
+    found.sort(key=lambda s: (s.start_line, s.qualname, s.kind))
+    return tuple(found), "ast"
 
 
 def _walk(
@@ -95,12 +110,15 @@ def chunk_spans(source: str, lines: list[str], max_chars: int) -> tuple[ChunkSpa
     """Structural chunk boundaries for Python (FR-CQ-05).
 
     Definitions are the unit; a definition larger than ``max_chars`` is split
-    into its own header plus its body statements.
+    into its own header plus its body statements. Falls back to tree-sitter
+    chunk spans when `ast` cannot parse ``source`` (FR-CQ-11); if that grammar
+    is also unavailable, the `ExtractionError` propagates so the core degrades
+    to line-window chunks instead.
     """
     try:
         tree = ast.parse(source)
-    except (SyntaxError, ValueError, RecursionError) as exc:
-        raise ExtractionError(f"cannot parse python source: {exc}") from exc
+    except (SyntaxError, ValueError, RecursionError):
+        return ts.chunk_spans(GRAMMAR, source, lines, max_chars)
     return tuple(
         _spans(tree.body, lines, max_chars, start_line=1, end_line=len(lines))
     )
@@ -142,3 +160,67 @@ def _split_definition(
     spans = [ChunkSpan(start, header_end, name, signature)]
     spans.extend(_spans(node.body, lines, max_chars, start_line=header_end + 1, end_line=end))
     return spans
+
+
+# --------------------------------------------------------------------------
+# tree-sitter fallback (FR-CQ-11 Phase 5): only reached when `ast` cannot
+# parse the file. `cq/graph.py` special-cases Python outside the generic
+# `LanguageSupport.graph` dispatch, so this is consulted there directly.
+# --------------------------------------------------------------------------
+
+
+def _decorators_of(node, src) -> tuple[str, ...]:
+    """A decorated `def`/`class` is wrapped in a `decorated_definition` parent
+    whose preceding `decorator` children apply to it (unlike Java/Rust, which
+    attach decorators as a sibling or same-node child)."""
+    parent = node.parent
+    if parent is None or parent.type != "decorated_definition":
+        return ()
+    return tuple(
+        " ".join(ts.text(child, src).split())
+        for child in parent.named_children
+        if child.type == "decorator"
+    )
+
+
+def _is_test(node, src, name: str) -> bool:
+    return _looks_like_test(name)
+
+
+def _import_of(node, src) -> str:
+    """First path component, matching `graph.extract_python`'s AST-based
+    convention. A relative import's leading dots (`.`, `.pkg`) are stripped
+    before splitting so a bare `from . import x` yields no module (the AST
+    path records `module=None` for it too)."""
+    field = "name" if node.type == "import_statement" else "module_name"
+    target = node.child_by_field_name(field)
+    if target is None:
+        return ""
+    module = ts.text(target, src).lstrip(".")
+    return module.split(".")[0] if module else ""
+
+
+GRAMMAR = ts.Grammar(
+    lang="python",
+    module="tree_sitter_python",
+    kinds={
+        "class_definition": "class",
+        "function_definition": "function",
+    },
+    scopes={"class_definition": "class"},
+    name_of=lambda n, s: ts.field_name(n, s),
+    scope_name_of=lambda n, s: ts.field_name(n, s),
+    # Docstrings are a body statement, not a preceding comment; no marker
+    # makes `doc_head()` a safe, correct no-op for this tier (see module doc).
+    doc_markers=(),
+    decorators_of=_decorators_of,
+    is_test_of=_is_test,
+    call_nodes=frozenset({"call"}),
+    import_nodes=frozenset({"import_statement", "import_from_statement"}),
+    import_of=_import_of,
+)
+
+
+def extract_graph(source: str):
+    return ts.extract_graph(GRAMMAR, source)
+

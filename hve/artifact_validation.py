@@ -243,7 +243,7 @@ def validate_aqod_run(
 # - Dev-Microservice-Azure-ComputeDeploy-AzureFunctions: AC-3, AC-9
 # - Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps: AC-1, AC-6, AC-8
 # - Dev-Microservice-Azure-AddServiceDeploy: AC-1
-# - Dev-Microservice-Azure-AgenticRetrievalDeploy: AC4B-1
+# - Dev-Microservice-Azure-AgenticRetrievalDeploy: AC4B-1, AC4B-14, AC4B-15, AC4B-18
 # - Dev-Microservice-Azure-AgentDeploy: AC-1, AC-2, AC-3 + Provider Pre-flight
 # - Dev-Microservice-Azure-DataDeploy: AC-1
 #
@@ -254,7 +254,14 @@ _DEPLOY_AGENT_REALITY_AC: Dict[str, List[str]] = {
     "Dev-Microservice-Azure-ComputeDeploy-AzureFunctions": ["AC-3", "AC-9"],
     "Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps": ["AC-1", "AC-6", "AC-8"],
     "Dev-Microservice-Azure-AddServiceDeploy": ["AC-1"],
-    "Dev-Microservice-Azure-AgenticRetrievalDeploy": ["AC4B-1"],
+    "Dev-Microservice-Azure-AgenticRetrievalDeploy": [
+        "AC4B-1",
+        # 設計値と live knowledge base 設定の一致、および実 retrieve での
+        # Knowledge Source 横断を実在で判定する。
+        "AC4B-14",
+        "AC4B-15",
+        "AC4B-18",
+    ],
     "Dev-Microservice-Azure-AgentDeploy": ["AC-1", "AC-2", "AC-3"],
     "Dev-Microservice-Azure-DataDeploy": ["AC-1"],
 }
@@ -10221,6 +10228,42 @@ _AI_AGENT_CONTRACT_HEADINGS = {
     "AG-CAP-05": "MCP Integration Plan",
     "AG-CAP-06": "Skill Packaging Decision",
 }
+# Skill `agentic-retrieval-contract` の AR-CAP-01〜05。
+# AG-CAP-03 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合だけ必須になる。
+_AGENTIC_RETRIEVAL_CONTRACT_HEADINGS = {
+    "AR-CAP-01": "Knowledge Base Contract",
+    "AR-CAP-02": "Knowledge Source Matrix",
+    "AR-CAP-03": "Retrieval Budget",
+    "AR-CAP-04": "Evidence & Observability",
+    "AR-CAP-05": "MCP Exposure",
+}
+_AGENTIC_RETRIEVAL_EFFORTS = {"minimal", "low", "medium"}
+_AGENTIC_RETRIEVAL_OUTPUT_MODES = {"extractivedata", "answersynthesis"}
+# Learn: minimal は KB あたり最大 10 Knowledge Source。low / medium も tier 依存で同値のため
+# 設計時の上限として 10 を用い、実行時に再確認する運用とする。
+_AGENTIC_RETRIEVAL_MAX_KNOWLEDGE_SOURCES = 10
+_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL = "knowledge_base_retrieve"
+# Skill `foundry-toolbox-contract` の TB-CAP-01〜05。
+# Tool 総数が閾値を超えた場合だけ必須になる。
+_TOOLBOX_CONTRACT_HEADINGS = {
+    "TB-CAP-01": "Tool Inventory",
+    "TB-CAP-02": "Toolbox Decision",
+    "TB-CAP-03": "Pinning Policy",
+    "TB-CAP-04": "Search Metadata",
+    "TB-CAP-05": "Discovery Budget",
+}
+# Learn / Command Line ブログが一致して示す閾値。16 以上で tool search を既定とする。
+_TOOLBOX_TOOL_COUNT_THRESHOLD = 15
+# FR-WF-AAG-01: 生成 Agent の Tool Search 方針。3値以外は推測で丸めない。
+_TOOL_SEARCH_POLICIES = ("auto", "yes", "no")
+# Learn: tool_search の limit は既定 5・最大 10。
+_TOOLBOX_MAX_SEARCH_LIMIT = 10
+_TOOLBOX_TOPOLOGIES = {"direct-kb", "via-toolbox"}
+_AGENTIC_RETRIEVAL_UNBOUNDED = re.compile(
+    r"\b(?:unlimited|unbounded|infinite|no\s+limit)\b|無制限|上限なし",
+    re.IGNORECASE,
+)
+
 _AI_AGENT_PLACEHOLDERS = {
     "",
     "-",
@@ -10842,7 +10885,707 @@ def _validate_ai_agent_skill(
     return errors
 
 
-def _parse_ai_agent_design(path: Path) -> tuple[List[str], Dict[str, Any]]:
+def _agentic_retrieval_route_selected(routes: List[Dict[str, str]]) -> bool:
+    """AG-CAP-03のPreferred / FallbackにFoundry IQ経路が含まれるかを判定する。"""
+    preferred_key = _normalize_ai_agent_label("Preferred route")
+    fallback_key = _normalize_ai_agent_label("Fallback route")
+    for row in routes:
+        for key in (preferred_key, fallback_key):
+            token = _normalize_ai_agent_label(row.get(key, ""))
+            if "foundryiq" in token or "agenticretrieval" in token:
+                return True
+            if "azureaisearch" in token and "knowledgebase" in token:
+                return True
+    return False
+
+
+def _is_declared_absent_route(value: str) -> bool:
+    """`none: ...` / `n/a: ...` のように「経路なし」を宣言した値かを判定する。"""
+    head = re.split(r"[:：]", value.strip(), maxsplit=1)[0].strip().casefold()
+    return head in {"none", "n/a", "na", "not applicable", "なし", "無し"}
+
+
+def _agent_tool_ids(metadata: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    """AG-CAP-03/04/05から`正規化ID -> 表示名`を重複排除して収集する。
+
+    TB-CAP-01のTool総数とTB-CAP-04のTool表を同じ実データから導き、
+    件数だけ合って中身がずれる状態を作らせない。
+    Preferred / Fallbackは同じ経路が複数行に現れるため重複排除する。
+    """
+    rest: Dict[str, str] = {}
+    tool_id_key = _normalize_ai_agent_label("Tool ID")
+    for row in metadata.get("crud_rows") or []:
+        display = row.get(tool_id_key, "").strip()
+        if display:
+            rest.setdefault(_normalize_ai_agent_label(display), display)
+
+    mcp: Dict[str, str] = {}
+    allowlist_key = _normalize_ai_agent_label("Tool allowlist")
+    for row in metadata.get("mcp_rows") or []:
+        for token in re.split(r"[,\s]+", row.get(allowlist_key, "")):
+            token = token.strip().strip("`")
+            if token and token != "*":
+                mcp.setdefault(_normalize_ai_agent_label(token), token)
+
+    routes: Dict[str, str] = {}
+    for label in ("Preferred route", "Fallback route"):
+        key = _normalize_ai_agent_label(label)
+        for row in metadata.get("routes") or []:
+            raw = row.get(key, "")
+            if not _is_meaningful_ai_agent_value(raw) or _is_declared_absent_route(raw):
+                continue
+            display = raw.strip()
+            routes.setdefault(_normalize_ai_agent_label(display), display)
+    return {"rest": rest, "mcp": mcp, "routes": routes}
+
+
+def _count_agent_tools(metadata: Dict[str, Any]) -> Dict[str, int]:
+    """TB-CAP-01のTool総数と内訳を実データから算出する。"""
+    ids = _agent_tool_ids(metadata)
+    counts = {key: len(value) for key, value in ids.items()}
+    counts["total"] = sum(counts.values())
+    return counts
+
+
+def _validate_toolbox_inventory(
+    section: str, counts: Dict[str, int], metadata: Dict[str, Any]
+) -> List[str]:
+    contract_id = "TB-CAP-01"
+    errors: List[str] = []
+    declared: Dict[str, int] = {}
+    for label, key in (
+        ("Total tools", "total"),
+        ("REST tools", "rest"),
+        ("MCP allowlist tools", "mcp"),
+        ("Distinct search routes", "routes"),
+    ):
+        raw = _ai_agent_field(section, label)
+        match = re.search(r"\d+", raw)
+        if not match:
+            errors.append(f"[{contract_id}] missing numeric {label}")
+            continue
+        declared[key] = int(match.group())
+    if len(declared) == 4:
+        breakdown = declared["rest"] + declared["mcp"] + declared["routes"]
+        if breakdown != declared["total"]:
+            errors.append(
+                f"[{contract_id}] breakdown sum {breakdown} does not match "
+                f"Total tools {declared['total']}"
+            )
+        elif declared["total"] != counts["total"]:
+            # 宣言値とAG-CAPからの算出値がずれると、閾値判定の根拠が崩れる。
+            errors.append(
+                f"[{contract_id}] Total tools {declared['total']} does not match the "
+                f"{counts['total']} tools counted from AG-CAP-03/04/05 "
+                f"(REST {counts['rest']} + MCP {counts['mcp']} + routes {counts['routes']})"
+            )
+    if not _is_meaningful_ai_agent_value(_ai_agent_field(section, "Counting source")):
+        errors.append(f"[{contract_id}] missing Counting source")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _ai_agent_field(section, "Checked at")):
+        errors.append(f"[{contract_id}] Checked at must use YYYY-MM-DD")
+    metadata["toolbox_declared_counts"] = declared
+    metadata["toolbox_actual_counts"] = counts
+    return errors
+
+
+def _validate_toolbox_decision(
+    section: str, counts: Dict[str, int], metadata: Dict[str, Any], policy: str
+) -> List[str]:
+    contract_id = "TB-CAP-02"
+    errors: List[str] = []
+    tool_search = _ai_agent_field(section, "Tool search").strip().casefold()
+    if tool_search not in {"enabled", "disabled"}:
+        errors.append(f"[{contract_id}] Tool search must be enabled or disabled")
+    elif policy == "yes" and tool_search != "enabled":
+        errors.append(
+            f"[{contract_id}] tool search policy yes requires Tool search: enabled"
+        )
+    elif policy == "no" and tool_search != "disabled":
+        errors.append(
+            f"[{contract_id}] tool search policy no requires Tool search: disabled"
+        )
+    elif tool_search == "disabled" and counts["total"] > _TOOLBOX_TOOL_COUNT_THRESHOLD:
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, "Reason")):
+            errors.append(
+                f"[{contract_id}] Tool search disabled with {counts['total']} tools "
+                f"requires a Reason"
+            )
+    topology = _ai_agent_field(section, "Connection topology").strip().casefold()
+    if topology not in _TOOLBOX_TOPOLOGIES:
+        errors.append(
+            f"[{contract_id}] Connection topology must be one of "
+            f"{sorted(_TOOLBOX_TOPOLOGIES)}"
+        )
+    metadata["toolbox_tool_search"] = tool_search
+    metadata["toolbox_topology"] = topology
+    return errors
+
+
+def _validate_toolbox_pinning(section: str, metadata: Dict[str, Any]) -> List[str]:
+    contract_id = "TB-CAP-03"
+    errors: List[str] = []
+    pinned = _ai_agent_field(section, "Pinned tools")
+    if not _has_reasoned_none(pinned):
+        errors.append(
+            f"[{contract_id}] Pinned tools requires concrete tools or a reasoned none"
+        )
+    wildcard = _ai_agent_field(section, "Wildcard pin")
+    uses_wildcard = "*" in wildcard and "not used" not in wildcard.casefold()
+    if uses_wildcard and metadata.get("toolbox_tool_search") == "enabled":
+        errors.append(
+            f"[{contract_id}] wildcard pin disables tool search; "
+            "remove it or set Tool search to disabled"
+        )
+    pinned_ids: set[str] = set()
+    if not _is_declared_absent_route(pinned):
+        pinned_ids = {
+            token.strip().strip("`")
+            for token in re.split(r"[,\s]+", pinned)
+            if token.strip()
+        }
+    metadata["toolbox_pinned"] = pinned_ids
+    return errors
+
+
+def _validate_toolbox_search_metadata(
+    section: str, metadata: Dict[str, Any], expected: Dict[str, str]
+) -> List[str]:
+    contract_id = "TB-CAP-04"
+    errors: List[str] = []
+    header = ["Tool ID", "Pinned", "Additional search text"]
+    rows = _find_ai_agent_table(section, header)
+    if rows is None:
+        return [f"[{contract_id}] missing Search Metadata table"]
+    text_key = _normalize_ai_agent_label("Additional search text")
+    pinned_key = _normalize_ai_agent_label("Pinned")
+    id_key = _normalize_ai_agent_label("Tool ID")
+    declared: set[str] = set()
+    declared_pinned: set[str] = set()
+    for row in rows:
+        tool_id = row.get(id_key, "").strip()
+        normalized = _normalize_ai_agent_label(tool_id)
+        if normalized in declared:
+            errors.append(f"[{contract_id}] duplicate Tool row {tool_id!r}")
+        declared.add(normalized)
+        if row.get(pinned_key, "").strip().casefold() == "yes":
+            declared_pinned.add(normalized)
+            continue
+        text = row.get(text_key, "").strip()
+        if not text:
+            errors.append(
+                f"[{contract_id}] unpinned Tool {tool_id!r} missing Additional search text"
+            )
+    missing = sorted(expected[key] for key in expected.keys() - declared)
+    if missing:
+        errors.append(f"[{contract_id}] missing Tool rows: {', '.join(missing)}")
+    unknown = sorted(declared - expected.keys())
+    if unknown:
+        errors.append(
+            f"[{contract_id}] unknown Tool rows not declared in AG-CAP-03/04/05: "
+            f"{', '.join(unknown)}"
+        )
+    pinned = metadata.get("toolbox_pinned")
+    if pinned is not None:
+        expected_pinned = {_normalize_ai_agent_label(value) for value in pinned}
+        if declared_pinned != expected_pinned:
+            errors.append(
+                f"[{contract_id}] Pinned column does not match the TB-CAP-03 pin list "
+                f"(TB-CAP-03 {sorted(expected_pinned)}, TB-CAP-04 {sorted(declared_pinned)})"
+            )
+    return errors
+
+
+def _validate_toolbox_budget(section: str, metadata: Dict[str, Any]) -> List[str]:
+    contract_id = "TB-CAP-05"
+    errors: List[str] = []
+    raw = _ai_agent_field(section, "limit")
+    match = re.search(r"\d+", raw)
+    if not match:
+        errors.append(f"[{contract_id}] missing numeric limit")
+    else:
+        limit = int(match.group())
+        if not 1 <= limit <= _TOOLBOX_MAX_SEARCH_LIMIT:
+            errors.append(
+                f"[{contract_id}] limit {limit} is outside 1-{_TOOLBOX_MAX_SEARCH_LIMIT}"
+            )
+        metadata["toolbox_limit"] = limit
+    for label in ("Expected tool_search calls per turn", "Overflow behavior"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
+            errors.append(f"[{contract_id}] missing {label}")
+    return errors
+
+
+def _validate_toolbox_contracts(
+    visible: str, metadata: Dict[str, Any], policy: str = "auto"
+) -> List[str]:
+    """Tool Search方針とTool総数に応じてTB-CAP-01〜05を検証する。"""
+    normalized_policy = (policy or "auto").strip().casefold()
+    if normalized_policy not in _TOOL_SEARCH_POLICIES:
+        # 未知値を既定へ丸めると利用者の指定が黙って別方針に変わる。
+        return [
+            f"[TB-CAP] unknown tool search policy {policy!r}; expected one of "
+            f"{', '.join(_TOOL_SEARCH_POLICIES)}"
+        ]
+    counts = _count_agent_tools(metadata)
+    metadata["toolbox"] = {"selected": False}
+    over_threshold = counts["total"] > _TOOLBOX_TOOL_COUNT_THRESHOLD
+    if normalized_policy == "auto" and not over_threshold:
+        return []
+    if normalized_policy == "auto":
+        cause = (
+            f"the design declares {counts['total']} tools "
+            f"(threshold {_TOOLBOX_TOOL_COUNT_THRESHOLD})"
+        )
+    else:
+        cause = f"the tool search policy is {normalized_policy}"
+    na_only = {"TB-CAP-03", "TB-CAP-04", "TB-CAP-05"} if normalized_policy == "no" else set()
+
+    errors: List[str] = []
+    sections: Dict[str, str] = {}
+    for contract_id, heading in _TOOLBOX_CONTRACT_HEADINGS.items():
+        section, section_errors = _extract_ai_agent_contract_section(
+            visible,
+            contract_id,
+            heading,
+        )
+        if section_errors:
+            errors.append(f"[{contract_id}] {heading} is required because {cause}")
+            continue
+        if contract_id in na_only:
+            is_na, na_errors = _reasoned_ai_agent_na(section, contract_id)
+            if not is_na:
+                errors.append(
+                    f"[{contract_id}] tool search policy no requires a reasoned N/A"
+                )
+            errors.extend(na_errors)
+            continue
+        sections[contract_id] = section
+    if "TB-CAP-01" in sections:
+        errors.extend(_validate_toolbox_inventory(sections["TB-CAP-01"], counts, metadata))
+    if "TB-CAP-02" in sections:
+        errors.extend(
+            _validate_toolbox_decision(
+                sections["TB-CAP-02"], counts, metadata, normalized_policy
+            )
+        )
+    if "TB-CAP-03" in sections:
+        errors.extend(_validate_toolbox_pinning(sections["TB-CAP-03"], metadata))
+    if "TB-CAP-04" in sections:
+        expected = {
+            key: display
+            for group in _agent_tool_ids(metadata).values()
+            for key, display in group.items()
+        }
+        errors.extend(
+            _validate_toolbox_search_metadata(sections["TB-CAP-04"], metadata, expected)
+        )
+    if "TB-CAP-05" in sections:
+        errors.extend(_validate_toolbox_budget(sections["TB-CAP-05"], metadata))
+    pinned = {
+        _normalize_ai_agent_label(value) for value in metadata.get("toolbox_pinned") or ()
+    }
+    metadata["toolbox"] = {
+        "selected": True,
+        "policy": normalized_policy,
+        "tool_search": metadata.get("toolbox_tool_search", ""),
+        "topology": metadata.get("toolbox_topology", ""),
+        "pinned": pinned,
+        "unpinned": {
+            key
+            for group in _agent_tool_ids(metadata).values()
+            for key in group
+            if key not in pinned
+        },
+        "limit": metadata.get("toolbox_limit"),
+    }
+    return errors
+
+
+def _agentic_retrieval_reasoned_flag(value: str, allowed: set[str]) -> bool:
+    """`<許可語>: 理由` 形式であることを検証する。"""
+    head, separator, reason = value.partition(":")
+    if not separator:
+        head, separator, reason = value.partition("：")
+    if head.strip().casefold() not in allowed:
+        return False
+    return bool(separator and _is_meaningful_ai_agent_value(reason))
+
+
+def _agentic_retrieval_finite(value: str) -> bool:
+    return _is_meaningful_ai_agent_value(value) and not _AGENTIC_RETRIEVAL_UNBOUNDED.search(value)
+
+
+def _validate_agentic_retrieval_knowledge_base(
+    section: str,
+    contract: Dict[str, Any],
+) -> tuple[List[str], str]:
+    contract_id = "AR-CAP-01"
+    is_na, errors = _reasoned_ai_agent_na(section, contract_id)
+    if is_na:
+        errors.append(
+            f"[{contract_id}] Knowledge Base Contract must not be N/A "
+            "while an Agentic Retrieval route is selected in AG-CAP-03"
+        )
+        return errors, ""
+
+    for label in (
+        "Knowledge base name",
+        "Knowledge domain",
+        "Query planning LLM",
+        "Effort rationale",
+        "Retrieval instructions",
+        "Decision source",
+    ):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
+            errors.append(f"[{contract_id}] missing {label}")
+
+    effort = _ai_agent_field(section, "Retrieval reasoning effort").strip().casefold()
+    if effort not in _AGENTIC_RETRIEVAL_EFFORTS:
+        errors.append(
+            f"[{contract_id}] Retrieval reasoning effort must be minimal, low, or medium"
+        )
+        effort = ""
+
+    output_mode_raw = _ai_agent_field(section, "Output mode")
+    output_mode = _normalize_ai_agent_label(output_mode_raw)
+    if output_mode not in _AGENTIC_RETRIEVAL_OUTPUT_MODES:
+        errors.append(f"[{contract_id}] Output mode must be extractiveData or answerSynthesis")
+    elif effort == "minimal" and output_mode != "extractivedata":
+        errors.append(
+            f"[{contract_id}] minimal retrieval reasoning effort requires Output mode extractiveData"
+        )
+
+    status = _ai_agent_field(section, "Design status").strip().casefold()
+    if status not in _AI_AGENT_DESIGN_STATUSES:
+        errors.append(f"[{contract_id}] invalid Design status {status!r}")
+
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _ai_agent_field(section, "Checked at")):
+        errors.append(f"[{contract_id}] Checked at must use YYYY-MM-DD")
+
+    count_match = re.search(r"\d+", _ai_agent_field(section, "Knowledge source count"))
+    if not count_match:
+        errors.append(f"[{contract_id}] Knowledge source count must be an integer")
+    else:
+        contract["knowledge_source_count"] = int(count_match.group())
+
+    if effort == "medium" and not _is_meaningful_ai_agent_value(
+        _ai_agent_field(section, "Region availability")
+    ):
+        errors.append(
+            f"[{contract_id}] medium retrieval reasoning effort requires Region availability"
+        )
+
+    contract["reasoning_effort"] = effort
+    contract["knowledge_base_name"] = _ai_agent_field(section, "Knowledge base name")
+    return errors, effort
+
+
+def _validate_agentic_retrieval_sources(
+    section: str,
+    effort: str,
+    contract: Dict[str, Any],
+) -> tuple[List[str], List[Dict[str, str]]]:
+    contract_id = "AR-CAP-02"
+    required_headers = (
+        "KS name",
+        "Kind",
+        "Locality",
+        "Always query",
+        "Selection description",
+        "Ingestion",
+        "Freshness SLO",
+        "Permission boundary",
+        "Required for Done",
+        "Design status",
+        "Checked at",
+        "Decision source",
+    )
+    rows = _find_ai_agent_table(section, required_headers)
+    if not rows:
+        return [f"[{contract_id}] Knowledge Source Matrix is missing or empty"], []
+
+    errors: List[str] = []
+    if len(rows) > _AGENTIC_RETRIEVAL_MAX_KNOWLEDGE_SOURCES:
+        errors.append(
+            f"[{contract_id}] a knowledge base allows at most "
+            f"{_AGENTIC_RETRIEVAL_MAX_KNOWLEDGE_SOURCES} knowledge sources, found {len(rows)}"
+        )
+
+    names: List[str] = []
+    for row in rows:
+        name = row[_normalize_ai_agent_label("KS name")]
+        names.append(name)
+        for label in (
+            "KS name",
+            "Kind",
+            "Ingestion",
+            "Freshness SLO",
+            "Permission boundary",
+            "Decision source",
+        ):
+            if not _is_meaningful_ai_agent_value(row[_normalize_ai_agent_label(label)]):
+                errors.append(f"[{contract_id}] knowledge source {name!r} missing {label}")
+
+        locality = row[_normalize_ai_agent_label("Locality")].strip().casefold()
+        if locality not in {"indexed", "remote"}:
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} Locality must be indexed or remote"
+            )
+        if not _agentic_retrieval_reasoned_flag(
+            row[_normalize_ai_agent_label("Always query")], {"true", "false"}
+        ):
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} Always query must be "
+                "true or false with a reason"
+            )
+        if row[_normalize_ai_agent_label("Required for Done")].strip().casefold() not in {"yes", "no"}:
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} Required for Done must be yes or no"
+            )
+        status = row[_normalize_ai_agent_label("Design status")].strip().casefold()
+        if status not in _AI_AGENT_DESIGN_STATUSES:
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} invalid Design status {status!r}"
+            )
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", row[_normalize_ai_agent_label("Checked at")]):
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} Checked at must use YYYY-MM-DD"
+            )
+        if effort in {"low", "medium"} and not _is_meaningful_ai_agent_value(
+            row[_normalize_ai_agent_label("Selection description")]
+        ):
+            errors.append(
+                f"[{contract_id}] knowledge source {name!r} requires Selection description "
+                f"at {effort} retrieval reasoning effort"
+            )
+        if effort == "minimal" and _normalize_ai_agent_label(
+            row[_normalize_ai_agent_label("Kind")]
+        ) == "web":
+            errors.append(
+                f"[{contract_id}] minimal retrieval reasoning effort does not support "
+                f"the web knowledge source {name!r}"
+            )
+
+    contract["knowledge_sources"] = names
+    return errors, rows
+
+
+def _validate_agentic_retrieval_budget(section: str) -> List[str]:
+    contract_id = "AR-CAP-03"
+    errors: List[str] = []
+    for label in (
+        "Expected subqueries per request",
+        "Retrieval token budget",
+        "LLM token budget",
+        "Latency target p50",
+        "Latency target p95",
+        "Max runtime",
+        "Max output size",
+        "Degradation policy",
+        "Measurement method",
+    ):
+        value = _ai_agent_field(section, label)
+        if not _is_meaningful_ai_agent_value(value):
+            errors.append(f"[{contract_id}] missing {label}")
+        elif not _agentic_retrieval_finite(value):
+            errors.append(f"[{contract_id}] {label} must be a finite value")
+    if _ai_agent_field(section, "Retrieval reasoning effort"):
+        errors.append(
+            f"[{contract_id}] retrieval reasoning effort must be declared only in AR-CAP-01"
+        )
+    return errors
+
+
+def _validate_agentic_retrieval_evidence(
+    section: str,
+    contract: Dict[str, Any],
+) -> List[str]:
+    contract_id = "AR-CAP-04"
+    errors: List[str] = []
+    for label in ("Source references", "Activity log"):
+        value = _ai_agent_field(section, label)
+        if not _agentic_retrieval_reasoned_flag(value, {"enabled", "disabled"}):
+            errors.append(f"[{contract_id}] {label} must be enabled or disabled with a reason")
+    for label in ("Citation fields", "Blocked condition", "Secret handling", "Decision source"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
+            errors.append(f"[{contract_id}] missing {label}")
+    return errors
+
+
+def _validate_agentic_retrieval_mcp(
+    section: str,
+    contract: Dict[str, Any],
+) -> List[str]:
+    contract_id = "AR-CAP-05"
+    is_na, errors = _reasoned_ai_agent_na(section, contract_id)
+    if is_na:
+        contract["mcp_exposure"] = None
+        return errors
+
+    for label in ("Consumer", "Auth type", "Approval mode", "Decision source"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
+            errors.append(f"[{contract_id}] missing {label}")
+    status = _ai_agent_field(section, "Design status").strip().casefold()
+    if status not in _AI_AGENT_DESIGN_STATUSES:
+        errors.append(f"[{contract_id}] invalid Design status {status!r}")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _ai_agent_field(section, "Checked at")):
+        errors.append(f"[{contract_id}] Checked at must use YYYY-MM-DD")
+
+    is_foundry_agent_service = "foundryagentservice" in _normalize_ai_agent_label(
+        _ai_agent_field(section, "Consumer")
+    )
+    tools = [
+        token.strip()
+        for token in re.split(r"[,、/]|\band\b", _ai_agent_field(section, "Tool allowlist"))
+        if token.strip()
+    ]
+    if not tools:
+        errors.append(f"[{contract_id}] missing Tool allowlist")
+    elif is_foundry_agent_service and tools != [_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL]:
+        errors.append(
+            f"[{contract_id}] Foundry Agent Service Tool allowlist must contain only "
+            f"{_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL}"
+        )
+
+    per_user = _ai_agent_field(section, "Per-user authorization")
+    if not _agentic_retrieval_reasoned_flag(per_user, {"required", "not-required"}):
+        errors.append(
+            f"[{contract_id}] Per-user authorization must be required or not-required with a reason"
+        )
+    elif (
+        per_user.partition(":")[0].strip().casefold() == "required"
+        and is_foundry_agent_service
+    ):
+        errors.append(
+            f"[{contract_id}] Per-user authorization required cannot be satisfied through "
+            "Foundry Agent Service because per-request MCP headers are unsupported"
+        )
+
+    contract["mcp_exposure"] = {"foundry_agent_service": is_foundry_agent_service, "tools": tools}
+    return errors
+
+
+def _validate_agentic_retrieval_contracts(
+    visible: str,
+    metadata: Dict[str, Any],
+) -> List[str]:
+    """AG-CAP-03でFoundry IQ経路を選んだ場合のAR-CAP-01〜05を検証する。"""
+    errors: List[str] = []
+    sections: Dict[str, str] = {}
+    for contract_id, heading in _AGENTIC_RETRIEVAL_CONTRACT_HEADINGS.items():
+        section, section_errors = _extract_ai_agent_contract_section(
+            visible,
+            contract_id,
+            heading,
+        )
+        errors.extend(section_errors)
+        sections[contract_id] = section
+
+    contract: Dict[str, Any] = {"selected": True}
+    effort = ""
+    rows: List[Dict[str, str]] = []
+
+    if sections["AR-CAP-01"]:
+        kb_errors, effort = _validate_agentic_retrieval_knowledge_base(
+            sections["AR-CAP-01"],
+            contract,
+        )
+        errors.extend(kb_errors)
+    if sections["AR-CAP-02"]:
+        source_errors, rows = _validate_agentic_retrieval_sources(
+            sections["AR-CAP-02"],
+            effort,
+            contract,
+        )
+        errors.extend(source_errors)
+    if sections["AR-CAP-03"]:
+        errors.extend(_validate_agentic_retrieval_budget(sections["AR-CAP-03"]))
+    if sections["AR-CAP-04"]:
+        errors.extend(_validate_agentic_retrieval_evidence(sections["AR-CAP-04"], contract))
+    if sections["AR-CAP-05"]:
+        errors.extend(_validate_agentic_retrieval_mcp(sections["AR-CAP-05"], contract))
+
+    declared_count = contract.get("knowledge_source_count")
+    if sections["AR-CAP-01"] and rows and declared_count is not None and declared_count != len(rows):
+        errors.append(
+            f"[AR-CAP-01] Knowledge source count {declared_count} does not match "
+            f"{len(rows)} Knowledge Source Matrix rows"
+        )
+
+    metadata["agentic_retrieval"] = contract
+    return errors
+
+
+def _validate_agentic_retrieval_implementation(
+    contract: Dict[str, Any],
+    config: Any,
+    source: str,
+) -> List[str]:
+    """AR-CAP-01 / 02 / 05 の設計値が実装設定とコードへ反映されているかを検証する。"""
+    errors: List[str] = []
+
+    knowledge_base_name = str(contract.get("knowledge_base_name") or "").strip()
+    if knowledge_base_name and (
+        config is None or not _ai_agent_config_contains(config, knowledge_base_name)
+    ):
+        errors.append(
+            f"[AR-CAP-01] knowledge base name missing from configuration: {knowledge_base_name}"
+        )
+
+    effort = str(contract.get("reasoning_effort") or "").strip()
+    if effort:
+        configured = {
+            str(value).strip().casefold()
+            for value in _ai_agent_json_key_values(config, "retrieval_reasoning_effort")
+            if not isinstance(value, (Mapping, list))
+        }
+        if effort not in configured:
+            errors.append(
+                f"[AR-CAP-01] configuration must set retrieval_reasoning_effort to {effort}"
+            )
+
+    for name in contract.get("knowledge_sources") or []:
+        cleaned = str(name).strip()
+        if cleaned and (config is None or not _ai_agent_config_contains(config, cleaned)):
+            errors.append(
+                f"[AR-CAP-02] knowledge source missing from configuration: {cleaned}"
+            )
+
+    exposure = contract.get("mcp_exposure")
+    if isinstance(exposure, Mapping) and exposure.get("foundry_agent_service"):
+        entries = _ai_agent_json_key_values(config, "tool_allowlist")
+        entries += _ai_agent_json_key_values(config, "allowed_tools")
+        declared = {
+            str(tool).strip()
+            for entry in entries
+            for tool in (entry if isinstance(entry, list) else [entry])
+        }
+        if _AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL not in declared:
+            errors.append(
+                "[AR-CAP-05] configuration must expose the knowledge base through "
+                f"{_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL}"
+            )
+        # Learn: Foundry Agent Service が対応する MCP ツールは knowledge_base_retrieve のみ。
+        # 許可リストに他のツールが混ざると実行時に解決できないため、実装時点で拒否する。
+        extra_tools = sorted(
+            tool for tool in declared if tool and tool != _AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL
+        )
+        if extra_tools:
+            errors.append(
+                "[AR-CAP-05] Foundry Agent Service supports only "
+                f"{_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL}; remove: "
+                + ", ".join(extra_tools)
+            )
+        if _AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL not in source:
+            errors.append(
+                f"[AR-CAP-05] source does not reference {_AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL}"
+            )
+    return errors
+
+
+def _parse_ai_agent_design(
+    path: Path, tool_search_policy: str = "auto"
+) -> tuple[List[str], Dict[str, Any]]:
     metadata: Dict[str, Any] = {"agent_key": ""}
     if not path.is_file():
         return [f"AI Agent design artifact not found: {path}"], metadata
@@ -10889,6 +11632,11 @@ def _parse_ai_agent_design(path: Path) -> tuple[List[str], Dict[str, Any]]:
             )
         )
 
+    if _agentic_retrieval_route_selected(metadata.get("routes", [])):
+        errors.extend(_validate_agentic_retrieval_contracts(visible, metadata))
+
+    errors.extend(_validate_toolbox_contracts(visible, metadata, tool_search_policy))
+
     mutation_intent = metadata.get("mutation_intent")
     active_mutations = [
         row
@@ -10903,9 +11651,11 @@ def _parse_ai_agent_design(path: Path) -> tuple[List[str], Dict[str, Any]]:
     return errors, metadata
 
 
-def validate_ai_agent_design_artifact(path: "Path | str") -> List[str]:
+def validate_ai_agent_design_artifact(
+    path: "Path | str", tool_search_policy: str = "auto"
+) -> List[str]:
     """AAG Step 3のAG-CAP-01〜06設計成果物を決定的に検証する。"""
-    errors, _ = _parse_ai_agent_design(Path(path))
+    errors, _ = _parse_ai_agent_design(Path(path), tool_search_policy)
     return errors
 
 
@@ -11004,12 +11754,137 @@ def _collect_ai_agent_files(agent_dir: Path) -> tuple[List[Path], List[str]]:
     return files, errors
 
 
-def _validate_ai_agent_system_prompt(agent_dir: Path) -> List[str]:
-    candidates = sorted(
+def _ai_agent_system_prompt_candidates(agent_dir: Path) -> List[Path]:
+    return sorted(
         path
         for path in agent_dir.rglob("*.md")
         if "system" in path.name.casefold() and "prompt" in path.name.casefold()
     )
+
+
+def _agent_toolbox_settings(config: Any) -> "Dict[str, Any] | None":
+    """Agent 設定から toolbox ブロックを取り出し、キーを正規化して返す。"""
+    for value in _ai_agent_json_key_values(config, "toolbox"):
+        if isinstance(value, Mapping):
+            return {
+                _normalize_ai_agent_label(str(key)): item for key, item in value.items()
+            }
+    return None
+
+
+def _validate_toolbox_implementation(
+    toolbox: Mapping[str, Any],
+    config: Any,
+    agent_dir: Path,
+    test_spec: Path,
+) -> List[str]:
+    """設計 TB-CAP と Agent 設定・System Prompt・test trace の一致を検証する。
+
+    SDK シンボル名や API version は変動するため見ない。設定契約だけを照合する。
+    """
+    settings = _agent_toolbox_settings(config)
+    if toolbox.get("tool_search") != "enabled":
+        if settings is None:
+            return []
+        return [
+            "[TB-CAP-02] tool search is disabled in the design; the Agent "
+            "configuration must not declare a toolbox block"
+        ]
+    if settings is None:
+        return ["[TB-CAP-02] Agent configuration is missing the toolbox block"]
+
+    errors: List[str] = []
+    declared_search = str(settings.get(_normalize_ai_agent_label("tool search"), "")).casefold()
+    if declared_search != "enabled":
+        errors.append("[TB-CAP-02] Agent configuration must set tool search to enabled")
+    topology = str(toolbox.get("topology") or "")
+    declared_topology = str(
+        settings.get(_normalize_ai_agent_label("connection topology"), "")
+    ).casefold()
+    if topology and declared_topology != topology:
+        errors.append(
+            f"[TB-CAP-02] configuration connection topology {declared_topology!r} "
+            f"does not match the design {topology!r}"
+        )
+
+    limit = toolbox.get("limit")
+    declared_limit = settings.get(_normalize_ai_agent_label("tool search limit"))
+    if limit is not None and declared_limit != limit:
+        errors.append(
+            f"[TB-CAP-05] configuration tool search limit {declared_limit!r} "
+            f"does not match the design limit {limit}"
+        )
+
+    raw_pins = settings.get(_normalize_ai_agent_label("pinned tools")) or []
+    if not isinstance(raw_pins, list):
+        raw_pins = [raw_pins]
+    if any(str(pin).strip() == "*" for pin in raw_pins):
+        errors.append(
+            "[TB-CAP-03] wildcard pin disables tool search; remove it from the "
+            "Agent configuration"
+        )
+    else:
+        declared_pins = {_normalize_ai_agent_label(str(pin)) for pin in raw_pins if str(pin).strip()}
+        expected_pins = set(toolbox.get("pinned") or ())
+        if declared_pins != expected_pins:
+            errors.append(
+                f"[TB-CAP-03] configuration pinned tools {sorted(declared_pins)} "
+                f"do not match the design {sorted(expected_pins)}"
+            )
+
+    search_text = settings.get(_normalize_ai_agent_label("additional search text")) or {}
+    described = (
+        {
+            _normalize_ai_agent_label(str(key))
+            for key, value in search_text.items()
+            if str(value).strip()
+        }
+        if isinstance(search_text, Mapping)
+        else set()
+    )
+    missing_text = sorted(set(toolbox.get("unpinned") or ()) - described)
+    if missing_text:
+        errors.append(
+            "[TB-CAP-04] configuration is missing additional search text for: "
+            + ", ".join(missing_text)
+        )
+
+    candidates = _ai_agent_system_prompt_candidates(agent_dir)
+    if len(candidates) == 1:
+        prompt_text = candidates[0].read_text(encoding="utf-8", errors="replace")
+        if "tool_search" not in prompt_text or not re.search(
+            r"結論|conclud", prompt_text, re.IGNORECASE
+        ):
+            errors.append(
+                "[TB-CAP-05] Agent System Prompt must require calling tool_search "
+                "before concluding that a capability is missing"
+            )
+
+    errors.extend(_validate_toolbox_test_trace(test_spec))
+    return errors
+
+
+def _validate_toolbox_test_trace(path: Path) -> List[str]:
+    if not path.is_file():
+        return [f"[TB-CAP-01] Agent test specification not found: {path}"]
+    text = path.read_text(encoding="utf-8", errors="replace")
+    rows = _find_ai_agent_table(text, ("Test Case ID", "Contract ID", "Evidence")) or []
+    errors: List[str] = []
+    for contract_id in _TOOLBOX_CONTRACT_HEADINGS:
+        traced = any(
+            row[_normalize_ai_agent_label("Contract ID")].strip() == contract_id
+            and _is_meaningful_ai_agent_value(row[_normalize_ai_agent_label("Evidence")])
+            for row in rows
+        )
+        if not traced:
+            errors.append(
+                f"[{contract_id}] test specification is missing a Test Case ID trace"
+            )
+    return errors
+
+
+def _validate_ai_agent_system_prompt(agent_dir: Path) -> List[str]:
+    candidates = _ai_agent_system_prompt_candidates(agent_dir)
     if not candidates:
         return ["AAGD System Prompt file not found"]
     if len(candidates) != 1:
@@ -11143,11 +12018,12 @@ def validate_ai_agent_implementation_artifacts(
     design_path: "Path | str",
     agent_dir: "Path | str",
     test_spec_path: "Path | str | None" = None,
+    tool_search_policy: str = "auto",
 ) -> List[str]:
     """AAGD Step 2.3の設計・code・config・test traceを相互検証する。"""
     detail_path = Path(design_path)
     root = Path(agent_dir)
-    design_errors, metadata = _parse_ai_agent_design(detail_path)
+    design_errors, metadata = _parse_ai_agent_design(detail_path, tool_search_policy)
     errors = [f"AAGD design prerequisite: {error}" for error in design_errors]
 
     if test_spec_path is None:
@@ -11243,6 +12119,18 @@ def validate_ai_agent_implementation_artifacts(
         if any(bool(value) for value in selected):
             errors.append("[AG-CAP-03] reasoned N/A conflicts with selected route configuration")
 
+    agentic_retrieval = metadata.get("agentic_retrieval") or {}
+    if agentic_retrieval.get("selected"):
+        errors.extend(
+            _validate_agentic_retrieval_implementation(agentic_retrieval, config, source)
+        )
+
+    toolbox = metadata.get("toolbox") or {}
+    if toolbox.get("selected"):
+        errors.extend(
+            _validate_toolbox_implementation(toolbox, config, root, test_spec)
+        )
+
     crud_rows = metadata.get("crud_rows", [])
     if crud_rows:
         if "AG-CAP-04" not in source:
@@ -11311,17 +12199,262 @@ def validate_ai_agent_implementation_artifacts(
     return errors
 
 
+_TOOLBOX_TOKEN_SCOPE = "https://ai.azure.com/.default"
+_TOOLBOX_RESOURCE_MARKER = re.compile(r"/toolboxes/|toolbox_search|call_tool")
+_TOOLBOX_AGENT_REGISTRATION = re.compile(r"/assistants\b|/agents\b")
+# verify script が実測値と設計値を突き合わせるための環境変数（ハードコード禁止）。
+_TOOLBOX_VERIFY_MARKERS = (
+    ("TB-CAP-02", "tools/list", "must read the initial tools/list"),
+    ("TB-CAP-03", "PINNED_TOOLS", "must compare tools/list against ${PINNED_TOOLS}"),
+    ("TB-CAP-04", "tool_search", "must discover a hidden Tool through tool_search"),
+    ("TB-CAP-04", "call_tool", "must execute the discovered Tool through call_tool"),
+    ("TB-CAP-05", "TOOL_SEARCH_LIMIT", "must bound results by ${TOOL_SEARCH_LIMIT}"),
+    ("TB-CAP-02", "TOOLBOX_VERSION", "must assert the deployed ${TOOLBOX_VERSION}"),
+)
+
+
+def _read_deploy_script(path: Path) -> "str | None":
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _validate_toolbox_deploy_scripts(
+    toolbox: Mapping[str, Any], infra_dir: Path
+) -> List[str]:
+    """deploy / verify scriptがTB-CAPどおりかを静的に照合する。
+
+    shellを構文解析せず、必要な契約の存在と作成順序だけを見る。
+    """
+    create_path = infra_dir / "create-azure-agent-resources.sh"
+    verify_path = infra_dir / "verify-agent-resources.sh"
+    create = _read_deploy_script(create_path)
+    verify = _read_deploy_script(verify_path)
+
+    if toolbox.get("tool_search") != "enabled":
+        return [
+            f"[TB-CAP-02] tool search is disabled in the design; {path.name} "
+            "must not create or verify a Toolbox"
+            for path, text in ((create_path, create), (verify_path, verify))
+            if text and _TOOLBOX_RESOURCE_MARKER.search(text)
+        ]
+
+    errors: List[str] = []
+    if create is None:
+        errors.append(f"[TB-CAP-02] Toolbox create script not found: {create_path.name}")
+    else:
+        if "toolbox_search" not in create:
+            errors.append("[TB-CAP-02] create script must register the toolbox_search tool")
+        if "Foundry-Features" not in create:
+            errors.append(
+                "[TB-CAP-02] create script must send the Foundry-Features preview header"
+            )
+        if _TOOLBOX_TOKEN_SCOPE not in create:
+            errors.append(
+                f"[TB-CAP-02] create script must request a token for the "
+                f"{_TOOLBOX_TOKEN_SCOPE} scope"
+            )
+        version_at = create.find("/versions")
+        if version_at < 0:
+            errors.append(
+                "[TB-CAP-02] create script must use the version-specific toolbox "
+                "endpoint /toolboxes/{name}/versions"
+            )
+        else:
+            registration = _TOOLBOX_AGENT_REGISTRATION.search(create)
+            if registration and registration.start() < version_at:
+                # Agent が参照する時点で version が無いと登録が壊れる。
+                errors.append(
+                    "[TB-CAP-02] create script registers the Agent before creating "
+                    "the toolbox version"
+                )
+
+    if verify is None:
+        errors.append(f"[TB-CAP-02] Toolbox verify script not found: {verify_path.name}")
+    else:
+        for contract_id, marker, message in _TOOLBOX_VERIFY_MARKERS:
+            if marker not in verify:
+                errors.append(f"[{contract_id}] verify script {message}")
+        if "set -euo pipefail" not in verify:
+            errors.append(
+                "[TB-CAP-02] verify script must be fail-closed (set -euo pipefail)"
+            )
+    return errors
+
+
+def validate_ai_agent_deploy_artifacts(
+    design_path: "Path | str",
+    infra_dir: "Path | str",
+    tool_search_policy: str = "auto",
+) -> List[str]:
+    """AAGD Step 3のdeploy/verify scriptを設計TB-CAPと照合する。"""
+    detail_path = Path(design_path)
+    design_errors, metadata = _parse_ai_agent_design(detail_path, tool_search_policy)
+    errors = [f"AAGD design prerequisite: {error}" for error in design_errors]
+    toolbox = metadata.get("toolbox") or {}
+    if not toolbox.get("selected"):
+        return errors
+
+    root = Path(infra_dir)
+    if not root.is_dir() or root.is_symlink():
+        errors.append(f"[TB-CAP-02] Azure infrastructure directory not found: {root}")
+        return errors
+    errors.extend(_validate_toolbox_deploy_scripts(toolbox, root))
+    return errors
+
+
+_TOOL_SEARCH_EVAL_MIN_QUERIES = 10
+_TOOL_SEARCH_EVAL_MIN_MULTI_TOOL = 3
+_TOOL_SEARCH_EVAL_BENCHMARK = re.compile(r"toolret|公開ベンチマーク|ベンチマーク公表値", re.IGNORECASE)
+_TOOL_SEARCH_EVAL_UNMEASURED = re.compile(r"未測定|not measured|unmeasured", re.IGNORECASE)
+
+
+def _tool_search_eval_query_errors(text: str) -> List[str]:
+    contract_id = "TB-CAP-05"
+    header = ("Query ID", "Query", "Expected tools", "Multi tool")
+    rows = _find_ai_agent_table(text, header)
+    if not rows:
+        return [f"[{contract_id}] evaluation query table is missing"]
+
+    errors: List[str] = []
+    if len(rows) < _TOOL_SEARCH_EVAL_MIN_QUERIES:
+        errors.append(
+            f"[{contract_id}] evaluation needs at least "
+            f"{_TOOL_SEARCH_EVAL_MIN_QUERIES} queries, found {len(rows)}"
+        )
+    multi_key = _normalize_ai_agent_label("Multi tool")
+    multi = sum(1 for row in rows if row.get(multi_key, "").strip().casefold() == "yes")
+    if multi < _TOOL_SEARCH_EVAL_MIN_MULTI_TOOL:
+        errors.append(
+            f"[{contract_id}] evaluation needs at least "
+            f"{_TOOL_SEARCH_EVAL_MIN_MULTI_TOOL} multi-tool queries, found {multi}"
+        )
+    expected_key = _normalize_ai_agent_label("Expected tools")
+    missing = [
+        row.get(_normalize_ai_agent_label("Query ID"), "?").strip()
+        for row in rows
+        if not _is_meaningful_ai_agent_value(row.get(expected_key, ""))
+    ]
+    if missing:
+        errors.append(
+            f"[{contract_id}] queries without an expected Tool set: {', '.join(missing)}"
+        )
+    return errors
+
+
+def _tool_search_eval_metric_errors(text: str) -> List[str]:
+    contract_id = "TB-CAP-02"
+    header = ("Metric", "Measured off", "Measured on", "Evidence")
+    rows = _find_ai_agent_table(text, header)
+    if not rows:
+        return [
+            f"[{contract_id}] metrics table with measured on/off columns is missing"
+        ]
+
+    errors: List[str] = []
+    off_key = _normalize_ai_agent_label("Measured off")
+    on_key = _normalize_ai_agent_label("Measured on")
+    evidence_key = _normalize_ai_agent_label("Evidence")
+    for row in rows:
+        name = row.get(_normalize_ai_agent_label("Metric"), "?").strip()
+        values = [row.get(off_key, "").strip(), row.get(on_key, "").strip()]
+        if not all(values):
+            errors.append(
+                f"[{contract_id}] metric {name!r} is blank; record the value or "
+                "未測定（理由）"
+            )
+            continue
+        if any(_TOOL_SEARCH_EVAL_UNMEASURED.search(value) for value in values):
+            if not all(
+                _TOOL_SEARCH_EVAL_UNMEASURED.search(value)
+                and re.search(r"[（(].+[)）]", value)
+                for value in values
+            ):
+                errors.append(
+                    f"[{contract_id}] metric {name!r} marked 未測定 without a reason"
+                )
+            continue
+        if _TOOL_SEARCH_EVAL_BENCHMARK.search(row.get(evidence_key, "")):
+            # 公開ベンチマーク値は自社カタログの効果ではない。
+            errors.append(
+                f"[{contract_id}] metric {name!r} cites a published benchmark as a "
+                "measured value"
+            )
+    return errors
+
+
+def validate_tool_search_eval_report(
+    design_path: "Path | str",
+    report_path: "Path | str",
+    tool_search_policy: str = "auto",
+) -> List[str]:
+    """AAGD Step 4のtool search実測レポートを検証する。
+
+    数値の正しさは判定せず、測定構造と証跡・未測定理由の存在だけを見る。
+    """
+    detail_path = Path(design_path)
+    design_errors, metadata = _parse_ai_agent_design(detail_path, tool_search_policy)
+    errors = [f"AAGD design prerequisite: {error}" for error in design_errors]
+
+    path = Path(report_path)
+    if not path.is_file() or path.is_symlink():
+        errors.append(f"[TB-CAP-02] tool search evaluation report not found: {path}")
+        return errors
+    text = _strip_ai_agent_markdown_code(
+        path.read_text(encoding="utf-8", errors="replace")
+    )
+
+    toolbox = metadata.get("toolbox") or {}
+    measurable = toolbox.get("tool_search") == "enabled"
+    is_na, na_errors = _reasoned_ai_agent_na(text, "TB-CAP-02")
+    if is_na:
+        if measurable:
+            errors.append(
+                "[TB-CAP-02] tool search is enabled in the design; the report "
+                "must contain measurements instead of a reasoned N/A"
+            )
+        errors.extend(na_errors)
+        if not measurable:
+            return errors
+    elif not measurable:
+        errors.append(
+            "[TB-CAP-02] no Toolbox is deployed; the report must record a reasoned "
+            "N/A instead of being omitted"
+        )
+        return errors
+
+    for label in ("Toolbox version", "Pinned tools", "Measured at"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(text, label)):
+            errors.append(f"[TB-CAP-01] measurement condition {label!r} is missing")
+    if not re.search(r"\d", _ai_agent_field(text, "limit")):
+        errors.append("[TB-CAP-01] measurement condition 'limit' is missing")
+    errors.extend(_tool_search_eval_query_errors(text))
+    errors.extend(_tool_search_eval_metric_errors(text))
+    if not _ai_agent_field(text, "Conclusion").strip() or not _is_meaningful_ai_agent_value(
+        _ai_agent_field(text, "Rationale")
+    ):
+        errors.append(
+            "[TB-CAP-02] report must state a Conclusion and Rationale for the "
+            "TB-CAP-02 decision"
+        )
+    return errors
+
+
 def validate_ai_agent_capability_artifacts(
     workflow_id: str,
     design_path: "Path | str",
     *,
     agent_dir: "Path | str | None" = None,
     test_spec_path: "Path | str | None" = None,
+    tool_search_policy: str = "auto",
 ) -> List[str]:
     """AAG/AAGDだけをallowlistし、他workflowではno-opにするdispatcher。"""
     workflow = (workflow_id or "").strip().casefold()
     if workflow == "aag":
-        return validate_ai_agent_design_artifact(design_path)
+        return validate_ai_agent_design_artifact(design_path, tool_search_policy)
     if workflow == "aagd":
         if agent_dir is None:
             return ["AAGD agent directory is required for capability validation"]
@@ -11329,5 +12462,6 @@ def validate_ai_agent_capability_artifacts(
             design_path,
             agent_dir,
             test_spec_path,
+            tool_search_policy,
         )
     return []

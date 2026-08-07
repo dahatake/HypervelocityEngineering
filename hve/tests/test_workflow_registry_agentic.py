@@ -1,16 +1,15 @@
-"""test_workflow_registry_agentic.py — Agentic Retrieval 関連 Step の整合性検証テスト（Phase 7）
+"""test_workflow_registry_agentic.py — Agentic Retrieval 関連 Step の整合性検証テスト
 
 workflow_registry.py の AAD-WEB / ASDW-WEB ワークフロー定義に対して、
-Agentic Retrieval 関連 Step の存在・依存整合性・スキップ条件を検証する。
+Agentic Retrieval 専用 Step の存在・依存整合性を検証する。
 
-NOTE:
-  現時点で Agentic Retrieval は専用の独立 Step ではなく、以下のステップ内で処理される：
-  - AAD-WEB Step.2.2: Arch-Microservice-ServiceDetail
-      → Arch-AgenticRetrieval-Detail Custom Agent に委譲（Arch-AgenticRetrieval-Detail 相当）
-  - ASDW-WEB Step.2.1: Dev-Microservice-Azure-AddServiceDesign（AgenticRetrievalDesign 相当）
-  - ASDW-WEB Step.2.2: Dev-Microservice-Azure-AddServiceDeploy（AgenticRetrievalDeploy 相当）
-  スキップ判定は registry 単体では完結せず normalize_agentic_retrieval_answers によって
-  orchestrator レベルで処理される（本ファイルの TestAgenticRetrievalSkipCondition を参照）。
+ADR-0001 Phase 5（2026-08-04）で専用 Step を配線済み:
+  - AAD-WEB Step.2.6: `Arch-AgenticRetrieval-Detail`（製品非依存の機能要件詳細）
+  - ASDW-WEB Step.2.5: `Dev-Microservice-Azure-AgenticRetrievalDesign`（Azure 実装設計）
+  - ASDW-WEB Step.2.6: `Dev-Microservice-Azure-AgenticRetrievalDeploy`（Knowledge Base / Source 作成）
+
+`enable_agentic_retrieval=no` による Step 無効化は `StepDef.disabled_when_config` が担う
+（契約テストは `test_agentic_retrieval_step_skip.py`）。
 """
 
 from __future__ import annotations
@@ -32,34 +31,44 @@ _WORKFLOWS_DIR = _REPO_ROOT / ".github" / "workflows"
 
 
 class TestAadWebAgenticRetrievalStep:
-    """AAD-WEB の Agentic Retrieval 関連 Step の存在・整合性を検証する。"""
+    """AAD-WEB の Agentic Retrieval 専用 Step（2.6）を検証する。"""
 
-    def test_aad_web_step_2_2_exists(self):
-        """AAD-WEB の Step.2.2 が存在すること。"""
-        step = get_step("aad-web", "2.2")
+    def test_step_2_6_uses_agentic_retrieval_detail_agent(self):
+        """Step.2.6 が `Arch-AgenticRetrieval-Detail` を使用すること。"""
+        step = get_step("aad-web", "2.6")
         assert step is not None
-
-    def test_aad_web_step_2_2_uses_service_detail_agent(self):
-        """AAD-WEB の Step.2.2 が Arch-Microservice-ServiceDetail を使用すること。
-
-        Arch-Microservice-ServiceDetail は Arch-AgenticRetrieval-Detail に委譲するため、
-        この Step が Agentic Retrieval 相当の処理を担う。
-        """
-        step = get_step("aad-web", "2.2")
-        assert step is not None
-        assert step.custom_agent == "Arch-Microservice-ServiceDetail"
-
-    def test_aad_web_step_2_2_is_not_container(self):
-        """AAD-WEB の Step.2.2 がコンテナでないこと。"""
-        step = get_step("aad-web", "2.2")
-        assert step is not None
+        assert step.custom_agent == "Arch-AgenticRetrieval-Detail"
         assert step.is_container is False
 
-    def test_aad_web_all_four_steps_exist(self):
-        """AAD-WEB の全 4 Step（1 / 2.1 / 2.2 / 2.3）が存在すること。"""
-        for step_id in ["1", "2.1", "2.2", "2.3"]:
-            step = get_step("aad-web", step_id)
-            assert step is not None, f"AAD-WEB に Step.{step_id} が存在しません"
+    def test_step_2_6_depends_on_service_detail(self):
+        """Step.2.6 がマイクロサービス定義書（Step.2.2）に依存すること。"""
+        step = get_step("aad-web", "2.6")
+        assert step is not None
+        assert step.depends_on == ["2.2"]
+
+    def test_step_2_6_declares_spec_output(self):
+        """Step.2.6 が製品非依存 spec を契約として宣言すること。
+
+        判定キーワードにヒットしたサービスだけを処理する条件付き成果物のため、
+        確定ファイルパス（output_paths）ではゲートしない。
+        """
+        step = get_step("aad-web", "2.6")
+        assert step is not None
+        assert step.output_paths == []
+        assert step.output_paths_template == [
+            "docs/services/{serviceId}-agentic-retrieval-spec.md"
+        ]
+
+    def test_step_2_6_requires_agentic_retrieval_contract_skill(self):
+        """Step.2.6 が AR-CAP 契約 Skill を required 宣言すること。"""
+        step = get_step("aad-web", "2.6")
+        assert step is not None
+        assert "agentic-retrieval-contract" in step.required_skills
+
+    def test_aad_web_all_steps_exist(self):
+        """AAD-WEB の全 Step（1 / 2.1 / 2.2 / 2.3 / 2.4 / 2.5 / 2.6 / 3）が存在すること。"""
+        for step_id in ["1", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "3"]:
+            assert get_step("aad-web", step_id) is not None, f"AAD-WEB に Step.{step_id} が存在しません"
 
 
 # ---------------------------------------------------------------------------
@@ -68,46 +77,50 @@ class TestAadWebAgenticRetrievalStep:
 
 
 class TestAsdwWebAgenticRetrievalSteps:
-    """ASDW-WEB の AgenticRetrievalDesign / AgenticRetrievalDeploy 相当 Step を検証する。
+    """ASDW-WEB の Agentic Retrieval 専用 Step（2.5 / 2.6）を検証する。"""
 
-    ASDW-WEB では Agentic Retrieval は独立 Step ではなく AddService 系 Step で処理される:
-      - Step.2.1: Dev-Microservice-Azure-AddServiceDesign（AgenticRetrievalDesign 相当）
-      - Step.2.2: Dev-Microservice-Azure-AddServiceDeploy（AgenticRetrievalDeploy 相当）
-    """
-
-    def test_asdw_web_step_2_1_exists(self):
-        """ASDW-WEB の Step.2.1（AgenticRetrievalDesign 相当）が存在すること。"""
-        step = get_step("asdw-web", "2.1")
+    def test_step_2_5_uses_design_agent(self):
+        """Step.2.5 が `Dev-Microservice-Azure-AgenticRetrievalDesign` を使用すること。"""
+        step = get_step("asdw-web", "2.5")
         assert step is not None
+        assert step.custom_agent == "Dev-Microservice-Azure-AgenticRetrievalDesign"
+        assert step.depends_on == ["2.1"]
 
-    def test_asdw_web_step_2_1_uses_add_service_design_agent(self):
-        """ASDW-WEB の Step.2.1 が Dev-Microservice-Azure-AddServiceDesign を使用すること。
-
-        このステップは Agentic Retrieval の設計 (AgenticRetrievalDesign 相当) を担う。
-        """
-        step = get_step("asdw-web", "2.1")
+    def test_step_2_6_uses_deploy_agent(self):
+        """Step.2.6 が `Dev-Microservice-Azure-AgenticRetrievalDeploy` を使用すること。"""
+        step = get_step("asdw-web", "2.6")
         assert step is not None
-        assert step.custom_agent == "Dev-Microservice-Azure-AddServiceDesign"
+        assert step.custom_agent == "Dev-Microservice-Azure-AgenticRetrievalDeploy"
 
-    def test_asdw_web_step_2_2_exists(self):
-        """ASDW-WEB の Step.2.2（AgenticRetrievalDeploy 相当）が存在すること。"""
-        step = get_step("asdw-web", "2.2")
+    def test_step_2_6_depends_on_deploy_and_design(self):
+        """Step.2.6 が live 済みの 2.2 と設計の 2.5 の両方に依存すること。"""
+        step = get_step("asdw-web", "2.6")
         assert step is not None
+        assert sorted(step.depends_on) == ["2.2", "2.5"]
 
-    def test_asdw_web_step_2_2_uses_add_service_deploy_agent(self):
-        """ASDW-WEB の Step.2.2 が Dev-Microservice-Azure-AddServiceDeploy を使用すること。
+    def test_step_2_5_is_part_of_local_generation_checkpoint(self):
+        """Step.2.5 は local 生成 Step であり、checkpoint（4.2）へ到達すること。"""
+        step_42 = get_step("asdw-web", "4.2")
+        assert step_42 is not None
+        assert "2.5" in step_42.depends_on
 
-        このステップは Agentic Retrieval のデプロイ (AgenticRetrievalDeploy 相当) を担う。
-        """
-        step = get_step("asdw-web", "2.2")
+    def test_step_2_6_declares_reality_gate_acs(self):
+        """Step.2.6 が実在系 AC（設計値一致と smoke retrieve）を gate として宣言すること。"""
+        step = get_step("asdw-web", "2.6")
         assert step is not None
-        assert step.custom_agent == "Dev-Microservice-Azure-AddServiceDeploy"
+        assert step.reality_gate_acs == ["AC4B-1", "AC4B-14", "AC4B-15", "AC4B-18"]
 
-    def test_asdw_web_step_2_2_depends_on_step_2_1(self):
-        """ASDW-WEB の Step.2.2 が Step.2.1 に依存すること（Deploy は Design 後）。"""
-        step = get_step("asdw-web", "2.2")
-        assert step is not None
-        assert "2.1" in step.depends_on
+    def test_agentic_retrieval_steps_require_contract_skill(self):
+        """2.5 / 2.6 の両方が AR-CAP 契約 Skill を required 宣言すること。"""
+        for step_id in ("2.5", "2.6"):
+            step = get_step("asdw-web", step_id)
+            assert step is not None
+            assert "agentic-retrieval-contract" in step.required_skills, step_id
+
+    def test_add_service_steps_remain_unchanged(self):
+        """既存の AddService 系 Step の責務が変わっていないこと。"""
+        assert get_step("asdw-web", "2.1").custom_agent == "Dev-Microservice-Azure-AddServiceDesign"
+        assert get_step("asdw-web", "2.2").custom_agent == "Dev-Microservice-Azure-AddServiceDeploy"
 
 
 # ---------------------------------------------------------------------------
@@ -261,10 +274,10 @@ class TestAsdwWebLocalFirstDesignInputs:
 class TestAgenticRetrievalSkipCondition:
     """enable_agentic_retrieval=no 条件での正規化動作を検証する。
 
-    NOTE: workflow_registry.py は enable_agentic_retrieval によるスキップ判定を直接持たない。
-          スキップ/無効化は normalize_agentic_retrieval_answers が担い、
-          orchestrator / reusable workflow レベルで処理される。
-          本クラスはその正規化ロジックを直接テストする。
+    NOTE: Step の無効化そのものは `StepDef.disabled_when_config` と
+          `resolve_disabled_step_ids` が担う（`test_agentic_retrieval_step_skip.py` を参照）。
+          本クラスは Foundry 連携フラグ等の**回答値の正規化**（`normalize_agentic_retrieval_answers`）
+          だけを対象とする。
     """
 
     def test_no_disables_foundry_mcp(self):

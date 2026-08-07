@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from cq import chunking, config, indexer, languages, store
+from cq import chunking, config, graph, indexer, languages, store
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,9 +50,22 @@ def _index(tmp_path: Path) -> Path:
 class TestParserFidelity:
     """FR-CQ-04: the recorded fidelity must name the parser that actually ran."""
 
-    def test_regex_extractor_is_not_reported_as_ast(self) -> None:
+    def test_regex_extractor_is_not_reported_as_ast(self, monkeypatch) -> None:
+        """C#'s regex tier is now only reached as a fallback (Phase 2), so the
+        grammar is forced absent here to exercise it deterministically."""
+        from cq.languages import csharp, treesitter as ts
+
+        monkeypatch.setitem(
+            ts._PARSERS,
+            ts.cache_key(csharp.GRAMMAR),
+            languages.ExtractionError("simulated missing grammar"),
+        )
         _, parser = indexer._extract("csharp", CSHARP)
         assert parser == "regex"
+
+    def test_csharp_prefers_tree_sitter_when_the_grammar_is_installed(self) -> None:
+        _, parser = indexer._extract("csharp", CSHARP)
+        assert parser == "tree-sitter"
 
     def test_python_extractor_is_reported_as_ast(self) -> None:
         _, parser = indexer._extract("python", "def a():\n    return 1\n")
@@ -72,8 +85,13 @@ class TestChunkerRegistration:
         support = languages.support_for("python")
         assert support is not None and support.chunk is not None
 
-    def test_language_without_a_chunker_falls_back_to_windows(self) -> None:
-        chunks = chunking.chunk_source(CSHARP, "csharp")
+    def test_language_without_a_chunker_falls_back_to_windows(self, monkeypatch) -> None:
+        """A synthetic registry entry keeps this contract test independent of
+        which real languages currently lack a chunker (C# gained one in
+        Phase 2, so it can no longer stand in for "no chunker registered")."""
+        support = languages.LanguageSupport(parser="fake", extract=lambda _s: ())
+        monkeypatch.setattr(languages, "_registry", lambda: {"fake": support})
+        chunks = chunking.chunk_source(CSHARP, "fake")
         assert chunks and all(chunk.name == "" for chunk in chunks)
 
 
@@ -161,6 +179,55 @@ class TestDegradation:
         with closing(store.open_store(db, create=False)) as conn:
             parsers = dict(conn.execute("SELECT path, parser FROM files"))
         assert parsers == {"pkg/a.py": "ast", "pkg/b.cs": "lite"}
+
+    @pytest.mark.parametrize(
+        "failure", [languages.ExtractionError("no grammar"), ImportError("no grammar")]
+    )
+    def test_graph_extractor_failure_degrades_like_symbol_extraction(
+        self, failure: Exception
+    ) -> None:
+        """The graph layer must degrade like `indexer._extract` does.
+
+        A missing optional grammar reaches `graph.extract` through
+        `LanguageSupport.graph`, which `indexer._extract` never touches.
+        """
+
+        def unavailable(_source: str):
+            raise failure
+
+        support = languages.LanguageSupport(
+            parser="tree-sitter", extract=lambda _s: (), graph=unavailable
+        )
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(languages, "_registry", lambda: {"fake": support})
+            assert graph.extract("noop\n", "fake") == ((), ())
+
+    def test_failed_graph_extractor_does_not_abort_the_whole_index(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Reproduces the distribution-kit failure: a repository holding a
+        single `.ps1` aborted `cq index` when the grammar was absent."""
+
+        def unavailable(_source: str):
+            raise ImportError("grammar package is not installed")
+
+        broken = dict(languages._registry())
+        broken["powershell"] = languages.LanguageSupport(
+            parser="tree-sitter", extract=unavailable, graph=unavailable
+        )
+        monkeypatch.setattr(languages, "_registry", lambda: broken)
+        repo = _repo(
+            tmp_path,
+            {
+                "pkg/a.py": "def a():\n    return 1\n",
+                "pkg/deploy.ps1": "function Invoke-Deploy { Write-Host 'x' }\n",
+            },
+        )
+        profile = config.resolve_profile(repo, "test")
+        report = indexer.build_index(repo, profile, db_path=repo / ".cq" / "index-test.sqlite")
+        assert report.errors == 0
+        assert report.indexed == 2
+        assert report.degraded == 1
 
 
 class TestPersistedSemantics:

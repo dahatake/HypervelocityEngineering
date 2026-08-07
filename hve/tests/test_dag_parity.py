@@ -264,6 +264,62 @@ class TestStepParityWithRealFiles(unittest.TestCase):
             f"hve_only={result['hve_only']}",
         )
 
+    def _assert_step_parity(self, workflow_id: str) -> None:
+        bash_steps = extract_bash_workflow_steps(_BASH_REGISTRY_PATH, workflow_id)
+        hve_steps = self._hve_steps_for(workflow_id)
+        missing = []
+        if not bash_steps:
+            missing.append("bash")
+        if not hve_steps:
+            missing.append("hve")
+        if missing:
+            self.fail(f"{workflow_id} workflow missing from registry: " + ", ".join(missing))
+        result = compare_step_definitions(
+            workflow_id, workflow_id, list(bash_steps), hve_steps
+        )
+        self.assertTrue(
+            result["in_sync"],
+            f"{workflow_id} step parity mismatch — bash_only={result['bash_only']}, "
+            f"hve_only={result['hve_only']}",
+        )
+
+    def test_aag_step_parity(self) -> None:
+        self._assert_step_parity("aag")
+
+    def test_aagd_step_parity(self) -> None:
+        """AI Agent の Step を hve 側だけに足すと Cloud が追随しない。"""
+        self._assert_step_parity("aagd")
+
+    def test_every_bash_registered_workflow_is_in_sync(self) -> None:
+        """bash registry に載っている全 workflow を網羅する。
+
+        workflow ごとに個別テストを書く方式は、テストを書き忘れた workflow が
+        無検査で残る（aag / aagd / adfd が実際にそうなっていた）。
+        """
+        # 抽出器は `_WORKFLOW_REGISTRY[${workflow_id}]` のような参照も拾うため、
+        # 実定義（heredoc を持つ ID）だけに絞る。
+        workflow_ids = [
+            workflow_id
+            for workflow_id in extract_bash_workflow_ids(_BASH_REGISTRY_PATH)
+            if self._parse_bash_workflow(workflow_id) is not None
+        ]
+        self.assertTrue(workflow_ids, "bash registry から workflow を抽出できていない")
+        # 抽出漏れで対象が減ると検査が自明に通る。実定義数の下限を固定する。
+        self.assertGreaterEqual(len(workflow_ids), 6, workflow_ids)
+        for workflow_id in workflow_ids:
+            with self.subTest(workflow_id=workflow_id):
+                self._assert_step_parity(workflow_id)
+
+    def test_aagd_tool_search_step_is_registered_on_both_sides(self) -> None:
+        """`aagd/4`（tool search 実測評価）は Cloud 側にも必要。
+
+        parity テストは集合比較なので、どちらか片方が空でも通ってしまう
+        書き方をしがち。対象 Step の実在を直接固定する。
+        """
+        bash_steps = extract_bash_workflow_steps(_BASH_REGISTRY_PATH, "aagd")
+        self.assertIn("4", bash_steps)
+        self.assertIn("4", self._hve_steps_for("aagd"))
+
     @staticmethod
     def _parse_bash_workflow(workflow_key: str) -> dict[str, Any] | None:
         text = _BASH_REGISTRY_PATH.read_text(encoding="utf-8")

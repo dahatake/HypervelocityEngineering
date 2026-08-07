@@ -95,6 +95,8 @@ sdkconfig_internal_fields:
   - step_timeout_seconds            # Step全体timeout（実行基盤）
   - timeout_seconds                 # idle タイムアウト（タイムアウト）
   - timestamp_style                 # タイムスタンプ表示位置（出力制御）
+  - tool_search                     # SDK ツール定義遅延ロード（FR-MODEL-04、CLI/GUI実行基盤）
+  - tool_search_ranking             # tool_search_tool のランキング実装差し替え（FR-TS-01、HVE 自身の SDK セッション）
   - unattended                      # 全自動モード（自動化用）
   - verbose                         # 詳細出力（レガシー互換）
   - verbosity                       # 出力レベル（出力制御）
@@ -224,44 +226,44 @@ options:
   - option_key: enable_agentic_retrieval
     issue_form_field_id: enable_agentic_retrieval
     hve_config_attr: enable_agentic_retrieval
-    hve_cli_flag: null
+    hve_cli_flag: --enable-agentic-retrieval
     applies_to: common
-    notes: "Agentic Retrieval 有効化。CLI 直接フラグなし（Issue タグ経由）。config.py:304"
+    notes: "Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。CLI フラグ / Wizard / GUI から設定でき、no のとき StepDef.disabled_when_config により実行対象から外れる。config.py:628"
 
   - option_key: agentic_data_source_modes
     issue_form_field_id: agentic_data_source_modes
     hve_config_attr: agentic_data_source_modes
-    hve_cli_flag: null
+    hve_cli_flag: --agentic-data-source-modes
     applies_to: common
-    notes: "データソース投入方式（indexer/push）。CLI 直接フラグなし（Issue タグ経由）。config.py:308"
+    notes: "データソース投入方式（indexer/push）。CLI フラグ / 対話ウィザード / GUI から設定可能。Cloud は Root Issue 本文へタグを埋め込む。config.py:308"
 
   - option_key: foundry_mcp_integration
     issue_form_field_id: foundry_mcp_integration
     hve_config_attr: foundry_mcp_integration
-    hve_cli_flag: null
+    hve_cli_flag: --foundry-mcp-integration
     applies_to: common
-    notes: "Microsoft Foundry 連携（Remote MCP Server）。CLI 直接フラグなし（Issue タグ経由）。config.py:310"
+    notes: "Microsoft Foundry 連携（Remote MCP Server）。CLI フラグ / 対話ウィザード / GUI から設定可能。Cloud は Root Issue 本文へタグを埋め込む。config.py:310"
 
   - option_key: agentic_data_sources_hint
     issue_form_field_id: agentic_data_sources_hint
     hve_config_attr: agentic_data_sources_hint
-    hve_cli_flag: null
+    hve_cli_flag: --agentic-data-sources-hint
     applies_to: common
-    notes: "想定データソースヒント（任意テキスト）。CLI 直接フラグなし（Issue タグ経由）。config.py:312"
+    notes: "想定データソースヒント（任意テキスト）。CLI フラグ / 対話ウィザード / GUI から設定可能。Cloud は Root Issue 本文へタグを埋め込む。config.py:312"
 
   - option_key: agentic_existing_design_diff_only
     issue_form_field_id: agentic_existing_design_diff_only
     hve_config_attr: agentic_existing_design_diff_only
-    hve_cli_flag: null
+    hve_cli_flag: --agentic-existing-design-diff-only
     applies_to: common
-    notes: "既存設計差分更新モード。CLI 直接フラグなし（Issue タグ経由）。config.py:314"
+    notes: "既存設計差分更新モード。CLI フラグ / 対話ウィザード / GUI から設定可能。Cloud は Root Issue 本文へタグを埋め込む。config.py:314"
 
   - option_key: foundry_sku_fallback_policy
     issue_form_field_id: foundry_sku_fallback_policy
     hve_config_attr: foundry_sku_fallback_policy
-    hve_cli_flag: null
+    hve_cli_flag: --foundry-sku-fallback-policy
     applies_to: common
-    notes: "Foundry モデル SKU フォールバック方針。CLI 直接フラグなし（Issue タグ経由）。config.py:316"
+    notes: "Foundry モデル SKU フォールバック方針。CLI フラグ / 対話ウィザード / GUI から設定可能。Cloud は Root Issue 本文へタグを埋め込む。config.py:316"
 
   # ============================================================
   # issue_form_only: Issue Form にのみ存在し hve SDKConfig には対応フィールドがない
@@ -405,3 +407,10 @@ options:
     hve_cli_flag: null
     applies_to: hve_only
     notes: "Work IQ 高優先度質問を優先して抽出するフィルタ。環境変数 WORKIQ_PRIORITY_FILTER。デフォルト True。config.py:225"
+
+  - option_key: enable_tool_search
+    issue_form_field_id: enable_tool_search
+    hve_config_attr: enable_tool_search
+    hve_cli_flag: --enable-tool-search
+    applies_to: common
+    notes: "生成する AI Agent の Foundry Toolbox tool search。auto は Tool 総数 15 超で有効化。CLI / GUI / Cloud Issue Form（ai-agent-design.yml / ai-agent-dev.yml）の 3 面で選択肢と意味が一致。HVE 自身の SDK セッション設定 `tool_search` とは別ドメイン。config.py:653"

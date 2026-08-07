@@ -4,11 +4,19 @@ Guards the two defects found while reviewing the existing extractors: braces
 inside string literals and comments corrupted parent attribution, and
 TypeScript-only declarations were invisible because TypeScript reused the
 JavaScript pattern table verbatim.
+
+C# / JavaScript / TypeScript were upgraded to tree-sitter as the primary
+extractor (FR-CQ-11 Phase 2); the regex extractor guarded here is now the
+fallback tier, so these tests call `extract_regex` directly rather than
+`languages.extractor_for(...)` — otherwise, in an environment where the
+optional tree-sitter grammar is installed, they would silently stop
+exercising the regex path they exist to guard.
 """
 
 from __future__ import annotations
 
 from cq import languages
+from cq.languages import csharp, javascript, typescript
 from cq.languages.linescan import brace_delta, code_only
 
 
@@ -45,7 +53,7 @@ class LedgerView {
 """
 
     def test_methods_keep_their_class_after_a_brace_in_a_string(self) -> None:
-        symbols = {s.name: s for s in languages.extractor_for("javascript")(self.SOURCE)}
+        symbols = {s.name: s for s in javascript.extract_regex(self.SOURCE)}
         assert symbols["render"].parent == "LedgerView"
         assert symbols["reset"].parent == "LedgerView"
         assert symbols["reset"].qualname == "LedgerView.reset"
@@ -67,7 +75,7 @@ public sealed class LedgerService
 """
 
     def test_members_keep_their_type_after_a_brace_in_a_string(self) -> None:
-        symbols = {s.name: s for s in languages.extractor_for("csharp")(self.SOURCE)}
+        symbols = {s.name: s for s in csharp.extract_regex(self.SOURCE)}
         assert symbols["Reset"].parent == "LedgerService"
 
 
@@ -99,7 +107,7 @@ export function mountScreen(container: HTMLElement): HTMLElement {
 """
 
     def _symbols(self):
-        return {s.qualname: s for s in languages.extractor_for("typescript")(self.SOURCE)}
+        return {s.qualname: s for s in typescript.extract_regex(self.SOURCE)}
 
     def test_interface_is_extracted(self) -> None:
         assert self._symbols()["Ledger"].kind == "interface"

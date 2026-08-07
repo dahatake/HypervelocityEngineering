@@ -76,7 +76,9 @@
 
 - 言語正規化: `mdq/tokenize.py::normalize`（`ja-jp` / `en-us`、既定 `ja-jp`）
 - FTS5 トークナイザ解決: `mdq/tokenize.py::resolved_fts5_tokenizer`（`ja-jp` → `trigram`、未対応時 `unicode61`、`en-us` → `unicode61`）
-- BM25 フォールバックの正規表現トークナイザ: `mdq/search.py::_TOKEN_RE = [A-Za-z0-9_]+ | [\u3040-\u30ff\u4e00-\u9fff]`（CJK は 1 文字 1 トークン、形態素解析なし）
+- BM25 スコアリングのトークナイザ: `mdq/tokenize.py::scoring_terms`（CJK 連続部は隣接バイグラムへ分解、隣に CJK が無い 1 文字はそのまま、ASCII 連続部は小文字化するだけで分割しない。形態素解析なし）
+- BM25 のスコアリング対象テキスト: `mdq/search.py::_scoring_text` が `path` + `heading_path`（`HEADING_WEIGHT = 3` 回繰り返す）+ 本文を連結する。見出しやパスに現れる語は本文だけに現れる語より順位が上がる
+- 抜粋（snippet）の中心行選択にだけ使う正規表現トークナイザ: `mdq/search.py::_TOKEN_RE = [A-Za-z0-9_]+ | [\u3040-\u30ff\u4e00-\u9fff]`（CJK は 1 文字 1 トークン）。順位付けには関与しない
 
 ## 検索エンジン
 - `--engine auto`（既定）: 環境変数 `MDQ_FTS5`（旧名 `HVE_MDQ_FTS5` も deprecated alias）が truthy（`1`/`true`/`yes`/`on`）かつ DB が FTS5 をサポートする場合に FTS5、それ以外は in-memory BM25。
@@ -87,15 +89,16 @@
 - 小コーパス特性: BM25-Okapi の IDF は `df ≈ N/2` で 0 に近づくため、頻出語のみのクエリはヒットしないことがある。
 
 ## snippet と expansion
-- snippet: マッチした query token を最も多く含む 1 行を中心に `--snippet-radius` 行を抽出（`mdq/search.py::_make_snippet`、`max_chars=400` で末尾切り詰め）。
+- snippet: マッチした query token を最も多く含む 1 行を中心に `--snippet-radius` 行を抽出（`mdq/search.py::_make_snippet`、`max_chars=400` で末尾切り詰め）。`--return-unit locations` のときは `snippet` 自体を生成せず、JSON 出力からもキーごと落ちる。
 - `Hit.expansion`（任意フィールド）: `--include-parent` / `--expand-neighbors N` / `--merge-parts` 指定時のみ付与される dict。
   - `parent`: 親見出しチャンク（`heading_path` から末尾セグメントを除いたパスに一致するチャンク）
   - `neighbors`: 同一ファイル内で `start_line` が直前/直後の N 件
   - `parts`: 同一 `(path, heading_path)` の他 part（`part_total > 1` の場合のみ）
-- いずれも JSON 出力では `{chunk_id, path, heading_path, lines, text}` の最小ブリーフ表現。
+- いずれも JSON 出力では `{chunk_id, path, heading_path, lines, text}` の最小ブリーフ表現。ただし `--return-unit locations` のときは `text` を除いた所在情報のみとなる。
 
 ## 既知の制約（捏造禁止）
 - BM25 in-memory 経路はクエリ時にチャンク全件をロードする（小〜中規模向け）。大規模化時は `--engine fts5` を検討。
-- 日本語は trigram もしくは 1 文字単位で扱い、形態素解析は行わない。固有表現の精度は限定的。
+- 日本語は FTS5 では trigram、BM25 では隣接バイグラム単位で扱い、形態素解析は行わない。固有表現の精度は限定的。
 - `expansion` の snippet 長は `--max-tokens` の予算には算入されない（本体ヒットのみ予算対象）。
 - 索引 DB は言語 × 戦略の組み合わせごとに別ファイルとして作成される。複数組み合わせを使う場合はそれぞれ `mdq index` の実行が必要。
+- 索引と作業ツリーの乖離は `mdq search` が検知して stderr へ警告を出すが、**自動で再索引はしない**（再索引は検索レイテンシと桁が違うため）。検知はサイズと更新時刻だけを見るので、内容を戻す編集は見逃すことがある。

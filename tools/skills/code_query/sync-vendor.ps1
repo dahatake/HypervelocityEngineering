@@ -1,4 +1,4 @@
-# sync-vendor.ps1 — Windows launcher for the shared kit sync (FR-KIT-03).
+# sync-vendor.ps1 - Windows launcher for the shared kit sync (FR-KIT-03).
 #
 # The rules for what ships and what is excluded live in
 # tools/skills/_kit/kit_sync.py. Run this inside the upstream repository only;

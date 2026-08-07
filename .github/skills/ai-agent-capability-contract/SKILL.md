@@ -91,6 +91,8 @@ AAG / AAGD の各Stepが、ユーザー目的、Read-only検索、REST mutation�
 
 | Skill | 関係 | 用途 |
 |---|---|---|
+| `agentic-retrieval-contract` | 依存 | AG-CAP-03でFoundry IQ / Azure AI Search Agentic Retrievalを選んだときのAR-CAP-01〜05 |
+| `foundry-toolbox-contract` | 依存 | Tool総数が10〜15を超えたときのToolbox / tool search（TB-CAP-01〜05） |
 | `task-dag-planning` | 先行 | AAG/AAGDのStep分割と依存設計 |
 | `test-strategy-template` | 依存 | Agent capability testのテスト戦略 |
 | `mcp-server-design` | 補完 | API側Remote MCPとSkillの責務分離 |

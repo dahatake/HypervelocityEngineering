@@ -1,0 +1,17 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--aas--1
+- path: docs/agent/agent-detail-{key}.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-AIAgentDesign-Step3--aag--3
+- path: src/agent/{key}/
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-AgentCoding--aagd--2.3
+outputs:
+- path: docs/agent/tool-search-eval/{key}-eval-report.md
+  required: true
+  mode: create

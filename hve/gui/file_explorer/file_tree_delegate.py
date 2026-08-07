@@ -12,6 +12,7 @@ from PySide6.QtCore import QModelIndex, QRect, QSize, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
+from ..theme import token
 from .file_change_tracker import ChangeState, FileChangeTracker
 from .multi_root_model import PathRole
 
@@ -20,8 +21,8 @@ _BADGE_DIAMETER = 8
 _BADGE_MARGIN = 6  # 行右端からの距離
 
 
-_COLOR_NEW = QColor("#22aa55")
-_COLOR_MODIFIED = QColor("#dd8800")
+_TOKEN_NEW = "git.addedForeground"
+_TOKEN_MODIFIED = "git.modifiedForeground"
 
 
 class FileTreeDelegate(QStyledItemDelegate):
@@ -45,7 +46,7 @@ class FileTreeDelegate(QStyledItemDelegate):
         if state == ChangeState.NORMAL:
             return
 
-        color = _COLOR_NEW if state == ChangeState.NEW else _COLOR_MODIFIED
+        color = QColor(token(_TOKEN_NEW if state == ChangeState.NEW else _TOKEN_MODIFIED))
         rect = option.rect
         bx = rect.right() - _BADGE_MARGIN - _BADGE_DIAMETER
         by = rect.top() + (rect.height() - _BADGE_DIAMETER) // 2

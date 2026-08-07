@@ -32,6 +32,7 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 ## Foundry Project 責務境界
 
 - Foundry Project は ASDW-WEB Step.2.2 が作成する。本 Step は **Foundry Project を作成しない**。
+- Azure AI Search の Knowledge Base / Knowledge Source は ASDW-WEB Step.2.6（`Dev-Microservice-Azure-AgenticRetrievalDeploy`）が作成する。本 Step は **Knowledge Base / Knowledge Source を作成せず**、設計で選択された場合に存在と接続を確認するのみとする。未作成の場合は自己対応せず blocked として Step.2.6 へフィードバックする。
 - Agent 登録前に `az cognitiveservices account project show --name <account> --resource-group <rg> --project-name <project>` で Project 子リソースと `Succeeded` を確認する。
 - Project が無い場合は、account / Project 名を示して ASDW-WEB Step.2.2 (AddServiceDeploy) の先行実行を案内し、`aagd:blocked` で停止する。
 - Project endpoint を取得できない場合、**親 account endpoint を Project endpoint の代用にしない**。値を推測・合成せず停止する。

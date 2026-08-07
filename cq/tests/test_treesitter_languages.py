@@ -504,6 +504,58 @@ class TestHeaderDisambiguation:
         assert languages.resolve_language(".h", lambda: HEADER_C) == "c"
 
 
+class TestPartialFidelity:
+    """Phase 4: an ``ERROR`` node degrades the reported fidelity, not just the
+    symbols (FR-CQ-11: "which parser ran" must include recovered-but-lossy
+    parses, not only the binary tree-sitter/lite choice)."""
+
+    BROKEN_JAVA = """\
+public class Broken {
+    public void method() {
+        int x = 1;
+"""
+
+    BROKEN_GO = """\
+package svc
+
+func Grant(id string
+"""
+
+    def test_error_recovery_is_reported_as_partial(self) -> None:
+        from cq.languages import java
+
+        symbols, parser = java.extract_ex(self.BROKEN_JAVA)
+        assert parser == "tree-sitter-partial"
+        assert symbols  # the grammar still recovers the outer class declaration
+
+    def test_clean_source_is_not_marked_partial(self) -> None:
+        from cq.languages import java
+
+        _symbols, parser = java.extract_ex(JAVA)
+        assert parser == "tree-sitter"
+
+    def test_indexer_prefers_extract_ex_over_the_static_parser_field(self) -> None:
+        symbols, parser = indexer._extract("java", self.BROKEN_JAVA)
+        assert parser == "tree-sitter-partial"
+        assert symbols
+
+    @pytest.mark.parametrize("lang,source", [("go", BROKEN_GO), ("java", BROKEN_JAVA)])
+    def test_partial_fidelity_never_aborts_indexing(self, lang: str, source: str) -> None:
+        """A recovered ERROR must degrade like FR-CQ-11, not raise."""
+        symbols, parser = indexer._extract(lang, source)
+        assert parser == "tree-sitter-partial"
+        assert isinstance(symbols, tuple)
+
+    def test_every_tree_sitter_language_declares_extract_ex(self) -> None:
+        """Guards against a future language being wired without the fidelity hook."""
+        tree_sitter_langs = {
+            "java", "go", "rust", "c", "cpp", "shell", "powershell", "batch", "scala",
+        }
+        for lang in tree_sitter_langs:
+            support = languages.support_for(lang)
+            assert support is not None and support.extract_ex is not None, lang
+
+
 class TestDegradationWithoutGrammars:
     def test_missing_grammar_degrades_instead_of_raising(self, monkeypatch) -> None:
         grammar = ts.Grammar(

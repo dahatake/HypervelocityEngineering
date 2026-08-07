@@ -206,6 +206,22 @@ body:
     validations:
       required: false
 
+  - type: dropdown
+    id: enable_tool_search
+    attributes:
+      label: "生成する AI Agent の Tool Search 方針"
+      description: |
+        生成される AI Agent 自身が Foundry Toolbox の tool search を使うかどうかを指定します。
+        HVE 自身の Tool Search 設定とは別項目です。
+        auto は Tool 総数（15 超）で自動判定します。
+      options:
+        - "auto（Tool 総数で自動判定）"
+        - "yes（必ず使用する）"
+        - "no（使用しない）"
+      default: 0
+    validations:
+      required: false
+
   - type: textarea
     id: additional_comment
     attributes:

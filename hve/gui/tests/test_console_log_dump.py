@@ -236,6 +236,90 @@ class TestLogPaneBaseDir:
         finally:
             pane.deleteLater()
 
+    def test_set_log_base_dir_none_closes_handle(
+        self, qapp, tmp_path: Path
+    ) -> None:
+        """NFR-OBS-09 (1): 永続化無効化時に保持中のハンドルを閉じる。"""
+        from hve.gui.page_workbench import _LogPane
+
+        pane = _LogPane("ログ")
+        run_dir = tmp_path / "run-close"
+        run_dir.mkdir()
+        try:
+            pane.set_log_base_dir(run_dir)
+            pane.append_line("before-close")
+            handle = pane._log_file
+            assert handle is not None and not handle.closed
+            pane.set_log_base_dir(None)
+            assert handle.closed
+            assert pane._log_file is None
+        finally:
+            pane.deleteLater()
+
+    def test_append_line_does_not_reopen_file_each_line(
+        self, qapp, tmp_path: Path, monkeypatch
+    ) -> None:
+        """NFR-OBS-09 (1): 1 行ごとに ``open`` し直さない（ハンドルを保持する）。"""
+        from hve.gui.page_workbench import _LogPane
+
+        opened: list[str] = []
+        original_open = Path.open
+
+        def counting_open(self: Path, *args, **kwargs):
+            opened.append(str(self))
+            return original_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", counting_open)
+
+        pane = _LogPane("ログ")
+        run_dir = tmp_path / "run-handle"
+        run_dir.mkdir()
+        try:
+            pane.set_log_base_dir(run_dir)
+            baseline = len(opened)
+            for i in range(50):
+                pane.append_line(f"line-{i}")
+            assert len(opened) - baseline <= 1
+            content = (run_dir / "gui-logs" / "log-0001.log").read_text(
+                encoding="utf-8"
+            )
+            assert "line-0" in content and "line-49" in content
+        finally:
+            pane.deleteLater()
+
+    def test_rotation_opens_new_file_once(
+        self, qapp, tmp_path: Path, monkeypatch
+    ) -> None:
+        """NFR-OBS-09 (1): ローテーション時のみ次ファイルを開き直す。"""
+        from hve.gui import page_workbench
+
+        monkeypatch.setattr(page_workbench, "_LOG_ROTATE_LINES", 3)
+
+        opened: list[str] = []
+        original_open = Path.open
+
+        def counting_open(self: Path, *args, **kwargs):
+            opened.append(str(self))
+            return original_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", counting_open)
+
+        pane = page_workbench._LogPane("ログ")
+        run_dir = tmp_path / "run-rotate"
+        run_dir.mkdir()
+        try:
+            pane.set_log_base_dir(run_dir)
+            baseline = len(opened)
+            for i in range(4):
+                pane.append_line(f"rot-{i}")
+            # 4 行 = 初回ファイル 1 回 + ローテーション後 1 回
+            assert len(opened) - baseline <= 2
+            gui_logs = run_dir / "gui-logs"
+            assert "rot-0" in (gui_logs / "log-0001.log").read_text(encoding="utf-8")
+            assert "rot-3" in (gui_logs / "log-0002.log").read_text(encoding="utf-8")
+        finally:
+            pane.deleteLater()
+
     def test_set_session_work_root_wires_gui_logs(
         self, page, tmp_path: Path
     ) -> None:
@@ -244,3 +328,14 @@ class TestLogPaneBaseDir:
         run_dir.mkdir()
         page.set_session_work_root(run_dir)
         assert (run_dir / "gui-logs" / "log-0001.log").exists()
+
+    def test_cleanup_closes_log_file_handle(self, page, tmp_path: Path) -> None:
+        """NFR-OBS-09 (1): ページ cleanup 時に保持中のハンドルを閉じる。"""
+        run_dir = tmp_path / "run-cleanup"
+        run_dir.mkdir()
+        page.set_session_work_root(run_dir)
+        page._log_pane.append_line("before-cleanup")
+        handle = page._log_pane._log_file
+        assert handle is not None and not handle.closed
+        page.cleanup()
+        assert handle.closed
